@@ -42,10 +42,15 @@ fl_epoch_iso() { [[ -n "$1" ]] || return 0; date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ 
 # ---------------------------------------------------------------- pins
 
 # APP_FOCUS holds "app=focus app2=ignore"; an app without an entry is auto
-fl_app_focus_pin() {
+fl_app_focus_pin() { fl_app_memo pin "$1" fl__app_focus_pin "$1"; }
+fl__app_focus_pin() {
   local w pins
-  # the state file is read once per doctor run, not once for every app (facts.sh)
-  fl_memo_v pins "app-focus-pins:${FL_BENCH_DIR}" fl_bstate_get APP_FOCUS || true
+  if [[ "$FL_AF_ON" == "1" ]]; then pins="$FL_AF_PINS"
+  else
+    # the state file is read once per doctor run, not once for every app (facts.sh)
+    fl_memo_v pins "app-focus-pins:${FL_BENCH_DIR}" fl_bstate_get APP_FOCUS || true
+  fi
+  # shellcheck disable=SC2086  # the pins are words
   for w in $pins; do
     [[ "${w%%=*}" == "$1" ]] && { printf '%s' "${w#*=}"; return 0; }
   done
@@ -59,41 +64,50 @@ fl_app_focus_pin_set() {
   done
   [[ "$pin" == "auto" ]] || out="${out}${out:+ }${app}=${pin}"
   fl_bstate_set APP_FOCUS "$out"
+  # what the facts hold of the pins and of what they decide is old now
+  fl_app_memo_clear
+  [[ "$FL_AF_ON" == "1" ]] && FL_AF_PINS="$(fl_bstate_get APP_FOCUS)"
+  return 0
 }
 
 # ---------------------------------------------------------------- inference
 
 # The branch an app is expected to follow: the profile's (config/apps.tsv or
 # the team profile), else the remote's default branch as git last saw it.
-fl_app_reference_branch() {
-  local app="$1" b remote
-  b="$(fl_app_policy_branch "$app")"
-  if [[ -z "$b" ]]; then
-    remote="$(fl_app_remote "$app")"
-    if [[ -n "$remote" ]]; then
-      # the rows of the doctor run know it (HEAD of the remote is a symbolic ref); else git is asked
-      if fl__app_ref_v b "$app" "refs/remotes/${remote}/HEAD" sym; then b="${b#refs/remotes/}"
-      else b="$(fl_app_git "$app" symbolic-ref -q --short "refs/remotes/${remote}/HEAD" 2>/dev/null || true)"; fi
-    fi
-    b="${b#"${remote}/"}"
+fl_app_reference_branch() { local b; fl__app_reference_branch_v b "$1"; printf '%s' "$b"; }
+fl__app_reference_branch_v() {
+  local app="$2" __rb remote
+  fl__memo_v __rb policy "$app" fl_app_policy_branch "$app"
+  if [[ -z "$__rb" ]]; then
+    if fl__af_field "$app" remote; then remote="$FL_AF_VAL"; else remote="$(fl_app_remote "$app")"; fi
+    if [[ -z "$remote" ]]; then :
+    elif fl__af_field "$app" refhead; then __rb="$FL_AF_VAL"
+    # the rows of the doctor run know it (HEAD of the remote is a symbolic ref); else git is asked
+    elif fl__app_ref_v __rb "$app" "refs/remotes/${remote}/HEAD" sym; then __rb="${__rb#refs/remotes/}"
+    else __rb="$(fl_app_git "$app" symbolic-ref -q --short "refs/remotes/${remote}/HEAD" 2>/dev/null || true)"; fi
+    __rb="${__rb#"${remote}/"}"
   fi
-  printf '%s' "$b"
+  printf -v "$1" '%s' "$__rb"
 }
 
 # fl_app_focus_auto_reasons APP: why APP counts as a focus app, one reason
 # per line; nothing when it does not.
 fl_app_focus_auto_reasons() {
-  local app="$1" branch ref email at now age
+  local app="$1" branch ref email at="" now age
   fl_app_has_git "$app" || return 0
   fl_app_dirty "$app" && printf 'local changes\n'
-  branch="$(fl_app_branch "$app")"
-  ref="$(fl_app_reference_branch "$app")"
+  if fl__af_field "$app" branch; then branch="$FL_AF_VAL"; else branch="$(fl_app_branch "$app")"; fi
+  fl__app_reference_branch_v ref "$app"
   if [[ -n "$branch" && -n "$ref" && "$branch" != "$ref" ]]; then printf 'on %s, not %s\n' "$branch" "$ref"; fi
-  fl_app_config_v email "$app" user.email
+  if fl__af_field "$app" email; then
+    email="$FL_AF_VAL"; fl__af_field "$app" authored && at="$FL_AF_VAL"
+  else
+    fl_app_config_v email "$app" user.email
+    [[ -n "$email" ]] && at="$(fl_app_git "$app" log -1 -i -F --author="<${email}>" --format=%at HEAD --branches 2>/dev/null || true)"
+  fi
   if [[ -n "$email" ]]; then
-    at="$(fl_app_git "$app" log -1 -i -F --author="<${email}>" --format=%at HEAD --branches 2>/dev/null || true)"
     if [[ "$at" =~ ^[0-9]+$ ]]; then
-      now="$(fl_now)"; age=$(((now - at) / 86400))
+      now="${FL_AF_NOW:-$(fl_now)}"; age=$(((now - at) / 86400))
       [[ "$age" -lt 0 ]] && age=0
       if [[ "$age" -lt "$FL_FOCUS_DAYS" ]]; then
         if [[ "$age" == "0" ]]; then printf 'your commit today\n'; else printf 'your commit %d day(s) ago\n' "$age"; fi
@@ -104,8 +118,11 @@ fl_app_focus_auto_reasons() {
 }
 
 # fl_app_focus_reasons APP: the pin's reason, or the inferred ones
-fl_app_focus_reasons() {
-  case "$(fl_app_focus_pin "$1")" in
+fl_app_focus_reasons() { fl_app_memo reasons "$1" fl__app_focus_reasons "$1"; }
+fl__app_focus_reasons() {
+  local pin
+  fl__memo_v pin pin "$1" fl_app_focus_pin "$1"
+  case "$pin" in
     focus) printf 'pinned\n' ;;
     ignore) ;;
     *) fl_app_focus_auto_reasons "$1" ;;
@@ -115,11 +132,16 @@ fl_app_focus_reasons() {
 # The focus apps of the bench, one per line (sets FL_FOCUS_APPS too)
 FL_FOCUS_APPS=""
 fl_focus_apps() {
-  local app out=""
-  while IFS= read -r app; do
-    [[ -n "$app" ]] || continue
-    [[ -n "$(fl_app_focus_reasons "$app")" ]] && out="${out}${app}"$'\n'
-  done < <(fl_apps_all)
+  local app out="" apps=()
+  while IFS= read -r app; do [[ -n "$app" ]] && apps+=("$app"); done < <(fl_apps_all)
+  fl_app_memo_fill ${apps[@]+"${apps[@]}"}
+  for app in ${apps[@]+"${apps[@]}"}; do
+    # asked in this shell, so the answer stays for fl_freshness_app_json
+    fl_app_focus_pin "$app" >/dev/null
+    fl_app_focus_reasons "$app" >/dev/null
+    if fl_app_memo_peek reasons "$app"; then [[ -n "$FL_MEMO_VAL" ]] && out="${out}${app}"$'\n'
+    elif [[ -n "$(fl_app_focus_reasons "$app")" ]]; then out="${out}${app}"$'\n'; fi
+  done
   FL_FOCUS_APPS="$out"
   printf '%s' "$out"
 }
@@ -164,8 +186,11 @@ fl_app_upstream() {
   fl_app_has_git "$app" || return 0
   b="$(fl_app_branch "$app")"; [[ -n "$b" ]] || return 0
   remote="$(fl_app_remote "$app")"; [[ -n "$remote" ]] || return 0
-  fl_app_config_v merge "$app" "branch.${b}.merge"
-  merge="${merge#refs/heads/}"
+  if fl__af_field "$app" merge; then merge="$FL_AF_VAL"
+  else
+    fl_app_config_v merge "$app" "branch.${b}.merge"
+    merge="${merge#refs/heads/}"
+  fi
   printf '%s %s' "$remote" "${merge:-$b}"
 }
 
@@ -176,10 +201,46 @@ fl_app_upstream() {
 # can bring in commits of any age and number (another repository's history
 # from 2011, a hotfix branch's commits), and those say nothing about how far
 # behind HEAD is: a release merged in is one step, not every commit in it.
+FL_BH_N=""; FL_BH_DAYS=""; FL_BH_UP=""
+# fl__app_behind_v APP: fl_app_behind in FL_BH_N, FL_BH_DAYS and FL_BH_UP; 1 when
+# it says nothing. From the loaded facts it needs no subshell.
+fl__app_behind_v() {
+  local app="$1" b remote merge n ct="" days=0 line
+  FL_BH_N=""; FL_BH_DAYS=""; FL_BH_UP=""
+  if [[ "$FL_AF_BEHIND" == "1" ]] && fl__af_field "$app" git && [[ "$FL_AF_VAL" == "1" ]]; then
+    fl__af_v b "$app" branch; [[ -n "$b" ]] || return 1
+    fl__af_v remote "$app" remote; [[ -n "$remote" ]] || return 1
+    fl__af_v merge "$app" merge
+    fl__af_v n "$app" bn
+    [[ "$n" =~ ^[0-9]+$ ]] || return 1
+    if [[ "$n" -gt 0 ]]; then
+      fl__af_v ct "$app" bct
+      [[ "$ct" =~ ^[0-9]+$ ]] && days=$(((${FL_AF_NOW:-$(fl_now)} - ct) / 86400))
+      [[ "$days" -lt 0 ]] && days=0
+    fi
+    FL_BH_N="$n"; FL_BH_DAYS="$days"; FL_BH_UP="${remote}/${merge:-$b}"
+    return 0
+  fi
+  line="$(fl_app_behind "$app")"
+  [[ -n "$line" ]] || return 1
+  read -r FL_BH_N FL_BH_DAYS FL_BH_UP <<<"$line"
+}
+
 fl_app_behind() {
-  local app="$1" up remote branch ref n ct days=0 h hb
+  local app="$1" up remote branch ref n ct="" days=0 h hb
   up="$(fl_app_upstream "$app")"; [[ -n "$up" ]] || return 0
   remote="${up%% *}"; branch="${up#* }"
+  if [[ "$FL_AF_BEHIND" == "1" ]] && fl__af_field "$app" bn; then
+    n="$FL_AF_VAL"
+    [[ "$n" =~ ^[0-9]+$ ]] || return 0
+    if [[ "$n" -gt 0 ]]; then
+      fl__af_field "$app" bct && ct="$FL_AF_VAL"
+      [[ "$ct" =~ ^[0-9]+$ ]] && days=$((($(fl_now) - ct) / 86400))
+      [[ "$days" -lt 0 ]] && days=0
+    fi
+    printf '%s %s %s/%s' "$n" "$days" "$remote" "$branch"
+    return 0
+  fi
   ref="refs/remotes/${remote}/${branch}"
   # a ref that does not exist fails the count, so no separate rev-parse is asked
   # (in a doctor run the rows of for-each-ref say whether HEAD and the ref are one commit: 0 behind)
@@ -257,6 +318,7 @@ fl_freshness_fetch() {
     if [[ "$(cat "$app")" == "0" ]]; then ok=1; else failed=1; fi
   done
   rm -rf "$codes"
+  fl_app_facts_drop_behind
   # the refs just changed: what a doctor run kept about the apps' git is old
   fl_facts_forget "git"
   [[ "$ok" == "1" && "$failed" == "0" ]] && fl_kv_set "$(fl_freshness_file)" FETCHED_AT "$(fl_now)"
@@ -339,6 +401,7 @@ FL_FRESHNESS_READY=""
 fl_freshness_prepare() {
   fl_facts_wait_warm
   [[ "$FL_FRESHNESS_READY" == "$FL_BENCH_DIR" ]] && return 0
+  fl_app_facts_load
   fl_focus_apps >/dev/null
   FL_FOCUS_DEPS="$(fl_focus_dependencies)"
   FL_FRESHNESS_READY="$FL_BENCH_DIR"
@@ -369,9 +432,9 @@ chk_dependency_behind() {
     if [[ "$n" == "0" ]]; then fresh=$((fresh + 1)); continue; fi
     stale=1
     if fl_app_dirty "$dep"; then
-      fix="cd ${FL_BENCH_DIR}/apps/${dep} && git status   (commit or stash the changes, then: benchbar app update ${dep} --bench-dir ${FL_BENCH_DIR})"
+      fix="$(fl_fix_cmd cd "${FL_BENCH_DIR}/apps/${dep}" '&&' git status)   (commit or stash the changes, then: benchbar app update $(printf '%q' "$dep") --bench-dir $(printf '%q' "$FL_BENCH_DIR"))"
     else
-      fix="benchbar app update ${dep} --bench-dir ${FL_BENCH_DIR}"
+      fix="$(fl_fix_cmd benchbar app update "$dep" --bench-dir "$FL_BENCH_DIR")"
     fi
     CHK_MORE+=("warn"$'\037'"${dep} (needed by ${by//,/, }) is $(fl_behind_words "$n" "$days") ${up}${note}"$'\037'"${fix}"$'\037')
   done <<<"$deps"
@@ -412,18 +475,30 @@ chk_apps_behind() {
 # the JSON fields of one app: focus, pin, reasons, requires, needed_by, behind
 # (reads FL_FOCUS_APPS and FL_FOCUS_DEPS)
 FL_FOCUS_DEPS=""
-fl_freshness_app_json() {
-  local app="$1" reasons=() r focus=0 by="" b n="" days="" up=""
-  while IFS= read -r r; do [[ -n "$r" ]] && reasons+=("$r"); done < <(fl_app_focus_reasons "$app")
+fl_freshness_app_json() { local j; fl_freshness_app_json_v j "$1"; printf '%s' "$j"; }
+fl_freshness_app_json_v() {
+  local __o="$1" app="$2" reasons line focus=0 by="" rest n="" days="" up="" pin req
+  local j_focus j_pin j_reasons j_req j_by j_up j_n j_days
+  fl__memo_v reasons reasons "$app" fl_app_focus_reasons "$app"
+  fl__memo_v pin pin "$app" fl_app_focus_pin "$app"
+  fl__memo_v req required "$app" fl_app_required_apps "$app"
   fl_is_focus_app "$app" && focus=1
-  [[ "$focus" == "1" ]] || by="$(printf '%s\n' "$FL_FOCUS_DEPS" | awk -v a="$app" '$1 == a {print $2; exit}')"
-  b="$(fl_app_behind "$app")"
-  [[ -n "$b" ]] && read -r n days up <<<"$b"
-  # shellcheck disable=SC2046  # the app names are words
-  printf '"focus":%s,"focus_pin":%s,"focus_reasons":%s,"requires":%s,"needed_by":%s,"upstream":%s,"behind":%s,"behind_days":%s' \
-    "$(fl_json_bool "$focus")" "$(fl_json_str "$(fl_app_focus_pin "$app")")" "$(fl_json_str_array ${reasons[@]+"${reasons[@]}"})" \
-    "$(fl_json_str_array $(fl_app_required_apps "$app"))" "$(fl_json_str_array $(printf '%s' "$by" | tr ',' ' '))" \
-    "$(fl_json_str "$up")" "$(fl_json_num "$n")" "$(fl_json_num "$days")"
+  if [[ "$focus" != "1" ]]; then
+    rest=$'\n'"$FL_FOCUS_DEPS"
+    if [[ "$rest" == *$'\n'"${app} "* ]]; then rest="${rest#*$'\n'"${app} "}"; by="${rest%%$'\n'*}"; by="${by%% *}"; fi
+  fi
+  fl__app_behind_v "$app" && { n="$FL_BH_N"; days="$FL_BH_DAYS"; up="$FL_BH_UP"; }
+  local lines=()
+  while IFS= read -r line; do [[ -n "$line" ]] && lines+=("$line"); done <<<"$reasons"
+  fl_json_bool_v j_focus "$focus"; fl_json_str_v j_pin "$pin"
+  fl_json_words_v j_reasons ${lines[@]+"${lines[@]}"}
+  # shellcheck disable=SC2086  # the app names are words
+  fl_json_words_v j_req $req
+  # shellcheck disable=SC2086
+  fl_json_words_v j_by ${by//,/ }
+  fl_json_str_v j_up "$up"; fl_json_num_v j_n "$n"; fl_json_num_v j_days "$days"
+  printf -v "$__o" '"focus":%s,"focus_pin":%s,"focus_reasons":%s,"requires":%s,"needed_by":%s,"upstream":%s,"behind":%s,"behind_days":%s' \
+    "$j_focus" "$j_pin" "$j_reasons" "$j_req" "$j_by" "$j_up" "$j_n" "$j_days"
 }
 
 fl_cmd_app_focus_list() {

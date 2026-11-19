@@ -61,12 +61,36 @@ internal sealed class BenchPage : UserControl
 
     public AppsView? Apps => _views.GetValueOrDefault(BenchTab.Apps) as AppsView;
 
+    public SharingView? Sharing => _views.GetValueOrDefault(BenchTab.Sharing) as SharingView;
+
     public HealthView? Health => _views.GetValueOrDefault(BenchTab.Health) as HealthView;
 
     /// <summary>The tab headers in order (for tests).</summary>
     public IReadOnlyList<string> TabLabels => _tabs.Items.OfType<TabItem>().Select(t => (string)t.Header).ToList();
 
     public BenchContext? Context => _context;
+
+    /// <summary>
+    /// Shows the Sharing tab (after Health) while the lan-rooms experiment is on, and takes it away when it is off, moving to the Overview
+    /// when it was the tab shown. The tab is not in <see cref="BenchTabs.All"/> and is built the first time it is shown.
+    /// </summary>
+    public void SetSharingVisible(bool visible)
+    {
+        var present = _items.ContainsKey(BenchTab.Sharing);
+        if (visible == present) return;
+        if (visible)
+        {
+            var item = new TabItem { Header = BenchTabs.Label(BenchTab.Sharing), Tag = BenchTab.Sharing, Padding = new Thickness(14, 6, 14, 6) };
+            Ui.Name(item, "Sharing tab");
+            _items[BenchTab.Sharing] = item;
+            _tabs.Items.Add(item);
+            return;
+        }
+        if (Tab == BenchTab.Sharing) Select(BenchTab.Overview);
+        _tabs.Items.Remove(_items[BenchTab.Sharing]);
+        _items.Remove(BenchTab.Sharing);
+        _views.Remove(BenchTab.Sharing);
+    }
 
     /// <summary>Raised after the person (or <see cref="Select"/>) changed the tab.</summary>
     public event Action<BenchTab>? TabChanged;
@@ -108,6 +132,7 @@ internal sealed class BenchPage : UserControl
         {
             BenchTab.Sites => new SitesView(_services),
             BenchTab.Apps => new AppsView(_services),
+            BenchTab.Sharing => new SharingView(_services),
             _ => new HealthView(_services),
         };
         _views[tab] = view;

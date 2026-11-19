@@ -78,8 +78,9 @@ public partial class App : Application, ITrayHost
         DispatcherUnhandledException += (_, args) =>
         {
             _log.Write("ui", args.Exception);
+            if (Observe.IsFatal(args.Exception)) return; // not handled: the process ends and the next start reports it
             args.Handled = true; // keep running, and say so once: a silent catch hid every fault from the person
-            _notices.Set(new Notice("unexpected", "BenchBar hit an error and kept running. If something looks wrong, tell us.", "Report a Bug", () => ReportBugAsync("Error notice").Forget()));
+            _notices.Set(new Notice("unexpected", UiText.Get("UnexpectedErrorNotice"), UiText.Get("MenuReportBug"), () => ReportBugAsync("Error notice").Forget()));
         };
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
@@ -681,6 +682,24 @@ public partial class App : Application, ITrayHost
     private void CopyText(string text)
     {
         try { Clipboard.SetText(text); }
+        catch (System.Runtime.InteropServices.COMException ex) { _log.Write("clipboard", ex); }
+    }
+
+    /// <summary>
+    /// The room code or invite, on a click only: marked so Windows clipboard history, the cloud clipboard and clipboard monitors leave it out
+    /// (the Mac's concealed and transient pasteboard types). A failure is logged without the text.
+    /// </summary>
+    private void CopySecret(string text)
+    {
+        try
+        {
+            var data = new DataObject();
+            data.SetText(text);
+            data.SetData("ExcludeClipboardContentFromMonitorProcessing", new byte[4] { 1, 0, 0, 0 });
+            data.SetData("CanIncludeInClipboardHistory", new byte[4]);
+            data.SetData("CanUploadToCloudClipboard", new byte[4]);
+            Clipboard.SetDataObject(data, true);
+        }
         catch (System.Runtime.InteropServices.COMException ex) { _log.Write("clipboard", ex); }
     }
 

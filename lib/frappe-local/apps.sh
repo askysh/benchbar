@@ -52,13 +52,15 @@ fl__apps_txt_read() {
   done <"$1"
 }
 
-fl_app_in_apps_txt() { fl_has_line "$(fl_apps_txt || true)" "$1"; }
+fl_app_in_apps_txt() {
+  if [[ "$FL_AF_ON" == "1" ]]; then fl_has_line "$FL_AF_TXT" "$1"; return; fi
+  fl_has_line "$(fl_apps_txt || true)" "$1"
+}
 
 # A git app: apps/X with a .git and a Python package (stray files and
 # tarballs in apps/ are not apps).
 fl_app_is_git_app() {
-  local d
-  d="$(fl_app_path "$1")"
+  local d="${FL_BENCH_DIR}/apps/$1"
   [[ -e "$d/.git" ]] || return 1
   [[ -f "$d/pyproject.toml" || -f "$d/setup.py" || -f "$d/$1/__init__.py" ]]
 }
@@ -106,7 +108,286 @@ fl_app_existing_dir() {
   return 0
 }
 
-fl_app_has_git() { [[ -e "${FL_BENCH_DIR}/apps/${1}/.git" ]]; }
+# ---------------------------------------------------------------- facts of every app
+#
+# app list, app focus and doctor's freshness checks ask the same few things
+# of every app many times over (the branch alone nine times: remote, upstream,
+# focus, JSON). fl_app_facts_load reads them once per app, several apps side
+# by side, with four git calls each (status, config, log, rev-list), and
+# the getters below answer from that while it is loaded. It lives for one
+# command: whatever changes an app (add, update, lock apply, a fetch) either
+# never loads it or drops what it has made stale, so no answer is old.
+
+FL_AF_ON=0
+FL_AF_BEHIND=0     # 1 while the behind counts are still those of the load
+FL_AF_NAMES=()     # the apps loaded; FL_AF_REC has the same index
+FL_AF_REC=()       # one record each: lines "key=value", a newline before and after
+FL_AF_VAL=""
+FL_AF_TXT=""       # sites/apps.txt as of the load
+FL_AF_PINS=""      # the focus pins as of the load
+FL_AF_NOW=""       # the time of the load
+FL_AF_JOBS="${FL_AF_JOBS:-8}"
+FL_AF_LIGHT=0      # 1: only branch, commit and local changes (the table of app list)
+
+# fl__af_collect APP: the record of APP on stdout (see fl_app_facts_load)
+fl__af_collect() {
+  local app="$1" dir line k v branch="" oid="" dirty=0 shallow=0 email="" merge="" remote="" url="" insteadof=0
+  local names=" " urlmap="" first="" r since authored="" refhead="" bn="" bct="" out ref LC_COLLATE=C
+  dir="${FL_BENCH_DIR}/apps/${app}"
+  if [[ ! -e "$dir/.git" ]]; then printf 'git=0\n'; return 0; fi
+  while IFS= read -r line; do
+    case "$line" in
+      '# branch.head '*) branch="${line#\# branch.head }"; [[ "$branch" == "(detached)" ]] && branch="" ;;
+      '# branch.oid '*) oid="${line#\# branch.oid }"; [[ "$oid" == "(initial)" ]] && oid="" ;;
+      '#'*|'') ;;
+      *) dirty=1 ;;
+    esac
+  done < <(git -C "$dir" status --porcelain=v2 -b -uno 2>/dev/null || true)
+  # app list (the table) needs no more: branch, commit and local changes
+  if [[ "$FL_AF_LIGHT" == "1" ]]; then
+    printf 'git=1\nbranch=%s\ncommit=%s\ndirty=%s\n' "$branch" "$oid" "$dirty"
+    return 0
+  fi
+  # the branch's remote and merge ref, the remotes, the user's e-mail: one call
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    k="${line%% *}"; v=""
+    [[ "$line" == *" "* ]] && v="${line#* }"
+    case "$k" in
+      user.email) email="$v" ;;
+      url.*.insteadof) insteadof=1 ;;
+      remote.*.*)
+        r="${k#remote.}"; r="${r%.*}"
+        case "$names" in *" ${r} "*) ;; *) names="${names}${r} " ;; esac
+        [[ "$k" == "remote.${r}.url" ]] && urlmap="${urlmap}${r}"$'\t'"${v}"$'\n' ;;
+      *)
+        if [[ -n "$branch" && "$k" == "branch.${branch}.remote" ]]; then remote="$v"
+        elif [[ -n "$branch" && "$k" == "branch.${branch}.merge" ]]; then merge="$v"; fi ;;
+    esac
+  done < <(git -C "$dir" config --get-regexp '^(remote\..+|branch\..+\.(remote|merge)|user\.email|url\..+\.insteadof)$' 2>/dev/null || true)
+  # the remote bench follows: the branch's, else upstream, else the first by name
+  if [[ -z "$remote" || "$remote" == "." ]]; then
+    remote=""
+    if [[ "$names" == *" upstream "* ]]; then remote=upstream
+    else
+      for r in $names; do
+        if [[ -z "$first" || "$r" < "$first" ]]; then first="$r"; fi
+      done
+      remote="$first"
+    fi
+  fi
+  if [[ -n "$remote" ]]; then
+    if [[ "$insteadof" == "1" ]]; then
+      # a url.X.insteadOf rewrite: only git knows what it makes of the URL
+      url="$(git -C "$dir" remote get-url "$remote" 2>/dev/null || true)"
+    else
+      while IFS=$'\t' read -r r v; do
+        [[ "$r" == "$remote" ]] && { url="$v"; break; }
+      done <<<"$urlmap"
+    fi
+    if [[ -f "$dir/.git/refs/remotes/${remote}/HEAD" ]]; then
+      read -r ref <"$dir/.git/refs/remotes/${remote}/HEAD" || true
+      [[ "$ref" == "ref: refs/remotes/"* ]] && refhead="${ref#ref: refs/remotes/}"
+    fi
+  fi
+  if [[ -d "$dir/.git" ]]; then
+    [[ -f "$dir/.git/shallow" ]] && shallow=1
+  elif [[ "$(git -C "$dir" rev-parse --is-shallow-repository 2>/dev/null || true)" == "true" ]]; then
+    shallow=1
+  fi
+  if [[ -n "$email" ]]; then
+    # a commit older than the focus window cannot matter: bound the walk
+    since=$((FL_AF_NOW - (FL_FOCUS_DAYS + 1) * 86400))
+    authored="$(git -C "$dir" log -1 -i -F --author="<${email}>" --format=%at --since="@${since}" HEAD --branches 2>/dev/null || true)"
+  fi
+  if [[ -n "$branch" && -n "$remote" ]]; then
+    v="${merge#refs/heads/}"
+    out="$(git -C "$dir" rev-list --first-parent --format=%ct "HEAD..refs/remotes/${remote}/${v:-$branch}" 2>/dev/null)" && {
+      bn=0
+      while IFS= read -r line; do
+        case "$line" in commit\ *) bn=$((bn + 1)) ;; *[!0-9]*|'') ;; *) bct="$line" ;; esac
+      done <<<"$out"
+    }
+  fi
+  printf 'git=1\nbranch=%s\ncommit=%s\ndirty=%s\nshallow=%s\nremote=%s\nurl=%s\nmerge=%s\nemail=%s\nauthored=%s\nrefhead=%s\nbn=%s\nbct=%s\n' \
+    "$branch" "$oid" "$dirty" "$shallow" "$remote" "$url" "${merge#refs/heads/}" "$email" "$authored" "$refhead" "$bn" "$bct"
+}
+
+# fl_app_facts_load [APP...]: reads the facts of the given apps (all of the
+# bench by default), FL_AF_JOBS at a time; FL_AF_LIGHT=1 reads only what the
+# table of app list shows
+# shellcheck disable=SC2120
+fl_app_facts_load() {
+  local apps=() app dir i=0 pids=() p now_keep rec
+  if [[ "$#" -gt 0 ]]; then apps=("$@"); else while IFS= read -r app; do [[ -n "$app" ]] && apps+=("$app"); done < <(fl_apps_all); fi
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-facts.XXXXXX")"
+  FL_AF_NOW="$(fl_now)"
+  for app in ${apps[@]+"${apps[@]}"}; do
+    fl__af_collect "$app" >"${dir}/${i}" 2>/dev/null &
+    pids+=("$!")
+    if [[ "${#pids[@]}" -ge "$FL_AF_JOBS" ]]; then wait "${pids[0]}" 2>/dev/null || true; pids=("${pids[@]:1}"); fi
+    i=$((i + 1))
+  done
+  for p in ${pids[@]+"${pids[@]}"}; do wait "$p" 2>/dev/null || true; done
+  now_keep="$FL_AF_NOW"
+  fl_app_facts_clear
+  FL_AF_NOW="$now_keep"
+  FL_AF_NAMES=(${apps[@]+"${apps[@]}"})
+  i=0
+  for app in ${apps[@]+"${apps[@]}"}; do
+    IFS= read -r -d '' rec <"${dir}/${i}" || true
+    FL_AF_REC+=("${rec%$'\n'}")
+    # the place of APP in the arrays, found by name without a scan (a name that
+    # clashes after the sanitizing is told by fl__af_field and found by a scan)
+    printf -v "FL_AF_I_${app//[!A-Za-z0-9_]/_}" '%s' "$i"
+    i=$((i + 1))
+  done
+  rm -rf "$dir"
+  FL_AF_TXT="$(fl_apps_txt || true)"
+  FL_AF_PINS="$(fl_bstate_get APP_FOCUS)"
+  FL_AF_ON=1; FL_AF_BEHIND=1
+  fl_app_prefetch ${apps[@]+"${apps[@]}"}
+}
+
+# fl_app_prefetch APP...: what the apps' files say (the policy branch in
+# apps.tsv, the version in sites/apps.json, required_apps in hooks.py) read
+# once for the whole bench, kept as the memo answers of fl_app_policy_branch,
+# fl_app_json_version and fl_app_required_apps. 36 apps were 126 awk and 45 tr.
+fl_app_prefetch() {
+  local app f v line out files=() owners=() i s sites=() sapps=()
+  [[ "$#" -gt 0 ]] || return 0
+  # the policy branch of each app, asked in this shell (an answer asked for in
+  # a "$( )" would be lost) from apps.tsv read once
+  fl_policy_table_load
+  for app in "$@"; do
+    if [[ "$app" == "frappe" ]]; then v="$FL_FRAPPE_BRANCH"
+    elif fl_lookup_app_policy_v v "$app" "$FL_PROFILE"; then v="${v%%|*}"
+    else v=""; fi
+    fl_app_memo_set policy "$app" "$v"
+  done
+  if [[ -f "${FL_BENCH_DIR}/sites/apps.json" ]]; then
+    out="$(fl_apps_json_versions)"
+    out=$'\n'"${out}"$'\n'
+    for app in "$@"; do
+      v=""
+      if [[ "$out" == *$'\n'"${app}"$'\t'* ]]; then v="${out#*$'\n'"${app}"$'\t'}"; v="${v%%$'\n'*}"; fi
+      fl_app_memo_set version "$app" "$v"
+    done
+  fi
+  # the sites each app is on: the cached list of each site is read once, not
+  # once per app and site (a grep and two subshells each)
+  sites=(); sapps=()
+  while IFS= read -r s; do
+    [[ -n "$s" ]] || continue
+    if v="$(fl_site_apps_cached "$s")"; then sites+=("$s"); sapps+=(" ${v} "); fi
+  done < <(fl_sites_list)
+  for app in "$@"; do
+    v=""; i=0
+    for s in ${sites[@]+"${sites[@]}"}; do
+      [[ "${sapps[$i]}" == *" ${app} "* ]] && v="${v}${v:+ }${s}"
+      i=$((i + 1))
+    done
+    fl_app_memo_set sites "$app" "$v"
+  done
+  for app in "$@"; do
+    if fl_app_hooks_file_v f "$app"; then files+=("$f"); owners+=("$app"); else fl_app_memo_set required "$app" ""; fi
+  done
+  [[ "${#files[@]}" -gt 0 ]] || return 0
+  out="$(fl_hooks_required_apps_many "${files[@]}")"$'\n'
+  i=0
+  for f in ${files[@]+"${files[@]}"}; do
+    v=""
+    while IFS= read -r line; do
+      [[ "${line%%$'\t'*}" == "$f" ]] && v="${v}${line#*$'\t'}"$'\n'
+    done <<<"$out"
+    fl_app_memo_set required "${owners[$i]}" "$v"
+    i=$((i + 1))
+  done
+}
+
+fl_app_facts_clear() {
+  local n
+  for n in ${FL_AF_NAMES[@]+"${FL_AF_NAMES[@]}"}; do unset "FL_AF_I_${n//[!A-Za-z0-9_]/_}"; done
+  FL_AF_ON=0; FL_AF_BEHIND=0; FL_AF_NAMES=(); FL_AF_REC=(); FL_AF_TXT=""; FL_AF_PINS=""; FL_AF_NOW=""
+  fl_policy_table_drop
+  fl_app_memo_clear
+}
+
+# fl_app_memo KIND APP COMMAND...: COMMAND's output, asked once per app while
+# the facts are loaded (policy, required_apps, focus: awk and tr each time).
+# Without loaded facts it is just COMMAND. fl_app_memo_clear drops the answers.
+# An answer asked for inside a "$( )" is lost with that subshell: fl_app_memo_fill
+# asks for the apps in the shell that keeps them.
+FL_AFM_KEYS=()
+fl_app_memo() {
+  local kind="$1" app="$2" v out
+  shift 2
+  if [[ "$FL_AF_ON" != "1" ]]; then "$@"; return; fi
+  v="FL_AFM_${kind}_${app//[!A-Za-z0-9_]/_}"
+  if [[ -z "${!v+x}" ]]; then
+    # the x keeps the newlines at the end of the output
+    out="$("$@"; printf x)"
+    printf -v "$v" '%s' "${out%x}"
+    FL_AFM_KEYS+=("$v")
+  fi
+  printf '%s' "${!v}"
+}
+# fl_app_memo_set KIND APP VALUE: an answer asked for in one go for every app
+# (one awk over the bench instead of one per app)
+fl_app_memo_set() {
+  local v="FL_AFM_${1}_${2//[!A-Za-z0-9_]/_}"
+  [[ -n "${!v+x}" ]] || FL_AFM_KEYS+=("$v")
+  printf -v "$v" '%s' "$3"
+}
+# fl_app_memo_peek KIND APP: the answer in FL_MEMO_VAL when it was asked; else 1
+# fl_app_memo_fill APP...: the policy branch, pin and required apps of each, asked once
+fl_app_memo_fill() {
+  local app
+  for app in "$@"; do
+    fl_app_policy_branch "$app" >/dev/null
+    fl_app_required_apps "$app" >/dev/null
+    fl_app_focus_pin "$app" >/dev/null
+    fl_app_sites "$app" >/dev/null
+    fl_app_json_version "$app" >/dev/null
+  done
+}
+fl_app_memo_peek() {
+  local v="FL_AFM_${1}_${2//[!A-Za-z0-9_]/_}"
+  [[ "$FL_AF_ON" == "1" && -n "${!v+x}" ]] || return 1
+  FL_MEMO_VAL="${!v}"
+}
+FL_MEMO_VAL=""
+fl_app_memo_clear() {
+  local v
+  for v in ${FL_AFM_KEYS[@]+"${FL_AFM_KEYS[@]}"}; do unset "$v"; done
+  FL_AFM_KEYS=()
+}
+
+# after a fetch the remote tracking refs moved: behind is read from git again
+fl_app_facts_drop_behind() { FL_AF_BEHIND=0; }
+
+# fl__af_field APP KEY: the loaded value in FL_AF_VAL; 1 when APP or KEY is not loaded
+fl__af_field() {
+  local i n="" rec v
+  [[ "$FL_AF_ON" == "1" ]] || return 1
+  v="FL_AF_I_${1//[!A-Za-z0-9_]/_}"
+  i="${!v-}"
+  if [[ -z "$i" || "${FL_AF_NAMES[$i]-}" != "$1" ]]; then
+    i=0
+    for n in ${FL_AF_NAMES[@]+"${FL_AF_NAMES[@]}"}; do
+      [[ "$n" == "$1" ]] && break
+      i=$((i + 1))
+    done
+    [[ "$n" == "$1" ]] || return 1
+  fi
+  rec=$'\n'"${FL_AF_REC[$i]}"$'\n'
+  [[ "$rec" == *$'\n'"$2="* ]] || return 1
+  rec="${rec#*$'\n'"$2="}"
+  FL_AF_VAL="${rec%%$'\n'*}"
+  return 0
+}
+
+fl_app_has_git() { [[ -e "${FL_BENCH_DIR}/apps/$1/.git" ]]; }
 
 # fl__app_refs_v VAR APP: every branch and remote tracking ref of APP, one
 # "REF OID SYMREF HEAD" row (fields apart by \037; HEAD is * on the branch that
@@ -152,18 +433,32 @@ fl__app_ref_v() {
 fl_app_branch() {
   local h
   fl_app_has_git "$1" || return 0
+  if fl__af_field "$1" branch; then printf '%s' "$FL_AF_VAL"; return 0; fi
   if fl__app_head_v h "$1"; then printf '%s' "${h% *}"; return 0; fi
   fl_app_git "$1" symbolic-ref --short -q HEAD 2>/dev/null || true
 }
-fl_app_commit() { fl_app_has_git "$1" || return 0; fl_app_git "$1" rev-parse -q --verify 'HEAD^{commit}' 2>/dev/null || true; }
-fl_app_dirty() { fl_app_has_git "$1" && [[ -n "$(fl_app_git "$1" status --porcelain -uno 2>/dev/null || true)" ]]; }
-fl_app_shallow() { fl_app_has_git "$1" && [[ "$(fl_app_git "$1" rev-parse --is-shallow-repository 2>/dev/null || true)" == "true" ]]; }
+fl_app_commit() {
+  fl_app_has_git "$1" || return 0
+  if fl__af_field "$1" commit; then printf '%s' "$FL_AF_VAL"; return 0; fi
+  fl_app_git "$1" rev-parse -q --verify 'HEAD^{commit}' 2>/dev/null || true
+}
+fl_app_dirty() {
+  fl_app_has_git "$1" || return 1
+  if fl__af_field "$1" dirty; then [[ "$FL_AF_VAL" == "1" ]]; return; fi
+  [[ -n "$(fl_app_git "$1" status --porcelain -uno 2>/dev/null || true)" ]]
+}
+fl_app_shallow() {
+  fl_app_has_git "$1" || return 1
+  if fl__af_field "$1" shallow; then [[ "$FL_AF_VAL" == "1" ]]; return; fi
+  [[ "$(fl_app_git "$1" rev-parse --is-shallow-repository 2>/dev/null || true)" == "true" ]]
+}
 
 # The remote an app follows, in bench's order: the branch's remote, else
 # upstream, else the first one.
 fl_app_remote() {
   local app="$1" b r="" remotes
   fl_app_has_git "$app" || return 0
+  if fl__af_field "$app" remote; then printf '%s' "$FL_AF_VAL"; return 0; fi
   b="$(fl_app_branch "$app")"
   [[ -n "$b" ]] && fl_app_config_v r "$app" "branch.${b}.remote"
   if [[ -z "$r" || "$r" == "." ]]; then
@@ -173,28 +468,43 @@ fl_app_remote() {
   printf '%s' "$r"
 }
 
-# https://user:token@host/x -> https://host/x (never shown, never written)
-fl_url_strip_userinfo() { printf '%s' "$1" | sed -E 's#^(https?://)[^/@]*@#\1#'; }
-
 fl_app_remote_url() {
   local app="$1" r
+  fl_app_has_git "$app" || return 0
+  if fl__af_field "$app" url; then fl_url_strip_userinfo "$FL_AF_VAL"; return 0; fi
   r="$(fl_app_remote "$app")"
   [[ -n "$r" ]] || return 0
   fl_url_strip_userinfo "$(fl_app_git "$app" remote get-url "$r" 2>/dev/null || true)"
 }
 
 # The version bench recorded in sites/apps.json for APP.
-fl_app_json_version() {
-  local f="${FL_BENCH_DIR}/sites/apps.json"
-  [[ -f "$f" ]] || return 0
-  awk -v a="\"$1\"" '
-    index($0, a) && /:[ \t]*\{/ { f = 1; next }
-    f && /"version"/ { v = $0; sub(/.*"version"[ \t]*:[ \t]*"/, "", v); sub(/".*/, "", v); print v; exit }
-    f && /^[ \t]?\}/ { exit }' "$f"
+fl_app_json_version() { fl_app_memo version "$1" fl__app_json_version "$1"; }
+fl__app_json_version() {
+  local v
+  [[ -f "${FL_BENCH_DIR}/sites/apps.json" ]] || return 0
+  # shellcheck disable=SC2119
+  v="$(fl_apps_json_versions "$1")"
+  printf '%s' "${v#*$'\t'}"
+}
+
+# fl_apps_json_versions [APP]: "app<TAB>version" for the apps of
+# sites/apps.json (just APP when given), one awk for all of them. An app is a
+# key of the top level object; its version is the first "version" inside it.
+fl_apps_json_versions() {
+  awk -v want="${1:-}" '
+    { opn = gsub(/\{/, "{"); cls = gsub(/\}/, "}") }
+    depth == 1 && match($0, /^[ \t]*"[^"]+"[ \t]*:[ \t]*\{/) { cur = $0; sub(/^[ \t]*"/, "", cur); sub(/".*/, "", cur) }
+    depth >= 2 && cur != "" && /"version"/ {
+      v = $0; sub(/.*"version"[ \t]*:[ \t]*"/, "", v); sub(/".*/, "", v)
+      if (!(cur in seen) && (want == "" || want == cur)) { seen[cur] = 1; print cur "\t" v }
+      cur = ""
+    }
+    { depth += opn - cls }' "${FL_BENCH_DIR}/sites/apps.json" 2>/dev/null || true
 }
 
 # The branch config/apps.tsv (or the profile, for frappe) wants for APP.
-fl_app_policy_branch() {
+fl_app_policy_branch() { fl_app_memo policy "$1" fl__app_policy_branch "$1"; }
+fl__app_policy_branch() {
   local policy
   if [[ "$1" == "frappe" ]]; then printf '%s' "$FL_FRAPPE_BRANCH"; return 0; fi
   policy="$(fl_lookup_app_policy "$1" "$FL_PROFILE" 2>/dev/null || true)"
@@ -203,34 +513,52 @@ fl_app_policy_branch() {
 
 # required_apps from the app's hooks.py, read like bench does (a Python
 # list of strings; "org/app" entries count as "app"), frappe left out.
-fl_app_required_apps() { local f; f="$(fl_app_hooks_file "$1")" && fl_hooks_required_apps "$f"; return 0; }
+fl_app_required_apps() { fl_app_memo required "$1" fl__app_required_apps "$1"; }
+fl__app_required_apps() { local f; f="$(fl_app_hooks_file "$1")" && fl_hooks_required_apps "$f"; return 0; }
 
-# fl_app_hooks_file APP: apps/APP/<package>/hooks.py. The folder and the
-# package can differ (apps/Raven holds raven), so like the app add plan:
-# the folder's own name, its lower case form, else the one package there.
-fl_app_hooks_file() {
-  local d f lower
-  d="$(fl_app_path "$1")"
-  lower="$(printf '%s' "$1" | tr '[:upper:]-' '[:lower:]_')"
-  for f in "$d/$1/hooks.py" "$d/${lower}/hooks.py"; do [[ -f "$f" ]] && { printf '%s' "$f"; return 0; }; done
-  for f in "$d"/*/hooks.py; do [[ -f "$f" ]] && { printf '%s' "$f"; return 0; }; done
+# fl_app_hooks_file_v VAR APP: apps/APP/<package>/hooks.py in VAR, 1 when
+# there is none. The folder and the package can differ (apps/Raven holds
+# raven), so like the app add plan: the folder's own name, its lower case
+# form, else the one package there. No fork unless the first try misses.
+fl_app_hooks_file_v() {
+  local __d __f __l
+  __d="${FL_BENCH_DIR}/apps/$2"
+  if [[ -f "$__d/$2/hooks.py" ]]; then printf -v "$1" '%s' "$__d/$2/hooks.py"; return 0; fi
+  __l="$(printf '%s' "$2" | tr '[:upper:]-' '[:lower:]_')"
+  for __f in "$__d/${__l}/hooks.py" "$__d"/*/hooks.py; do
+    [[ -f "$__f" ]] && { printf -v "$1" '%s' "$__f"; return 0; }
+  done
   return 1
 }
+fl_app_hooks_file() { local f; fl_app_hooks_file_v f "$1" && printf '%s' "$f"; }
 
 # fl_hooks_required_apps FILE: the same read from any hooks.py
 fl_hooks_required_apps() {
-  local hooks="$1"
-  [[ -f "$hooks" ]] || return 0
-  awk '
-    /^[ \t]*required_apps[ \t]*=/ { f = 1 }
-    f { buf = buf " " $0; if (index($0, "]")) exit }
-    END {
+  [[ -f "$1" ]] || return 0
+  fl__hooks_required_awk 0 "$1"
+}
+
+# fl_hooks_required_apps_many FILE...: "FILE<TAB>app" per required app, one awk
+fl_hooks_required_apps_many() { fl__hooks_required_awk 1 "$@"; }
+
+# fl__hooks_required_awk TAG FILE...: with TAG 1 every line starts with its file
+fl__hooks_required_awk() {
+  local tag="$1"
+  shift
+  awk -v tag="$tag" '
+    function flush(   v, n, parts) {
       while (match(buf, /["\047][^"\047]+["\047]/)) {
         v = substr(buf, RSTART + 1, RLENGTH - 2); buf = substr(buf, RSTART + RLENGTH)
         n = split(v, parts, "/"); v = parts[n]
-        if (v != "frappe") print v
+        if (v != "frappe") print (tag ? name "\t" : "") v
       }
-    }' "$hooks"
+      buf = ""
+    }
+    FNR == 1 { flush(); name = FILENAME; f = 0; done = 0 }
+    done { next }
+    /^[ \t]*required_apps[ \t]*=/ { f = 1 }
+    f { buf = buf " " $0; if (index($0, "]")) done = 1 }
+    END { flush() }' "$@"
 }
 
 # ---------------------------------------------------------------- site app lists
@@ -328,7 +656,8 @@ fl_site_has_app() {
 }
 
 # the sites (from the cache) that have APP, space separated
-fl_app_sites() {
+fl_app_sites() { fl_app_memo sites "$1" fl__app_sites "$1"; }
+fl__app_sites() {
   local s out=""
   while IFS= read -r s; do
     [[ -n "$s" ]] || continue
@@ -346,8 +675,56 @@ fl_json_str_array() {
   printf ']'
 }
 
+# fl__af_v VAR APP KEY: the loaded KEY of APP in VAR, empty when it is not there
+fl__af_v() {
+  if fl__af_field "$2" "$3"; then printf -v "$1" '%s' "$FL_AF_VAL"; else printf -v "$1" '%s' ''; fi
+}
+
+# fl__memo_v VAR KIND APP COMMAND...: the memo's answer, else COMMAND's, in VAR
+fl__memo_v() {
+  local __v="$1" __k="$2" __a="$3"
+  shift 3
+  if fl_app_memo_peek "$__k" "$__a"; then printf -v "$__v" '%s' "$FL_MEMO_VAL"; else printf -v "$__v" '%s' "$("$@")"; fi
+}
+
+# fl_json_words_v VAR WORD...: a JSON array of strings
+fl_json_words_v() {
+  local __o="$1" w e sep="" arr=""
+  shift
+  for w in "$@"; do
+    fl_json_escape_v e "$w"
+    arr="${arr}${sep}\"${e}\""; sep=","
+  done
+  printf -v "$__o" '[%s]' "$arr"
+}
+
+# fl__app_list_row_v VAR APP: the JSON object of one app of app list, with the
+# facts loaded and without a subshell: 36 apps and a dozen values each were
+# 400 forks
+fl__app_list_row_v() {
+  local __o="$1" app="$2" listed=0 dirty=0 shallow=0 url remote branch commit policy ver sites fresh
+  local j_name j_listed j_repo j_remote j_branch j_policy j_commit j_dirty j_shallow j_ver j_sites
+  fl_app_in_apps_txt "$app" && listed=1
+  fl_app_dirty "$app" && dirty=1
+  fl_app_shallow "$app" && shallow=1
+  fl__af_v url "$app" url; fl_url_strip_userinfo_v url "$url"
+  fl__af_v remote "$app" remote; fl__af_v branch "$app" branch; fl__af_v commit "$app" commit
+  fl__memo_v policy policy "$app" fl_app_policy_branch "$app"
+  fl__memo_v ver version "$app" fl_app_json_version "$app"
+  fl__memo_v sites sites "$app" fl_app_sites "$app"
+  fl_json_str_v j_name "$app"; fl_json_bool_v j_listed "$listed"; fl_json_str_v j_repo "$url"
+  fl_json_str_v j_remote "$remote"; fl_json_str_v j_branch "$branch"; fl_json_str_v j_policy "$policy"
+  fl_json_str_v j_commit "$commit"; fl_json_bool_v j_dirty "$dirty"; fl_json_bool_v j_shallow "$shallow"
+  fl_json_str_v j_ver "$ver"
+  # shellcheck disable=SC2086  # the site names are words
+  fl_json_words_v j_sites $sites
+  fl_freshness_app_json_v fresh "$app"
+  printf -v "$__o" '{"name":%s,"in_apps_txt":%s,"repo":%s,"remote":%s,"branch":%s,"policy_branch":%s,"commit":%s,"dirty":%s,"shallow":%s,"version":%s,"sites":%s,%s}' \
+    "$j_name" "$j_listed" "$j_repo" "$j_remote" "$j_branch" "$j_policy" "$j_commit" "$j_dirty" "$j_shallow" "$j_ver" "$j_sites" "$fresh"
+}
+
 fl_cmd_app_list() {
-  local no_sites=0 a app sep="" rows=() branch commit dirty sites listed policy
+  local no_sites=0 a app sep="" rows=() branch commit dirty sites policy row
   for a in "$@"; do
     case "$a" in
       --no-sites) no_sites=1 ;;
@@ -364,20 +741,19 @@ fl_cmd_app_list() {
     FL_FRESHNESS_READY=""; fl_freshness_prepare
     while IFS= read -r app; do
       [[ -n "$app" ]] || continue
-      listed=0; fl_app_in_apps_txt "$app" && listed=1
-      dirty=0; fl_app_dirty "$app" && dirty=1
-      # shellcheck disable=SC2046  # the site names are words
-      printf '%s{"name":%s,"in_apps_txt":%s,"repo":%s,"remote":%s,"branch":%s,"policy_branch":%s,"commit":%s,"dirty":%s,"shallow":%s,"version":%s,"sites":%s,%s}' \
-        "$sep" "$(fl_json_str "$app")" "$(fl_json_bool "$listed")" "$(fl_json_str "$(fl_app_remote_url "$app")")" \
-        "$(fl_json_str "$(fl_app_remote "$app")")" "$(fl_json_str "$(fl_app_branch "$app")")" \
-        "$(fl_json_str "$(fl_app_policy_branch "$app")")" "$(fl_json_str "$(fl_app_commit "$app")")" \
-        "$(fl_json_bool "$dirty")" "$(fl_json_bool "$(fl_app_shallow "$app" && printf 1 || printf 0)")" \
-        "$(fl_json_str "$(fl_app_json_version "$app")")" "$(fl_json_str_array $(fl_app_sites "$app"))" "$(fl_freshness_app_json "$app")"
+      fl__app_list_row_v row "$app"
+      printf '%s%s' "$sep" "$row"
       sep=","
     done < <(fl_apps_all)
     printf ']}\n'
+    fl_app_facts_clear
     return 0
   fi
+  FL_AF_LIGHT=1
+  # shellcheck disable=SC2119
+  fl_app_facts_load
+  FL_AF_LIGHT=0
+  fl_app_memo_fill ${FL_AF_NAMES[@]+"${FL_AF_NAMES[@]}"}
   rows+=("App|Branch|Commit|Policy|Version|Sites")
   while IFS= read -r app; do
     [[ -n "$app" ]] || continue
@@ -389,6 +765,7 @@ fl_cmd_app_list() {
     sites="$(fl_app_sites "$app")"
     rows+=("${app}|${branch:--}|${commit:0:7}|${policy:--}|$(fl_app_json_version "$app")|${sites:--}")
   done < <(fl_apps_all)
+  fl_app_facts_clear
   fl_table "${rows[@]}"
   [[ -n "$(fl_site_apps_meta error)" ]] && fl_warn "$(fl_site_apps_meta error); sites shown from the last good read"
   printf '  %s* local changes%s\n' "$FL_DIM" "$FL_RESET"
@@ -411,7 +788,7 @@ fl_app_name_from_url() {
 }
 
 # git that never prompts: a missing key or token fails at once
-fl_git_batch() { env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git "$@"; }
+fl_git_batch() { fl_git_net "$@"; }
 
 fl_url_is_ssh() {
   case "$1" in
@@ -441,21 +818,17 @@ fl_repo_access_hint() {
 # fl_repo_preflight REPO BRANCH: 0 when the branch (or tag) exists and the
 # repo is readable without a prompt; prints the reason and a fix otherwise.
 fl_repo_preflight() {
-  local repo="$1" branch="$2" code=0 err heads
-  err="$(mktemp "${TMPDIR:-/tmp}/benchbar-lsremote.XXXXXX")"
-  fl_git_batch ls-remote --exit-code --heads --tags -- "$repo" "$branch" >/dev/null 2>"$err" || code=$?
-  fl_log_file_append "$err"
-  if [[ "$code" == "0" ]]; then rm -f "$err"; return 0; fi
+  local repo="$1" branch="$2" code=0 heads
+  fl_git_remote_ref "$repo" "$branch" || code=$?
+  [[ "$code" == "0" ]] && return 0
   if [[ "$code" == "2" ]]; then
-    rm -f "$err"
-    heads="$(fl_git_batch ls-remote --heads -- "$repo" 2>/dev/null | sed 's#.*refs/heads/##' | awk 'NR<=20' | tr '\n' ' ')"
+    heads="$(fl_git_remote_heads "$repo" | tr '\n' ' ')"
     fl_fail "branch ${branch} not found in ${repo}"
     fl_note "remote branches: ${heads:-none}"
     fl_fix "pass one of them with --branch"
     return 1
   fi
-  fl_fail "cannot read ${repo} (git ls-remote exit ${code}): $(grep -v '^[[:space:]]*$' "$err" | awk 'NR==1')"
-  rm -f "$err"
+  fl_fail "cannot read ${repo} (git ls-remote exit ${code}): ${FL_GR_ERR}"
   fl_repo_access_hint "$repo"
   return 1
 }
@@ -513,7 +886,7 @@ fl_app_clone_rollback() {
     [[ -n "$d" && -d "$(fl_app_path "$d")" ]] || continue
     if fl_app_in_apps_txt "$d"; then
       fl_warn "apps/${d} is half cloned and already listed in sites/apps.txt; benchbar does not edit sites/"
-      fl_fix "cd ${FL_BENCH_DIR} && bench remove-app ${d}   (then benchbar app add ${d} again)"
+      fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench remove-app "$d")   (then benchbar app add $(printf '%q' "$d") again)"
       continue
     fi
     dest="${FL_BACKUP_ROOT}/$(fl_backup_stamp)/apps"
@@ -542,7 +915,7 @@ fl_app_clone() {
   after="$(fl__apps_dirs)"
   # shellcheck disable=SC2046  # folder names are words
   fl_app_clone_rollback $(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))
-  fl_fix "cd ${FL_BENCH_DIR} && bench get-app --skip-assets --branch ${branch} ${repo}"
+  fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench get-app --skip-assets --branch "$branch" "$repo")"
   return 1
 }
 
@@ -556,7 +929,7 @@ fl_app_install_on_sites() {
   [[ -n "$FL_SETUP_REDIS_PORTS" ]] || fl_bench_redis_up "$FL_BENCH_DIR"
   for s in "$@"; do
     if ! fl_run_long "bench --site ${s} install-app ${app}" fl__in_dir "$FL_BENCH_DIR" bench --site "$s" install-app "$app"; then
-      fl_fix "cd ${FL_BENCH_DIR} && bench --site ${s} install-app ${app}   (or run this command again)"
+      fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench --site "$s" install-app "$app")   (or run this command again)"
       code=1
     fi
   done
@@ -612,7 +985,7 @@ fl_cmd_app_install() {
   missing="$(fl_app_required_apps "$app" | while IFS= read -r dep; do fl_app_in_apps_txt "$dep" || printf '%s ' "$dep"; done)"
   if [[ -n "$missing" ]]; then
     fl_fail "${app} requires ${missing% }, which the bench does not have"
-    for dep in $missing; do fl_fix "benchbar app add ${dep}"; done
+    for dep in $missing; do fl_fix "$(fl_fix_cmd benchbar app add "$dep")"; done
     return 1
   fi
   fl_header "benchbar app install" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$OPT_SITE"
@@ -1087,7 +1460,7 @@ fl_cmd_app_update() {
         fl_fail "update of ${app} stopped at: ${name}"
         [[ "$(fl_app_commit "$app")" != "$old" ]] && fl_note "the code is at ${new:0:12}; to go back (not run for you): git -C ${FL_BENCH_DIR}/apps/${app} reset --hard ${old}"
         [[ "$skip_backup" != "1" && "${#sites[@]}" -gt 0 ]] && fl_note "site backups are in ${FL_BENCH_DIR}/sites/<site>/private/backups"
-        fl_fix "benchbar app update ${app} --bench-dir ${FL_BENCH_DIR}   (runs the steps that did not finish, nothing else)"
+        fl_fix "$(fl_fix_cmd benchbar app update "$app" --bench-dir "$FL_BENCH_DIR")   (runs the steps that did not finish, nothing else)"
         return 1
       fi
       fl_step_end "done"

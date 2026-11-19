@@ -659,3 +659,126 @@ func TestKeepaliveStatusReportsRunProcess(t *testing.T) {
 		t.Errorf("%+v", info)
 	}
 }
+
+func TestKeepaliveStart(t *testing.T) {
+	runCall := `/Run /TN BenchBar Keepalive`
+	xmlCall := `/Query /TN BenchBar Keepalive /XML`
+	cases := []struct {
+		name     string
+		setup    func(e *env)
+		code     int
+		stdout   string
+		stderr   string
+		wantRun  bool
+		wantCall []string
+	}{
+		{
+			name:     "no task",
+			setup:    func(e *env) { e.taskNotInstalled() },
+			wantCall: []string{`/Query /TN BenchBar Keepalive`},
+		},
+		{
+			name: "task and run alive",
+			setup: func(e *env) {
+				e.procs.add(777, testExe)
+				e.writePid(777, 777000)
+			},
+			wantCall: []string{`/Query /TN BenchBar Keepalive`},
+		},
+		{
+			name:     "task and no run",
+			setup:    func(e *env) {},
+			stdout:   `Started the task "BenchBar Keepalive".`,
+			wantCall: []string{`/Query /TN BenchBar Keepalive`, xmlCall, runCall},
+		},
+		{
+			name: "task and a reused pid",
+			setup: func(e *env) {
+				e.procs.add(777, `C:\Windows\notepad.exe`)
+				e.writePid(777, 777000)
+			},
+			stdout:   `Started the task "BenchBar Keepalive".`,
+			wantCall: []string{`/Query /TN BenchBar Keepalive`, xmlCall, runCall},
+		},
+		{
+			// a second install's task is that copy's to start: nothing is run
+			name: "task of another copy",
+			setup: func(e *env) {
+				e.taskHandler(taskXMLOutput(`--headless "C:\other\benchbar.exe" keepalive run --distro "Ubuntu-24.04"`), statusCSV)
+				e.FileExists = func(p string) bool { return true }
+				if e.LocalAppData == "" {
+					e.LocalAppData = `C:\Users\me\AppData\Local`
+				}
+			},
+			wantCall: []string{`/Query /TN BenchBar Keepalive`, xmlCall},
+		},
+		{
+			name: "run fails",
+			setup: func(e *env) {
+				e.tasks.handler = func(a []string) (string, int, error) {
+					if a[0] == "/Run" {
+						return "ERROR: Access is denied.", 1, nil
+					}
+					return "", 0, nil
+				}
+			},
+			code:     1,
+			stderr:   `the task "BenchBar Keepalive" is installed but did not start: ERROR: Access is denied.`,
+			wantCall: []string{`/Query /TN BenchBar Keepalive`, xmlCall, runCall},
+		},
+	}
+	for _, c := range cases {
+		for _, packaged := range []bool{false, true} {
+			e := newEnv(t)
+			e.Package.Packaged = packaged
+			c.setup(e)
+			if code := e.run("keepalive", "start"); code != c.code {
+				t.Errorf("%s (packaged %v): exit %d, want %d", c.name, packaged, code, c.code)
+			}
+			if got := strings.TrimSpace(e.stdout()); got != c.stdout {
+				t.Errorf("%s: stdout %q, want %q", c.name, got, c.stdout)
+			}
+			if !strings.Contains(e.stderr(), c.stderr) || (c.stderr == "" && e.stderr() != "") {
+				t.Errorf("%s: stderr %q, want %q", c.name, e.stderr(), c.stderr)
+			}
+			var got []string
+			for _, call := range e.tasks.calls {
+				got = append(got, strings.Join(call, " "))
+			}
+			if strings.Join(got, "\n") != strings.Join(c.wantCall, "\n") {
+				t.Errorf("%s: calls %v, want %v", c.name, got, c.wantCall)
+			}
+		}
+	}
+}
+
+func TestKeepaliveRunLogsUpdateStopWhenPackaged(t *testing.T) {
+	for _, packaged := range []bool{false, true} {
+		e := newEnv(t)
+		e.Package.Packaged = packaged
+		ctx, cancel := context.WithCancel(context.Background())
+		e.Ctx = ctx
+		t.Setenv("FAKE_WSL_MODE", "wait-signal")
+		t.Setenv("FAKE_WSL_READY", "")
+		done := make(chan int, 1)
+		go func() { done <- e.run("keepalive", "run") }()
+		deadline := time.Now().Add(15 * time.Second)
+		for len(e.starts()) < 1 && time.Now().Before(deadline) {
+			time.Sleep(20 * time.Millisecond)
+		}
+		cancel()
+		select {
+		case code := <-done:
+			if code != 0 {
+				t.Errorf("exit %d", code)
+			}
+		case <-time.After(15 * time.Second):
+			t.Fatal("keepalive run did not stop")
+		}
+		data, _ := os.ReadFile(filepath.Join(e.ConfigDir, "keepalive.log"))
+		has := strings.Contains(string(data), "an update or a sign out stopped it; benchbar.exe keepalive start or the next logon starts it again")
+		if has != packaged {
+			t.Errorf("packaged %v: log has the line %v:\n%s", packaged, has, data)
+		}
+	}
+}

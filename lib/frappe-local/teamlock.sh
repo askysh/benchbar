@@ -132,7 +132,7 @@ fl_lock_drift() {
   fi
   if [[ -n "$with_version" && -n "$LK_FRAPPE_BENCH" ]]; then
     ver="$(fl_bench_cli_version)"
-    if [[ -z "$ver" || "$ver" == "$LK_FRAPPE_BENCH" ]]; then DR_OK=$((DR_OK + 1)); else fl__drift bench_version_mismatch "" "" "$LK_FRAPPE_BENCH" "$ver" warn "uv tool install frappe-bench==${LK_FRAPPE_BENCH}   (or pipx install frappe-bench==${LK_FRAPPE_BENCH})"; fi
+    if [[ -z "$ver" || "$ver" == "$LK_FRAPPE_BENCH" ]]; then DR_OK=$((DR_OK + 1)); else fl__drift bench_version_mismatch "" "" "$LK_FRAPPE_BENCH" "$ver" warn "$(fl_fix_cmd uv tool install "frappe-bench==${LK_FRAPPE_BENCH}")   (or pipx install frappe-bench==${LK_FRAPPE_BENCH})"; fi
   fi
   listed=" $(fl_apps_txt | tr '\n' ' ') "
   i=0
@@ -142,7 +142,7 @@ fl_lock_drift() {
     before="${#DR_KIND[@]}"
     dir="$(fl_app_existing_dir "$name")"
     if [[ -z "$dir" || "$listed" != *" ${dir} "* ]]; then
-      fl__drift app_missing "$name" "" "${LK_APP_BRANCH[$i]}" "" fail "benchbar lock apply"
+      fl__drift app_missing "$name" "" "${LK_APP_BRANCH[$i]}" "" fail "$(fl_fix_cmd benchbar lock apply)"
       i=$((i + 1)); continue
     fi
     if ! fl_app_has_git "$dir"; then
@@ -152,19 +152,19 @@ fl_lock_drift() {
     cur="$(fl_app_remote_url "$dir")"
     if [[ "$(fl_repo_key "$cur")" != "$(fl_repo_key "${LK_APP_REPO[$i]}")" ]]; then
       remote="$(fl_app_remote "$dir")"
-      fl__drift repo_mismatch "$name" "" "${LK_APP_REPO[$i]}" "$cur" warn "git -C ${FL_BENCH_DIR}/apps/${dir} remote set-url ${remote:-upstream} ${LK_APP_REPO[$i]}"
+      fl__drift repo_mismatch "$name" "" "${LK_APP_REPO[$i]}" "$cur" warn "$(fl_fix_cmd git -C "${FL_BENCH_DIR}/apps/${dir}" remote set-url "${remote:-upstream}" "${LK_APP_REPO[$i]}")"
     fi
-    fl_app_dirty "$dir" && fl__drift dirty "$name" "" "clean" "local changes" warn "git -C ${FL_BENCH_DIR}/apps/${dir} status"
+    fl_app_dirty "$dir" && fl__drift dirty "$name" "" "clean" "local changes" warn "$(fl_fix_cmd git -C "${FL_BENCH_DIR}/apps/${dir}" status)"
     cur="$(fl_app_branch "$dir")"
-    [[ "$cur" == "${LK_APP_BRANCH[$i]}" ]] || fl__drift branch_mismatch "$name" "" "${LK_APP_BRANCH[$i]}" "${cur:-detached}" warn "benchbar lock apply"
+    [[ "$cur" == "${LK_APP_BRANCH[$i]}" ]] || fl__drift branch_mismatch "$name" "" "${LK_APP_BRANCH[$i]}" "${cur:-detached}" warn "$(fl_fix_cmd benchbar lock apply)"
     if [[ -n "$(fl_lock_app_commit "$i")" ]]; then
       state="$(fl_lock_commit_state "$dir" "$(fl_lock_app_commit "$i")")"
       cur="$(fl_app_commit "$dir")"; cur="${cur:0:7}"; a="$(fl_lock_app_commit "$i")"; a="${a:0:7}"
       case "$state" in
-        behind) fl__drift commit_behind "$name" "" "$a" "$cur" warn "benchbar lock apply" ;;
-        unknown) fl__drift commit_unknown "$name" "" "$a" "$cur" warn "benchbar lock apply" ;;
+        behind) fl__drift commit_behind "$name" "" "$a" "$cur" warn "$(fl_fix_cmd benchbar lock apply)" ;;
+        unknown) fl__drift commit_unknown "$name" "" "$a" "$cur" warn "$(fl_fix_cmd benchbar lock apply)" ;;
         ahead) fl__drift commit_ahead "$name" "" "$a" "$cur" warn "benchbar lock write   (when the newer code is what the team should get)" ;;
-        diverged) fl__drift commit_diverged "$name" "" "$a" "$cur" warn "git -C ${FL_BENCH_DIR}/apps/${dir} log --oneline --graph HEAD ${a}" ;;
+        diverged) fl__drift commit_diverged "$name" "" "$a" "$cur" warn "$(fl_fix_cmd git -C "${FL_BENCH_DIR}/apps/${dir}" log --oneline --graph HEAD "$a")" ;;
       esac
     fi
     [[ "${#DR_KIND[@]}" == "$before" ]] && DR_OK=$((DR_OK + 1))
@@ -183,10 +183,10 @@ fl_lock_drift() {
     before="${#DR_KIND[@]}"
     apps="${LK_SITE_APPS[$i]:-}"
     if [[ ! -f "${FL_BENCH_DIR}/sites/${s}/site_config.json" ]]; then
-      fl__drift site_missing "" "$s" "$s" "" warn "benchbar site add ${s}${apps:+ --apps \"${apps}\"}"
+      fl__drift site_missing "" "$s" "$s" "" warn "$(fl_fix_cmd benchbar site add "$s" ${apps:+--apps "$apps"})"
     elif fl_site_apps_cached "$s" >/dev/null; then
       for a in $apps; do
-        fl_site_has_app "$s" "$a" || fl__drift site_app_missing "$a" "$s" "$a" "" warn "benchbar app install ${a} --site ${s}"
+        fl_site_has_app "$s" "$a" || fl__drift site_app_missing "$a" "$s" "$a" "" warn "$(fl_fix_cmd benchbar app install "$a" --site "$s")"
       done
     fi
     [[ "${#DR_KIND[@]}" == "$before" ]] && DR_OK=$((DR_OK + 1))
@@ -536,12 +536,12 @@ fl_cmd_lock_apply() {
 
 # Site level changes are printed, never run: sites hold data.
 fl_lock_site_steps() {
-  local i=0 printed=0
+  local i=0 printed=0 plain
   while [[ "$i" -lt "${#DR_KIND[@]}" ]]; do
     case "${DR_KIND[$i]}" in
       site_missing|site_app_missing)
         [[ "$printed" == "1" ]] || { printf '\n%sNext steps for the sites (not run)%s\n' "$FL_BOLD" "$FL_RESET"; printed=1; }
-        fl_note "${DR_FIX[$i]}" ;;
+        fl_fix_plain_v plain "${DR_FIX[$i]}"; fl_note "$plain" ;;
     esac
     i=$((i + 1))
   done
@@ -589,5 +589,5 @@ chk_lock_drift() {
     i=$((i + 1))
   done
   [[ "${#DR_KIND[@]}" -gt 3 ]] && what="${what}, and $((${#DR_KIND[@]} - 3)) more"
-  chk__set warn "${#DR_KIND[@]} difference(s) from $(basename "$FL_LOCK_FILE"): ${what}" "benchbar lock apply   (benchbar lock check lists them)"
+  chk__set warn "${#DR_KIND[@]} difference(s) from $(basename "$FL_LOCK_FILE"): ${what}" "$(fl_fix_cmd benchbar lock apply)   (benchbar lock check lists them)"
 }
