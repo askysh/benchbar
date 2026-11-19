@@ -170,9 +170,10 @@ assert_contains "$OUT" "done (exit 0)"
 # a record that ends while op wait looks at it
 fake_op op-20260101-000007-17 running "$LIVE"
 ( sleep 1; fake_op op-20260101-000007-17 "done" "$DEAD" 0 ) &
+SUB=$!
 run_json op wait op-20260101-000007-17 --timeout 30 --json
 assert_eq "0 done" "$CODE $(printf '%s' "$OUT" | jget - 'd["state"]')" "$OUT"
-wait
+wait "$SUB"
 
 # ---- 5. the records are pruned: the newest FL_KEEP_OPS stay, and a run that still runs
 rm -rf "$OPS"
