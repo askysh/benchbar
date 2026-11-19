@@ -128,6 +128,7 @@ public partial class App
     private PageServices NewPageServices()
     {
         var services = PageServices.ForApp(_cli, () => Theme, () => _main, CopyText, OpenUrl, () => _controller?.Poller.Kick());
+        services.Pins = _config.Pins;
         services.Distro = () => DistroName.Resolve(_config.Distro) ?? _controller?.Snapshot.Distro;
         services.CopySecret = CopySecret;
         services.Notify = text => _icon?.TrayIcon.ShowNotification("BenchBar", text, H.NotifyIcon.Core.NotificationIcon.Info);
@@ -392,6 +393,48 @@ public partial class App
         public string? ShimPath => app.DisplayShimPath();
 
         public void DistroSwitched() => app._controller?.Poller.Kick();
+    }
+
+    // --- Quick Switch ---
+
+    private QuickSwitchWindow? _quickSwitch;
+    private string? _lastSwitchTarget;
+    private readonly Dictionary<string, string> _lastSwitchUser = [];
+
+    /// <summary>
+    /// The Quick Switch panel (one at a time). It reads the benches the last poll saw, and what it opens is the CLI's own <c>open --as</c>.
+    /// The last user it opened is remembered for this run only, to mark the row "last opened".
+    /// </summary>
+    private void ShowQuickSwitch()
+    {
+        if (_quitting || _setup is null) return;
+        if (_quickSwitch is { } open)
+        {
+            open.Activate();
+            return;
+        }
+        var window = new QuickSwitchWindow(new QuickSwitchHost
+        {
+            Cli = _cli,
+            Benches = () => _controller?.Snapshot.Benches ?? [],
+            Pins = _config.Pins,
+            LastTarget = () => _lastSwitchTarget,
+            LastUser = key => _lastSwitchUser.GetValueOrDefault(key),
+            Opened = (target, user) =>
+            {
+                _lastSwitchTarget = target.Key;
+                _lastSwitchUser[target.Key] = user;
+            },
+        }, Theme);
+        _quickSwitch = window;
+        window.Closed += (_, _) =>
+        {
+            _quickSwitch = null;
+            Viewer(false);
+        };
+        Viewer(true);
+        window.Show();
+        window.Activate();
     }
 
     private void ShowAbout()
