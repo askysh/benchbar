@@ -8,6 +8,8 @@
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
+# an apply wants a plan that came back some seconds ago (MCP-4: tests/test-mcp-2.sh checks the wait itself)
+export BENCHBAR_MCP_APPLY_DELAY=0
 BENCH="$HOME/frappe-bench"
 make_fake_bench "$BENCH"
 run_fm service --yes --bench-dir "$BENCH"
@@ -262,8 +264,8 @@ import json, sys
 r = [json.loads(l) for l in sys.stdin if l.strip()]
 print(r[0]["error"]["code"], "ok" if r[1]["id"] == 2 and r[1]["result"] == {} else r[1])')" "$R"
 
-# an action on a folder benchbar does not know (not in benchbar_list: not
-# registered, remembered, discovered under ~ or ~/dev, or given an agent) is
+# an action on a folder benchbar does not know (not registered, remembered or
+# given an agent: one that only looks like a bench under ~ or ~/dev is not known either) is
 # refused: no stop flag is written into it and nothing of it is signalled
 STRAY="$HOME/work/stray-bench"; make_fake_bench "$STRAY" stray
 add_proc 6001 "/x/bin/honcho start -f Procfile.lean" "$STRAY"
@@ -345,6 +347,7 @@ cat >"$FAKE" <<SH
 case "\$*" in
   "status --json"*) printf '{"state":"running"}\n'; exit 0 ;;
   "app list --json"*) printf '{"apps":[]}\n'; exit 0 ;;
+  "app add "*"--dry-run"*) printf '{"event":"plan","token":"%064d"}\n' 0; exit 0 ;;
   "app add "*"--apply"*)
     # a group member that ignores TERM and holds no pipe (a daemonized helper): only a kill of the group ends it
     ( trap '' TERM; exec sleep 30 >/dev/null 2>&1 ) & printf '%s\n' "\$!" >"$CHILDFILE"
@@ -353,26 +356,28 @@ esac
 printf 'unexpected: %s\n' "\$*" >&2; exit 1
 SH
 TOK="$(printf '%064d' 0)"
+PLAN="$(call 4 benchbar_app_add_plan '{"url_or_name":"https://example.com/x.git"}')"
 APPLY="$(call 1 benchbar_app_add '{"url_or_name":"https://example.com/x.git","token":"'"$TOK"'"}')"
 T0="$SECONDS"
 # no tail here: it would buffer the lines and hide when each one arrived
-TIMED="$(printf '%s\n' "$INIT" "$APPLY" "$(call 2 benchbar_status '{}')" | TIMEOUT=30 fake_mcp | while IFS= read -r line; do printf '%s %s\n' "$((SECONDS - T0))" "$line"; done)"
+# the apply goes in after the plan was answered: a loaded runner needs more than a second for the plan call
+TIMED="$({ printf '%s\n' "$INIT" "$PLAN"; sleep 4; printf '%s\n' "$APPLY" "$(call 2 benchbar_status '{}')"; } | TIMEOUT=30 fake_mcp | while IFS= read -r line; do printf '%s %s\n' "$((SECONDS - T0))" "$line"; done)"
 printf '%s\n' "$TIMED" | python3 -c '
 import json, sys
 rows = [(int(l.split(" ", 1)[0]), json.loads(l.split(" ", 1)[1])) for l in sys.stdin if l.strip()]
-assert [r[1]["id"] for r in rows] == ["init", 2, 1], rows       # status answered first
-assert rows[1][0] <= 3, rows[1]                                 # and at once, not after the 4 second apply
-assert rows[2][1]["result"]["structuredContent"]["result"] == {"ok": True}, rows[2]
+assert [r[1]["id"] for r in rows] == ["init", 4, 2, 1], rows    # status answered first
+assert rows[2][0] <= 6, rows[2]                                 # and at once (the apply goes in at 4 s and runs 4 s more)
+assert rows[3][1]["result"]["structuredContent"]["result"] == {"ok": True}, rows[3]
 ' || fail "MCP concurrency: $TIMED"
 
 # ---- notifications/cancelled stops the call's process group; the server goes on
 rm -f "$PIDFILE" "$CHILDFILE"
-R="$({ printf '%s\n' "$INIT" "$APPLY"; for _ in $(seq 1 100); do [[ -s "$PIDFILE" && -s "$CHILDFILE" ]] && break; sleep 0.1; done
+R="$({ printf '%s\n' "$INIT" "$PLAN"; sleep 1; printf '%s\n' "$APPLY"; for _ in $(seq 1 100); do [[ -s "$PIDFILE" && -s "$CHILDFILE" ]] && break; sleep 0.1; done
        printf '%s\n' '{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":1,"reason":"user"}}'; sleep 1; printf '%s\n' '{"jsonrpc":"2.0","id":3,"method":"ping"}'; } | TIMEOUT=30 GRACE=1 fake_mcp | tail -n +2)"
 [[ -s "$PIDFILE" && -s "$CHILDFILE" ]] || fail "test setup: the fake apply did not start"
 gone "$(cat "$PIDFILE")" || fail "the cancelled call's CLI (pid $(cat "$PIDFILE")) must be gone"
 gone "$(cat "$CHILDFILE")" || fail "the TERM ignoring child (pid $(cat "$CHILDFILE")) must die with the group"
-assert_eq '[{"jsonrpc": "2.0", "id": 3, "result": {}}]' "$(printf '%s\n' "$R" | python3 -c 'import json,sys; print(json.dumps([json.loads(l) for l in sys.stdin if l.strip()]))')" "(no reply to the cancelled call, ping still answered)"
+assert_eq '[4, 3]' "$(printf '%s\n' "$R" | python3 -c 'import json,sys; print(json.dumps([json.loads(l)["id"] for l in sys.stdin if l.strip()]))')" "(the plan and the ping answered, no reply to the cancelled call)"
 
 # ---- which python3 runs the server: /usr/bin/python3 -I when the Command
 # Line Tools are there (the mock xcode-select says so), else python3 from PATH
@@ -442,7 +447,7 @@ assert_eq "-32602 -32602" "$(printf '%s\n' "$R" | python3 -c 'import json,sys; p
 STALE="$(printf '%s' "$ARGS" | python3 -c 'import json,sys; a=json.load(sys.stdin); a["token"]="0"*64; print(json.dumps(a))')"
 R="$(mcp "$(call 4 benchbar_app_add "$STALE")")"
 assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')"
-assert_contains "$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["output"]')" "The app add plan changed"
+assert_contains "$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["output"]')" "The app add plan changed"   # (the zero token of the fake plan above is on record, so the CLI answers)
 assert_calls_not_contain '^bench (get-app|build)'
 # the approved plan: output, the result and a fresh app list
 WITH="$(printf '%s' "$ARGS" | python3 -c 'import json,sys; a=json.load(sys.stdin); a["token"]=sys.argv[1]; print(json.dumps(a))' "$TOKEN")"
@@ -495,7 +500,7 @@ STOK="$(printf '%s' "$SPLAN" | jget - 'd["token"]')"
 assert_no_file "$BENCH/sites/qa1.localhost" "(a plan creates nothing)"
 R="$(mcp "$(call 2 benchbar_site_add '{"site":"qa1.localhost","token":"'"$(printf '0%.0s' $(seq 64))"'","bench":"'"$BENCH"'"}')")"
 assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
-assert_contains "$R" "The site add plan changed"
+assert_contains "$R" "needs a token that benchbar_site_add_plan returned"
 assert_no_file "$BENCH/sites/qa1.localhost" "(a stale token creates nothing)"
 reset_calls
 # an older file of that name with a loose mode and other content: the new password never lands in it
@@ -614,7 +619,7 @@ assert_contains "$(printf '%s' "$R" | jget - 'd["result"]["content"][0]["text"]'
 SVTOK="$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["token"]')"
 R="$(mcp "$(call 3 benchbar_service_install '{"token":"'"$(printf '0%.0s' $(seq 64))"'","bench":"'"$NOSVC"'"}')")"
 assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
-assert_contains "$R" "The service plan changed"
+assert_contains "$R" "needs a token that benchbar_service_install_plan returned"
 assert_no_file "$NOSVC/Procfile.lean" "(a stale service token writes nothing)"
 R="$(mcp "$(call 4 benchbar_service_install '{"token":"'"$SVTOK"'","bench":"'"$NOSVC"'"}')")"
 assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"

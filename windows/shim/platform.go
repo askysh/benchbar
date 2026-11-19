@@ -17,30 +17,40 @@ func newSystem() *System {
 	if u, err := user.Current(); err == nil {
 		name = u.Username
 	}
-	configDir := ""
-	if local := os.Getenv("LOCALAPPDATA"); local != "" {
-		configDir = filepath.Join(local, "BenchBar")
+	local := os.Getenv("LOCALAPPDATA")
+	pkg := detectPackage()
+	configDir, legacyDir := "", ""
+	if local != "" {
+		legacyDir = filepath.Join(local, "BenchBar")
+		configDir = legacyDir
+		if pkg.Packaged {
+			configDir = packagedDataDir(local, pkg.Family)
+		}
 	}
 	sys := &System{
-		Tasks:       schtasksRunner{},
-		WSLPath:     defaultWSLPath,
-		FileExists:  fileExists,
-		ListDir:     listDir,
-		Getenv:      os.Getenv,
-		Getwd:       os.Getwd,
-		Environ:     os.Environ,
-		ConfigDir:   configDir,
-		ProfileDir:  os.Getenv("USERPROFILE"),
-		ExePath:     exe,
-		Pid:         os.Getpid(),
-		User:        name,
-		Stdin:       os.Stdin,
-		Stdout:      os.Stdout,
-		Stderr:      os.Stderr,
-		Ctx:         context.Background(),
-		Sleep:       sleepContext,
-		Now:         time.Now,
-		MemoryBytes: hostMemory,
+		Tasks:           schtasksRunner{},
+		WSLPath:         defaultWSLPath,
+		FileExists:      fileExists,
+		ListDir:         listDir,
+		Getenv:          os.Getenv,
+		Getwd:           os.Getwd,
+		Environ:         os.Environ,
+		ConfigDir:       configDir,
+		LegacyConfigDir: legacyDir,
+		LocalAppData:    local,
+		Package:         pkg,
+		LstatExists:     lstatExists,
+		ProfileDir:      os.Getenv("USERPROFILE"),
+		ExePath:         exe,
+		Pid:             os.Getpid(),
+		User:            name,
+		Stdin:           os.Stdin,
+		Stdout:          os.Stdout,
+		Stderr:          os.Stderr,
+		Ctx:             context.Background(),
+		Sleep:           sleepContext,
+		Now:             time.Now,
+		MemoryBytes:     hostMemory,
 	}
 	sys.Distros, sys.Paths, sys.Broadcast = osServices()
 	sys.Procs = procControl{}
@@ -135,4 +145,11 @@ func systemWSLPath() (string, error) {
 		return "", fmt.Errorf("%s does not exist", p)
 	}
 	return p, nil
+}
+
+// lstatExists is true when the path exists. It does not open the file, so it
+// also sees an app execution alias, which os.Stat reports as access denied.
+func lstatExists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
 }

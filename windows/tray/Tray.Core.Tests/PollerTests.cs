@@ -59,22 +59,31 @@ public class PollerTests
     internal sealed class Probe : IDisposable
     {
         private readonly SemaphoreSlim _updates = new(0);
+        private readonly BenchPoller _poller;
         private int _count;
 
-        public Probe(BenchPoller poller) => poller.Updated += _ =>
+        public Probe(BenchPoller poller)
         {
-            Interlocked.Increment(ref _count);
-            _updates.Release();
-        };
+            _poller = poller;
+            poller.Updated += _ =>
+            {
+                Interlocked.Increment(ref _count);
+                _updates.Release();
+            };
+        }
 
         public int Count => Volatile.Read(ref _count);
 
         public async Task NextAsync() =>
             Assert.True(await _updates.WaitAsync(Wait, TestContext.Current.CancellationToken), "no poll finished in time");
 
-        public async Task NoneForAsync(int milliseconds)
+        /// <summary>
+        /// Nothing more is coming: the poll loop is idle and no poll is waiting to be counted. A fake timer fires inside Advance, and
+        /// that starts a poll before Advance returns, so an idle loop proves no poll was started; no real time passes.
+        /// </summary>
+        public async Task QuietAsync()
         {
-            await Task.Delay(milliseconds, TestContext.Current.CancellationToken);
+            await Eventually.Async(() => !_poller.IsPolling);
             Assert.Equal(0, _updates.CurrentCount);
         }
 
@@ -122,7 +131,7 @@ public class PollerTests
             foreach (var seconds in new double[] { 30, 60, 120, 300, 300 })
             {
                 time.Advance(S(seconds - 0.5));
-                await probe.NoneForAsync(100);
+                await probe.QuietAsync();
                 time.Advance(S(0.5));
                 await probe.NextAsync();
             }
@@ -148,7 +157,7 @@ public class PollerTests
             Assert.Equal(4, source.Lists);
 
             time.Advance(S(29.5));
-            await probe.NoneForAsync(100);
+            await probe.QuietAsync();
             time.Advance(S(0.5)); // back at 30 s, not 120
             await probe.NextAsync();
         }
@@ -192,13 +201,13 @@ public class PollerTests
 
             poller.SetFlyoutOpen(true);
             time.Advance(S(4.9));
-            await probe.NoneForAsync(100);
+            await probe.QuietAsync();
             time.Advance(S(0.1));
             await probe.NextAsync();
 
             poller.SetFlyoutOpen(false);
             time.Advance(S(29.9));
-            await probe.NoneForAsync(100);
+            await probe.QuietAsync();
             time.Advance(S(0.1));
             await probe.NextAsync();
         }
@@ -208,13 +217,15 @@ public class PollerTests
     public async Task KicksDuringAPollAreCoalescedIntoOneMorePollAndCallsNeverOverlap()
     {
         var (poller, source, _, probe) = Make();
-        source.Latency = TimeSpan.FromMilliseconds(300);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        source.ListGate = release.Task; // the first poll holds until the kicks are in: no clock decides when it ends
         using (poller)
         using (probe)
         {
             poller.Start();
-            while (source.Lists == 0) await Task.Yield(); // the first poll is under way (it holds for 300 ms), however slow the machine
+            await source.FirstList.Task.WaitAsync(Wait, TestContext.Current.CancellationToken);
             for (var i = 0; i < 6; i++) poller.Kick();
+            release.SetResult();
 
             await probe.NextAsync();
             await probe.NextAsync();
@@ -238,7 +249,7 @@ public class PollerTests
             poller.Suspend();
             time.Advance(TimeSpan.FromHours(3));
             poller.Kick(); // an action while suspended does not poll either
-            await probe.NoneForAsync(200);
+            await probe.QuietAsync();
             Assert.Equal(1, source.Lists);
 
             poller.Resume();
@@ -253,16 +264,18 @@ public class PollerTests
     public async Task SuspendDuringAPollLeavesNoTimerBehind()
     {
         var (poller, source, time, probe) = Make();
-        source.Latency = TimeSpan.FromMilliseconds(250);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        source.ListGate = release.Task;
         using (poller)
         using (probe)
         {
             poller.Start();
-            await Task.Delay(50, TestContext.Current.CancellationToken);
+            await source.FirstList.Task.WaitAsync(Wait, TestContext.Current.CancellationToken);
             poller.Suspend();
+            release.SetResult();
             await probe.NextAsync(); // the poll in progress still reports
             time.Advance(TimeSpan.FromHours(1));
-            await probe.NoneForAsync(200);
+            await probe.QuietAsync();
             Assert.Equal(1, source.Lists);
         }
     }
@@ -291,7 +304,7 @@ public class PollerTests
         await probe.NextAsync();
         poller.Dispose();
         time.Advance(TimeSpan.FromHours(1));
-        await probe.NoneForAsync(200);
+        await probe.QuietAsync();
         Assert.Equal(1, source.Lists);
         probe.Dispose();
     }

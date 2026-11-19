@@ -316,7 +316,7 @@ fl_doctor_ack() {
   [[ "$(fl_bstate_get "ACK_${id}")" == "$msg" ]] || fl_changed state "ack:${id}" "acknowledged: ${msg}"
   fl_bstate_set "ACK_${id}" "$msg"
   fl_ok "acknowledged ${id} for ${FL_BENCH_NAME}: ${msg}"
-  fl_note "it lapses when the message changes; undo it: ${FL_SELF} doctor --unack ${id} --bench-dir ${FL_BENCH_DIR}"
+  fl_note "it lapses when the message changes; undo it: ${FL_SELF} doctor --unack ${id} --bench-dir $(printf '%q' "$FL_BENCH_DIR")"
 }
 
 # fl_doctor_unack ID: doctor --unack ID
@@ -546,7 +546,7 @@ fl_prereq_json_v() {
   local __out="[" __sep="" __i=0 __m __f
   while [[ "$__i" -lt "${#FL_P_IDS[@]}" ]]; do
     fl_json_str_v __m "${FL_P_MSG[$__i]}"; fl_json_str_v __f "${FL_P_FIX[$__i]}"
-    __out="${__out}${__sep}{\"id\":\"${FL_P_IDS[$__i]}\",\"label\":$(fl_json_str "$(fl_prereq_label "${FL_P_IDS[$__i]}")"),\"level\":\"${FL_P_LEVEL[$__i]}\",\"message\":${__m},\"fix_command\":${__f}${FL_P_EXTRA[$__i]}}"
+    __out="${__out}${__sep}{\"id\":\"${FL_P_IDS[$__i]}\",\"label\":$(fl_json_str "$(fl_prereq_label "${FL_P_IDS[$__i]}")"),\"level\":\"${FL_P_LEVEL[$__i]}\",\"message\":${__m},\"fix_command\":${__f},\"fix_quoted\":$(fl_fix_quoted_json "${FL_P_FIX[$__i]}")${FL_P_EXTRA[$__i]}}"
     __sep=","; __i=$((__i + 1))
   done
   printf -v "$1" '%s]' "$__out"
@@ -574,9 +574,9 @@ fl_doctor_print_json() {
     fl_json_escape_v e_label "$label"; fl_json_escape_v e_msg "${FL_D_MSG[$i]}"; fl_json_escape_v e_fix "${FL_D_FIX[$i]}"
     fl_json_str_v j_fix "${FL_D_FIX[$i]}"; fl_json_str_v j_act "${FL_D_ACTION[$i]}"
     if fl_doctor_is_acked "$i"; then acked_s=true; else acked_s=false; fi
-    printf '%s{"id":"%s","group":"%s","label":"%s","level":"%s","message":"%s","fix_command":%s,"action":%s,"status":"%s","fix":"%s","acked":%s}' \
+    printf '%s{"id":"%s","group":"%s","label":"%s","level":"%s","message":"%s","fix_command":%s,"fix_quoted":%s,"action":%s,"status":"%s","fix":"%s","acked":%s}' \
       "$sep" "${FL_D_IDS[$i]}" "$group" "$e_label" \
-      "${FL_D_STATUS[$i]}" "$e_msg" "$j_fix" "$j_act" \
+      "${FL_D_STATUS[$i]}" "$e_msg" "$j_fix" "$(fl_fix_quoted_json "${FL_D_FIX[$i]}")" "$j_act" \
       "${FL_D_STATUS[$i]}" "$e_fix" "$acked_s"
     sep=","
     i=$((i + 1))
@@ -602,11 +602,13 @@ fl_doctor_print_json() {
 # doctor --fix-hints: the fix command of every failing and warning check,
 # failures first, one per line, each once. For agents and scripts.
 fl_doctor_print_fix_hints() {
-  local want i
+  local want i plain
   for want in fail warn; do
     i=0
     while [[ "$i" -lt "${#FL_D_IDS[@]}" ]]; do
-      if [[ "${FL_D_STATUS[$i]}" == "$want" && -n "${FL_D_FIX[$i]}" ]] && ! fl_doctor_is_acked "$i"; then printf '%s\n' "${FL_D_FIX[$i]}"; fi
+      if [[ "${FL_D_STATUS[$i]}" == "$want" && -n "${FL_D_FIX[$i]}" ]] && ! fl_doctor_is_acked "$i"; then
+        fl_fix_plain_v plain "${FL_D_FIX[$i]}"; printf '%s\n' "$plain"
+      fi
       i=$((i + 1))
     done
   done | awk '!seen[$0]++'

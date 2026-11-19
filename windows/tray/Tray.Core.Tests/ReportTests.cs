@@ -196,6 +196,15 @@ public class BugReporterTests : IDisposable
 public class ObserveTests
 {
     [Fact]
+    public void OnlyAFaultThatLeavesTheProcessUnsafeIsFatalToTheUiHandler()
+    {
+        Assert.True(Observe.IsFatal(new OutOfMemoryException()));
+        Assert.True(Observe.IsFatal(new InvalidOperationException("wrapper", new AccessViolationException())));
+        Assert.False(Observe.IsFatal(new InvalidOperationException("a page broke")));
+        Assert.False(Observe.IsFatal(new IOException("disk")));
+    }
+
+    [Fact]
     public async Task AForgottenTaskThatFailsIsReported()
     {
         var seen = new TaskCompletionSource<Exception>();

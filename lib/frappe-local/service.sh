@@ -315,11 +315,11 @@ fl_check_port_clash_or_confirm() {
   printf -v quoted '%q' "$FL_BENCH_DIR"
   if [[ -n "$hard" ]]; then
     while IFS= read -r line; do [[ -z "$line" ]] || fl_fail "Cannot start: $line"; done <<<"$hard"
-    fl_fix "benchbar ports setup -- ${quoted}"
+    fl_fix "$(fl_fix_cmd benchbar ports setup -- "$FL_BENCH_DIR")"
     return 1
   fi
   while IFS= read -r line; do [[ -z "$line" ]] || fl_warn "Stopped bench port conflict: $line"; done <<<"$soft"
-  fl_fix "benchbar ports setup -- ${quoted}"
+  fl_fix "$(fl_fix_cmd benchbar ports setup -- "$FL_BENCH_DIR")"
   fl_confirm "Other stopped benches use these ports. Start this bench without changing its address?"
 }
 
@@ -352,7 +352,7 @@ fl_cmd_up_services_only() {
         fl_bench_redis_down
         fl_step_end failed
         fl_fail "nothing listens on port ${port} after starting the Redis of ${FL_BENCH_NAME}"
-        fl_fix "cd ${FL_BENCH_DIR} && redis-server config/redis_queue.conf --daemonize yes   (and config/redis_cache.conf)"
+        fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' redis-server config/redis_queue.conf --daemonize yes)   (and config/redis_cache.conf)"
         return 1
       fi
       sleep 0.5

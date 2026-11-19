@@ -22,7 +22,9 @@ func startupDisabled(sys *System, name string) bool {
 // trayChecks covers the optional tray app. They apply only when the tray
 // sits next to this benchbar.exe, because the shim alone needs no runtime.
 func trayChecks(sys *System) []Check {
-	if !sys.FileExists(dirOf(sys.ExePath) + `\` + trayExe) {
+	// the packaged tray ships its own runtime and starts through a
+	// StartupTask, so neither check applies to it
+	if sys.Package.Packaged || !sys.FileExists(dirOf(sys.ExePath)+`\`+trayExe) {
 		return nil
 	}
 	dotnet := Check{ID: "dotnet_desktop", Label: ".NET Desktop Runtime", Status: "ok", Message: "version 10 is installed"}
