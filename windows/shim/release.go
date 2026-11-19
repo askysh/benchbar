@@ -25,9 +25,14 @@ const (
 // webTimeout bounds the release lookup. A variable so a test can shorten it.
 var webTimeout = 10 * time.Second
 
-// plainVersionRE is a release tag: X.Y.Z with an optional v. install.ps1
-// -Version takes only this form, so a tag of any other form is skipped.
+// plainVersionRE is a release tag: X.Y.Z with an optional v. The newest
+// release is picked among these only, so a tag of any other form (a release
+// candidate, X.Y.Z-rc.N) is never offered as an update.
 var plainVersionRE = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)$`)
+
+// namedVersionRE is what --version and install.ps1 -Version take: a release,
+// or a release candidate that a person names on purpose.
+var namedVersionRE = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-rc\.\d+)?$`)
 
 // latestPageTagRE reads the tag out of the Location of the release page.
 var latestPageTagRE = regexp.MustCompile(`/releases/tag/(v\d+\.\d+\.\d+)$`)
