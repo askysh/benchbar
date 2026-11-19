@@ -32,6 +32,9 @@ chmod +x "$G/bin/gh" "$G/bin/git"
 export PATH="$G/bin:/usr/bin:/bin" GATE_RESULTS="$G/results" GIT_LOG="$G/git.log" GH_GATE_REPO=askysh/benchbar
 
 g() { git -c user.name=t -c user.email=t@example.com "$@"; }
+# the script makes its sync merge with the caller's git identity: a runner (the bash 3.2
+# container) has none configured, so the test gives one
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 
 # write_tree VERSION: the files check-version.sh reads, saying VERSION
 write_tree() {
