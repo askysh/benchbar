@@ -26,7 +26,10 @@ it off; a problem while undoing is a warning, and the experiment is off anyway.
 
 A lab lists its platforms (`macos`, `linux`, `windows`). On another platform
 `labs` shows it as "(not on this platform)" and `labs on` stops with exit
-code 1: "NAME is not available on linux yet".
+code 1: "NAME is not available on linux yet". The same test applies to every
+other path: a lab the platform does not list stays off even when
+`BENCHBAR_LABS` or a copied state file names it, and its commands refuse
+with exit 2 and the same sentence.
 
 All of this is benchbar's own state (the `LABS` key). No bench or site changes.
 The BenchBar app shows the same list under Settings. `BENCHBAR_LABS=a,b` in

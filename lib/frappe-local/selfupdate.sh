@@ -331,4 +331,11 @@ fl_cli_standalone_script() {
 }
 
 # fl_cli_version_at FILE: the version a benchbar script declares, or nothing
-fl_cli_version_at() { sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$1" 2>/dev/null | awk 'NR==1'; }
+fl_cli_version_at() {
+  local line
+  [[ -r "$1" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ ^FL_VERSION=\"(.*)\"$ ]]; then printf '%s\n' "${BASH_REMATCH[1]}"; return 0; fi
+  done <"$1"
+  return 0
+}

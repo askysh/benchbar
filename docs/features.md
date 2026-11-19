@@ -28,6 +28,7 @@ macOS version. A row that says "macOS" does not work on Linux.
 | Feature | What it does | Since | Platform | Guide |
 | --- | --- | --- | --- | --- |
 | Install | Installs the dependencies, a bench and a site. A second run changes nothing. | 0.1.0 | macOS; Linux 0.8.0 | [Install](install.md) |
+| Pick a profile at install | `install --profile` takes `v15-lts`, `v16-lts` or a team profile. On Linux, Python and Node come from uv and fnm, and MariaDB from apt (10.11). | 0.1.0 | macOS; Linux 0.9.0 (v15-lts only before) | [Install](install.md#profiles-on-linux) |
 | Background service | Runs each bench under launchd or `systemd --user`: it survives a closed Terminal, restarts after a crash and comes back after a reboot. | 0.2.0 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md) |
 | Doctor and repair | `doctor` reads the state and names the fix. `repair` applies only the flagged fixes, with a backup first. | 0.2.0 | macOS; Linux 0.8.0 | [Doctor and repair](guides/doctor-and-repair.md) |
 | Shell helpers | `benchup`, `benchdown`, `benchrestart`, `benchwatch`, `benchlogs` and `benchstatus`. | 0.2.0 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md#daily-use) |
@@ -66,7 +67,7 @@ JSON. See [The menu bar app](app.md).
 | --- | --- | --- | --- | --- |
 | Runner and popover | A small runner shows the state of your benches. The popover starts and stops a bench. | 0.3.0 | macOS | [The menu bar app](app.md#the-runner) |
 | Speed | The runner runs faster the busier the bench is. | 0.3.0 | macOS | [Energy](app.md#energy) |
-| Crash notification | A notice when a bench crashes or the crash guard pauses it. | 0.3.0 | macOS | [The menu bar app](app.md) |
+| Crash notification | A notice when a bench crashes or the crash guard pauses it. On Linux the runner calls `notify-send`; in WSL the tray shows the toast; a headless server has the record in `status`. | 0.3.0 | macOS; Linux 0.9.0 | [The menu bar app](app.md), [Linux](install.md#crash-notifications-on-linux) |
 | Custom runners | Draw your own menu bar runner. | 0.3.0 | macOS | [Runners](runners.md) |
 | BenchBar window | A page per bench for its overview, sites, apps and health. | 0.5.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | Doctor and repair | The Health page runs doctor and repairs with the plan first. | 0.5.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |

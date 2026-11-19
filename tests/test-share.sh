@@ -673,6 +673,15 @@ run_json_status() { set +e; OUT="$("$FM" share status --json --bench-dir "$BENCH
 run_json_status
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["setup_interrupted"]')"
+# the app's fixtures (macos/BenchBarTests/Fixtures) hold only keys the CLI prints: their keys are a subset of the live keys, and both carry setup_interrupted
+printf '%s' "$OUT" | python3 -I -c '
+import json, sys
+live = json.load(sys.stdin)
+for name in sys.argv[1:]:
+    fixture = json.load(open(name))
+    assert set(fixture) <= set(live), (name, "keys the CLI no longer prints", set(fixture) - set(live))
+    assert "setup_interrupted" in fixture, (name, "setup_interrupted missing")
+' "$ROOT/macos/BenchBarTests/Fixtures/share-status.json" "$ROOT/macos/BenchBarTests/Fixtures/share-status-interrupted.json" || fail "share status --json and the app fixtures disagree"
 run_fm share status --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "Sharing setup was interrupted. Run: benchbar share setup --refresh"
 BENCHBAR_SUDO=gui run_fm share start --bench-dir "$BENCH"

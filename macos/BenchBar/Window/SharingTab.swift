@@ -9,6 +9,8 @@ struct SharingTab: View {
     @State private var hours = 4
     @State private var setupOpen = false
     @State private var showActivity = false
+    /// The code is drawn as dots until the host asks (a shared screen, a screenshot); Start and New code show it once.
+    @State private var codeRevealed = false
 
     private var site: String { bench.summary.site }
 
@@ -28,7 +30,7 @@ struct SharingTab: View {
                     if status.isOn { roomSection(status) }
                     noticesSection(status)
                     // a bench never set up fails every check by definition; the list is for after setup
-                    if SharePrimary.from(status) != .setUp { checksSection(status) }
+                    if SharePrimary.from(status) != .setUp && SharePrimary.from(status) != .finishSetup { checksSection(status) }
                     if let copy = status.copy { copySection(copy, status: status) }
                     if status.isOn { peopleSection(status) ; activitySection }
                 }
@@ -40,9 +42,12 @@ struct SharingTab: View {
         .frame(maxWidth: WindowMetrics.groupedFormMaxWidth)
         .frame(maxWidth: .infinity)
         .onAppear { share.tabVisible = true }
-        .onDisappear { share.tabVisible = false }
+        .onDisappear {
+            share.tabVisible = false
+            codeRevealed = false
+        }
         .sheet(isPresented: $setupOpen) {
-            ShareSetupSheet(share: share, site: site, refresh: share.status?.copy != nil) { setupOpen = false }
+            ShareSetupSheet(share: share, site: site, refresh: share.status?.copy != nil || share.status?.setupInterrupted == true) { setupOpen = false }
         }
     }
 
@@ -51,7 +56,7 @@ struct SharingTab: View {
     @ViewBuilder
     private func primarySection(_ status: ShareStatus) -> some View {
         Section {
-            Text(SharePrimary.from(status) == .setUp ? SharePresentation.setUpIntro : SharePresentation.liveUpdates)
+            Text(SharePrimary.from(status) == .setUp || SharePrimary.from(status) == .finishSetup ? SharePresentation.setUpIntro : SharePresentation.liveUpdates)
                 .foregroundStyle(.secondary)
             HStack {
                 if status.isOn {
@@ -90,7 +95,7 @@ struct SharingTab: View {
 
     private func act(_ primary: SharePrimary, status: ShareStatus) async {
         switch primary {
-        case .setUp: setupOpen = true
+        case .setUp, .finishSetup: setupOpen = true
         case .turnOnProtection: await turnOnProtection()
         case .start:
             guard ShareConfirm.ask("Start sharing \(site) on this network?",
@@ -98,6 +103,7 @@ struct SharingTab: View {
                                    button: "Start sharing") else { return }
             await share.start(hours: hours, label: nil)
             await share.loadCode()
+            codeRevealed = true
         case .stop:
             guard ShareConfirm.ask(SharePresentation.stopConfirm(online: status.devicesOnline), button: "Stop") else { return }
             await share.stop()
@@ -116,17 +122,26 @@ struct SharingTab: View {
     private func roomSection(_ status: ShareStatus) -> some View {
         Section("Room code") {
             HStack(alignment: .firstTextBaseline) {
-                Text(share.code?.spaced ?? "••• •••")
+                Text(SharePresentation.codeText(share.code, revealed: codeRevealed))
                     .font(.system(size: 40, weight: .semibold, design: .monospaced))
                     .textSelection(.disabled)
-                    .accessibilityLabel("Room code")
+                    .accessibilityLabel(codeRevealed ? "Room code" : "Room code, hidden")
                 Spacer()
+                Button(codeRevealed ? "Hide" : "Show") { codeRevealed.toggle() }
+                    .accessibilityLabel(codeRevealed ? "Hide room code" : "Show room code")
+                    .disabled(share.code == nil)
+                    .help("The code lets anyone on this Wi-Fi join. Hide it while you share your screen.")
                 Button("Copy") { if let code = share.code { ShareClipboard.copy(code.code) } }
                     .disabled(share.code == nil)
                 Button(SharePresentation.copyInvite) { Task { await share.copyInvite(write: ShareClipboard.copy) } }
                     .help(SharePresentation.copyInviteHelp)
                     .disabled(share.busy != nil)
-                Button("New code") { Task { await share.loadCode(new: true) } }
+                Button("New code") {
+                    Task {
+                        await share.loadCode(new: true)
+                        codeRevealed = true
+                    }
+                }
                 Button(status.locked == true ? "Unlock" : "Lock room") {
                     Task { await share.setLocked(!(status.locked ?? false)) }
                 }
@@ -151,8 +166,9 @@ struct SharingTab: View {
     @ViewBuilder
     private func noticesSection(_ status: ShareStatus) -> some View {
         let lock = SharePresentation.lockLine(status)
-        if lock != nil || status.joinTrouble || status.wipeFailed > 0 || status.degraded != nil || status.error != nil {
+        if lock != nil || status.joinTrouble || status.wipeFailed > 0 || status.degraded != nil || status.error != nil || status.setupInterrupted {
             Section {
+                if status.setupInterrupted { Label(SharePresentation.setupInterrupted, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
                 if let lock { Label(lock, systemImage: "lock.fill").foregroundStyle(status.lockReason == .budget ? .orange : .secondary) }
                 if status.joinTrouble { Label(SharePresentation.joinTrouble, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
                 if status.wipeFailed > 0 { Label(SharePresentation.wipeOwed, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }

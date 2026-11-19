@@ -149,12 +149,35 @@ fl_expand_policy_ref() {
   esac
 }
 
+# fl__apps_tsv_row FILE APP: "repo|v15|v16|priority|notes" of the first row of
+# APP (the header is skipped), read in bash: fields 2 to 6, tabs between them
+# written as |, an empty field kept
+fl__apps_tsv_row() {
+  local line n=0 rest f i out sep
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    n=$((n + 1))
+    [[ "$n" -gt 1 && "${line%%$'\t'*}" == "$2" ]] || continue
+    rest=""
+    [[ "$line" != *$'\t'* ]] || rest="${line#*$'\t'}"
+    out=""; sep=""
+    for i in 1 2 3 4 5; do
+      f="${rest%%$'\t'*}"
+      if [[ "$rest" == *$'\t'* ]]; then rest="${rest#*$'\t'}"; else rest=""; fi
+      out="${out}${sep}${f}"; sep="|"
+    done
+    printf '%s\n' "$out"
+    return 0
+  done <"$1"
+  return 0
+}
+
 fl_lookup_app_policy() {
   local app="$1" profile="$2" file row repo v15 v16 priority notes branch
   # a loaded team profile names its own apps' repos and branches
   if declare -F fl_team_app_policy >/dev/null && fl_team_app_policy "$app"; then return 0; fi
   file="$(fl_config_file apps.tsv)"
-  row="$(awk -F '\t' -v a="$app" 'NR > 1 && $1 == a {printf "%s|%s|%s|%s|%s\n", $2, $3, $4, $5, $6}' "$file")"
+  # this file is also read alone, by the phase scripts, without facts.sh
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then row="$(fl_memo "apps-tsv:${app}" fl__apps_tsv_row "$file" "$app")"; else row="$(fl__apps_tsv_row "$file" "$app")"; fi
   [[ -n "$row" ]] || return 1
   IFS='|' read -r repo v15 v16 priority notes <<<"$row"
   case "$profile" in

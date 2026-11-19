@@ -1123,3 +1123,8 @@ fl_ask_secret() {
     fl_warn "values do not match; retry"
   done
 }
+
+# what one doctor run reads once (fl_memo, fl_memo_v, the background jobs);
+# loaded here because every lib file and phase script that may ask for it has ui.sh
+# shellcheck source=lib/frappe-local/facts.sh
+. "${BASH_SOURCE[0]%/*}/facts.sh"
