@@ -15,6 +15,12 @@ cat >"$B2/sites/common_site_config.json" <<JSON
 JSON
 printf 'port 11001\n' >"$B2/config/redis_queue.conf"; printf 'port 13001\n' >"$B2/config/redis_cache.conf"
 export BENCHBAR_LABS=lan-rooms,quick-switch
+# share log reads the log with the share's node and walks its path for a folder another user could write:
+# on a Mac and on a CI runner TMPDIR is the user's own, but in the bash 3.2 container it is /tmp (1777,
+# root:root), which the walk calls group-writable. The group of the folder the fixtures live in is the one
+# the walk may trust here, the way Homebrew's own admin group is on a Mac.
+FL_SHARE_ADMIN_GROUP="$(stat -c %G "$(dirname "$TMP_DIR")" 2>/dev/null || stat -f %Sg "$(dirname "$TMP_DIR")")"
+export FL_SHARE_ADMIN_GROUP
 export MOCK_KICKSTART_PING=200
 NOBENCH="$HOME/no-such-bench"
 
@@ -30,7 +36,7 @@ done
 mkdir -p "$BENCH/sites/newsite"; printf '{"db_name": "_newsite"}\n' >"$BENCH/sites/newsite/site_config.json"
 mkdir -p "$TMP_DIR/team-config/profiles"
 (cd "$TMP_DIR/team-config" && git init -q -b main . && printf 'base = "v15-lts"\ndescription = "Team A"\n' >profiles/team-a.toml && git add -A \
-  && git -c user.email=t@example.com -c user.name=t commit -q -m profiles && git init -q --bare "$REMOTES/team-config.git" \
+  && git -c user.email=t@example.com -c user.name=t commit -q -m profiles && git init -q --bare -b main "$REMOTES/team-config.git" \
   && git remote add origin "file://$REMOTES/team-config.git" && git push -q origin main)
 printf '{"url": "https://api.github.com/repos/askysh/benchbar/releases/1", "html_url": "https://github.com/askysh/benchbar/releases/tag/v%s", "tag_name": "v%s", "draft": false}\n' "$VER" "$VER" >"$MOCK_STATE/release.json"
 RS="erp.example.com"; RB="$MOCK_STATE/remote/home/frappe-bench"; BK="$RB/sites/$RS/private/backups"
