@@ -56,8 +56,7 @@ cli_out() {
   run_fm "$@" </dev/null
   # a command that is expected to refuse (ALLOW_EXIT=1) still prints what the tray reads
   [[ "$CODE" == 0 || "${ALLOW_EXIT:-0}" == 1 ]] || fail "benchbar $* exited $CODE: $OUT"
-  printf '%s
-' "$OUT" | TMP="$TMP_DIR" CHECKOUT="$ROOT" python3 -c '
+  printf '%s\n' "$OUT" | TMP="$TMP_DIR" CHECKOUT="$ROOT" python3 -c '
 import os, sys
 tmp = os.environ["TMP"]
 text = sys.stdin.read()
