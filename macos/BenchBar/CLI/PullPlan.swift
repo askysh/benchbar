@@ -2,9 +2,9 @@ import Foundation
 
 /// The `plan` line of `benchbar pull ... --dry-run --json` (a stream of JSON
 /// lines, see docs/json-schema.md): which backup is copied into which new
-/// site, the apps that differ, and what the copy loses. Pull has no token: the
-/// CLI checks everything again when the run starts, and asks the person
-/// through `--yes`, which the sheet passes only after the plan was shown.
+/// site, the apps that differ, and what the copy loses. Its `token` is a hash
+/// of the plan: `pull --apply TOKEN --yes` makes the plan again after its
+/// checks and stops, with nothing changed, when it is not the one shown.
 nonisolated struct PullPlan: ReviewablePlan, Codable {
     nonisolated struct Backup: Codable, Sendable, Equatable {
         var name: String?
@@ -50,9 +50,12 @@ nonisolated struct PullPlan: ReviewablePlan, Codable {
     var migrate: Bool
     var createSite: Bool
     var steps: [String]
+    /// What `--apply` takes. Nil for a CLI older than the token (0.8): the run then has no
+    /// reviewed plan to hold the CLI to, and `differences(from:)` is the app's fallback.
+    var token: String?
 
     enum CodingKeys: String, CodingKey {
-        case source, host, bench, site, replace, backup, neutralise, apps, migrate, steps
+        case source, host, bench, site, replace, backup, neutralise, apps, migrate, steps, token
         case remoteSite = "remote_site"
         case fromDir = "from_dir"
         case encryptionKey = "encryption_key"
@@ -61,8 +64,8 @@ nonisolated struct PullPlan: ReviewablePlan, Codable {
 
     var canRun: Bool { true }
 
-    /// What the run does that the plan the person reviewed did not say: pull has no token, so the
-    /// CLI cannot refuse a changed plan, and the app says it instead (as Repair does).
+    /// Only for a CLI without a plan token: what the run does that the plan the person reviewed did
+    /// not say, told after the fact. With a token the CLI refuses a changed plan before it starts.
     func differences(from reviewed: PullPlan) -> [String] {
         var out = steps.filter { !reviewed.steps.contains($0) }.map { "a step the plan did not show: \($0)" }
         if let name = backup?.name, name != reviewed.backup?.name { out.append("another backup than the one reviewed: \(name)") }
@@ -82,7 +85,8 @@ nonisolated extension PullPlan {
                   backup: c.lenient(.backup, nil), encryptionKey: c.lenient(.encryptionKey, false),
                   // an older CLI neutralised nothing: its absence is "not neutralised", never "neutralised"
                   neutralise: c.lenient(.neutralise, false), apps: c.lenient(.apps, []), migrate: c.lenient(.migrate, true),
-                  createSite: c.lenient(.createSite, true), steps: c.lenient(.steps, []))
+                  createSite: c.lenient(.createSite, true), steps: c.lenient(.steps, []),
+                  token: c.lenient(.token, nil))
     }
 }
 

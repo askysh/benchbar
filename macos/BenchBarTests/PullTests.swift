@@ -30,6 +30,11 @@ struct PullTests {
         #expect(PullText.appLine(plan.differingApps[0]) == "frappe: 15.41.0 here, 15.40.0 on production (local newer)")
         #expect(PullText.appLine(plan.differingApps[1]) == "erpnext: 15.30.0 here, 15.30.0 on production (branch differs)")
         #expect(PullStream.done(in: try Fixture.lines("pull-plan"))?.exit == 0)
+        #expect(plan.token?.count == 64, "the CLI's plan line has the token --apply takes")
+    }
+
+    @Test func theNeutralisedTextSaysTheAdministratorLoginStays() {
+        #expect(PullText.neutralisedText.contains("Administrator login is kept"))
     }
 
     @Test func aPlanThatKeepsSecretsSaysSo() throws {
@@ -61,23 +66,58 @@ struct PullTests {
         #expect(base.cli.calls.last == ["pull", "prod:erp.example.com", "--as", "erpcopy", "--dry-run", "--json", "--bench-dir", v16])
     }
 
-    @Test func aPullRunsWithYesAfterThePlanAndReportsWhatWasNeutralised() async throws {
+    @Test func aPullRunsTheReviewedPlanByItsTokenAndReportsWhatWasNeutralised() async throws {
         let (workbench, bench) = try await workbench()
         base.cli.answer("pull", .ok(try Fixture.lines("pull-done")))
         let request = PullRequest(source: .folder("/Users/you/dl"), name: "erpdl")
         let reviewed = try #require(PullStream.plan(in: try Fixture.lines("pull-plan")))
         let error = await workbench.pull(request, reviewed: reviewed, on: bench)
         #expect(error == nil)
-        #expect(base.cli.calls.last { $0.first == "pull" } == ["pull", "--from-dir", "/Users/you/dl", "--as", "erpdl", "--yes", "--json", "--bench-dir", v16])
+        let token = try #require(reviewed.token)
+        #expect(base.cli.calls.last { $0.first == "pull" } == ["pull", "--from-dir", "/Users/you/dl", "--as", "erpdl", "--apply", token, "--yes", "--json", "--bench-dir", v16])
         #expect(workbench.result?.title == "Pull erpdl" && workbench.result?.succeeded == true)
         let note = try #require(workbench.result?.note)
         #expect(note.contains("Neutralised: 1 email accounts switched off, 7 stored secrets cleared, 2 webhooks switched off."))
         #expect(note.contains("Administrator") && note.contains("Add Hosts Lines"))
-        // the run listed a plan of its own: a step the reviewed plan lacked, and a backup it did not name, are said
+        // the CLI held the run to the reviewed plan: the app has nothing to add after the fact
+        #expect(!note.contains("differed from the plan"))
+    }
+
+    @Test func aCLIWithoutATokenStillGetsTheAfterTheFactNote() async throws {
+        let (workbench, bench) = try await workbench()
+        base.cli.answer("pull", .ok(try Fixture.lines("pull-done")))
+        var reviewed = try #require(PullStream.plan(in: try Fixture.lines("pull-plan")))
+        reviewed.token = nil
+        let error = await workbench.pull(PullRequest(source: .folder("/Users/you/dl"), name: "erpdl"), reviewed: reviewed, on: bench)
+        #expect(error == nil)
+        #expect(base.cli.calls.last { $0.first == "pull" } == ["pull", "--from-dir", "/Users/you/dl", "--as", "erpdl", "--yes", "--json", "--bench-dir", v16])
+        // the run listed a plan of its own: a step the reviewed plan lacked is said
+        let note = try #require(workbench.result?.note)
         #expect(note.contains("The run differed from the plan you reviewed: a step the plan did not show: Create the site erpdl (bench new-site)"))
     }
 
-    @Test func aRunThatMatchesTheReviewedPlanSaysNothingAboutIt() throws {
+    @Test func aPlanThatChangedSinceItWasShownKeepsTheSheetOpenOnReviewAgain() async throws {
+        let (workbench, bench) = try await workbench()
+        let message = "The plan changed since it was shown; nothing was changed."
+        base.cli.answer("pull", CommandOutput(exitCode: 1, stdout: "", stderr: "[FAIL] \(message)\n"))
+        let reviewed = try #require(PullStream.plan(in: try Fixture.lines("pull-plan")))
+        let error = await workbench.pull(PullRequest(source: .ssh("prod:erp.example.com"), name: "erpcopy"), reviewed: reviewed, on: bench)
+        let text = try #require(error)
+        #expect(text.contains(message) && StalePlan.isStale(text))
+        var flow = PlanReviewFlow<PullPlan>()
+        let started = flow.review()
+        flow.read(.success(reviewed))
+        let applying = flow.apply()
+        let closes = flow.finish(error: text)
+        #expect(started && applying == reviewed)
+        #expect(!closes, "the sheet stays open")
+        #expect(flow.stage == .stale(text))
+        let again = flow.review()
+        #expect(again, "Review Again reads a fresh plan")
+        #expect(StalePlan.isStale("The plan token expired: a token is good for about an hour after its plan was made, and this one is older. Nothing was changed."))
+    }
+
+    @Test func theFallbackForAnOlderCLISaysWhatTheRunDidNotShow() throws {
         let plan = try #require(PullStream.plan(in: try Fixture.lines("pull-plan")))
         #expect(plan.differences(from: plan).isEmpty)
         var newer = plan

@@ -19,7 +19,7 @@ nonisolated enum PullText {
         return "\(app.app): " + (versions.isEmpty ? app.status : versions.joined(separator: ", ") + " (\(app.status))")
     }
 
-    static let neutralisedText = "Integrations are switched off and stored passwords are cleared on the copy. Email is muted and the scheduler paused. Customer data is not touched."
+    static let neutralisedText = "Integrations are switched off and stored passwords are cleared on the copy; the Administrator login is kept. Email is muted and the scheduler paused. Customer data is not touched."
     static let keptText = "Production's passwords, webhooks and integrations stay on the copy. Email is muted and the scheduler paused, but the copy can still talk to the outside."
 }
 
@@ -59,8 +59,10 @@ struct PullPlanView: View {
 }
 
 /// Fill in where production is, Review reads the CLI's plan (`pull --dry-run --json`), Pull runs
-/// it with `--yes`. Pull has no token, so the CLI checks everything again as it starts. The copy is
-/// neutralised by default; keeping production's secrets is an explicit choice with a warning.
+/// exactly that plan by its token (`--apply TOKEN --yes`). A plan that changed in between (a newer
+/// backup, other apps) is refused by the CLI and answered here with Review Again, as the restore
+/// sheet does. The copy is neutralised by default; keeping production's secrets is an explicit
+/// choice with a warning.
 struct PullSheet: View {
     /// What the sheet starts with: empty for a person, filled for a render.
     struct Start {

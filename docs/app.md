@@ -221,16 +221,22 @@ Every bench has a page:
   backups are not offered. **Pull…** in the header of the Sites section
   copies a production site over SSH (`HOST:SITE`, a Host of your
   `~/.ssh/config`), or a backup you downloaded, into a new site. It shows
-  the plan (`benchbar pull --dry-run --json`) first. The copy is
+  the plan (`benchbar pull --dry-run --json`) first, and Pull runs exactly
+  that plan by its token (`--apply TOKEN --yes`). The copy is
   neutralised, as the command does since 0.9: integrations off and stored
-  passwords cleared. **Keep production's passwords and integrations** is
-  off unless you turn it on, and the plan says so in orange when it is.
-  A pull has no plan token, so the app tells you in the result when the
-  run had a step or a backup that the plan you reviewed did not show.
+  passwords cleared; the Administrator login is kept. **Keep production's
+  passwords and integrations** is off unless you turn it on, and the plan
+  says so in orange when it is. When the plan changed after you saw it (a
+  newer backup on the server, another set of apps), the CLI refuses the
+  run before it changes anything and the sheet says so, with **Review
+  Again**.
   Neither sheet asks for a password: the MariaDB password stays with
-  `benchbar`, and when it does not have it (the plan says
-  `MARIADB_ROOT_PASSWORD` is needed) the sheet tells you to run the
-  command in Terminal.
+  `benchbar`. When it does not have it, the restore plan lists the
+  password as an error and cannot be run. For a pull, the dry run itself
+  stops (exit 2, no plan) and the sheet shows the CLI's message, "The
+  MariaDB root password is needed for the restore", in place of a plan.
+  Either way, run the command in Terminal with `MARIADB_ROOT_PASSWORD`
+  set; the app never asks for it.
 - **Apps**: add an app from the registry or any GitHub URL, and update it
   after reading the changelog. Each app's ⋯ menu installs it on a site
   that lacks it and sets its focus (Auto, Focus, Ignore). The ⋯ menu

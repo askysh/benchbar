@@ -333,6 +333,69 @@ assert_eq "0" "$(pulled_files)" "(downloaded and decrypted files removed)"
 assert_no_secrets "(encrypted)"
 mkdir -p "$MOCK_STATE/aside"; mv "$BK"/20260926_1* "$MOCK_STATE/aside/"
 
+# ---- the plan token: --dry-run --json prints it, --apply TOKEN --yes runs exactly that plan
+DLT="$TMP_DIR/tokens"; mkdir -p "$DLT"; cp "$BK"/20260925_020000-* "$DLT/"
+plan_token() { printf '%s\n' "${1%%$'\n'*}" | jget - 'd["token"]'; }
+plan_of() { "$FM" pull --from-dir "$DLT" --as "$1" --skip-app hrms "${@:2}" --dry-run --json --bench-dir "$BENCH" 2>/dev/null; }
+reset_calls
+JOUT="$(plan_of tokcopy)" || fail "pull --dry-run --json (token)"
+TOK="$(plan_token "$JOUT")"
+[[ "$TOK" =~ ^[0-9a-f]{64}$ ]] || fail "the plan line has a token (got '${TOK}')"
+assert_eq "True" "$(printf '%s\n' "${JOUT%%$'\n'*}" | jget - 'str(d["dry_run"])')" "(the dry run says so)"
+assert_eq "$TOK" "$(plan_token "$(plan_of tokcopy)")" "(the same plan, the same token)"
+# other arguments are another plan: the name, the apps, the secrets, the files, the migrate, the scheduler
+assert_eq "no" "$([[ "$(plan_token "$(plan_of tokother)")" == "$TOK" ]] && printf yes || printf no)" "(another name)"
+for flags in "--skip-app erpnext" "--keep-secrets" "--no-files" "--no-migrate" "--keep-scheduler"; do
+  # shellcheck disable=SC2086  # the flag is words
+  o="$(plan_of tokcopy $flags)" || fail "plan of ${flags}"
+  [[ "$(plan_token "$o")" != "$TOK" ]] || fail "the token of '${flags}' must differ from the plain plan's"$'\n'"$o"
+done
+# a refusal before anything runs: no token, no --yes, a dry run
+run_fm pull --from-dir "$DLT" --as tokcopy --skip-app hrms --apply notatoken --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "--apply needs the token of a plan"
+run_fm pull --from-dir "$DLT" --as tokcopy --skip-app hrms --apply "$TOK" --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "pass its token with --apply TOKEN --yes"
+run_fm pull --from-dir "$DLT" --as tokcopy --skip-app hrms --apply "$TOK" --yes --dry-run --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "--apply runs the plan; --dry-run shows it"
+assert_no_file "$BENCH/sites/tokcopy"
+# the token of other arguments: nothing is changed, the run ends in done with exit 1
+set +e; JOUT="$("$FM" pull --from-dir "$DLT" --as tokcopy --skip-app hrms --keep-secrets --apply "$TOK" --yes --json --bench-dir "$BENCH" 2>"$TMP_DIR/err")"; code=$?; set -e
+assert_eq "1" "$code" "$(cat "$TMP_DIR/err")"
+assert_contains "$(cat "$TMP_DIR/err")" "The plan changed since it was shown; nothing was changed"
+assert_eq "1" "$(printf '%s\n' "$JOUT" | tail -n1 | jget - 'd["exit"]')" "(a stale token still ends in done)"
+assert_no_file "$BENCH/sites/tokcopy"
+assert_calls_not_contain '^(bench|python benchbar-frappe|rsync|scp) '
+# the right token runs the plan, with no question
+reset_calls
+set +e; JOUT="$("$FM" pull --from-dir "$DLT" --as tokcopy --skip-app hrms --apply "$TOK" --yes --json --bench-dir "$BENCH" 2>"$TMP_DIR/err")"; code=$?; set -e
+assert_eq "0" "$code" "$(cat "$TMP_DIR/err")"
+assert_file "$BENCH/sites/tokcopy/site_config.json"
+printf '%s\n' "$JOUT" | python3 -c '
+import json, sys
+events = [json.loads(line) for line in sys.stdin if line.strip()]
+plan = events[0]
+assert plan["event"] == "plan" and plan["dry_run"] is False and plan["token"] == sys.argv[1], plan
+assert any(e["event"] == "gate" and e["name"] == "apply" and e["answer"] == "yes" for e in events), "the apply gate"
+assert events[-1]["event"] == "done" and events[-1]["exit"] == 0, events[-1]
+# the keys the app reads of the done line stay (macos PullDone: exit, site, url, warnings, neutralised {on, counts, labels})
+done = events[-1]
+assert {"exit", "site", "url", "warnings", "neutralised"} <= set(done), set(done)
+n = done["neutralised"]
+assert {"on", "counts", "labels"} <= set(n) and n["on"] is True, n
+assert n["counts"] and set(n["counts"]) == set(n["labels"]), n
+assert all(isinstance(v, int) for v in n["counts"].values()) and all(isinstance(v, str) for v in n["labels"].values()), n
+' "$TOK" || fail "pull --apply events"$'\n'"$JOUT"
+# a plan that changed after it was shown: a newer backup is another plan
+DLS="$TMP_DIR/stale"; mkdir -p "$DLS"; cp "$BK"/20260925_020000-* "$DLS/"
+JOUT="$("$FM" pull --from-dir "$DLS" --as tokstale --skip-app hrms --dry-run --json --bench-dir "$BENCH" 2>/dev/null)" || fail "pull --dry-run --json (stale)"
+TOKS="$(plan_token "$JOUT")"
+for f in "$BK"/20260925_020000-*; do cp "$f" "$DLS/20260927_020000-${f##*/20260925_020000-}"; done
+reset_calls
+run_fm pull --from-dir "$DLS" --as tokstale --skip-app hrms --apply "$TOKS" --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "The plan changed since it was shown; nothing was changed"
+assert_no_file "$BENCH/sites/tokstale"
+assert_calls_not_contain '^(bench|python benchbar-frappe|rsync|scp) '
+
 # ---- --json: one object per line on stdout, ending in done
 JOUT="$("$FM" pull "$SRC" --as jsoncopy --skip-app hrms --yes --json --bench-dir "$BENCH" 2>/dev/null)" || fail "pull --json failed"
 printf '%s\n' "$JOUT" | python3 -c '

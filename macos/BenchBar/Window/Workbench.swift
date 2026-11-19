@@ -314,17 +314,20 @@ final class Workbench {
         }
     }
 
-    /// Copies the site, after the person saw the plan. Returns the CLI's message when it failed.
+    /// Copies the site by the token of the plan the person saw. Returns the CLI's message when it
+    /// failed (a plan that changed since it was shown among them).
     @discardableResult
     func pull(_ request: PullRequest, reviewed: PullPlan? = nil, on bench: BenchModel) async -> String? {
         var ran: PullRun?
         let title = "Pull \(request.name)"
+        let token = reviewed?.token
         let error = await change(title, on: bench) { client throws(CLIError) in
-            ran = try await client.pull(request, bench: bench.path)
+            ran = try await client.pull(request, token: token, bench: bench.path)
         }
         if let ran, error == nil {
             let neutralised = ran.done.neutralised?.summary ?? ""
-            let changed = reviewed.flatMap { reviewed in ran.plan.map { $0.differences(from: reviewed) } } ?? []
+            // a CLI with a token has already refused a changed plan; only an older one is told after the run
+            let changed = token != nil ? [] : (reviewed.flatMap { reviewed in ran.plan.map { $0.differences(from: reviewed) } } ?? [])
             result?.note = [neutralised.isEmpty ? nil : "Neutralised: \(neutralised).",
                             "Log in as Administrator. Its password is production's unless you set one in Terminal. If \(request.name) does not open, Sites has Add Hosts Lines.",
                             changed.isEmpty ? nil : "The run differed from the plan you reviewed: \(changed.joined(separator: "; ")).",

@@ -175,6 +175,19 @@ stamps), plan first, show it to the user, then apply with the token:
 
 It backs the site up first, never moves the default site and ends with a
 check. Do not run `bench restore` or `mariadb -u root` yourself.
+
+A `pull` has a token too (the CLI form only; it is not an MCP tool). Show
+the plan to the user, then run exactly it:
+
+```bash
+./benchbar pull HOST:SITE --as NAME --dry-run --json            # the plan line has the token
+./benchbar pull HOST:SITE --as NAME --apply TOKEN --yes --json  # same arguments
+```
+
+The run makes the plan again after its checks; a newer backup on the
+server or another set of apps is another plan, and it stops with "The
+plan changed since it was shown; nothing was changed" (exit 1). Without
+`--apply` the old behaviour stays: a person in a terminal is asked.
 `benchbar up --services-only` starts only the bench's Redis.
 
 ## Port setup and conflicts

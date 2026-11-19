@@ -32,11 +32,14 @@ nonisolated extension CLIClient {
         return plan
     }
 
-    /// benchbar pull ... --yes --json: the copy. No token exists for a pull; the CLI checks
-    /// again and the person said yes to the plan they saw. No password goes in: the Administrator
-    /// login is then production's (the CLI says so), and the hosts line is left for Sites.
-    func pull(_ request: PullRequest, bench: String) async throws(CLIError) -> PullRun {
-        let output = try await run(request.arguments + ["--yes", "--json", "--bench-dir", bench],
+    /// benchbar pull ... --apply TOKEN --yes --json: runs the plan the person saw. The CLI makes
+    /// the plan again after its checks and refuses a token that no longer matches (a newer backup,
+    /// other apps), with nothing changed. A CLI without a token (0.8) gets `--yes` alone. No password
+    /// goes in: the Administrator login is then production's (the CLI says so), and the hosts line
+    /// is left for Sites.
+    func pull(_ request: PullRequest, token: String?, bench: String) async throws(CLIError) -> PullRun {
+        let apply = token.map { ["--apply", $0] } ?? []
+        let output = try await run(request.arguments + apply + ["--yes", "--json", "--bench-dir", bench],
                                    timeout: Timeout.install, acceptExitCodes: [0, 1, 2])
         guard output.exitCode == 0, let done = PullStream.done(in: output.stdout), done.exit == 0 else {
             throw .failed(command: "pull", exitCode: output.exitCode, message: PullStream.failure(output))
