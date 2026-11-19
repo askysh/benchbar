@@ -84,9 +84,9 @@ struct NetworkPane: View {
         .formStyle(.grouped)
         .onAppear {
             if explained { store.startBrowsing() }
-            store.startHealthLoop()
+            store.paneAppeared()
         }
-        .onDisappear { store.stopBrowsing() }
+        .onDisappear { store.paneDisappeared() }
         .sheet(isPresented: Binding(get: { store.join != .none }, set: { if !$0 { store.cancelJoin() } })) {
             JoinSheet(store: store)
         }
@@ -137,13 +137,22 @@ private struct JoinedRoomRow: View {
                 if NetworkPanePresentation.canRejoin(health) {
                     Button("Join") { store.beginRejoin(room) }
                 }
-                Button(health == .identityChanged ? "Remove and Join Again" : "Forget") { Task { await store.forget(room) } }
+                Button(health == .identityChanged ? "Remove and Join Again" : "Forget") { forget(health) }
+            }
+            if let failure = store.openFailed[room.id] {
+                Label(failure, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
             }
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 Text(NetworkPanePresentation.health(health, host: room.host, now: context.date))
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func forget(_ health: GuestRoomStore.RoomHealth) {
+        let ask = NetworkPanePresentation.forgetConfirm(room, identityChanged: health == .identityChanged)
+        guard ShareConfirm.ask(ask.message, detail: ask.detail, button: ask.button, cancelIsDefault: true) else { return }
+        Task { await store.forget(room) }
     }
 }
 

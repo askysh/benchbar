@@ -102,7 +102,7 @@ fl_app_bundle_version_at() {
 # The installed BenchBar app: "VERSION<tab>APP PATH", or nothing when no
 # app is installed. /Applications first, then ~/Applications.
 fl_app_bundle_info() {
-  local dir dirs="$FL_APP_DIRS" v
+  local dir dirs="${FL_APP_DIRS:-/Applications:$HOME/Applications}" v
   while [[ -n "$dirs" ]]; do
     dir="${dirs%%:*}"
     [[ "$dirs" == *:* ]] && dirs="${dirs#*:}" || dirs=""

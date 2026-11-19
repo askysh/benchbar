@@ -1094,7 +1094,7 @@ Exit 0. An argument other than `--json` exits 1.
 `labs list --json` is one document, with no done fields:
 
 ```json
-{"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.9.0","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false}]}
+{"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.8.2","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false}]}
 ```
 
 `commands` are the top level commands the lab gates (it may be empty, or name
@@ -1131,13 +1131,15 @@ share one timestamp:
   "size_bytes": 5242880,
   "with_files": true,
   "encrypted": false,
-  "partial": false
+  "partial": false,
+  "complete": true
 }
 ```
 
 | Field | Meaning |
 |---|---|
 | `stamp` | the timestamp at the start of the file names, in the site's time zone |
+| `complete` | `false` for a partial set, a set without a database file, or one with an empty part (a cheap check: `site restore` also reads the files to their end) |
 | `time` | when the database file was written, UTC |
 | `path` | the database file, the one a restore needs (else the first file of the set) |
 | `database`, `files`, `private_files`, `config` | each part, `null` when the set has none |

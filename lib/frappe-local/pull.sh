@@ -323,6 +323,27 @@ fl_pull_local_file() {
   esac
 }
 
+# fl_pull_check_files: the picked set, as restore will read it (the decrypted
+# files for an encrypted set), is read before the old data is replaced: the
+# dump to its end, the file archives when they are restored. Once per run; 1
+# with a [FAIL] line when a file is empty, cut short or unreadable.
+FL_PULL_FILES_CHECKED=0
+fl_pull_check_files() {
+  local f
+  [[ "$FL_PULL_FILES_CHECKED" != "1" ]] || return 0
+  for f in "$FL_PULL_DB" "$FL_PULL_PUB" "$FL_PULL_PRIV"; do
+    [[ -n "$f" ]] || continue
+    [[ "$FL_PULL_NO_FILES" != "1" || "$f" == "$FL_PULL_DB" ]] || continue
+    if ! fl_backup_file_check "$(fl_pull_local_file "$f")"; then
+      fl_fail "${FL_BACKUP_PROBLEM}; nothing was replaced"
+      fl_fix "get the backup set again (benchbar site backups NAME lists local ones, --new-backup takes a fresh one on the server), then run the same command"
+      return 1
+    fi
+  done
+  FL_PULL_FILES_CHECKED=1
+  fl_log "the backup set was read to its end: ${FL_PULL_DB}"
+}
+
 # ---------------------------------------------------------------- check
 
 fl_pull_parse_args() {
@@ -877,10 +898,18 @@ fl_pull_step_decrypt() {
 }
 
 fl_pull_step_local_backup() {
+  local code
+  # the set is read before the old site is touched, even for its backup
+  fl_pull_check_files || return 1
   fl_bench_env_exports
   # frappe reads the site's settings through the bench's Redis cache (a stopped bench has none running)
   [[ -n "$FL_SETUP_REDIS_PORTS" ]] || fl_bench_redis_up "$FL_BENCH_DIR"
-  fl_run_long "bench --site ${FL_PULL_AS} backup --with-files" fl__in_dir "$FL_BENCH_DIR" bench --site "$FL_PULL_AS" backup --with-files || return 1
+  # bench's backup deletes the site's backups older than 23 hours: keep them
+  fl_backups_keep_begin "$FL_PULL_AS" || return 1
+  code=0
+  fl_run_long "bench --site ${FL_PULL_AS} backup --with-files" fl__in_dir "$FL_BENCH_DIR" bench --site "$FL_PULL_AS" backup --with-files || code=$?
+  fl_backups_keep_end
+  [[ "$code" == "0" ]] || return 1
   fl_ok "backup of the old ${FL_PULL_AS} in sites/${FL_PULL_AS}/private/backups"
   if [[ "${FL_ASSUME_YES:-0}" != "1" && "$FL_PULL_CONFIRM_BACKUP" == "1" ]] && ! fl_confirm "The old ${FL_PULL_AS} is backed up. Replace it now?"; then
     fl_pull_emit gate ",\"name\":\"replace\",\"answer\":\"no\""
@@ -903,6 +932,7 @@ fl__pull_frappe_secret() {
 # generated one is never shown or kept.
 fl_pull_step_new_site() {
   local pw="${ADMIN_PASSWORD:-}" code=0
+  fl_pull_check_files || return 1
   [[ -n "$pw" ]] || pw="$(fl_password_generate)"
   fl_bench_env_exports
   [[ -n "$FL_SETUP_REDIS_PORTS" ]] || fl_bench_redis_up "$FL_BENCH_DIR"
@@ -917,6 +947,7 @@ fl_pull_step_new_site() {
 
 fl_pull_step_restore() {
   local args=(--mariadb-root-password "$(fl_pull_local_file "$FL_PULL_DB")")
+  fl_pull_check_files || return 1
   if [[ "$FL_PULL_NO_FILES" != "1" ]]; then
     [[ -n "$FL_PULL_PUB" ]] && args+=(--with-public-files "$(fl_pull_local_file "$FL_PULL_PUB")")
     [[ -n "$FL_PULL_PRIV" ]] && args+=(--with-private-files "$(fl_pull_local_file "$FL_PULL_PRIV")")
@@ -1208,6 +1239,11 @@ fl_cmd_pull() {
   if [[ "$FL_PULL_NEW_BACKUP" != "1" && -z "$FL_PULL_FROM_DIR" ]]; then
     s="$(fl_pull_age_hours "${FL_PULL_DB%%-*}")"
     [[ -n "$s" && "$s" -ge 48 ]] && fl_pull_warn "the latest backup is about ${s}h old; --new-backup takes a fresh one"
+  fi
+
+  # a folder of files is read now, a download (and a decrypt) once its files are here
+  if [[ -n "$FL_PULL_FROM_DIR" && "$FL_PULL_ENCRYPTED" != "1" ]]; then
+    fl_pull_check_files || fl_die "The backup set in ${FL_PULL_FROM_DIR} cannot be restored." "Nothing was changed."
   fi
 
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then

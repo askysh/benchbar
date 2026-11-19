@@ -300,11 +300,22 @@ The Sharing tab of a bench has one main button for each state:
    to 12 hours in total.
 4. **Stop** ends the room. Every guest session ends with it.
 
+If a setup stopped halfway (for example you quit BenchBar while it ran), the
+tab says so and the button reads **Finish setup**. It opens the same sheet as
+**Refresh copy…**; `benchbar share setup --refresh` does the same. **Start
+sharing** does not work before that.
+
+Turning the `lan-rooms` Lab off while a room runs asks first: it says how many
+people are connected and will be signed out, and that the rooms you opened as
+a guest close.
+
 While the room is open the tab shows:
 
-- **Room code**: six digits. **Copy** copies the code. **Copy invite**
-  copies a link that holds the code. **New code** makes the old code stop
-  working. **Lock room** stops new joins.
+- **Room code**: six digits, drawn as dots so a shared screen or a
+  screenshot does not leak it. **Show** and **Hide** switch it; Start sharing
+  and **New code** show it once, and leaving the tab hides it again. **Copy**
+  copies the code. **Copy invite** copies a link that holds the code. **New
+  code** makes the old code stop working. **Lock room** stops new joins.
 - **Checks**: the protection checks. Sharing ends by itself when they fail
   twice in a row.
 - **The copy**: the site that guests see, with **Refresh copy…**.
@@ -321,7 +332,10 @@ room is open. Closing the lid still ends it.
 **On your network** is in the sidebar of the window. It has two lists:
 
 - **Your rooms**: the rooms you joined. **Open** opens the room's site,
-  **Change Seat** picks another seat, and **Forget** removes the room.
+  **Change Seat** picks another seat, and **Forget** removes the room. Forget
+  asks first: this Mac signs out of the room, the saved key is deleted, and a
+  new code or invite from the host is needed to join again. If **Open** cannot
+  start its local connection, the row says so.
 - **Nearby**: rooms that colleagues on this Wi-Fi opened. **Join** asks for
   the room code and then for a seat.
 
@@ -329,6 +343,12 @@ The first time, BenchBar explains why it needs Local Network access and
 then asks macOS for it. If you said no, the pane shows a button for System
 Settings. **Find rooms** looks again. Got an invite from a colleague?
 **Paste invite** joins from it. Browsing runs only while the pane is open.
+While the pane is open, or a room is open in your browser, BenchBar asks each
+joined room every 10 seconds whether the host is still there. A room that does
+not answer is asked less often (every 20 seconds, then 40, up to every 5
+minutes) and one that was removed or ended is not asked at all. When you leave
+the pane and no room is open in your browser, or when you turn the Lab off, the
+asking stops.
 
 ## Updates
 
@@ -443,8 +463,12 @@ then `/usr/local/bin` when that is Homebrew's benchbar too, then
 `~/.local/bin`, the one line installer's link. With no CLI at all, the
 app says to install one with `brew install askysh/tap/benchbar` and
 asks once with a file picker.
-macOS asks whether BenchBar may send notifications; allow it for the
-crash alerts.
+BenchBar does not ask about notifications when it starts. macOS asks once,
+when the first alert has something to say (a bench crashed), or when you
+press **Allow Notifications** in the setup walkthrough or turn the setting on;
+allow it for the crash alerts. If you said no, **Settings, Notifications**
+says so and opens the macOS pane. An alert macOS refuses to show is
+named there too.
 
 ## What the app does not do
 
@@ -496,15 +520,48 @@ only while that bench runs. The runner's speed is not read while the Mac
 sleeps, the screen is locked, the menu bar is hidden or Low Power Mode
 is on (the runner then plays at one speed).
 
+While the Mac sleeps or the screen is locked, the loops stop but the
+folder watchers stay, so a crash is announced at once, as it happens. A
+bench that crashed and was restarted by launchd while you were away shows
+`running` at wake; the app sees that it has a new start and a failing exit
+code, and tells you once.
+
+At most three `benchbar status` calls run at the same time, and opening
+the popover and the window together reads the benches once. A bench that
+has never run under the runner (no `state.json`) and that `benchbar status`
+called stopped is no longer asked every minute: the 5 minute check still
+asks, and its first start is heard from the folder.
+
 Two features read more often, and only while they are on screen. While the
-Sharing tab is open or a room runs, the app asks `benchbar share status`
-every 5 seconds and runs the protection checks once a minute. While **On
-your network** is open, it looks for nearby rooms every 5 seconds. Both
-stop when you close the pane and no room runs.
+Sharing tab is open, the app asks `benchbar share status` every 5 seconds
+and runs the protection checks once a minute. While you host a room (a
+Labs feature) and the tab is closed, `share status` is asked every 15
+seconds. While **On your network** is open, it looks for nearby rooms
+every 5 seconds and asks each joined room every 10 seconds (less often
+when a room does not answer). All of it stops when you close the pane and
+no room runs or is open.
 
 `benchbar status` pings only the default site. `benchbar status --ping`
 asks every site once and fills `ping_code` in the JSON; see
 [Running a bench](reference/cli/running.md).
+
+## Quitting and two copies
+
+If you quit while a change runs (an install, a repair, an app update, a
+site change, port setup, hosts lines, or a start, stop or restart), BenchBar
+asks. **Keep running** is the default; **Quit when it finishes** closes
+BenchBar as soon as the change is done. Quitting during a change would end
+it halfway and could leave a bench half installed or half migrated.
+
+Only one BenchBar runs at a time. Opening a second copy (from another
+folder, a DMG, Homebrew or Xcode) brings the running one to the front and
+quits the new one. The `benchbar` command line tool follows the copy in
+`/Applications`: a copy in `~/Applications` does not take it over, and an
+older copy never replaces a newer one on the same level.
+
+When a command times out or is cancelled, the app stops the command and
+everything it started (its process group): first SIGTERM, then SIGKILL
+after 2 seconds. A cancel is not reported as a timeout.
 
 ## Find existing benches in a folder
 

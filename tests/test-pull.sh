@@ -59,8 +59,8 @@ make_backup_set() {
   # make_backup_set TIMESTAMP [ENC]: a complete set in the server's backup folder
   local base="$BK/$1-erp_example_com" enc="${2:+-enc}"
   cp "$MOCK_STATE/remote_dump.sql.gz" "${base}-database${enc}.sql.gz"
-  printf 'public files\n' >"${base}-files${enc}.tar"
-  printf 'private files\n' >"${base}-private-files${enc}.tar"
+  mktar "${base}-files${enc}.tar"
+  mktar "${base}-private-files${enc}.tar"
   cp "$RB/sites/$RS/site_config.json" "${base}-site_config_backup${enc}.json"
 }
 make_backup_set 20260924_020000

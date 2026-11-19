@@ -73,6 +73,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/release-windows.yml"
+      - "windows/tray/scripts/**"
       - "install.ps1"
       - "windows/shim/versioninfo.json"
       - "windows/shim/benchbar.manifest"
@@ -281,6 +282,17 @@ jobs:
           # fail loudly rather than ship amd64 bits in the arm64 zip
           Assert-PeMachine $exe $env:MACHINE
 
+      # The tray's own tests (the test projects are x64; the arm64 leg is started by
+      # the tray-arm64 job below, on an arm64 runner).
+      - name: Test the tray app
+        if: steps.tray.outputs.present == 'true' && matrix.arch == 'amd64'
+        # from windows/tray: the SDK reads that folder's global.json (the
+        # Microsoft.Testing.Platform runner) only from the working folder upward
+        working-directory: windows/tray
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          dotnet test BenchBarTray.sln -c Release
+
       # ------------------------------------------------------------- signing
       # Only the project's own binaries: SignPath Foundation signs a project's
       # own code, not the NuGet libraries it ships.
@@ -347,6 +359,13 @@ jobs:
             }
           }
           foreach ($name in $targets.Keys) { if ($name -like '*.exe') { Assert-PeMachine $targets[$name] $env:MACHINE } }
+
+      # What ships, started once on recorded data: it must stay up and quit cleanly
+      # (windows/tray/scripts/smoke.ps1). A publish that lacks a file or a manifest
+      # that does not load passes every other check and fails here.
+      - name: Start the tray app once
+        if: steps.tray.outputs.present == 'true' && matrix.arch == 'amd64' && hashFiles('windows/tray/scripts/smoke.ps1') != ''
+        run: ./windows/tray/scripts/smoke.ps1 -Dir out/tray -Fixtures windows/tray/fixtures/rest -Version $env:VERSION
 
       # ------------------------------------------------------------- package
       - name: Write README.txt and SHA256SUMS, build the zip
@@ -472,6 +491,43 @@ jobs:
           name: windows-${{ matrix.arch }}
           path: dist/*
           if-no-files-found: error
+
+  # The arm64 zip is built on an x64 runner, which cannot run it. Start its tray
+  # app here, on a hosted Windows on Arm runner, the way the amd64 leg does.
+  tray-arm64:
+    name: Tray app starts (arm64)
+    needs: [version, package]
+    runs-on: windows-11-arm
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.release == 'true' && format('refs/tags/v{0}', needs.version.outputs.version) || '' }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-arm64
+          path: source
+      - name: Unpack the zip
+        id: unpack
+        run: |
+          $unpacked = Join-Path $env:RUNNER_TEMP 'arm64'
+          Expand-Archive (Get-ChildItem source -Filter *.zip).FullName -DestinationPath $unpacked -Force
+          $has = Test-Path (Join-Path $unpacked 'BenchBarTray.exe')
+          if (-not $has) { Write-Host '::warning title=No tray app::the arm64 zip has no BenchBarTray.exe (an older tag): nothing to start.' }
+          "dir=$unpacked" >> $env:GITHUB_OUTPUT
+          "present=$($has.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+      - uses: actions/setup-dotnet@v6
+        if: steps.unpack.outputs.present == 'true'
+        with:
+          global-json-file: windows/tray/global.json
+      - name: Start the tray app once
+        if: steps.unpack.outputs.present == 'true' && hashFiles('windows/tray/scripts/smoke.ps1') != ''
+        run: ./windows/tray/scripts/smoke.ps1 -Dir '${{ steps.unpack.outputs.dir }}' -Fixtures windows/tray/fixtures/rest -Version $env:VERSION
 
   # Runs on every trigger, a tag push included: the release job waits for it,
   # so a zip the installer cannot install is never attached to a release.
@@ -759,7 +815,7 @@ jobs:
 
   release:
     name: Attach to the draft release
-    needs: [version, package, installer-test]
+    needs: [version, package, installer-test, tray-arm64]
     if: needs.version.outputs.release == 'true'
     # ubuntu: waiting for the Mac draft costs almost nothing there
     runs-on: ubuntu-latest
@@ -910,12 +966,26 @@ jobs:
             $isDraft = [bool]$rel.isDraft
           }
 
-          gh release upload $tag (Get-ChildItem dist -File | Where-Object { $_.Name -like 'benchbar-windows-*' } | ForEach-Object { $_.FullName }) --clobber
+          # A published release is immutable: fail, change nothing. On a draft a
+          # file of the same name is deleted first, so nothing is overwritten
+          # in place (no --clobber).
+          if (-not $isDraft) {
+            Write-Host "::error title=Release already published::Release $tag is published and immutable, so this run will not add or replace its files or edit its notes. To fix a release, delete nothing: cut a new version."
+            exit 1
+          }
+          $files = @(Get-ChildItem dist -File | Where-Object { $_.Name -like 'benchbar-windows-*' })
+          $existing = @(gh release view $tag --json assets --jq '.assets[].name')
+          if ($LASTEXITCODE -ne 0) { throw 'gh release view (assets) failed' }
+          foreach ($f in $files) {
+            if ($existing -contains $f.Name) {
+              gh release delete-asset $tag $f.Name --yes
+              if ($LASTEXITCODE -ne 0) { throw "gh release delete-asset $($f.Name) failed" }
+            }
+          }
+          gh release upload $tag ($files | ForEach-Object { $_.FullName })
           if ($LASTEXITCODE -ne 0) { throw 'gh release upload failed' }
 
-          if (-not $isDraft) {
-            Write-Host "::warning::Release $tag is already published. Assets uploaded; its notes are left alone."
-          } elseif (-not $created) {
+          if (-not $created) {
             $body = [string]$rel.body
             $start = $body.IndexOf('<!-- windows -->')
             $end = $body.IndexOf('<!-- /windows -->')

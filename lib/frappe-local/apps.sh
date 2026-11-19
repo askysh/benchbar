@@ -17,13 +17,39 @@
 # ---------------------------------------------------------------- reading
 
 fl_app_path() { printf '%s/apps/%s' "$FL_BENCH_DIR" "$1"; }
-fl_app_git() { local app="$1"; shift; git -C "$(fl_app_path "$app")" "$@"; }
+# In a doctor run (facts.sh) the same git question about an app is asked once.
+fl_app_git() {
+  local app="$1"
+  shift
+  # the path is spelled here and not asked of fl_app_path: a $(...) is a process each time
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then fl_memo "git:${app}:${*}" git -C "${FL_BENCH_DIR}/apps/${app}" "$@"; return; fi
+  git -C "${FL_BENCH_DIR}/apps/${app}" "$@"
+}
 
-# sites/apps.txt, one app per line, in order
+# sites/apps.txt, one app per line, in order: no carriage return, no space or
+# tab at either end, no empty line, each name once. Read in bash; in a doctor
+# run (facts.sh) once.
 fl_apps_txt() {
-  local f="${FL_BENCH_DIR}/sites/apps.txt"
+  local f="${FL_BENCH_DIR}/sites/apps.txt" out
   [[ -f "$f" ]] || return 0
-  tr -d '\r' <"$f" | awk '{gsub(/^[ \t]+|[ \t]+$/, "")} NF && !seen[$0]++'
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    fl_memo_v out "apps_txt:${FL_BENCH_DIR}" fl__apps_txt_read "$f"
+    printf '%s' "$out"
+    return 0
+  fi
+  fl__apps_txt_read "$f"
+}
+
+fl__apps_txt_read() {
+  local line seen=$'\n'
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line//$'\r'/}"
+    line="${line#"${line%%[![:blank:]]*}"}"; line="${line%"${line##*[![:blank:]]}"}"
+    [[ -n "$line" ]] || continue
+    case "$seen" in *$'\n'"$line"$'\n'*) continue ;; esac
+    seen="${seen}${line}"$'\n'
+    printf '%s\n' "$line"
+  done <"$1"
 }
 
 fl_app_in_apps_txt() { fl_has_line "$(fl_apps_txt || true)" "$1"; }
@@ -51,6 +77,22 @@ fl_apps_unlisted() {
 
 fl_apps_all() { fl_apps_txt; fl_apps_unlisted; }
 
+# fl_app_config_v VAR APP KEY: what "git config --get KEY" says in APP's repo
+# (the last value, nothing when unset). In a doctor run one "git config -l" per
+# app answers every key, instead of one process for each.
+fl_app_config_v() {
+  local __all __line __v=""
+  if [[ -n "${FL_FACTS_DIR:-}" ]] && fl_memo_v __all "gitcfg:${2}" git -C "${FL_BENCH_DIR}/apps/${2}" config -l; then
+    while IFS= read -r __line; do
+      # what follows KEY=, whatever it holds (a branch named a=b reads right)
+      [[ "$__line" == "${3}="* ]] && __v="${__line:${#3}+1}"
+    done <<<"$__all"
+    printf -v "$1" '%s' "$__v"
+    return 0
+  fi
+  printf -v "$1" '%s' "$(fl_app_git "$2" config --get "$3" 2>/dev/null || true)"
+}
+
 # The folder in apps/ that holds NAME, compared without case (a repo named
 # Raven is the app raven), or nothing.
 fl_app_existing_dir() {
@@ -64,8 +106,55 @@ fl_app_existing_dir() {
   return 0
 }
 
-fl_app_has_git() { [[ -e "$(fl_app_path "$1")/.git" ]]; }
-fl_app_branch() { fl_app_has_git "$1" || return 0; fl_app_git "$1" symbolic-ref --short -q HEAD 2>/dev/null || true; }
+fl_app_has_git() { [[ -e "${FL_BENCH_DIR}/apps/${1}/.git" ]]; }
+
+# fl__app_refs_v VAR APP: every branch and remote tracking ref of APP, one
+# "REF OID SYMREF HEAD" row (fields apart by \037; HEAD is * on the branch that
+# is checked out), from ONE for-each-ref. Only in a doctor run (facts.sh keeps
+# it): the branch, the remote's default branch and "is it up to date" are then
+# read from these rows and each start a git of their own no more. 1 when there
+# are no rows (outside a run, git failed, a repository without a ref).
+fl__app_refs_v() {
+  local __r=""
+  [[ -n "${FL_FACTS_DIR:-}" ]] || return 1
+  fl_memo_v __r "git:${2}:refs-rows" git -C "${FL_BENCH_DIR}/apps/${2}" for-each-ref '--format=%(refname)%1f%(objectname)%1f%(symref)%1f%(HEAD)' refs/heads refs/remotes || return 1
+  [[ -n "$__r" ]] || return 1
+  printf -v "$1" '%s' "$__r"
+}
+
+# fl__app_head_v VAR APP: "BRANCH OID" of the checked out branch, from the rows
+# (kept for the run); 1 when no row says (a detached or an unborn HEAD: the
+# callers ask git)
+fl__app_head_v() { fl_memo_v "$1" "git:${2}:refs-head" fl__app_head_print "$2"; }
+fl__app_head_print() {
+  local rows ref oid sym head
+  fl__app_refs_v rows "$1" || return 1
+  while IFS=$'\037' read -r ref oid sym head; do
+    if [[ "$head" == "*" && "$ref" == refs/heads/* ]]; then printf '%s %s' "${ref#refs/heads/}" "$oid"; return 0; fi
+  done <<<"$rows"
+  return 1
+}
+
+# fl__app_ref_v VAR APP REF FIELD: the OID (FIELD oid) or the SYMREF (FIELD sym)
+# of the ref REF (refs/remotes/R/HEAD); 1 when the rows have no such ref
+fl__app_ref_v() {
+  local __rows __ref __oid __sym __head
+  fl__app_refs_v __rows "$2" || return 1
+  while IFS=$'\037' read -r __ref __oid __sym __head; do
+    if [[ "$__ref" == "$3" ]]; then
+      if [[ "$4" == "oid" ]]; then printf -v "$1" '%s' "$__oid"; else printf -v "$1" '%s' "$__sym"; fi
+      return 0
+    fi
+  done <<<"$__rows"
+  return 1
+}
+
+fl_app_branch() {
+  local h
+  fl_app_has_git "$1" || return 0
+  if fl__app_head_v h "$1"; then printf '%s' "${h% *}"; return 0; fi
+  fl_app_git "$1" symbolic-ref --short -q HEAD 2>/dev/null || true
+}
 fl_app_commit() { fl_app_has_git "$1" || return 0; fl_app_git "$1" rev-parse -q --verify 'HEAD^{commit}' 2>/dev/null || true; }
 fl_app_dirty() { fl_app_has_git "$1" && [[ -n "$(fl_app_git "$1" status --porcelain -uno 2>/dev/null || true)" ]]; }
 fl_app_shallow() { fl_app_has_git "$1" && [[ "$(fl_app_git "$1" rev-parse --is-shallow-repository 2>/dev/null || true)" == "true" ]]; }
@@ -76,7 +165,7 @@ fl_app_remote() {
   local app="$1" b r="" remotes
   fl_app_has_git "$app" || return 0
   b="$(fl_app_branch "$app")"
-  [[ -n "$b" ]] && r="$(fl_app_git "$app" config --get "branch.${b}.remote" 2>/dev/null || true)"
+  [[ -n "$b" ]] && fl_app_config_v r "$app" "branch.${b}.remote"
   if [[ -z "$r" || "$r" == "." ]]; then
     remotes="$(fl_app_git "$app" remote 2>/dev/null || true)"
     if fl_has_line "$remotes" upstream; then r=upstream; else r="${remotes%%$'\n'*}"; fi
@@ -765,10 +854,15 @@ fl__au_command() {
 
 # fl__au_run KIND TARGET APP TO: one step of app update; its own [FAIL] line says why it failed
 fl__au_run() {
-  local kind="$1" target="$2" app="$3" to="$4"
+  local kind="$1" target="$2" app="$3" to="$4" code
   case "$kind" in
     backup) fl_bench_redis_up "$FL_BENCH_DIR" >/dev/null 2>&1 || true
-      fl_run_long "bench --site ${target} backup" fl__in_dir "$FL_BENCH_DIR" bench --site "$target" backup ;;
+      # bench's backup deletes the site's backups older than 23 hours: keep them
+      fl_backups_keep_begin "$target" || return 1
+      code=0
+      fl_run_long "bench --site ${target} backup" fl__in_dir "$FL_BENCH_DIR" bench --site "$target" backup || code=$?
+      fl_backups_keep_end
+      return "$code" ;;
     fast_forward) fl_run_long "git merge --ff-only" git -C "$(fl_app_path "$app")" merge --ff-only --quiet "$to" ;;
     requirements_python) fl_run_long "bench setup requirements --python ${app}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --python "$app" ;;
     requirements_node) fl_run_long "bench setup requirements --node ${app}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --node "$app" ;;

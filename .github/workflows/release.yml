@@ -1,12 +1,16 @@
 # Builds BenchBar and drafts a GitHub release when a v* tag is pushed.
 #
 # Two paths, one workflow (docs/releasing.md):
-#   ad hoc      no Apple Developer account: the app is ad hoc signed,
-#               packaged as zip and dmg with SHA256SUMS, and attached to a
-#               draft release. Downloads open after "Open Anyway"; install.sh
-#               fetches them with curl, which sets no quarantine flag.
-#   Developer ID  when the signing and notarization secrets exist: signed,
-#               notarized, stapled, and a Sparkle appcast too.
+#   Developer ID  the release: signed, notarized, stapled, with a Sparkle
+#               appcast. It runs only for a v* tag, in the `release`
+#               environment, which holds the signing, notarization, Sparkle
+#               and tap secrets, accepts only v* tags and waits for the
+#               maintainer's approval. A missing secret fails the run: a tag
+#               never silently becomes an unsigned release.
+#   ad hoc      only for a manual run with the `adhoc` input on: the app is ad
+#               hoc signed, packaged as zip and dmg with SHA256SUMS. It reads
+#               no secret and never enters the `release` environment, so a
+#               test build from any branch cannot reach the keys.
 #
 # Both paths attach the CLI tarball the Homebrew formula installs. The tap
 # is updated only after the draft is published, by homebrew-tap.yml: a
@@ -23,8 +27,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (X.Y.Z), for a manual run without a tag"
+        description: "Version to build (X.Y.Z). Run it on the tag (--ref vX.Y.Z) for the signed release"
         required: true
+      adhoc:
+        description: "Build an ad hoc signed app with no secrets, for a test. Off: the run must be on a v* tag and is signed"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -34,11 +42,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Reads no secret: it only decides the path from the ref and the input.
   check:
     name: Which path
     runs-on: ubuntu-latest
     outputs:
-      signed: ${{ steps.secrets.outputs.signed }}
+      mode: ${{ steps.mode.outputs.mode }}
       version: ${{ steps.version.outputs.version }}
     steps:
       - id: version
@@ -53,149 +62,153 @@ jobs:
           esac
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "Building version $v"
-      - id: secrets
+      - id: mode
         env:
-          CERT: ${{ secrets.MACOS_CERTIFICATE_P12 }}
-          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
-          TEAM: ${{ secrets.APPLE_TEAM_ID }}
-          KEY: ${{ secrets.NOTARY_API_KEY_P8 }}
-          KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
-          ISSUER: ${{ secrets.NOTARY_API_ISSUER_ID }}
-          ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
-          ED_PUBLIC: ${{ secrets.SPARKLE_ED_PUBLIC_KEY }}
+          REF: ${{ github.ref }}
+          ADHOC: ${{ inputs.adhoc }}
         run: |
-          missing=""
-          for name in CERT CERT_PASSWORD IDENTITY TEAM KEY KEY_ID ISSUER ED_KEY ED_PUBLIC; do
-            [ -n "${!name}" ] || missing="$missing $name"
-          done
-          if [ -z "$missing" ]; then
-            echo "signed=true" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Developer ID release::Signing secrets found: the app will be signed, notarized and stapled."
+          if [ "$ADHOC" = "true" ]; then
+            case "$REF" in
+              refs/tags/v*) echo "::error::The adhoc input is on, and this run is on the tag $REF. An ad hoc build never runs on a release tag: it would draft an unsigned release for it. Run it on a branch, or turn adhoc off for the signed release."; exit 1 ;;
+            esac
+            echo "mode=adhoc" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Ad hoc build::The adhoc input is on: an unsigned test build that reads no secret."
           else
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Ad hoc release::No Developer ID secrets (missing:${missing}). Building the unsigned release. See docs/releasing.md."
+            case "$REF" in
+              refs/tags/v*) ;;
+              *) echo "::error::A signed release builds a v* tag, and this run is on $REF. Run it on the tag (gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z), or turn on the adhoc input for an unsigned test build."; exit 1 ;;
+            esac
+            echo "mode=signed" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Developer ID release::Building $REF signed, in the release environment."
           fi
 
-  build:
-    name: Build and draft the release (${{ needs.check.outputs.signed == 'true' && 'Developer ID' || 'ad hoc' }})
+  # The release. The environment makes GitHub check the ref against its
+  # deployment rule (v* tags only) and wait for the reviewer before this job
+  # starts, so the secrets below reach no other ref and no one unapproved.
+  build-signed:
+    name: Build, sign and draft the release (Developer ID)
     needs: check
+    if: needs.check.outputs.mode == 'signed'
+    environment: release
     runs-on: macos-26
     timeout-minutes: 120
     env:
       VERSION: ${{ needs.check.outputs.version }}
-      SIGNED: ${{ needs.check.outputs.signed }}
     steps:
+      # The token stays out of .git/config: the tests and the build run
+      # code that is not ours, and the draft step passes it to gh itself.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      - name: Cache Homebrew downloads
-        uses: actions/cache@v6
-        with:
-          path: ~/Library/Caches/Homebrew
-          key: brew-${{ runner.os }}-${{ runner.arch }}-xcodegen
-          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Install tools
-        run: brew install xcodegen shellcheck
-
-      - name: CLI tests
-        run: /bin/bash tests/run-tests.sh
-
-      - name: Check the version against project.yml, benchbar and the CHANGELOG
+      # A missing secret fails the release; it never falls back to ad hoc.
+      - name: Check that every signing secret is set
+        env:
+          S_MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          S_MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          S_MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          S_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          S_NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
+          S_NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          S_NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+          S_SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          S_SPARKLE_ED_PUBLIC_KEY: ${{ secrets.SPARKLE_ED_PUBLIC_KEY }}
         run: |
-          project="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' macos/project.yml | head -n 1)"
-          [ "$project" = "$VERSION" ] || { echo "::error::tag says $VERSION but macos/project.yml says $project"; exit 1; }
-          cli="$(sed -n 's/^FL_VERSION="\([^"]*\)"$/\1/p' benchbar | head -n 1)"
-          [ "$cli" = "$VERSION" ] || { echo "::error::tag says $VERSION but FL_VERSION in benchbar says $cli"; exit 1; }
-          grep -q "^## ${VERSION} " CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## ${VERSION} ' section"; exit 1; }
-          echo "version $VERSION matches project.yml and benchbar, and has a CHANGELOG section"
+          missing=""
+          for var in S_MACOS_CERTIFICATE_P12 S_MACOS_CERTIFICATE_PASSWORD S_MACOS_SIGN_IDENTITY S_APPLE_TEAM_ID \
+                     S_NOTARY_API_KEY_P8 S_NOTARY_API_KEY_ID S_NOTARY_API_ISSUER_ID \
+                     S_SPARKLE_ED_PRIVATE_KEY S_SPARKLE_ED_PUBLIC_KEY; do
+            [ -n "${!var}" ] || missing="$missing ${var#S_}"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Signing secrets missing::Not set in the release environment:${missing}. A tag build is never released unsigned. Set them (docs/releasing.md, Secrets) and re-run."
+            exit 1
+          fi
+          echo "All nine signing secrets are set."
 
-      # ---------------------------------------------------------- Developer ID path
-      - name: Import the Developer ID certificate
-        if: env.SIGNED == 'true'
+      - uses: ./.github/actions/release-prepare
+        with:
+          version: ${{ env.VERSION }}
+
+      # The certificate, the notary key and the Sparkle key exist only from
+      # here to the cleanup step below. The certificate is imported in this
+      # step and its file deleted at once; the script writes the notary and
+      # Sparkle keys to a temporary file for the one command that needs each
+      # and removes it again. The keychain is not given to every program (no
+      # -A): codesign only.
+      - name: Build, sign, notarize, package
         env:
           CERT: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-        run: |
-          keychain="$RUNNER_TEMP/release.keychain-db"
-          keychain_password="$(uuidgen)"
-          echo "$CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security create-keychain -p "$keychain_password" "$keychain"
-          security set-keychain-settings -lut 3600 "$keychain"
-          security unlock-keychain -p "$keychain_password" "$keychain"
-          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
-          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" >/dev/null
-          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          rm -f "$RUNNER_TEMP/cert.p12"
-          echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
-
-      - name: Write the notary and Sparkle keys
-        if: env.SIGNED == 'true'
-        env:
-          KEY: ${{ secrets.NOTARY_API_KEY_P8 }}
-          ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
-        run: |
-          umask 077
-          echo "$KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
-          printf '%s' "$ED_KEY" > "$RUNNER_TEMP/sparkle_ed.key"
-
-      - name: Build, sign, notarize, package
-        if: env.SIGNED == 'true'
-        env:
           BENCHBAR_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
           BENCHBAR_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           BENCHBAR_SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_ED_PUBLIC_KEY }}
-          NOTARY_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          NOTARY_KEY_BASE64: ${{ secrets.NOTARY_API_KEY_P8 }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
-          SPARKLE_ED_KEY_PATH: ${{ runner.temp }}/sparkle_ed.key
-        run: scripts/macos-release.sh "$VERSION"
-
-      # ---------------------------------------------------------- ad hoc path
-      - name: Build, ad hoc sign, package
-        if: env.SIGNED != 'true'
-        run: scripts/release-local.sh "$VERSION"
-
-      # ---------------------------------------------------------- both paths
-      - name: Release notes from the CHANGELOG
+          SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
-          if [ "$SIGNED" = "true" ]; then
-            scripts/release-notes.sh "$VERSION" --signed > "$RUNNER_TEMP/notes.md"
-          else
-            scripts/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
-          fi
-          cat "$RUNNER_TEMP/notes.md"
+          umask 077
+          # the one folder the script writes the notary and Sparkle key files
+          # into; the cleanup step removes it
+          mkdir -p "$RUNNER_TEMP/release-keys"
+          echo "BENCHBAR_KEY_DIR=$RUNNER_TEMP/release-keys" >> "$GITHUB_ENV"
+          export BENCHBAR_KEY_DIR="$RUNNER_TEMP/release-keys"
+          keychain="$RUNNER_TEMP/release.keychain-db"
+          keychain_password="$(uuidgen)"
+          echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          printf '%s' "$CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          # Locks after an hour without use. Not shorter: the build signs, waits
+          # for notarization (up to NOTARY_TIMEOUT, 50 minutes) and signs again.
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -T /usr/bin/codesign -t cert -f pkcs12 -k "$keychain"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          # what the build and its tests do not need stays out of their environment
+          unset CERT CERT_PASSWORD keychain_password
+          scripts/macos-release.sh "$VERSION"
 
-      - name: Upload the files as a workflow artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: BenchBar-${{ env.VERSION }}
-          path: dist/*
-          if-no-files-found: error
-
-      - name: Create or update the draft GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
-          else
-            gh release create "$TAG" --draft --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
-          fi
-          gh release upload "$TAG" dist/* --clobber
-          echo "::notice title=Draft release::https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG} (draft: review, then publish; publishing updates the Homebrew tap)"
-
+      # Right after the build, pass or fail, and before anything else runs.
       - name: Remove the keychain and keys
         if: always()
         run: |
           [ -z "${KEYCHAIN:-}" ] || security delete-keychain "$KEYCHAIN" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/sparkle_ed.key"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          [ -z "${BENCHBAR_KEY_DIR:-}" ] || rm -rf "$BENCHBAR_KEY_DIR"
+
+      - uses: ./.github/actions/release-draft
+        with:
+          version: ${{ env.VERSION }}
+          signed: "true"
+
+  # A test build for a manual run with the adhoc input. No environment, no
+  # secret: nothing here can reach the release keys.
+  build-adhoc:
+    name: Build and draft the release (ad hoc)
+    needs: check
+    if: needs.check.outputs.mode == 'adhoc'
+    runs-on: macos-26
+    timeout-minutes: 120
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/release-prepare
+        with:
+          version: ${{ env.VERSION }}
+
+      - name: Build, ad hoc sign, package
+        run: scripts/release-local.sh "$VERSION"
+
+      - uses: ./.github/actions/release-draft
+        with:
+          version: ${{ env.VERSION }}
+          signed: "false"

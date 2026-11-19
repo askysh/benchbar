@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -266,7 +267,11 @@ func wslText(sys *System, d time.Duration, args ...string) (wslResult, error) {
 // wslBytes runs wsl.exe and returns its raw stdout (a zip must not pass
 // through the text decoder).
 func wslBytes(sys *System, d time.Duration, max int, args ...string) ([]byte, int, error) {
-	cmd, err := wslCommand(sys, args...)
+	ctx, cancel := context.WithTimeout(sys.Ctx, d)
+	defer cancel()
+	// the deadline ends wsl.exe, and WaitDelay bounds the wait for a pipe
+	// that a helper process still holds
+	cmd, err := wslCommandContext(ctx, sys, args...)
 	if err != nil {
 		return nil, 1, err
 	}
@@ -278,27 +283,22 @@ func wslBytes(sys *System, d time.Duration, max int, args ...string) ([]byte, in
 		return nil, 1, err
 	}
 	defer attachKillOnClose(cmd.Process.Pid)()
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	select {
-	case err := <-done:
-		if o.over {
-			return nil, 1, errors.New("the output is larger than the limit")
-		}
-		code := 0
-		if err != nil {
-			var ee interface{ ExitCode() int }
-			if !errors.As(err, &ee) {
-				return nil, 1, err
-			}
-			code = ee.ExitCode()
-		}
-		return o.Bytes(), code, nil
-	case <-time.After(d):
-		cmd.Process.Kill()
-		<-done
+	err = cmd.Wait()
+	if ctx.Err() == context.DeadlineExceeded {
 		return nil, 1, fmt.Errorf("no answer within %s", d)
 	}
+	if o.over {
+		return nil, 1, errors.New("the output is larger than the limit")
+	}
+	code := 0
+	if err != nil {
+		var ee interface{ ExitCode() int }
+		if !errors.As(err, &ee) {
+			return nil, 1, err
+		}
+		code = ee.ExitCode()
+	}
+	return o.Bytes(), code, nil
 }
 
 // --- the parts ---------------------------------------------------------------
