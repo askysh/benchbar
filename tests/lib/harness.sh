@@ -32,6 +32,7 @@ export MOCK_PIPX_HOME="$HOME/.local/pipx"
 export FL_STATE_DIR="$TMP_DIR/state"
 export FL_STATE_FILE="$FL_STATE_DIR/state.env"
 export FL_BACKUP_ROOT="$TMP_DIR/state/backups"
+export BENCHBAR_TEST=1
 export FL_HOSTS_FILE="$TMP_DIR/hosts"
 # where the official wkhtmltopdf package would put its binary (tests never look at /usr/local)
 export FL_WKHTML_PKG_BIN="$TMP_DIR/usr-local-bin/wkhtmltopdf"

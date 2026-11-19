@@ -132,6 +132,8 @@ fl_linger_ensure() { return 0; }
 
 # launchd always has a user manager to ask; systemd.sh tells the two apart
 fl_user_manager_down() { return 1; }
+fl_user_bus_wait() { return 0; }
+fl_user_manager_reachable() { return 0; }
 fl_user_manager_msg() { :; }
 fl_user_manager_fix() { :; }
 

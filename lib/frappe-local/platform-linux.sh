@@ -487,6 +487,32 @@ fl_linux_os_summary() {
   printf '%s%s' "${name:-Linux}" "${ver:+ $ver}"
 }
 
+# The system the Linux install is tested on and supports: Ubuntu 24.04, whose
+# apt gives the MariaDB 10.11 the profile needs. Ubuntu 22.04 ships 10.6 and
+# Debian 13 11.8; Debian 12 ships 10.11 but nothing tests it. Another release
+# is stopped before sudo and before any package (INST-5); --allow-unsupported-distro
+# or BENCHBAR_ALLOW_UNSUPPORTED_DISTRO=1 is the way to try anyway.
+FL_ALLOW_UNSUPPORTED_DISTRO="${FL_ALLOW_UNSUPPORTED_DISTRO:-0}"
+fl_linux_distro_supported() {
+  local id="" ver="" line
+  if [[ -r "$FL_OS_RELEASE" ]]; then
+    while IFS= read -r line; do
+      case "$line" in
+        ID=*) id="${line#ID=}" ;;
+        VERSION_ID=*) ver="${line#VERSION_ID=}" ;;
+      esac
+    done <"$FL_OS_RELEASE"
+  fi
+  id="${id//\"/}"; ver="${ver//\"/}"
+  [[ "$id" == "ubuntu" && "$ver" == "24.04" ]]
+}
+# fl_linux_distro_blocker: the line "id|message|fix" for an unsupported system
+fl_linux_distro_blocker() {
+  [[ "$FL_ALLOW_UNSUPPORTED_DISTRO" != "1" && "${BENCHBAR_ALLOW_UNSUPPORTED_DISTRO:-0}" != "1" ]] || return 0
+  fl_linux_distro_supported && return 0
+  printf 'linux_distro_unsupported|The Linux install supports Ubuntu 24.04 (this is %s). Its apt packages differ, for example the MariaDB version, and the install would stop after it had installed packages.|Use Ubuntu 24.04 (in WSL: wsl --install -d Ubuntu-24.04). To try anyway, at your own risk: benchbar install --allow-unsupported-distro\n' "$(fl_linux_os_summary)"
+}
+
 # true when systemd runs as the init (WSL needs "systemd=true" in /etc/wsl.conf)
 fl_linux_systemd_booted() { [[ -d "$FL_SYSTEMD_RUN_DIR" ]]; }
 

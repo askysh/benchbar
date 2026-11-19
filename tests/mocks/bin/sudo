@@ -28,6 +28,16 @@ if [[ "${1:-}" == env && "${2:-}" == DEBIAN_FRONTEND=* ]]; then
     log_args+=("$a")
   done
 fi
+# a tool named by its absolute system path (what benchbar does on macOS) is logged by
+# its name, so the calls read as before, and recorded in sudo_argv0 as "abs PATH"; a bare name
+# is recorded as "bare NAME" (the test of INST-6 looks for those)
+case "${log_args[0]:-}" in
+  /usr/bin/*|/usr/sbin/*|/bin/*|/sbin/*)
+    [[ -d "${MOCK_STATE:-/nonexistent}" ]] && printf 'abs %s\n' "${log_args[0]}" >>"$MOCK_STATE/sudo_argv0"
+    [[ "${log_args[0]}" == /bin/bash ]] || log_args[0]="${log_args[0]##*/}" ;;
+  -*|"") ;;
+  *) [[ -d "${MOCK_STATE:-/nonexistent}" ]] && printf 'bare %s\n' "${log_args[0]}" >>"$MOCK_STATE/sudo_argv0" ;;
+esac
 [[ -n "${MOCK_NO_LOG:-}" ]] || mock_log "${log_args[@]}"
 # the whole wrapper call, for the test of its options and the proxy hand-over
 [[ "${1:-}" == env && "${2:-}" == DEBIAN_FRONTEND=* && -d "${MOCK_STATE:-/nonexistent}" ]] && printf '%s\n' "$*" >>"$MOCK_STATE/apt_sudo_raw"
@@ -40,6 +50,11 @@ cred="$state/sudo_cred"
 # the command runs as root: the mariadb mock then logs in over its unix socket; a root script
 # (/bin/bash -c SCRIPT) gets its system tool and file paths mapped to the mocks
 run_cmd() {
+  # an absolute system path runs the tool of that name (a mock when there is one)
+  case "${1:-}" in
+    /bin/bash) ;;
+    /usr/bin/*|/usr/sbin/*|/bin/*|/sbin/*) local first="${1##*/}"; shift; set -- "$first" "$@" ;;
+  esac
   if [[ "${1:-}" == /bin/bash && "${2:-}" == -c && "$#" -ge 3 ]]; then
     local script
     script="$(mock_root_paths "$3")"

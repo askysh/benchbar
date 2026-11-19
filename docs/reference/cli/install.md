@@ -65,6 +65,7 @@ phase scripts: no other program started by the install sees them.
 | `--dry-run` | Print the plan of every phase, change nothing |
 | `--frappe-commit SHA`, `--erpnext-commit SHA` | Pin frappe or erpnext to a commit (7 to 40 hex characters; a team profile can say `frappe_commit` and `erpnext_commit`). The flag wins over the profile. A pinned clone is fetched without its first build, the commit is checked out, and one build follows. A commit the clone does not reach stops the install before anything is built or created |
 | `--offline` | Skip the remote branch checks of both phase scripts (also `OFFLINE=1` or `BENCHBAR_OFFLINE=1`) |
+| `--allow-unsupported-distro` | Linux only: try a system other than Ubuntu 24.04, the one the install is tested on and supports. Without it the install stops before it installs any package (also `BENCHBAR_ALLOW_UNSUPPORTED_DISTRO=1`, for `00-linux-system-deps.sh`) |
 | `--allow-windows-fs` | WSL only: accept a bench on the Windows file system (`/mnt/c`, drvfs, 9p). Refused by default: it is very slow, file watching does not work and permissions break |
 | `-y`, `--yes` | Accept every default and confirmation, including the `sudo` line for `/etc/hosts`; the passwords must be in the environment |
 | `--json` | JSON lines for the BenchBar app and agents: `plan`, `step`, `progress` and a closing `done` ([schema](../../json-schema.md#benchbar-install---json)). Needs `--yes` or `--dry-run`, takes every value from a flag or the environment and never asks |

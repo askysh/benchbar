@@ -390,7 +390,8 @@ fresh_machine
 rm -rf "$BENCH"; : >"$FL_STATE_FILE"
 export ADMIN_PASSWORD=adminpw
 # what ran before the background service step (its own sudo needs are the service layer's)
-before_service() { sed '/^systemctl --user/,$d' "$MOCK_LOG"; }
+# (the plan and install ask the user manager whether it answers, before sudo: the service step is the daemon-reload)
+before_service() { sed '/^systemctl --user daemon-reload/,$d' "$MOCK_LOG"; }
 run_fm install --yes --bench-dir "$BENCH" --site linuxdev.localhost
 assert_contains "$OUT" "1. System dependencies (00-linux-system-deps.sh)"
 assert_contains "$OUT" "install the apt packages: mariadb-server"

@@ -175,9 +175,11 @@ app or adopt a bench you have.
 
 ## Linux
 
-From 0.8 the same CLI runs on Linux: Ubuntu 24.04 and other Debian based
-systems with apt, Windows through WSL first, with the v15-lts profile so
-far. There is no menu bar app on Linux; on Windows a tray app shows the
+From 0.8 the same CLI runs on Linux: Ubuntu 24.04 (the only system it is
+tested on and supports), Windows through WSL first, with the v15-lts profile so
+far. On another system, for example Ubuntu 22.04 (MariaDB 10.6) or Debian,
+`install` stops before sudo and before it installs any package; with
+`--allow-unsupported-distro` you can try anyway, at your own risk. There is no menu bar app on Linux; on Windows a tray app shows the
 benches of the distro: see [Windows](windows.md).
 
 ```bash
@@ -198,6 +200,15 @@ without sudo: the distro (Ubuntu 24.04 is tested, others warn), the CPU
 user is in the sudo group), apt, systemd, linger, memory, free disk, the
 bench folder, the default ports and the MariaDB root password state. Each
 check that is not ok names its fix.
+
+Run `install` from a shell that has a user session. Under `sudo -iu USER`,
+`su -` or cron there is no login session, so `systemctl --user` cannot find
+its bus. `install` turns on lingering (`loginctl enable-linger`), which starts
+the user manager, and points `XDG_RUNTIME_DIR` at `/run/user/UID`. When the
+manager still cannot be reached it stops before it changes anything and says
+what to run: `sudo loginctl enable-linger USER`, then run it again from a
+login shell or with `XDG_RUNTIME_DIR=/run/user/$(id -u)`. `benchbar status`
+says `unknown (no user bus)` in that case, not `loaded: no`.
 
 `install` first checks that ports 3306 (MariaDB) and 6379 (the system
 Redis) are free, or held by this distro's own services. In WSL 2 every

@@ -302,7 +302,7 @@ if [[ -n "${BENCHBAR_PDF_STEP:-}" && "$(fl_wkhtmltopdf_state)" != "patched" ]]; 
   case "$WKHTML_STATE" in
     dry-run) WKHTML_STATE=ok; fl_info "dry-run: the wkhtmltopdf plan is above (benchbar install showed it)" ;;
     skipped) fl_warn "wkhtmltopdf was skipped above (benchbar install asked already): PDFs will not work until it is installed" ;;
-    *) WKHTML_STATE=failed; fl_fail "the wkhtmltopdf install failed above (see benchbar install's output)"; add_pending "WKHTMLTOPDF_FAILED" ;;
+    *) WKHTML_STATE=failed; fl_warn "the wkhtmltopdf install failed above (see benchbar install's output); the bench works, PDF printing does not"; fl_fix "${FL_SELF} repair"; add_pending "WKHTMLTOPDF_FAILED" ;;
   esac
 elif fl_wkhtmltopdf_ensure; then WKHTML_STATE=ok; else
   case "$?" in 2) WKHTML_STATE=skipped ;; *) WKHTML_STATE=failed; add_pending "WKHTMLTOPDF_FAILED" ;; esac
