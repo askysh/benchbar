@@ -78,8 +78,8 @@ assert_contains "$SIGNED_JOB" "persist-credentials: false"
 assert_contains "$SIGNED_JOB" "-T /usr/bin/codesign"
 case "$SIGNED_JOB" in *"security import"*" -A "*) fail "the certificate is imported with -A (any program may use the key)" ;; esac
 # the cleanup runs always, and before the release is drafted
-clean_line="$(printf '%s\n' "$SIGNED_JOB" | grep -n 'Remove the keychain and keys' | head -n 1 | cut -d: -f1)"
-draft_line="$(printf '%s\n' "$SIGNED_JOB" | grep -n 'release-draft' | head -n 1 | cut -d: -f1)"
+clean_line="$(grep -n -m 1 'Remove the keychain and keys' <<<"$SIGNED_JOB" | cut -d: -f1)"
+draft_line="$(grep -n -m 1 'release-draft' <<<"$SIGNED_JOB" | cut -d: -f1)"
 [[ -n "$clean_line" && -n "$draft_line" && "$clean_line" -lt "$draft_line" ]] || fail "the key cleanup step must come before the draft step"
 assert_contains "$(printf '%s\n' "$SIGNED_JOB" | sed -n "${clean_line},$((clean_line + 2))p")" "if: always()"
 
@@ -103,14 +103,14 @@ DRAFT="$(cat "$ROOT/.github/actions/release-draft/action.yml")"
 assert_contains "$DRAFT" "--json isDraft"
 assert_contains "$DRAFT" '"$view" != "true"'
 assert_contains "$DRAFT" "gh release delete-asset"
-edit_line="$(printf '%s\n' "$DRAFT" | grep -n 'gh release edit' | head -n 1 | cut -d: -f1)"
-gate_line="$(printf '%s\n' "$DRAFT" | grep -n '"$view" != "true"' | head -n 1 | cut -d: -f1)"
+edit_line="$(grep -n -m 1 'gh release edit' <<<"$DRAFT" | cut -d: -f1)"
+gate_line="$(grep -n -m 1 '"$view" != "true"' <<<"$DRAFT" | cut -d: -f1)"
 [[ -n "$edit_line" && -n "$gate_line" && "$gate_line" -lt "$edit_line" ]] || fail "release-draft must check the release is a draft before it edits it"
 WIN="$(cat "$WF/release-windows.yml")"
 assert_contains "$WIN" "gh release delete-asset"
 assert_contains "$WIN" "Release already published"
-win_gate="$(printf '%s\n' "$WIN" | grep -n 'Release already published' | head -n 1 | cut -d: -f1)"
-win_up="$(printf '%s\n' "$WIN" | grep -n 'gh release upload' | head -n 1 | cut -d: -f1)"
+win_gate="$(grep -n -m 1 'Release already published' <<<"$WIN" | cut -d: -f1)"
+win_up="$(grep -n -m 1 'gh release upload' <<<"$WIN" | cut -d: -f1)"
 [[ -n "$win_gate" && -n "$win_up" && "$win_gate" -lt "$win_up" ]] || fail "release-windows.yml must refuse a published release before it uploads"
 
 # ---- macos-release.sh: content keys never reach the build's environment
