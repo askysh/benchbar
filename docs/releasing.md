@@ -446,11 +446,16 @@ gh release create v0.3.0 dist/* --title "BenchBar 0.3.0" --draft
 4. **DMG.** `hdiutil create` makes a compressed disk image holding the
    app and an Applications shortcut. The DMG is signed, notarized and
    stapled too, so the first open shows no warning.
-5. **Appcast.** `generate_appcast` reads the zip, signs it with the
-   EdDSA key and writes `appcast.xml` with the download URL on the GitHub
-   release. The app's `SUFeedURL` points at
+5. **Appcast.** `scripts/macos-appcast.sh` runs `generate_appcast`, which
+   reads the zip, signs it with the EdDSA key and writes `appcast.xml` with
+   the download URL on the GitHub release and a link to the release notes
+   (`--full-release-notes-url`), then checks the result (every item has an
+   https download, a build, a version and a signature). The app's `SUFeedURL`
+   points at
    `https://github.com/askysh/benchbar/releases/latest/download/appcast.xml`,
-   so the newest release's feed is always the one read.
+   so the newest release's feed is always the one read. A folder with no
+   `BenchBar-*.zip` (a release without Mac files) makes the script print
+   `[SKIP]`, write nothing and exit 0.
 6. **Cask.** Not part of this script. The tap's formula and cask are
    written after the release is published, from these files, by
    `homebrew-tap.yml`, which opens a pull request on the tap when
@@ -469,6 +474,13 @@ gh release create v0.3.0 dist/* --title "BenchBar 0.3.0" --draft
   updater and adds **Check for Updates…** to the right click menu and the
   app menu.
 - `BENCHBAR_APPCAST_URL` overrides the feed URL (for a test feed).
+- Pull request CI builds this configuration too (the `app` job): the
+  Sparkle build, the updater test (`UpdaterTests`, which checks the feed key
+  and the update switch in Info.plist) and an unsigned appcast made from the
+  build's zip with `scripts/macos-appcast.sh --unsigned` and checked, with a
+  placeholder public key and no secret. A break of the Sparkle package, of
+  `sparkle.yml` or of the feed format shows on the pull request, not when
+  a release is cut.
 
 ## Checking a build
 

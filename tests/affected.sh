@@ -100,6 +100,7 @@ script_tests() {
     release-notes) echo "test-release-notes" ;;
     changelog-fold) echo "test-changelog test-release-notes" ;;
     app-embed-cli|cli-tarball|homebrew-render) echo "test-packaging test-homebrew" ;;
+    macos-appcast) echo "test-macos-appcast" ;;
     check-profile-formulae) echo "test-doctor-hardening test-homebrew" ;;
     ci-plan|ci-timings) echo "test-ci-plan" ;;
   esac
