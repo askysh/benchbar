@@ -9,6 +9,8 @@ FL_R_RUNNER=""
 FL_R_PLIST=""
 FL_PROFILE_SOURCE=""
 FL_R_PROCFILE=""
+FL_R_LISTEN_PY=""
+FL_R_LISTEN_JS=""
 FL_R_HELPERS=""
 FL_CRASH_MAX_STARTS="${FL_CRASH_MAX_STARTS:-3}"
 FL_CRASH_WINDOW="${FL_CRASH_WINDOW:-600}"
@@ -110,6 +112,18 @@ fl_scheduler_enabled() {
   [[ "$v" == "on" ]]
 }
 
+# Where the dev web server and socketio listen is per bench: "local" (the
+# default, 127.0.0.1 only) or "all" (every interface, what frappe does on
+# its own). benchbar listen local|all stores it; FL_LISTEN overrides the
+# stored value while a plan is being made. Only "all" is ever written, so a
+# bench with no value is local.
+fl_listen_mode() {
+  local v="${FL_LISTEN:-}"
+  [[ -n "$v" ]] || v="$(fl_bstate_get LISTEN 2>/dev/null || true)"
+  [[ "$v" == "all" ]] && printf all || printf local
+}
+fl_listen_is_all() { [[ "$(fl_listen_mode)" == "all" ]]; }
+
 fl_autostart_enabled() {
   [[ "$(fl_bstate_get AUTOSTART 2>/dev/null || true)" != "off" ]]
 }
@@ -120,7 +134,7 @@ fl_render_all() {
   # reports it as bench_path); the commands that write or start call
   # fl_require_plain_bench first and refuse
   fl_autostart_enabled || run_at_load=false
-  FL_R_PROCFILE="$(fl_template_render Procfile.lean "WEB_PORT=${FL_WEB_PORT}" "SCHEDULE=$(fl_scheduler_enabled && printf 'schedule: bench schedule')")"
+  fl_render_procfile
   fl_runner_extra_args
   FL_R_RUNNER="$(fl_template_render bench-run.sh \
     "BENCH_DIR=${FL_BENCH_DIR}" \
@@ -139,6 +153,31 @@ fl_render_all() {
   FL_R_HELPERS="$(fl_template_render shell-helpers \
     "PROFILE_EXPORTS=$(fl_profile_path_exports "$(fl_rc_profile)")" \
     "BENCHBAR=$(fl_helpers_cli)")"
+}
+
+# The Procfile and, for the default "local" listen mode, the two files its web
+# and socketio lines start with (fl_listen_dir). In "all" mode the lines are
+# plain "bench serve" and "bench socketio", as before 0.9.0, and no file is
+# rendered. The tokens hold a $ and double quotes for the shell that honcho
+# runs the line in. The paths start at $PWD, the bench folder (honcho starts
+# the line there), and are absolute for a reason: "bench serve" changes into
+# sites/ before it starts the dev server, and a relative PYTHONPATH entry would
+# then point at sites/config/benchbar-listen, which does not exist. The
+# quotes keep a bench path with spaces in one piece (node splits NODE_OPTIONS on spaces and
+# reads a double quoted part as one word).
+fl_render_procfile() {
+  local web_env="" socketio_env=""
+  FL_R_LISTEN_PY=""; FL_R_LISTEN_JS=""
+  if ! fl_listen_is_all; then
+    # shellcheck disable=SC2016  # the shell of the Procfile line expands these
+    web_env='PYTHONPATH="$PWD/config/benchbar-listen${PYTHONPATH:+:$PYTHONPATH}" '
+    # shellcheck disable=SC2016
+    socketio_env='NODE_OPTIONS="--require \"$PWD/config/benchbar-listen/socketio.js\" ${NODE_OPTIONS:-}" '
+    FL_R_LISTEN_PY="$(fl_template_render listen-sitecustomize.py)"
+    FL_R_LISTEN_JS="$(fl_template_render listen-socketio.js)"
+  fi
+  FL_R_PROCFILE="$(fl_template_render Procfile.lean "WEB_PORT=${FL_WEB_PORT}" "WEB_ENV=${web_env}" "SOCKETIO_ENV=${socketio_env}" \
+    "SCHEDULE=$(fl_scheduler_enabled && printf 'schedule: bench schedule')")"
 }
 
 # fl_helpers_cli: the benchbar the helper block runs. FL_SELF, except for
@@ -732,6 +771,50 @@ fl_cmd_autostart() {
   fl_ok "autostart ${mode}"
 }
 
+# benchbar listen [local|all]: where the dev web server and socketio listen.
+# local (the default) is 127.0.0.1 only; all is every interface, which is what
+# frappe does on its own and what puts the dev server, with its debugger, on
+# the network. The choice is per bench, kept in the bench's state file, and
+# lands in Procfile.lean (and the two files it starts) the way the scheduler
+# choice does. A running bench takes it at its next restart.
+fl_cmd_listen() {
+  local mode="${1:-}" running=0
+  case "$mode" in
+    local|all) fl_require_plain_bench ;;
+    "")
+      fl_require_bench
+      if fl_listen_is_all; then
+        fl_ok "listen is all: the web server and socketio listen on every interface (benchbar listen local goes back to 127.0.0.1)"
+      else
+        fl_ok "listen is local: the web server and socketio listen on 127.0.0.1 only (benchbar listen all opens them to the network)"
+      fi
+      return 0 ;;
+    *) fl_die "Usage: benchbar listen [local|all]" ;;
+  esac
+  fl_require_service
+  if [[ "$mode" == "all" ]] && ! fl_listen_is_all; then
+    # opening the dev server to the network is a person's decision, like the LAN guard and Open as
+    fl_noninteractive && fl_die "benchbar listen all puts the dev web server and its debugger on the network, a person's decision, so nothing run without a terminal can do it." "Run it in a terminal: benchbar listen all"
+    fl_warn "listen all: anyone on your network can reach http://<this computer>:${FL_WEB_PORT} and socketio on ${FL_SOCKETIO_PORT}; the dev server runs Frappe's debugger and developer mode"
+    fl_confirm "Let the web server and socketio of ${FL_BENCH_NAME} listen on every interface?" || fl_die "listen stays local." "Run again and answer yes, or pass --yes"
+  fi
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    FL_LISTEN="$mode"
+  else
+    fl_bench_state_migrate "$FL_BENCH_DIR"
+    if [[ "$mode" == "all" ]]; then fl_bstate_set LISTEN all; else fl_bstate_del LISTEN; fi
+    FL_LISTEN=""
+  fi
+  fl_bench_is_running && running=1
+  fl_render_all
+  act_write_procfile || return 1
+  fl_ok "listen ${mode}"
+  if [[ "$running" == "1" && "${FL_DRY_RUN:-0}" != "1" ]]; then
+    fl_warn "the running bench still listens as before; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"
+  fi
+  return 0
+}
+
 # The bench folder is gone or emptied but its agent is still installed (and
 # restarting every 20 seconds): boot out and move aside every com.benchbar
 # agent whose WorkingDirectory is that path. Nothing else is touched.
@@ -818,8 +901,22 @@ fl_cmd_uninstall_service() {
   [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_runner_path_legacy)" ]] || { rm -f "$(fl_runner_path_legacy)"; fl_ok "removed the old runner (backup: ${FL_LAST_BACKUP})"; }
   fl_backup_file "$(fl_procfile_path)" || return 1
   [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_procfile_path)" ]] || { rm -f "$(fl_procfile_path)"; fl_ok "removed Procfile.lean (backup: ${FL_LAST_BACKUP})"; }
+  fl_uninstall_listen_files || return 1
   fl_uninstall_helper_block "$rc"
   fl_ok "service uninstalled; start the bench by hand with: cd ${FL_BENCH_DIR} && bench start"
+}
+
+# the two files Procfile.lean's web and socketio lines start with, each backed
+# up first; the folder goes only when nothing else is in it
+fl_uninstall_listen_files() {
+  local f
+  for f in "$(fl_listen_py_path)" "$(fl_listen_js_path)"; do
+    [[ -f "$f" ]] || continue
+    fl_backup_file "$f" || return 1
+    [[ "${FL_DRY_RUN:-0}" == "1" ]] || { rm -f "$f"; fl_ok "removed ${f} (backup: ${FL_LAST_BACKUP})"; }
+  done
+  [[ "${FL_DRY_RUN:-0}" == "1" ]] || rmdir "$(fl_listen_dir)" 2>/dev/null || true
+  return 0
 }
 
 # fl_uninstall_helper_block RC: the benchbar block goes from RC (it is one

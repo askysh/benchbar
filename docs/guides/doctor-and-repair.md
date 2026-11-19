@@ -482,10 +482,27 @@ Fix: `benchbar repair` installs setuptools into honcho's own venv only.
 ### procfile
 
 `Procfile.lean` exists, was written by benchbar, and matches its
-template and the bench's settings (for example the scheduler choice).
+template and the bench's settings (for example the scheduler choice). With
+the default `listen local` the two files in `config/benchbar-listen` that
+its web and socketio lines start with are part of this check: a Procfile
+that names a file that is gone would stop the bench.
 
-Fix: `benchbar repair` writes it again; the old copy goes to the
-backups.
+Fix: `benchbar repair` writes them again; the old copies go to the
+backups. A running bench takes them at its next `benchbar restart`.
+
+### bench_listen
+
+The dev web server and socketio listen on 127.0.0.1 only. Frappe binds
+both to every interface, with its debugger on; 0.9.0 starts them on
+loopback unless the bench was set to `all` with `benchbar listen all`.
+A warning means one of four things:
+
+- the bench is set to `all` (the message says so). Fix: `benchbar listen local`, then `benchbar restart`.
+- the bench is set to `local` but `Procfile.lean` is the one of before 0.9.0 (or a file in `config/benchbar-listen` is missing). This is reported while the bench is stopped too: its next start binds every interface. Fix: `benchbar repair`, then `benchbar restart`.
+- a listener on the bench's web or socketio port is not on loopback although the files are current, because it was started before 0.9.0 or outside benchbar (`bench start`). Fix: `benchbar restart`.
+- the realtime server is the Python one (`socketio_backend: python`, Frappe v16). benchbar does not cover that backend yet: it listens on every interface whatever `listen` says, and a restart does not change that. Fix: switch the bench to the node socketio server (remove `socketio_backend` or set it to `node` in `sites/common_site_config.json`).
+
+The check only reads, and `benchbar listen all` is a person's command.
 
 ### runner
 

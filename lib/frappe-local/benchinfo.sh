@@ -274,6 +274,10 @@ fl_runner_legacy_in_use() {
   return 1
 }
 fl_procfile_path() { printf '%s/Procfile.lean' "$FL_BENCH_DIR"; }
+# the files Procfile.lean's web and socketio lines start with (listen local)
+fl_listen_dir() { printf '%s/config/benchbar-listen' "$FL_BENCH_DIR"; }
+fl_listen_py_path() { printf '%s/sitecustomize.py' "$(fl_listen_dir)"; }
+fl_listen_js_path() { printf '%s/socketio.js' "$(fl_listen_dir)"; }
 fl_stop_flag_path() { printf '%s/logs/.bench-stopped' "$FL_BENCH_DIR"; }
 fl_starts_path() { printf '%s/logs/.bench-starts' "$FL_BENCH_DIR"; }
 fl_bench_log_path() { printf '%s/logs/bench.log' "$FL_BENCH_DIR"; }
