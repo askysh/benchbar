@@ -210,16 +210,20 @@ assert_contains "$(cat "$SCRIPT")" 'BENCHBAR_SKIP_TESTS'
 # checks, with no merge and no force (tests/test-release-promote.sh runs its refusals)
 PROMOTE="$(grep -v '^[[:space:]]*#' "$ROOT/scripts/release-promote.sh")"
 assert_contains "$PROMOTE" 'git merge-base --is-ancestor "$OLD" "$SHA"'
+# the sync of docs only commits: a merge made without a checkout, pushed as a fast forward of next-release
+assert_contains "$PROMOTE" '"$HERE/docs-only.sh" --commit "$c"'
+assert_contains "$PROMOTE" 'git merge-tree --write-tree'
+assert_contains "$PROMOTE" 'git push "$REMOTE" "${MERGE}:refs/heads/next-release"'
 assert_contains "$PROMOTE" '"$HERE/check-version.sh" --kind "$VERSION")" == final'
 assert_contains "$PROMOTE" '--folded "$VERSION"'
 assert_contains "$PROMOTE" '"$HERE/release-ci-gate.sh" "$SHA"'
-assert_contains "$PROMOTE" 'git push "$REMOTE" "${SHA}:refs/heads/main"'
+assert_contains "$PROMOTE" 'git push "$REMOTE" "${TARGET}:refs/heads/main"'
 assert_not_contains "$PROMOTE" "--force"
 assert_not_contains "$PROMOTE" "push -f"
 assert_not_contains "$PROMOTE" "+refs/heads/main:refs/heads/main"
 if grep -Eq 'git merge( |$)' <<<"$PROMOTE"; then fail "release-promote.sh merges"; fi
-# every check comes before the push
-push_line="$(grep -n 'git push "\$REMOTE"' <<<"$PROMOTE" | cut -d: -f1)"
+# every check comes before the push of main
+push_line="$(grep -n 'git push "\$REMOTE" "\${TARGET}' <<<"$PROMOTE" | cut -d: -f1)"
 for chk in 'merge-base --is-ancestor' '--kind "$VERSION"' 'ls-remote --exit-code --tags' 'release-ci-gate.sh'; do
   line="$(grep -n -F -m 1 -- "$chk" <<<"$PROMOTE" | cut -d: -f1)"
   [[ -n "$line" && -n "$push_line" && "$line" -lt "$push_line" ]] || fail "release-promote.sh: '$chk' must come before the push"

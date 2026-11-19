@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # scripts/release-promote.sh cuts a release by a fast forward of main to
-# next-release: it refuses when main is not an ancestor (it never merges or
-# forces), when the version is a candidate or disagrees, when the tag exists
+# next-release. When main is not an ancestor it syncs only docs commits (one merge
+# commit of main into next-release, pushed to next-release) and refuses anything
+# else (it never forces); it refuses too when the version is a candidate or disagrees, when the tag exists
 # or when "CI result" is not green; a dry run and a "no" push nothing; a yes
 # runs one plain `git push origin SHA:refs/heads/main`. A real git on local
 # folders stands in for the remote; gh is a fake and git is wrapped to log
@@ -17,7 +18,8 @@ mkdir -p "$G/bin" "$G/results"
 cat >"$G/bin/gh" <<'SH'
 #!/usr/bin/env bash
 for a in "$@"; do case "$a" in repos/*/commits/*/check-runs*) sha="${a#*/commits/}"; sha="${sha%%/*}" ;; esac; done
-[[ -f "$GATE_RESULTS/$sha" ]] && cat "$GATE_RESULTS/$sha"
+if [[ -f "$GATE_RESULTS/$sha" ]]; then cat "$GATE_RESULTS/$sha"
+elif [[ -f "$GATE_RESULTS/default" ]]; then cat "$GATE_RESULTS/default"; fi
 exit 0
 SH
 # git wrapper: logs every call, then runs the real git
@@ -67,6 +69,22 @@ ci() { printf '%s\n' "$2" >"$G/results/$1"; }
 run() { set +e; OUT="$(bash "$PROMOTE" "$@" 2>&1 </dev/null)"; CODE=$?; set -e; }
 runin() { local input="$1"; shift; set +e; OUT="$(printf '%s\n' "$input" | bash "$PROMOTE" "$@" 2>&1)"; CODE=$?; set -e; }
 pushed() { grep -c '^push origin [0-9a-f]*:refs/heads/main' "$GIT_LOG" || true; }
+pushed_next() { grep -c '^push origin [0-9a-f]*:refs/heads/next-release' "$GIT_LOG" || true; }
+remote_next() { /usr/bin/git --git-dir="$G/remote.git" rev-parse next-release; }
+# main_ahead KIND: main gets one more commit than next-release (docs, docs2: a docs file; code: lib/y.sh)
+main_ahead() {
+  (
+    cd "$G/work"; g checkout -q main
+    case "$1" in
+      docs) mkdir -p docs; echo "a fixed typo" >docs/fix.md ;;
+      docs2) echo "more docs" >site-note.md ;;
+      code) mkdir -p lib; echo hotfix >lib/y.sh ;;
+    esac
+    g add -A; g commit -q -m "fix on main ($1)"
+    git push -q origin main 2>/dev/null
+  )
+  MAIN1="$(remote_main)"; : >"$GIT_LOG"
+}
 assert_untouched() { assert_eq "$MAIN0" "$(remote_main)" "main moved: $1"; assert_eq 0 "$(pushed)" "a push happened: $1"; }
 
 # ---- a dry run shows the plan and pushes nothing
@@ -115,6 +133,88 @@ assert_contains "$OUT" "will not merge or force it"
 assert_contains "$OUT" "hotfix on main"
 assert_eq "$HOT" "$(remote_main)"; assert_eq 0 "$(pushed)"
 assert_not_contains "$(cat "$GIT_LOG")" "merge "
+
+# ---- main ahead by docs only: sync (one merge commit into next-release), then the fast forward
+setup; main_ahead docs; ci default "completed success"
+run --yes; assert_eq 0 "$CODE" "$OUT"
+assert_contains "$OUT" "main has 1 docs commit(s) next-release has not"
+assert_contains "$OUT" "next-release is at"
+assert_contains "$OUT" "main is at"
+M="$(remote_next)"
+assert_eq "$M" "$(remote_main)" "main and next-release equal"
+assert_eq "$NEXT" "$(/usr/bin/git --git-dir="$G/remote.git" rev-parse "$M^1")" "first parent is the old next-release"
+assert_eq "$MAIN1" "$(/usr/bin/git --git-dir="$G/remote.git" rev-parse "$M^2")" "second parent is main"
+assert_eq 2 "$(/usr/bin/git --git-dir="$G/remote.git" rev-list --parents -n 1 "$M" | wc -w | tr -d ' ' | awk '{print $1-1}')" "two parents"
+assert_eq 1 "$(pushed_next)" "one push to next-release"; assert_eq 1 "$(pushed)" "one push to main"
+assert_contains "$(grep '^push origin [0-9a-f]*:refs/heads/next-release' "$GIT_LOG")" "push origin ${M}:refs/heads/next-release"
+assert_not_contains "$(cat "$GIT_LOG")" "--force"
+assert_not_contains "$(grep '^push ' "$GIT_LOG")" "+refs"
+assert_eq "a fixed typo" "$(/usr/bin/git --git-dir="$G/remote.git" show "main:docs/fix.md")"
+assert_eq "$(( $(/usr/bin/git --git-dir="$G/remote.git" rev-list --count "$NEXT..$M") ))" 2 "the merge and the docs commit"
+# the checkout the script ran in is untouched (branch and files)
+assert_eq "main" "$(cd "$G/work" && git rev-parse --abbrev-ref HEAD)"
+
+# without --yes: two questions; no to the sync pushes nothing, a yes to the sync and a no to main stops between
+setup; main_ahead docs; ci default "completed success"
+runin "n"; assert_eq 1 "$CODE"; assert_contains "$OUT" "Cancelled"; assert_eq 0 "$(pushed_next)"; assert_eq "$NEXT" "$(remote_next)"; assert_eq "$MAIN1" "$(remote_main)"
+runin $'y\nn'; assert_eq 1 "$CODE"; assert_eq 1 "$(pushed_next)"; assert_eq 0 "$(pushed)"; assert_eq "$MAIN1" "$(remote_main)"
+# then main is behind next-release: the second run is a plain fast forward with no sync
+: >"$GIT_LOG"; M="$(remote_next)"
+run --yes; assert_eq 0 "$CODE" "$OUT"; assert_not_contains "$OUT" "docs commit(s)"; assert_eq 0 "$(pushed_next)"; assert_eq "$M" "$(remote_main)"
+
+# the merge has no CI result yet: the run stops after the sync, main untouched, the second run passes
+setup; main_ahead docs; ci "$NEXT" "completed success"
+run --yes; assert_eq 1 "$CODE"; assert_contains "$OUT" "Wait for \"CI result\" on next-release"
+assert_eq 1 "$(pushed_next)"; assert_eq 0 "$(pushed)"; assert_eq "$MAIN1" "$(remote_main)"
+M="$(remote_next)"; ci "$M" "completed success"
+run --yes; assert_eq 0 "$CODE" "$OUT"; assert_eq "$M" "$(remote_main)"
+
+# next-release itself red: refused before the sync, nothing pushed
+setup; main_ahead docs; ci "$NEXT" "completed failure"
+run --yes; assert_eq 1 "$CODE"; assert_contains "$OUT" "CI result is failure on ${NEXT:0:9}"
+assert_eq 0 "$(pushed_next)"; assert_eq 0 "$(pushed)"; assert_eq "$NEXT" "$(remote_next)"
+
+# two docs commits on main
+setup; main_ahead docs; main_ahead docs2; ci default "completed success"
+run --yes; assert_eq 0 "$CODE" "$OUT"; assert_contains "$OUT" "2 docs commit(s)"
+assert_eq "$(remote_next)" "$(remote_main)"
+
+# ---- main ahead by a code commit: refused, nothing pushed, nothing merged
+setup; main_ahead code; ci default "completed success"
+run --yes; assert_eq 1 "$CODE"
+assert_contains "$OUT" "not only docs"; assert_contains "$OUT" "fix on main (code)"; assert_contains "$OUT" "changes lib/y.sh"
+assert_eq 0 "$(pushed_next)"; assert_eq 0 "$(pushed)"; assert_eq "$NEXT" "$(remote_next)"; assert_eq "$MAIN1" "$(remote_main)"
+assert_not_contains "$(cat "$GIT_LOG")" "commit-tree"
+# a docs commit and a code commit: the code one stops it
+setup; main_ahead docs; main_ahead code; ci default "completed success"
+run --yes; assert_eq 1 "$CODE"; assert_contains "$OUT" "fix on main (code)"; assert_not_contains "$OUT" "fix on main (docs)"
+assert_eq 0 "$(pushed_next)"; assert_eq 0 "$(pushed)"
+
+# ---- a sync conflict (both sides changed the same docs file) stops it and pushes nothing
+setup; ci default "completed success"
+(
+  cd "$G/work"; g checkout -q next-release; echo "next side" >docs.md; g add -A; g commit -q -m "docs.md on next-release"; git push -q origin next-release 2>/dev/null
+  g checkout -q main; echo "main side" >docs.md; g add -A; g commit -q -m "docs.md on main"; git push -q origin main 2>/dev/null
+)
+NEXT="$(remote_next)"; MAIN1="$(remote_main)"; : >"$GIT_LOG"
+run --yes; assert_eq 1 "$CODE"
+assert_contains "$OUT" "conflicts"; assert_contains "$OUT" "by pull request"
+assert_eq 0 "$(pushed_next)"; assert_eq 0 "$(pushed)"; assert_eq "$NEXT" "$(remote_next)"; assert_eq "$MAIN1" "$(remote_main)"
+assert_not_contains "$(cat "$GIT_LOG")" "commit-tree"
+
+# ---- --dry-run with main ahead: shows the sync, pushes nothing, moves nothing
+setup; main_ahead docs; ci default "completed success"
+run --dry-run; assert_eq 0 "$CODE" "$OUT"
+assert_contains "$OUT" "sync     main has 1 docs commit(s) next-release has not; one merge commit"
+assert_contains "$OUT" "fix on main (docs)"
+assert_contains "$OUT" ":refs/heads/next-release   (a fast forward of next-release"
+assert_contains "$OUT" ":refs/heads/main   (no force"
+assert_contains "$OUT" "Dry run: nothing was pushed"
+assert_eq 0 "$(pushed_next)"; assert_eq 0 "$(pushed)"; assert_eq "$NEXT" "$(remote_next)"; assert_eq "$MAIN1" "$(remote_main)"
+assert_eq "main" "$(cd "$G/work" && git rev-parse --abbrev-ref HEAD)"
+# a dry run with a code commit on main refuses, as a real run does
+setup; main_ahead code; ci default "completed success"
+run --dry-run; assert_eq 1 "$CODE"; assert_contains "$OUT" "not only docs"
 
 # ---- a release candidate never goes to main
 setup; ci "$NEXT" "completed success"
