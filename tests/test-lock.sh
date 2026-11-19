@@ -239,7 +239,7 @@ assert_eq "site_app_missing:acme_base site_missing:ghost" "$(drift_kinds)"
 reset_calls
 run_fm lock apply --yes --bench-dir "$BENCH"
 assert_contains "$OUT" "benchbar app install acme_base --site macdev"
-assert_contains "$OUT" 'benchbar site add ghost --apps "acme_crm"'
+assert_contains "$OUT" 'benchbar site add ghost --apps acme_crm'
 assert_calls_not_contain 'install-app|new-site'
 
 # ---- the parser: only the strict subset, with the line
