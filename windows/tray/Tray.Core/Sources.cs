@@ -83,6 +83,7 @@ public sealed class SystemProcessRunner : IProcessRunner
             StandardErrorEncoding = outputEncoding ?? Encoding.UTF8,
         };
         foreach (var a in args) info.ArgumentList.Add(a);
+        TrayCaller.Apply(info);
 
         using var process = new Process { StartInfo = info };
         process.Start();
@@ -138,6 +139,7 @@ public sealed class SystemProcessRunner : IProcessRunner
     {
         var info = new ProcessStartInfo(fileName) { UseShellExecute = false, CreateNoWindow = true };
         foreach (var a in args) info.ArgumentList.Add(a);
+        TrayCaller.Apply(info);
         Process.Start(info)?.Dispose(); // disposing the handle does not end the process
     }
 }

@@ -33,6 +33,8 @@ Raycast extensions and the like can rely on it too.
 | `benchbar site drop NAME --json` | the plan (with `--dry-run`) or the result of dropping a site (0.5.8) |
 | `benchbar op status [OP_ID]\|list\|wait OP_ID --json` | the long runs: one record or the recent ones (0.9), see [operation handles](#operation-handles-09) |
 | `<state folder>/ops/<op_id>.json` | the record a run keeps of itself, rewritten at each step (0.9) |
+| `benchbar history [--bench PATH] [--since TIME] [--limit N] --json` | the runs that changed things on this machine, newest first (0.9), see [action history](#action-history-09) |
+| `<state folder>/history.jsonl` | one line per finished run, 1 MB and three older files (0.9) |
 
 ## Rules for readers
 
@@ -1319,6 +1321,39 @@ out (then with `"timed_out": true`).
 `pending_operations[]` of `status --json` is a different thing: the record
 of an `app add` or `app update` that stopped part way, kept until it is
 finished or discarded. An op record says what a run is doing, or did.
+
+## Action history (0.9)
+
+What ran on this machine, and who started it. A run that changes things
+(one that has an `op_id`, see above) appends one line to
+`history.jsonl` in benchbar's state folder when it ends (mode 0600; for
+Homebrew and the one line installer `~/.local/state/benchbar/history.jsonl`).
+At 1 MB the file moves to `history.jsonl.old.1` (`.old.2` and `.old.3`
+shift up, the oldest goes), like the MCP audit log `mcp-calls.jsonl`, so
+the history reaches back further than the newest 100 operation records.
+A dry run, a read and a refusal before the log have no line, and a run that
+was killed (SIGKILL, a power cut) wrote none: `op list` shows it as
+`interrupted`. A reader skips a line that is not a whole object.
+
+`benchbar history --json` prints `{"schema_version", "cli_version",
+"history": [entry, ...]}`, newest first (`--bench PATH`, `--since TIME`,
+`--limit N`, 1 to 1000, default 20; see the
+[reference](reference/cli/other.md#history)). An entry:
+
+| Field | Type | Notes |
+|---|---|---|
+| `op_id` | string | the run's handle: `benchbar op status OP_ID` while its record is still kept |
+| `command` | string or null | the command's key in `benchbar commands --json` (`site add`) |
+| `argv` | array of strings | the command line without `benchbar`, as typed. The value after a flag named like a password, secret, token, key, credential, auth, cookie or session (and after `--apply`), the credentials of a URL, and a secret looking `KEY=VALUE` or `?query=value` are `***`; a word is cut at 200 characters (`... [cut]`) and the list at 40 words (a last word `...`). For `--background` the launcher's extra `--jsonl` is not there |
+| `caller` | string | who started the run: `terminal`, `app`, `tray`, `mcp`, `agent` or `script`. From `BENCHBAR_CALLER` when it is one of these (the Mac app, the tray and `benchbar mcp` set it), else `agent` for `--for-agent`, `terminal` when stdin is a terminal, `script`. A label the caller sets, not a proof. A new value may be added later: treat an unknown one as unknown |
+| `mcp` | object or null | for `caller` `mcp`: `tool` (`benchbar_app_add`) and `client` (what the MCP client called itself, with its version), each a string or null. The same run is in `mcp-calls.jsonl` under its `op_id` |
+| `bench`, `site` | string or null | as in the op record |
+| `started_at`, `ended_at` | string | ISO 8601 UTC |
+| `exit` | number | the exit code |
+| `changed` | array | what the run changed, as in `changed[]` of the done line but only `kind` and `name` (the detail is in the done line and the log); at most 20 |
+| `changed_more` | number | how many more entries `changed[]` had |
+| `cli_version` | string | the version that ran |
+| `log` | string or null | the run's log file. Its first line says what ran and who started it: `run: benchbar site backup x (caller: app, op: op-...)` |
 
 ## `logs/.benchbar/state.json`
 
