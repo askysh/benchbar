@@ -94,8 +94,8 @@ shapes() {
     "cli/health-doctor.json|doctor --json --bench-dir $BENCH" \
     "cli/labs-list.json|labs list --json" \
     "cli/logs-first.json|logs --json -n5 --bench-dir $BENCH" \
-    "cli/prerequisites.json|doctor --prerequisites --json --bench-dir $BENCH" \
-    "cli/prerequisites-fail.json|doctor --prerequisites --json --bench-dir $BENCH" \
+    "cli/prerequisites.json|!doctor --prerequisites --json --bench-dir $BENCH" \
+    "cli/prerequisites-fail.json|!doctor --prerequisites --json --bench-dir $BENCH" \
     "cli/up-services-only.jsonl|!up --services-only --json --bench-dir $BENCH" \
     "cli/ports-check-conflict.json|ports check --json --bench-dir $BENCH" \
     "cli/ports-check-running.json|ports check --json --bench-dir $BENCH" \
