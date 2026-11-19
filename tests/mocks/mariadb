@@ -72,7 +72,7 @@ case "$*" in
     check_login || { echo "ERROR 1045 (28000): Access denied for user '${user}'@'localhost'" >&2; exit 1; }
     sql="$(cat)"
     printf '%s\n' "$sql" >>"$state/mariadb_sql.log"
-    newpw="$(printf '%s\n' "$sql" | sed -n "s/.*ALTER USER 'root'@'localhost' IDENTIFIED VIA \(unix_socket OR \)\{0,1\}mysql_native_password USING PASSWORD('\([^']*\)').*/\2/p" | head -n1)"
+    newpw="$(printf '%s\n' "$sql" | sed -n "s/.*ALTER USER 'root'@'localhost' IDENTIFIED VIA \(unix_socket OR \)\{0,1\}mysql_native_password USING PASSWORD('\([^']*\)').*/\2/p" | awk 'NR==1')"
     [[ -n "$newpw" ]] && printf '%s' "$newpw" >"$pwfile"
     # DROP DATABASE IF EXISTS `x`: the name leaves $MOCK_STATE/mariadb_dbs
     # shellcheck disable=SC2016

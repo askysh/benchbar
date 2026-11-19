@@ -100,9 +100,9 @@ AP_TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 reset_calls
 apply_json acme_bad --site macdev
 assert_eq "0" "$CODE" "$OUT"
-r="$(grep -n 'setup requirements --python acme_bad' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
-b="$(grep -n 'build --app acme_bad' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
-i="$(grep -n 'install-app acme_bad' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+r="$(grep -m1 -n 'setup requirements --python acme_bad' "$MOCK_LOG" | cut -d: -f1)"
+b="$(grep -m1 -n 'build --app acme_bad' "$MOCK_LOG" | cut -d: -f1)"
+i="$(grep -m1 -n 'install-app acme_bad' "$MOCK_LOG" | cut -d: -f1)"
 [[ -n "$r" && -n "$b" && -n "$i" && "$r" -lt "$b" && "$b" -lt "$i" ]] || fail "requirements, build, install in that order: $r $b $i"
 assert_eq "" "$(pending_file acme_bad)"
 
@@ -223,7 +223,7 @@ fl_run_capture_timeout 5 "$TMP_DIR/cap2.out" "$TMP_DIR/cap2.err" bash -c 'echo t
 printf '%s\n' "\$code"
 SH
 result="$(bash "$TMP_DIR/captest.sh")"
-read -r code secs pgid <<<"$(printf '%s\n' "$result" | head -n1)"
+read -r code secs pgid <<<"${result%%$'\n'*}"
 assert_eq "124 4242" "$code $pgid" "$result"
 [[ "$secs" -le 3 ]] || fail "fl_run_capture_timeout took ${secs}s for a 1s deadline"
 assert_eq "3" "$(printf '%s\n' "$result" | tail -n1)"

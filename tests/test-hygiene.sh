@@ -66,7 +66,7 @@ done
 between="$(sed -n '/^sudo -v$/,/^sudo -k$/p' "$MOCK_LOG")"
 assert_contains "$between" "sudo installer -pkg"
 assert_contains "$between" "sudo tee -a"
-! printf '%s\n' "$between" | grep -q -E '^(brew|yarn|npm|pipx|uv|bench|git) ' || fail "third party code ran while the sudo credential was live:"$'\n'"$between"
+! grep -q -E '^(brew|yarn|npm|pipx|uv|bench|git) ' <<<"$between" || fail "third party code ran while the sudo credential was live:"$'\n'"$between"
 # phase 00 found the package in place and did not download or install again
 assert_eq "1" "$(grep -c '^curl .*wkhtmltox' "$MOCK_LOG")" "(one download)"
 assert_eq "1" "$(grep -c '^sudo installer ' "$MOCK_LOG")" "(one install)"

@@ -12,7 +12,7 @@
 # interpreter. mockkill stands in for the kill builtin.
 execs() { grep -v -c -E '^mockkill ' "$MOCK_LOG" || true; }
 # summary: the five programs started most, "sed 40, grep 31, ..."
-summary() { awk '{ print ($1 == "exec") ? $2 : $1 }' "$MOCK_LOG" | sort | uniq -c | sort -rn | head -5 | awk '{ printf "%s%s %s", (NR > 1 ? ", " : ""), $2, $1 }'; }
+summary() { awk '{ print ($1 == "exec") ? $2 : $1 }' "$MOCK_LOG" | sort | uniq -c | sort -rn | awk 'NR<=5' | awk '{ printf "%s%s %s", (NR > 1 ? ", " : ""), $2, $1 }'; }
 
 # shims: log "exec NAME" and run the real program, as in test-status-cost.
 # Programs a mock starts are not logged (_mocklib.sh exports BENCHBAR_TEST_MOCK).

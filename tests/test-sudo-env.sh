@@ -106,7 +106,7 @@ assert_no_secret() {
   assert_not_contains "$(cat "$MOCK_LOG")" "$SECRET" "(mock calls) $1"
   if [[ -d "$LOGS" ]] && grep -rqF -- "$SECRET" "$LOGS"; then fail "the password is in the run log: $1"; fi
   if grep -rqF --exclude-dir=mock --exclude=sudo_password -- "$SECRET" "$TMP_DIR" 2>/dev/null; then
-    fail "the password is in a file under the test folder: $1 ($(grep -rlF --exclude-dir=mock --exclude=sudo_password -- "$SECRET" "$TMP_DIR" | head -n3 | tr '\n' ' '))"
+    fail "the password is in a file under the test folder: $1 ($(grep -rlF --exclude-dir=mock --exclude=sudo_password -- "$SECRET" "$TMP_DIR" | awk 'NR<=3' | tr '\n' ' '))"
   fi
   [[ ! -s "$MOCK_STATE/sudo_leak" ]] || fail "a program got the password in its arguments or environment: $1"$'\n'"$(cat "$MOCK_STATE/sudo_leak")"
 }
@@ -160,7 +160,7 @@ PROBE
   main_pid="$(head -n1 "$TMP_DIR/environ-probe.out" | cut -d' ' -f1)"
   mine="$(grep "^${main_pid} " "$TMP_DIR/environ-probe.out")"
   assert_eq "2" "$(printf '%s\n' "$mine" | wc -l | tr -d ' ')" "(two images, one pid: $mine)"
-  assert_eq "${main_pid} 1" "$(printf '%s\n' "$mine" | head -n1)" "(the first image had the secret)"
+  assert_eq "${main_pid} 1" "$(printf '%s\n' "$mine" | awk 'NR==1')" "(the first image had the secret)"
   assert_eq "${main_pid} 0" "$(printf '%s\n' "$mine" | tail -n1)" "(the running image does not)"
 fi
 
@@ -183,7 +183,7 @@ assert_no_secret "install --json"
 # after phase 00 the credential is dropped and the password forgotten: nothing later can sudo
 assert_calls_contain '^sudo -k$'
 last_sudo="$(grep -n '^sudo ' "$MOCK_LOG" | tail -n1 | cut -d: -f1)"
-first_bench="$(grep -n '^bench ' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+first_bench="$(grep -m1 -n '^bench ' "$MOCK_LOG" | cut -d: -f1)"
 [[ "$last_sudo" -lt "$first_bench" ]] || fail "sudo was used after the bench steps began (last sudo line $last_sudo, first bench line $first_bench)"
 
 # ---- a second run on the set up machine asks for nothing

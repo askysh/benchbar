@@ -40,7 +40,7 @@ make_release() {
 }
 JSON
 }
-installed_app_version() { sed -n 's/.*<string>\(.*\)<\/string>.*/\1/p' "$APP/Contents/Info.plist" 2>/dev/null | head -n1; }
+installed_app_version() { sed -n 's/.*<string>\(.*\)<\/string>.*/\1/p' "$APP/Contents/Info.plist" 2>/dev/null | awk 'NR==1'; }
 
 # ---- no release yet: CLI installed, app skipped with a clear message
 run_install --yes

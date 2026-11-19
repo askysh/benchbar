@@ -49,11 +49,11 @@ run_with() {
 # calls PATTERN: how often a mock call matching PATTERN was logged since reset_calls
 calls() { grep -c -E "$1" "$MOCK_LOG" || true; }
 # pending_file APP: the app's record in the bench's state folder
-pending_file() { find "$FL_STATE_DIR/benches" -path "*.pending/$1.json" 2>/dev/null | head -n1; }
+pending_file() { find "$FL_STATE_DIR/benches" -path "*.pending/$1.json" 2>/dev/null | awk 'NR==1'; }
 pending_get() { jget "$(pending_file "$1")" "$2"; }
 pending_dir_for() {
   local e
-  e="$(find "$FL_STATE_DIR/benches" -maxdepth 1 -name 'frappe-bench-*.env' | head -n1)"
+  e="$(find "$FL_STATE_DIR/benches" -maxdepth 1 -name 'frappe-bench-*.env' | awk 'NR==1')"
   # without the bench's state file the path would be relative to the test's folder
   [[ -n "$e" ]] || fail "pending_dir_for: no bench state file in $FL_STATE_DIR/benches"
   printf '%s.pending' "${e%.env}"

@@ -23,8 +23,8 @@ while read -r pid cmdline; do
   [[ -n "$pid" ]] || continue
   if [[ "$exact" == "1" ]]; then
     prog="${cmdline%% *}"; prog="${prog##*/}"
-    printf '%s' "$prog" | grep -qE -- "^(${pattern})\$" || continue
-  elif ! printf '%s' "$cmdline" | grep -qE -- "$pattern"; then
+    grep -qE -- "^(${pattern})\$" <<<"$prog" || continue
+  elif ! grep -qE -- "$pattern" <<<"$cmdline"; then
     continue
   fi
   found=0
