@@ -10,7 +10,8 @@ Mac app.
 
 **Labs** are experiments. A Lab is off until you turn it on, and it can
 change or go away. They are marked **Lab** below. Turn one on with
-`benchbar labs on NAME` or in **Settings > Labs** in the Mac app. See
+`benchbar labs on NAME`, in **Settings > Labs** in the Mac app or on the
+**Labs** page of the BenchBar window on Windows. See
 [labs](reference/cli/labs.md).
 
 Terms: a *bench* is one Frappe installation folder. A *site* is one
@@ -98,12 +99,13 @@ BenchBar for Windows is a beta. The benches run in WSL 2. See
 | Window: Sites, Apps, Health | A page per bench: Overview, Sites (backups, restore, drop), Apps and Health with Repair. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Ports | Port Settings and Setup in a bench's Overview. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Profiles, Find Benches | Team Profiles and Find Benches in the sidebar. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
+| Window: Labs | Lists the experiments with a switch, a warning, the version and, for one that is not on Windows yet, why. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | URL scheme | `benchbar://` links start, stop and open a bench from a launcher or a script. **Settings > Ask before a link acts** is off by default. | 0.9.0 | Windows | [benchbar:// links](windows.md#benchbar-links), [URL scheme](reference/url-scheme.md) |
 | Report a bug | The tray writes the diagnostics zip. | 0.8.1 | Windows | [Report a bug](windows.md#report-a-bug) |
 | Self update | `benchbar.exe self-update` and Update Now in the tray. | 0.8.3 | Windows | [Update](windows.md#update) |
 
 Rooms and Quick Switch are not available on Windows yet. A Lab lists its
-platforms, and `labs on` refuses on another one.
+platforms, and `labs on` refuses on another one. The Labs page shows why.
 
 ## MCP server
 

@@ -34,7 +34,7 @@ assert_eq "outdated" "$(fl_template_status "$old_copy" "$r3")"
 # the runner's CLI_VERSION is unhashed: an upgrade alone does not make every
 # runner outdated, while the version still lands in the file (state.json)
 runner_with() {
-  fl_template_render bench-run.sh "BENCH_DIR=/b" "BENCH_RE=/b" "BENCH_NAME=b" "HONCHO=/h" "PORTS=8000" "SITE=s" \
+  fl_template_render bench-run.sh "BENCH_DIR=/b" "BENCH_NAME=b" "HONCHO=/h" "PORTS=8000" "SITE=s" \
     "WEB_PORT=$2" "CLI_VERSION=$1" "LABEL=com.benchbar.b" "MAX_STARTS=3" "WINDOW=600"
 }
 ra="$(runner_with 0.7.0 8000)"; rb="$(runner_with 0.7.1 8000)"; rc="$(runner_with 0.7.0 8001)"

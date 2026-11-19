@@ -124,7 +124,6 @@ fl_render_all() {
   fl_runner_extra_args
   FL_R_RUNNER="$(fl_template_render bench-run.sh \
     "BENCH_DIR=${FL_BENCH_DIR}" \
-    "BENCH_RE=$(fl_regex_escape "$FL_BENCH_DIR")" \
     "BENCH_NAME=${FL_BENCH_NAME}" \
     "HONCHO=${honcho}" \
     "PORTS=$(fl_bench_ports_csv)" \
@@ -189,11 +188,13 @@ fl_require_service() {
   [[ -f "$(fl_runner_path)" && -f "$(fl_agent_plist_path)" ]] && return 0
   # a bench set up before the rename still has its com.frappe-mac agent:
   # it is installed, it only needs the one time migration
-  local list legacy
+  local list legacy more="" why="set up before BenchBar's own service"
   list="$(fl_legacy_agents_list)"
   legacy="${list%%$'\n'*}"; legacy="${legacy#*|}"; legacy="${legacy%%|*}"
   if [[ -n "$legacy" ]]; then
-    fl_die "${FL_BENCH_NAME} still uses the old agent ${legacy}, from before the BenchBar rename." \
+    [[ "$list" == *$'\n'* ]] && more=" and $(printf '%s\n' "$list" | awk 'NF' | awk 'END {print NR - 1}') more"
+    [[ "$legacy" == com.frappe-mac.* ]] && why="from before the BenchBar rename"
+    fl_die "${FL_BENCH_NAME} still uses the old agent ${legacy}${more}, ${why}." \
       "Run: ${FL_SELF} repair (moves the old agent aside and installs $(fl_agent_label); sites and data are not touched)."
   fi
   fl_die "The background service for ${FL_BENCH_NAME} is not installed." "Run: ${FL_SELF} service (or benchbar install)."

@@ -51,6 +51,7 @@ internal sealed class MainWindow : Window
     private readonly BenchPage _page;
     private readonly DiscoveryView _discovery;
     private readonly ProfilesView _profiles;
+    private readonly LabsView _labs;
     private readonly Dictionary<SidebarTool, Button> _toolButtons = [];
     private SidebarTool _tool = SidebarTool.None;
     private TraySnapshot _snapshot = TraySnapshot.Empty;
@@ -69,6 +70,7 @@ internal sealed class MainWindow : Window
         _page.TabChanged += _ => SyncContentKey();
         _discovery = new DiscoveryView(actions.Services);
         _profiles = new ProfilesView(actions.Services);
+        _labs = new LabsView(actions.Services);
 
         Title = BetaText.WindowTitle;
         Width = 1000;
@@ -126,6 +128,8 @@ internal sealed class MainWindow : Window
     public DiscoveryView Discovery => _discovery;
 
     public ProfilesView Profiles => _profiles;
+
+    public LabsView Labs => _labs;
 
     /// <summary>The pane below the benches that is open now, or None.</summary>
     public SidebarTool Tool => _tool;
@@ -360,7 +364,7 @@ internal sealed class MainWindow : Window
         if (index >= 0) _list.SelectedIndex = index;
     }
 
-    /// <summary>Opens the Find Benches or Team Profiles pane and clears the bench selection in the sidebar.</summary>
+    /// <summary>Opens the Find Benches, Team Profiles or Labs pane and clears the bench selection in the sidebar.</summary>
     public void ShowTool(SidebarTool tool)
     {
         if (Mode == MainMode.Wizard) return; // the buttons are off then; a shortcut must not change what is hidden behind the wizard
@@ -379,7 +383,7 @@ internal sealed class MainWindow : Window
 
     public const string ToolsOffWhileSetupTip = "Finish or close the setup first.";
 
-    /// <summary>Find Benches and Team Profiles do nothing while the wizard covers the window, so they are off, with the reason.</summary>
+    /// <summary>Find Benches, Team Profiles and Labs do nothing while the wizard covers the window, so they are off, with the reason.</summary>
     private void UpdateToolButtons()
     {
         var off = Mode == MainMode.Wizard;
@@ -420,13 +424,14 @@ internal sealed class MainWindow : Window
         else if (_tool != SidebarTool.None)
         {
             var key = "tool|" + _tool;
-            var pane = _tool == SidebarTool.FindBenches ? (UserControl)_discovery : _profiles;
+            var pane = _tool switch { SidebarTool.FindBenches => (UserControl)_discovery, SidebarTool.Labs => _labs, _ => _profiles };
             var changed = _contentKey != key || !ReferenceEquals(_content.Content, pane);
             _contentKey = key;
             _content.Content = pane;
             if (changed && navigate)
             {
                 if (_tool == SidebarTool.FindBenches) _discovery.OnShown();
+                else if (_tool == SidebarTool.Labs) _labs.OnShown();
                 else _profiles.OnShown();
             }
         }

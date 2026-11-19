@@ -44,10 +44,34 @@ run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Legacy agents: 1 legacy agent(s): com.frappe-mac.frappe-bench (running, last exit 0)"
 assert_not_contains "$OUT" "com.frappe-mac.other-bench ("
 
+# ---- a user's own agent is never benchbar's to migrate, even when it says "frappe",
+# "honcho" or names this bench's folder; only one that runs this bench's own
+# processes (honcho, the runner, socketio, serve) is an old per-process setup
+user_plist() {
+  # user_plist LABEL WORKDIR ARG...: a LaunchAgent of the user's own
+  local label="$1" dir="$2" arg; shift 2
+  {
+    printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n<key>Label</key><string>%s</string>\n<key>ProgramArguments</key>\n<array>\n' "$label"
+    for arg in "$@"; do printf '  <string>%s</string>\n' "$arg"; done
+    printf '</array>\n<key>WorkingDirectory</key><string>%s</string>\n</dict>\n</plist>\n' "$dir"
+  } >"$agents/${label}.plist"
+}
+user_plist com.example.frappe-cloud-backup "$HOME" /usr/local/bin/pull-frappe-cloud-backup.sh --site example.frappe.cloud
+user_plist com.example.frappe-vpn "$HOME" /usr/local/bin/frappe-vpn-up
+user_plist com.example.nightly-bench-backup "$BENCH" /opt/homebrew/bin/bench --site macdev backup
+user_plist com.example.my-honcho "$HOME/side-project" /usr/local/bin/honcho start
+user_plist com.example.bench-migrate "$BENCH" "$BENCH/env/bin/python" -m frappe.utils.bench_helper frappe --site macdev migrate
+user_plist com.example.old-web "$BENCH" "$BENCH/env/bin/honcho" start -f Procfile
+for label in frappe-cloud-backup frappe-vpn nightly-bench-backup my-honcho bench-migrate old-web; do set_agent "com.example.$label" "not running" "" 0; done
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "2 legacy agent(s): com.example.old-web (not running, last exit 0); com.frappe-mac.frappe-bench (running, last exit 0)" "(the frappe-mac agent and the user's old per-process honcho agent for this bench, and nothing else)"
+for label in frappe-cloud-backup frappe-vpn nightly-bench-backup my-honcho bench-migrate; do assert_not_contains "$OUT" "com.example.$label" "(a user's own agent is not benchbar's)"; done
+user_agents_kept() { for label in frappe-cloud-backup frappe-vpn nightly-bench-backup my-honcho bench-migrate; do assert_file "$agents/com.example.$label.plist" "(repair must leave $label alone)"; done; }
+
 # ---- up before the migration names the old agent and the fix, not "not installed"
 run_fm up --bench-dir "$BENCH"
 assert_eq "1" "$CODE"
-assert_contains "$OUT" "frappe-bench still uses the old agent com.frappe-mac.frappe-bench"
+assert_contains "$OUT" "frappe-bench still uses the old agent com.example.old-web and 1 more, set up before BenchBar's own service."
 assert_contains "$OUT" "benchbar repair"
 assert_not_contains "$OUT" "not installed"
 
@@ -105,6 +129,11 @@ assert_no_file "$BENCH/frappe-mac-run.sh"
 assert_eq "1" "$(grep -c -x -F '# >>> benchbar >>>' "$HOME/.zshrc")"
 assert_eq "0" "$(grep -c -x -F '# >>> frappe-mac >>>' "$HOME/.zshrc")"
 assert_eq "export AFTER=1" "$(tail -n 1 "$HOME/.zshrc")" "(content after the block stays after it)"
+# the user's own agents stay in LaunchAgents, loaded and unmoved
+user_agents_kept
+assert_no_file "$agents/com.example.old-web.plist" "(the old per-process agent of this bench is moved aside)"
+[[ -n "$(find "$HOME/Library/LaunchAgents-disabled" -name 'com.example.old-web.plist')" ]] || fail "the old per-process plist must be moved aside, not deleted"
+assert_calls_not_contain '(bootout|bootstrap|kickstart|unload).*com.example'
 # the other bench keeps its agent until its own repair
 assert_file "$other_old"
 assert_calls_not_contain '(bootout|bootstrap|kickstart|unload).*com.frappe-mac.other-bench'
