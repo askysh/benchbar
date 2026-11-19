@@ -66,6 +66,8 @@ mkdir -p "$HOME/Library/LaunchAgents" "$MOCK_STATE/agents" "$FL_STATE_DIR" "$MOC
 # the plan token key: a real install makes it at its first plan; made here so a
 # test that checks "a dry run writes nothing" is not the first plan
 (umask 077; printf '%s\n' 5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed >"$FL_STATE_DIR/plan-key")
+# a fixed plan clock, so two plans of one test never straddle a token window
+export FL_PLAN_NOW=1795000000
 # 50 GB free on every volume (the df mock): the installer's 10 GB check must
 # not depend on the runner's disk, which is sometimes below it. A test of
 # the check writes its own value.

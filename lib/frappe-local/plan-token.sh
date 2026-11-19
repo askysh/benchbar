@@ -19,14 +19,17 @@
 # It proves that the bench is as the plan saw it, recently. It does not prove
 # that a person looked at the plan (the MCP and AGENTS.md rules say who asks).
 
-FL_PLAN_WINDOW_SECS="${FL_PLAN_WINDOW_SECS:-600}"
-FL_PLAN_VALID_WINDOWS="${FL_PLAN_VALID_WINDOWS:-6}"
+# fixed in production; the tests may change them only under FL_TESTING=1 (DECISIONS: test seams)
+FL_PLAN_WINDOW_SECS=600
+FL_PLAN_VALID_WINDOWS=6
 # how far back an expired token is still recognised as one of ours (windows):
 # older ones are only "not this plan"
 FL_PLAN_RECOGNISE_WINDOWS="${FL_PLAN_RECOGNISE_WINDOWS:-36}"
 
-# FL_PLAN_NOW: the tests' clock
-fl_plan_now() { printf '%s' "${FL_PLAN_NOW:-$(date +%s)}"; }
+# FL_PLAN_NOW: the tests' clock, read only under FL_TESTING=1
+fl_plan_now() {
+  if [[ "${FL_TESTING:-0}" == "1" && -n "${FL_PLAN_NOW:-}" ]]; then printf '%s' "$FL_PLAN_NOW"; else date +%s; fi
+}
 
 # fl__plan_key_usable FILE: a regular file with a key in it that only its
 # owner can read or write. An empty file, or one that group or others can
