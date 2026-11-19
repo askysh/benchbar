@@ -12,7 +12,7 @@
 # interpreter. mockkill stands in for the kill builtin.
 execs() { grep -v -c -E '^mockkill ' "$MOCK_LOG" || true; }
 # summary: the five programs started most, "sed 40, grep 31, ..."
-summary() { awk '{ print ($1 == "exec") ? $2 : $1 }' "$MOCK_LOG" | sort | uniq -c | sort -rn | head -5 | awk '{ printf "%s%s %s", (NR > 1 ? ", " : ""), $2, $1 }'; }
+summary() { awk '{ print ($1 == "exec") ? $2 : $1 }' "$MOCK_LOG" | sort | uniq -c | sort -rn | awk 'NR<=5' | awk '{ printf "%s%s %s", (NR > 1 ? ", " : ""), $2, $1 }'; }
 
 # shims: log "exec NAME" and run the real program, as in test-status-cost.
 # Programs a mock starts are not logged (_mocklib.sh exports BENCHBAR_TEST_MOCK).
@@ -66,13 +66,17 @@ assert_eq "0" "$CODE" "$OUT"
 export ADMIN_PASSWORD=admin MARIADB_ROOT_PASSWORD=root
 
 # the budgets: the larger count of macOS and of the Linux layer run on a Mac
-# (FL_PLATFORM=linux), plus 10 percent. doctor: 79 programs and doctor --json 82
-# (293 and 356 before issue 147 and 94 and 101 after its first part: listeners,
-# brew, launchctl, each git config and the receipts of brew are read once)
-cost "doctor" 87 "0 1" doctor --bench-dir "$BENCH"
-cost "doctor --json" 91 "0 1" doctor --json --bench-dir "$BENCH"
+# (FL_PLATFORM=linux), plus 10 percent. doctor: 96 programs and doctor --json
+# 108 on the Linux layer (84 and 87 on macOS; 293 and 356 before issue 147 and
+# 94 and 101 after its first part: listeners, brew, launchctl, each git config
+# and the receipts of brew are read once). The listen check adds no lookup of
+# its own: it filters the listeners of that one snapshot; the rest is the two
+# listen files the procfile check reads (shasum, readlink, awk).
+# install --dry-run: 285 since issue 146 polls ls-remote with sleep; app list --json: 54 since issue 146
+cost "doctor" 106 "0 1" doctor --bench-dir "$BENCH"
+cost "doctor --json" 119 "0 1" doctor --json --bench-dir "$BENCH"
 cost "install --dry-run --yes" 285 "0" install --dry-run --yes --bench-dir "$HOME/fresh-bench" --site freshsite
-cost "adopt --dry-run --yes" 165 "0" adopt "$THIRD" --dry-run --yes
+cost "adopt --dry-run --yes" 172 "0" adopt "$THIRD" --dry-run --yes
 cost "app list --json" 54 "0" app list --json --bench-dir "$BENCH"
 
 printf 'test-command-cost: ok\n'

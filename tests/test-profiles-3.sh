@@ -65,7 +65,7 @@ MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_fm install --yes --profi
 assert_eq "0" "$CODE" "$OUT"
 assert_calls_contain "^bench init ${BENCH3} --frappe-branch version-15 --python .* --skip-assets\$"
 assert_eq "$FSHA" "$(git -C "$BENCH3/apps/frappe" rev-parse HEAD)"
-c="$(grep -n "git -C ${BENCH3}/apps/frappe checkout --quiet ${FSHA}\$" "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+c="$(grep -m1 -n "git -C ${BENCH3}/apps/frappe checkout --quiet ${FSHA}\$" "$MOCK_LOG" | cut -d: -f1)"
 b="$(grep -n '^bench build$' "$MOCK_LOG" | tail -n1 | cut -d: -f1)"
 [[ -n "$c" && -n "$b" && "$c" -lt "$b" ]] || fail "frappe is checked out before the one build (${c} ${b})"
 assert_no_file "$BENCH3/logs/.benchbar/needs-build" "(the build was done)"

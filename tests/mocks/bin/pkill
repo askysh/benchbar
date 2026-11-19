@@ -9,7 +9,7 @@ found=1
 : >"${MOCK_PROCS}.tmp"
 while read -r pid cmdline; do
   [[ -n "$pid" ]] || continue
-  if printf '%s' "$cmdline" | grep -qE -- "$pattern"; then
+  if grep -qE -- "$pattern" <<<"$cmdline"; then
     printf 'killed %s %s %s\n' "$sig" "$pid" "$cmdline" >>"${MOCK_STATE:?}/killed"
     found=0
   else

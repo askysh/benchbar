@@ -80,7 +80,12 @@ around it.
 
 Not a vulnerability: a bench's own Frappe or ERPNext code (report those
 to [Frappe](https://github.com/frappe/frappe/security)), and a dev bench
-reachable on your local network because you bound it there.
+reachable on your local network because you set it to listen there
+(`benchbar listen all`). Since 0.9.0 the web server and socketio of a bench
+listen on 127.0.0.1 by default. Before 0.9.0 the generated Procfile started
+them on every interface (Frappe's own default), which is fixed: a bench
+that still listens on a network address with `listen` at its default is a
+bug, and `benchbar doctor` warns about it.
 
 ## Supported versions
 

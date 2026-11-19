@@ -16,7 +16,7 @@ run_fm --version; assert_eq "0" "$CODE"; assert_eq "benchbar ${VER}" "$OUT" "(no
 mkdir -p "$HOME/Applications/BenchBar.app/Contents"
 printf '<plist><dict>\n<key>CFBundleShortVersionString</key>\n<string>0.5.5</string>\n</dict></plist>\n' >"$HOME/Applications/BenchBar.app/Contents/Info.plist"
 run_fm --version; assert_eq "0" "$CODE"
-assert_eq "benchbar ${VER}" "$(printf '%s\n' "$OUT" | head -n 1)" "(the first line never changes)"
+assert_eq "benchbar ${VER}" "${OUT%%$'\n'*}" "(the first line never changes)"
 assert_eq "BenchBar app 0.5.5 (${HOME}/Applications/BenchBar.app)" "$(printf '%s\n' "$OUT" | sed -n 2p)"
 
 # ---- docs: opens the site, or a topic's page, after a HEAD check
@@ -80,7 +80,7 @@ block="$(printf '%s\n' "$OUT" | grep -A2 '^  \[FAIL\] Bench env:')"
 assert_eq "     fix: ${SCRIPT_DIR}/benchbar repair" "$(printf '%s\n' "$block" | sed -n 2p | sed 's/ (.*//')"
 assert_eq "     see: ${DOCS}/guides/doctor-and-repair/#env_python" "$(printf '%s\n' "$block" | sed -n 3p)"
 # [WARN] lines have no see: line
-printf '%s\n' "$OUT" | grep -A2 '^  \[WARN\]' | grep -q 'see:' && fail "a [WARN] must not get a see: line"
+grep -q 'see:' <<<"$(grep -A2 '^  \[WARN\]' <<<"$OUT")" && fail "a [WARN] must not get a see: line"
 # every see: follows a fix: line or a [FAIL] line
 printf '%s\n' "$OUT" | awk '/see:/ && prev !~ /fix:|\[FAIL\]/ { bad = 1 } { prev = $0 } END { exit bad }' || fail "see: must follow fix: or [FAIL]"
 run_fm doctor --json --bench-dir "$BENCH"; assert_eq "1" "$CODE"
