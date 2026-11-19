@@ -77,9 +77,14 @@ nonisolated enum BenchText {
 }
 
 extension DoctorReport {
-    /// Checks worth reading first: fail, then warn, then anything unknown.
+    /// Checks worth reading first: fail, then warn, then anything unknown. A warning the person
+    /// acknowledged is not among them: the Health tab lists it apart, with Undo.
     nonisolated var needsAttention: [DoctorCheck] {
-        checks.filter { $0.level != .ok }.sorted { Self.rank($0.level) < Self.rank($1.level) }
+        checks.filter { $0.level != .ok && !$0.acked }.sorted { Self.rank($0.level) < Self.rank($1.level) }
+    }
+
+    nonisolated var acknowledged: [DoctorCheck] {
+        checks.filter { $0.level == .warn && $0.acked }
     }
 
     nonisolated var passing: [DoctorCheck] {
