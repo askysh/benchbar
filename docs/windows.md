@@ -144,6 +144,15 @@ your Linux password right before the steps that use sudo.
 
 ![The New Bench page](images/windows-wizard-bench.png)
 
+The **Profile** list on the New Bench page holds the built in profiles
+(`v15-lts`, `v16-lts`) and the valid team profiles from
+`benchbar.exe profile list`. It starts on `v15-lts`; the choice goes to
+the install as `--profile NAME`. BenchBar asks the CLI about each
+profile with a dry run (`install --dry-run --json --offline --profile
+NAME`), so a profile that this Ubuntu cannot install shows off, with the
+CLI's own reason under the list. If the list cannot be read, `v15-lts` is
+the only choice and **Try Again** reads it again.
+
 ![Review, the plan before Install](images/windows-wizard-review.png)
 
 Every wizard page has a **Report a Bug** button in its footer, and a
