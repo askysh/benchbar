@@ -12,7 +12,8 @@ read tools, `up`, `down` and `restart`, and the changes that have a plan
 (an app, a site, a restore, the background service): a `*_plan` tool
 first, then the apply tool with the plan's token. The full list is under
 [Tools](#tools). Nothing that repairs, installs a bench or needs `sudo`
-is offered. Each tool runs `benchbar ... --json` with stdin closed and
+is offered, and neither is anything that turns a lab on, applies ports,
+shares a site or updates benchbar ([What is not a tool](#what-is-not-a-tool)). Each tool runs `benchbar ... --json` with stdin closed and
 `BENCHBAR_NONINTERACTIVE=1`, so a command that needs an answer it cannot
 ask for stops and names the missing input, and never hangs. An action
 returns the CLI's `done` line as `result` (`changed`, `warnings`,
@@ -184,11 +185,38 @@ claude mcp add benchbar -- benchbar mcp
 | `benchbar_run_plan` | plan (read only) | Plan one bench command of the allow list (migrate, clear-cache, clear-website-cache, build, run-tests, doctor, list-apps, version), read only: the exact bench command line, what it touches, whether a backup is taken first (migrate always), the deadline, warnings, and a token for benchbar_run. | `command`*, `site`, `timeout`, `app`, `module`, `doctype`, `test`, `case`, `failfast`, `skip_failing`, `skip_search_index`, `format`, `bench` |
 | `benchbar_run` | acts | Apply a plan from benchbar_run_plan: back the site up first when the plan says so, then run the bench command in the bench folder with the bench's own environment, under the plan's deadline. | `command`*, `site`, `timeout`, `app`, `module`, `doctype`, `test`, `case`, `failfast`, `skip_failing`, `skip_search_index`, `format`, `bench`, `token`* |
 | `benchbar_run_read` | read | Run a bench command that only reads, at once and without a plan: doctor (workers and queued jobs of a site; needs the bench's Redis), list-apps (the apps installed on a site) or version (the apps of the bench). | `command`*, `site`, `timeout`, `app`, `module`, `doctype`, `test`, `case`, `failfast`, `skip_failing`, `skip_search_index`, `format`, `bench` |
+| `benchbar_site_backups` | read | The backup sets of one site, newest first: stamp, time, size, whether files are in it and whether it is complete (and the folder they are in). | `site`*, `bench` |
+| `benchbar_ports_check` | read | Whether the ports of one bench conflict with a running bench or another listener, its port mode (automatic or fixed) and whether it already runs. | `bench` |
+| `benchbar_ports_plan` | read | Preview the port blocks and service files for one or more benches that would share this machine, read only: the allocation, what adopting each would write and whether it can be applied. | `paths`* |
+| `benchbar_lock_check` | read | Compare one bench with its team lockfile (benchbar.toml): every app's repo, branch and commit and the sites, with the differences and the fix for each. | `bench` |
+| `benchbar_labs_list` | read | The experiments (labs) and whether each is on. | none |
+| `benchbar_where` | read | How this benchbar was installed (homebrew, managed, checkout, app, other), the path it records for itself, its state folder, the BenchBar app and its version. | none |
+| `benchbar_doctor_prerequisites` | read | What this machine needs before a bench can be installed (tools, Homebrew or apt packages, MariaDB, free disk), each check with its level and fix, no bench needed. | `bench` |
+| `benchbar_self_update_check` | read | This benchbar and the BenchBar app against the latest release, and the command that would update them (available is null when GitHub could not be asked). | none |
+| `benchbar_app_focus_list` | read | Every app of one bench with whether it is a focus app (the ones being worked on), why, and how far behind its remote it is, from the last git fetch. | `bench` |
 
 An argument marked `*` is required. `bench` (the bench's path, from `benchbar_list`) is optional on every tool that has it: without it the tool uses the default bench.
 <!-- /generated:mcp-tools -->
 
+`benchbar_site_backups` lists the backup sets of a site; its `stamp` is the
+`from` of `benchbar_site_restore_plan`. `benchbar_ports_plan` takes the bench
+paths (`paths`) and only previews: it returns a token that no tool applies.
+`benchbar_self_update_check` asks GitHub for the latest release and takes
+the CLI's run lock for a moment, so it can answer that another run is busy.
+
 `benchbar_logs_tail` reads one file: `file` is `bench` (the default), `worker`, `worker_error` or `previous` (the log of the run before the last restart). `since` returns only the lines after a time, and `since_restart` only the lines since the bench last started; each line has its time in `ts`.
+
+## What is not a tool
+
+Some things are a person's decision and have no tool, whatever the client
+asks for: `repair` and bench installs, turning a lab on or off
+(`labs on` refuses an agent too), applying a port plan (`ports apply`,
+`ports setup`, `ports mode`), sharing a site, the LAN guard, `self-update`,
+changing the default site (`site default`) and pinning a focus app
+(`app focus NAME`). An agent reads the state with the read tools
+(`benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_labs_list`,
+`benchbar_self_update_check`, `benchbar_site_list`, `benchbar_app_focus_list`)
+and tells the person the command to run in a terminal.
 
 ## Flags, needs and environment
 
