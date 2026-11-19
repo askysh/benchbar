@@ -1,0 +1,7 @@
+#!/bin/bash
+# notify-send mock: records the call and the session bus it was given
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+printf 'bus=%s\n' "${DBUS_SESSION_BUS_ADDRESS:-}" >>"${MOCK_LOG:-/dev/null}"
+exit "${MOCK_NOTIFY_EXIT:-0}"

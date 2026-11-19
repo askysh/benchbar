@@ -176,8 +176,8 @@ app or adopt a bench you have.
 ## Linux
 
 From 0.8 the same CLI runs on Linux: Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them), Windows through WSL
-first, with the v15-lts profile so far. There is no menu bar app on Linux; on Windows a tray app shows the
-benches of the distro: see [Windows](windows.md).
+first. `install` takes the v15-lts and v16-lts profiles and team profiles (a team profile follows its base). There is no menu bar app on
+Linux; on Windows a tray app shows the benches of the distro: see [Windows](windows.md).
 
 ```bash
 git clone https://github.com/askysh/benchbar.git && cd benchbar
@@ -209,6 +209,35 @@ distro. benchbar stops nothing for you.
 
 After the install, run `source ~/.bashrc` (or open a new terminal), then
 `benchup`. The helpers are in `~/.bashrc`, not in `~/.zshrc`.
+
+### Profiles on Linux
+
+Python comes from uv and Node from fnm, so each profile gets its own:
+`v15-lts` runs Python 3.11 and Node 22, `v16-lts` runs Python 3.14 and
+Node 24. MariaDB is the one apt gives, 10.11 on Ubuntu 24.04. That is
+inside the range both profiles accept (v15: 10.6 to 10.11, v16: 10.6 to
+11.8), so `v16-lts` does not install the 11.8 its Mac formula names. A
+MariaDB that is already running and inside the range is used as it is.
+A profile whose range does not include what apt gives is refused before
+anything is installed, and the message names the numbers.
+
+### Crash notifications on Linux
+
+When the crash guard pauses a bench (three starts in ten minutes), or the
+bench cannot start because its ports are taken or its env is missing, the
+runner writes the pause to `logs/.benchbar/state.json` and to the bench
+log. `benchbar status` and `doctor` read it from there. What else you get
+depends on where you run:
+
+| Where | What you see |
+| --- | --- |
+| Desktop Linux | A desktop notification from `notify-send` (package `libnotify-bin`), sent through your session bus. Nothing is sent when `notify-send` is missing or there is no desktop session. |
+| WSL | A Windows notification from the tray, which reads the same record. The runner adds none, so there is one. |
+| Headless server | The record and the log only. Run `benchbar status` or `benchlogs`. |
+
+There is no menu bar app on Linux, so no other notification exists. A
+runner written before this change has no notification: `benchbar repair`
+(or `benchbar service`) writes the new one.
 
 ## Windows
 
