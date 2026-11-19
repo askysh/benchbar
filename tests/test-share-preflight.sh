@@ -243,6 +243,13 @@ assert_check gateway_reachable fail "8443" restart_sharing
 printf '18097\n8443\n' >"$MOCK_STATE/lan_reachable_ports"
 pre --critical
 assert_check gateway_reachable ok; assert_eq "0" "$CODE" "$OUT"
+# the gateway listens on the address it started with (SHARE-7): another address is named as the cause
+printf '{\n  "v": 3,\n  "listen": {"host": "10.9.8.7", "port": 8443}\n}\n' >"$SHARE_DIR/gateway.json"
+: >"$MOCK_STATE/lan_reachable_ports"
+pre --critical
+assert_check gateway_reachable fail "network address changed from 10.9.8.7 to 192.168.1.20" restart_sharing
+: >"$SHARE_DIR/gateway.json"
+printf '18097\n8443\n' >"$MOCK_STATE/lan_reachable_ports"
 
 # ---------------------------------------------------------------- no share web port: a critical run fails closed
 reset_world; rm -f "$SHARE_DIR/share.json"

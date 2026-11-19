@@ -781,6 +781,9 @@ if (!ok) { console.error(JSON.stringify(c)); process.exit(1); }
 ' "$ROOT" "$SHARE_DIR/gateway.json" "$SOCK" "$BENCH" || fail "gateway.json is what config.js validates"
 assert_not_contains "$(cat "$SHARE_DIR/gateway.json")" "socketio"
 assert_not_contains "$(cat "$SHARE_DIR/gateway.json")" "9000"
+# SHARE-7: the gateway listens on the address of the network the room is on, not on every interface
+assert_eq "192.168.1.20" "$(jget "$SHARE_DIR/gateway.json" 'd["listen"]["host"]')" "(the LAN address of the default route)"
+assert_not_contains "$(cat "$SHARE_DIR/gateway.json")" "0.0.0.0"
 assert_eq "True" "$(jget "$SHARE_DIR/devices.json" 'd["devices"] == [] and d["blocked"] == []')" "(devices are scoped to one room)"
 # the runner names node and benchbar by absolute paths, never by PATH
 runner_text="$(cat "$SHARE_DIR/share-run.sh")"
