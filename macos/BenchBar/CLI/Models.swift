@@ -7,6 +7,40 @@ import Foundation
 // Rules from the schema: ignore unknown fields (Codable does), and treat
 // an unknown enum value as .unknown instead of failing the whole decode.
 
+// Tolerant reading (MAC-9): a field a view can live without is optional or
+// has a default, and only the identity of a thing (a path, a name, a state)
+// is required. The init(from:) of each model sits in an extension so the
+// memberwise init stays. Field names stay exactly as the CLI prints them.
+nonisolated extension KeyedDecodingContainer {
+    /// A field the view can live without: missing, null or the wrong type gives `fallback`.
+    func lenient<T: Decodable>(_ key: Key, _ fallback: T) -> T {
+        (try? decodeIfPresent(T.self, forKey: key)) ?? fallback
+    }
+
+    /// A list read element by element: an element that does not decode is
+    /// skipped and named in `skipped`, so one bad entry never hides the rest.
+    /// A list that is missing, null or not an array throws (keyNotFound, valueNotFound
+    /// or typeMismatch): a document without its list is not an empty list.
+    func lossyList<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> (items: [T], skipped: [String]) {
+        var list = try nestedUnkeyedContainer(forKey: key)
+        var items: [T] = []
+        var skipped: [String] = []
+        while !list.isAtEnd {
+            let index = list.currentIndex
+            do {
+                items.append(try list.decode(T.self))
+            } catch {
+                skipped.append("entry \(index): \(BenchJSON.describe(error))")
+                _ = try? list.decode(Skipped.self)
+            }
+        }
+        return (items, skipped)
+    }
+}
+
+/// Decodes any JSON value and keeps nothing: moves a list past an entry that failed.
+nonisolated private struct Skipped: Decodable {}
+
 nonisolated enum BenchState: String, Codable, Sendable, CaseIterable {
     case stopped, starting, running, crashed, paused, unknown
 
@@ -43,6 +77,16 @@ nonisolated struct BenchPorts: Codable, Sendable, Equatable, Hashable {
     }
 }
 
+nonisolated extension BenchPorts {
+    /// A port the CLI left out reads 0: no bench listens there, so nothing is mistaken for a port.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(web: c.lenient(.web, 0), socketio: c.lenient(.socketio, 0),
+                  redisQueue: c.lenient(.redisQueue, 0), redisCache: c.lenient(.redisCache, 0),
+                  redisSocketio: c.lenient(.redisSocketio, nil))
+    }
+}
+
 /// One site of a bench (`sites[]` in list and status, added in 0.4).
 nonisolated struct SiteInfo: Codable, Sendable, Equatable, Hashable, Identifiable {
     var name: String
@@ -67,6 +111,16 @@ nonisolated struct SiteInfo: Codable, Sendable, Equatable, Hashable, Identifiabl
         case developerMode = "developer_mode"
         case openAsEnabled = "open_as_enabled"
         case openAs = "open_as"
+    }
+}
+
+nonisolated extension SiteInfo {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(name: try c.decode(String.self, forKey: .name),
+                  isDefault: c.lenient(.isDefault, false), hostsEntry: c.lenient(.hostsEntry, false),
+                  pingCode: c.lenient(.pingCode, nil), developerMode: c.lenient(.developerMode, nil),
+                  openAsEnabled: c.lenient(.openAsEnabled, nil), openAs: c.lenient(.openAs, nil))
     }
 }
 
@@ -98,6 +152,22 @@ nonisolated struct BenchSummary: Codable, Sendable, Equatable, Hashable, Identif
     }
 }
 
+nonisolated extension BenchSummary {
+    /// Only `path` is the identity. The rest has a default a row can show: the
+    /// folder name, no site, the state file where the runner writes it.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let path = try c.decode(String.self, forKey: .path)
+        let name = c.lenient(.name, (path as NSString).lastPathComponent)
+        self.init(path: path, name: name, site: c.lenient(.site, ""), label: c.lenient(.label, ""),
+                  webURL: c.lenient(.webURL, ""),
+                  ports: c.lenient(.ports, BenchPorts(web: 0, socketio: 0, redisQueue: 0, redisCache: 0)),
+                  isDefault: c.lenient(.isDefault, false), serviceInstalled: c.lenient(.serviceInstalled, false),
+                  stateFile: c.lenient(.stateFile, path + "/logs/.benchbar/state.json"),
+                  sites: c.lenient(.sites, nil), lockFile: c.lenient(.lockFile, nil))
+    }
+}
+
 /// `benchbar scan PATH --json`: discoveries and any skipped-folder warnings.
 nonisolated struct BenchScan: Codable, Sendable {
     var root: String
@@ -111,12 +181,31 @@ nonisolated struct BenchList: Codable, Sendable, Equatable {
     var cliVersion: String
     var defaultBench: String?
     var benches: [BenchSummary]
+    /// Entries of `benches` that did not decode, one line each (not part of the JSON).
+    var skipped: [String] = []
 
     enum CodingKeys: String, CodingKey {
         case benches
         case schemaVersion = "schema_version"
         case cliVersion = "cli_version"
         case defaultBench = "default_bench"
+    }
+
+    /// One entry without a path is skipped and named, it does not fail the list.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let list = try c.lossyList(BenchSummary.self, forKey: .benches)
+        self.init(schemaVersion: try c.decode(Int.self, forKey: .schemaVersion),
+                  cliVersion: c.lenient(.cliVersion, ""), defaultBench: c.lenient(.defaultBench, nil),
+                  benches: list.items, skipped: list.skipped)
+    }
+
+    init(schemaVersion: Int, cliVersion: String, defaultBench: String?, benches: [BenchSummary], skipped: [String] = []) {
+        self.schemaVersion = schemaVersion
+        self.cliVersion = cliVersion
+        self.defaultBench = defaultBench
+        self.benches = benches
+        self.skipped = skipped
     }
 }
 
@@ -191,10 +280,23 @@ nonisolated struct DoctorCheck: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+nonisolated extension DoctorCheck {
+    /// `id` is the identity; a check with no level reads as unknown, not as a pass.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try c.decode(String.self, forKey: .id)
+        self.init(id: id, group: c.lenient(.group, nil), label: c.lenient(.label, id),
+                  level: c.lenient(.level, .unknown), message: c.lenient(.message, ""),
+                  fixCommand: c.lenient(.fixCommand, nil), action: c.lenient(.action, nil))
+    }
+}
+
 nonisolated struct DoctorSummary: Codable, Sendable, Equatable {
     var ok: Int
     var warn: Int
     var fail: Int
+
+    enum CodingKeys: String, CodingKey { case ok, warn, fail }
 
     /// "1 failure · 2 warnings", nil when nothing needs attention: the
     /// popover and the Health tab say it the same way.
@@ -211,6 +313,19 @@ nonisolated struct DoctorSummary: Codable, Sendable, Equatable {
     }
 }
 
+nonisolated extension DoctorSummary {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(ok: c.lenient(.ok, 0), warn: c.lenient(.warn, 0), fail: c.lenient(.fail, 0))
+    }
+
+    /// The counts of a list of checks, for a report that came without them.
+    init(counting checks: [DoctorCheck]) {
+        self.init(ok: checks.filter { $0.level == .ok }.count, warn: checks.filter { $0.level == .warn }.count,
+                  fail: checks.filter { $0.level == .fail }.count)
+    }
+}
+
 /// `benchbar doctor --json`.
 nonisolated struct DoctorReport: Codable, Sendable, Equatable {
     var schemaVersion: Int
@@ -223,6 +338,8 @@ nonisolated struct DoctorReport: Codable, Sendable, Equatable {
     var profileSource: String? = nil
     var checks: [DoctorCheck]
     var summary: DoctorSummary
+    /// Entries of `checks` that did not decode (not part of the JSON).
+    var skipped: [String] = []
 
     /// The profile is only the default: no profile matches this bench's Frappe.
     var profileIsDefault: Bool { profileSource == "default" }
@@ -232,6 +349,21 @@ nonisolated struct DoctorReport: Codable, Sendable, Equatable {
         case schemaVersion = "schema_version"
         case cliVersion = "cli_version"
         case profileSource = "profile_source"
+    }
+
+    /// `bench` is the identity. A missing summary is counted from the checks.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let list = try c.lossyList(DoctorCheck.self, forKey: .checks)
+        schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
+        cliVersion = c.lenient(.cliVersion, nil)
+        bench = try c.decode(String.self, forKey: .bench)
+        site = c.lenient(.site, nil)
+        profile = c.lenient(.profile, nil)
+        profileSource = c.lenient(.profileSource, nil)
+        checks = list.items
+        summary = c.lenient(.summary, DoctorSummary(counting: list.items))
+        skipped = list.skipped
     }
 }
 
@@ -326,6 +458,19 @@ nonisolated struct AppInfo: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+nonisolated extension AppInfo {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(name: try c.decode(String.self, forKey: .name), inAppsTxt: c.lenient(.inAppsTxt, false),
+                  repo: c.lenient(.repo, nil), branch: c.lenient(.branch, nil), policyBranch: c.lenient(.policyBranch, nil),
+                  commit: c.lenient(.commit, nil), dirty: c.lenient(.dirty, false), version: c.lenient(.version, nil),
+                  sites: c.lenient(.sites, []), focus: c.lenient(.focus, nil), focusPin: c.lenient(.focusPin, nil),
+                  focusReasons: c.lenient(.focusReasons, nil), requires: c.lenient(.requires, nil),
+                  neededBy: c.lenient(.neededBy, nil), upstream: c.lenient(.upstream, nil),
+                  behind: c.lenient(.behind, nil), behindDays: c.lenient(.behindDays, nil))
+    }
+}
+
 /// `benchbar app list --json`.
 nonisolated struct AppList: Codable, Sendable, Equatable {
     var schemaVersion: Int
@@ -335,6 +480,8 @@ nonisolated struct AppList: Codable, Sendable, Equatable {
     var sitesCheckedAt: String?
     var sitesError: String?
     var apps: [AppInfo]
+    /// Entries of `apps` that did not decode (not part of the JSON).
+    var skipped: [String] = []
 
     var sitesKnown: Bool { sitesCheckedAt != nil }
 
@@ -343,6 +490,17 @@ nonisolated struct AppList: Codable, Sendable, Equatable {
         case schemaVersion = "schema_version"
         case sitesCheckedAt = "sites_checked_at"
         case sitesError = "sites_error"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let list = try c.lossyList(AppInfo.self, forKey: .apps)
+        schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
+        bench = try c.decode(String.self, forKey: .bench)
+        sitesCheckedAt = c.lenient(.sitesCheckedAt, nil)
+        sitesError = c.lenient(.sitesError, nil)
+        apps = list.items
+        skipped = list.skipped
     }
 }
 
@@ -412,6 +570,22 @@ nonisolated struct ProfileInfo: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+nonisolated extension ProfileInfo {
+    /// `name` is the identity. A profile that does not say whether it is valid
+    /// is valid unless it carries an error.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let error: String? = c.lenient(.error, nil)
+        self.init(name: try c.decode(String.self, forKey: .name), kind: c.lenient(.kind, ""),
+                  source: c.lenient(.source, nil), file: c.lenient(.file, ""), base: c.lenient(.base, nil),
+                  label: c.lenient(.label, nil), frappeBranch: c.lenient(.frappeBranch, nil),
+                  valid: c.lenient(.valid, error == nil), error: error, sourceURL: c.lenient(.sourceURL, nil),
+                  subscription: c.lenient(.subscription, nil), shadowedBy: c.lenient(.shadowedBy, nil),
+                  schema: c.lenient(.schema, nil), python: c.lenient(.python, nil), node: c.lenient(.node, nil),
+                  mariadb: c.lenient(.mariadb, nil))
+    }
+}
+
 /// One app bundle `install --bundle` takes (`profile list --json`, 0.8).
 nonisolated struct AppBundle: Codable, Sendable, Equatable, Identifiable {
     var name: String
@@ -420,6 +594,17 @@ nonisolated struct AppBundle: Codable, Sendable, Equatable, Identifiable {
     var description: String?
 
     var id: String { name }
+
+    enum CodingKeys: String, CodingKey { case name, label, apps, description }
+}
+
+nonisolated extension AppBundle {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let name = try c.decode(String.self, forKey: .name)
+        self.init(name: name, label: c.lenient(.label, name), apps: c.lenient(.apps, []),
+                  description: c.lenient(.description, nil))
+    }
 }
 
 nonisolated struct ProfileList: Codable, Sendable, Equatable {
