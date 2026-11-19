@@ -619,3 +619,9 @@ Asked for after the phases, to stop naming drift before the first release.
 - `RunnerLibrary.reload` returns at once when the folder's files, sizes and modification times are as at the last load: Settings reloads on every appear, and new images made `isSame` false, which restarted the menu bar animation of a custom runner.
 - The back up spinner compares the bench's activity text with the exact strings `Workbench.backupActivity` builds, not a prefix.
 - A failed profile list in the wizard has Try Again (`WizardState.Event.retryProfiles`), one read at a time, and the Review problem text says to use it.
+
+## 0.9: restore and unfinished changes (parity part 1, #177)
+
+- Restore goes through the plan and its token like Add Site: `site restore ... --dry-run --json`, then the same arguments with `--apply TOKEN --yes`. Only the site's own backups are offered (a copy uses `--new --from-site`), and a plain complete set only: the CLI refuses encrypted and partial ones. Restoring into the site needs its name typed and is never the default button (the Drop Site rule); a copy is not destructive and is the default. The plan's `needs` (a MariaDB password the CLI does not have) or `errors` make it unrunnable and the sheet points to Terminal: the app never asks for or reads that password.
+- Unfinished changes read `status.pending_operations` and do nothing else of their own: Resume opens the Update sheet (the plan lists only the steps left, `AppUpdatePlan.pending`) or Add App with the app's name, and Drop the Record runs `app update NAME --discard-pending --yes` after an alert. An entry without an app name is not shown, so one odd entry never hides the rest or breaks the status.
+
