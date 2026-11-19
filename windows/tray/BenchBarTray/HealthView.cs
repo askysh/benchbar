@@ -45,6 +45,7 @@ internal sealed class HealthView : UserControl, IBenchPageView
     private HealthModel? _model;
     private bool _repairRequested;
     private bool _showPassing;
+    private bool _canAck;
 
     public HealthView(PageServices services, bool autoRun = true)
     {
@@ -85,7 +86,11 @@ internal sealed class HealthView : UserControl, IBenchPageView
             _model.Changed += OnModelChanged;
             _showPassing = false;
             Rebuild();
-            if (_autoRun) _model.RunAsync().Forget();
+            if (_autoRun)
+            {
+                _model.RunAsync().Forget();
+                LoadCommandsAsync().Forget();
+            }
         }
         else if (problemChanged)
         {
@@ -107,6 +112,16 @@ internal sealed class HealthView : UserControl, IBenchPageView
             return;
         }
         StartRepair();
+    }
+
+    /// <summary>Acknowledge buttons appear only when the CLI lists <c>doctor --ack</c>.</summary>
+    public async Task LoadCommandsAsync()
+    {
+        if (_canAck) return;
+        var catalogue = await _services.Commands.GetAsync().ConfigureAwait(true);
+        if (catalogue?.HasFlag("doctor", "--ack") != true) return;
+        _canAck = true;
+        OnModelChanged(); // may be off the UI thread
     }
 
     public Task RunDoctorAsync() => _model?.RunAsync() ?? Task.CompletedTask;
@@ -174,6 +189,7 @@ internal sealed class HealthView : UserControl, IBenchPageView
         }
         if (model.IsRunning && model.Report is not null) card.Children.Add(Ui.Text("Running doctor...", 12, opacity: 0.7, margin: new Thickness(0, 6, 0, 0)));
         if (model.Error is { Length: > 0 } error) card.Children.Add(Banner(error, nested: true));
+        if (model.AckError is { Length: > 0 } ackError) card.Children.Add(Banner(ackError, nested: true));
         _root.Children.Add(Ui.CardOf(card));
         _root.Children.Add(Ui.Text("Doctor is read only. Repair shows its plan, and runs only after you confirm, with a backup before each change.", 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 16)));
 
@@ -237,6 +253,18 @@ internal sealed class HealthView : UserControl, IBenchPageView
             Ui.Name(text, "Fix for " + check.Label);
             line.Children.Add(text);
             body.Children.Add(line);
+        }
+        if (_canAck && _model is { } ackModel && (check.CanAck || check.Acked))
+        {
+            // a person's click only: nothing acknowledges a warning by itself, and a failure has no button
+            var acked = check.Acked;
+            var ack = Ui.Button(acked ? "Undo Acknowledge" : "Acknowledge", () => ackModel.AckAsync(check, !acked).Forget(),
+                (acked ? "Undo acknowledging " : "Acknowledge ") + check.Label, minWidth: 0);
+            ack.Margin = new Thickness(0, 6, 0, 0);
+            ack.Padding = new Thickness(8, 2, 8, 2);
+            ack.HorizontalAlignment = HorizontalAlignment.Left;
+            ack.ToolTip = acked ? "Show this warning again" : "Silence this warning for this bench until its message changes";
+            body.Children.Add(ack);
         }
         grid.Children.Add(body);
         return grid;

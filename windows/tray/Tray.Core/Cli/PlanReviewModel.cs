@@ -123,6 +123,25 @@ public sealed class PlanReviewModel : IDisposable
         Result = null;
         Raise();
         var env = BuildEnv(null);
+        if (Request.PlanIsText)
+        {
+            var preview = await _cli.RunStreamAsync(Request.PlanArgs, env, Request.PlanTimeout, _ => { }, ct).ConfigureAwait(true);
+            if (_disposed) return;
+            if (preview.Ok)
+            {
+                Plan = PlanDocument.FromText(preview.TextLines);
+                Phase = PlanPhase.Review;
+            }
+            else
+            {
+                Phase = PlanPhase.PlanFailed;
+                // a command without JSON says why on stdout: its [FAIL] line is the reason
+                var fail = preview.TextLines.FirstOrDefault(l => l.Contains("[FAIL]", StringComparison.Ordinal));
+                Message = fail is not null ? fail[(fail.IndexOf("[FAIL]", StringComparison.Ordinal) + 6)..].Trim() : preview.Problem ?? "The preview could not be made.";
+            }
+            Raise();
+            return;
+        }
         var result = await _cli.RunJsonAsync(Request.PlanArgs, env, Request.PlanTimeout, PlanDocument.FromJson, ct).ConfigureAwait(true);
         if (_disposed) return;
         if (result.Value is { } plan)

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "cli_version": "0.8.3",
+  "bench": "/home/akash/frappe-bench",
+  "action": "ack",
+  "check": "mariadb_utf8",
+  "acked": [
+    "mariadb_utf8"
+  ],
+  "exit": 0,
+  "changed": [
+    {
+      "kind": "state",
+      "name": "ack:mariadb_utf8",
+      "detail": "acknowledged: the MariaDB default character set is not utf8mb4"
+    }
+  ],
+  "warnings": [],
+  "next_actions": []
+}
