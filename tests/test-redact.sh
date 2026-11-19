@@ -101,6 +101,38 @@ LOG
 out="$(fl_redact_stream <"$IN")"
 assert_eq "$(cat "$IN")" "$out" "(nothing in these lines is a secret)"
 
+# ---- curl credentials, cookies and token or key headers
+cat >"$IN" <<'LOG'
+curl -u admin:Hunter11 http://x/api/method/ping
+curl -s --user "bob:Hunter 12" http://x
+curl --user=carol:Hunter13 http://x
+curl -b "sid=Hunter14; a=b" http://x
+curl --cookie 'sid=Hunter15' http://x
+curl -H "X-Frappe-CSRF-Token: Hunter16" -H 'X-Api-Key: Hunter17' http://x
+X-Frappe-CSRF-Token: Hunter18
+X-Custom-Key: Hunter19
+LOG
+out="$(fl_redact_stream <"$IN")"
+assert_eq "$(wc -l <"$IN" | tr -d ' ')" "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" "(the line count is unchanged)"
+for secret in Hunter11 'Hunter 12' Hunter13 Hunter14 Hunter15 Hunter16 Hunter17 Hunter18 Hunter19; do
+  assert_not_contains "$out" "$secret" "(fl_redact_stream must mask it)"
+done
+assert_contains "$out" "curl -u *** http://x/api/method/ping"
+assert_contains "$out" "curl -s --user *** http://x"
+assert_contains "$out" "curl -b *** http://x"
+assert_contains "$out" 'curl -H "X-Frappe-CSRF-Token: ***" -H '"'"'X-Api-Key: ***'"'"' http://x'
+assert_contains "$out" "X-Frappe-CSRF-Token: ***"
+# what only looks like them stays
+cat >"$IN" <<'LOG'
+systemctl --user restart benchbar-frappe-bench.service
+journalctl --user -u benchbar-frappe-bench -n 50
+curl -s -o /dev/null -w "%{http_code}" -H "Accept: application/json" http://x
+curl --cookie-jar jar.txt --user-agent benchbar http://x
+tar -b 20 -u -f x.tar dir
+LOG
+out="$(fl_redact_stream <"$IN")"
+assert_eq "$(cat "$IN")" "$out" "(nothing in these lines is a secret)"
+
 # ---- fl_redact_url: only the user:token part of a URL, no process without an @
 assert_eq "clone https://***@github.com/x/y.git now" "$(fl_redact_url "clone https://user:tok3n@github.com/x/y.git now")"
 assert_eq "redis://***@127.0.0.1:13000" "$(fl_redact_url "redis://:pw@127.0.0.1:13000")"

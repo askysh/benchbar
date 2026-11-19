@@ -87,7 +87,8 @@ add only repos you trust, and read the plan:
 1. `benchbar_app_add_plan` with `url_or_name` (and `branch`, `name`,
    `site` or `all_sites`) reads the repo and its `hooks.py` and returns
    the plan: repo, branch, the required apps and where each comes from,
-   the sites, the steps, and a `token`. Nothing changes.
+   the sites, the steps, and a `token`. Nothing changes in the bench; the
+   first plan also creates the plan key described below, once.
 2. The agent shows you that plan and waits for your OK. benchbar cannot
    tell whether you saw it: the token proves only that the bench has not
    changed since the plan, and the tool says so, so ask your agent to

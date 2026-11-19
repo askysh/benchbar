@@ -246,7 +246,9 @@ fl_runner_path_legacy() { printf '%s/frappe-mac-run.sh' "$FL_BENCH_DIR"; }
 #   SERVICE_MEMORY_HIGH=4G      systemd MemoryHigh: reclaim pressure above it, no kill
 # A value that is not valid is ignored (the default stays).
 FL_SERVICE_NOFILE_MAC=10240
-FL_SERVICE_NOFILE_LINUX=65536
+# soft:hard. systemd gives a user unit a hard limit of 524288; naming only the
+# soft limit would set the hard one to the same number and lower it
+FL_SERVICE_NOFILE_LINUX=65536:524288
 # fl_service_limits: sets FL_SVC_NICE, FL_SVC_PROCESS_TYPE, FL_SVC_MEMORY_HIGH
 # and FL_SVC_NOFILE for the bench in context
 fl_service_limits() {
@@ -258,7 +260,8 @@ fl_service_limits() {
   v="$(fl_bstate_get SERVICE_BACKGROUND 2>/dev/null || true)"
   if [[ "$v" == "on" ]]; then FL_SVC_PROCESS_TYPE=Background; elif [[ -n "$v" && "$v" != "off" ]]; then fl_log "SERVICE_BACKGROUND=${v} is not on or off; ignored"; fi
   v="$(fl_bstate_get SERVICE_MEMORY_HIGH 2>/dev/null || true)"
-  if [[ "$v" =~ ^([0-9]+[KMGT]?|[0-9]{1,2}%|infinity)$ ]]; then FL_SVC_MEMORY_HIGH="$v"; elif [[ -n "$v" ]]; then fl_log "SERVICE_MEMORY_HIGH=${v} is not a size; ignored"; fi
+  if [[ "$v" =~ ^0+[KMGT]?%?$ ]]; then fl_log "SERVICE_MEMORY_HIGH=${v} is zero: a limit of nothing would starve the bench; ignored (use infinity for no limit)"
+  elif [[ "$v" =~ ^([0-9]+[KMGT]?|[0-9]{1,2}%|infinity)$ ]]; then FL_SVC_MEMORY_HIGH="$v"; elif [[ -n "$v" ]]; then fl_log "SERVICE_MEMORY_HIGH=${v} is not a size; ignored"; fi
 }
 
 # True while an installed agent plist of this bench still runs the old runner.

@@ -18,6 +18,30 @@ rm -f "$KEY"
 assert_no_file "$KEY"
 fl_plan_token_v T1 "$DATA"
 assert_file "$KEY"
+
+# an existing key file that is empty is replaced, not ignored
+: >"$KEY"
+chmod 600 "$KEY"
+fl_plan_token_v KT2 "$DATA"
+[[ -s "$KEY" ]] || fail "an empty plan-key was left empty"
+assert_eq "600" "$(stat -c '%a' "$KEY" 2>/dev/null || stat -f '%Lp' "$KEY")" "replaced key mode"
+KEY_NOW="$(cat "$KEY")"
+fl_plan_token_v KT3 "$DATA"
+assert_eq "$KT2" "$KT3" "the new key is kept: same plan, same token"
+[[ "$KT2" != "$T1" ]] || fail "the new key made the old key's token"
+# a key that group or others can read is replaced too
+printf '%s\n' 0123456789abcdef0123456789abcdef >"$KEY"
+chmod 644 "$KEY"
+fl_plan_token_v KT4 "$DATA"
+assert_eq "600" "$(stat -c '%a' "$KEY" 2>/dev/null || stat -f '%Lp' "$KEY")" "loose key mode after replace"
+[[ "$(cat "$KEY")" != "0123456789abcdef0123456789abcdef" ]] || fail "a loose plan-key was kept"
+[[ "$(cat "$KEY")" != "$KEY_NOW" ]] || fail "key not replaced"
+# a good key is left alone
+KEY_NOW="$(cat "$KEY")"
+fl_plan_token_v KT5 "$DATA"
+assert_eq "$KEY_NOW" "$(cat "$KEY")" "a good key is kept"
+# the rest of this test goes on with the key as it is now
+fl_plan_token_v T1 "$DATA"
 # shellcheck disable=SC2012  # one known file
 assert_eq "-rw-------" "$(ls -ld "$KEY" | cut -c1-10)" "(the key is readable by the owner only)"
 [[ "$T1" =~ ^[0-9a-f]{64}$ ]] || fail "a token is 64 hex characters, got [$T1]"

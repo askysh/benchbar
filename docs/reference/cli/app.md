@@ -83,7 +83,8 @@ benchbar app add NAME|URL [same flags] --dry-run --json
 benchbar app add NAME|URL [same flags] --apply TOKEN --yes [--json]
 ```
 
-`--dry-run --json` prints the plan and changes nothing: the resolved app,
+`--dry-run --json` prints the plan and changes nothing in the bench (the
+first plan creates the plan key for tokens, once): the resolved app,
 repo and branch, whether git can read the repo (without a prompt, with a
 timeout), the sites, the required apps from `hooks.py` (read from a
 shallow clone in a temp folder, then removed; at the pinned commit with

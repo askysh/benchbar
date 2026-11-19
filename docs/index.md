@@ -106,7 +106,9 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 ## Safety
 
 - Every command is check, plan, apply, verify. `--dry-run` prints the
-  full plan and changes nothing. A second run says `unchanged`.
+  full plan and changes nothing, with one exception: the first plan that
+  makes an approval token also creates the plan key (a small file only you
+  can read, in benchbar's state folder). A second run says `unchanged`.
 - Generated files carry a version and content hash header. They are
   rewritten only when their template or inputs changed, and the previous
   copy goes to `backups/<date>-<time>-<pid>/` in benchbar's state folder first

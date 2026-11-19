@@ -512,6 +512,16 @@ func TestRedactionHidesJSONStyleSecrets(t *testing.T) {
 		{`mysql -u root -phunter2 -h 127.0.0.1`, `mysql -u root -p<redacted> -h 127.0.0.1`},
 		{`mysql -u root -p'hunter two' sitedb`, `mysql -u root -p<redacted> sitedb`},
 		{`mariadb-dump -phunter2b --single-transaction db`, `mariadb-dump -p<redacted> --single-transaction db`},
+		// curl credentials and cookies, and token or key headers
+		{`curl -u admin:hunter11 http://x`, `curl -u <redacted> http://x`},
+		{`curl -s --user "bob:hunter 12" http://x`, `curl -s --user <redacted> http://x`},
+		{`curl --user=carol:hunter13 http://x`, `curl --user=<redacted> http://x`},
+		{`curl -b "sid=hunter14; a=b" http://x`, `curl -b <redacted> http://x`},
+		{`curl --cookie 'sid=hunter15' http://x`, `curl --cookie <redacted> http://x`},
+		{`curl -H "X-Frappe-CSRF-Token: hunter16" -H 'X-Api-Key: hunter17' http://x`, `curl -H "X-Frappe-CSRF-Token: <redacted> -H 'X-Api-Key: <redacted> http://x`}, // a bare value runs to the next space, closing quote included: over masking is the safe side
+		{`X-Custom-Key: hunter19`, `X-Custom-Key: <redacted>`},
+		{`systemctl --user restart benchbar`, `systemctl --user restart benchbar`},
+		{`curl --cookie-jar jar.txt --user-agent benchbar http://x`, `curl --cookie-jar jar.txt --user-agent benchbar http://x`},
 		// words that only look similar stay
 		{`tests passed=12 bypass=1 compass: north`, `tests passed=12 bypass=1 compass: north`},
 		{`bench serve -p 8000 --keep-going`, `bench serve -p 8000 --keep-going`},

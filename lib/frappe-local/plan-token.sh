@@ -28,21 +28,44 @@ FL_PLAN_RECOGNISE_WINDOWS="${FL_PLAN_RECOGNISE_WINDOWS:-36}"
 # FL_PLAN_NOW: the tests' clock
 fl_plan_now() { printf '%s' "${FL_PLAN_NOW:-$(date +%s)}"; }
 
-# fl_plan_key_v VAR: the install's secret, made when it is not there yet
+# fl__plan_key_usable FILE: a regular file with a key in it that only its
+# owner can read or write. An empty file, or one that group or others can
+# read, is not a key to trust.
+fl__plan_key_usable() {
+  local mode
+  [[ -f "$1" && ! -L "$1" && -s "$1" ]] || return 1
+  mode="$(stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null || true)"
+  [[ "$mode" =~ ^[0-7]*[0-7]00$ ]]
+}
+
+# fl_plan_key_v VAR: the install's secret, made when it is not there yet. A
+# key file that is empty or readable by others is replaced with a new key
+# (tokens made with the old one are then refused as a changed plan).
 fl_plan_key_v() {
-  local __file="${FL_STATE_DIR}/plan-key" __k="" __tmp
-  if [[ -s "$__file" ]]; then
+  local __file="${FL_STATE_DIR}/plan-key" __k="" __tmp __replace=0
+  if fl__plan_key_usable "$__file"; then
     __k="$(cat "$__file" 2>/dev/null || true)"
   else
+    [[ -e "$__file" || -L "$__file" ]] && __replace=1
     __k="$(head -c 32 /dev/urandom 2>/dev/null | od -An -tx1 | tr -d ' \n')"
     if [[ ${#__k} -ge 32 ]] && mkdir -p "$FL_STATE_DIR" 2>/dev/null; then
       __tmp="${__file}.$$"
-      # a second run that made one first wins: link fails when the file exists
       if (umask 077; printf '%s\n' "$__k" >"$__tmp") 2>/dev/null; then
         chmod 600 "$__tmp" 2>/dev/null || true
-        ln "$__tmp" "$__file" 2>/dev/null || true
-        rm -f "$__tmp"
-        __k="$(cat "$__file" 2>/dev/null || true)"
+        if [[ "$__replace" -eq 1 ]]; then
+          # the old file was empty or readable by others: it is replaced
+          if mv -f "$__tmp" "$__file" 2>/dev/null; then
+            fl_log "plan token: ${__file} was empty or readable by others; made a new key"
+          else
+            fl_log "plan token: could not replace ${__file}"
+          fi
+        else
+          # a second run that made one first wins: link fails when the file exists
+          ln "$__tmp" "$__file" 2>/dev/null || true
+        fi
+        [[ -e "$__tmp" ]] && rm -f "$__tmp"
+        __k=""
+        fl__plan_key_usable "$__file" && __k="$(cat "$__file" 2>/dev/null || true)"
       else
         __k=""
       fi

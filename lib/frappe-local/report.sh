@@ -240,7 +240,12 @@ fl_report_sed_escape() { printf '%s' "$1" | sed -e 's/[][\.*^$#]/\\&/g'; }
 #           between separators (smtp_pass), never inside passed or bypass.
 #           Also here: a Cookie or Set-Cookie header to the end of its line,
 #           --password VALUE (a space instead of =), and -pVALUE (or
-#           -p'a b') on a line that runs a mysql or mariadb program.
+#           -p'a b') on a line that runs a mysql or mariadb program;
+#           --cookie VALUE, --user VALUE (on a curl line, or when the value
+#           holds a colon: systemctl --user restart is not touched), and -u
+#           or -b VALUE on a curl line; and a header whose name ends in
+#           -Token or -Key (X-Frappe-CSRF-Token: value), also inside
+#           quotes (curl -H "X-Api-Key: value").
 #   urls    the user:password or :password in front of a URL's host
 #   jwt     three base64url parts starting with eyJ
 #   tokens  GitHub (ghp_ gho_ ghu_ ghs_ ghr_ github_pat_), Slack (xox?-),
@@ -249,13 +254,19 @@ fl_report_sed_escape() { printf '%s' "$1" | sed -e 's/[][\.*^$#]/\\&/g'; }
 #   email   addresses with a dotted domain become <email>; user@host: (an SSH
 #           clone URL), user@host (no dot) and user@host.local are kept
 fl_redact_exprs() {
-  local sq="'" dq='"' pyval
+  local sq="'" dq='"' pyval argval
   # a Python repr value: 'quoted', "quoted" (escapes allowed inside) or a number
   pyval="(${sq}([^${sq}\\\\]|\\\\.)*${sq}|${dq}([^${dq}\\\\]|\\\\.)*${dq}|[0-9][0-9.]*)"
+  # a command line argument: "quoted", 'quoted' or one word (no leading dash)
+  argval="(${dq}([^${dq}\\\\]|\\\\.)*${dq}|${sq}([^${sq}\\\\]|\\\\.)*${sq}|[^[:space:]${sq}${dq}-][^[:space:]]*)"
   case "$1" in
     keys)
       printf '%s\n' \
         's/(^|[^A-Za-z0-9_-])([Ss]et-)?([Cc]ookie[[:space:]]*:[[:space:]]*).*$/\1\2\3***/' \
+        "s/(^|[[:space:]])(--cookie)([[:space:]]+|=)${argval}/\\1\\2\\3***/g" \
+        "/[Cc][Uu][Rr][Ll]/ s/(^|[[:space:]])(-[ub]|--user)([[:space:]]+|=)${argval}/\\1\\2\\3***/g" \
+        "s/(^|[[:space:]])(--user[[:space:]]+)[^[:space:]${sq}${dq}-][^[:space:]]*:[^[:space:]]*/\\1\\2***/g" \
+        's/(^|[^A-Za-z0-9_-])(([A-Za-z0-9]+-)+([Tt][Oo][Kk][Ee][Nn]|[Kk][Ee][Yy])[[:space:]]*:[[:space:]]*)[^"'"'"']*/\1\2***/g' \
         's/(^|[[:space:]])(--([A-Za-z0-9-]*(password|passwd|passphrase|secret|token|credential|api-key|apikey)[A-Za-z0-9-]*|pass|pwd))[[:space:]]+("([^"\\]|\\.)*"|'"'"'([^'"'"'\\]|\\.)*'"'"'|[^[:space:]'"'"'"-][^[:space:]]*)/\1\2 ***/g' \
         '/([Mm][Yy][Ss][Qq][Ll]|[Mm][Aa][Rr][Ii][Aa][Dd][Bb])/ s/(^|[[:space:]])-p("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:]'"'"'"-][^[:space:]]*)/\1-p***/g' \
         's/("('"$FL_REPORT_KEY_RE"')"[[:space:]]*:[[:space:]]*)"([^"\\]|\\.)*"/\1"***"/g' \
