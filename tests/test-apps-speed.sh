@@ -221,13 +221,13 @@ remember fl_profile_reach_remember "https://octo:s3cr3tt0ken@github.com/acme/tok
 assert_not_contains "$(cat "$RC_FILE")" "s3cr3tt0ken" "(the cache keeps a token)"
 assert_not_contains "$(cat "$RC_FILE")" "octo" "(the cache keeps a user name)"
 assert_contains "$(cat "$RC_FILE")" "https://github.com/acme/tokapp.git"
-assert_eq "600" "$(stat -f '%Lp' "$RC_FILE" 2>/dev/null || stat -c '%a' "$RC_FILE")" "(the cache is readable by its owner only, an old 0644 file is closed)"
+assert_eq "600" "$(stat -c '%a' "$RC_FILE" 2>/dev/null || stat -f '%Lp' "$RC_FILE")" "(the cache is readable by its owner only, an old 0644 file is closed)"
 # the same repo with another token is the same answer
 remember fl_profile_reach_cached "https://other:0therT0ken@github.com/acme/tokapp.git" main || fail "a kept yes was not found by the URL without its userinfo"
 remember fl_profile_reach_cached "https://github.com/acme/tokapp.git" other && fail "another branch is not the same answer"
 # a new cache file is created 0600
 unlink "$RC_FILE"
 remember fl_profile_reach_remember "https://github.com/acme/tokapp.git" main
-assert_eq "600" "$(stat -f '%Lp' "$RC_FILE" 2>/dev/null || stat -c '%a' "$RC_FILE")" "(a new cache is created 0600)"
+assert_eq "600" "$(stat -c '%a' "$RC_FILE" 2>/dev/null || stat -f '%Lp' "$RC_FILE")" "(a new cache is created 0600)"
 
 echo "test-apps-speed: ok"
