@@ -39,7 +39,7 @@ make_set() {
   mkdir -p "$BENCH/sites/$1/private/backups"
   if [[ "${3:-}" != nodb ]]; then gzip -c "$SQL" >"${base}-database.sql.gz"; fi
   printf '{"db_name":"_old","db_password":"olddbpw","encryption_key":"setkey-Zm9vYmFy"}\n' >"${base}-site_config_backup.json"
-  if [[ "${3:-}" == files ]]; then printf 'public\n' >"${base}-files.tar"; printf 'private\n' >"${base}-private-files.tar"; fi
+  if [[ "${3:-}" == files ]]; then mktar "${base}-files.tar"; mktar "${base}-private-files.tar"; fi
 }
 # what "bench backup" writes for the site: a dump a restore can read
 gzip -c "$SQL" >"$TMP_DIR/dump.sql.gz"; export MOCK_BENCH_BACKUP_DB="$TMP_DIR/dump.sql.gz"
