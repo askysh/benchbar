@@ -187,6 +187,17 @@ benchbar doctor --for-agent  # one JSON document
   refuse when stdin is not a terminal. That stops the documented agent modes
   and a missing terminal, not a process of the same user that fakes a
   terminal: they are guards against mistakes.
+- The same is true of the other person only commands (`site open-as on`,
+  `lan-guard`, `share`): a safety rail, not a boundary. The Mac app lifts the
+  missing terminal with `BENCHBAR_SUDO=gui` or `BENCHBAR_NONINTERACTIVE=0`
+  together with `BENCHBAR_APP_PID`, and on a Mac the CLI honors that only when
+  the pid is a running ancestor of the CLI whose name (the path `ps` prints)
+  is inside a `BenchBar.app`. That is a name check on the parent chain: it
+  stops an agent that only sets the variables in its own shell, not one that
+  deliberately fakes a parent named like the app. On Linux and WSL there is
+  no check (the Windows tray's process is not visible from inside WSL). Do
+  not set those variables to get past a refusal; give the person the command.
+  `labs on` follows the same rule.
 - `benchbar doctor --quick` skips the slow checks and names them.
   `doctor --ack CHECK` silences one warning until its message changes;
   `--unack CHECK` undoes it. A failure cannot be acknowledged, and

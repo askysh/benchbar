@@ -79,9 +79,9 @@ fl_context_init() {
     # no Homebrew on Linux: the toolchain paths come from uv, fnm and apt
     FL_BREW_PREFIX=""
   elif command -v brew >/dev/null 2>&1; then
-    FL_BREW_PREFIX="$(brew --prefix 2>/dev/null || printf '/opt/homebrew')"
+    FL_BREW_PREFIX="$(brew --prefix 2>/dev/null || fl_brew_default_prefix)"
   else
-    FL_BREW_PREFIX="${FL_BREW_PREFIX:-/opt/homebrew}"
+    FL_BREW_PREFIX="${FL_BREW_PREFIX:-$(fl_brew_default_prefix)}"
   fi
   FL_ARCH="$(uname -m)"
   fl_honcho_resolve || true
@@ -1008,6 +1008,44 @@ fl_uninstall_helper_block() {
   [[ "${FL_DRY_RUN:-0}" == "1" ]] || fl_ok "removed the helper block from ${1}"
 }
 
+# The benchbar block in /etc/hosts (a line per site) outlives the service:
+# no command of benchbar removes it on its own, and it needs sudo. Offered
+# once after uninstall-service --all, to a person at a terminal only; --yes,
+# a mode that cannot ask and a dry run print the command instead, so a
+# script never edits /etc/hosts. The sites stop resolving until
+# benchbar repair writes the lines again. No hosts edit on Linux.
+fl_uninstall_hosts_offer() {
+  local n manual
+  fl_is_linux && return 0
+  [[ "$(fl_rc_markers_state "$FL_HOSTS_FILE" "$FL_HOSTS_START" "$FL_HOSTS_END")" == "present" ]] || return 0
+  n="$(awk -v s="$FL_HOSTS_START" -v e="$FL_HOSTS_END" '$0 == s { inside = 1 } inside { c++ } $0 == e { inside = 0 } END { print c + 0 }' "$FL_HOSTS_FILE")"
+  manual="sudo sed -i '' '/^${FL_HOSTS_START}\$/,/^${FL_HOSTS_END}\$/d' ${FL_HOSTS_FILE}"
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: would offer to remove the benchbar block (${n} lines) from ${FL_HOSTS_FILE} (sudo, backup first)"
+    return 0
+  fi
+  if [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_noninteractive || [[ ! -t 0 ]] || fl_sudo_gui; then
+    fl_note "the benchbar block in ${FL_HOSTS_FILE} stays; to remove it: ${manual}"
+    return 0
+  fi
+  fl_info "${FL_HOSTS_FILE} still has benchbar's block (${n} lines). Without it the sites of your benches no longer resolve; benchbar repair writes it again."
+  if ! fl_confirm "Remove the benchbar block from ${FL_HOSTS_FILE} with sudo?"; then
+    fl_note "kept; to remove it later: ${manual}"
+    return 0
+  fi
+  if ! fl_sudo_begin "remove the benchbar block from ${FL_HOSTS_FILE}"; then
+    fl_warn "skipped without sudo; to remove it: ${manual}"
+    return 0
+  fi
+  fl_backup_file "$FL_HOSTS_FILE" || return 1
+  # shellcheck disable=SC2016  # an awk program
+  fl_hosts_rewrite "$((-n))" '
+    $0 == ENVIRON["S"] { inside = 1 }
+    inside { if ($0 == ENVIRON["E"]) inside = 0; next }
+    { print }' "S=${FL_HOSTS_START}" "E=${FL_HOSTS_END}" || { fl_note "to remove it: ${manual}"; return 1; }
+  fl_ok "removed the benchbar block from ${FL_HOSTS_FILE} (backup: ${FL_LAST_BACKUP:-none})"
+}
+
 # benchbar uninstall-service --all: the same for every bench that has a
 # com.benchbar agent in ~/Library/LaunchAgents (a folder that is no bench
 # any more loses only its agent), one after the other, after one question.
@@ -1026,11 +1064,15 @@ fl_cmd_uninstall_service_all() {
   if [[ "${#dirs[@]}" == "0" ]]; then
     case "$(fl_rc_block_state "$rc")" in
       present|legacy) ;;
-      *) fl_ok "nothing to uninstall: no benchbar agent in ~/Library/LaunchAgents and no helper block in ${rc}"; return 0 ;;
+      *)
+        fl_ok "nothing to uninstall: no benchbar agent in ~/Library/LaunchAgents and no helper block in ${rc}"
+        fl_uninstall_hosts_offer || true
+        return 0 ;;
     esac
     fl_info "No benchbar agent is installed; the shell helper block in ${rc} is still there."
     fl_confirm "Remove the helper block from ${rc}?" || { fl_warn "Cancelled."; return 1; }
     fl_uninstall_helper_block "$rc"
+    fl_uninstall_hosts_offer || true
     return 0
   fi
   fl_info "This removes the background service of ${#dirs[@]} bench(es), one after the other:"
@@ -1055,6 +1097,7 @@ fl_cmd_uninstall_service_all() {
   # a folder that is no bench any more loses only its agent, so with no
   # bench left the block would stay and run a CLI that is about to go
   fl_uninstall_helper_block "$rc" || code=1
+  fl_uninstall_hosts_offer || code=1
   printf '\n'
   if [[ "$code" == "0" ]]; then
     fl_ok "the background service of ${n} bench(es) is uninstalled"
