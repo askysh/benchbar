@@ -32,6 +32,8 @@ final class Workbench {
         var error: String?
         /// Where the banner shows: a bench's path, or `Workbench.profilesScope`.
         var scope: String = ""
+        /// What a change that worked has to say (what a pull neutralised); the banner shows it under the title.
+        var note: String?
         var succeeded: Bool { error == nil }
     }
 
@@ -275,7 +277,7 @@ final class Workbench {
         return .failure(ChangeError(message: result?.error ?? "The site was not dropped."))
     }
 
-    // MARK: restore and unfinished changes
+    // MARK: restore and pull
 
     /// The reviewed plan of a restore, read only. Nothing is backed up or restored
     /// and no change slot is taken; the person looks at it before `restoreSite`.
@@ -298,6 +300,39 @@ final class Workbench {
             try await client.restoreSite(request, token: token, bench: bench.path)
         }
         await loadBackups(bench)
+        return error
+    }
+
+    /// The plan of a pull (`pull --dry-run --json`), read only: the server and the bench are
+    /// checked, nothing is downloaded or written.
+    func pullPlan(_ request: PullRequest, on bench: BenchModel) async -> Result<PullPlan, ChangeError> {
+        guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
+        do {
+            return .success(try await client.pullPlan(request, bench: bench.path))
+        } catch {
+            return .failure(ChangeError(message: error.localizedDescription))
+        }
+    }
+
+    /// Copies the site by the token of the plan the person saw. Returns the CLI's message when it
+    /// failed (a plan that changed since it was shown among them).
+    @discardableResult
+    func pull(_ request: PullRequest, reviewed: PullPlan? = nil, on bench: BenchModel) async -> String? {
+        var ran: PullRun?
+        let title = "Pull \(request.name)"
+        let token = reviewed?.token
+        let error = await change(title, on: bench) { client throws(CLIError) in
+            ran = try await client.pull(request, token: token, bench: bench.path)
+        }
+        if let ran, error == nil {
+            let neutralised = ran.done.neutralised?.summary ?? ""
+            // a CLI with a token has already refused a changed plan; only an older one is told after the run
+            let changed = token != nil ? [] : (reviewed.flatMap { reviewed in ran.plan.map { $0.differences(from: reviewed) } } ?? [])
+            result?.note = [neutralised.isEmpty ? nil : "Neutralised: \(neutralised).",
+                            "Log in as Administrator. Its password is production's unless you set one in Terminal. If \(request.name) does not open, Sites has Add Hosts Lines.",
+                            changed.isEmpty ? nil : "The run differed from the plan you reviewed: \(changed.joined(separator: "; ")).",
+                            ran.done.warnings.isEmpty ? nil : ran.done.warnings.joined(separator: " ")].compactMap { $0 }.joined(separator: " ")
+        }
         return error
     }
 
