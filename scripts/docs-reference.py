@@ -211,7 +211,7 @@ def main(argv):
         known = set(t["name"] for t in tools)
         for rel in ("docs/guides/agents.md", "docs/reference/cli/mcp.md", "docs/features.md", "AGENTS.md"):
             with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:
-                for name in sorted(set(re.findall(r"benchbar_[a-z][a-z_]*", fh.read()))):
+                for name in sorted(set(re.findall(r"benchbar_[a-z][a-z_]*", fh.read()))):
                     if name not in known:
                         problems.append("%s names %s, which is not an MCP tool of the server" % (rel, name))
         for p in problems:

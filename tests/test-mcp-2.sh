@@ -540,7 +540,9 @@ for tool, args in (
 ):
     r = c.call(tool, args)
     assert "error" in r and r["error"]["code"] == -32602, (tool, args, r)
-for args in ({"paths": []}, {"paths": "/b"}, {"paths": [1]}):
+r = c.call("benchbar_ports_plan", {"paths": []})
+assert r["error"]["code"] == -32602 and "paths" in r["error"]["message"], r
+for args in ({"paths": "/b"}, {"paths": [1]}):
     r = c.call("benchbar_ports_plan", args)
     assert r["result"]["isError"] and "paths" in text(r), (args, r)
 assert open(log).read() == before, "a refused call ran the CLI"
