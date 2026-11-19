@@ -111,7 +111,7 @@ render_runner() { # DNS_SD CAFFEINATE LSOF
 render_runner /usr/bin/avahi-publish "" /usr/bin/ss >"$TMP_DIR/runner.sh"
 bash -n "$TMP_DIR/runner.sh" || fail "the runner does not parse"
 runner="$(cat "$TMP_DIR/runner.sh")"
-assert_contains "$runner" "benchbar-template: share-run.sh v7 "
+assert_contains "$runner" "benchbar-template: share-run.sh v8 "
 assert_not_contains "$runner" "__" "(every value is filled in)"
 assert_contains "$runner" 'DNS_SD="/usr/bin/avahi-publish"'; assert_contains "$runner" 'CAFFEINATE=""'; assert_contains "$runner" 'LSOF="/usr/bin/ss"'
 # no gateway.json: the runner ends with 78 before it starts anything
@@ -161,5 +161,74 @@ SP_NODE_REAL="/n/node"
 fl_sp_firewall
 assert_eq "firewall_node skip" "${SP_ID[0]} ${SP_STATUS[0]}"
 assert_contains "${SP_MSG[0]}" "sudo ufw allow 8443/tcp"
+
+# ---------------------------------------------------------------- WSL: a room needs mirrored networking
+# the mode, read as wslinfo prints it; no wslinfo (a WSL with no mirrored mode) is NAT; outside WSL there is none
+fl_sp_wsl_net_v m; assert_eq mirrored "$m" "(the mock's default)"
+MOCK_WSL_NETMODE=nat fl_sp_wsl_net_v m; assert_eq nat "$m"
+MOCK_WSL_NETMODE=Mirrored fl_sp_wsl_net_v m; assert_eq mirrored "$m" "(case does not matter)"
+MOCK_WSL_NETMODE=bridged fl_sp_wsl_net_v m; assert_eq mirrored "$m" "(the VM has an address on the Wi-Fi)"
+MOCK_WSL_NETMODE=virtioproxy fl_sp_wsl_net_v m; assert_eq nat "$m"
+MOCK_WSL_NETMODE=none fl_sp_wsl_net_v m; assert_eq nat "$m"
+FL_WSLINFO="$TMP_DIR/no-wslinfo" fl_sp_wsl_net_v m; assert_eq nat "$m" "(wslinfo is absent)"
+FL_WSLINFO="" fl_sp_wsl_net_v m; assert_eq nat "$m" "(wslinfo is set and empty)"
+WSL_PROC_VERSION="$(cat "$FL_PROC_VERSION")"
+printf 'Linux version 6.8.0-generic (buildd@lcy02) #1 SMP\n' >"$FL_PROC_VERSION"
+MOCK_WSL_NETMODE=nat fl_sp_wsl_net_v m; assert_eq "" "$m" "(not WSL: no mode, and nothing is asked)"
+code=0; out="$( (export MOCK_WSL_NETMODE=nat; fl_share_wsl_gate warn) 2>&1 )" || code=$?
+assert_eq 0 "$code" "$out"; assert_eq "" "$out" "(a real Linux PC is never stopped or warned)"
+printf '%s\n' "$WSL_PROC_VERSION" >"$FL_PROC_VERSION"
+
+fl_sp_wsl_rule_v rule
+assert_eq "New-NetFirewallHyperVRule -Name BenchBarRoom -DisplayName \"BenchBar room\" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8443" "$rule"
+
+# the gate: NAT stops with what NAT means and how to switch; mirrored warns with the rule; invite (no "warn") is quiet on mirrored
+code=0; out="$( (export MOCK_WSL_NETMODE=nat; fl_share_wsl_gate warn) 2>&1 )" || code=$?
+assert_eq 1 "$code" "$out"
+assert_contains "$out" "NAT networking"; assert_contains "$out" "not available on WSL NAT"
+assert_contains "$out" "networkingMode=mirrored"; assert_contains "$out" ".wslconfig"; assert_contains "$out" "wsl.exe --shutdown"
+code=0; out="$( (export MOCK_WSL_NETMODE=nat; fl_share_wsl_gate) 2>&1 )" || code=$?
+assert_eq 1 "$code" "(invite stops on NAT too) $out"
+code=0; out="$( (export MOCK_WSL_NETMODE=mirrored; fl_share_wsl_gate warn) 2>&1 )" || code=$?
+assert_eq 0 "$code" "$out"
+assert_contains "$out" "New-NetFirewallHyperVRule"; assert_contains "$out" "-LocalPorts 8443"; assert_contains "$out" "administrator"
+code=0; out="$( (export MOCK_WSL_NETMODE=mirrored; fl_share_wsl_gate) 2>&1 )" || code=$?
+assert_eq 0 "$code" "$out"; assert_eq "" "$out" "(invite does not repeat the warning)"
+
+# share preflight: a failing check on NAT, a warning with the rule on mirrored, none outside WSL
+wsl_check() { printf '%s\n' "$OUT" | grep '^{' | jget - "[c[\"$1\"] for c in d[\"checks\"] if c[\"id\"] == \"wsl_networking\"][0]"; }
+MOCK_WSL_NETMODE=nat run_fm share preflight --static --json --bench-dir "$BENCH"
+assert_eq 1 "$CODE" "$OUT"
+assert_eq fail "$(wsl_check status)"; assert_eq static "$(wsl_check class)"
+assert_contains "$(wsl_check message)" "not available on WSL NAT"; assert_contains "$(wsl_check fix)" "networkingMode=mirrored"
+MOCK_WSL_NETMODE=mirrored run_fm share preflight --static --json --bench-dir "$BENCH"
+assert_eq warn "$(wsl_check status)"; assert_contains "$(wsl_check fix)" "New-NetFirewallHyperVRule"
+assert_contains "$(wsl_check rule)" "-LocalPorts 8443"
+assert_contains "$(wsl_check message)" "mirrored networking"
+MOCK_WSL_NETMODE=nat run_fm share preflight --static --bench-dir "$BENCH"
+assert_contains "$OUT" "wsl_networking: WSL uses NAT networking"
+assert_contains "$OUT" "networkingMode=mirrored"
+FL_WSLINFO="$TMP_DIR/no-wslinfo" run_fm share preflight --static --json --bench-dir "$BENCH"
+assert_eq fail "$(wsl_check status)" "(no wslinfo counts as NAT)"
+# the check is only for WSL: a native Linux run has none
+printf 'Linux version 6.8.0-generic (buildd@lcy02) #1 SMP\n' >"$FL_PROC_VERSION"
+MOCK_WSL_NETMODE=nat run_fm share preflight --static --json --bench-dir "$BENCH"
+assert_eq "[]" "$(printf '%s\n' "$OUT" | grep '^{' | jget - '[c["id"] for c in d["checks"] if c["id"] == "wsl_networking"]')"
+printf '%s\n' "$WSL_PROC_VERSION" >"$FL_PROC_VERSION"
+
+# share start: a copy that is set up, so the first refusal is the network. NAT stops, even for --dry-run, before
+# a plan is printed or a thing is written; mirrored warns and goes on to the next step
+mkdir -p "$FL_STATE_DIR/share" "$BENCH/sites/share.localhost"
+printf '{\n  "v": 3,\n  "room_label": "Lab room"\n}\n' >"$FL_STATE_DIR/share/share.json"
+printf '{}\n' >"$BENCH/sites/share.localhost/site_config.json"
+BENCHBAR_SUDO=gui MOCK_WSL_NETMODE=nat run_fm share start --dry-run --bench-dir "$BENCH" </dev/null
+assert_eq 1 "$CODE" "$OUT"
+assert_contains "$OUT" "not available on WSL NAT"; assert_contains "$OUT" "networkingMode=mirrored"
+assert_not_contains "$OUT" "Share start" "(no plan is printed)"
+BENCHBAR_SUDO=gui FL_WSLINFO="$TMP_DIR/no-wslinfo" run_fm share start --bench-dir "$BENCH" </dev/null
+assert_eq 1 "$CODE" "$OUT"; assert_contains "$OUT" "not available on WSL NAT" "(no wslinfo: NAT)"
+BENCHBAR_SUDO=gui MOCK_WSL_NETMODE=mirrored run_fm share start --dry-run --bench-dir "$BENCH" </dev/null
+assert_not_contains "$OUT" "not available on WSL NAT"
+assert_contains "$OUT" "New-NetFirewallHyperVRule"; assert_contains "$OUT" "-LocalPorts 8443"
 
 printf 'test-share-linux: ok\n'

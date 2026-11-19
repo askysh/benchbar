@@ -9,3 +9,5 @@
 ### Sharing
 
 - The `lan-rooms` lab now lists Linux. `share status` reads the nftables guard on Linux, and the two checks that were the Mac's (the firewall list for node, the Local Network message) say what applies on Linux.
+- On WSL a room needs mirrored networking. `share preflight`, `share start` and `share invite` refuse on NAT (the room's address is private to the Windows PC, so the Wi-Fi cannot reach it) and say how to switch; on mirrored they warn which Hyper-V firewall rule lets the room's port in.
+- The runner's log and its "may not list this room" note name the advertiser it runs (`avahi-publish` on Linux) instead of Bonjour, and the room's messages say "this computer" where they said "this Mac" on Linux.

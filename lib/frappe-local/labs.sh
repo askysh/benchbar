@@ -14,7 +14,7 @@
 # from macos, linux, windows (Windows is Linux inside WSL).
 
 read -r -d '' FL_LAB_TABLE <<'TABLE' || true
-lab~lan-rooms~Share with people on the same Wi-Fi~Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose.~Asks for your password once to install a firewall rule, and opens port 8443 on this Mac while a share is on. A share stays up until you stop it.~0.8.2~share,lan-guard~macos,linux
+lab~lan-rooms~Share with people on the same Wi-Fi~Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose.~Asks for your password once to install a firewall rule, and opens port 8443 on this computer while a share is on. A share stays up until you stop it.~0.8.2~share,lan-guard~macos,linux
 lab~quick-switch~Quick Switch panel~A panel on a global keyboard shortcut to open a site as any pinned user.~Holds a system wide keyboard shortcut while the app runs.~0.8.2~~macos
 TABLE
 
@@ -128,8 +128,6 @@ fl_lab_platform_v() {
 # linux also runs in WSL)
 fl_lab_available() {
   local p plat x
-  # tests only: the lab's own platform list is not what a test of one platform's code is about
-  [[ "${FL_TESTING:-}" == "1" && "${FL_LABS_ANY_PLATFORM:-}" == "1" ]] && return 0
   fl_lab_attr_v p "$1" platforms
   fl_lab_platform_v plat
   for x in ${p//,/ }; do

@@ -29,8 +29,20 @@ The same commands, with the macOS parts swapped:
 
 `share start` needs a user session with a systemd user manager (the folder `$XDG_RUNTIME_DIR` exists):
 over SSH without a login session, or in a WSL distro without systemd, it stops and says so. In WSL the
-default NAT network is not the office Wi-Fi, so colleagues cannot reach the room from outside the
-Windows machine unless it uses mirrored networking.
+default NAT network is not the office Wi-Fi: its address belongs to the Windows PC, so nobody on the Wi-Fi
+can reach a room there. A room is not available on WSL NAT: `share preflight`, `share start` and
+`share invite` read `wslinfo --networking-mode` (a WSL without `wslinfo` counts as NAT) and refuse, naming
+the fix. With mirrored networking (`networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`,
+then `wsl.exe --shutdown` in Windows) the room has the PC's own Wi-Fi address, and `share preflight` and
+`share start` warn that Windows still blocks inbound connections to WSL until the Hyper-V firewall allows
+the room's port. Run this once in a PowerShell opened as administrator:
+
+```powershell
+New-NetFirewallHyperVRule -Name BenchBarRoom -DisplayName "BenchBar room" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8443
+```
+
+See [Windows](../../windows.md#rooms-on-windows) and Microsoft's
+[mirrored mode networking](https://learn.microsoft.com/windows/wsl/networking#mirrored-mode-networking).
 
 ## The safety model
 
@@ -103,7 +115,7 @@ benchbar share preflight [--static|--critical] [--quiet] [--json]
 
 The checks, each with a status, a message and a `fix_action`. `--static`:
 what is checked before anything starts (the copy, its seats, node, the
-firewall). `--critical`: what a running share repeats (the pf block probed
+firewall; on WSL, the networking mode: `wsl_networking` fails on NAT and warns on mirrored). `--critical`: what a running share repeats (the pf block probed
 from the LAN address, the share web process, the bench's Redis).
 
 Exit codes: 0 when every check passes; 1 when one fails.
@@ -120,7 +132,10 @@ benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]
 
 Starts the room until the deadline (`--for 30m`, `4h`; 5 minutes to 12
 hours; 4 hours by default). The bench must be running. Refused like
-`share setup`. A second start says "unchanged".
+`share setup`. A second start says "unchanged". On WSL with NAT networking it
+is refused before anything is written, even with `--dry-run`; with mirrored
+networking it warns what the Hyper-V firewall needs (see
+[Sharing on Linux](#sharing-on-linux)).
 
 A start takes about 15 seconds on a 29-app copy: the checks run before
 and after the gateway starts (about 2 seconds each), and the copy's web
@@ -159,7 +174,7 @@ benchbar share invite [--install-url URL] [--json]
 ```
 
 Prints a ready-to-paste invite for your team channel. Its link carries
-the room's name, this Mac's key fingerprint, the code's salt, the code
+the room's name, this computer's key fingerprint, the code's salt, the code
 itself, this Mac's LAN address and gateway port, and the deadline, so
 a guest's BenchBar opens the join sheet with everything filled in. The
 guest still clicks **Join**. Before the code is sent, the guest's app checks

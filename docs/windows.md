@@ -829,6 +829,30 @@ every distro, so stop your benches first).
   `benchbar://share/...` link shows a note that says so. Hosting a room is
   the **Sharing** tab above.
 
+## Rooms on Windows
+
+A room is the host side of **Share with people on the same Wi-Fi**. The bench runs in WSL, so the room's
+address is the one WSL has, and that depends on WSL's networking mode:
+
+- **NAT (the default).** WSL has a private address that only this PC can reach. Nobody on the Wi-Fi can join
+  a room there, and the checks run inside WSL, so they would pass without telling you. A room is not available on
+  WSL NAT: `share preflight`, `share start` and `share invite` refuse and say so.
+- **Mirrored.** WSL shares the PC's own Wi-Fi address. Put `networkingMode=mirrored` under `[wsl2]` in
+  `%UserProfile%\.wslconfig` (Windows 11 22H2 or later; BenchBar never edits that file), then run
+  `wsl.exe --shutdown`. Windows still drops inbound connections to WSL until its Hyper-V firewall allows the
+  room's port. Run this once in a PowerShell opened as administrator:
+
+  ```powershell
+  New-NetFirewallHyperVRule -Name BenchBarRoom -DisplayName "BenchBar room" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8443
+  ```
+
+  `share preflight` and `share start` show this line as a warning, and `share start` goes on. The other way,
+  `Set-NetFirewallHyperVVMSetting -Name '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -DefaultInboundAction Allow`,
+  opens every port of WSL, so the rule above is the narrower one. Microsoft documents both under
+  [mirrored mode networking](https://learn.microsoft.com/windows/wsl/networking#mirrored-mode-networking).
+
+BenchBar reads the mode with `wslinfo --networking-mode`; a WSL that has no `wslinfo` counts as NAT.
+
 ## Labs
 
 Labs work the same on Windows. The **Labs** page of the BenchBar window

@@ -516,7 +516,7 @@ start_runner
 wait_for 15 bash -c '[[ "$(grep -c "^dns-sd " "$1")" -ge 2 ]]' _ "$MOCK_STATE/order"
 # the runner writes the file before it logs the line, so wait on the line
 wait_for 5 grep -q "dns-sd ended; starting it again in 5 polls" "$TMP_DIR/runner.log"
-assert_contains "$(cat "$SHARE_DIR/degraded")" "Bonjour"
+assert_contains "$(cat "$SHARE_DIR/degraded")" "the advertiser stopped"
 assert_contains "$(cat "$TMP_DIR/runner.log")" "dns-sd ended; starting it again in 5 polls"
 # the runner logs the line and then removes the file: wait on both
 wait_for 20 bash -c 'grep -q "no longer degraded" "$2" && ! test -f "$1"' _ "$SHARE_DIR/degraded" "$TMP_DIR/runner.log"

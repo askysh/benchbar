@@ -8,8 +8,7 @@
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 use_linux
-# the lab's platform list is not under test here (tests/test-labs.sh has it)
-export BENCHBAR_LABS=lan-rooms FL_LABS_ANY_PLATFORM=1
+export BENCHBAR_LABS=lan-rooms
 
 BENCH="$HOME/frappe-bench"
 make_fake_bench "$BENCH" linuxdev.localhost

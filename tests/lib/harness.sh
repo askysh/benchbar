@@ -130,7 +130,7 @@ use_all_mocks() { PATH="$SAVED_PATH"; }
 # use_linux: the CLI sees Ubuntu on x86_64 under WSL. Call it right after
 # sourcing this file, before any CLI run (or set BENCHBAR_TEST_PLATFORM=linux
 # before sourcing). Sets FL_PLATFORM, MOCK_UNAME, FL_PROC_VERSION (mentions
-# microsoft), FL_PROC_DIR (add_proc's third argument is /proc/PID/cwd),
+# microsoft), FL_WSLINFO (the wslinfo mock), FL_PROC_DIR (add_proc's third argument is /proc/PID/cwd),
 # FL_OS_RELEASE, XDG_CONFIG_HOME with the systemd user unit folder, SHELL and
 # FL_RC_FILE (bash), a fake uv Python and fnm Node (the mocks copied to where
 # fl_python_bin and fl_node_bin look) and the apt package set dpkg-query reads.
@@ -141,6 +141,8 @@ use_linux() {
   mkdir -p "$FL_PROC_DIR"
   printf 'Linux version 6.6.0-microsoft-standard-WSL2 (root@build) (gcc) #1 SMP\n' >"$FL_PROC_VERSION"
   printf 'NAME="Ubuntu"\nID=ubuntu\nID_LIKE=debian\nVERSION_ID="24.04"\n' >"$FL_OS_RELEASE"
+  # wslinfo: the mock's networking mode (MOCK_WSL_NETMODE, mirrored unless a test says nat), never this machine's
+  export FL_WSLINFO="$ROOT/tests/mocks/bin/wslinfo"
   export XDG_CONFIG_HOME="$HOME/.config"
   unset XDG_STATE_HOME XDG_DATA_HOME UV_PYTHON_INSTALL_DIR FNM_DIR 2>/dev/null || true
   mkdir -p "$XDG_CONFIG_HOME/systemd/user"

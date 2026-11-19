@@ -1,5 +1,5 @@
 #!/bin/bash
-#@version 7
+#@version 8
 #@quoted SHARE_DIR SOCK BENCH SHARE_SITE WEB_PORT PYTHON LIB NODE BENCHBAR DNS_SD CAFFEINATE LSOF CURL SITE_LABEL ROOM_LABEL  # SESSIONS_PY and CONTROL_JS sit in quoted here-documents, where they are literal
 # __HEADER__
 #
@@ -289,7 +289,7 @@ start_dns() {
   esac
   DNS_PID=$!
   DNS_SINCE=$polls
-  [ -n "${1:-}" ] || say "dns-sd started (pid ${DNS_PID})"
+  [ -n "${1:-}" ] || say "${DNS_SD##*/} started (pid ${DNS_PID})"
 }
 
 start_caffeinate() {
@@ -374,12 +374,12 @@ while :; do
     DNS_PID=""
     DNS_DELAY="$(backoff_next "$DNS_DELAY" "$DNS_SINCE")"
     DNS_NEXT=$((polls + DNS_DELAY))
-    printf '%s\n' "Rooms on this Wi-Fi may not list this room for a moment: Bonjour stopped and was started again." >"$DEGRADED"
-    say "dns-sd ended; starting it again in ${DNS_DELAY} polls"
+    printf '%s\n' "Rooms on this Wi-Fi may not list this room for a moment: the advertiser stopped and was started again." >"$DEGRADED"
+    say "${DNS_SD##*/} ended; starting it again in ${DNS_DELAY} polls"
   fi
   if [ -z "$DNS_PID" ] && [ "$polls" -ge "$DNS_NEXT" ]; then start_dns again; fi
   if [ -n "$DNS_PID" ] && [ -f "$DEGRADED" ] && [ $((polls - DNS_SINCE)) -ge "$STABLE_POLLS" ]; then
-    say "dns-sd has stayed up for ${STABLE_POLLS} polls: no longer degraded"
+    say "${DNS_SD##*/} has stayed up for ${STABLE_POLLS} polls: no longer degraded"
     rm -f "$DEGRADED"
   fi
   if [ -n "$CAF_PID" ] && ! alive "$CAF_PID"; then
