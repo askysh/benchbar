@@ -31,7 +31,7 @@ VERSION="$1"
 OUT="${2:-${ROOT}/dist}"
 REF="${3:-HEAD}"
 
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "version '${VERSION}' is not X.Y.Z"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || die "version '${VERSION}' is not X.Y.Z or X.Y.Z-rc.N"
 cli_version="$(git -C "$ROOT" show "${REF}:benchbar" | sed -n 's/^FL_VERSION="\([^"]*\)"$/\1/p' | head -n 1)"
 [[ "$cli_version" == "$VERSION" ]] || die "benchbar at ${REF} says FL_VERSION=\"${cli_version}\", not ${VERSION}" \
   "set FL_VERSION=\"${VERSION}\" in benchbar, the same as MARKETING_VERSION in macos/project.yml"

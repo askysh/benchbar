@@ -61,7 +61,9 @@
     BENCHBAR_SOURCE=DIR      the same as -Source (CI only)
 
 .PARAMETER Version
-  Install this release (X.Y.Z) instead of the latest.
+  Install this release (X.Y.Z) instead of the latest. A release candidate
+  (X.Y.Z-rc.N, a GitHub pre-release) is installed only when named here: the
+  default never picks one.
 
 .PARAMETER NoTray
   Install only benchbar.exe and README.txt: no tray app, no runtime check, no
@@ -812,7 +814,7 @@ function Install-BenchBar {
   }
   if ($Version) {
     $Version = $Version.Trim()
-    if ($Version -notmatch '^v?\d+\.\d+\.\d+$') { Stop-Install "'$Version' is not a version." 'use X.Y.Z, for example -Version 0.8.0' }
+    if ($Version -notmatch '^v?\d+\.\d+\.\d+(-rc\.\d+)?$') { Stop-Install "'$Version' is not a version." 'use X.Y.Z, for example -Version 0.8.0 (or X.Y.Z-rc.N for a release candidate)' }
     $Version = $Version.TrimStart('v')
   }
 
@@ -1255,7 +1257,7 @@ function Install-BenchBar {
       }
       Write-Host ''
       Write-Host 'Next:' -ForegroundColor Cyan
-      if ($releaseVersion -match '^\d+\.\d+\.\d+$') { Write-Host "  - What changed: $repoWeb/releases/tag/v$releaseVersion" }
+      if ($releaseVersion -match '^\d+\.\d+\.\d+(-rc\.\d+)?$') { Write-Host "  - What changed: $repoWeb/releases/tag/v$releaseVersion" }
       if ($trayExists) {
         if ($trayStarted) {
           # $order is -1 for a higher version, 1 for a lower one, 0 or $null otherwise
