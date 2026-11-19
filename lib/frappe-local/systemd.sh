@@ -491,8 +491,9 @@ fl_render_agent() {
 # state.json and the log, which is all a headless server gets. On a desktop
 # the runner also calls notify-send, over the user's session bus: a systemd
 # user unit has XDG_RUNTIME_DIR but not always DBUS_SESSION_BUS_ADDRESS, so
-# the bus is found at $XDG_RUNTIME_DIR/bus, and no socket there means no
-# desktop session, so nothing is sent. In WSL the Windows tray reads the same
+# the bus is found at $XDG_RUNTIME_DIR/bus, and no socket there means nothing
+# is sent. A server with a lingering user can have that socket too; it stays
+# quiet because notify-send is rarely installed there and its output is dropped. In WSL the Windows tray reads the same
 # record and shows its own toast; a second one from the distro would double it.
 FL_RUNNER_EXTRA=()
 # shellcheck disable=SC2016  # the runner expands $1 and $PORTS, not this file
