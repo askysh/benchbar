@@ -719,7 +719,7 @@ for i in (1, 2, 3, 4):
     r = by[i]
     assert not r["isError"], (calls[i - 1], r)
     assert r["content"][0]["text"].startswith("Data from the bench ("), r["content"][0]["text"][:120]
-assert by[1]["structuredContent"]["site"] == "macdev" and by[1]["structuredContent"]["backups"] == [], by[1]
+assert by[1]["structuredContent"]["site"] == "macdev" and all("stamp" in b for b in by[1]["structuredContent"]["backups"]), by[1]   # (earlier steps may have made backups)
 assert "conflicts" in by[2]["structuredContent"] and by[2]["structuredContent"]["mode"], by[2]
 assert by[3]["structuredContent"]["state_dir"] and by[3]["structuredContent"]["install"], by[3]
 assert by[4]["structuredContent"]["labs"], by[4]
