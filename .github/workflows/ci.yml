@@ -155,6 +155,9 @@ jobs:
           /bin/bash --version | head -n 1
           sysctl -n hw.ncpu
 
+      - name: TEMP debug process groups
+        run: /bin/bash scripts/ci-debug-pg.sh </dev/null 2>&1 || true
+
       # run-tests.sh runs its share of the tests PARALLEL (the CPU count) at a
       # time; the Linux platform tests run in the Linux shards
       - name: CLI tests (macOS /bin/bash 3.2)
