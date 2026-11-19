@@ -104,7 +104,9 @@ fl_state_guard_reclaim() {
 # then uses the state where it is.
 fl_state_guard_take() {
   local __g="$1" __i __round
-  if mkdir "$__g" 2>/dev/null; then printf '%s\n' "$$" >"${__g}/pid" 2>/dev/null || true; return 0; fi
+  # the braces make 2>/dev/null cover the redirection too: a guard another
+  # run dropped in between would otherwise print "No such file" to stderr
+  if mkdir "$__g" 2>/dev/null; then { printf '%s\n' "$$" >"${__g}/pid"; } 2>/dev/null || true; return 0; fi
   for __round in 1 2; do
     for ((__i = 0; __i < 50; __i++)); do
       [[ -d "$__g" ]] || break
@@ -117,7 +119,7 @@ fl_state_guard_take() {
     # another waiter reclaimed it first and holds it now: one more wait
   done
   mkdir "$__g" 2>/dev/null || return 1
-  printf '%s\n' "$$" >"${__g}/pid" 2>/dev/null || true
+  { printf '%s\n' "$$" >"${__g}/pid"; } 2>/dev/null || true
   return 0
 }
 

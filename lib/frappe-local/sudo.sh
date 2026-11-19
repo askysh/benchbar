@@ -104,14 +104,24 @@ fl_sudo_begin() {
 
 # Keep the timestamp fresh while this process lives. The loop owns no
 # stdio and not fd 3, the JSON stream (a reader must not wait for it), sleeps in
-# short slices so it notices the parent leaving, and dies on TERM.
+# short slices so it notices the parent leaving, and dies on TERM. The sleep
+# is a child the loop waits for: bash runs a trap only after the foreground
+# command ends, so a plain "sleep 5" made fl_sudo_end wait up to 5 seconds.
 fl__sudo_keepalive() {
-  ( trap 'exit 0' TERM
+  ( nap=""
+    trap '[[ -z "$nap" ]] || kill "$nap" 2>/dev/null; exit 0' TERM
     parent="$$"
     while kill -0 "$parent" 2>/dev/null; do
       sudo -n true 2>/dev/null || exit 0
       slice=0
-      while [[ "$slice" -lt 10 ]]; do sleep 5; kill -0 "$parent" 2>/dev/null || exit 0; slice=$((slice + 1)); done
+      while [[ "$slice" -lt 10 ]]; do
+        sleep 5 &
+        nap="$!"
+        wait "$nap" 2>/dev/null || true
+        nap=""
+        kill -0 "$parent" 2>/dev/null || exit 0
+        slice=$((slice + 1))
+      done
     done ) </dev/null >/dev/null 2>&1 3>&- &
   FL_SUDO_KEEPALIVE_PID="$!"
   fl_log "sudo session started (keepalive pid ${FL_SUDO_KEEPALIVE_PID})"

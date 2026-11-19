@@ -168,6 +168,8 @@ jobs:
           ONLY_TESTS: ${{ needs.changes.outputs.tests }}
           SHELLCHECK: '0'
           SKIP_TESTS: ${{ needs.changes.outputs.macos_skip }}
+          # these have node here: a skip would be a pass that ran nothing
+          NO_SKIP: test-share-gateway
         run: /bin/bash tests/run-tests.sh
 
   # The mocked suite on Linux, for the Linux platform layer
@@ -199,6 +201,7 @@ jobs:
           ONLY_TESTS: ${{ needs.changes.outputs.tests }}
           SHELLCHECK: '0'
           SKIP_TESTS: ${{ needs.changes.outputs.linux_skip }}
+          NO_SKIP: test-share-gateway
         run: bash tests/run-tests.sh
 
   # The mocked suite under bash 3.2.57, the bash of macOS, on cheap Linux
@@ -245,7 +248,7 @@ jobs:
           SKIP_TESTS: ${{ needs.changes.outputs.bash32_skip }}
         run: |
           for attempt in 1 2 3; do docker pull -q bash:3.2.57 >/dev/null && break; [ "$attempt" = 3 ] && exit 1; sleep 5; done
-          docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS bash:3.2.57 sh -euc '
+          docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS -e CI bash:3.2.57 sh -euc '
             for attempt in 1 2 3; do
               apk add --no-cache coreutils findutils diffutils grep sed gawk procps git python3 zip unzip curl perl-utils musl-locales >/dev/null && break
               [ "$attempt" = 3 ] && exit 1

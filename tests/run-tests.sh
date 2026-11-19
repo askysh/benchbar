@@ -12,6 +12,8 @@
 #   ONLY_TESTS="test-a test-b" ...      only those, sharded like the full list (CI: affected tests)
 #   LIST_ONLY=1 SHARD=2/4 ...           print the chosen tests, run nothing
 #   SECS_ONLY=1 ...                     print the weight (table seconds) of the chosen tests, run nothing
+#   NO_SKIP="test-a test-b" ...         those tests fail when they skip themselves ("NAME: ok (SKIPPED ...)")
+#   RERUN_FAILED=1 ...                  a failed test runs once more, and FLAKY says it passed then (on by default when CI is set)
 #   SHELLCHECK_FILES="a.sh b.sh" ...    the lint checks only those files; SC_JOBS=4 runs 4 shellcheck at once
 #
 # PARALLEL defaults to the number of CPUs. Every test builds its own HOME
@@ -38,7 +40,7 @@ test-cli test-open-as test-freshness test-hygiene test-mcp test-mcp-2 test-site-
 test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
 test-runner test-redact test-docs-command test-status-cost test-command-cost test-bench-flow test-run test-platform-linux test-self-update
 test-site-restore test-site-restore-2 test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
-test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin test-lan-guard test-labs test-labs-share test-wsl-preflight test-ci-plan test-fresh-install test-tray-fixtures test-backup-safety test-changelog test-lean-load test-linux-parity test-facts test-guards test-release-workflows test-neutralise test-listen test-macos-appcast test-apps-speed test-version-sources test-person-guard"
+test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-suite-hygiene test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin test-lan-guard test-labs test-labs-share test-wsl-preflight test-ci-plan test-fresh-install test-tray-fixtures test-backup-safety test-changelog test-lean-load test-linux-parity test-facts test-guards test-release-workflows test-neutralise test-listen test-macos-appcast test-apps-speed test-version-sources test-person-guard"
 
 ALL_TESTS_WORDS=" $(printf '%s' "$ALL_TESTS" | tr '\n' ' ') "
 for f in "$ROOT"/tests/test-*.sh; do
@@ -248,6 +250,26 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+# run_one_test NAME LOG: one run of a test file, its output in LOG; 0 only when it passed in full.
+# Two checks beyond the exit code, because bash 3.2 (the macOS /bin/bash and the container legs) exits 0
+# after a "set -u" abort inside a function when an EXIT trap is set, so a test that stopped halfway
+# counts as a pass: the log may not hold an "unbound variable" error (stderr is in it), and a share or
+# lan-guard test must print its own "NAME: ok" line (a skip says why after the ok, in parentheses:
+# "NAME: ok (SKIPPED ...)").
+run_one_test() {
+  local name="$1" log="$2" c=0
+  if run_test_with_deadline "$ROOT/tests/$name.sh" >"$log" 2>&1; then c=0; else c=$?; fi
+  if [[ "$c" == 0 && ( "$name" == test-share* || "$name" == test-lan-guard ) ]] && ! grep -qE "^${name}: ok( \(.*\))?\$" "$log"; then
+    printf 'FAIL: %s exited 0 without its "%s: ok" line\n' "$name" "$name" >>"$log"
+    c=1
+  fi
+  if [[ "$c" == 0 ]] && grep -qE ': [A-Za-z_][A-Za-z_0-9]*: unbound variable' "$log"; then
+    printf 'FAIL: %s printed an "unbound variable" error: a set -u abort the shell did not turn into an exit code\n' "$name" >>"$log"
+    c=1
+  fi
+  return "$c"
+}
+
 # start_job INDEX: runs job INDEX in the background, output to $OUT_DIR/INDEX.log,
 # exit code to $OUT_DIR/INDEX.rc, seconds to $OUT_DIR/INDEX.secs
 start_job() {
@@ -257,13 +279,17 @@ start_job() {
     if [[ "$name" == "shellcheck" ]]; then
       if run_shellcheck >"$OUT_DIR/$idx.log" 2>&1; then c=0; else c=$?; fi
     else
-      if run_test_with_deadline "$ROOT/tests/$name.sh" >"$OUT_DIR/$idx.log" 2>&1; then c=0; else c=$?; fi
-      # a share or lan-guard test passes only with its own "NAME: ok" line as well: under bash 3.2 a set -u
-      # abort inside a function exits 0 when an EXIT trap is set, so the code alone can count a test that
-      # stopped halfway (a skip says why after the ok, in parentheses: "NAME: ok (SKIPPED ...)")
-      if [[ "$c" == 0 && ( "$name" == test-share* || "$name" == test-lan-guard ) ]] && ! grep -qE "^${name}: ok( \(.*\))?\$" "$OUT_DIR/$idx.log"; then
-        printf 'FAIL: %s exited 0 without its "%s: ok" line\n' "$name" "$name" >>"$OUT_DIR/$idx.log"
-        c=1
+      if run_one_test "$name" "$OUT_DIR/$idx.log"; then c=0; else c=$?; fi
+      # a failed test runs once more on CI (RERUN_FAILED=1 anywhere else): one that then passes is a
+      # flake, and the log says so with the first failure, so it is fixed and not hidden
+      if [[ "$c" != 0 && "$c" != 124 && "${RERUN_FAILED:-${CI:+1}}" == 1 ]]; then
+        mv "$OUT_DIR/$idx.log" "$OUT_DIR/$idx.first"
+        if run_one_test "$name" "$OUT_DIR/$idx.log"; then c=0; else c=$?; fi
+        if [[ "$c" == 0 ]]; then
+          { printf 'FLAKY: %s failed once and passed on the rerun. The first failure:\n' "$name"; sed 's/^/  | /' "$OUT_DIR/$idx.first"; } >>"$OUT_DIR/$idx.log"
+        else
+          { printf 'FAILED TWICE: %s. The first failure:\n' "$name"; sed 's/^/  | /' "$OUT_DIR/$idx.first"; } >>"$OUT_DIR/$idx.log"
+        fi
       fi
     fi
     printf '%s\n' "$((SECONDS - started))" >"$OUT_DIR/$idx.secs"
@@ -276,7 +302,7 @@ start_job() {
 TOTAL="${#JOBS[@]}"
 printf 'running %s jobs, %s at a time (shard %s)\n' "$TOTAL" "$PARALLEL" "$SHARD"
 started_all="$SECONDS"
-next_start=0; next_print=0; running=0; FAILED=()
+next_start=0; next_print=0; running=0; FAILED=(); SKIPPED_TESTS=()
 while [[ "$next_print" -lt "$TOTAL" ]]; do
   while [[ "$running" -lt "$PARALLEL" && "$next_start" -lt "$TOTAL" ]]; do
     start_job "$next_start"
@@ -295,6 +321,14 @@ while [[ "$next_print" -lt "$TOTAL" ]]; do
   while [[ "$next_print" -lt "$TOTAL" && -f "$OUT_DIR/$next_print.rc" && -z "${PIDS[next_print]:-}" ]]; do
     name="${JOBS[$next_print]}"; rc="$(cat "$OUT_DIR/$next_print.rc")"; secs="$(cat "$OUT_DIR/$next_print.secs")"
     cat "$OUT_DIR/$next_print.log"
+    # a test that skipped itself says so after its ok ("NAME: ok (SKIPPED: why)"): counted and listed at the
+    # end, and a failure for a test in NO_SKIP (the legs that are meant to have what it needs, node for the gateway)
+    if [[ "$rc" == "0" && "$name" != shellcheck ]] && grep -qE "^${name}: ok \(SKIPPED" "$OUT_DIR/$next_print.log"; then
+      SKIPPED_TESTS+=("$name")
+      case " ${NO_SKIP:-} " in
+        *" $name "*) printf 'FAIL: %s skipped itself, and this run lists it in NO_SKIP (it must run here)\n' "$name"; rc=1 ;;
+      esac
+    fi
     if [[ "$rc" == "0" ]]; then
       printf -- '--- ok: %s (%ss)\n' "$name" "$secs"
     else
@@ -307,6 +341,7 @@ while [[ "$next_print" -lt "$TOTAL" ]]; do
 done
 
 printf '\n%s jobs in %ss, %s failed\n' "$TOTAL" "$((SECONDS - started_all))" "${#FAILED[@]}"
+[[ "${#SKIPPED_TESTS[@]}" -eq 0 ]] || printf 'skipped: %s (%s)\n' "${#SKIPPED_TESTS[@]}" "${SKIPPED_TESTS[*]}"
 if [[ "${#FAILED[@]}" -gt 0 ]]; then
   printf 'FAILED: %s\n' "${FAILED[*]}" >&2
   exit 1
