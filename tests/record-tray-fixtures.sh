@@ -101,7 +101,9 @@ shapes() {
     "cli/ports-check-running.json|ports check --json --bench-dir $BENCH" \
     "cli/profile-list.json|profile list --json" \
     "cli/profile-list-linux.json|profile list --json" \
-    "cli/scan-list.json|list --json"
+    "cli/scan-list.json|list --json" \
+    "cli/status-pending-update.json|status --json --bench-dir $BENCH" \
+    "cli/status-pending-add.json|status --json --bench-dir $BENCH"
 }
 
 # paths FILE: one line per field path of a JSON document, arrays folded into

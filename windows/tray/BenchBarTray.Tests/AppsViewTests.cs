@@ -325,7 +325,7 @@ public class AppsViewTests
         PageKit.Click(PageKit.ButtonNamed(view, "Add App..."));
         var form = view.AddForm!.Value;
         Assert.Equal(["one.localhost", "two.localhost"], form.Sites.Select(s => (string)s.Content));
-        Assert.Equal(["Review Plan...", "Cancel"], PageKit.Walk(view.OpenPanel!).OfType<Button>().Select(b => (string)b.Content));
+        Assert.Equal(["Add Another App", "Review Plan...", "Cancel"], PageKit.Walk(view.OpenPanel!).OfType<Button>().Select(b => (string)b.Content));
         PageKit.AssertEveryControlIsNamed(view);
     });
 

@@ -426,9 +426,18 @@ A bench has four tabs:
   Open as. **Pin** in Find User keeps a user (nine at most per site,
   Administrator is always there) for Quick Switch.
 - **Apps**: Add App (from a git URL, with a branch or a commit, and the
-  sites to install it on), Update after the dry run, Install on a site,
-  focus pins and Check Remotes. An app with local changes cannot be
-  updated from the window.
+  sites to install it on; **Add Another App** puts several apps in one
+  plan, each with its own branch, commit and sites, under one token),
+  Update after the dry run, Install on a site, focus pins and Check
+  Remotes. An app with local changes cannot be updated from the window.
+- **Unfinished updates and adds**: when an `app update` or an `app add`
+  stopped part way, the bench page shows a banner above the tabs with
+  what stopped, why, the fix command and two buttons. **Finish Update**
+  or **Finish Add** shows the plan of the same command, which lists only
+  the steps left. **Discard** asks first, then runs
+  `benchbar app update NAME --discard-pending`, which drops the record
+  and runs nothing; it does not undo what already ran. The banner reads
+  `pending_operations` of `benchbar.exe status --json`.
 - **Health**: the doctor checks with the Windows setup checks, Copy fix,
   and Repair, which shows the plan first and asks for your Linux password
   once when a step uses sudo.
