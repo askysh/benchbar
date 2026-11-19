@@ -5,8 +5,8 @@ public static class UpdatePolicy
 {
     public const string StoreLine = "Updates come from the Microsoft Store";
 
-    /// <summary>Only the one line installer's copy asks GitHub for a release and offers its install line.</summary>
-    public static bool ChecksGitHub(IPackageInfo package) => !package.IsPackaged;
+    /// <summary>Only the one line installer's copy checks for an update (through benchbar.exe self-update) and offers Update Now; the Store updates a package.</summary>
+    public static bool ChecksForUpdates(IPackageInfo package) => !package.IsPackaged;
 }
 
 /// <summary>The path of <c>benchbar.exe</c> to show: packaged, the alias, because the file next to the tray sits in a versioned folder that changes on every update.</summary>

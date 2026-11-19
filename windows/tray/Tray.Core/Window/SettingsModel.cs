@@ -82,7 +82,7 @@ public sealed class SettingsModel(TrayConfig config, ISettingsHost host, ISetupS
     public bool IsPackaged => host.Package.IsPackaged;
 
     /// <summary>Packaged: the Store updates the programs, so there is no "check for updates" switch.</summary>
-    public bool ShowsUpdateCheck => UpdatePolicy.ChecksGitHub(host.Package);
+    public bool ShowsUpdateCheck => UpdatePolicy.ChecksForUpdates(host.Package);
 
     public void OpenStartupSettings() => host.OpenStartupSettings();
 

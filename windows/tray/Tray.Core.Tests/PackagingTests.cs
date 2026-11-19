@@ -343,8 +343,8 @@ public class PackagingTests
     [Fact]
     public void OnlyAnUnpackagedTrayAsksGitHub()
     {
-        Assert.True(UpdatePolicy.ChecksGitHub(Plain));
-        Assert.False(UpdatePolicy.ChecksGitHub(Packaged));
+        Assert.True(UpdatePolicy.ChecksForUpdates(Plain));
+        Assert.False(UpdatePolicy.ChecksForUpdates(Packaged));
         Assert.Equal("Updates come from the Microsoft Store", UpdatePolicy.StoreLine);
     }
 
