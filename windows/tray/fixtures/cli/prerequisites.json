@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "cli_version": "0.8.3",
+  "bench": "/home/akash/frappe-bench",
+  "prerequisites": [
+    {
+      "id": "linux_distro",
+      "label": "Linux distribution",
+      "level": "ok",
+      "message": "Ubuntu 24.04",
+      "fix_command": null,
+      "fix_quoted": false
+    },
+    {
+      "id": "architecture",
+      "label": "CPU architecture",
+      "level": "ok",
+      "message": "x86_64",
+      "fix_command": null,
+      "fix_quoted": false
+    },
+    {
+      "id": "regular_user",
+      "label": "Regular user",
+      "level": "ok",
+      "message": "tester",
+      "fix_command": null,
+      "fix_quoted": false
+    },
+    {
+      "id": "sudo",
+      "label": "sudo",
+      "level": "warn",
+      "message": "tester is not in the sudo or admin group; apt and MariaDB can be set up only if a sudoers rule allows tester",
+      "fix_command": "if sudo is refused, add the user as root: usermod -aG sudo tester",
+      "fix_quoted": false
+    },
+    {
+      "id": "apt",
+      "label": "apt",
+      "level": "ok",
+      "message": "http://archive.ubuntu.com/ubuntu/ is reachable",
+      "fix_command": null,
+      "fix_quoted": false
+    },
+    {
+      "id": "systemd",
+      "label": "systemd",
+      "level": "ok",
+      "message": "systemd runs as PID 1",
+      "fix_command": null,
+      "fix_quoted": false,
+      "enabled": true
+    },
+    {
+      "id": "linger",
+      "label": "Linger",
+      "level": "warn",
+      "message": "lingering is off for tester; a bench returns after a reboot only once you log in (install turns it on)",
+      "fix_command": "sudo loginctl enable-linger tester",
+      "fix_quoted": false,
+      "enabled": false
+    },
+    {
+      "id": "memory",
+      "label": "Memory",
+      "level": "ok",
+      "message": "7541 MB of memory",
+      "fix_command": null,
+      "fix_quoted": false,
+      "total_mb": 7541
+    },
+    {
+      "id": "inotify_watches",
+      "label": "File watchers",
+      "level": "ok",
+      "message": "fs.inotify.max_user_watches is 524288",
+      "fix_command": null,
+      "fix_quoted": false,
+      "max_user_watches": 524288
+    },
+    {
+      "id": "disk_free",
+      "label": "Free disk space",
+      "level": "ok",
+      "message": "50 GB free",
+      "fix_command": null,
+      "fix_quoted": false,
+      "free_gb": 50
+    },
+    {
+      "id": "bench_folder",
+      "label": "Bench folder",
+      "level": "ok",
+      "message": "/home/akash/frappe-bench",
+      "fix_command": null,
+      "fix_quoted": false
+    },
+    {
+      "id": "mariadb_password",
+      "label": "MariaDB root password",
+      "level": "warn",
+      "message": "MariaDB is already running and benchbar has no root password for it. A fresh apt install needs nothing (the install secures it with sudo); a root password you set yourself must be passed",
+      "fix_command": "pass MARIADB_ROOT_PASSWORD='...' to benchbar install",
+      "fix_quoted": false,
+      "needs_password": true
+    },
+    {
+      "id": "default_ports",
+      "label": "Default ports",
+      "level": "ok",
+      "message": "ports 8000, 9000, 11000 and 13000 are free",
+      "fix_command": null,
+      "fix_quoted": false,
+      "port_offset": 0
+    }
+  ],
+  "summary": {
+    "ok": 10,
+    "warn": 3,
+    "fail": 0
+  }
+}
