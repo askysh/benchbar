@@ -32,8 +32,22 @@ fl_bench_helper_pattern() {
 }
 
 # The working folder of a process, from lsof; nothing when it cannot be read.
+# In a doctor run (facts.sh) one lsof per pid, read in bash.
 fl_pid_cwd() {
+  local out line
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    fl_memo_v out "cwd:${1}" lsof -a -p "$1" -d cwd -Fn || true
+    while IFS= read -r line; do
+      [[ "$line" == n* ]] && { printf '%s\n' "${line#n}"; return 0; }
+    done <<<"$out"
+    return 0
+  fi
   lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | awk 'NR==1'
+}
+
+# fl_pgrep_f PATTERN: pgrep -f, once per pattern in a doctor run
+fl_pgrep_f() {
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then fl_memo "pgrep:${1}" pgrep -f "$1" || true; else pgrep -f "$1" 2>/dev/null || true; fi
 }
 
 # fl_pid_is_bench_own_strict PID: the one ownership test. True only when
@@ -61,11 +75,11 @@ fl_pids_in_bench() {
 }
 
 fl_bench_honcho_pids() {
-  { pgrep -f "honcho start -f Procfile\\.lean" 2>/dev/null || true; } | fl_pids_in_bench
+  fl_pgrep_f "honcho start -f Procfile\\.lean" | fl_pids_in_bench
 }
 
 fl_bench_socketio_pids() {
-  { pgrep -f "apps/frappe/socketio\\.js" 2>/dev/null || true; } | fl_pids_in_bench
+  fl_pgrep_f "apps/frappe/socketio\\.js" | fl_pids_in_bench
 }
 
 # Listeners on the bench's ports that run inside the bench folder (redis,
@@ -74,7 +88,7 @@ fl_bench_socketio_pids() {
 # neither is one whose folder cannot be read: stopping needs proof.
 fl_bench_listener_pids() {
   local pid
-  { lsof -ti "tcp:${1:-$(fl_bench_ports_csv)}" -sTCP:LISTEN 2>/dev/null || true; } | while IFS= read -r pid; do
+  { fl_listener_pids_of "${1:-$(fl_bench_ports_csv)}"; } | while IFS= read -r pid; do
     [[ -n "$pid" ]] && fl_pid_is_bench_own_strict "$pid" && printf '%s\n' "$pid"
   done
   return 0
@@ -83,7 +97,7 @@ fl_bench_listener_pids() {
 fl_bench_process_pids() {
   {
     fl_bench_honcho_pids
-    pgrep -f "$(fl_bench_helper_pattern)" 2>/dev/null || true
+    fl_pgrep_f "$(fl_bench_helper_pattern)"
     fl_bench_socketio_pids
     fl_bench_listener_pids
   } | sort -u
@@ -100,14 +114,14 @@ fl_bench_is_running() {
 # down and the waits that must see it gone.
 fl_bench_is_serving() {
   [[ -n "$(fl_bench_honcho_pids)" || -n "$(fl_bench_socketio_pids)" ]] && return 0
-  [[ -n "$(pgrep -f "$(fl_bench_helper_pattern)" 2>/dev/null || true)" ]] && return 0
+  [[ -n "$(fl_pgrep_f "$(fl_bench_helper_pattern)")" ]] && return 0
   [[ -n "$(fl_bench_listener_pids "${FL_WEB_PORT},${FL_SOCKETIO_PORT}")" ]]
 }
 
 # honcho on any Procfile whose working folder is this bench: benchfg and the
 # agent run Procfile.lean, "bench start" runs the bench's own Procfile
 fl_bench_any_honcho_pids() {
-  { pgrep -f "honcho start" 2>/dev/null || true; } | fl_pids_in_bench
+  fl_pgrep_f "honcho start" | fl_pids_in_bench
 }
 
 # fl_bench_running_outside_benchbar: the bench's honcho, serve, worker,
@@ -116,7 +130,7 @@ fl_bench_any_honcho_pids() {
 # them (bench start, benchfg, a hand-run honcho). That is a person's
 # terminal session: nothing of benchbar may stop or restart it.
 fl_bench_running_outside_benchbar() {
-  [[ -n "$(fl_bench_any_honcho_pids)" || -n "$(fl_bench_socketio_pids)" || -n "$(pgrep -f "$(fl_bench_helper_pattern)" 2>/dev/null || true)" ]] || return 1
+  [[ -n "$(fl_bench_any_honcho_pids)" || -n "$(fl_bench_socketio_pids)" || -n "$(fl_pgrep_f "$(fl_bench_helper_pattern)")" ]] || return 1
   [[ "$(fl_agent_field state 2>/dev/null)" != "running" ]]
 }
 
@@ -189,22 +203,69 @@ fl_bench_wait_stopped() {
   return 0
 }
 
+# The listeners of a doctor run: one "lsof -nP -iTCP -sTCP:LISTEN" for every
+# port (facts.sh keeps it), filtered here. fl__listen_rows PORTS prints "port
+# pid command address" for each listening socket on one of the comma
+# separated PORTS, in lsof's order; the address ends with ":port".
+fl__listen_rows() {
+  local snap line cmd pid user fd type dev size node name rest port
+  fl_memo_v snap listeners lsof -nP -iTCP -sTCP:LISTEN || true
+  while IFS= read -r line; do
+    [[ -n "$line" && "$line" != COMMAND* ]] || continue
+    read -r cmd pid user fd type dev size node name rest <<<"$line"
+    port="${name##*:}"
+    case ",${1}," in *",${port},"*) printf '%s %s %s %s\n' "$port" "$pid" "$cmd" "$name" ;; esac
+  done <<<"$snap"
+}
+
+# fl_listener_pids_of PORTS: the pid of every listener on the comma separated
+# PORTS, once each, one per line (lsof -ti)
+fl_listener_pids_of() {
+  local port pid cmd addr seen=" "
+  if [[ -z "${FL_FACTS_DIR:-}" ]]; then lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null || true; return 0; fi
+  while read -r port pid cmd addr; do
+    case "$seen" in *" $pid "*) continue ;; esac
+    seen="${seen}${pid} "
+    printf '%s\n' "$pid"
+  done < <(fl__listen_rows "$1")
+}
+
 fl_port_listener_pid() {
+  local port pid cmd addr
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    while read -r port pid cmd addr; do printf '%s\n' "$pid"; return 0; done < <(fl__listen_rows "$1")
+    return 0
+  fi
   lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null | awk 'NR==1' || true
 }
 
 # fl_port_listener_pids PORT: the pid of every listener on PORT, one per line
 fl_port_listener_pids() {
-  lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null || true
+  fl_listener_pids_of "$1"
 }
 
 fl_port_listener_summary() {
   # prints "pid command" for the first listener on a port, or nothing
+  local port pid cmd addr
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    while read -r port pid cmd addr; do printf '%s %s\n' "$pid" "$cmd"; return 0; done < <(fl__listen_rows "$1")
+    return 0
+  fi
   lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | awk 'NR == 2 {print $2 " " $1}' || true
 }
 
 fl_port_listen_addresses() {
   # prints the local address:port of every listener on a port, one per line
+  local port pid cmd addr out="" n=0
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    while read -r port pid cmd addr; do
+      [[ $'\n'"$out" == *$'\n'"$addr"$'\n'* ]] && continue
+      out="${out}${addr}"$'\n'; n=$((n + 1))
+    done < <(fl__listen_rows "$1")
+    # one address needs no sort; several keep the order sort -u gives
+    if [[ "$n" -le 1 ]]; then printf '%s' "$out"; else printf '%s' "$out" | sort -u; fi
+    return 0
+  fi
   lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | awk 'NR > 1 {print $9}' | sort -u || true
 }
 

@@ -17,13 +17,39 @@
 # ---------------------------------------------------------------- reading
 
 fl_app_path() { printf '%s/apps/%s' "$FL_BENCH_DIR" "$1"; }
-fl_app_git() { local app="$1"; shift; git -C "$(fl_app_path "$app")" "$@"; }
+# In a doctor run (facts.sh) the same git question about an app is asked once.
+fl_app_git() {
+  local app="$1"
+  shift
+  # the path is spelled here and not asked of fl_app_path: a $(...) is a process each time
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then fl_memo "git:${app}:${*}" git -C "${FL_BENCH_DIR}/apps/${app}" "$@"; return; fi
+  git -C "${FL_BENCH_DIR}/apps/${app}" "$@"
+}
 
-# sites/apps.txt, one app per line, in order
+# sites/apps.txt, one app per line, in order: no carriage return, no space or
+# tab at either end, no empty line, each name once. Read in bash; in a doctor
+# run (facts.sh) once.
 fl_apps_txt() {
-  local f="${FL_BENCH_DIR}/sites/apps.txt"
+  local f="${FL_BENCH_DIR}/sites/apps.txt" out
   [[ -f "$f" ]] || return 0
-  tr -d '\r' <"$f" | awk '{gsub(/^[ \t]+|[ \t]+$/, "")} NF && !seen[$0]++'
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    fl_memo_v out "apps_txt:${FL_BENCH_DIR}" fl__apps_txt_read "$f"
+    printf '%s' "$out"
+    return 0
+  fi
+  fl__apps_txt_read "$f"
+}
+
+fl__apps_txt_read() {
+  local line seen=$'\n'
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line//$'\r'/}"
+    line="${line#"${line%%[![:blank:]]*}"}"; line="${line%"${line##*[![:blank:]]}"}"
+    [[ -n "$line" ]] || continue
+    case "$seen" in *$'\n'"$line"$'\n'*) continue ;; esac
+    seen="${seen}${line}"$'\n'
+    printf '%s\n' "$line"
+  done <"$1"
 }
 
 fl_app_in_apps_txt() { fl_has_line "$(fl_apps_txt || true)" "$1"; }
@@ -51,6 +77,21 @@ fl_apps_unlisted() {
 
 fl_apps_all() { fl_apps_txt; fl_apps_unlisted; }
 
+# fl_app_config_v VAR APP KEY: what "git config --get KEY" says in APP's repo
+# (the last value, nothing when unset). In a doctor run one "git config -l" per
+# app answers every key, instead of one process for each.
+fl_app_config_v() {
+  local __all __line __v=""
+  if [[ -n "${FL_FACTS_DIR:-}" ]] && fl_memo_v __all "gitcfg:${2}" git -C "${FL_BENCH_DIR}/apps/${2}" config -l; then
+    while IFS= read -r __line; do
+      [[ "$__line" == "${3}="* ]] && __v="${__line#*=}"
+    done <<<"$__all"
+    printf -v "$1" '%s' "$__v"
+    return 0
+  fi
+  printf -v "$1" '%s' "$(fl_app_git "$2" config --get "$3" 2>/dev/null || true)"
+}
+
 # The folder in apps/ that holds NAME, compared without case (a repo named
 # Raven is the app raven), or nothing.
 fl_app_existing_dir() {
@@ -64,7 +105,7 @@ fl_app_existing_dir() {
   return 0
 }
 
-fl_app_has_git() { [[ -e "$(fl_app_path "$1")/.git" ]]; }
+fl_app_has_git() { [[ -e "${FL_BENCH_DIR}/apps/${1}/.git" ]]; }
 fl_app_branch() { fl_app_has_git "$1" || return 0; fl_app_git "$1" symbolic-ref --short -q HEAD 2>/dev/null || true; }
 fl_app_commit() { fl_app_has_git "$1" || return 0; fl_app_git "$1" rev-parse -q --verify 'HEAD^{commit}' 2>/dev/null || true; }
 fl_app_dirty() { fl_app_has_git "$1" && [[ -n "$(fl_app_git "$1" status --porcelain -uno 2>/dev/null || true)" ]]; }
@@ -76,7 +117,7 @@ fl_app_remote() {
   local app="$1" b r="" remotes
   fl_app_has_git "$app" || return 0
   b="$(fl_app_branch "$app")"
-  [[ -n "$b" ]] && r="$(fl_app_git "$app" config --get "branch.${b}.remote" 2>/dev/null || true)"
+  [[ -n "$b" ]] && fl_app_config_v r "$app" "branch.${b}.remote"
   if [[ -z "$r" || "$r" == "." ]]; then
     remotes="$(fl_app_git "$app" remote 2>/dev/null || true)"
     if fl_has_line "$remotes" upstream; then r=upstream; else r="${remotes%%$'\n'*}"; fi

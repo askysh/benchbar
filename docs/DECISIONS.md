@@ -8,6 +8,13 @@ One line per non obvious choice: the decision, then the reason. The
 decisions of the app work live in `macos/DECISIONS.md`. The 0.5.5, 0.5 and 0.4
 runs come first, the 0.3 easy install run follows.
 
+## 0.9: doctor speed (issue 147)
+
+- A doctor run keeps what its checks ask again and again (listeners, `launchctl print`, `brew list`, git answers, the ports of each bench) in files of a private folder, `facts.sh`: a file, not a variable, because most checks run in `$(...)` or in a background job, where a variable set is lost. Outside `fl_doctor_run` the folder is empty and every function answers as before, so no other command can read a stale answer.
+- The slow checks that only read (`FL_PARALLEL_CHECKS`) run as background jobs, a few at a time (`FL_DOCTOR_JOBS`, 6), slowest first, and the run takes their rows in the order of `FL_CHECK_ORDER`: the report is the same as a serial run. A job that leaves no row (it died) is run again in the shell. A new check stays serial until it is added to the list, so a check that sets a variable for a later one keeps working.
+- Git is asked about every app at the start of the run, in the background (8 apps at a time), by the same functions the checks call, so the checks only find the answers. `doctor --fetch` drops the kept git answers after its fetch. One `git config -l` answers the remote, merge branch and user.email of an app, and `rev-parse --verify` before `rev-list` is gone: a missing ref fails the count the same way.
+- A background job clears the command's EXIT and ERR traps first: a job that ends must not release the run lock or send the done line.
+
 ## 0.9: first install (issue 112)
 
 - Phase 00 on macOS installs `uv` with Homebrew unless one is already runnable (PATH, `<brew prefix>/bin`, `~/.local/bin`), and phase 01 refuses to go on without it before pipx, bench or `bench init` cost time: frappe-bench 5.31 runs `uv venv` in `bench init` whoever installed bench itself, so pipx is no way round it.

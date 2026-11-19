@@ -30,7 +30,11 @@ FL_FETCH="${FL_FETCH:-0}"
 FL_FRESHNESS_FETCH_TIMEOUT="${FL_FRESHNESS_FETCH_TIMEOUT:-20}"
 
 # now as epoch seconds; FL_NOW fixes it (tests)
-fl_now() { if [[ -n "${FL_NOW:-}" ]]; then printf '%s' "$FL_NOW"; else date +%s; fi; }
+fl_now() {
+  if [[ -n "${FL_NOW:-}" ]]; then printf '%s' "$FL_NOW"
+  elif [[ -n "${FL_FACTS_DIR:-}" ]]; then fl_memo now date +%s
+  else date +%s; fi
+}
 
 fl_epoch_iso() { [[ -n "$1" ]] || return 0; date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true; }
 
@@ -38,8 +42,10 @@ fl_epoch_iso() { [[ -n "$1" ]] || return 0; date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ 
 
 # APP_FOCUS holds "app=focus app2=ignore"; an app without an entry is auto
 fl_app_focus_pin() {
-  local w
-  for w in $(fl_bstate_get APP_FOCUS); do
+  local w pins
+  # the state file is read once per doctor run, not once for every app (facts.sh)
+  fl_memo_v pins "app-focus-pins:${FL_BENCH_DIR}" fl_bstate_get APP_FOCUS || true
+  for w in $pins; do
     [[ "${w%%=*}" == "$1" ]] && { printf '%s' "${w#*=}"; return 0; }
   done
   printf 'auto'
@@ -78,7 +84,7 @@ fl_app_focus_auto_reasons() {
   branch="$(fl_app_branch "$app")"
   ref="$(fl_app_reference_branch "$app")"
   if [[ -n "$branch" && -n "$ref" && "$branch" != "$ref" ]]; then printf 'on %s, not %s\n' "$branch" "$ref"; fi
-  email="$(fl_app_git "$app" config user.email 2>/dev/null || true)"
+  fl_app_config_v email "$app" user.email
   if [[ -n "$email" ]]; then
     at="$(fl_app_git "$app" log -1 -i -F --author="<${email}>" --format=%at HEAD --branches 2>/dev/null || true)"
     if [[ "$at" =~ ^[0-9]+$ ]]; then
@@ -153,7 +159,7 @@ fl_app_upstream() {
   fl_app_has_git "$app" || return 0
   b="$(fl_app_branch "$app")"; [[ -n "$b" ]] || return 0
   remote="$(fl_app_remote "$app")"; [[ -n "$remote" ]] || return 0
-  merge="$(fl_app_git "$app" config --get "branch.${b}.merge" 2>/dev/null || true)"
+  fl_app_config_v merge "$app" "branch.${b}.merge"
   merge="${merge#refs/heads/}"
   printf '%s %s' "$remote" "${merge:-$b}"
 }
@@ -170,11 +176,11 @@ fl_app_behind() {
   up="$(fl_app_upstream "$app")"; [[ -n "$up" ]] || return 0
   remote="${up%% *}"; branch="${up#* }"
   ref="refs/remotes/${remote}/${branch}"
-  fl_app_git "$app" rev-parse -q --verify "${ref}^{commit}" >/dev/null 2>&1 || return 0
+  # a ref that does not exist fails the count, so no separate rev-parse is asked
   n="$(fl_app_git "$app" rev-list --count --first-parent "HEAD..${ref}" 2>/dev/null || true)"
   [[ "$n" =~ ^[0-9]+$ ]] || return 0
   if [[ "$n" -gt 0 ]]; then
-    ct="$(fl_app_git "$app" log --first-parent --format=%ct "HEAD..${ref}" 2>/dev/null | tail -n1)"
+    ct="$(fl_app_git "$app" log --first-parent --format=%ct "HEAD..${ref}" 2>/dev/null)"; ct="${ct##*$'\n'}"
     [[ "$ct" =~ ^[0-9]+$ ]] && days=$((($(fl_now) - ct) / 86400))
     [[ "$days" -lt 0 ]] && days=0
   fi
@@ -238,6 +244,8 @@ fl_freshness_fetch() {
     if [[ "$(cat "$app")" == "0" ]]; then ok=1; else failed=1; fi
   done
   rm -rf "$codes"
+  # the refs just changed: what a doctor run kept about the apps' git is old
+  fl_facts_forget "git"
   [[ "$ok" == "1" && "$failed" == "0" ]] && fl_kv_set "$(fl_freshness_file)" FETCHED_AT "$(fl_now)"
   return 0
 }
@@ -259,10 +267,61 @@ fl_behind_words() {
 
 # ---------------------------------------------------------------- doctor
 
+# fl_facts_warm_apps IDS: at the start of a doctor run, when a check that
+# reads the apps' git will run (IDS, the checks of the run), the git questions
+# those checks ask about every app are asked here, in the background, several
+# apps at a time. The checks then find each answer kept (facts.sh) and start
+# no git. Reads only; the checks keep their own order and their own words.
+FL_WARM_PID=""
+FL_WARM_FULL=0
+FL_WARM_JOBS="${FL_WARM_JOBS:-8}"
+fl_facts_warm_apps() {
+  FL_WARM_PID=""
+  # the freshness checks need all of it; the branch policy check only the branch and remote
+  FL_WARM_FULL=0
+  case "$1" in *" dependency_behind "*|*" apps_behind "*) FL_WARM_FULL=1 ;; esac
+  case "$1" in *" dependency_behind "*|*" apps_behind "*|*" app_branch_policy "*) ;; *) return 0 ;; esac
+  (
+    local app pids=() alive pid
+    trap - EXIT ERR
+    while IFS= read -r app; do
+      [[ -n "$app" ]] || continue
+      fl_app_has_git "$app" || continue
+      while [[ "${#pids[@]}" -ge "$FL_WARM_JOBS" ]]; do
+        alive=()
+        for pid in "${pids[@]}"; do if kill -0 "$pid" 2>/dev/null; then alive+=("$pid"); fi; done
+        pids=(${alive[@]+"${alive[@]}"})
+        [[ "${#pids[@]}" -lt "$FL_WARM_JOBS" ]] || wait "${pids[0]}" 2>/dev/null || true
+      done
+      { trap - EXIT ERR; fl__app_warm "$app"; } >/dev/null 2>&1 &
+      pids+=("$!")
+    done < <(fl_apps_all)
+    wait
+  ) &
+  FL_WARM_PID="$!"
+}
+
+# fl_facts_wait_warm: the checks that read the apps' git wait for the warming
+fl_facts_wait_warm() {
+  [[ -z "$FL_WARM_PID" ]] || wait "$FL_WARM_PID" 2>/dev/null || true
+  FL_WARM_PID=""
+}
+
+# the questions of chk_app_branch_policy, fl_focus_apps and fl_app_behind for one app
+fl__app_warm() {
+  local reasons
+  fl_app_branch "$1"; fl_app_remote "$1"
+  [[ "$FL_WARM_FULL" == "1" ]] || return 0
+  reasons="$(fl_app_focus_reasons "$1")"
+  [[ -n "$reasons" ]] || fl_app_behind "$1"
+  return 0
+}
+
 # One row per stale dependency of a focus app (CHK_MORE), or one ok row.
 # The two checks share one inference per doctor run.
 FL_FRESHNESS_READY=""
 fl_freshness_prepare() {
+  fl_facts_wait_warm
   [[ "$FL_FRESHNESS_READY" == "$FL_BENCH_DIR" ]] && return 0
   fl_focus_apps >/dev/null
   FL_FOCUS_DEPS="$(fl_focus_dependencies)"

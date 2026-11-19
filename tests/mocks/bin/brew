@@ -9,6 +9,8 @@ case "${1:-}" in
     # --installed-on-request: what was asked for (the leaves file doubles as that list)
     [[ " $* " == *" --installed-on-request "* ]] && { cat "${MOCK_BREW_LEAVES:?}"; exit 0; }
     f="${*: -1}"
+    # "--versions" with no name: every installed formula (doctor reads them all at once)
+    if [[ "$f" == "--versions" ]]; then while IFS= read -r f; do [[ -z "$f" ]] || printf '%s 1.0\n' "$f"; done <"${MOCK_STATE:?}/installed" 2>/dev/null; exit 0; fi
     if grep -qx "$f" "${MOCK_STATE:?}/installed" 2>/dev/null; then printf '%s 1.0\n' "$f"; else exit 1; fi ;;
   install|reinstall)
     f="${*: -1}"

@@ -577,6 +577,8 @@ fl_cleanup() {
   fl_sp_listener_stop
   fl_sudo_end
   fl_lock_release
+  # a doctor run that was cut short leaves its folder of kept answers (facts.sh)
+  fl_facts_end
   # install --json and adopt --json: always the last line, after the lock is free
   fl_jsonl_on_exit "$code"
   # repair --json: its done line, when the run ended before it could send one

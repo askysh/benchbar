@@ -157,6 +157,9 @@ fl_agent_target() {
 }
 
 fl_agent_loaded() {
+  local out
+  # in a doctor run (facts.sh) the one print of this target is shared with fl_agent_field
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then fl_memo_v out "launchctl:$(fl_agent_target)" launchctl print "$(fl_agent_target)"; return; fi
   launchctl print "$(fl_agent_target)" >/dev/null 2>&1
 }
 
@@ -189,7 +192,19 @@ fl_agent_read() {
 
 # fl_agent_field FIELD [TARGET]: reads "state", "pid" or "last exit code".
 fl_agent_field() {
-  local field="$1" target="${2:-$(fl_agent_target)}"
+  local field="$1" target="${2:-$(fl_agent_target)}" out line k v
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    fl_memo_v out "launchctl:${target}" launchctl print "$target" || true
+    while IFS= read -r line; do
+      [[ "$line" == *" = "* ]] || continue
+      k="${line%%" = "*}"; k="${k#"${k%%[![:space:]]*}"}"
+      [[ "$k" == "$field" ]] || continue
+      v="${line#*" = "}"; v="${v%%" = "*}"
+      v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
+      printf '%s\n' "$v"; return 0
+    done <<<"$out"
+    return 0
+  fi
   launchctl print "$target" 2>/dev/null | awk -F' = ' -v f="$field" '
     $1 ~ "^[[:space:]]*" f "$" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }' || true
 }

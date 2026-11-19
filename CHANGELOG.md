@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Command line tool
+
+- `benchbar doctor` is much faster: on a bench with 41 apps `doctor --json` went from about 10 s to about 4 s on an M4 (issue #147; `--quick` takes about 2 s). It reads what its checks share once (one `lsof` for every port, one `brew list`, one `launchctl print`, one `git config` and one read of each config file per app), starts the slow checks (`bench version`, `brew info`, Python and Node probes, the site ping) side by side, asks git about the apps several at a time, and does its text work in bash instead of starting `awk`, `sed`, `grep` and `tr` for it. The checks, their order and their messages are the same. `FL_DOCTOR_JOBS=1` runs everything one after the other.
+
 ### Mac app
 
 - New setting **Links, Ask before a link acts** (off by default): when on, BenchBar shows an alert before a `benchbar://` link starts, stops or restarts a bench or opens a console. Any web page or app can open such a link, and a browser's "always allow" removes its own question. The docs say so plainly.
