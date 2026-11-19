@@ -10,7 +10,7 @@ mock_log() {
   if [[ "$name" != "sudo" && -f "${MOCK_STATE:-/nonexistent}/sudo_password" ]]; then
     local pw
     pw="$(head -n1 "${MOCK_STATE}/sudo_password")"
-    if env | grep -q '^BENCHBAR_SUDO_PASSWORD=' || env | grep -F -q -- "$pw" || [[ "$*" == *"$pw"* ]]; then
+    if grep -q '^BENCHBAR_SUDO_PASSWORD=' <<<"$(env)" || grep -F -q -- "$pw" <<<"$(env)" || [[ "$*" == *"$pw"* ]]; then
       printf '%s %s\n' "$name" "$*" >>"${MOCK_STATE}/sudo_leak"
     fi
   fi

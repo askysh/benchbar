@@ -51,7 +51,7 @@ for f in 20260901_090000-bbtest_localhost-database.sql.gz 20260901_090000-bbtest
   20260901_090000-bbtest_localhost-site_config_backup.json 20260902_090000-bbtest_localhost-database.sql.gz; do
   assert_file "$BK/$f" "(site backup must not delete older backups)"
 done
-assert_eq "-- dump of 20260901_090000" "$(gzip -dc "$BK/20260901_090000-bbtest_localhost-database.sql.gz" | head -n1)"
+assert_eq "-- dump of 20260901_090000" "$(gzip -dc "$BK/20260901_090000-bbtest_localhost-database.sql.gz" | awk 'NR==1')"
 assert_eq "202609010900" "$(date -r "$BK/20260901_090000-bbtest_localhost-database.sql.gz" +%Y%m%d%H%M 2>/dev/null || date -d "@$(mtime_of "$BK/20260901_090000-bbtest_localhost-database.sql.gz")" +%Y%m%d%H%M)" "(the kept file keeps its time)"
 assert_no_kept_copy
 run_json site backups bbtest.localhost --json --bench-dir "$BENCH"
@@ -234,7 +234,7 @@ assert_contains "$OUT" "4 file(s) of bbtest.localhost"
 MOCK_BENCH_BACKUP_PRUNE=1 run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT$ERR"
 for f in database.sql.gz files.tar private-files.tar site_config_backup.json; do assert_file "$BK/${KSET}-${f}" "(put back by the next backup)"; done
-assert_eq "-- dump of 20260801_090000" "$(gzip -dc "$BK/${KSET}-database.sql.gz" | head -n1)"
+assert_eq "-- dump of 20260801_090000" "$(gzip -dc "$BK/${KSET}-database.sql.gz" | awk 'NR==1')"
 assert_contains "$OUT" "put back 4 older backup file(s)"
 assert_eq "True" "$(printf '%s' "$OUT" | jget - 'any(c["kind"] == "backups" for c in d["changed"])')" "$OUT"
 assert_no_file "$FL_BACKUP_ROOT/20260801-000000-1/kept-sets" "(nothing left to keep)"

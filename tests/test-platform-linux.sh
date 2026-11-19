@@ -130,10 +130,10 @@ reset_calls
 assert_eq "4242
 4545
 4747" "$(fl_bench_status_pids | sort)" "(this bench's socketio, honcho and serve; the other bench's honcho and an unreadable one are left out)"
-assert_eq "4545" "$(fl_bench_status_pids | head -n 1)" "(honcho first)"
+assert_eq "4545" "$(fl_bench_status_pids | awk 'NR==1')" "(honcho first)"
 assert_calls_contain '^pgrep -af '
 assert_calls_not_contain '^pgrep -lf '
-assert_eq "4545 honcho start -f Procfile.lean" "$(pgrep -af 'honcho start' | head -n 1)"
+assert_eq "4545 honcho start -f Procfile.lean" "$(pgrep -af 'honcho start' | awk 'NR==1')"
 fl_process_running 'socketio\.js' || fail "a running process is found"
 ! fl_process_running 'no-such-process-anywhere' || fail "a missing one is not"
 assert_calls_not_contain '^pgrep -q'
@@ -176,7 +176,7 @@ FL_PYTHON_BIN_NAME=python3.11; FL_NODE_MAJOR=22; FL_PROFILE=v15-lts
 PYDIR="$HOME/.local/share/uv/python"
 NODEDIR="$HOME/.local/share/fnm/node-versions"
 assert_eq "$PYDIR/cpython-3.11.9-linux-x86_64-gnu/bin/python3.11" "$(fl_python_bin)"
-"$(fl_python_bin)" --version | grep -q 'Python 3.11' || fail "the mock python answers"
+grep -q 'Python 3.11' <<<"$("$(fl_python_bin)" --version)" || fail "the mock python answers"
 assert_eq "$NODEDIR/v22.11.0/installation/bin/node" "$(fl_node_bin)"
 assert_eq "$NODEDIR/v22.11.0/installation/bin/npm" "$(fl_npm_bin)"
 # the newest patch release wins, by number and not by text
@@ -320,7 +320,7 @@ fl_keychain_delete   # again: nothing to do, no error
 
 # ---- the content hash is the same 12 hex digits with sha256sum as with shasum
 # the real sha256sum, not the tests/mocks shim (macOS hosts have none: skipped)
-REAL_SHA256SUM="$(type -ap sha256sum | grep -v '/tests/mocks/' | head -n1 || true)"
+REAL_SHA256SUM="$(type -ap sha256sum | grep -v '/tests/mocks/' | awk 'NR==1' || true)"
 if [[ -n "$REAL_SHA256SUM" ]] && command -v shasum >/dev/null 2>&1; then
   NOSHA="$TMP_DIR/nosha"; mkdir -p "$NOSHA"
   ln -s "$REAL_SHA256SUM" "$NOSHA/sha256sum"; ln -s "$(command -v cut)" "$NOSHA/cut"

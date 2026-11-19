@@ -19,7 +19,7 @@ done
 found=1
 while read -r pid cmdline; do
   [[ -n "$pid" ]] || continue
-  if printf '%s' "$cmdline" | grep -qE -- "$pattern"; then
+  if grep -qE -- "$pattern" <<<"$cmdline"; then
     found=0
     if [[ "$quiet" == "1" ]]; then :; elif [[ "$long" == "1" ]]; then printf '%s %s\n' "$pid" "$cmdline"; else printf '%s\n' "$pid"; fi
   fi

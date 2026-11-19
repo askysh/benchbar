@@ -54,7 +54,7 @@ grep -q '^export EDITOR=vim$' "$HOME/.zshrc" || fail "existing zshrc content mus
 assert_calls_contain "^launchctl bootstrap gui/[0-9]+ ${plist}\$"
 for name in benchbar frappe-mac; do
   [[ -L "$HOME/.local/bin/$name" && "$(readlink "$HOME/.local/bin/$name")" == "$ROOT/benchbar" ]] || fail "$name must be linked into ~/.local/bin"
-  "$HOME/.local/bin/$name" --version | grep -q "benchbar ${VER}" || fail "the symlinked $name must resolve its own libraries"
+  grep -q "benchbar ${VER}" <<<"$("$HOME/.local/bin/$name" --version)" || fail "the symlinked $name must resolve its own libraries"
 done
 grep -q '<key>AssociatedBundleIdentifiers</key>' "$plist" || fail "plist must name the BenchBar app"
 grep -q '<string>com.akashmishra.benchbar</string>' "$plist" || fail "plist must carry the app bundle id"
@@ -93,7 +93,7 @@ reset_calls
 run_fm autostart off --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 grep -q '<key>RunAtLoad</key><false/>' "$plist" || fail "autostart off must set RunAtLoad false"
-[[ -n "$(find "$FL_BACKUP_ROOT" -name '*com.benchbar.frappe-bench.plist' | head -n1)" ]] || fail "old plist must be backed up"
+[[ -n "$(find "$FL_BACKUP_ROOT" -name '*com.benchbar.frappe-bench.plist' | awk 'NR==1')" ]] || fail "old plist must be backed up"
 assert_calls_contain '^launchctl bootout'
 assert_calls_contain '^launchctl bootstrap'
 run_fm autostart on --bench-dir "$BENCH"

@@ -16,6 +16,6 @@ cd "$ROOT"
 # nothing but "Promise resolution is still pending". The slowest test takes about 2 s. Node
 # before 20.11 has no --test-timeout, so ask it first.
 timeout_flag=()
-if node --help 2>/dev/null | grep -q -- '--test-timeout'; then timeout_flag=(--test-timeout=120000); fi
+if grep -q -- '--test-timeout' <<<"$(node --help 2>/dev/null)"; then timeout_flag=(--test-timeout=120000); fi
 node --test ${timeout_flag[@]+"${timeout_flag[@]}"} tests/share/*.test.js
 printf 'test-share-gateway: ok\n'

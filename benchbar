@@ -291,6 +291,7 @@ Daily
   fg                  Stop the service and run honcho in the foreground.
   watch               Run bench watch for asset rebuilds.
   autostart on|off    Whether the bench may come back after login.
+  listen local|all    Where the web server and socketio listen: 127.0.0.1 (default) or every interface.
   path                Print the bench directory (used by benchcd).
   site list           The bench's sites; the default one is what benchup waits for.
   site add NAME       bench new-site (MariaDB password from the Keychain, a file on Linux), the hosts line, and
@@ -1583,7 +1584,7 @@ case "$COMMAND" in
     ;;
   # fg stops the background bench first (a down), so it holds the lock until
   # just before it execs honcho (fl_cmd_fg releases it there)
-  install|adopt|service|repair|up|down|restart|autostart|uninstall-service|pull|fg)
+  install|adopt|service|repair|up|down|restart|autostart|listen|uninstall-service|pull|fg)
     [[ "$FL_JSONL_KIND" == "own" ]] || fl_log_init "${FL_STATE_DIR}/logs"
     fl_lock_acquire "${FL_STATE_DIR}/lock"
     ;;
@@ -1625,6 +1626,7 @@ case "$COMMAND" in
   fg) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_fg ;;
   watch) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_watch ;;
   autostart) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_autostart "${ARGS[0]:-}" ;;
+  listen) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_listen "${ARGS[0]:-}" ;;
   uninstall-service)
     if [[ " ${ARGS[*]:-} " == *" --all "* ]]; then
       [[ -z "$OPT_BENCH_DIR" ]] || fl_die "uninstall-service takes --all or --bench-dir, not both." "Every bench: benchbar uninstall-service --all. One bench: benchbar uninstall-service --bench-dir PATH."

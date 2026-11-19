@@ -241,8 +241,12 @@ fl_share_gateway_json() {
   fl_share_host_label_v host
   fl_share_app_routes_json_v app_routes
   [[ "$web_port" =~ ^[0-9]+$ && -n "$seats" && -n "$copy_made" ]] || { fl_fail "share.json lacks the web port, the seats or the copy's date"; return 1; }
-  content="$(printf '{\n  "v": 3,\n  "protocol": 3,\n  "listen": {"host": "0.0.0.0", "port": %s},\n  "tls": {"key": %s, "cert": %s},\n  "share_site": %s,\n  "web_port": %s,\n  "deadline_epoch": %s,\n  "started_epoch": %s,\n  "max_total_s": %s,\n  "state_dir": %s,\n  "devices": %s,\n  "control_sock": %s,\n  "log_dir": %s,\n  "python": %s,\n  "signin_helper": %s,\n  "max_conns": {"per_device": 64, "total": 256, "unpaired_total": 16, "unpaired_per_ip": 4},\n  "max_body_mb": 50,\n  "label": %s,\n  "room_label": %s,\n  "site_label": %s,\n  "copy_made": %s,\n  "app_routes": %s,\n  "seats": [\n    %s\n  ]\n}\n' \
-    "$FL_SHARE_GATEWAY_PORT" "$(fl_json_str "${dir}/host.key")" "$(fl_json_str "${dir}/host.crt")" "$(fl_json_str "$FL_SHARE_SITE")" "$web_port" \
+  # the gateway listens on the address of the network the room is on (the default route's interface), not
+  # on every interface: a VPN, a phone hotspot or an Ethernet port of this Mac never sees it (SHARE-7)
+  fl_sp_lan_v
+  [[ -n "$SP_LAN_IP" ]] || { fl_fail "this Mac has no network address for the gateway to listen on"; return 1; }
+  content="$(printf '{\n  "v": 3,\n  "protocol": 3,\n  "listen": {"host": %s, "port": %s},\n  "tls": {"key": %s, "cert": %s},\n  "share_site": %s,\n  "web_port": %s,\n  "deadline_epoch": %s,\n  "started_epoch": %s,\n  "max_total_s": %s,\n  "state_dir": %s,\n  "devices": %s,\n  "control_sock": %s,\n  "log_dir": %s,\n  "python": %s,\n  "signin_helper": %s,\n  "max_conns": {"per_device": 64, "total": 256, "unpaired_total": 16, "unpaired_per_ip": 4},\n  "max_body_mb": 50,\n  "label": %s,\n  "room_label": %s,\n  "site_label": %s,\n  "copy_made": %s,\n  "app_routes": %s,\n  "seats": [\n    %s\n  ]\n}\n' \
+    "$(fl_json_str "$SP_LAN_IP")" "$FL_SHARE_GATEWAY_PORT" "$(fl_json_str "${dir}/host.key")" "$(fl_json_str "${dir}/host.crt")" "$(fl_json_str "$FL_SHARE_SITE")" "$web_port" \
     "$2" "$1" "$FL_SHARE_MAX_TOTAL_S" "$(fl_json_str "$dir")" "$(fl_json_str "${dir}/devices.json")" "$(fl_json_str "$(fl_share_sock)")" \
     "$(fl_json_str "$dir")" "$(fl_json_str "${FL_BENCH_DIR}/env/bin/python")" "$(fl_json_str "${lib}/signin.py")" \
     "$(fl_json_str "$host")" "$3" "$(fl_json_str "$site")" "$(fl_json_str "$copy_made")" "$app_routes" "$seats")"
