@@ -88,8 +88,8 @@ assert_eq "$SITE True True" "$(J '" ".join(str(x) for x in (d["default_site"], d
 ok labs list --json
 # lan-rooms lists Linux, so it is available in WSL (whether a room can be reached is share's check, not the lab's);
 # quick-switch is the Mac's, and not available here
-assert_eq "['macos', 'linux'] True" "$(J '[(l["platforms"], l["available"]) for l in d["labs"] if l["name"] == "lan-rooms"][0]')"
-assert_eq "['macos'] False" "$(J '[(l["platforms"], l["available"]) for l in d["labs"] if l["name"] == "quick-switch"][0]')"
+assert_eq "['macos', 'linux'] True" "$(J '[l for l in d["labs"] if l["name"] == "lan-rooms"][0]["platforms"], [l for l in d["labs"] if l["name"] == "lan-rooms"][0]["available"]')"
+assert_eq "['macos'] False" "$(J '[l for l in d["labs"] if l["name"] == "quick-switch"][0]["platforms"], [l for l in d["labs"] if l["name"] == "quick-switch"][0]["available"]')"
 lx labs on quick-switch --yes --json
 assert_eq "1" "$CODE" "$(all)"
 
