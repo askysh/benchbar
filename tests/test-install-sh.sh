@@ -144,7 +144,7 @@ run_install --yes --app-only
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "build provenance verified (gh attestation verify)"
 assert_calls_contain "^gh auth status"
-assert_calls_contain "^gh attestation verify .*BenchBar-0.6.0.zip -R askysh/benchbar$"
+assert_calls_contain "^gh attestation verify .*BenchBar-0.6.0.zip -R askysh/benchbar --signer-workflow askysh/benchbar/.github/workflows/release.yml$"
 assert_contains "$OUT" "code signature valid (codesign --verify --deep --strict)"
 assert_contains "$OUT" "Gatekeeper accepts the app: notarized (spctl --assess --type execute)"
 assert_calls_contain '^codesign --verify --deep --strict .*/unpacked/BenchBar.app$'
@@ -158,25 +158,64 @@ assert_calls_contain "^curl --proto =https --tlsv1.2 -fsSL .*releases/latest"
 assert_calls_contain "^curl --proto =https --tlsv1.2 -fsSL --retry 3 -o .*BenchBar-0.6.0.zip "
 assert_calls_not_contain '^curl -fsSL'
 
-make_release 0.7.0
+# 0.9.0 and later: a failed check stops the install
+make_release 1.0.0
 touch "$MOCK_STATE/gh_attest_fail"
 reset_calls
 run_install --yes --app-only
 assert_eq "1" "$CODE" "$OUT"
-assert_contains "$OUT" "gh attestation verify did not accept BenchBar-0.7.0.zip"
+assert_contains "$OUT" "gh attestation verify did not accept BenchBar-1.0.0.zip"
 assert_contains "$OUT" "no attestations found"
-assert_contains "$OUT" "the build provenance of BenchBar-0.7.0.zip did not verify; nothing installed"
+assert_contains "$OUT" "the build provenance of BenchBar-1.0.0.zip did not verify; nothing installed"
 assert_eq "0.6.0" "$(installed_app_version)"
 assert_calls_not_contain '^ditto'
+# the same for 0.9.0 itself, and a release candidate of it
+make_release 0.9.0
+run_install --yes --app-only
+assert_eq "1" "$CODE" "$OUT"
+assert_eq "0.6.0" "$(installed_app_version)"
+# before 0.9.0 no Mac file has an attestation: gh finds none (HTTP 404), so only
+# the checksum is checked, and it says so
+make_release 0.8.3
+printf 'HTTP 404: Not Found (https://api.github.com/repos/askysh/benchbar/attestations/sha256:abc)' >"$MOCK_STATE/gh_attest_fail"
+reset_calls
+run_install --yes --app-only
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "v0.8.3 is older than 0.9.0, the first release with build provenance: only the checksum was checked"
+assert_not_contains "$OUT" "build provenance verified"
+assert_eq "0.8.3" "$(installed_app_version)" "$OUT"
+# but any other gh error is still a refusal, also for an old release
+printf 'verification failed: the signer workflow does not match' >"$MOCK_STATE/gh_attest_fail"
+make_release 0.8.4
+run_install --yes --app-only
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "signer workflow does not match"
+assert_eq "0.8.3" "$(installed_app_version)"
 rm -f "$MOCK_STATE/gh_attest_fail"
+# the signer is pinned
+assert_calls_contain '^gh attestation verify .* --signer-workflow askysh/benchbar/.github/workflows/release.yml$'
+# a gh that does not answer: the fallback after the deadline, not a stall
+touch "$MOCK_STATE/gh_hang"
+make_release 0.9.2
+reset_calls
+BENCHBAR_ATTEST_TIMEOUT=2 run_install --yes --app-only
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "gh attestation verify did not answer within 2 s: only the checksum was checked"
+assert_eq "0.9.2" "$(installed_app_version)" "$OUT"
+rm -f "$MOCK_STATE/gh_hang"
+make_release 0.7.0
+make_release 0.6.0
+run_install --yes --app-only --version v0.6.0
+assert_eq "0.6.0" "$(installed_app_version)" "$OUT"
 
 # gh signed out: only the checksum, and the command to run by hand
+make_release 0.7.0
 touch "$MOCK_STATE/gh_signed_out"
 reset_calls
 run_install --yes --app-only
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "gh is not signed in (gh auth login): only the checksum was checked, not where the file was built"
-assert_contains "$OUT" "to check by hand: gh attestation verify BenchBar-0.7.0.zip -R askysh/benchbar"
+assert_contains "$OUT" "to check by hand: gh attestation verify BenchBar-0.7.0.zip -R askysh/benchbar --signer-workflow askysh/benchbar/.github/workflows/release.yml"
 assert_not_contains "$OUT" "build provenance verified"
 assert_calls_not_contain '^gh attestation verify'
 assert_eq "0.7.0" "$(installed_app_version)"
@@ -191,7 +230,7 @@ reset_calls
 PATH="$TMP_DIR/nogh" run_install --yes --app-only
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "gh (the GitHub CLI) is not installed: only the checksum was checked, not where the file was built"
-assert_contains "$OUT" "to check by hand: gh attestation verify BenchBar-0.8.0.zip -R askysh/benchbar"
+assert_contains "$OUT" "to check by hand: gh attestation verify BenchBar-0.8.0.zip -R askysh/benchbar --signer-workflow askysh/benchbar/.github/workflows/release.yml"
 assert_eq "0.8.0" "$(installed_app_version)"
 
 # the signature: codesign or Gatekeeper refuses, and the old app stays
@@ -211,6 +250,24 @@ assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "spctl --assess --type execute refused the app (not notarized"
 assert_eq "0.8.0" "$(installed_app_version)"
 rm -f "$MOCK_STATE/spctl_fail"
+
+# the running app is quit only after the checks passed: a refused app leaves it running
+add_proc 779 "BenchBar"
+touch "$MOCK_STATE/codesign_fail"
+reset_calls
+run_install --yes --app-only
+assert_eq "1" "$CODE" "$OUT"
+assert_calls_not_contain '^osascript'
+assert_calls_not_contain '^pkill'
+assert_calls_not_contain '^ditto .*\.app\.new'
+rm -f "$MOCK_STATE/codesign_fail"
+reset_calls
+run_install --yes --app-only
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^osascript .*to quit'
+# and the quit comes after the signature check in the call order
+cs="$(grep -n '^codesign ' "$MOCK_LOG" | head -1 | cut -d: -f1)"; qt="$(grep -n '^osascript .*to quit' "$MOCK_LOG" | head -1 | cut -d: -f1)"
+[[ -n "$cs" && -n "$qt" && "$cs" -lt "$qt" ]] || fail "codesign (line ${cs:-none}) must run before the running app is quit (line ${qt:-none})"
 
 # the copy beside the app fails: the old app is as it was, and no half copy stays
 touch "$MOCK_STATE/ditto_fail_new"
@@ -232,7 +289,7 @@ assert_no_file "$APP.old"
 set +e; OUT="$(bash -s -- --help <"$INSTALL" 2>&1)"; CODE=$?; set -e
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "the one line installer"
-assert_contains "$OUT" "gh attestation verify -R askysh/benchbar"
+assert_contains "$OUT" "gh attestation verify, pinned to this repository's release workflow"
 assert_contains "$OUT" "curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash"
 
 # ---- a download that is cut short runs nothing: everything is in main, called on the last line

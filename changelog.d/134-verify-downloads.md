@@ -6,6 +6,8 @@
 - The Homebrew tap workflow verifies the tarball, the DMG and `SHA256SUMS` before it renders the formula.
 - `SHA256SUMS` of a release lists `install.sh` and `install.ps1` of its tag.
 
+- `install.sh` pins the signer of the attestation (this repository's release workflow) and gives each `gh` call 30 seconds, then says only the checksum was checked. A release older than 0.9.0 has no attestation (`gh` answers HTTP 404): `install.sh --version v0.8.3`, and an update from it, go on with the checksum alone; 0.9.0 and later still refuse. The running BenchBar is quit only after the signature checks passed.
+
 ### Windows installer
 
 - `install.ps1` removes Windows' "downloaded from the internet" mark only when `gh attestation verify` accepts the zip. Without `gh` signed in, or when the check fails, the mark stays, the installer says so, and Windows asks once before it starts each program. A checksum from the same release was no reason to drop it.

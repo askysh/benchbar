@@ -293,7 +293,8 @@ cannot. The checksums file is attested too. With the
 [GitHub CLI](https://cli.github.com):
 
 ```powershell
-gh attestation verify benchbar-windows-<version>-amd64.zip -R askysh/benchbar
+gh attestation verify benchbar-windows-<version>-amd64.zip -R askysh/benchbar `
+  --signer-workflow askysh/benchbar/.github/workflows/release-windows.yml
 ```
 
 ## If Windows blocks it

@@ -380,7 +380,7 @@ The workflow runs on publish, not with the draft: a draft's download
 URLs answer 404, so a formula merged earlier would break `brew install`.
 It downloads the release's tarball and DMG, checks them against
 `SHA256SUMS`, runs `gh attestation verify` on them and on `SHA256SUMS`
-(a file without build provenance from `release.yml` stops the run), renders the formula and cask from `packaging/homebrew`
+(a file without build provenance from `release.yml` stops the run; a run for a version below 0.9.0 skips this, with a notice), renders the formula and cask from `packaging/homebrew`
 with `scripts/homebrew-render.sh`, runs `brew style` and `brew audit
 --strict --online`, installs both, runs `brew test`, uninstalls, and
 opens a pull request on the tap. It does not merge it: you read the

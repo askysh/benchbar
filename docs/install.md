@@ -76,9 +76,13 @@ In more detail, in this order, and it says so before each step:
 3. It installs or updates the BenchBar app from the latest GitHub
    release. The zip is checked against the release's `SHA256SUMS`. When
    `gh` (the GitHub CLI) is installed and signed in, it is also checked
-   against its build provenance (`gh attestation verify`), and a failure
-   stops the install. Without `gh` it says that only the checksum was
-   checked and prints the command to run by hand. The unpacked app must
+   against its build provenance (`gh attestation verify`, pinned to this
+   repository's release workflow), and a failure stops the install.
+   Without `gh`, with `gh` signed out, or when `gh` does not answer within
+   30 seconds, it says that only the checksum was checked and prints the
+   command to run by hand. The same goes for a release older than 0.9.0,
+   which has no attestation. The running BenchBar is quit and replaced only
+   after every check passed. The unpacked app must
    pass `codesign --verify --deep --strict` and `spctl --assess`, which
    is Gatekeeper's check of the Developer ID signature and the
    notarization: `curl` sets no quarantine flag, so macOS never checks an
@@ -124,7 +128,8 @@ app zip, the CLI tarball and `SHA256SUMS`) has an attestation. With the
 [GitHub CLI](https://cli.github.com), signed in (`gh auth login`):
 
 ```bash
-gh attestation verify BenchBar-<version>.dmg -R askysh/benchbar
+gh attestation verify BenchBar-<version>.dmg -R askysh/benchbar \
+  --signer-workflow askysh/benchbar/.github/workflows/release.yml
 shasum -a 256 -c SHA256SUMS --ignore-missing
 ```
 
@@ -136,10 +141,10 @@ spctl --assess --type execute --verbose=2 /Applications/BenchBar.app
 ```
 
 The first checks the signature, the second asks Gatekeeper, which also
-checks the notarization. Releases before 0.9.0 have no attestation:
-`install.sh --version` for one of them stops when `gh` is signed in,
-since `gh` finds nothing to verify. Sign `gh` out for that run, or
-download the file and check its `SHA256SUMS` by hand.
+checks the notarization. Releases before 0.9.0 have no attestation, so
+`install.sh --version v0.8.3` finds none (`gh` answers HTTP 404), says
+that only the checksum was checked and goes on. For 0.9.0 and later, and
+for any other error from `gh`, it stops.
 
 On Linux the installer downloads no file: git fetches the CLI from
 `github.com/askysh/benchbar` over https, and `--version vX.Y.Z` checks
