@@ -76,8 +76,8 @@ are the main ones.
 - **Linux and Windows.** The same CLI runs on Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them), with each
   bench under `systemd --user`. On Windows (a beta) the benches run in
   WSL, `benchbar.exe` runs the CLI from PowerShell and a tray app shows
-  them. The Windows programs are not signed yet: see
-  [Before you install](windows.md#before-you-install). See
+  them. The Windows programs are not signed and 0.9.0 has no Store
+  route: see [Smart App Control](windows.md#smart-app-control). See
   [Install](install.md#linux) and [Windows](windows.md).
 - **For coding agents.** `benchbar mcp` lets Claude Code, Cursor and
   other agents read and drive your benches. In Terminal, `--for-agent`

@@ -28,17 +28,11 @@
 #                      asset named exactly that and install.sh takes the first
 #                      asset whose name ends in it.
 #
-# Signing is best effort and only for a build of the release tag. With the
-# SignPath secrets (SIGNPATH_API_TOKEN, SIGNPATH_ORGANIZATION_ID) the project's
-# own binaries go through SignPath (third party DLLs are not ours to sign); a
-# signature that does not verify is thrown away and the unsigned file ships.
-# README.txt and the release notes list what Get-AuthenticodeSignature says
-# about every .exe and .dll in the zip. SignPath may wait for a person to
-# approve the request: the step waits up to 24 hours, but GitHub stops any
-# hosted job after 6 hours, so an approval later than that leaves the file
-# unsigned (re-run the workflow after approving). Set the repository variable
-# SIGNING_REQUIRED to true and the release job fails when a program of ours is
-# unsigned, instead of attaching an unsigned build.
+# Nothing is code signed. SignPath Foundation declined the project on
+# 2026-11-13 and the Store route is not part of 0.9.0, so every .exe and .dll
+# ships as built. README.txt and the release notes still list what
+# Get-AuthenticodeSignature says about every .exe and .dll in the zip, so a
+# download says plainly what is signed (today: only third party libraries).
 #
 # Build provenance: the release job attests both zips (actions/attest-build-
 # provenance), so `gh attestation verify FILE.zip -R askysh/benchbar` works.
@@ -135,15 +129,9 @@ jobs:
     name: Package (${{ matrix.arch }})
     needs: version
     runs-on: windows-latest
-    # A release build may wait for a person to approve the signing request, so
-    # it gets the longest time GitHub allows for a hosted job (6 hours). Other
-    # builds never sign and stop after 40 minutes.
-    timeout-minutes: ${{ needs.version.outputs.release == 'true' && 360 || 40 }}
-    # actions: read is for SignPath's action, which reads this run and
-    # downloads the unsigned artifact with the GitHub token
+    timeout-minutes: 40
     permissions:
       contents: read
-      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -163,10 +151,6 @@ jobs:
       ARCH: ${{ matrix.arch }}
       RID: ${{ matrix.rid }}
       MACHINE: ${{ matrix.machine }}
-      # true when this run builds the release tag and both SignPath secrets
-      # exist (the values themselves go only to the signing step). An artifact
-      # only dispatch and a pull request never sign.
-      SIGNING_CONFIGURED: ${{ needs.version.outputs.release == 'true' && secrets.SIGNPATH_API_TOKEN != '' && secrets.SIGNPATH_ORGANIZATION_ID != '' }}
     steps:
       # a run that attaches to a release builds the tag, not the dispatched commit
       - uses: actions/checkout@v7
@@ -292,73 +276,6 @@ jobs:
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           dotnet test BenchBarTray.sln -c Release
-
-      # ------------------------------------------------------------- signing
-      # Only the project's own binaries: SignPath Foundation signs a project's
-      # own code, not the NuGet libraries it ships.
-      - name: Stage the first party binaries for signing
-        if: env.SIGNING_CONFIGURED == 'true'
-        run: |
-          New-Item -ItemType Directory -Force sign-in | Out-Null
-          Copy-Item out/benchbar.exe sign-in/
-          foreach ($n in 'BenchBarTray.exe', 'BenchBarTray.dll', 'BenchBar.Tray.Core.dll') {
-            if (Test-Path "out/tray/$n") { Copy-Item "out/tray/$n" sign-in/ }
-          }
-          Get-ChildItem sign-in | Format-Table Name, Length
-
-      - name: Upload the unsigned files
-        id: upload-unsigned
-        if: env.SIGNING_CONFIGURED == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: unsigned-${{ matrix.arch }}
-          path: sign-in/*
-          if-no-files-found: error
-
-      - name: Sign with SignPath
-        id: sign
-        if: env.SIGNING_CONFIGURED == 'true'
-        continue-on-error: true
-        uses: signpath/github-action-submit-signing-request@v3
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'benchbar' }}
-          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
-          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG || 'windows-exe' }}
-          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
-          wait-for-completion: true
-          # a person may have to approve the request; GitHub ends a hosted job
-          # after 6 hours whatever this says
-          wait-for-completion-timeout-in-seconds: 86400
-          output-artifact-directory: signed
-
-      - name: Use signed files that verify
-        env:
-          SIGN_OUTCOME: ${{ steps.sign.outcome }}
-        run: |
-          . "$env:RUNNER_TEMP/pe.ps1"
-          $targets = [ordered]@{ 'benchbar.exe' = 'out/benchbar.exe' }
-          foreach ($n in 'BenchBarTray.exe', 'BenchBarTray.dll', 'BenchBar.Tray.Core.dll') {
-            if (Test-Path "out/tray/$n") { $targets[$n] = "out/tray/$n" }
-          }
-          if ($env:SIGN_OUTCOME -eq 'failure') { Write-Host "::warning title=Signing failed::SignPath did not finish; shipping unsigned binaries." }
-          foreach ($name in $targets.Keys) {
-            $candidate = Join-Path 'signed' $name
-            if ($env:SIGN_OUTCOME -ne 'success') { continue }
-            if (-not (Test-Path $candidate)) { Write-Host "::warning::SignPath returned no $name; shipping it unsigned."; continue }
-            $sig = Get-AuthenticodeSignature -FilePath $candidate
-            $same = $true
-            if ($name -like '*.exe') { $same = (Get-PeMachine $candidate) -eq $env:MACHINE }
-            if ($sig.Status -eq 'Valid' -and $same) {
-              Copy-Item $candidate $targets[$name] -Force
-              Write-Host "$name is signed: $($sig.SignerCertificate.Subject)"
-            } else {
-              # never ship a broken signature: keep the unsigned build
-              Write-Host "::warning::The signature on $name is '$($sig.Status)' (CPU match: $same); shipping it unsigned."
-            }
-          }
-          foreach ($name in $targets.Keys) { if ($name -like '*.exe') { Assert-PeMachine $targets[$name] $env:MACHINE } }
 
       # What ships, started once on recorded data: it must stay up and quit cleanly
       # (windows/tray/scripts/smoke.ps1). A publish that lacks a file or a manifest
@@ -838,26 +755,12 @@ jobs:
       GH_REPO: ${{ github.repository }}
       EVENT: ${{ github.event_name }}
       WAIT_FOR_DRAFT: ${{ github.event_name == 'push' || inputs.wait_for_draft == true }}
-      # repository variable: 'true' makes this job fail when a program of ours is unsigned
-      SIGNING_REQUIRED: ${{ vars.SIGNING_REQUIRED }}
     steps:
       - uses: actions/download-artifact@v8
         with:
           pattern: windows-*
           merge-multiple: true
           path: dist
-
-      - name: Fail when a program of ours is unsigned (only if SIGNING_REQUIRED is true)
-        if: env.SIGNING_REQUIRED == 'true'
-        run: |
-          $records = @(Get-ChildItem dist -Filter 'signing-*.json' | Sort-Object Name | ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json })
-          if ($records.Count -eq 0) { throw 'SIGNING_REQUIRED is true, but there is no signing record to check.' }
-          $unsigned = @($records | ForEach-Object { $arch = $_.arch; @($_.files) | Where-Object { $_.firstParty -and -not $_.signed } | ForEach-Object { "$($_.name) ($arch)" } })
-          if ($unsigned.Count -gt 0) {
-            Write-Host "::error title=Unsigned programs::SIGNING_REQUIRED is true and these are not signed: $($unsigned -join ', '). Nothing was attached. Fix signing, then run this workflow again."
-            exit 1
-          }
-          Write-Host 'Every program of ours is signed.'
 
       - name: Write the combined checksums file
         run: |
