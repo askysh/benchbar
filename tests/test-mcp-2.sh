@@ -544,7 +544,8 @@ r = c.call("benchbar_ports_plan", {"paths": []})
 assert r["error"]["code"] == -32602 and "paths" in r["error"]["message"], r
 for args in ({"paths": "/b"}, {"paths": [1]}):
     r = c.call("benchbar_ports_plan", args)
-    assert r["result"]["isError"] and "paths" in text(r), (args, r)
+    refused = r["error"]["message"] if "error" in r else (text(r) if r["result"]["isError"] else "")
+    assert "paths" in refused, (args, r)
 assert open(log).read() == before, "a refused call ran the CLI"
 # the safety decisions are a person's: nothing for them exists, whatever it is called
 names = [t["name"] for t in c.tools()]
