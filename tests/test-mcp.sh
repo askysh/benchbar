@@ -81,7 +81,7 @@ names = [t["name"] for t in by[2]["result"]["tools"]]
 assert names == json.loads(sys.argv[1]), names
 # repairs and bench installs stay terminal work; a service install is a reviewed plan
 assert not any("repair" in n or n.endswith("_install_bench") or n == "benchbar_install" for n in names)
-# the safety decisions stay a person's: no tool turns a lab on, applies ports, shares, guards the LAN or updates
+# the safety decisions stay with the person: no tool turns a lab on, applies ports, shares, guards the LAN or updates
 assert not any(w in n for n in names for w in ("labs_on", "labs_off", "ports_apply", "ports_setup", "share", "lan_guard", "uninstall"))
 assert "benchbar_self_update" not in names
 an = {t["name"]: t["annotations"] for t in by[2]["result"]["tools"]}
