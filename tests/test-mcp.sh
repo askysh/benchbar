@@ -52,7 +52,7 @@ assert_eq "1" "$CODE"; assert_contains "$OUT" "no previous file"
 INIT='{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}'
 mcp() { printf '%s\n' "$INIT" '{"jsonrpc":"2.0","method":"notifications/initialized"}' "$@" | "$FM" mcp 2>/dev/null | tail -n +2; }
 call() { printf '{"jsonrpc":"2.0","id":%s,"method":"tools/call","params":{"name":"%s","arguments":%s}}' "$1" "$2" "$3"; }
-TOOL_NAMES='["benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_app_list", "benchbar_profile_list", "benchbar_profile_check", "benchbar_up", "benchbar_down", "benchbar_restart", "benchbar_app_add_plan", "benchbar_app_add", "benchbar_site_add_plan", "benchbar_site_add", "benchbar_site_backup", "benchbar_site_restore_plan", "benchbar_site_restore", "benchbar_service_install_plan", "benchbar_service_install", "benchbar_site_backups", "benchbar_ports_check", "benchbar_ports_plan", "benchbar_lock_check", "benchbar_labs_list", "benchbar_where", "benchbar_doctor_prerequisites", "benchbar_self_update_check", "benchbar_app_focus_list"]'
+TOOL_NAMES='["benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_app_list", "benchbar_profile_list", "benchbar_profile_check", "benchbar_up", "benchbar_down", "benchbar_restart", "benchbar_app_add_plan", "benchbar_app_add", "benchbar_site_add_plan", "benchbar_site_add", "benchbar_site_backup", "benchbar_site_restore_plan", "benchbar_site_restore", "benchbar_service_install_plan", "benchbar_service_install", "benchbar_site_backups", "benchbar_ports_check", "benchbar_ports_plan", "benchbar_lock_check", "benchbar_labs_list", "benchbar_where", "benchbar_doctor_prerequisites", "benchbar_self_update_check", "benchbar_app_focus_list", "benchbar_lease_take", "benchbar_lease_renew", "benchbar_lease_release", "benchbar_lease_list"]'
 REPLIES="$(mcp \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
@@ -87,7 +87,7 @@ assert "benchbar_self_update" not in names
 an = {t["name"]: t["annotations"] for t in by[2]["result"]["tools"]}
 for n in ("benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_app_list", "benchbar_profile_list",
           "benchbar_site_backups", "benchbar_ports_check", "benchbar_ports_plan", "benchbar_lock_check", "benchbar_labs_list", "benchbar_where",
-          "benchbar_doctor_prerequisites", "benchbar_app_focus_list"):
+          "benchbar_doctor_prerequisites", "benchbar_app_focus_list", "benchbar_lease_list"):
     assert an[n] == {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}, (n, an[n])
 assert an["benchbar_profile_check"] == {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}, an["benchbar_profile_check"]
 assert an["benchbar_self_update_check"] == {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}, an["benchbar_self_update_check"]
@@ -96,6 +96,13 @@ assert an["benchbar_up"] == {"readOnlyHint": False, "destructiveHint": False, "i
 for n in ("benchbar_down", "benchbar_restart"):
     assert an[n] == {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False}, (n, an[n])
 assert an["benchbar_app_add"] == {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}, an["benchbar_app_add"]
+assert an["benchbar_lease_take"] == {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False}, an["benchbar_lease_take"]
+for n in ("benchbar_lease_renew", "benchbar_lease_release"):
+    assert an[n] == {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}, (n, an[n])
+# a lease is breakable only by a person: no tool, and no argument that says so
+assert not any("break" in n for n in names)
+for t in by[2]["result"]["tools"]:
+    assert not any("break" in k for k in t["inputSchema"]["properties"]), t["name"]
 lt = {t["name"]: t for t in by[2]["result"]["tools"]}["benchbar_logs_tail"]
 assert lt["inputSchema"]["properties"]["file"]["enum"] == ["bench", "worker", "worker_error", "previous"], lt
 assert "worker" not in lt["inputSchema"]["properties"]["process"]["enum"], lt

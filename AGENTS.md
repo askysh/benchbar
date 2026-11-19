@@ -44,6 +44,19 @@ runs it without a shell, only when benchbar quoted that fix itself (`null`
 otherwise: read the text). The tools change only benches benchbar knows
 (`adopted` in `benchbar_list`).
 
+Before long work on a bench or a site (tests, a migration you watch) take a
+lease: `benchbar_lease_take` (or `benchbar lease take --site NAME --for 20
+--note "why"` in a terminal, with `BENCHBAR_CALLER` set to a name for you).
+It returns an id; pass it as `lease` (`--lease ID` in a terminal) to your own
+restart, down and apply calls, renew it while you work and release it when
+done (`benchbar_lease_renew`, `benchbar_lease_release`). While another
+holder's lease stands, a restart, drop, restore or app update of what it
+covers is refused with who holds it and until when: wait, or ask the user.
+That is not an error to work around, and `--break-lease` is a person's, never
+yours. Reads are never refused, and `benchbar_lease_list` shows who holds what.
+A lease is a promise between cooperating tools: it stops mistakes, not a
+process that means harm.
+
 Never probe MariaDB root, the Keychain or benchbar's state folder for a
 password: benchbar keeps the root password and uses it itself, and no
 tool hands it out. Long calls send progress notifications when the client

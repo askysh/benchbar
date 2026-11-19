@@ -22,6 +22,9 @@ FAKE="$TMP_DIR/fake-benchbar"; FAKE_LOG="$TMP_DIR/fake-calls.log"
 TOK64="$(printf 'a%.0s' $(seq 64))"
 cat >"$FAKE" <<SH
 #!/usr/bin/env bash
+case "\$*" in
+  lease*) printf 'CALLER %s\n' "\${BENCHBAR_CALLER:-}" >>"$FAKE_LOG" ;;
+esac
 printf '%s\n' "\$*" >>"$FAKE_LOG"
 case "\$*" in
   *--apply*) printf 'ENV ADMIN_PASSWORD=%s\n' "\${ADMIN_PASSWORD:-}" >>"$FAKE_LOG" ;;
@@ -98,7 +101,7 @@ from mcpclient import Client, text
 fake, mode, tok = sys.argv[1], sys.argv[2], sys.argv[3]
 c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "FAKE_MODE": mode})
 tools = c.tools()
-assert len(tools) == 29, [t["name"] for t in tools]
+assert len(tools) == 33, [t["name"] for t in tools]
 LABEL = "Data from the bench ("
 for t in tools:
     props, required = t["inputSchema"]["properties"], t["inputSchema"].get("required", [])
@@ -106,6 +109,11 @@ for t in tools:
     for key in list(required) + (["url_or_name"] if "url_or_name" in props else []):
         kind = props[key]["type"]
         args[key] = tok if key == "token" else ("20261029_101500" if key == "from" else ("qa1.localhost" if key == "site" else (["/x/acme"] if kind == "array" else "acme")))
+    if t["name"] == "benchbar_lease_take":
+        args = {"site": "qa1.localhost"}
+    for key in args:
+        if key == "lease":
+            args[key] = "l-0123456789ab"
     r = c.call(t["name"], args)
     assert "result" in r, (t["name"], r)
     body = text(r)
@@ -518,6 +526,7 @@ cases = [
     ("benchbar_doctor_prerequisites", {"bench": "/b"}, "doctor --prerequisites --json --bench-dir /b"),
     ("benchbar_self_update_check", {}, "self-update --check --json"),
     ("benchbar_app_focus_list", {"bench": "/b"}, "app focus --list --json --bench-dir /b"),
+    ("benchbar_lease_list", {"bench": "/b"}, "lease list --json --bench-dir /b"),
 ]
 for tool, args, argv in cases:
     r = c.call(tool, args)
@@ -558,6 +567,87 @@ for gone in ("benchbar_repair", "benchbar_install", "benchbar_labs_on", "benchba
 c.close()
 PY
 FM="$FM" python3 "$TMP_DIR/readtools.py" "$FAKE" "$FAKE_LOG" || fail "MCP-15: the read tools"
+
+# ---- leases (#184): the argv of the four tools, the holder every CLI gets, and the lease argument of the changing tools
+: >"$FAKE_LOG"
+cat >"$TMP_DIR/leasetools.py" <<'PY'
+import os, re, sys
+sys.path.insert(0, os.path.dirname(sys.argv[0]))
+from mcpclient import Client, text
+
+fake, log = sys.argv[1], sys.argv[2]
+ID = "l-0123456789ab"
+
+
+def lines():
+    return open(log).read().splitlines()
+
+
+def ran(c, tool, args, start):
+    """The CLI lines a call wrote (after start), without the follow up status or lease list."""
+    r = c.call(tool, args)
+    assert "result" in r and not r["result"]["isError"], (tool, r)
+    return [l for l in lines()[start:] if not l.startswith(("status ", "lease list ", "ENV "))], r
+
+
+c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "BENCHBAR_MCP_APPLY_DELAY": "0", "BENCHBAR_MCP_ALLOW_BENCH": "/b", "BENCHBAR_CALLER": ""})
+n = len(lines())
+got, r = ran(c, "benchbar_lease_take", {"site": "qa1.localhost", "bench": "/b", "minutes": 20, "note": "running tests"}, n)
+assert re.match(r"^CALLER mcp:walker:[0-9]+$", got[0]), got          # the client, and this server's pid
+assert got[1] == "lease take --json --for 20 --note running tests --site qa1.localhost --bench-dir /b", got
+n = len(lines())
+got, r = ran(c, "benchbar_lease_take", {"bench": "/b"}, n)
+assert got[1] == "lease take --json --bench /b", got
+# the follow up lists the leases (the holder sees its own ids there)
+assert "leases" in r["result"]["structuredContent"], r
+n = len(lines())
+got, r = ran(c, "benchbar_lease_renew", {"lease": ID, "minutes": 5}, n)
+assert got[1] == "lease renew %s --json --for 5" % ID, got
+n = len(lines())
+got, r = ran(c, "benchbar_lease_renew", {"lease": ID}, n)
+assert got[1] == "lease renew %s --json" % ID, got
+n = len(lines())
+got, r = ran(c, "benchbar_lease_release", {"lease": ID}, n)
+assert got[1] == "lease release %s --json" % ID, got
+# the changing tools pass a lease as --lease
+n = len(lines())
+got, r = ran(c, "benchbar_down", {"bench": "/b", "lease": ID}, n)
+assert got == ["down --plain --json --lease %s --bench-dir /b" % ID], got
+n = len(lines())
+got, r = ran(c, "benchbar_restart", {"lease": ID}, n)
+assert got == ["restart --plain --json --lease %s" % ID], got
+# refusals: nothing runs
+before = open(log).read()
+for tool, args in (
+    ("benchbar_lease_take", {}),                                 # a lease needs a bench or a site
+    ("benchbar_lease_renew", {}),
+    ("benchbar_lease_release", {"lease": "nope"}),
+    ("benchbar_lease_release", {"lease": "--yes"}),
+    ("benchbar_lease_renew", {"lease": "l-ABCDEF123456"}),
+    ("benchbar_down", {"lease": "nope"}),
+    ("benchbar_site_restore", {"site": "a", "from": "b", "token": "t" * 16, "lease": "x"}),
+    ("benchbar_lease_take", {"site": "qa1.localhost", "break": True}),
+    ("benchbar_down", {"break_lease": True}),
+):
+    r = c.call(tool, args)
+    assert "error" in r and r["error"]["code"] == -32602, (tool, args, r)
+for minutes in (0, 481, "5", True):
+    r = c.call("benchbar_lease_take", {"site": "qa1.localhost", "bench": "/b", "minutes": minutes})
+    assert "result" in r and r["result"]["isError"], (minutes, r)
+assert open(log).read() == before, "a refused call ran the CLI"
+# a bench the server does not know is refused for a lease too (the tools that change things act on known benches)
+r = c.call("benchbar_lease_take", {"bench": "/elsewhere"})
+assert r["result"]["isError"] and "not a bench benchbar knows" in text(r), r
+assert not any(l.startswith("lease ") for l in lines()[len(before.splitlines()):]), "a lease was asked for on a bench the server does not know"
+c.close()
+# a BENCHBAR_CALLER of the person's own wins
+c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "BENCHBAR_MCP_APPLY_DELAY": "0", "BENCHBAR_MCP_ALLOW_BENCH": "/b", "BENCHBAR_CALLER": "claude-qa"})
+n = len(lines())
+got, r = ran(c, "benchbar_lease_take", {"bench": "/b"}, n)
+assert got[0] == "CALLER claude-qa", got
+c.close()
+PY
+FM="$FM" python3 "$TMP_DIR/leasetools.py" "$FAKE" "$FAKE_LOG" || fail "leases: the MCP tools"
 
 # ---- the label holds by construction, a plan is kept a day, the question holds the whole plan, the token pattern
 python3 - "$ROOT/lib/frappe-local/mcp.py" "$TMP_DIR/followups-state" <<'PY' || fail "MCP follow ups (label by construction, plan age, whole plan, token)"

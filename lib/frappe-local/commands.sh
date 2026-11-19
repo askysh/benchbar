@@ -310,6 +310,22 @@ cmd~labs off~benchbar labs off NAME [--json]~Turn an experiment off and undo wha
 flag~labs off~--json~~JSON lines, ending in a done line.
 cmd~labs status~benchbar labs status NAME [--json]~Whether an experiment is on. Exit 0 on, 1 off.~no~no~no~no~document
 flag~labs status~--json~~One JSON document.
+cmd~lease~benchbar lease take|release|renew|list ...~Leases: a bench or a site held for a while, so that restart, down, migrate, drop and restore by another agent or the app wait.~no~no~no~no~none
+cmd~lease take~benchbar lease take (--bench PATH | --site NAME) [--for MINUTES] [--note TEXT] [--json]~Take a lease on a bench, or on one site of it, and return its id. Commands that change what it covers refuse, naming the holder and the end, unless they pass --lease ID. Reads are never refused. Benchbar's own state only.~no~no~no~yes~stream
+flag~lease take~--bench~PATH~Lease the whole bench (every site of it).
+flag~lease take~--site~NAME~Lease one site (global option; the bench is --bench-dir or the default one).
+flag~lease take~--for~MINUTES~How long, from 1 to 480. Default: 30.
+flag~lease take~--note~TEXT~Why, for whoever meets the lease: printable ASCII, at most 120 characters.
+flag~lease take~--json~~JSON lines, ending in a done line with the lease and its id.
+env~lease take~BENCHBAR_CALLER~The holder's name (1 to 40 letters, digits or . _ @ : + -). benchbar mcp sets it per client; without it an agent run is "agent" and a terminal run is the login name.
+cmd~lease release~benchbar lease release ID [--json]~Let go of a lease. Unchanged when it is already gone.~no~no~no~yes~stream
+flag~lease release~--json~~JSON lines, ending in a done line.
+cmd~lease renew~benchbar lease renew ID [--for MINUTES] [--json]~Push a lease's end to MINUTES from now (default: its first length). Refused once it has expired.~no~no~no~yes~stream
+flag~lease renew~--for~MINUTES~How long from now, from 1 to 480.
+flag~lease renew~--json~~JSON lines, ending in a done line with the lease.
+cmd~lease list~benchbar lease list [--bench PATH] [--json]~The active leases of every bench, or of one. The id is shown to the lease's holder and to a person at a terminal; for anyone else it is null.~no~no~no~no~document
+flag~lease list~--bench~PATH~Only the leases of this bench.
+flag~lease list~--json~~One JSON document.
 TABLE
 
 fl_cmd_table() { printf '%s\n' "$FL_CMD_TABLE"; }
@@ -333,6 +349,8 @@ fl_cmd_global_flags() {
 --bench-dir~DIR~Bench to act on (default: remembered, or auto-detected).
 --site~NAME~Site name (default: remembered, or from the bench).
 --json~~JSON: one document for a command that reads, JSON lines for one that changes things.
+--lease~ID~A lease you hold (benchbar lease take): lets this command change what the lease covers. Repeatable.
+--break-lease~~Go ahead although a lease covers this command. A person at a terminal only; refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.
 --jsonl~~JSON lines (plan, step, progress, done) for any command that changes things.
 --for-agent~~--jsonl for a command that changes things, --json for one that reads, plus BENCHBAR_NONINTERACTIVE=1, NO_COLOR=1 and --plain.
 --plain~~No colors or spinners.

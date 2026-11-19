@@ -54,6 +54,7 @@ macOS version. A row that says "macOS" does not work on Linux.
 | Open as a user | `open --as USER` signs in to a development site as another user, with no password. Off until you turn it on for a site. | 0.8.1 | macOS, Linux | [open](reference/cli/other.md#open), [site open-as](reference/cli/site.md#site-open-as) |
 | Rooms on your Wi-Fi (`share`, `lan-guard`) | Lets colleagues on the same Wi-Fi use a hardened copy of a site behind a room code. **Lab** `lan-rooms`. | 0.8.2 | macOS | [share and lan-guard](reference/cli/share.md), [How sharing keeps your bench safe](concepts/sharing-safety.md) |
 | Labs | `benchbar labs` lists, turns on and turns off experiments. | 0.8.2 | macOS, Linux | [labs](reference/cli/labs.md) |
+| Leases | `benchbar lease take` holds a bench or a site for a while, so another agent or the app does not restart, migrate, drop or restore it meanwhile. `--lease ID` passes it, `status --json` lists it. | 0.9.0 | macOS, Linux | [lease](reference/cli/lease.md) |
 
 On Linux, only the v15-lts bench is supported, and the site is
 `linuxdev.localhost`. See [Install](install.md#linux).
@@ -132,6 +133,7 @@ Windows (`benchbar.exe mcp`) since 0.8.0. The tools below are the ones in
 | Site plan and apply | `benchbar_site_add_plan` and `benchbar_site_add`, `benchbar_site_restore_plan` and `benchbar_site_restore`. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
 | `benchbar_site_backup` | Backs up one site. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
 | Service plan and apply | `benchbar_service_install_plan` and `benchbar_service_install`, for a bench that has no service. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
+| Lease tools | `benchbar_lease_take`, `benchbar_lease_renew`, `benchbar_lease_release` and `benchbar_lease_list`: hold a bench or a site while an agent works. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md#leases) |
 | More read tools | `benchbar_site_backups`, `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`, `benchbar_labs_list`, `benchbar_where`, `benchbar_doctor_prerequisites`, `benchbar_self_update_check` and `benchbar_app_focus_list`. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
 
 A person approves each plan before the agent applies it. Rooms, Labs,
