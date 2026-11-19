@@ -115,7 +115,7 @@ cmd~users~benchbar users [--site S] [--search Q] [--limit N] [--json]~Enabled us
 flag~users~--search~TEXT~Only users whose id or full name contains TEXT.
 flag~users~--limit~N~At most N users (1 to 500, default 50).
 flag~users~--json~~One JSON document.
-cmd~pull~benchbar pull HOST:SITE [--as NAME] [--from-dir DIR] [--replace] [--json]~Copy a production site over SSH into a new local site.~yes~no~yes~yes~stream
+cmd~pull~benchbar pull HOST:SITE [--as NAME] [--from-dir DIR] [--replace] [--dry-run|--apply TOKEN --yes] [--json]~Copy a production site over SSH into a new local site.~yes~no~yes~yes~stream
 flag~pull~--as~NAME~Local site name (default SITE.local).
 flag~pull~--from-dir~DIR~A backup set downloaded by hand, no SSH.
 flag~pull~--remote-bench~DIR~The bench folder on the server.
@@ -129,6 +129,8 @@ flag~pull~--no-migrate~~Stop after the restore and the dev safety, before bench 
 flag~pull~--before-migrate~SCRIPT~An executable run after the restore, before migrate, in the bench folder, with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME; a failing script stops the run.
 flag~pull~--keep-scheduler~~Leave the scheduler as production has it.
 flag~pull~--keep-staging~~Keep the downloaded backup in the bench's .benchbar/pulls/ after a successful run.
+flag~pull~--dry-run~~Print the plan and its token, change nothing.
+flag~pull~--apply~TOKEN~Run exactly that plan (with --yes); refused when the plan changed since the token was made.
 env~pull~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~report~benchbar report [--print] [--json]~Redacted diagnostics zip on the Desktop for bug reports.~no~no~no~no~document
 flag~report~--print~~Print to the terminal instead of writing the zip.
