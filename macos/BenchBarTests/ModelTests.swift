@@ -48,6 +48,21 @@ struct ModelTests {
         #expect(list.benches[0].sites?.map(\.name) == ["macdev"])
     }
 
+    @Test func decodesTheReadyObject() throws {
+        let stale = try #require(try BenchJSON.decode(BenchStatus.self, from: Fixture.data("status-stale")).ready)
+        #expect(stale.ready == false)
+        #expect(stale.stale == true)
+        #expect(stale.staleFile == "apps/erpnext/erpnext/hooks.py")
+        #expect(stale.waitingOn == ["stale"])
+        #expect(stale.fix?.hasPrefix("benchbar restart") == true)
+        // without --deep the worker and code parts are null, and ready does not depend on them
+        let basic = try #require(try BenchJSON.decode(BenchStatus.self, from: Fixture.data("status-not-ready")).ready)
+        #expect(basic.workers == nil && basic.stale == nil)
+        #expect(basic.socketio == false && basic.waitingOn == ["socketio"])
+        let ready = try #require(try BenchJSON.decode(BenchStatus.self, from: Fixture.data("status-ready")).ready)
+        #expect(ready.ready && ready.waitingOn == [] && ready.fix == nil)
+    }
+
     @Test func decodesEmptyList() throws {
         let list = try BenchJSON.decode(BenchList.self, from: Fixture.data("list-empty"))
         #expect(list.benches.isEmpty)

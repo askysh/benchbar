@@ -213,7 +213,7 @@ fl_bench_adopted() {
 # fl_status_print_json [PINGS]: PINGS "ping" asks every site (status --ping);
 # without it only web_ping_code, the default site's, is known.
 fl_status_print_json() {
-  local mode="${1:-none}" j_listen j_labs j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending sched=0
+  local mode="${1:-none}" j_listen j_labs j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending j_ready sched=0
   # a folder benchbar does not know has no site of its own to name: never the
   # default bench's, never one it guessed
   [[ "$ST_STATE" != "not_adopted" ]] || FL_SITE=""
@@ -221,6 +221,8 @@ fl_status_print_json() {
   FL_DEFAULT_PING=""; [[ "$ST_PROCS" == "1" ]] && FL_DEFAULT_PING="$ST_PING"
   fl_sites_json_v j_sites "$mode" 0 1
   fl_redis_json_v j_redis
+  fl_ready_compute "${OPT_DEEP:-0}"
+  fl_ready_json_v j_ready
   fl_scheduler_enabled && sched=1
   fl_json_bool_v j_sched "$sched"
   fl_json_str_v j_listen "$(fl_listen_mode)"
@@ -242,7 +244,7 @@ fl_status_print_json() {
     "$j_url" "$j_label" "$([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)" "${ST_FLAG:-none}" "$ST_PING"
   # app update or app add runs that stopped half way, with the steps left
   fl_lab_enabled_json_v j_labs
-  printf ',"pending_operations":%s,"labs":%s}\n' "$j_pending" "$j_labs"
+  printf ',"pending_operations":%s,"ready":%s,"labs":%s}\n' "$j_pending" "$j_ready" "$j_labs"
 }
 
 # fl_redis_json_v VAR: {"queue":{"port","running"},"cache":{...}}. running is whether
@@ -251,10 +253,130 @@ fl_status_print_json() {
 # by the service, and a stranger on the port look the same here, as they
 # do to the web server that would use them.
 fl_redis_json_v() {
-  local __q=false __c=false
-  fl_tcp_open "$FL_REDIS_QUEUE_PORT" && __q=true
-  fl_tcp_open "$FL_REDIS_CACHE_PORT" && __c=true
-  printf -v "$1" '{"queue":{"port":%s,"running":%s},"cache":{"port":%s,"running":%s}}' "$FL_REDIS_QUEUE_PORT" "$__q" "$FL_REDIS_CACHE_PORT" "$__c"
+  fl_redis_probe
+  printf -v "$1" '{"queue":{"port":%s,"running":%s},"cache":{"port":%s,"running":%s}}' "$FL_REDIS_QUEUE_PORT" "$FL_RD_REDIS_Q" "$FL_REDIS_CACHE_PORT" "$FL_RD_REDIS_C"
+}
+
+# fl_redis_probe: FL_RD_REDIS_Q and FL_RD_REDIS_C (true or false), each port
+# asked once per run; the readiness contract reuses the answer. Clear both to
+# ask again (the wait loop does).
+FL_RD_REDIS_Q=""; FL_RD_REDIS_C=""
+fl_redis_probe() {
+  [[ -z "$FL_RD_REDIS_Q" ]] || return 0
+  FL_RD_REDIS_Q=false; FL_RD_REDIS_C=false
+  fl_tcp_open "$FL_REDIS_QUEUE_PORT" && FL_RD_REDIS_Q=true
+  fl_tcp_open "$FL_REDIS_CACHE_PORT" && FL_RD_REDIS_C=true
+  return 0
+}
+
+# ---------------------------------------------------------------- readiness
+#
+# One definition of "ready", for status --json (the ready object), wait, up
+# and restart. The parts, each true, false or (not asked yet) null:
+#
+#   agent       the service is loaded in launchd or systemd
+#   processes   the bench's processes run
+#   web         the default site answers its ping with a 2xx or 3xx
+#   socketio    the realtime port accepts a connection
+#   redis       the queue and the cache Redis accept a connection
+#   workers     a background worker runs            (deep only)
+#   stale       a Python file under apps/ changed after the bench started,
+#               so the running code is old          (deep only)
+#
+# ready is true when no part is false and stale is not true. The fast path
+# (status without --deep) starts no program beyond what status already runs:
+# agent, processes and web come from fl_status_compute, socketio and redis
+# from bash's /dev/tcp. The deep parts need pgrep, lsof and find, so only
+# wait, up, restart and status --deep ask for them.
+
+# fl_ready_web_ok CODE: the web part, for an HTTP code: 2xx or 3xx
+fl_ready_web_ok() { [[ "$1" =~ ^[23][0-9][0-9]$ ]]; }
+
+# fl_ready_part_ok PART: after fl_ready_compute, whether the part holds
+# (workers and stale count as holding while they are not asked)
+fl_ready_part_ok() {
+  case "$1" in
+    agent) [[ "$RD_AGENT" == true ]] ;;
+    processes) [[ "$RD_PROCESSES" == true ]] ;;
+    web) [[ "$RD_WEB" == true ]] ;;
+    socketio) [[ "$RD_SOCKETIO" == true ]] ;;
+    redis) [[ "$RD_REDIS" == true ]] ;;
+    workers) [[ "$RD_WORKERS" != false ]] ;;
+    stale) [[ "$RD_STALE" != true ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+# fl_ready_stale_v VAR: true when a *.py file under apps/ is newer than the
+# runner that started the bench's processes (state.json's started_at, UTC,
+# before the web server loads its code), false when none is, null when the
+# start time is not known. RD_STALE_FILE names the first one found.
+fl_ready_stale_v() {
+  local __since="" __hit=""
+  RD_STALE_FILE=""
+  if [[ "$SJ_STARTED" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}:[0-9]{2}:[0-9]{2})Z$ ]]; then
+    __since="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+  fi
+  if [[ -z "$__since" || ! -d "${FL_BENCH_DIR}/apps" ]]; then printf -v "$1" '%s' null; return 0; fi
+  __hit="$(TZ=UTC find "${FL_BENCH_DIR}/apps" \( -name node_modules -o -name .git -o -name __pycache__ \) -prune -o -type f -name '*.py' -newermt "$__since" -print -quit 2>/dev/null || true)"
+  if [[ -n "$__hit" ]]; then RD_STALE_FILE="${__hit#"${FL_BENCH_DIR}/"}"; printf -v "$1" '%s' true; else printf -v "$1" '%s' false; fi
+}
+
+# fl_ready_compute [deep]: sets RD_* from the ST_* of fl_status_compute (run
+# that first). deep "1" also asks workers and stale.
+fl_ready_compute() {
+  local deep="${1:-0}"
+  RD_AGENT=false; RD_PROCESSES=false; RD_WEB=false; RD_SOCKETIO=false; RD_REDIS=false
+  RD_WORKERS=null; RD_STALE=null; RD_STALE_FILE=""
+  [[ "$ST_LOADED" != "1" ]] || RD_AGENT=true
+  [[ "$ST_PROCS" != "1" ]] || RD_PROCESSES=true
+  ! fl_ready_web_ok "$ST_PING" || RD_WEB=true
+  if [[ "$ST_PROCS" == "1" ]] && fl_tcp_open "$FL_SOCKETIO_PORT"; then RD_SOCKETIO=true; fi
+  fl_redis_probe
+  [[ "$FL_RD_REDIS_Q" == true && "$FL_RD_REDIS_C" == true ]] && RD_REDIS=true
+  if [[ "$deep" == "1" ]]; then
+    RD_WORKERS=false
+    if [[ "$ST_PROCS" == "1" ]]; then
+      [[ -z "$(fl_pgrep_f ' -m frappe\.utils\.bench_helper frappe worker( |$)' | fl_pids_in_bench)" ]] || RD_WORKERS=true
+      fl_ready_stale_v RD_STALE
+    fi
+  fi
+  RD_WAITING=""
+  local p
+  for p in agent processes web socketio redis workers stale; do
+    fl_ready_part_ok "$p" || RD_WAITING="${RD_WAITING}${RD_WAITING:+ }${p}"
+  done
+  RD_READY=false; [[ -n "$RD_WAITING" ]] || RD_READY=true
+  fl_ready_fix_v RD_FIX
+}
+
+# fl_ready_fix_v VAR: the command that moves the first missing part, empty when ready
+fl_ready_fix_v() {
+  local __f=""
+  if [[ "$RD_READY" == true ]]; then
+    __f=""
+  elif [[ "$ST_STATE" == "not_adopted" ]]; then
+    __f="${FL_SELF} adopt ${FL_BENCH_DIR}"
+  elif [[ "$ST_STATE" == "paused" || "$ST_STATE" == "crashed" ]]; then
+    __f="${FL_SELF} doctor --bench-dir ${FL_BENCH_DIR}"
+  elif [[ "$RD_PROCESSES" != true ]]; then
+    __f="${FL_SELF} up --bench-dir ${FL_BENCH_DIR}"
+  elif [[ "$RD_STALE" == true ]]; then
+    __f="${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}"
+  else
+    __f="${FL_SELF} logs --bench-dir ${FL_BENCH_DIR}"
+  fi
+  printf -v "$1" '%s' "$__f"
+}
+
+# fl_ready_json_v VAR: the ready object of status --json, from the RD_* of fl_ready_compute
+fl_ready_json_v() {
+  local __w="" __p __fix __stale_file
+  for __p in $RD_WAITING; do __w="${__w}${__w:+,}\"${__p}\""; done
+  fl_json_str_v __fix "$RD_FIX"; [[ -n "$RD_FIX" ]] || __fix=null
+  fl_json_str_v __stale_file "$RD_STALE_FILE"; [[ -n "$RD_STALE_FILE" ]] || __stale_file=null
+  printf -v "$1" '{"ready":%s,"agent":%s,"processes":%s,"web":%s,"socketio":%s,"redis":%s,"workers":%s,"stale":%s,"stale_file":%s,"waiting_on":[%s],"fix":%s}' \
+    "$RD_READY" "$RD_AGENT" "$RD_PROCESSES" "$RD_WEB" "$RD_SOCKETIO" "$RD_REDIS" "$RD_WORKERS" "$RD_STALE" "$__stale_file" "$__w" "$__fix"
 }
 
 # fl_state_after_v VAR: the bench's status --json object as it is now, for the
@@ -263,7 +385,7 @@ fl_redis_json_v() {
 fl_state_after_v() {
   local __j="null"
   if [[ "${FL_CONTEXT_READY:-0}" == "1" ]] && fl_is_bench_dir "${FL_BENCH_DIR:-}"; then
-    __j="$( set +e; trap - ERR; { fl_status_compute; fl_status_print_json; } 2>/dev/null )" || __j="null"
+    __j="$( set +e; trap - ERR; FL_RD_REDIS_Q=""; { fl_status_compute; fl_status_print_json; } 2>/dev/null )" || __j="null"
     __j="${__j//$'\n'/}"
     [[ "$__j" == "{"*"}" ]] || __j="null"
   fi

@@ -619,3 +619,4 @@ Asked for after the phases, to stop naming drift before the first release.
 - `RunnerLibrary.reload` returns at once when the folder's files, sizes and modification times are as at the last load: Settings reloads on every appear, and new images made `isSame` false, which restarted the menu bar animation of a custom runner.
 - The back up spinner compares the bench's activity text with the exact strings `Workbench.backupActivity` builds, not a prefix.
 - A failed profile list in the wizard has Try Again (`WizardState.Event.retryProfiles`), one read at a time, and the Review problem text says to use it.
+- The popover, the window and the sidebar word a running bench from `ready` of `status --json` (0.9): "Ready", "Needs restart (code changed)" when `stale` is true, "Running, not ready" otherwise. A CLI without `ready` keeps "Running". The app asks `status --deep` only for a bench it last saw starting or running, so a stopped bench costs no `pgrep`, `lsof` or `find`.

@@ -59,7 +59,8 @@ struct BenchPage: View {
                 Text(activity).font(.caption).foregroundStyle(.secondary)
             }
             StatePill(state: bench.state, text: BenchText.headline(bench.state, reason: bench.machine.stopReason,
-                                                                    exitCode: bench.status?.lastExitCode))
+                                                                    exitCode: bench.status?.lastExitCode,
+                                                                    ready: bench.status?.ready))
         }
     }
 }

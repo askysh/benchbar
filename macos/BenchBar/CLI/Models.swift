@@ -235,12 +235,14 @@ nonisolated struct BenchStatus: Codable, Sendable, Equatable {
     /// Added in 0.4.
     var sites: [SiteInfo]?
     var scheduler: Bool?
+    /// Added in 0.9: whether the bench can serve, and the parts that say so.
+    var ready: ReadyInfo?
     // state.json only
     var updatedAt: Date?
     var source: String?
 
     enum CodingKeys: String, CodingKey {
-        case bench, name, site, label, state, pid, ports, log, source, sites, scheduler
+        case bench, name, site, label, state, pid, ports, log, source, sites, scheduler, ready
         case schemaVersion = "schema_version"
         case cliVersion = "cli_version"
         case stopReason = "stop_reason"
@@ -253,6 +255,30 @@ nonisolated struct BenchStatus: Codable, Sendable, Equatable {
         case agentState = "agent_state"
         case processesRunning = "processes_running"
         case updatedAt = "updated_at"
+    }
+}
+
+/// `ready` of `status --json` (the readiness contract, docs/json-schema.md). `workers` and
+/// `stale` are nil unless the status was asked with `--deep`; a nil part never makes the
+/// bench not ready. Every field is optional: a CLI older than 0.9 sends no `ready` at all.
+nonisolated struct ReadyInfo: Codable, Sendable, Equatable {
+    var ready: Bool
+    var agent: Bool?
+    var processes: Bool?
+    var web: Bool?
+    var socketio: Bool?
+    var redis: Bool?
+    var workers: Bool?
+    /// A Python file under apps/ changed after the bench started: the code that runs is old.
+    var stale: Bool?
+    var staleFile: String?
+    var waitingOn: [String]?
+    var fix: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ready, agent, processes, web, socketio, redis, workers, stale, fix
+        case staleFile = "stale_file"
+        case waitingOn = "waiting_on"
     }
 }
 

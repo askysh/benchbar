@@ -8,7 +8,10 @@ without surprising the user.
 
 If your client speaks the Model Context Protocol, add the server once
 (`claude mcp add benchbar -- benchbar mcp`) and use its tools instead of
-parsing text: `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
+parsing text: `benchbar_list`, `benchbar_status` (its `ready` object says
+whether the bench can serve; `ready.stale` means Python code changed since
+it started, so restart it), `benchbar_wait` (blocks until it is ready, with
+progress notifications), `benchbar_doctor`,
 `benchbar_logs_tail` (`file`: `bench`, `worker`, `worker_error` or
 `previous`), `benchbar_site_list`, `benchbar_app_list` and the profile
 tools return the same JSON as the commands below; log lines and git
@@ -58,7 +61,10 @@ tools: run them in a terminal, with the user, as described here.
 ./benchbar doctor                 # same, for humans
 ```
 
-Both are safe to run at any time. Every check carries a `fix` string
+Both are safe to run at any time. After `up` or `restart`, or after you
+changed Python code, `./benchbar wait --json` blocks until the bench is
+ready (exit 0) or says what is not (exit 1, with the fix); `status --json
+--deep` shows the same `ready` object without waiting. Every check carries a `fix` string
 (the exact command) and an `action` id (what `repair` would do).
 
 The examples run `./benchbar` from this checkout. On a user's Mac the

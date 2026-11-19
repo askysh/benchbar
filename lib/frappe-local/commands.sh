@@ -70,9 +70,10 @@ flag~repair~--dry-run~~Print the plan, change nothing.
 flag~repair~--yes~~Do not ask.
 env~repair~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~repair~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
-cmd~status~benchbar status [--json] [--ping]~State, pid, stop reason, site ping.~no~no~no~no~document
+cmd~status~benchbar status [--json] [--ping] [--deep]~State, pid, stop reason, site ping, and with --json the ready object (is the bench ready to serve).~no~no~no~no~document
 env~status~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 flag~status~--ping~~Ask every site, not only the default one.
+flag~status~--deep~~Also ask the ready parts that start programs: workers (pgrep, lsof) and stale (find: a Python file under apps/ changed after the bench started). Without it ready.workers and ready.stale are null.
 cmd~list~benchbar list [--json]~Every bench benchbar knows about. Never pings a site.~no~no~no~no~document
 env~list~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~scan~benchbar scan PATH [--json]~Find benches recursively in a folder (read only).~no~no~no~no~document
@@ -81,6 +82,10 @@ cmd~up~benchbar up [--services-only] [--json]~Start the bench in the background.
 flag~up~--services-only~~Start only the bench's Redis (for a restore or a migrate); down stops it.
 cmd~down~benchbar down [--json]~Stop the bench and keep it stopped across reboots.~no~no~no~yes~stream
 cmd~restart~benchbar restart [--json]~Restart the bench, for example after changing Python code.~yes~no~no~yes~stream
+cmd~wait~benchbar wait [--ready] [--for PART] [--timeout SECS] [--json]~Block until the bench is ready (agent loaded, processes, site ping 2xx or 3xx, socketio, Redis, a worker, no Python file changed since the start), or until one part is. Exit 0 ready, 1 not ready in time, with what is missing and the fix. Reads only, starts nothing.~no~no~no~no~document
+flag~wait~--ready~~Wait for every part (the default).
+flag~wait~--for~PART~Wait for one part only: agent, processes, web, socketio, redis, workers or stale.
+flag~wait~--timeout~SECS~Give up after SECS seconds, 0 to 3600 (default 60). 0 checks once.
 cmd~logs~benchbar logs [-nN] [--worker|--worker-error|--previous] [--process NAME] [--since TIMESTAMP] [--since-restart] [--no-follow] [--json]~Tail logs/bench.log.~no~no~no~no~document
 flag~logs~--worker~~Read logs/worker.log.
 flag~logs~--worker-error~~Read logs/worker.error.log.
