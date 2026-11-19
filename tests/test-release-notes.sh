@@ -35,6 +35,7 @@ assert_contains "$OUT" "**Update Now**"
 assert_contains "$OUT" "benchbar self-update"
 # the cask updates itself, so plain "brew upgrade" skips it: the notes name the cask
 assert_contains "$OUT" 'brew upgrade --cask askysh/tap/benchbar-app'
+# shellcheck disable=SC2016 # the backticks are Markdown, not a command
 assert_contains "$OUT" 'a plain `brew upgrade` skips a cask that updates itself'
 assert_contains "$OUT" "--app-only"
 assert_contains "$OUT" "The summary line."
