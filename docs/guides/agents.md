@@ -119,6 +119,38 @@ under `~` or `~/dev` is listed with `adopted: false` and is refused:
 register it first in a terminal with `benchbar register PATH`, or name it
 in your client's setup for that server (`benchbar mcp --allow-bench PATH`).
 
+## Long runs and op_id
+
+Every run that changes things has an `op_id` (`op-20261119-101500-4242`).
+The apply tools return it with the result, as `op_id`, and it is in every
+line of the CLI's stream. A client that stops waiting after a few minutes,
+a timeout, a cancelled call: the run's record is still there, and
+`benchbar_op_status` with the `op_id` says whether it runs (`running`),
+which step it is on, its last progress line (`yarn build`, 42 seconds) and
+how it ended (`done` or `failed`, with `exit`). Without an `op_id` it lists
+the newest ten. A run whose process died without a `done` line is
+`interrupted`: its log says how far it got. Poll every few seconds, not
+faster; the tool only reads.
+
+`benchbar_app_add` and `benchbar_site_restore` also take `background:
+true`. The call then returns at once with the `op_id` (state `starting`)
+and the run goes on without the call: follow it with `benchbar_op_status`
+until its state is `done` or `failed`; `result` then holds the `done`
+line, with `changed`, `warnings` and `next_actions`. Use it when the
+client gives up on a call after a few minutes. The plan, its token and the
+person's OK work as before. The tool list has no `benchbar_op_wait`: a
+tool that blocks for minutes is what `background` replaces.
+
+In a terminal the same handles are `benchbar op status|list|wait` and
+`--background` on `install`, `repair`, `pull`, `app add`, `app update`,
+`site add`, `site backup` and `site restore` (it needs `--yes`: nothing
+can be asked of a run nobody watches). See [op](../reference/cli/other.md#op).
+
+The MCP protocol of 2025-11-25 has a tasks primitive for exactly this
+(a call that returns a task id, polled with `tasks/get`). This server
+speaks 2025-06-18 and clients are only starting on tasks, so for now the
+`op_id` is the handle; a task id will be the same string when tasks come.
+
 ## What was run
 
 Every call is logged in `mcp-calls.jsonl` in benchbar's state folder

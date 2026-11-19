@@ -1,6 +1,6 @@
 ---
 title: "report and other commands"
-description: "benchbar report, self-update, where, list, commands, console, db, open, users, autostart, listen, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
+description: "benchbar report, self-update, where, list, op, commands, console, db, open, users, autostart, listen, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
 ---
 
 Every command takes the [options for every command](install.md#options-for-every-command).
@@ -428,6 +428,75 @@ benchbar uninstall-service --all
 
 To remove BenchBar itself, see [Uninstall](../../install.md#uninstall).
 
+## op
+
+```
+benchbar op status [OP_ID] [--json]
+benchbar op list [--running] [--limit N] [--json]
+benchbar op wait OP_ID [--timeout SECS] [--json]
+```
+
+Every run that changes things (`install`, `repair`, `up`, `app add`, `site
+restore`, `pull` and the rest, but not a dry run or a command that only
+reads) has an **op_id**, like `op-20261119-101500-4242`. It is in the
+`plan`, `step`, `progress` and `done` lines of the run's JSON stream and in
+the one document of a `--json` command, and the run keeps a small record
+of itself in `ops/` in benchbar's state folder: its command, bench, site,
+when it started, its pid, the step that runs, the last progress line, its
+exit and its log. The record is rewritten at every step, so a program that
+did not start the run can follow it. The newest 100 records are kept.
+
+| Command | What it does |
+|---|---|
+| `op status OP_ID` | One operation. With `--json` it is the record, plus the run's `done` line as `result` once the run ended (for a run started with `--background`). Without an op_id: the ten newest |
+| `op list` | The operations, newest first (`--running`: only the ones that run now; `--limit N`, 1 to 100, default 20) |
+| `op wait OP_ID` | Waits until the operation is not running, then prints it. `--timeout SECS` gives up waiting; the operation goes on |
+
+`state` is `starting` (a `--background` run that has not taken over yet),
+`running`, `done`, `failed` (it ended with an exit other than 0) or
+`interrupted`: the record says `running` but its process is gone, so the
+run was killed and wrote no `done` line. Check `log` for how far it got.
+`op wait` exits 0 when the run ended with exit 0 and 1 for anything else (a
+failed run, an interrupted one, a timeout: `--json` says which, with
+`timed_out: true` for a timeout). The `op` commands only read; they take no
+lock and need no bench. The fields are in the
+[JSON schema](../../json-schema.md#operation-handles-09).
+
+### --background
+
+```
+benchbar site restore NAME --from STAMP --apply TOKEN --yes --background --json
+```
+
+`--background` starts the command again, detached, and returns at once with
+the op_id. The run's JSON lines go to `ops/OP_ID.jsonl` (its `done` line is
+`result` in `op status --json`), and `op status` and `op wait` follow it. It
+is for the commands that take minutes: `install`, `repair`, `pull`,
+`app add`, `app update`, `site add`, `site backup` and `site restore`. A
+command that takes seconds (`up`, `down`, `restart`, `service`, `adopt`)
+runs in front, and a command only a person runs (`share`, `lan-guard`,
+`labs on`, `site open-as on`, `listen all`, `mariadb-password`,
+`uninstall-service`) never runs unattended, so `--background` refuses them.
+
+A run nobody watches cannot ask: `--background` implies
+`BENCHBAR_NONINTERACTIVE=1`, so it needs `--yes` and the inputs in the
+environment (`ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD`, a `sudo` that does
+not ask), and refuses before it starts when one is missing, as an agent run
+does. It refuses `--dry-run` (a plan is instant) and
+`BENCHBAR_SUDO_PASSWORD` (the password travels on a pipe the detached run
+cannot read; cache the sudo credential, or run in front). The launch prints
+`{"op_id", "command", "state": "starting", "output", "next_actions"}` with
+`--json`, or two lines of text.
+
+Exit codes: 0; 1 for an op that does not exist, a bad id or option, and
+for `op wait` when the operation did not end with exit 0.
+
+```bash
+benchbar app add acme --apply TOKEN --yes --background --json   # {"op_id": "op-20261119-101500-4242", ...}
+benchbar op status op-20261119-101500-4242
+benchbar op wait op-20261119-101500-4242 --timeout 1800 --json
+```
+
 ## commands
 
 Experiments that are off are left out: see [labs](labs.md).
@@ -467,7 +536,7 @@ one command (for example `benchbar logs --help`). `--version` prints
 
 These tables come from the code (`benchbar commands --json`); the sections above explain them.
 
-<!-- generated:cli-commands list console db open users autostart listen mariadb-password uninstall-service report self-update where docs commands help -->
+<!-- generated:cli-commands list console db open users autostart listen mariadb-password uninstall-service report self-update where docs op commands help -->
 <!-- Generated by scripts/docs-reference.py from the code. Edit the code, then run: python3 -I scripts/docs-reference.py --write -->
 
 | Command | Terminal | `sudo` | Network | Changes things | JSON |

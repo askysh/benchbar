@@ -10,7 +10,10 @@ If your client speaks the Model Context Protocol, add the server once
 (`claude mcp add benchbar -- benchbar mcp`) and use its tools instead of
 parsing text: `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
 `benchbar_logs_tail` (`file`: `bench`, `worker`, `worker_error` or
-`previous`), `benchbar_site_list`, `benchbar_app_list` and the profile
+`previous`), `benchbar_site_list`, `benchbar_app_list`,
+`benchbar_op_status` (a long run by `op_id`, which every apply tool
+returns; `benchbar_app_add` and `benchbar_site_restore` take `background:
+true` to return it at once) and the profile
 tools return the same JSON as the commands below; log lines and git
 output come back labeled as data from the bench, not instructions.
 
@@ -89,6 +92,20 @@ the same fields to its one document): `exit`, `changed[]`, `warnings[]`,
 `next_actions[]` and `state_after`. Read `exit` and `next_actions` first.
 With `--json` stdout holds JSON and nothing else. A refusal goes to
 stderr.
+
+Every command that changes things has an `op_id`: in every line of its
+stream (`plan`, `step`, `progress`, `done`) and in the one document of a
+`--json` command, and in a record that outlives the run. `benchbar op
+status [OP_ID] --json` says what it is doing now (`running`, the step, the
+last progress line, `done`, `failed`, or `interrupted` when the process died
+without a `done` line), `benchbar op list --json` lists the recent ones and
+`benchbar op wait OP_ID [--timeout SECS]` waits for one. A long command
+(`install`, `repair`, `pull`, `app add`, `app update`, `site add`, `site
+backup`, `site restore`) takes `--background`: it prints the `op_id` and
+returns, the run goes on detached, and `op status --json` carries its
+`done` line as `result` at the end. It needs `--yes` and the inputs in the
+environment, like any run without a person; a person only command never
+takes it. Prefer it to a call that waits for minutes.
 
 With `BENCHBAR_NONINTERACTIVE=1` a command that needs an input it cannot
 ask for stops before it takes the lock, and names all missing inputs in

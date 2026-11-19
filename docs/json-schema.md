@@ -31,6 +31,8 @@ Raycast extensions and the like can rely on it too.
 | `benchbar site backups NAME --json` | every backup of a site (0.5.8) |
 | `benchbar up\|down\|restart\|service\|site add\|site default --json` | JSON lines ending in one `done` (0.8), see [the done fields](#the-done-fields-08) |
 | `benchbar site drop NAME --json` | the plan (with `--dry-run`) or the result of dropping a site (0.5.8) |
+| `benchbar op status [OP_ID]\|list\|wait OP_ID --json` | the long runs: one record or the recent ones (0.9), see [operation handles](#operation-handles-09) |
+| `<state folder>/ops/<op_id>.json` | the record a run keeps of itself, rewritten at each step (0.9) |
 
 ## Rules for readers
 
@@ -61,6 +63,7 @@ command that read only prints none of them.
 
 | field | meaning |
 |---|---|
+| `op_id` | (0.9) the run's handle, also on every `plan`, `step` and `progress` line; absent when the run ended before it started (a refusal) and in a dry run. See [operation handles](#operation-handles-09) |
 | `exit` | the exit code; the process exits with the same number, so a pipe cannot hide a failure |
 | `changed[]` | what the run changed: `{"kind": "bench"\|"site"\|"app"\|"service"\|"ports"\|"hosts"\|"backup"\|"process"\|"state", "name", "detail"}`. Only what the run really changed: empty on a second run, and in a dry run. `install` reports the bench, the site and the apps its phase scripts create |
 | `warnings[]` | the run's `[WARN]` lines, as text |
@@ -1249,6 +1252,72 @@ runs in the bench folder with `BENCHBAR_SITE`, `BENCHBAR_BENCH` and
 `BENCHBAR_DB_NAME`; variables named like a secret (`*PASSWORD*`, `*SECRET*`,
 `*TOKEN*`, `*PASSPHRASE*`, `*_KEY`) are removed from its environment, and a
 failing hook ends the run before migrate.
+
+## Operation handles (0.9)
+
+Every run that changes things has an `op_id` and a record, so a program
+that did not start the run (or lost its connection to it) can follow it.
+A dry run, a command that only reads and a run that was refused before
+it started (a missing input) have none. `fg` and `self-update` have
+none either: they end by replacing the process.
+
+`op_id` is `op-<date>-<time>-<pid>` (`op-20261119-101500-4242`; a `-N`
+follows when two runs share the second and the pid). It is in:
+
+- the `plan`, every `step` and `progress`, and the `done` line of the
+  stream (`--json` of `install`, `adopt`, `repair`, `pull` and the commands
+  that stream, `--jsonl` of any), as a field of its own, right after
+  `event` (in `repair`'s lines, which have no `event` first, it leads);
+- the one document of a `--json` command that changes things (`site
+  backup`, `site drop`, `app add --apply`, `site restore --apply`, ...),
+  next to `exit` and `changed[]`;
+- `benchbar op status`, and the launch of `--background`.
+
+The text form of a command prints no handle: `benchbar op list` shows the
+recent ones.
+
+The record is `ops/<op_id>.json` in benchbar's state folder (for Homebrew
+and the one line installer, `~/.local/state/benchbar/ops/`). It is made
+when the run makes its log, rewritten whole at each step and progress line
+(a temp file, then a rename: a reader never sees half of it) and finished
+by the run's exit trap before the `done` line goes out. The newest 100 are
+kept (`FL_KEEP_OPS`), and never one of a run that still runs.
+
+| Field | Type | Notes |
+|---|---|---|
+| `schema_version`, `cli_version`, `op_id` | | as everywhere |
+| `state` | string | `starting` (a `--background` run that has not taken over yet), `running`, `done` (exit 0), `failed` (any other exit). `op status` and `op list` print `interrupted` instead of `running` or `starting` when the process is gone (`kill -0` on `pid`; a start that did not take over within 60 seconds): the run was killed and wrote no `done` line. The file is not rewritten. Treat an unknown value as unknown |
+| `command` | string or null | the command's key in `benchbar commands --json` (`install`, `site restore`, `app add`) |
+| `bench`, `site` | string or null | the bench and the site the run works on, as far as it knew when the record was last written (null at the first write) |
+| `pid` | number or null | the run's process; null for `starting` |
+| `started_at`, `updated_at` | string | ISO 8601 UTC |
+| `finished_at` | string or null | null until the run ends |
+| `step` | object or null | the step that runs now, or the last one: `id`, `name`, `status` (`running`, `done`, `unchanged`, `skipped`, `warning` or `failed`; as in the `step` lines) |
+| `progress` | object or null | the last `progress` line of that step: `label`, `elapsed` (seconds), `bytes` (a download's size so far, or null). A new step clears it |
+| `exit` | number or null | the exit code, null until the run ends |
+| `log` | string or null | the run's log file (`logs/<date>-<time>-<pid>.log`); every line of a run is there |
+| `output` | string or null | for a `--background` run: `ops/<op_id>.jsonl`, where its stream goes (an `.err` file next to it holds what it wrote to stderr) |
+| `background` | bool | started with `--background` |
+
+`benchbar op status OP_ID --json` prints the record with the state that is
+true now, and, once the run ended and was a `--background` run, `result`:
+its `done` line (`exit`, `changed[]`, `warnings[]`, `next_actions[]`,
+`state_after`, and the fields of the document the command would have
+printed). `benchbar op status --json` without an op_id and `benchbar op list
+--json` print `{"schema_version", "cli_version", "ops": [record, ...]}`,
+newest first. `benchbar op wait OP_ID --json` prints the same document as
+`op status` when the run is not running any more, or when `--timeout` ran
+out (then with `"timed_out": true`).
+
+`--background` prints, and exits 0:
+
+```json
+{"schema_version":1,"cli_version":"0.9.0","op_id":"op-20261119-101500-4242","command":"install","state":"starting","background":true,"output":"/home/me/.local/state/benchbar/ops/op-20261119-101500-4242.jsonl","exit":0,"next_actions":[{"command":"benchbar op wait op-20261119-101500-4242","why":"...","quoted":true}]}
+```
+
+`pending_operations[]` of `status --json` is a different thing: the record
+of an `app add` or `app update` that stopped part way, kept until it is
+finished or discarded. An op record says what a run is doing, or did.
 
 ## `logs/.benchbar/state.json`
 

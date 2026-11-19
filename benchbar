@@ -78,13 +78,15 @@ SCRIPT_DIR="$(fl_resolve_self)"
 # holds that the output is the same). BENCHBAR_LOAD_ALL=1 loads everything.
 FL_LEAN=0
 if [[ "${BENCHBAR_LOAD_ALL:-0}" != "1" ]]; then
-  case "${1:-}" in path|commands|where|list|status|--version|--help|-h) FL_LEAN=1 ;; esac
+  case "${1:-}" in path|commands|where|list|status|op|--version|--help|-h) FL_LEAN=1 ;; esac
   # --profile checks the name against the profiles (version-policy.sh, profiles.sh)
   for _a in "$@"; do case "$_a" in --profile|--profile=*) FL_LEAN=0 ;; esac; done
   unset _a
 fi
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
+# a benchbar run begins its own operation (ops.sh): one an outer run exported stays that run's
+FL_OP_ID=""; FL_OP_OWNER=""; FL_OP_JSON=""; FL_OP_COMMAND=""; FL_OP_STARTED=""; FL_OP_BACKGROUND=0
 # shellcheck source=lib/frappe-local/run.sh
 . "${SCRIPT_DIR}/lib/frappe-local/run.sh"
 # shellcheck source=lib/frappe-local/platform.sh
@@ -195,6 +197,8 @@ OPT_JSON=0
 OPT_JSONL=0
 # --for-agent: --jsonl or --json, BENCHBAR_NONINTERACTIVE=1, NO_COLOR=1, --plain
 OPT_FOR_AGENT=0
+# --background: start a long command detached and print its op_id (ops.sh)
+OPT_BACKGROUND=0
 # doctor --ack CHECK, --unack CHECK, --quick
 OPT_ACK=""
 OPT_UNACK=""
@@ -330,6 +334,10 @@ Daily
   mcp                 Model Context Protocol server on stdio for coding agents
                       (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart,
                       changes from a reviewed plan. --calls [N] prints the audit log.
+  op status [OP_ID]   The long runs. Every command that changes things has an op_id (in its JSON
+                      lines too); status shows one (or the ten newest) with its step and last
+                      progress, list shows the recent ones, wait OP_ID [--timeout SECS] waits for
+                      one to end. A run that died without a done line is interrupted.
   docs [TOPIC]        Open the documentation, or one topic's page (benchbar docs --help lists
                       them: install, doctor, apps, mcp, json ...); --print prints the URL.
 
@@ -435,6 +443,8 @@ Options
                       app update and ports apply (docs/json-schema.md)
   --jsonl             JSON lines (plan, step, done) from any command that changes things
   --for-agent         --jsonl or --json, no questions (BENCHBAR_NONINTERACTIVE=1), no colors
+  --background        install, repair, pull, app add, app update, site add, site backup, site restore:
+                      start the run detached and print its op_id at once (needs --yes; no questions)
   benchbar COMMAND --help prints that command's flags and needs; benchbar commands --json lists them all
   --plain             No colors or spinners (also: NO_COLOR=1, or a non-TTY)
   -h, --help          This help
@@ -462,6 +472,7 @@ fl_print_version() {
   return 0
 }
 
+FL_ORIG_ARGS=("$@")
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --bench-dir) OPT_BENCH_DIR="${2:-}"; shift 2 ;;
@@ -485,6 +496,7 @@ while [[ "$#" -gt 0 ]]; do
     --json) OPT_JSON=1; shift ;;
     --jsonl) OPT_JSON=1; OPT_JSONL=1; shift ;;
     --for-agent) OPT_FOR_AGENT=1; shift ;;
+    --background) OPT_BACKGROUND=1; shift ;;
     --ack) OPT_ACK="${2:-}"; shift 2 ;;
     --ack=*) OPT_ACK="${1#*=}"; shift ;;
     --unack) OPT_UNACK="${2:-}"; shift 2 ;;
@@ -512,6 +524,8 @@ while [[ "$#" -gt 0 ]]; do
   esac
 done
 export FL_DRY_RUN
+# nothing can be asked of a run nobody watches: the questions are refused up front, as for an agent
+if [[ "$OPT_BACKGROUND" == "1" ]]; then BENCHBAR_NONINTERACTIVE=1; export BENCHBAR_NONINTERACTIVE; fi
 # the passwords stay shell variables of this process: the phase scripts get
 # them on their own command line below, no other child (brew, pip, npm,
 # yarn, bench get-app) sees them
@@ -605,6 +619,8 @@ fl_cleanup() {
   fl_lock_release
   # a doctor run that was cut short leaves its folder of kept answers (facts.sh)
   fl_facts_end
+  # the operation's record is finished before its done line goes out (ops.sh)
+  fl_op_end "$code"
   # install --json and adopt --json: always the last line, after the lock is free
   fl_jsonl_on_exit "$code"
   # repair --json: its done line, when the run ended before it could send one
@@ -649,7 +665,10 @@ fl_jsonl_start() {
     exit 1
   fi
   # a dry run has a log here too: the human plan goes there
+  # (the log of a dry run is no operation: nothing changes)
+  FL_OP_NONE="$FL_DRY_RUN"; export FL_OP_NONE
   FL_DRY_RUN=0 fl_log_init "${FL_STATE_DIR}/logs"
+  unset FL_OP_NONE
   exec 1>>"${FL_LOG_FILE:-/dev/null}" 2>&1 0</dev/null
   FL_PLAIN=1; fl_ui_init
   # a dry run streams the plan and done only: the plan line turns the rest
@@ -1523,6 +1542,14 @@ fl_noninteractive_preflight() {
   fl_need_check
 }
 
+# --background: refused here when it cannot run unattended, else started detached; the caller gets the
+# op_id at once and the stream goes to the operation's own output (ops.sh)
+if [[ "$OPT_BACKGROUND" == "1" ]]; then
+  fl_lab_gate "${FL_JSON_KEY:-$COMMAND}"
+  [[ "$FL_DRY_RUN" == "1" ]] || fl_noninteractive_preflight
+  fl_op_background ${FL_ORIG_ARGS[@]+"${FL_ORIG_ARGS[@]}"}
+fi
+
 # the stream starts first, so that a refusal (the preflight) is a done line and not silence:
 # install and adopt with --json before the log and the lock (fl_jsonl_start runs the preflight)
 if [[ "$OPT_JSON" == "1" && ( "$COMMAND" == "install" || "$COMMAND" == "adopt" ) ]]; then
@@ -1659,6 +1686,8 @@ case "$COMMAND" in
   where) cmd_where ;;
   commands) if [[ "$OPT_JSON" == "1" ]]; then fl_commands_json; else fl_cmd_visible_table | awk -F'~' '$1 == "cmd" { printf "%-22s %s\n", $2, $4 }'; fi ;;
   mcp) cmd_mcp ;;
+  # a run that is not done is exit 1 without the ERR trap's line, like doctor
+  op) fl_cmd_op ${ARGS[@]+"${ARGS[@]}"} || exit 1 ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;
 esac
