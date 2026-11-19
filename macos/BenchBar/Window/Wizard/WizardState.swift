@@ -104,6 +104,8 @@ nonisolated struct WizardState: Equatable, Sendable {
         case prerequisitesFailed(String)
         case profiles(ProfileList)
         case profilesFailed(String)
+        /// Try Again on the New Bench page after the profile list failed.
+        case retryProfiles
         /// The folder field changed (every keystroke): no check yet.
         case setFolder(String)
         /// The folder was chosen, or the field was left: check it.
@@ -154,12 +156,17 @@ nonisolated struct WizardState: Equatable, Sendable {
     private(set) var bundles: [AppBundle] = []
     private(set) var profilesLoaded = false
     private(set) var profilesError: String?
+    /// A Try Again read is out.
+    private(set) var profilesLoading = false
 
     private(set) var plan: InstallPlan?
     private(set) var planning = false
     private(set) var planError: String?
 
     private(set) var progress = InstallProgress()
+    /// Names of steps the install runs that the reviewed plan did not run:
+    /// the machine changed between Review and Install. Shown above the steps.
+    private(set) var planChanges: [String] = []
     private(set) var installPhase: InstallPhase = .idle
     private(set) var stopRequested = false
 
@@ -217,7 +224,7 @@ nonisolated struct WizardState: Equatable, Sendable {
     var formProblem: String? {
         if resolvedFolder.isEmpty || !resolvedFolder.hasPrefix("/") { return "Choose a folder for the bench." }
         if prerequisites?.check("bench_folder")?.level == .fail { return prerequisites?.check("bench_folder")?.message }
-        if !profilesLoaded { return "Reading the profiles…" }
+        if !profilesLoaded { return profilesError == nil ? "Reading the profiles…" : "The profiles could not be read. Choose Try Again." }
         if !profileChoices.contains(where: { $0.name == form.profile }) { return "Choose a profile." }
         if !bundles.contains(where: { $0.name == form.bundle }) { return "Choose a bundle." }
         if form.site.isEmpty || !SiteName.isValid(form.site) { return SiteName.rule }
@@ -316,12 +323,19 @@ nonisolated struct WizardState: Equatable, Sendable {
             profiles = list.profiles
             bundles = list.bundles ?? []
             profilesLoaded = true
+            profilesLoading = false
             profilesError = nil
             chooseDefaults()
             return []
         case .profilesFailed(let message):
+            profilesLoading = false
             profilesError = message
             return []
+        case .retryProfiles:
+            guard page == .newBench, profilesError != nil, !profilesLoaded, !profilesLoading else { return [] }
+            profilesError = nil
+            profilesLoading = true
+            return [.loadProfiles]
         case .setFolder(let folder):
             form.folder = folder
             form.folderEdited = true
@@ -355,6 +369,7 @@ nonisolated struct WizardState: Equatable, Sendable {
             return []
         case .install(let event):
             guard page == .install else { return [] }
+            if case .plan(let real) = event, let reviewed = plan { planChanges = Self.unreviewedSteps(reviewed: reviewed, real: real) }
             progress.apply(event)
             return []
         case .installEnded(let code, let error): return installEnded(code, error)
@@ -445,7 +460,14 @@ nonisolated struct WizardState: Equatable, Sendable {
         }
     }
 
+    /// The steps `real` will run that `reviewed` did not (by id).
+    static func unreviewedSteps(reviewed: InstallPlan, real: InstallPlan) -> [String] {
+        let known = Set(reviewed.steps.filter(\.willRun).map(\.id))
+        return real.steps.filter { $0.willRun && !known.contains($0.id) }.map(\.name)
+    }
+
     private mutating func resetInstall() {
+        planChanges = []
         progress = InstallProgress()
         installPhase = .idle
         stopRequested = false

@@ -227,12 +227,24 @@ final class Workbench {
         }
     }
 
+    /// The change slot's text while `site` is backed up.
+    nonisolated static func backupActivity(_ site: String, withFiles: Bool) -> String {
+        withFiles ? "Back up \(site) with files" : "Back up \(site)"
+    }
+
+    /// Whether the bench's activity text is a backup of exactly `site`: `shop`
+    /// is not `shop2`, which a prefix test could not tell apart.
+    nonisolated static func isBackingUp(_ site: String, activity: String?) -> Bool {
+        guard let activity else { return false }
+        return activity == backupActivity(site, withFiles: false) || activity == backupActivity(site, withFiles: true)
+    }
+
     /// Backs up a site in the change slot. Returns the new backup, nil when
     /// it failed (the banner says why).
     @discardableResult
     func backUpSite(_ site: String, withFiles: Bool, on bench: BenchModel) async -> SiteBackup? {
         var made: SiteBackup?
-        await change(withFiles ? "Back up \(site) with files" : "Back up \(site)", on: bench) { client throws(CLIError) in
+        await change(Self.backupActivity(site, withFiles: withFiles), on: bench) { client throws(CLIError) in
             made = try await client.backupSite(site, withFiles: withFiles, bench: bench.path).backup
         }
         if let client = store.cliClient, let list = try? await client.siteBackups(site, bench: bench.path) {

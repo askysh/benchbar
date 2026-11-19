@@ -60,7 +60,7 @@ if [[ -f "$state/sudo_password" ]]; then
   want="$(head -n1 "$state/sudo_password")"
   ticket="$state/sudo_ticket.$PPID"
   for a in "$@"; do [[ "$a" == "$want" ]] && printf 'argv %s\n' "$PPID" >>"$state/sudo_leak"; done
-  if env | grep -q '^BENCHBAR_SUDO_PASSWORD=' || env | grep -F -q -- "$want"; then printf 'env %s\n' "$PPID" >>"$state/sudo_leak"; fi
+  if grep -q '^BENCHBAR_SUDO_PASSWORD=' <<<"$(env)" || grep -F -q -- "$want" <<<"$(env)"; then printf 'env %s\n' "$PPID" >>"$state/sudo_leak"; fi
   [[ -f "$state/sudo_refused" ]] && { echo "sudo: a password is required" >&2; exit 1; }
   nflag=0; sflag=0; vflag=0
   while [[ "$#" -gt 0 ]]; do

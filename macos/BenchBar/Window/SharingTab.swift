@@ -200,6 +200,7 @@ struct SharingTab: View {
                 HStack {
                     Image(systemName: check.status == .ok ? "checkmark.circle.fill" : check.status == .fail ? "xmark.circle.fill" : "exclamationmark.circle.fill")
                         .foregroundStyle(check.status == .ok ? .green : check.status == .fail ? .red : .orange)
+                        .accessibilityLabel(SharePresentation.checkStatusText(check.status))
                     Text(SharePresentation.checkTitle(check))
                     Spacer()
                     if check.status != .ok, let label = SharePresentation.fixLabel(check.fixAction) {
@@ -263,6 +264,7 @@ struct SharingTab: View {
             ForEach(SharePresentation.sorted(share.people)) { person in
                 HStack {
                     Circle().fill(person.online ? Color.green : Color.secondary).frame(width: 8, height: 8)
+                        .accessibilityLabel(SharePresentation.presenceText(online: person.online))
                     VStack(alignment: .leading) {
                         Text(SharePresentation.personLine(person))
                         Text(person.seatFullName ?? "No seat yet").font(.caption).foregroundStyle(.secondary)

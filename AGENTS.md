@@ -254,6 +254,13 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   skipped but the password prompt is not, so say so. Started by the app
   (`BENCHBAR_SUDO=gui`), macOS asks in its own dialog once per step instead,
   at most two per run.
+- Where the bench listens is the person's choice. The web server and
+  socketio listen on 127.0.0.1 by default (`benchbar listen local`).
+  Never run `benchbar listen all` (it refuses an agent anyway) and never
+  edit the web or socketio line of `Procfile.lean` or the files in
+  `config/benchbar-listen` to bind another address. If doctor warns
+  `bench_listen`, tell the user the fix; `benchbar listen local` and
+  `benchbar restart` are safe to run when the user asked you to fix it.
 - Open as is the person's choice. Never run `benchbar site open-as on`
   (it refuses an agent anyway, but a process of the same user can set
   the variables that tell the CLI a person is at the keyboard, so the rule is

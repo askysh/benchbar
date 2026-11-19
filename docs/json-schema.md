@@ -236,6 +236,7 @@ listener: it is polled at rest (0.6.1).
 | `processes_running` | bool | any honcho, serve, worker, schedule or socketio process of this bench (before 0.6.1 a port listener counted too) |
 | `sites` | array | added in 0.4, see [Sites](#sites) |
 | `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
+| `listen` | string | added in 0.9: `"local"` (the web server and socketio listen on 127.0.0.1) or `"all"` (every interface, `benchbar listen all`) |
 | `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
 | `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
 

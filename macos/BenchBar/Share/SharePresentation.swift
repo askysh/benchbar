@@ -192,6 +192,19 @@ nonisolated enum SharePresentation {
     static let driftWarning = "Your apps changed since the copy was made. Guests see the copy's code, not your working tree; Refresh copy… to catch up."
 
     /// "Sam · MacBook Air · 192.168.1.31" (J18: name and model tell two Sams apart).
+    /// What the green or grey presence dot says in words.
+    static func presenceText(online: Bool) -> String { online ? "Online" : "Offline" }
+
+    /// What the check's icon says in words.
+    static func checkStatusText(_ status: ShareCheckStatus) -> String {
+        switch status {
+        case .ok: "Passed"
+        case .warn: "Warning"
+        case .fail: "Failed"
+        case .skip: "Skipped"
+        }
+    }
+
     static func personLine(_ person: SharePerson) -> String {
         [person.name, person.model, person.ip].compactMap { $0 }.joined(separator: " · ")
     }

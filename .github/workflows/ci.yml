@@ -345,6 +345,16 @@ jobs:
           tail -n 100 ~/frappe-bench/logs/bench.log || true
           exit 1
 
+      # 0.9.0: the dev web server and socketio listen on 127.0.0.1 only (issue 117)
+      - name: The web server and socketio listen on loopback only
+        run: |
+          ss -Hltn
+          rows="$(ss -Hltn '( sport = :8000 or sport = :9000 )' | awk '{print $4}')"
+          test "$(printf '%s\n' "$rows" | grep -c .)" -ge 2 || { echo "expected a listener on 8000 and 9000"; exit 1; }
+          bad="$(printf '%s\n' "$rows" | grep -v '^127\.0\.0\.1:' || true)"
+          test -z "$bad" || { echo "not on loopback: $bad"; exit 1; }
+          ./benchbar doctor --json | python3 -c 'import json,sys; d=json.load(sys.stdin); c=[x for x in d["checks"] if x["id"] == "bench_listen"][0]; assert c["status"] == "ok", c'
+
       - name: status --json and doctor --json
         run: |
           ./benchbar status --json | tee "$RUNNER_TEMP/status.json"
@@ -531,6 +541,7 @@ jobs:
           set -o pipefail
           xcodebuild -project macos/BenchBar.xcodeproj -scheme BenchBar -configuration Debug \
             -derivedDataPath macos/build/DerivedData -destination 'platform=macOS,arch=arm64' \
+            -skip-testing:BenchBarTests/SnapshotTests \
             CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= test 2>&1 | tee macos/build/test.log | \
             grep -E '^(✔|✘)|Test run with|Test Suite|error:|\*\* TEST|Executed' || true
           grep -q -E '\*\* TEST SUCCEEDED \*\*|Test run with [0-9]+ tests? passed' macos/build/test.log

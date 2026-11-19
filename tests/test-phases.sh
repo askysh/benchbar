@@ -301,7 +301,7 @@ printf 'rootpw' >"$MOCK_STATE/mariadb_root_pw"
 run_fm service --yes --bench-dir "$BENCH" --site second
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "1" "$(grep -c -x -F "# >>> benchbar >>>" "$FL_HOSTS_FILE")" "(one block only)"
-awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$FL_HOSTS_FILE" | grep -q -x '127.0.0.1 second' || fail "second site inside the block"
+grep -q -x '127.0.0.1 second' <<<"$(awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$FL_HOSTS_FILE")" || fail "second site inside the block"
 
 # ---- a stale MARIADB_ROOT_PASSWORD falls through to the Keychain password that works
 rm -rf "$BENCH"

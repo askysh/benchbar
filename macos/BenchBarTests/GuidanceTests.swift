@@ -104,6 +104,28 @@ struct GuidanceTests {
         #expect(m.benches[0].guidance == "You stopped it. Next: Start")
         #expect(SidebarModel([.init(path: "/b", name: "b", state: .running, isBusy: false, sites: [])]).benches[0].guidance == nil)
     }
+
+    /// The dot beside a bench is colour only: VoiceOver reads the state from the row.
+    @Test func theSidebarRowSaysItsStateInWords() {
+        func row(_ state: BenchState, guidance: BenchGuidance? = nil, text: String? = nil) -> SidebarModel.Row {
+            SidebarModel([.init(path: "/b", name: "b", state: state, isBusy: false, sites: [], guidance: guidance, statusText: text)]).benches[0]
+        }
+        #expect(row(.running).accessibilityValue == "Running")
+        #expect(row(.stopped).statusText == "Stopped")
+        #expect(row(.crashed, text: "Crashed (exit 1), restarting").accessibilityValue == "Crashed (exit 1), restarting")
+        #expect(row(.stopped, guidance: BenchGuidance(reason: "You stopped it.", action: .start)).accessibilityValue
+                == "Stopped. You stopped it. Next: Start")
+        for state in [BenchState.stopped, .starting, .running, .crashed, .paused, .unknown] {
+            #expect(!row(state).statusText.isEmpty)
+        }
+    }
+
+    @Test func presenceAndCheckIconsHaveWords() {
+        #expect(SharePresentation.presenceText(online: true) == "Online")
+        #expect(SharePresentation.presenceText(online: false) == "Offline")
+        let words = [ShareCheckStatus.ok, .warn, .fail, .skip].map(SharePresentation.checkStatusText)
+        #expect(Set(words).count == 4)
+    }
 }
 
 @Suite("Setup apply", .serialized)

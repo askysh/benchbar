@@ -163,6 +163,7 @@ struct RepairSheet: View {
                         HStack(spacing: 6) {
                             Text(step.label)
                             if step.sudo { Tag(text: "Asks for your password", color: .orange) }
+                            if step.unreviewed { Tag(text: "Not in the plan you reviewed", color: .orange) }
                         }
                         if !step.message.isEmpty, step.status != "done" {
                             Text(CLIText.plain(step.message)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)

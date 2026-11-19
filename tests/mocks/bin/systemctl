@@ -28,7 +28,7 @@ mkdir -p "$sdir"
 cmd="${args[0]:-}"; args=("${args[@]:1}")
 
 file_of() { printf '%s/%s' "$sdir" "$1"; }
-get() { sed -n "s/^$2=//p" "$(file_of "$1")" 2>/dev/null | head -n1; }
+get() { sed -n "s/^$2=//p" "$(file_of "$1")" 2>/dev/null | awk 'NR==1'; }
 put() {
   local f; f="$(file_of "$1")"
   [[ -f "$f" ]] || return 0
@@ -47,7 +47,7 @@ if [[ "$scope" == system ]]; then
   done
 fi
 unit_arg() { local u="${1:-}"; case "$u" in *.service|*.socket|*.target) printf '%s' "$u" ;; *) printf '%s.service' "$u" ;; esac; }
-workdir_of() { sed -n 's/^WorkingDirectory=//p' "$udir/$1" 2>/dev/null | head -n1; }
+workdir_of() { sed -n 's/^WorkingDirectory=//p' "$udir/$1" 2>/dev/null | awk 'NR==1'; }
 # a missing or not yet loaded unit: the message the real one prints
 need_loaded() {
   [[ "$(get "$1" LoadState)" == loaded ]] && return 0
