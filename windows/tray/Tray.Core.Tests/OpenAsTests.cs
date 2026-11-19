@@ -110,7 +110,7 @@ public class OpenAsTests
     }
 
     [Fact]
-    public async Task SearchReadsTheUsersAsAPersonAndAFailureShowsTheCliSentence()
+    public async Task SearchIsAReadThatDoesNotClaimAClickAndAFailureShowsTheCliSentenceWithoutItsTag()
     {
         SynchronizationContext.SetSynchronizationContext(null);
         var (client, runner) = Scripted();
@@ -120,15 +120,30 @@ public class OpenAsTests
         Assert.Equal(3, find.List!.Users.Count);
         var run = runner.Runs.Single();
         Assert.Equal(["users", "--site", "one.localhost", "--search", "pri", "--limit", "50", "--json", "--bench-dir", Bench], run.Args);
-        Assert.Equal("0", run.Env["BENCHBAR_NONINTERACTIVE"]);
+        Assert.DoesNotContain("BENCHBAR_NONINTERACTIVE", run.Env.Keys);
+        Assert.DoesNotContain("BENCHBAR_SUDO", run.Env.Keys);
 
+        // the real refusal prints nothing on stdout and "  [FAIL] message" first on stderr
         var (client2, runner2) = Scripted();
-        runner2.On("users").Print(Lines("open-as-refused.jsonl")).Fail(1);
+        runner2.On("users").Fail(1, RefusalStderr());
         var failed = new FindUserModel(client2, Bench, "one.localhost");
         await failed.SearchAsync(null, TestContext.Current.CancellationToken);
         Assert.Null(failed.List);
         Assert.Equal("one.localhost is not in developer mode, so benchbar will not sign in as another user.", failed.Error);
     }
+
+    [Fact]
+    public void TheCliSentenceDropsTheColourCodesAndTheFailTag()
+    {
+        Assert.Equal("Open as is off for one.localhost.", OpenAsRules.CliSentence("  [FAIL] Open as is off for one.localhost."));
+        Assert.Equal("Open as is off for one.localhost.", OpenAsRules.CliSentence("  [31m[FAIL][0m Open as is off for one.localhost."));
+        Assert.Equal("Already a sentence.", OpenAsRules.CliSentence("Already a sentence."));
+        Assert.Null(OpenAsRules.CliSentence("  [FAIL]  "));
+        Assert.Null(OpenAsRules.CliSentence(null));
+    }
+
+    /// <summary>What the runner reports from stderr for the recorded refusal: its first line, trimmed.</summary>
+    private static string RefusalStderr() => BenchBar.Tray.TestSupport.FixtureFiles.CliLines("open-as-refused.stderr.txt")[0].Trim();
 
     [Fact]
     public async Task OpeningAsAUserIsOneCallThatTheCliAnswersWithoutALink()
@@ -149,11 +164,11 @@ public class OpenAsTests
     {
         SynchronizationContext.SetSynchronizationContext(null);
         var (client, runner) = Scripted();
-        runner.On("open").Print(Lines("open-as-refused.jsonl")).Fail(1);
+        runner.On("open").Fail(1, RefusalStderr());
         var find = new FindUserModel(client, Bench, "one.localhost");
         Assert.False(await find.OpenAsync(OpenAsJson.ParseUsers(Doc("users.json")).Users[0], TestContext.Current.CancellationToken));
         Assert.True(find.NoteIsError);
-        Assert.Contains("not in developer mode", find.Note);
+        Assert.Equal("one.localhost is not in developer mode, so benchbar will not sign in as another user.", find.Note);
     }
 
     [Fact]

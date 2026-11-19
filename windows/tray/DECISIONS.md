@@ -382,6 +382,9 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   SITE --yes --json` only after a yes; `--yes` skips the CLI's copy of the question, not the person's. The tray runs it with
   `BENCHBAR_NONINTERACTIVE=0` and `BENCHBAR_SUDO=gui` (the CLI refuses an opt in that nothing at a terminal or an app confirmed), and no
   poll, link, retry or repair turns it on. Turning it off needs no question, as in the Mac app.
+  The environment goes only to `site open-as on` and `open --as` (a click or Enter); the search for users is a read and never claims one.
+- **A refusal of `open` and `users` is stderr text, not JSON.** They are not in the CLI's JSON modes, so a refusal prints nothing on stdout
+  and `  [FAIL] message` on stderr; the tray shows the message without the tag. A test scans the code so `site open-as on` has one way in.
 - **The sign in link never reaches the tray.** Find User runs `open --site S --as USER --json` (no `--print-url`, a test pins it) and the
   CLI opens the browser itself (`wslview`, else `explorer.exe`), so the session id is not in the tray's memory, logs, clipboard or screen.
   The Mac app reads the link to cache and reuse sessions; the tray does not cache, so each Open makes a new session on the site.
