@@ -39,8 +39,32 @@ func (e *env) setLstat(paths ...string) {
 
 func TestDetectPackageOnThisHost(t *testing.T) {
 	// the tests do not run in a package
-	if p := detectPackage(); p.Packaged || p.Family != "" {
+	if p := detectPackage(`C:\x\benchbar.exe`); p.Packaged || p.Family != "" {
 		t.Errorf("%+v", p)
+	}
+}
+
+func TestPackageNeedsIdentityAndAWindowsAppsPath(t *testing.T) {
+	const fam = "Test.BenchBar_abc123xyz"
+	cases := []struct {
+		name     string
+		exe      string
+		identity bool
+		want     bool
+	}{
+		{"identity and the package folder", testVersion, true, true},
+		{"identity, lower case and slashes", strings.ToLower(strings.ReplaceAll(testVersion, `\`, "/")), true, true},
+		// seen: a Raycast child inherited its parent's package identity
+		{"identity inherited by a zip copy", `C:\Users\Pat\AppData\Local\Programs\BenchBar\benchbar.exe`, true, false},
+		{"identity inherited, path unknown", "", true, false},
+		{"the package folder, no identity", testVersion, false, false},
+		{"neither", `C:\x\benchbar.exe`, false, false},
+	}
+	for _, c := range cases {
+		got := packageFor(c.exe, func() (string, bool) { return fam, c.identity })
+		if got.Packaged != c.want || (c.want && got.Family != fam) || (!c.want && got.Family != "") {
+			t.Errorf("%s: %+v", c.name, got)
+		}
 	}
 }
 

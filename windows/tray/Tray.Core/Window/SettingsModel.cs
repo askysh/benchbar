@@ -11,8 +11,17 @@ public interface ISettingsHost
 
     void ApplyNotifications(bool on);
 
-    /// <summary>The path of the running benchbar.exe, or null.</summary>
+    /// <summary>The path of benchbar.exe to show, or null: packaged, the alias in WindowsApps (see <see cref="ShimPathDisplay"/>).</summary>
     string? ShimPath { get; }
+
+    /// <summary>Packaged (Microsoft Store) or not: a packaged tray has no GitHub update check and keeps open at logon in the package's startup task.</summary>
+    IPackageInfo Package => PackageInfo.Unpackaged;
+
+    /// <summary>The logon switch when it is more than a boolean (the packaged startup task); null: use <see cref="OpenAtLogon"/>.</summary>
+    ILogonControl? Logon => null;
+
+    /// <summary>Opens Windows' Settings > Apps > Startup (<c>ms-settings:startupapps</c>).</summary>
+    void OpenStartupSettings() { }
 
     /// <summary>The distro BenchBar uses changed: poll now instead of waiting out the back off.</summary>
     void DistroSwitched() { }
@@ -37,13 +46,45 @@ public sealed class SettingsModel(TrayConfig config, ISettingsHost host, ISetupS
 
     public bool OpenAtLogon
     {
-        get => host.OpenAtLogon;
+        get => LogonView.IsOn;
         set
         {
-            host.OpenAtLogon = value;
-            Changed?.Invoke();
+            if (host.Logon is { } control) control.SetAsync(value).Forget();
+            else
+            {
+                host.OpenAtLogon = value;
+                Changed?.Invoke();
+            }
         }
     }
+
+    /// <summary>The logon switch: on or off, whether it can be changed here and the line that says why not.</summary>
+    public LogonView LogonView => host.Logon?.View ?? new LogonView(host.OpenAtLogon, true);
+
+    /// <summary>Reads the packaged startup task's state (the first time it is needed) and tells the window when it arrives.</summary>
+    public async Task LoadLogonAsync()
+    {
+        if (host.Logon is not { } control) return;
+        control.Changed -= RaiseChanged;
+        control.Changed += RaiseChanged;
+        await control.RefreshAsync().ConfigureAwait(true);
+        Changed?.Invoke();
+    }
+
+    /// <summary>Stops listening to the logon switch; the window calls it when it closes.</summary>
+    public void Detach()
+    {
+        if (host.Logon is { } control) control.Changed -= RaiseChanged;
+    }
+
+    private void RaiseChanged() => Changed?.Invoke();
+
+    public bool IsPackaged => host.Package.IsPackaged;
+
+    /// <summary>Packaged: the Store updates the programs, so there is no "check for updates" switch.</summary>
+    public bool ShowsUpdateCheck => UpdatePolicy.ChecksForUpdates(host.Package);
+
+    public void OpenStartupSettings() => host.OpenStartupSettings();
 
     public bool Notifications
     {
