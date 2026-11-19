@@ -14,7 +14,9 @@
 # (lan-guard install and remove: the pf anchor and its launch daemon) and the
 # firewall allow for node (lan-guard allow-node). On Linux: apt (the packages and
 # the wkhtmltopdf .deb), the MariaDB admin step, its drop-in and restart, and
-# starting a stopped mariadb or redis-server (platform-linux.sh). Nothing
+# starting a stopped mariadb or redis-server (platform-linux.sh), and the LAN
+# guard (lan-guard install and remove: the inet benchbar nftables table, its
+# systemd unit and /etc/benchbar; lan-guard-linux.sh). Nothing
 # else in benchbar runs as root, and fl_sudo_drop ("sudo -k") ends the
 # credential as soon as those steps are done, before brew, pip, npm, yarn,
 # uv, fnm or bench run any third party code on the same terminal: a
