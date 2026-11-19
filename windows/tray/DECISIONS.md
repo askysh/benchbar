@@ -375,3 +375,4 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   a fatal one ends the process so the next start reports it from the run marker.
 - **Dates for display use the current culture (`UiText.Date`), user text lives in `Strings.resx`.** The tray menu, crash toasts, tooltip and WSL messages are moved;
   `UiTextTests` fails when code asks for a missing name or an entry is unused. The pages of the BenchBar window still hold inline text.
+- **The wizard asks the install itself which profiles it takes.** `profile list --json` has no per platform field, so each profile gets `install --dry-run --json --offline --profile NAME`, one after the other: a plan line means taken, a `done` that failed before any plan is the refusal, shown as the CLI worded it. No answer leaves the profile on offer; Review then says more (#175).
