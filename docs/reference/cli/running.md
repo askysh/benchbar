@@ -120,7 +120,7 @@ Tails `logs/bench.log` and follows it in a terminal.
 |---|---|
 | `--worker` | `logs/worker.log` instead |
 | `--worker-error` | `logs/worker.error.log` instead |
-| `--previous` | `logs/bench.previous.log`, the tail of the run before |
+| `--previous` | `logs/bench.previous.log`, the tail of the run before (the starts before that are `bench.previous.1.log` to `.3.log`, read them with `cat`) |
 | `-n50` | The last 50 lines (the default); any number works, `-n` then the count |
 | `--no-follow` | Print and exit |
 | `--process NAME` | Only the lines of one honcho process: `web`, `socketio`, `schedule`, `redis_queue`, `redis_cache`. `worker` reads `logs/worker.log` instead, where `Procfile.lean` sends the worker (it never writes to `bench.log`); `--previous` does not combine with it, since `worker.log` has no previous file |
