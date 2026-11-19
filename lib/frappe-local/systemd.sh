@@ -484,13 +484,31 @@ fl_render_agent() {
     "LOG=${log}")"
 }
 
-# The runner's per platform lines (templates/bench-run.sh.tmpl): no
+# The runner's per platform lines (templates/bench-run.sh.tmpl): the crash
 # notification, and /proc and ss where the Mac uses lsof.
+#
+# A pause (the crash guard, a port conflict, a missing env) is always in
+# state.json and the log, which is all a headless server gets. On a desktop
+# the runner also calls notify-send, over the user's session bus: a systemd
+# user unit has XDG_RUNTIME_DIR but not always DBUS_SESSION_BUS_ADDRESS, so
+# the bus is found at $XDG_RUNTIME_DIR/bus, and no socket there means nothing
+# is sent. A server with a lingering user can have that socket too; it stays
+# quiet because notify-send is rarely installed there and its output is dropped. In WSL the Windows tray reads the same
+# record and shows its own toast; a second one from the distro would double it.
 FL_RUNNER_EXTRA=()
+# shellcheck disable=SC2016  # the runner expands $1 and $PORTS, not this file
+fl_runner_notify_body() {
+  if fl_is_wsl; then printf ':'; return 0; fi
+  printf '%s' 'local b p t; b="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bus}"; '
+  printf '%s' 'command -v notify-send >/dev/null 2>&1 || return 0; '
+  printf '%s' 'case "$b" in unix:path=*) p="${b#unix:path=}"; [ -S "${p%%,*}" ] || return 0 ;; esac; '
+  printf '%s' 't=""; command -v timeout >/dev/null 2>&1 && t="timeout 5"; '
+  printf '%s' 'DBUS_SESSION_BUS_ADDRESS="$b" $t notify-send -a BenchBar -u critical "BenchBar: '"${FL_BENCH_NAME}"'" "$1" >/dev/null 2>&1 || :'
+}
 # shellcheck disable=SC2016  # the runner expands $1 and $PORTS, not this file
 fl_runner_extra_args() {
   FL_RUNNER_EXTRA=(
-    "NOTIFY_BODY=:"
+    "NOTIFY_BODY=$(fl_runner_notify_body)"
     'CWD_OF=readlink "/proc/$1/cwd" 2>/dev/null'
     'LISTENER_PIDS=ss -Hltnp 2>/dev/null | awk -v p=",$PORTS," '"'"'{ n = split($4, a, ":"); if (index(p, "," a[n] ",") && match($0, /pid=[0-9]+/)) print substr($0, RSTART + 4, RLENGTH - 4) }'"'"' | sort -u'
   )
