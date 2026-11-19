@@ -411,9 +411,9 @@ switch runs `benchbar.exe labs on NAME` or `labs off NAME`, the same calls
 as **Settings > Labs** in the Mac app, so the state is the same in the
 tray, in PowerShell and for an agent. Turning an experiment on is your
 decision, and the click is it: the warning is on the row. An experiment
-that is not on Windows yet stays off and says why (both experiments today
-work on macOS only: `lan-rooms` and `quick-switch`). Turning one off stops
-what it started.
+that does not list Linux among its platforms (the benches run in WSL)
+stays off and says why; `benchbar labs list` shows each experiment's
+platforms. Turning one off stops what it started.
 
 The log window filters by process, searches, follows the log (while the
 window is open), shows the previous log and opens `tail -f` in Windows
