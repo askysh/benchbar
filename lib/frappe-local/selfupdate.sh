@@ -301,3 +301,41 @@ fl_cmd_self_update() {
   # shellcheck disable=SC2016  # $1 and $@ belong to the inner bash
   exec bash -c 'set -o pipefail; url="$1"; shift; curl -fsSL "$url" | bash -s -- "$@"' _ "$SU_INSTALLER" "${SU_ARGS[@]}"
 }
+
+# The path helpers of `where` (lean start): they live here, not in checks.sh,
+# which a lean start does not load.
+# Homebrew's benchbar by a path brew upgrade keeps: the opt path, or its
+# link in <prefix>/bin. Never a Cellar path, which brew cleanup deletes.
+fl_cli_path_is_brew() {
+  local p
+  case "$1" in
+    */opt/benchbar/bin/benchbar|*/opt/benchbar/bin/frappe-mac|*/opt/benchbar/libexec/benchbar|*/opt/benchbar/libexec/frappe-mac) return 0 ;;
+  esac
+  for p in "${FL_SELF_PREFIX:-}" "${FL_BREW_PREFIX:-}"; do
+    [[ -n "$p" ]] || continue
+    [[ "$1" == "${p}/bin/benchbar" || "$1" == "${p}/bin/frappe-mac" ]] && return 0
+  done
+  return 1
+}
+
+# fl_cli_standalone_script PATH: the benchbar script behind Homebrew's or the
+# installer's CLI at PATH (as a link or the helper block names it), else
+# nothing. No process.
+fl_cli_standalone_script() {
+  case "$1" in
+    */opt/benchbar/bin/benchbar|*/opt/benchbar/bin/frappe-mac) printf '%s' "${1%/bin/*}/libexec/benchbar" ;;
+    */opt/benchbar/libexec/benchbar|*/opt/benchbar/libexec/frappe-mac) printf '%s' "${1%/*}/benchbar" ;;
+    "${FL_MANAGED_HOME}/benchbar"|"${FL_MANAGED_HOME}/frappe-mac") printf '%s' "${FL_MANAGED_HOME}/benchbar" ;;
+    *) if fl_cli_path_is_brew "$1"; then printf '%s' "${1%/bin/*}/opt/benchbar/libexec/benchbar"; fi ;;
+  esac
+}
+
+# fl_cli_version_at FILE: the version a benchbar script declares, or nothing
+fl_cli_version_at() {
+  local line
+  [[ -r "$1" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ ^FL_VERSION=\"(.*)\"$ ]]; then printf '%s\n' "${BASH_REMATCH[1]}"; return 0; fi
+  done <"$1"
+  return 0
+}

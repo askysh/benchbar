@@ -147,6 +147,8 @@ PY
       disable-scheduler) exit 0 ;;
       set-config)
         # bench --site S set-config [-p] KEY VALUE: the site's own config
+        # MOCK_BENCH_SITE_SET_CONFIG_EXIT=N: it fails (the pull stops after the restore, before neutralise)
+        [[ -n "${MOCK_BENCH_SITE_SET_CONFIG_EXIT:-}" ]] && exit "$MOCK_BENCH_SITE_SET_CONFIG_EXIT"
         site="$2"; shift 3; parse=0
         [[ "${1:-}" == "-p" ]] && { parse=1; shift; }
         python3 - "sites/${site}/site_config.json" "$1" "$2" "$parse" <<'PY'

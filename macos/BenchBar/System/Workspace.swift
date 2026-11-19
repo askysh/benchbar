@@ -115,10 +115,7 @@ enum Workspace {
     static func runInTerminal(name: String, contents: String) throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("BenchBar", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let safe = name.map { $0.isLetter || $0.isNumber || "-_.".contains($0) ? $0 : "_" }
-        let script = folder.appendingPathComponent(String(safe) + ".command")
-        try contents.write(to: script, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+        let script = try writeScript(name: name, contents: contents, in: folder)
 
         let terminal = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal")
             ?? URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")
@@ -146,5 +143,25 @@ enum Workspace {
     static func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
+extension Workspace {
+    /// A script of this run only: two benches with the same name, or two runs, never share a
+    /// file. It is created owner only (no moment with the default mode), and a script older
+    /// than a day is removed when the next one is written.
+    @discardableResult
+    static func writeScript(name: String, contents: String, in folder: URL, now: Date = Date()) throws -> URL {
+        let fm = FileManager.default
+        for old in (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? [] {
+            let modified = (try? old.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            if old.pathExtension == "command", let modified, now.timeIntervalSince(modified) > 86_400 { try? fm.removeItem(at: old) }
+        }
+        let safe = String(name.map { $0.isLetter || $0.isNumber || "-_.".contains($0) ? $0 : "_" })
+        let script = folder.appendingPathComponent("\(safe)-\(UUID().uuidString.prefix(8)).command")
+        guard fm.createFile(atPath: script.path, contents: Data(contents.utf8), attributes: [.posixPermissions: 0o700]) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        return script
     }
 }

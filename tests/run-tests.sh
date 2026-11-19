@@ -34,11 +34,11 @@ SCRIPTS=("$ROOT"/benchbar "$ROOT"/00-mac-system-deps.sh "$ROOT"/00-linux-system-
 # order. A new test file must be added here; the check below enforces it.
 ALL_TESTS="test-doctor test-phases test-install-json test-install-json-2 test-lock test-apps test-app-recovery test-app-recovery-2 test-app-recovery-3 test-app-batch test-pull test-repair test-install-linux test-port-management
 test-profiles test-profiles-2 test-profiles-3 test-service test-homebrew test-multi-bench test-ports test-sites test-input-hygiene test-doctor-hardening
-test-cli test-open-as test-freshness test-hygiene test-mcp test-site-backups test-app-cli test-process test-doctor-linux test-install-sh test-install-sh-linux
+test-cli test-open-as test-freshness test-hygiene test-mcp test-site-backups test-app-cli test-process test-process-match test-doctor-linux test-install-sh test-install-sh-linux
 test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
 test-runner test-redact test-docs-command test-status-cost test-command-cost test-bench-flow test-run test-platform-linux test-self-update
 test-site-restore test-site-restore-2 test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-macos-appcast test-ui test-release-notes test-version-policy test-affected
-test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin test-lan-guard test-labs test-labs-share test-wsl-preflight test-ci-plan test-fresh-install test-tray-fixtures test-backup-safety test-changelog"
+test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin test-lan-guard test-labs test-labs-share test-wsl-preflight test-ci-plan test-fresh-install test-tray-fixtures test-backup-safety test-changelog test-lean-load test-linux-parity test-facts test-guards test-release-workflows test-neutralise"
 
 ALL_TESTS_WORDS=" $(printf '%s' "$ALL_TESTS" | tr '\n' ' ') "
 for f in "$ROOT"/tests/test-*.sh; do

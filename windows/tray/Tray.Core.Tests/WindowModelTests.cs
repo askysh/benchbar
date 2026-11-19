@@ -195,6 +195,18 @@ public class SettingsModelTests
     }
 
     [Fact]
+    public void AskBeforeALinkActsIsOffByDefaultAndSaves()
+    {
+        var (model, config, _, saves, _) = Make();
+        Assert.False(model.ConfirmLinkActions);
+        model.ConfirmLinkActions = true;
+        Assert.Equal(1, saves[0]);
+        Assert.True(TrayConfig.Load(config.Path).ConfirmLinkActions);
+        model.ConfirmLinkActions = false;
+        Assert.False(TrayConfig.Load(config.Path).ConfirmLinkActions);
+    }
+
+    [Fact]
     public void AnUnknownEditorFallsBackToVsCode()
     {
         var (model, _, _, _, _) = Make();

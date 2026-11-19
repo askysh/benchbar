@@ -69,7 +69,7 @@ build from source: `git clone`
 this repository and run `./benchbar install`; the app needs Xcode 26.
 
 **Linux and Windows.** From 0.8 the same CLI runs on Linux (Ubuntu 24.04
-and other apt based systems, the v15-lts profile so far), with each bench
+tested, other apt based systems with a doctor warning, the v15-lts profile so far), with each bench
 under `systemd --user`; clone the repository and run `./benchbar install`.
 See [Install](https://benchbar.akashmishra.com/install/#linux).
 

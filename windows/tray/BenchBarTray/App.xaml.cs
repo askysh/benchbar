@@ -94,8 +94,11 @@ public partial class App : Application, ITrayHost
             args.SetObserved();
         };
 
-        var resume = e.Args.Contains(StartupShortcut.ResumeArgument, StringComparer.OrdinalIgnoreCase);
-        if (!TakeSingleInstance(resume))
+        // a start from a benchbar:// link has no flags of its own: whatever follows the link on the command line is the link's text
+        var ownArgs = LinkRouter.OwnArguments(e.Args);
+        var resume = ownArgs.Contains(StartupShortcut.ResumeArgument, StringComparer.OrdinalIgnoreCase);
+        var startLink = LinkRouter.FromArguments(e.Args);
+        if (!TakeSingleInstance(resume, startLink))
         {
             Shutdown();
             return;
@@ -114,6 +117,7 @@ public partial class App : Application, ITrayHost
 
         _config = TrayConfig.Load();
         ApplyThemeMode();
+        RegisterLinkScheme();
         _source = BenchSourceFactory.FromEnvironment();
         _setup = BenchSourceFactory.SetupFromEnvironment();
         _cli = BenchSourceFactory.CliFromEnvironment();
@@ -157,6 +161,7 @@ public partial class App : Application, ITrayHost
         _icon.TrayMouseDoubleClick += (_, _) => OpenMain();
         _releaseFlyout.Tick += (_, _) => ReleaseFlyout();
         _controller.Start();
+        if (startLink is not null) QueueLink(startLink); // waits for the first poll: the bench list decides which bench the link means
         CheckShimVersionAsync().Forget();
         if (crashedLastTime)
         {
@@ -167,7 +172,7 @@ public partial class App : Application, ITrayHost
         // read before NoteVersion saves the file: a config with no tray object means no tray ran here before (an unreadable one is not that)
         var firstRun = !_config.HadTraySection && !_config.Unreadable;
         var updated = NoteVersion();
-        _launchStart = LaunchStart.From(e.Args, firstRun, _config.WizardDismissed, updated);
+        _launchStart = LaunchStart.From(ownArgs, firstRun, _config.WizardDismissed, updated);
         if (resume)
         {
             // the one shot flag did its job: take it away before anything can fail
@@ -178,16 +183,20 @@ public partial class App : Application, ITrayHost
 
     // --- single instance ---
 
-    private bool TakeSingleInstance(bool resume)
+    private bool TakeSingleInstance(bool resume, string? link)
     {
         _mutex = new Mutex(true, MutexName, out var first);
         if (!first)
         {
-            // ask the running one to open its flyout (or the wizard, after a restart); quietly nothing if it cannot be reached
+            // a link goes to the running tray as it is (nothing opens by itself: the link decides what shows); else ask it to open its
+            // flyout (or the wizard, after a restart). Quietly nothing if it cannot be reached.
             try
             {
-                using var existing = EventWaitHandle.OpenExisting(resume ? SetupEventName : OpenEventName);
-                existing.Set();
+                if (link is null || !PassLinkOn(link))
+                {
+                    using var existing = EventWaitHandle.OpenExisting(resume ? SetupEventName : OpenEventName);
+                    existing.Set();
+                }
             }
             catch (Exception ex) when (ex is WaitHandleCannotBeOpenedException or UnauthorizedAccessException or IOException) { }
             _mutex.Dispose();
@@ -200,6 +209,7 @@ public partial class App : Application, ITrayHost
         _setupWait = ThreadPool.RegisterWaitForSingleObject(_setupEvent, (_, _) => Dispatcher.BeginInvoke(() => OpenWizard(resume: true)), null, Timeout.Infinite, executeOnlyOnce: false);
         _quitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, QuitEventName);
         _quitWait = ThreadPool.RegisterWaitForSingleObject(_quitEvent, (_, _) => Dispatcher.BeginInvoke(Quit), null, Timeout.Infinite, executeOnlyOnce: true);
+        StartLinkServer();
         return true;
     }
 
@@ -213,6 +223,7 @@ public partial class App : Application, ITrayHost
         _setupEvent?.Dispose();
         _quitWait?.Unregister(null);
         _quitEvent?.Dispose();
+        _linkServer?.Dispose();
         if (_mutex is not null)
         {
             try { _mutex.ReleaseMutex(); } catch (ApplicationException) { }
@@ -240,6 +251,7 @@ public partial class App : Application, ITrayHost
         {
             _launchChecked = true;
             LaunchCheckAsync(snapshot).Forget();
+            LinksReady(); // links that came before the first poll can name a bench now
         }
         else if (_setupPending && snapshot.Benches.Count > 0) SetSetupPending(false); // a bench appeared: setup is done
     }

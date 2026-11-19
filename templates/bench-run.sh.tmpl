@@ -1,5 +1,5 @@
 #!/bin/bash
-#@version 7
+#@version 8
 #@unhashed CLI_VERSION
 #@default NOTIFY_BODY pgrep -xq BenchBar 2>/dev/null && return 0\n  osascript -e "display notification \"$1\" with title \"BenchBar: __BENCH_NAME__\"" >/dev/null 2>&1
 #@default CWD_OF lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
@@ -35,6 +35,9 @@ PING_TRIES="${BENCHBAR_PING_TRIES:-120}"
 PING_EVERY="${BENCHBAR_PING_EVERY:-2}"
 HEARTBEAT="$STATE_DIR/heartbeat"
 HEARTBEAT_EVERY="${BENCHBAR_HEARTBEAT_EVERY:-30}"
+# the stop command: always kill, except in the tests (FL_TESTING=1 and BENCHBAR_KILL_CMD)
+KILLER=kill
+if [ "${FL_TESTING:-}" = 1 ]; then KILLER="${BENCHBAR_KILL_CMD:-kill}"; fi
 
 cd "$BENCH" || exit 0
 mkdir -p "$BENCH/logs" 2>/dev/null
@@ -134,13 +137,19 @@ is_ours() {
   esac
   return 1
 }
-pkill -f "^__BENCH_RE__/env/bin/python -m frappe.utils.bench_helper frappe (serve|worker|schedule)" 2>/dev/null
+# serve, worker and schedule: the command line is the same in every bench and
+# under every interpreter (a Homebrew Python shows its framework path, no
+# bench path), so the folder decides. The pattern is fl_bench_helper_pattern
+# of the CLI (process.sh); tests/test-process-match.sh keeps them equal.
+for pid in $(pgrep -f ' -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)' 2>/dev/null); do
+  is_ours "$pid" && "$KILLER" "$pid" 2>/dev/null
+done
 # socketio runs as "node apps/frappe/socketio.js" in every bench
 for pid in $(pgrep -f "apps/frappe/socketio.js" 2>/dev/null); do
-  is_ours "$pid" && "${BENCHBAR_KILL_CMD:-kill}" "$pid" 2>/dev/null
+  is_ours "$pid" && "$KILLER" "$pid" 2>/dev/null
 done
 for pid in $(__LISTENER_PIDS__); do
-  is_ours "$pid" && "${BENCHBAR_KILL_CMD:-kill}" "$pid" 2>/dev/null
+  is_ours "$pid" && "$KILLER" "$pid" 2>/dev/null
 done
 # a port still held after that is not this bench's to free: honcho would only
 # fail to bind and trip the crash guard, so pause with the reason instead

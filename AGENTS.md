@@ -206,6 +206,21 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   folder that holds `kept-sets` files (older backups that a cut short run
   did not put back; `benchbar repair` puts them back).
 - Never run `bench update` unless the user asked for it by name.
+- Two hooks in `.claude/` check every Bash call: `guard-rm.sh` blocks a
+  recursive delete (`rm -r`, `find -delete`, `git clean`, `git reset --hard`,
+  `rsync --delete`) outside the repo, the temp folder and `~/.benchbar/logs`,
+  and `guard-writes.sh` blocks `gh` writes to any repository but this one and
+  the tap. They guard against mistakes and are not a security boundary: when
+  one blocks a call, say so to the user, do not look for a way around it.
+- `.claude/settings.json` asks before `git push`, `git tag` (also behind
+  `-C`, `-c` or `--no-pager`), `gh pr merge`, `gh pr close`,
+  `gh run rerun|cancel|delete`, `gh release`, `gh repo delete|archive|rename|edit`,
+  `gh api` calls for merge, `git/refs` or a DELETE on askysh, and `sudo`, and
+  denies `bench update`, `bench restore` and `mariadb` or `mysql` as root.
+  Under a bypass mode `ask` does nothing and the hooks do not cover push,
+  tag or merge, so there you are the only fence: do not run them unasked.
+- `tests/test-guards.sh` holds a table of allowed and blocked command lines
+  for both hooks. A change to a hook or to the settings adds its cases there.
 - Never write your own LaunchAgents or `Procfile`. Use `benchbar
   service`, which generates `Procfile.lean`, the runner and the agent
   from templates with a version hash header.
@@ -263,8 +278,13 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 
 ## Contributing a change
 
-- Run `bash tests/affected.sh` for the tests your change touches; the full
-  suite (`bash tests/run-tests.sh`) before you hand the work back.
+- Run `bash tests/affected.sh` for the tests your change touches. CI runs
+  the full suite; run it yourself only when the selector says everything.
+- A change a user can see updates its guide or app page, `docs/features.md`
+  and `CHANGELOG.md`; a new command, flag or MCP tool also needs
+  `python3 scripts/docs-reference.py --write` (the reference tables are
+  generated, and `test-docs` fails when they drift). The pull request
+  template lists the same checks.
 - Branch from `next-release` and open the pull request against it.
   `main` holds the last release and moves only when one is cut
   (docs/releasing.md).
