@@ -360,7 +360,7 @@ struct ChangeResultBanner: View {
             PaneBanner(symbol: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
                    tint: result.succeeded ? .green : .red,
                    title: result.succeeded ? "\(result.title): done" : "\(result.title): failed",
-                   detail: result.error, dismiss: { workbench.result = nil })
+                   detail: result.error ?? result.note, dismiss: { workbench.result = nil })
         }
     }
 }
