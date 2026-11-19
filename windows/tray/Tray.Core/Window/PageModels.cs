@@ -1,7 +1,6 @@
 namespace BenchBar.Tray.Core;
 
-/// <summary>The tabs of a bench page (macos BenchTab).</summary>
-/// <summary>Sharing is not in <see cref="BenchTabs.All"/>: the page adds it only while the lan-rooms experiment is on.</summary>
+/// <summary>The tabs of a bench page (macos BenchTab). Sharing is not in <see cref="BenchTabs.All"/>: the page adds it only while the lan-rooms experiment is on.</summary>
 public enum BenchTab { Overview, Sites, Apps, Health, Sharing }
 
 public static class BenchTabs

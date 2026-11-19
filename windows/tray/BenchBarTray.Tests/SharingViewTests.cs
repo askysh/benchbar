@@ -11,10 +11,10 @@ public class SharingViewTests
     /// <summary>The off room with every check passing, so Start is offered.</summary>
     private static string Clean(string from = "share-status-off.json") => Fixture(from)[0].Replace("\"fail\"", "\"ok\"");
 
-    private static (SharingView View, PageKit Kit, List<string> Asked) Make(string status, bool answer = true, Func<string, string>? tweak = null)
+    private static (SharingView View, PageKit Kit, List<string> Asked) Make(string status, bool answer = true, Func<string, string>? tweak = null, int statusExit = 0)
     {
         var kit = new PageKit();
-        kit.Runner.On("share", "status").Print(tweak is null ? Fixture(status)[0] : tweak(Fixture(status)[0]));
+        kit.Runner.On("share", "status").Print(tweak is null ? Fixture(status)[0] : tweak(Fixture(status)[0])).Fail(statusExit);
         kit.Runner.On("share", "people").Print(Fixture("share-people.json"));
         kit.Runner.On("share", "code").Print(Fixture("share-code.json"));
         kit.Runner.On("share", "invite").Print(Fixture("share-invite.json"));
@@ -157,13 +157,63 @@ public class SharingViewTests
         var plain = new List<string>();
         kit.Services.CopySecret = secrets.Add;
         kit.Services.CopyText = plain.Add;
-        Assert.False(view.Buttons["Copy"].IsEnabled); // no code read yet
+        Assert.True(view.Buttons["Copy"].IsEnabled); // no code in memory yet, a click reads it
+        Assert.Equal(0, Calls(kit, "share", "code"));
+        Click(view.Buttons["Copy"]);
+        Wait(view.Pending);
+        Assert.Equal(["000000"], secrets); // the current code, without --new: invites already sent stay valid
+        Assert.Equal(["share", "code", "--json", "--bench-dir", P], kit.Runner.Runs.Single(r => r.Args[1] == "code").Args);
+        Assert.DoesNotContain("Room code: shown", view.Lines); // Copy does not reveal it
+        Click(view.Buttons["Copy"]);
+        Wait(view.Pending);
+        Assert.Equal(2, secrets.Count);
+        Assert.Equal(1, Calls(kit, "share", "code")); // the second Copy used the one in memory
         Click(view.Buttons["Copy invite"]);
         Wait(view.Pending);
-        Assert.Single(secrets);
-        Assert.StartsWith("Join my BenchBar room", secrets[0]);
+        Assert.StartsWith("Join my BenchBar room", secrets[2]);
         Assert.Empty(plain);
         Assert.Contains(ShareText.InviteCopied, view.Lines);
+        Assert.DoesNotContain(view.Lines, l => l.Contains("000000") || l.Contains("000 000"));
+    });
+
+    [Fact]
+    public void ShowWithNoCodeInMemoryReadsTheCurrentCodeWithoutNew() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make("share-status-on.json");
+        Assert.True(view.Buttons["Show"].IsEnabled);
+        Click(view.Buttons["Show"]);
+        Wait(view.Pending);
+        Assert.Equal(["share", "code", "--json", "--bench-dir", P], kit.Runner.Runs.Single(r => r.Args[1] == "code").Args);
+        Assert.Contains("Room code: shown", view.Lines);
+        Assert.Contains("000 000", Texts(view));
+        Assert.DoesNotContain(view.Lines, l => l.Contains("000000") || l.Contains("000 000"));
+        Click(view.Buttons["Hide"]);
+        Click(view.Buttons["Show"]);
+        Wait(view.Pending);
+        Assert.Equal(1, Calls(kit, "share", "code")); // shown again from memory
+
+        // a code that cannot be read shows the CLI's words and no card
+        var broken = new PageKit();
+        broken.Runner.On("share", "status").Print(Fixture("share-status-on.json")[0]);
+        broken.Runner.On("share", "people").Print(Fixture("share-people.json"));
+        broken.Runner.On("share", "code").Print(Fixture("share-lab-off.json")).Fail(2);
+        var failing = new SharingView(broken.Services, bench => new ShareModel(broken.Services.Cli, bench));
+        failing.Bind(new BenchContext(Bench(), null));
+        Wait(failing.Pending);
+        Click(failing.Buttons["Show"]);
+        Wait(failing.Pending);
+        Assert.Contains("Room code: hidden", failing.Lines);
+        Assert.Contains("benchbar share is an experiment and it is off.", failing.Lines);
+    });
+
+    [Fact]
+    public void ALabRefusalOfStatusIsShownAsItIsAndNotAsAnOldCli() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make("share-lab-off.json", statusExit: 2);
+        Assert.Contains("benchbar share is an experiment and it is off.", view.Lines);
+        Assert.DoesNotContain(ShareText.NewerCli, view.Lines);
+        Assert.DoesNotContain("[Update]", view.Lines);
+        Assert.Equal(0, Calls(kit, "share", "people"));
     });
 
     // --- every change asks first ---
@@ -183,5 +233,23 @@ public class SharingViewTests
         Wait(yes.Pending);
         Assert.Equal(["share", "remove", "d_0a1b2c3d", "--yes", "--json", "--bench-dir", P], yesKit.Runner.Runs.Single(r => r.Args[1] == "remove").Args);
         Assert.Contains("Sam was removed. To let them back in, send a new invite.", yes.Lines);
+    });
+
+    [Fact]
+    public void DecliningStartAgainRunsNothingAndAgreeingStopsThenStarts() => Sta.Run(() =>
+    {
+        static string Broken(string text) => text.Replace("\"status\":\"ok\",\"message\":\"ok\",\"fix_action\":\"none\"", "\"status\":\"fail\",\"message\":\"The gateway does not answer.\",\"fix_action\":\"restart_sharing\"");
+        var (declined, declinedKit, asked) = Make("share-status-on.json", answer: false, Broken);
+        Assert.True(declined.Buttons["Start again"].IsEnabled);
+        Click(declined.Buttons["Start again"]);
+        Wait(declined.Pending);
+        Assert.Equal(["Restart sharing?"], asked);
+        Assert.Equal(0, Calls(declinedKit, "share", "stop") + Calls(declinedKit, "share", "start") + Calls(declinedKit, "share", "code"));
+
+        var (agreed, agreedKit, _) = Make("share-status-on.json", answer: true, Broken);
+        Click(agreed.Buttons["Start again"]);
+        Wait(agreed.Pending);
+        Assert.Equal(1, Calls(agreedKit, "share", "stop"));
+        Assert.Equal(1, Calls(agreedKit, "share", "start"));
     });
 }

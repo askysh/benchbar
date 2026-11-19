@@ -74,10 +74,13 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
         _refreshing = true;
         try
         {
-            var status = await cli.RunJsonAsync(StatusArgs(), null, CliTimeouts.Read, ShareStatus.Parse, ct).ConfigureAwait(true);
+            var result = await cli.RunJsonAsync(StatusArgs(), null, CliTimeouts.Read, ct).ConfigureAwait(true);
             _lastRefresh = _time.GetTimestamp();
-            if (status.Value is { } fresh)
+            // a refusal (the lab is off: exit 2 and an error, no state) is not a status; only a document that is ok keeps the
+            // "needs a newer command line tool" reading when it lacks the protocol fields
+            if (result.Value is { } document && (result.Ok || document.ContainsKey("state")))
             {
+                var fresh = ShareStatus.Parse(document);
                 Status = fresh;
                 if (_errorIsFromRead) LastError = null; // a failed action's sentence stays until the next action
                 _errorIsFromRead = false;
@@ -85,7 +88,7 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
             }
             else
             {
-                LastError = status.Error ?? "Sharing could not be read.";
+                LastError = result.Error is { Length: > 0 } e ? e : result.Value is { } refused && JsonRead.Str(refused, "error") is { Length: > 0 } text ? text : "Sharing could not be read.";
                 _errorIsFromRead = true;
             }
             if (Status is { IsLive: true })
@@ -109,10 +112,15 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
         if (!Begin(fresh ? "Drawing a new code..." : "Reading the room code...")) return false;
         try
         {
-            var result = await cli.RunJsonAsync(CodeArgs(fresh), PersonEnvironment(), CliTimeouts.Read,
-                o => JsonRead.Str(o, "code") is { Length: > 0 } code ? new ShareCode(code, JsonRead.Int(o, "budget_left")) : throw new FormatException("share code"), ct).ConfigureAwait(true);
-            if (result.Value is { } code) { Code = code; RemovedName = null; return true; }
-            LastError = result.Error is { } e && !e.Contains("share code", StringComparison.Ordinal) ? e : "The room code could not be read.";
+            // the document is read as it is: a refusal (exit 2, an error and no code) shows the CLI's sentence, an ok document without a code does not
+            var result = await cli.RunJsonAsync(CodeArgs(fresh), PersonEnvironment(), CliTimeouts.Read, ct).ConfigureAwait(true);
+            if (result.Ok && JsonRead.Str(result.Value!, "code") is { Length: > 0 } code)
+            {
+                Code = new ShareCode(code, JsonRead.Int(result.Value!, "budget_left"));
+                RemovedName = null;
+                return true;
+            }
+            LastError = Refusal(result, "The room code could not be read.");
             return false;
         }
         finally { End(); }
@@ -124,10 +132,9 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
         if (!Begin("Making the invite...")) return null;
         try
         {
-            var result = await cli.RunJsonAsync(InviteArgs(), PersonEnvironment(), CliTimeouts.Read,
-                o => JsonRead.Str(o, "text") is { Length: > 0 } text ? new ShareInvite(text) : throw new FormatException("share invite"), ct).ConfigureAwait(true);
-            if (result.Value is { } invite) { InviteCopied = true; return invite; }
-            LastError = result.Error is { } e && !e.Contains("share invite", StringComparison.Ordinal) ? e : "The invite could not be made.";
+            var result = await cli.RunJsonAsync(InviteArgs(), PersonEnvironment(), CliTimeouts.Read, ct).ConfigureAwait(true);
+            if (result.Ok && JsonRead.Str(result.Value!, "text") is { Length: > 0 } text) { InviteCopied = true; return new ShareInvite(text); }
+            LastError = Refusal(result, "The invite could not be made.");
             return null;
         }
         finally { End(); }
@@ -174,6 +181,9 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
             await RefreshAsync(true, CancellationToken.None).ConfigureAwait(true);
         }
     }
+
+    /// <summary>The CLI's sentence for a call that did not work (its <c>error</c> or stderr), else <paramref name="generic"/>. Never a field of stdout.</summary>
+    private static string Refusal<T>(CliResult<T> result, string generic) => !result.Ok && result.Error is { Length: > 0 } error ? error : generic;
 
     private bool Begin(string busy)
     {

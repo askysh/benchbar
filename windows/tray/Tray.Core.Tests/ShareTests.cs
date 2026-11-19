@@ -192,7 +192,25 @@ public class ShareTests
         runner.On("share", "status").Print(Lines("share-status-off.json"));
         Assert.False(await model.StartAsync(4, TestContext.Current.CancellationToken));
         Assert.Contains(runner.Runs, r => r.Args[1] == "status"); // read again afterwards
-        Assert.Equal("There is no LAN guard on this platform yet.", model.LastError);
+        Assert.Equal("Sharing on the network needs macOS.", model.LastError);
+    }
+
+    [Fact]
+    public async Task ALabRefusalOfStatusShowsItsErrorAndIsNeverReadAsAnOldCli()
+    {
+        var (model, runner) = Rig();
+        runner.On("share", "status").Print(Lines("share-lab-off.json")).Fail(2, "benchbar share is an experiment and it is off. lan-rooms is not available on windows yet");
+        await model.RefreshAsync(true, TestContext.Current.CancellationToken);
+        Assert.Null(model.Status); // no status at all, so the tab cannot say "needs a newer command line tool"
+        Assert.Equal("benchbar share is an experiment and it is off.", model.LastError);
+        Assert.Single(runner.Runs); // and no people read follows
+
+        // a refusal that printed no document shows the first line of stderr
+        var (bare, bareRunner) = Rig();
+        bareRunner.On("share", "status").Fail(2, "benchbar share is an experiment and it is off.");
+        await bare.RefreshAsync(true, TestContext.Current.CancellationToken);
+        Assert.Null(bare.Status);
+        Assert.Equal("benchbar share is an experiment and it is off.", bare.LastError);
     }
 
     [Fact]
