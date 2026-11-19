@@ -7,14 +7,19 @@
 # text change in a view shows as a red check here, and the PNGs of the failed
 # run are the artifact. ci.yml leaves this suite out so it runs once.
 #
-#   gh workflow run snapshots.yml -f ref=<branch>               render a branch, tag or commit
-#   gh workflow run snapshots.yml -f ref=<branch> -f record=true  also write the references
-#   gh run download <run id>                                    fetch the PNGs
+#   gh workflow run snapshots.yml --ref <branch>                 compare the branch
+#   gh workflow run snapshots.yml --ref <branch> -f record=true  write the references instead
+#   gh run download <run id> -n references                       fetch what a recording wrote
 #
 # References are per macOS major version, because the system draws controls
-# differently from one release to the next. When this runner's version has
-# none (a new runner image), the job records them instead of failing and
-# uploads them as the artifact "references": commit that folder.
+# differently from one release to the next. A run compares, and a missing
+# reference fails it (the `require` marker). Only a manual run with
+# `record=true` writes references, and uploads them as the artifact
+# "references": commit the folder for the runner's macOS version
+# (macos/BenchBarTests/Snapshots/macos<N>/). The tests remove the `record`
+# marker as soon as they read it, so a recording happens once. A new runner
+# image (a new macOS major version) therefore turns the check red until
+# someone records its references on purpose.
 #
 # Offscreen only: nothing opens on a screen. The docs images
 # (DocsSnapshotTests) open a window, so they stay off here.
@@ -57,7 +62,9 @@ jobs:
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          # the runner's default for macos-26 when this was pinned; another
+          # Xcode can draw controls differently, so bump it with the references
+          xcode-version: '26.6'
 
       - name: Install XcodeGen
         run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
@@ -69,22 +76,21 @@ jobs:
         id: rev
         run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      # a marker file in the output folder, because xcodebuild passes no
-      # environment variables to a hosted test
+      # marker files in the output folder, because xcodebuild passes no
+      # environment variables to a hosted test. `require` makes a missing
+      # reference fail; `record` (manual run with record=true only) writes the
+      # references, once: the tests remove it when they read it.
       - name: Compare or record
         id: mode
         env:
-          RECORD: ${{ inputs.record }}
+          RECORD: ${{ github.event_name == 'workflow_dispatch' && inputs.record }}
         run: |
-          major="$(sw_vers -productVersion | cut -d. -f1)"
           mkdir -p ~/Library/Caches/BenchBarSnapshots
           if [ "$RECORD" = true ]; then
             touch ~/Library/Caches/BenchBarSnapshots/record
             echo "record=true" >> "$GITHUB_OUTPUT"
-          elif [ ! -d "macos/BenchBarTests/Snapshots/macos${major}" ]; then
-            touch ~/Library/Caches/BenchBarSnapshots/record
-            echo "record=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::No reference images for macOS ${major}: recording them. Commit the artifact 'references' to macos/BenchBarTests/Snapshots/."
+          else
+            touch ~/Library/Caches/BenchBarSnapshots/require
           fi
 
       # the same call as the Swift tests step in ci.yml, limited to the

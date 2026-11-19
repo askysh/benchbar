@@ -414,6 +414,15 @@ struct QuickSwitchTests {
         #expect(on.contains(HotKey.name) && on.contains("⇧⌘O"))
     }
 
+    @Test func theShortcutRowSaysWhenAnotherAppHoldsTheKey() {
+        let free = SettingsView.shortcuts(quickSwitch: true).last?.keys
+        let held = SettingsView.shortcuts(quickSwitch: true, keyHeld: true).last?.keys
+        #expect(free == HotKey.name)
+        #expect(held == "\(HotKey.name) is used by another app")
+        // with the lab off there is no row to correct
+        #expect(!SettingsView.shortcuts(quickSwitch: false, keyHeld: true).map(\.keys).joined().contains("another app"))
+    }
+
     @Test func theSpokenTitleDropsTheEllipsis() {
         #expect(model().spokenTitle == "Open macdev as")
     }

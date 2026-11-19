@@ -460,7 +460,7 @@ open ~/Library/Caches/BenchBarSnapshots
 touch ~/Library/Caches/BenchBarSnapshots/record
 ```
 
-The suite is off unless that folder exists.
+The suite always runs. A render that differs from its reference fails, and so does a missing reference when the folder for this macOS version exists or the `require` marker is in the output folder (the Snapshots workflow sets it). On a macOS version with no folder, a local run only writes the PNGs. The `record` marker is removed by the run that reads it.
 
 ### Files to read
 
