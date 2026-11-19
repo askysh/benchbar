@@ -134,7 +134,7 @@ fl_preflight_basics "$OFFLINE" "$FL_MIN_DISK_GB" "$HOME"
 MACOS_VERSION="$(sw_vers | awk -F':[[:space:]]*' '$1 == "ProductVersion" { print $2 }')"
 fl_ok "macOS detected (${MACOS_VERSION})"
 if [[ "$FL_ARCH" != "arm64" ]]; then
-  fl_warn "Architecture is ${FL_ARCH}; this script is tuned for Apple Silicon."
+  fl_warn "Architecture is ${FL_ARCH}, an Intel Mac: the CLI supports it (Homebrew in ${FL_BREW_PREFIX}), but it is not checked on real hardware and the BenchBar app is Apple Silicon only."
 else
   fl_ok "Apple Silicon (${FL_ARCH})"
 fi

@@ -79,7 +79,9 @@ assert_calls_contain '^sudo installer -pkg /tmp/benchbar-wkhtmltopdf\..*/wkhtmlt
 assert_calls_not_contain '^sudo installer -pkg .*/downloads/' "(never install the user writable copy)"
 assert_calls_contain '^sudo rm -rf /tmp/benchbar-wkhtmltopdf\.'
 assert_calls_not_contain '^sudo rm -rf [^/]' "(sudo rm only on the fresh temp folder)"
-[[ -z "$(ls -d /tmp/benchbar-wkhtmltopdf.* 2>/dev/null)" ]] || fail "the root temp folder is removed afterwards"
+# this run's own folder (the cleanup call names it): other tests run side by side and may have one of their own
+own_tmp="$(grep -m1 -o '^sudo rm -rf /tmp/benchbar-wkhtmltopdf\.[^ ]*' "$MOCK_LOG" || true)"; own_tmp="${own_tmp##* }"
+[[ -n "$own_tmp" && ! -e "$own_tmp" ]] || fail "the root temp folder is removed afterwards (${own_tmp:-none named})"
 assert_contains "$OUT" "sha256 ok"
 assert_file "$FL_STATE_DIR/downloads/wkhtmltox-0.12.6-2.macos-cocoa.pkg" "(the download cache stays)"
 # INST-6: sudo runs its tools by absolute path, not by a bare name that the user's PATH decides
