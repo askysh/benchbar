@@ -35,6 +35,7 @@
 #   docs/, scripts/docs-reference.py   test-docs, test-docs-command
 #   any shell file          shellcheck
 #   tests/share/            test-share-gateway
+#   the release workflows, .github/actions/, scripts/macos-release.sh   test-release-workflows
 #   macos/, windows/, examples/, site/, .github/, .claude/, install.ps1,
 #   scripts/app-*.py and *.md   nothing here: the app, tray, shim and Windows installer
 #                           jobs, the workflows themselves and the docs site cover them
@@ -174,6 +175,8 @@ while IFS= read -r f; do
     .claude/guard-*.sh | .claude/settings.json) pick test-guards; shell=1 ;;
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;
+    scripts/macos-release.sh) pick test-release-workflows; shell=1 ;;
+    .github/workflows/release.yml | .github/workflows/release-windows.yml | .github/workflows/homebrew-tap.yml | .github/workflows/auto-tag.yml | .github/actions/*) pick test-release-workflows ;;
     macos/BenchBarTests/Fixtures/*) pick_family "test-json test-install-json test-lock" ;;
     windows/tray/fixtures/* | tests/record-tray-fixtures.sh) pick test-tray-fixtures; shell=1 ;;
     scripts/*.sh)

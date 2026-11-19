@@ -1,0 +1,67 @@
+# The steps both Mac build jobs of release.yml share after they build: the
+# release notes, a workflow artifact and the draft GitHub release. It reads
+# no secret; the only credential is the job's GitHub token, for gh.
+name: Release draft
+description: Write the release notes, upload dist/ as an artifact and create or update the draft release.
+inputs:
+  version:
+    description: The version being built (X.Y.Z)
+    required: true
+  signed:
+    description: "true for a Developer ID build, false for an ad hoc one"
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Release notes from the CHANGELOG
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        SIGNED: ${{ inputs.signed }}
+      run: |
+        if [ "$SIGNED" = "true" ]; then
+          scripts/release-notes.sh "$VERSION" --signed > "$RUNNER_TEMP/notes.md"
+        else
+          scripts/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
+        fi
+        cat "$RUNNER_TEMP/notes.md"
+
+    - name: Upload the files as a workflow artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: BenchBar-${{ inputs.version }}
+        path: dist/*
+        if-no-files-found: error
+
+    - name: Create or update the draft GitHub release
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ github.ref_name }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        # A published release is immutable: neither its notes nor its files may
+        # change. Only a draft is edited, and a file of the same name is deleted
+        # first, so nothing is overwritten in place (no --clobber).
+        if view="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>&1)"; then
+          if [ "$view" != "true" ]; then
+            echo "::error title=Release already published::$TAG is a published release and is immutable, so this run will not edit it or replace its files. To fix a release, delete nothing: cut a new version."
+            exit 1
+          fi
+          gh release edit "$TAG" --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
+          existing="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          for f in dist/*; do
+            name="$(basename "$f")"
+            if printf '%s\n' "$existing" | grep -Fxq -- "$name"; then
+              gh release delete-asset "$TAG" "$name" --yes
+            fi
+          done
+        elif printf '%s' "$view" | grep -qi 'not found'; then
+          gh release create "$TAG" --draft --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
+        else
+          echo "::error::gh release view $TAG failed: $view"
+          exit 1
+        fi
+        gh release upload "$TAG" dist/*
+        echo "::notice title=Draft release::https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG} (draft: review, then publish; publishing updates the Homebrew tap)"
