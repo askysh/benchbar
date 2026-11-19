@@ -266,7 +266,7 @@ run_install --yes --app-only
 assert_eq "0" "$CODE" "$OUT"
 assert_calls_contain '^osascript .*to quit'
 # and the quit comes after the signature check in the call order
-cs="$(grep -n '^codesign ' "$MOCK_LOG" | head -1 | cut -d: -f1)"; qt="$(grep -n '^osascript .*to quit' "$MOCK_LOG" | head -1 | cut -d: -f1)"
+cs="$(grep -n -m1 '^codesign ' "$MOCK_LOG" | cut -d: -f1)"; qt="$(grep -n -m1 '^osascript .*to quit' "$MOCK_LOG" | cut -d: -f1)"
 [[ -n "$cs" && -n "$qt" && "$cs" -lt "$qt" ]] || fail "codesign (line ${cs:-none}) must run before the running app is quit (line ${qt:-none})"
 
 # the copy beside the app fails: the old app is as it was, and no half copy stays
