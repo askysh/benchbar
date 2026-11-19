@@ -30,30 +30,31 @@ the one line installers and the docs site, which read from `main`. A push
 to `main` with a new version tags it and starts the release builds
 (`auto-tag.yml`).
 
-A release is the merge of reviewed work, not a new squash of it: the pull
-request from `next-release` into `main` is merged with a **merge commit**,
-so `main` gets the commits that were reviewed and run by CI on
-`next-release`, and its tip has the tree of a `next-release` commit that
-already passed. After tagging, `auto-tag.yml` fast forwards `next-release`
-to `main` (no merge back commit). Only when a pull request was merged into
-`next-release` after the release pull request does it merge `main` into
-`next-release` instead; keep `next-release` closed to merges from the
-release pull request until the tag exists.
+A release is the same reviewed work moving up, not a new squash of it:
+the maintainer **fast forwards `main` to the head of `next-release`**
+(`git push origin <sha>:main`; no merge commit, no new commit at all). `main`
+then holds the very commits that were reviewed and run by CI on
+`next-release`, and its tip is a commit whose "CI result" is already green.
+`main` and `next-release` are the same commit afterwards, so nothing has to
+be merged back. A fast forward needs `main` to be an ancestor of
+`next-release`, so **nothing but a release is ever pushed to `main`**: a
+commit that only `main` has makes the next release refuse (see
+[Cutting a release](#cutting-a-release)).
 
-### Repository settings the release needs
+### Repository settings
 
 These are settings of the repository, not files, so a pull request cannot
-change them (the maintainer sets them once):
+change them. The release does not need them to change; this is how they are
+today, and the release relies on them:
 
-1. Settings, General, Pull Requests: **Allow merge commits** on.
-2. Settings, Rules, Rulesets, the `main` ruleset:
-   - turn **Require linear history** off (a merge commit is not linear);
-   - under **Require a pull request before merging**, set **Allowed merge
-     methods** to **Merge** only, so a release cannot be squashed by
-     mistake (pull requests into `next-release` are not under this
-     ruleset and still squash).
-3. The `next-release` ruleset stays as it is: no deletion, no force push.
-   `auto-tag.yml` pushes to it without force, which a fast forward needs.
+- The `next-release` ruleset: changes go through a pull request, the only
+  merge method is **squash**, and the check **CI result** must be green.
+  Repository admins can bypass it.
+- The `main` ruleset: **linear history**. Repository admins can bypass it,
+  and that is how the maintainer pushes the fast forward (a fast forward
+  keeps the history linear; the bypass is for the push, which does not come
+  from a pull request). Nobody else can move `main`.
+- The bot (`GITHUB_TOKEN`) pushes tags only, never a branch.
 
 ## The docs site
 
@@ -67,8 +68,10 @@ week on `main` and a failure there means a link to fix, not a blocked
 pull request. A page's "Edit page" link opens the file on `next-release`.
 
 A docs only fix that cannot wait for a release (a wrong command, a typo)
-may go to `main` as its own pull request; merge `main` back into
-`next-release` afterwards so the next release does not undo it.
+goes to `next-release` like everything else and ships with the next
+release. Do not push it to `main` by itself: a commit that only `main` has
+is not in `next-release`, and the release (a fast forward) refuses until
+that is sorted out. When it cannot wait, cut a patch release.
 
 ## Cutting a release
 
@@ -105,21 +108,38 @@ On `next-release`, then into `main`:
      Find User sheet and three wizard pages in a real key window (the
      window panes are captured as the window server draws them, so the
      sidebar and the selection look as in the app).
-4. Merge those changes into `next-release`. For a release with a big change,
-   cut a [release candidate](#release-candidates) first. Then open a pull
-   request from `next-release` into `main` and merge it with a **merge
-   commit**, not a squash (the repository settings are under
-   [Branches](#branches)). Merge nothing else into `next-release` until the
-   tag exists.
-5. `auto-tag.yml` runs `scripts/check-version.sh` (every place says the same
+4. Merge those changes into `next-release` by pull request (squash, as
+   always). For a release with a big change, cut a
+   [release candidate](#release-candidates) first. Wait until the push run
+   of CI on the new `next-release` head is green: that run is the one the
+   release is built on. Merge nothing else until the tag exists.
+5. Fast forward `main` to that commit. You need to be a repository admin who
+   can bypass the `main` ruleset:
+
+   ```bash
+   git fetch origin
+   git merge-base --is-ancestor origin/main origin/next-release   # must succeed
+   git push origin origin/next-release:refs/heads/main
+   ```
+
+   Check first that the "CI result" of that commit is green, that
+   `main` is an ancestor of it (otherwise stop: see below) and that
+   `scripts/check-version.sh --folded` passes on it. Never force the push and never merge.
+6. `auto-tag.yml` runs `scripts/check-version.sh` (every place says the same
    version, CHANGELOG.md has its section, no fragment is left), refuses a
-   release candidate version on `main`, tags `vX.Y.Z` on the merge commit,
-   starts `release.yml` and `release-windows.yml` for the tag, and fast
-   forwards `next-release` to `main`. A push to `main` that keeps the version
-   tags nothing. A tag pushed by hand still starts both release workflows.
-6. Wait for the release workflows, open the draft on the Releases page,
+   release candidate version on `main`, tags `vX.Y.Z` on that commit and
+   starts `release.yml` and `release-windows.yml` for the tag. A push to
+   `main` that keeps the version and changes only docs tags nothing (a
+   notice); one that changes code **fails** ("release PR merged without a
+   version bump?"). A tag pushed by hand still starts both release workflows.
+   If `main` has a commit that `next-release` has not, the push is not a
+   fast forward and git refuses it: do not force it. The commit
+   was pushed to `main` by mistake or came from a fix made there; bring its
+   change to `next-release` by pull request, and ask the maintainer how to
+   put `main` right (it is a decision about history, not a script).
+7. Wait for the release workflows, open the draft on the Releases page,
    check the files, publish.
-7. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
+8. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
    below). It opens a pull request on `askysh/homebrew-tap` and stops.
    Read it (the formula and cask diff) and merge it yourself; until then
    `brew install` still gives the old version.

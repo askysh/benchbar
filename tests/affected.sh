@@ -98,7 +98,8 @@ lib_family() {
 script_tests() {
   case "$1" in
     release-notes) echo "test-release-notes" ;;
-    release-ci-gate) echo "test-release-ci-gate test-release-workflows" ;;
+    release-ci-gate|release-promote) echo "test-release-ci-gate test-release-promote test-release-workflows" ;;
+    docs-only) echo "test-release-ci-gate test-release-workflows" ;;
     check-version|bump-version) echo "test-version-sources test-release-notes test-release-workflows" ;;
     changelog-fold) echo "test-changelog test-release-notes" ;;
     app-embed-cli|cli-tarball|homebrew-render) echo "test-packaging test-homebrew" ;;

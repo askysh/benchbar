@@ -4,5 +4,5 @@
 
 ### For contributors
 
-- A release is now merged into `main` with a merge commit instead of a squash, and `auto-tag.yml` fast forwards `next-release` to `main` afterwards instead of merging `main` back (#132).
+- A release now moves `main` to the head of `next-release` by a fast forward instead of a new squash commit, so `main` is the very commit CI passed and nothing is merged back. `auto-tag.yml` no longer pushes a branch, and a push to `main` that keeps an already tagged version fails when it changes more than docs (#132).
 - One version source: `scripts/bump-version.sh X.Y.Z` sets the version in every place (benchbar, `macos/project.yml`, the bug report forms, the changelog heading and the tray fixtures), and `scripts/check-version.sh` is the one check that `auto-tag.yml`, `release.yml` and a new test run. The version pattern in the three release workflows is strict: `1.2.3 --draft` no longer passes (#132).
