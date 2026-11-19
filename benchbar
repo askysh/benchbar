@@ -147,6 +147,8 @@ fi
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/consoles.sh"
 # shellcheck source=lib/frappe-local/open-as.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/open-as.sh"
+# shellcheck source=lib/frappe-local/neutralise.sh
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/neutralise.sh"
 # shellcheck source=lib/frappe-local/share-site.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/share-site.sh"
 # shellcheck source=lib/frappe-local/share.sh
@@ -390,7 +392,8 @@ Experiments (off until a person turns one on)
 Production copy
   pull HOST:SITE      Copy a production site over SSH into a NEW local site: the latest
                       backup on the server (nothing written there), the encryption key,
-                      email muted and the scheduler paused. HOST is from ~/.ssh/config.
+                      email muted, the scheduler paused and the copy neutralised
+                      (integrations off, stored secrets cleared). HOST is from ~/.ssh/config.
     --as NAME         Local site name (default: SITE.local)
     --from-dir DIR    A backup set downloaded by hand (Frappe Cloud), no SSH
     --remote-bench D  The bench folder on the server (default ~/frappe-bench)
@@ -399,6 +402,9 @@ Production copy
     --replace         Restore over an existing local site, after backing it up
     --skip-app APP    Restore without APP (its tables stay behind as orphans)
     --no-files        Database only; --keep-scheduler, --keep-staging
+    --keep-secrets    Leave the copy as production had it. By default it is neutralised:
+                      outbound integrations off, stored secrets cleared, tokens and
+                      queued mail dropped (the Administrator login is kept)
     --no-migrate      Stop after the restore, before bench migrate
     --before-migrate S  Run the executable SCRIPT after the restore, before migrate (with
                       BENCHBAR_SITE, BENCHBAR_BENCH, BENCHBAR_DB_NAME; no secret in its
