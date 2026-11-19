@@ -193,6 +193,11 @@ fl_run_prepare() {
     if [[ "${OPT_JSON:-0}" == "1" ]]; then
       fl_run_refuse "${RUN_CMD} changes things: a run with --json needs a reviewed plan." "benchbar run ... --dry-run --json -- ${RUN_CMD}, then --apply TOKEN --yes."
     fi
+    # a run that cannot ask (an agent, a script with BENCHBAR_NONINTERACTIVE=1) goes through the
+    # plan and its token too: a bare --yes is a person's own shortcut at a terminal
+    if fl_noninteractive; then
+      fl_run_refuse "${RUN_CMD} changes things: without a person to ask, it needs a reviewed plan." "benchbar run ... --dry-run --json -- ${RUN_CMD}, then --apply TOKEN --yes."
+    fi
     [[ "${FL_ASSUME_YES:-0}" == "1" ]] || { fl_need "--yes" "to confirm ${RUN_CMD}, which changes things"; fl_need_check; }
   fi
 }

@@ -58,8 +58,10 @@ assert_eq "64 True True" "$(printf '%s' "$OUT" | tail -n 1 | jget - '" ".join(st
 # a change over --json or --for-agent needs a reviewed plan
 R --json --site macdev -- clear-cache;        assert_eq "64" "$CODE"; assert_contains "$OUT$ERR" "needs a reviewed plan"
 run_json run --bench-dir "$BENCH" --for-agent --site macdev -- migrate; assert_eq "64" "$CODE"
-# no --yes without a terminal: the missing input is named, before anything runs
-BENCHBAR_NONINTERACTIVE=1 R --site macdev -- clear-cache; assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "--yes"
+# without a person to ask (BENCHBAR_NONINTERACTIVE=1) a change needs a reviewed plan, before anything
+# runs: a bare --yes does not skip it
+BENCHBAR_NONINTERACTIVE=1 R --site macdev -- clear-cache; assert_eq "64" "$CODE"; assert_contains "$OUT$ERR" "needs a reviewed plan"
+BENCHBAR_NONINTERACTIVE=1 R --yes --site macdev -- run-tests; assert_eq "64" "$CODE"; assert_contains "$OUT$ERR" "needs a reviewed plan"
 assert_calls_not_contain '^bench '
 
 # ---- a read only command runs at once, in the bench folder, with the runner's exports

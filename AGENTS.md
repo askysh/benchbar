@@ -102,7 +102,10 @@ with the bench's environment, under a deadline, and ends with the done
 fields plus `command_exit` and `output_tail`. A command that changes
 things follows the plan rule (`--dry-run --json`, then `--apply TOKEN
 --yes`); a read runs at once. A command that is not on the list exits 64
-and names the list: do not look for another way to run it.
+and names the list: do not look for another way to run it. `run-tests`,
+`migrate` and `build` run code from the bench's apps (their tests,
+patches and build scripts): the list limits which command runs, not what
+that code does.
 
 ```bash
 benchbar run --site NAME --dry-run --json -- migrate

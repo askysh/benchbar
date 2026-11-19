@@ -38,6 +38,11 @@ word (letters, digits, `.`, `_`, `:`, `-` and spaces, not starting with
 `-`). `--site` is benchbar's own option and is refused for `build` and
 `version`.
 
+`run-tests`, `migrate` and `build` run code from the bench's apps by
+design: the apps' own tests, their patches and their build scripts. The
+allow list limits which bench command runs, not what that code does, so
+run them on benches whose apps you trust.
+
 `run-tests` writes test records into the database of the site it runs on:
 run it on a throwaway site (`benchbar site add`), not on one you keep. The
 plan says so.
