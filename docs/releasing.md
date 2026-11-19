@@ -34,8 +34,13 @@ On `next-release`, then into `main`:
    `bash tests/record-tray-fixtures.sh` and commit what it changes in
    `windows/tray/fixtures`: the tray's recorded CLI output holds `cli_version`,
    and `test-tray-fixtures` fails until it is regenerated.
-2. Add the `## X.Y.Z` section to `CHANGELOG.md`. The workflow refuses a
-   version without one, and uses the section as the release notes.
+2. Run `bash scripts/changelog-fold.sh`. It folds the fragments in
+   `changelog.d/` into `## Unreleased` of `CHANGELOG.md` and removes them
+   (`--print` shows the result first, `--check` only validates). Then
+   change the `## Unreleased` heading to `## X.Y.Z - date` and add a new
+   empty `## Unreleased` above it. The workflow refuses a version without
+   a `## X.Y.Z` section, and uses the section as the release notes
+   (`scripts/release-notes.sh` reads it as it is, folded or not).
 3. Refresh the screenshots in `docs/images` for every screen the release
    changed, and add new ones where a page still has none:
    - The Mac first run wizard and the walkthrough: `WizardSnapshotTests`
