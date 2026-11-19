@@ -1088,7 +1088,7 @@ fl_pull_step_before_migrate() {
     [[ -f "$FL_PULL_HOOK" ]] && now_sha="$(shasum -a 256 "$FL_PULL_HOOK" 2>/dev/null | awk '{print $1}')"
     if [[ "$now_sha" != "$FL_PULL_HOOK_SHA" ]]; then
       fl_fail "${FL_PULL_HOOK} is not the script the plan showed (its hash changed since the plan); it was not run, and ${FL_PULL_AS} is restored but not migrated"
-      fl_fix "read the script, run it by hand if it is right, then: cd ${FL_BENCH_DIR} && bench --site ${FL_PULL_AS} migrate"
+      fl_fix "read the script, run it by hand if it is right, then: cd $(printf '%q' "$FL_BENCH_DIR") && bench --site $(printf '%q' "$FL_PULL_AS") migrate"
       return 1
     fi
   fi
