@@ -43,6 +43,7 @@ on:
 
 permissions:
   contents: write
+  checks: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -159,6 +160,7 @@ jobs:
         with:
           version: ${{ env.VERSION }}
           prerelease: ${{ needs.check.outputs.prerelease }}
+          ci_gate: "true"
 
       # The certificate, the notary key and the Sparkle key exist only from
       # here to the cleanup step below. The certificate is imported in this
@@ -177,6 +179,8 @@ jobs:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
           SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          # the Swift tests ran in CI on this tree (the gate above checked it)
+          BENCHBAR_SKIP_TESTS: "1"
         run: |
           umask 077
           # the one folder the script writes the notary and Sparkle key files

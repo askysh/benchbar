@@ -229,6 +229,39 @@ build, signed and notarized the same way, published as a GitHub
 **pre-release**. It exists so one live QA pass can run on the real files
 before the release. Nobody gets it by updating.
 
+**When it is required.** In the history up to 0.8.3, 13 of 17 gaps between
+releases are under 48 hours, and the large 0.8.0 was followed by 0.8.1, 0.8.2
+and 0.8.3 after 44, 133 and 270 hours: users got versions that needed a
+live QA pass afterwards. A candidate is that pass, before they get the
+release. Cut one when the release has any of these (a rule of thumb, change
+it when it does not fit); a release with none may go straight to the release
+pull request:
+
+- [ ] a new feature area, or a command or Mac app screen that changes how
+      people start, stop or install (the 0.8.0 wizard, 0.8.2 rooms);
+- [ ] a change to an installer (`install.sh`, `install.ps1`), to the signing
+      or update path, to a runner or service template, or to the Windows
+      shim or tray;
+- [ ] more than about 20 merged pull requests since the last release, or one
+      of more than 1000 changed lines.
+
+Before the release pull request, with the candidate installed from its pinned
+line on a clean Mac user (and a clean Windows 11 when Windows changed):
+
+- [ ] `benchbar doctor` is clean, and `benchbar --version` and the app's
+      About say the candidate's version;
+- [ ] a first run: the wizard, then a bench from the app, then `benchup`
+      and the site opening;
+- [ ] an update over the previous release (install the previous release,
+      then the candidate with `--version`): the existing bench still starts
+      and nothing in `sites/` changed;
+- [ ] the feature the release is about, once, by hand, in light and dark;
+- [ ] Windows: the one liner of the notes with `-Version`, the tray's first
+      start, and `benchbar.exe self-update --check`.
+
+The release pull request says which candidate passed this list. The release
+itself is the merge of what the candidate tested plus fixes found by it.
+
 **Cut one.** On `next-release`:
 
 1. `scripts/bump-version.sh 0.9.0-rc.1` sets the version in every place. A
@@ -271,6 +304,77 @@ count, is higher). `benchbar.exe` built from a candidate behaves as a
 development build: it never offers an update, so a Windows tester installs
 the release with the one liner. `benchbar self-update` has no `--version`:
 to leave a candidate on the Mac, run the installer without a version.
+
+## When a release goes wrong
+
+Releases are immutable: a published release's files and its tag can never
+be replaced or deleted, and the tag ruleset forbids moving any `v*` tag. So
+every repair below ends in the same place: a **new version** (the next
+patch), never an edit of the old one. What you can still change on a
+published release is its notes and its flags.
+
+### A release run failed
+
+The release job does not run the test suite. It first checks that the CI
+result of the tagged commit is green (`scripts/release-ci-gate.sh`; for a
+merge commit still in CI, the parent with the same tree counts), then
+`scripts/check-version.sh`, then builds.
+
+| What failed | What to do |
+|---|---|
+| `auto-tag.yml` stopped on `check-version.sh` (nothing is tagged) | `main` already holds the merge. Fix the named place on `next-release` by pull request and release again with a new release pull request: a push to `main` with a version that has no tag tags it. |
+| The gate says CI is red or missing | Fix `next-release`, wait for a green push run, then release again as above. A tag that exists for a bad commit stays; the next patch version replaces it. |
+| `release.yml` failed after the tag exists (signing, notarization, a runner) | Re-run the failed jobs on the same run, or start it again on the tag: `gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z`. Approve the `release` environment again. A draft of that tag is reused: files of the same name are deleted from the draft and uploaded again, nothing is overwritten. |
+| `release-windows.yml` failed | Re-run it the same way (`gh workflow run release-windows.yml --ref vX.Y.Z -f version=X.Y.Z -f draft_release=true`) after `release.yml` has made the draft. Re-run it again after any later `release.yml` run, which replaces the notes. |
+| The release was published before a file arrived | A late file can never be added. Cut the next patch version. This is why you publish only after both workflows finish. |
+
+### A published release is bad
+
+Sparkle checks once a day, `install.sh` and `benchbar self-update` ask for
+the latest release whenever they run, and the tap serves a release once its
+pull request is merged. In this order:
+
+1. **Stop the spread.** Mark the bad release as a pre-release:
+   `gh release edit vX.Y.Z --prerelease`. GitHub's "latest" then falls back
+   to the previous release, and every reader of it (the Sparkle feed,
+   `install.sh`, `benchbar self-update`, the app's update check) stops
+   offering the bad one; the Windows installer and `benchbar.exe
+   self-update` skip pre-releases too. Check with
+   `gh release view --json tagName` that "latest" is the previous release;
+   if not, `gh release edit vPREVIOUS --latest`. If GitHub refuses to edit
+   the flag of a published release, `--latest` on the previous one is
+   enough.
+2. **The tap.** If its pull request is open, close it. If it is merged, revert
+   that commit in `askysh/homebrew-tap` by pull request and merge it, so
+   `brew upgrade` and a fresh `brew install` give the previous version again.
+3. **Say so.** Edit the notes of the bad release (notes stay editable): a line
+   at the top that names the problem and the version to use.
+4. **Fix forward.** Sparkle only moves forward (the build number is the
+   commit count), so installs that already updated stay on the bad build
+   until a newer one is out; nothing can take them back. Fix on `next-release`,
+   run `scripts/bump-version.sh X.Y.Z+1`, release as usual (a candidate if
+   the fix is not tiny), and put the cause in the changelog.
+
+### A key may have leaked
+
+A run you did not approve, a lost laptop, a secret in a log. **Revoke
+first, rotate after.** If a run is pending, reject its deployment (a rejected
+run costs nothing). Everything below is set in GitHub, Settings,
+Environments, `release`, Environment secrets, unless it says otherwise.
+
+| Secret | Revoke | Replace |
+|---|---|---|
+| `MACOS_CERTIFICATE_P12`, `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGN_IDENTITY` | developer.apple.com, Certificates, revoke the Developer ID Application certificate | make a new one (setup step 2), set all three; ship a release signed with it at once, since Apple may refuse what the old one signed |
+| `NOTARY_API_KEY_P8`, `NOTARY_API_KEY_ID`, `NOTARY_API_ISSUER_ID` | App Store Connect, Integrations, revoke the key | a new key (setup step 3), set all three |
+| `SPARKLE_ED_PRIVATE_KEY`, `SPARKLE_ED_PUBLIC_KEY` | none exists: installed apps trust the old public key until an update tells them otherwise | two releases: generate a new pair, set only `SPARKLE_ED_PUBLIC_KEY` to the new public key and ship a release still signed with the old private key (apps accept it and now carry the new key); once it is out, set `SPARKLE_ED_PRIVATE_KEY` to the new private key and ship the next |
+| `HOMEBREW_TAP_TOKEN` | GitHub, Settings, Developer settings, delete the token | a new fine grained token (setup step 5); read the tap's recent commits, branches and pull requests for anything you did not make |
+| `APPLE_TEAM_ID` | not secret | nothing |
+
+If the Sparkle or Developer ID key was used by someone else, say so: open a
+draft security advisory (the repository's Security tab, Advisories), list the
+affected versions and the fix, and name it in the notes of the release that
+rotates the key. Until a release carries the new Sparkle public key, check
+the Releases page for files you did not upload.
 
 ## The Developer ID path: one time setup
 

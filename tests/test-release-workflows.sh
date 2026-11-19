@@ -147,4 +147,19 @@ assert_contains "$AUTO" 'git push origin "$GITHUB_SHA:refs/heads/next-release"'
 assert_not_contains "$AUTO" "--force"
 assert_not_contains "$AUTO" "push -f"
 
+# ---- the signed release does not run the suite again: CI's verdict on the tagged
+# tree is checked (scripts/release-ci-gate.sh), and the Swift tests are left out
+PREP="$(cat "$ROOT/.github/actions/release-prepare/action.yml")"
+assert_contains "$SIGNED_JOB" 'ci_gate: "true"'
+assert_contains "$SIGNED_JOB" 'BENCHBAR_SKIP_TESTS: "1"'
+assert_contains "$PREP" 'scripts/release-ci-gate.sh "$GITHUB_SHA"'
+assert_contains "$PREP" "if: inputs.ci_gate != 'true'"
+assert_contains "$(cat "$RELEASE")" "checks: read"
+ADHOC_PREP="$(awk '/build-adhoc:/{f=1} f' "$RELEASE")"
+assert_not_contains "$ADHOC_PREP" "ci_gate"
+gate_step="$(grep -n -m 1 'CI passed for this commit' <<<"$PREP" | cut -d: -f1)"
+tests_step="$(grep -n -m 1 'run-tests.sh' <<<"$PREP" | cut -d: -f1)"
+[[ -n "$gate_step" && -n "$tests_step" && "$gate_step" -lt "$tests_step" ]] || fail "the CI gate must come first in release-prepare"
+assert_contains "$(cat "$SCRIPT")" 'BENCHBAR_SKIP_TESTS'
+
 printf 'test-release-workflows: ok\n'

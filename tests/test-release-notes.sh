@@ -33,6 +33,9 @@ assert_eq "## Update" "${OUT%%$'\n'*}" "(the Update section comes first)"
 assert_contains "$OUT" "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes"
 assert_contains "$OUT" "**Update Now**"
 assert_contains "$OUT" "benchbar self-update"
+# the cask updates itself, so plain "brew upgrade" skips it: the notes name the cask
+assert_contains "$OUT" 'brew upgrade --cask askysh/tap/benchbar-app'
+assert_contains "$OUT" 'a plain `brew upgrade` skips a cask that updates itself'
 assert_contains "$OUT" "--app-only"
 assert_contains "$OUT" "The summary line."
 assert_contains "$OUT" "- a thing"

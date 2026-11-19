@@ -38,7 +38,7 @@ test-cli test-open-as test-freshness test-hygiene test-mcp test-site-backups tes
 test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
 test-runner test-redact test-docs-command test-status-cost test-command-cost test-bench-flow test-run test-platform-linux test-self-update
 test-site-restore test-site-restore-2 test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
-test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin test-lan-guard test-labs test-labs-share test-wsl-preflight test-ci-plan test-fresh-install test-tray-fixtures test-backup-safety test-changelog test-lean-load test-linux-parity test-facts test-guards test-release-workflows test-neutralise test-listen test-version-sources"
+test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin test-lan-guard test-labs test-labs-share test-wsl-preflight test-ci-plan test-fresh-install test-tray-fixtures test-backup-safety test-changelog test-lean-load test-linux-parity test-facts test-guards test-release-workflows test-neutralise test-listen test-version-sources test-release-ci-gate"
 
 ALL_TESTS_WORDS=" $(printf '%s' "$ALL_TESTS" | tr '\n' ' ') "
 for f in "$ROOT"/tests/test-*.sh; do
@@ -70,7 +70,7 @@ test-profiles=45 test-process=43 test-adopt=42 test-profile-v16=38 test-run-lock
 test-command-cost=35 test-redact=35 test-repair-json=34 test-share-gateway=33 test-bench-flow=20 test-docs-command=20
 test-labs=20 test-prerequisites-linux=20 test-labs-share=19 test-runner=19 test-status-cost=14 test-run=13
 test-install-sh-linux=10 test-discovery=5 test-self-update=5 test-affected=4 test-shellrc=4 test-templates=4
-test-packaging=2 test-docs=1 test-platform=0 test-release-notes=0 test-changelog=0 test-ui=0 test-version-policy=0 test-version-sources=1 test-ci-plan=25"
+test-packaging=2 test-docs=1 test-platform=0 test-release-notes=0 test-changelog=0 test-ui=0 test-version-policy=0 test-version-sources=1 test-release-ci-gate=1 test-ci-plan=25"
 
 TEST_SECS_LINUX="test-doctor=184 test-apps=176 test-pull=175 test-sudo-env=172 test-windows-commands=165 test-install-json-2=164
 test-site-restore=159 test-repair=157 test-site-restore-2=153 test-app-batch=148 test-lock=148 test-mcp=145
@@ -84,7 +84,7 @@ test-profiles=33 test-report=32 test-repair-json=29 test-run-lock=27 test-state-
 test-redact=22 test-command-cost=20 test-docs-command=18 test-bench-flow=17 test-runner=17 test-share-gateway=17
 test-labs-share=14 test-prerequisites-linux=12 test-run=12 test-status-cost=10 test-install-sh-linux=7 test-self-update=7
 test-discovery=4 test-templates=4 test-affected=3 test-platform-linux=3 test-docs=2 test-shellrc=2
-test-packaging=1 test-release-notes=1 test-changelog=0 test-platform=0 test-ui=0 test-version-policy=0 test-version-sources=1 test-ci-plan=25"
+test-packaging=1 test-release-notes=1 test-changelog=0 test-platform=0 test-ui=0 test-version-policy=0 test-version-sources=1 test-release-ci-gate=1 test-ci-plan=25"
 # TEST_PLATFORM=mac or linux picks the table (default: this machine)
 case "${TEST_PLATFORM:-$(uname -s)}" in
   mac|Darwin) TEST_SECS="$TEST_SECS_MAC" ;;

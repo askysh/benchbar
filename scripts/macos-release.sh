@@ -156,7 +156,11 @@ notarize() {
 # ------------------------------------------------------------------- build
 step "build with Developer ID and Sparkle"
 export BENCHBAR_SPARKLE=YES
-BENCHBAR_VERSION="$VERSION" BENCHBAR_BUILD="$BUILD_NUMBER" "${ROOT}/scripts/macos-build.sh" --test --sparkle
+# BENCHBAR_SKIP_TESTS=1: the release workflow checked that CI passed on this tree,
+# Swift tests included, so they are not run twice
+test_flag=(--test)
+[[ "${BENCHBAR_SKIP_TESTS:-}" != "1" ]] || test_flag=()
+BENCHBAR_VERSION="$VERSION" BENCHBAR_BUILD="$BUILD_NUMBER" "${ROOT}/scripts/macos-build.sh" ${test_flag[@]+"${test_flag[@]}"} --sparkle
 built="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "${APP}/Contents/Info.plist")"
 [[ "$built" == "$BUILD_NUMBER" ]] || die "the app says build ${built}, expected ${BUILD_NUMBER}"
 
