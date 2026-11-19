@@ -360,12 +360,13 @@ PLAN="$(call 4 benchbar_app_add_plan '{"url_or_name":"https://example.com/x.git"
 APPLY="$(call 1 benchbar_app_add '{"url_or_name":"https://example.com/x.git","token":"'"$TOK"'"}')"
 T0="$SECONDS"
 # no tail here: it would buffer the lines and hide when each one arrived
-TIMED="$({ printf '%s\n' "$INIT" "$PLAN"; sleep 1; printf '%s\n' "$APPLY" "$(call 2 benchbar_status '{}')"; } | TIMEOUT=30 fake_mcp | while IFS= read -r line; do printf '%s %s\n' "$((SECONDS - T0))" "$line"; done)"
+# the apply goes in after the plan was answered: a loaded runner needs more than a second for the plan call
+TIMED="$({ printf '%s\n' "$INIT" "$PLAN"; sleep 4; printf '%s\n' "$APPLY" "$(call 2 benchbar_status '{}')"; } | TIMEOUT=30 fake_mcp | while IFS= read -r line; do printf '%s %s\n' "$((SECONDS - T0))" "$line"; done)"
 printf '%s\n' "$TIMED" | python3 -c '
 import json, sys
 rows = [(int(l.split(" ", 1)[0]), json.loads(l.split(" ", 1)[1])) for l in sys.stdin if l.strip()]
 assert [r[1]["id"] for r in rows] == ["init", 4, 2, 1], rows    # status answered first
-assert rows[2][0] <= 4, rows[2]                                 # and at once, not after the 4 second apply
+assert rows[2][0] <= 6, rows[2]                                 # and at once (the apply goes in at 4 s and runs 4 s more)
 assert rows[3][1]["result"]["structuredContent"]["result"] == {"ok": True}, rows[3]
 ' || fail "MCP concurrency: $TIMED"
 
