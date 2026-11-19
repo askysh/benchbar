@@ -109,6 +109,12 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   commit into a release. `draft_release` defaults to off: an artifact only dispatch builds the dispatched ref and is never signed. The
   package job has `contents: read` and `actions: read` (SignPath's action downloads the unsigned artifact with the GitHub token); only the
   release job has `contents: write`, and it runs on ubuntu so the long wait is cheap.
+- No release step signs anything (2026-11-19, issue 135). The SignPath steps, the `SIGNPATH_*` secret checks, the 360 minute timeout, the
+  `actions: read` grant and the `SIGNING_REQUIRED` gate left `release-windows.yml`, because SignPath Foundation declined the project and
+  nothing could ever run them. `Get-AuthenticodeSignature` stays: the package job records it per file in `signing-ARCH.json` and README.txt
+  and the release notes quote it, so a download says what is unsigned. A future signing route comes back as its own job.
+- The README and the release notes list what `Get-AuthenticodeSignature` says about every `.exe` and `.dll` in the zip, read after the swap: third party DLLs (H.NotifyIcon) show as not signed by this project, Microsoft's as signed. "Every file is signed" is written only when it is true.
+- A run that attaches to a release checks out `refs/tags/vX.Y.Z` and fails when the tag is missing, so a manual run can never put the wrong commit into a release. `draft_release` defaults to off: an artifact only dispatch builds the dispatched ref. The package job has only `contents: read`; only the release job has `contents: write`, and it runs on ubuntu so the wait for the Mac draft is cheap.
 - Every exe's PE machine type (0x8664, 0xAA64) is checked before packing, so an amd64 build cannot land in the Arm64 zip.
 - The workflow skips the tray with a warning when `windows/tray/BenchBarTray` is missing on the checked out ref, so it does not depend on the order the tray and release pull requests merge.
 - `workflow_dispatch` works only once the file is on main, so pull requests that change the workflow or `install.ps1` build both zips and run the installer on windows-latest (PowerShell 7, then Windows PowerShell 5.1 as an update, plus a refused bad checksum) without touching releases.
@@ -128,6 +134,11 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   installs a zip downloaded by hand. Every file is checked against the zip's own SHA256SUMS, and a program file the list does not name is
   refused; that finds a damaged or half unpacked download, not a swapped one, so a checksums file next to a `-Zip` is checked as well when
   present and its absence is a warning. The signing steps stay in the workflow and run only once the SignPath secrets exist.
+- Test builds go to testers by hand before any release, unsigned (Akash, 2026-10-29: no signing yet). Each zip carries `install.ps1`; run
+  from the unpacked zip (benchbar.exe and SHA256SUMS beside it, no `-Version`, `-Zip` or `-Source`) it installs that folder, and `-Zip PATH`
+  installs a zip downloaded by hand. Every file is checked against the zip's own SHA256SUMS, and a program file the list does not name is
+  refused; that finds a damaged or half unpacked download, not a swapped one, so a checksums file next to a `-Zip` is checked as well when
+  present and its absence is a warning. The workflow has no signing step.
 - The wizard state is a plain model in `Tray.Core` (`WizardModel`) that the views only draw. Pages are built once and then refreshed, so a poll or log line never takes the caret out of a field.
 - Passwords are `Secret`s (`SecureString`). They are read back only to fill the environment of the one child process, hidden in anything the child prints back, and never put in arguments, config or logs.
 - The tray never runs `reboot` through the shim. It confirms, writes a one-shot Startup shortcut (`--resume-setup`, deleted when the tray starts with it) and runs `shutdown /r /t 15`, so `shutdown /a` still aborts it.
@@ -364,7 +375,6 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   folder, and a bench is never matched by a trailing part of its path. `.` and `..` in a path are resolved first, as the Mac's
   `standardizedFileURL` does.
 - **The tray log gets fixed sentences only for links, and no bench name.** The Mac logs the bench of a link that ran; this log goes into bug reports, which keep bench names out, so it holds the action word and a fixed reason or a short hash.
-
 - **A timer poll skips the CLI while the distro is up and every bench was stopped on the last poll.** The probe alone runs, because every
   `benchbar.exe` call touches the VM and keeps WSL from its idle shutdown. A kick (unlock, action, flyout), a bench that was not stopped, a
   boost or an open flyout makes it a full poll, and a full poll runs at least every 20 minutes so a bench started from a terminal still shows up.
@@ -375,3 +385,35 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   a fatal one ends the process so the next start reports it from the run marker.
 - **Dates for display use the current culture (`UiText.Date`), user text lives in `Strings.resx`.** The tray menu, crash toasts, tooltip and WSL messages are moved;
   `UiTextTests` fails when code asks for a missing name or an entry is unused. The pages of the BenchBar window still hold inline text.
+
+## Tray parity: rooms (0.9.0, #174)
+
+- **The Sharing tab is the host side only (P30).** The guest side of a room (the code exchange, the pinned certificate, the local forwarder)
+  is Mac app code with no `benchbar` command behind it, and the tray drives the CLI through `benchbar.exe` JSON only, so P31 stays open: a
+  `benchbar://share/join` link still shows the note. Writing that protocol again in C# would be a security review of its own.
+- **The tab exists only while the lan-rooms lab is on and available here**, the same switch as the Mac app and the CLI (`labs list`), read once per bench selection through the Labs model, never per poll. With the lab off or "not on Windows yet" there is no tab and no call.
+- **Reading is all a poll or opening the tab does:** `share status --preflight` and, while the room is on, `share people` (at most every 8 s). Start, stop, extend, lock, code, invite and remove each follow a click, and start, stop and remove a question, with the CLI's person environment (`BENCHBAR_NONINTERACTIVE=0`, `BENCHBAR_SUDO=gui`, as on the Mac).
+- **The room code and the invite are read on a click and kept in memory only.** `ShareCode` and `ShareInvite` print as `hidden`, a failed
+  read says that it failed without repeating stdout, the card shows dots until Show, the lines the tests read never hold the code, and Copy
+  uses a clipboard write marked `ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory` 0 and
+  `CanUploadToCloudClipboard` 0 (the Mac's concealed and transient types).
+- **Show and Copy read the current code on a click when none is in memory.** After a tray restart or "Start again" the tab holds no code, and
+  New code would end the invites already sent. So these clicks run `share code` without `--new`. Opening the tab still never reads it.
+- **A refusal is shown as the CLI worded it, never as an old CLI.** A status call that fails and has no `state` (the lab is off, exit 2) sets the
+  error line from its `error` or first stderr line. "Needs a newer command line tool" is only for an ok document without the protocol fields.
+- **Not ported from the Mac tab in this change:** setup and Refresh copy and the lan-guard buttons (next change), Move to (`share assign`), the activity log, Open copy as and teardown.
+## The Microsoft Store package (MSIX)
+
+- A process is packaged when `kernel32!GetCurrentPackageFamilyName` answers; 15700 (no package) or any failure means unpackaged and nothing changes for the one line installer's copy. The family name is read at run time, never written in code. Everything that differs sits behind `IPackageInfo`, so `Tray.Core` logic is tested in both states.
+- Packaged, every file the tray keeps (`config.json`, `tray.log`, `running`, `runners`, `reports`, `recent-scan-folders.txt`,
+  `resume-setup`) is under `%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalCache\Local\BenchBar`, built in one place (`DataFolder`).
+  Writes to `%LOCALAPPDATA%\BenchBar` from a package are redirected to a private store whose content depends on what already existed, which
+  split `config.json` in two and made every shown path false; the physical path is never redirected. The shim uses the same expression and
+  does the one time import of an old `config.json`; the tray never writes to the old folder from a package.
+- `DisabledByUser` and `DisabledByPolicy` show the switch off and disabled, one line (Settings > Apps > Startup) and an "Open Startup
+  Settings" button (`ms-settings:startupapps`): an app cannot turn its own startup task back on after the person or a policy turned it off.
+  `EnabledByPolicy` shows on and disabled. A failed read shows off, disabled, with the same pointer, and writes the exception to `tray.log`.
+- A start with `--restarted` runs `benchbar.exe keepalive start` once, hidden, off the UI thread, 30 s timeout, and only logs a failure to
+  `tray.log` (`KeepaliveRestart`). A package update stops the keepalive process with the old package and nothing else starts it before the
+  next logon. The call is safe for everyone because the shim does nothing and exits 0 when there is no keepalive task or it already runs. A
+  normal start never makes the call.

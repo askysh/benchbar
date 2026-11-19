@@ -15,11 +15,11 @@ programs bring them to the Windows side:
 BenchBar for Windows is in beta. It works, and you may find rough edges.
 The tray and the window say so: a **Beta** pill, the window title
 "BenchBar (Beta)" and a banner that you can dismiss. Both programs are
-not signed yet. On our Windows 11 test PC (Smart App Control off) the one
-line installer needed no click through a warning. Smart App Control, when
-it is on, blocks unsigned programs: see
-[Before you install](#before-you-install) and
-[Signing and verification](#signing-and-verification).
+not signed, and 0.9.0 has no signed or Microsoft Store route. On our
+Windows 11 test PC (Smart App Control off) the one line installer needed
+no click through a warning. Smart App Control, when it is on, blocks the
+tray and `benchbar.exe`: see [Smart App Control](#smart-app-control) for
+what you can do, and [Signing and verification](#signing-and-verification).
 
 ## What you need
 
@@ -58,8 +58,10 @@ Open File dialog. It checks every file against `SHA256SUMS` first.
 
 Smart App Control is a Windows 11 feature. When it is on, it blocks
 programs that are not signed and have no known reputation, and it has no
-exception for one program. BenchBar is not signed yet, so with Smart App
-Control on, Windows blocks `benchbar.exe` and BenchBar Tray.
+exception for one program. BenchBar 0.9.0 is not signed and has no
+Microsoft Store package, so with Smart App Control on, Windows blocks
+`benchbar.exe` and BenchBar Tray. There is no signed route in this
+release.
 
 To check: open Windows Security, then **App & browser control**, then
 **Smart App Control**. It says **On**, **Evaluation** or **Off**.
@@ -67,16 +69,29 @@ To check: open Windows Security, then **App & browser control**, then
 What the installer does:
 
 - **On**: it stops before it downloads or writes anything, says what
-  Smart App Control is and that BenchBar is not signed yet, and links
-  here.
+  Smart App Control is and that BenchBar is not signed, and links here.
 - **Evaluation**: it warns and goes on. Windows may turn Smart App
   Control on later and block BenchBar then.
 - **Off**, or a Windows without it: it goes on.
 
-To use BenchBar while it is on, you have to turn it off in Windows
-Security > App & browser control > Smart App Control settings. On some
-versions of Windows you cannot turn it back on without resetting Windows.
-Think about that first.
+What you can do when it is on:
+
+- **Use the command line inside WSL.** `benchbar` runs inside your Ubuntu
+  24.04 distro, where Smart App Control does not apply, and it does all
+  the work: install it there with the line in
+  [The installer on Linux](install.md#the-installer-on-linux), then run
+  `benchbar install`. You lose only the Windows parts: `benchbar.exe` in
+  PowerShell and the tray. Run `wsl.exe -d Ubuntu-24.04 -- benchbar
+  status` from PowerShell instead.
+- **Turn Smart App Control off** in Windows Security > App & browser
+  control > Smart App Control settings, then run the one line installer
+  again. On some versions of Windows you cannot turn it back on without
+  resetting Windows. Think about that first.
+- **Wait for a signed build.** There is none in 0.9.0 and no date. See the
+  [roadmap](https://github.com/askysh/benchbar/blob/main/ROADMAP.md).
+
+With Smart App Control off, or in evaluation mode, the one line installer
+is the route to use.
 
 The installer also stops early when PowerShell runs in Constrained
 Language Mode, which a company policy can set. Ask whoever manages the PC.
@@ -306,9 +321,12 @@ tray while the runtime is missing.
 ## Signing and verification
 
 The Windows programs (`benchbar.exe`, `BenchBarTray.exe` and the tray's
-own DLLs) are not signed yet. In practice that means: Smart App Control
-blocks them, and a program you start from an unpacked zip shows the "Open
-File - Security Warning" dialog. See [Before you install](#before-you-install)
+own DLLs) are not signed, and 0.9.0 has no signed or Microsoft Store
+route: SignPath Foundation declined the project on 2026-11-13, and a
+Store package is not part of this release. In practice that means: Smart
+App Control blocks them (see [Smart App Control](#smart-app-control)),
+and a program you start from an unpacked zip shows the "Open File -
+Security Warning" dialog. See [Before you install](#before-you-install)
 for what to expect on each route.
 
 You can still check what you download:
@@ -394,6 +412,23 @@ A bench has four tabs:
   once when a step uses sudo.
 
 ![A bench on its Sites tab](images/windows-bench.png)
+
+A fifth tab, **Sharing**, is there only while the **Share with people on
+the same Wi-Fi** experiment (`lan-rooms`) is on in Labs. It is the host
+side of a room, with the Mac app's words: **Start sharing** for 1 to 12
+hours after a question, **Stop**, **Extend**, **Lock room**, the room code
+(hidden until you press **Show**), **Copy invite** and **New code**, the
+checks, the copy, and the people in the room with **Remove**. Every one of
+those calls is made from your click and asks first where it ends a room or
+a person's session; nothing runs when the tab opens, it only reads. The
+room code and the invite are read only on your click, kept in memory,
+never written to a log and copied with a mark that keeps them out of the
+Windows clipboard history. Setting up the copy and the network protection
+are not in the tab yet: run `benchbar.exe share setup` and
+`benchbar.exe lan-guard install` in PowerShell, where they ask first. The tab shows
+what `benchbar.exe` reports, including where a platform has no network
+protection yet (Linux). While the experiment says it is not on Windows
+yet in Labs, the tab does not appear.
 
 Start and Restart check the bench's ports first, from the window and from
 the flyout. A port another program holds stops the start with the reason
@@ -774,9 +809,11 @@ every distro, so stop your benches first).
   USER` opens the site signed in as that user in your Windows browser. The
   site needs a `*.localhost` name, which the Windows browser reaches without
   a hosts line (see [`*.localhost` names](#localhost-names)). See [benchbar open](reference/cli/other.md).
-- It cannot join a room. Rooms (`benchbar share`) are Mac only for now:
-  WSL 2 does not expose a port to the Wi-Fi by default and Windows has no
-  pf. A `benchbar://share/...` link shows a note that says so.
+- It cannot join a room as a guest. The guest side (the room code
+  exchange, the pinned certificate and the local forwarder) is part of the
+  Mac app and has no `benchbar` command, so it is not on Windows yet. A
+  `benchbar://share/...` link shows a note that says so. Hosting a room is
+  the **Sharing** tab above.
 
 ## Labs
 

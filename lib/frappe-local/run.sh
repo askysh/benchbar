@@ -55,27 +55,60 @@ fl_run_group_alive() {
 }
 
 # fl_run_group_kill: TERM to the group, then up to FL_KILL_GRACE seconds
-# (default 10, fractions allowed) for it to go, polled every tenth of a second
-# and not a moment longer than the group needs; then KILL for what is left;
+# (default 10, tenths allowed as 0.3) for it to go, polled every tenth of a
+# second and not a moment longer than the group needs; what is left gets KILL;
 # then the group is forgotten. A Ctrl-C during brew, yarn or bench init gets
 # the time those tools need to clean up behind them (a half written keg or
-# node_modules is a repair for the next run).
+# node_modules is a repair for the next run). The wait is bounded by the clock
+# as well as by the count: a loaded machine stretches each poll, never the grace.
 fl_run_group_kill() {
-  local grace="${FL_KILL_GRACE:-10}" whole frac ticks waited=0
   [[ -n "$FL_RUN_PGID" ]] || return 0
+  local grace="${FL_KILL_GRACE:-10}" whole frac ticks waited=0 t0="$SECONDS"
   fl_run_group_stop TERM
   whole="${grace%%.*}"; frac=0
   case "$grace" in *.*) frac="${grace#*.}"; frac="${frac:0:1}" ;; esac
   [[ "$whole" =~ ^[0-9]+$ ]] || whole=0
   [[ "$frac" =~ ^[0-9]$ ]] || frac=0
-  ticks=$((whole * 10 + frac))
+  ticks=$((10#$whole * 10 + frac))
   while [[ "$waited" -lt "$ticks" ]] && fl_run_group_alive "$FL_RUN_PGID"; do
     sleep 0.1
     waited=$((waited + 1))
+    [[ $((SECONDS - t0)) -le $((10#$whole + 1)) ]] || break
   done
-  fl_run_group_stop KILL
-  wait "$FL_RUN_PGID" 2>/dev/null || true
+  if fl_run_group_alive "$FL_RUN_PGID"; then fl_run_group_stop KILL; fi
+  wait "$FL_RUN_PGID" || true
   FL_RUN_PGID=""
+} 2>/dev/null # the shell reports a command a signal ended ("Terminated: 15") on its own stderr
+
+# Background jobs a command runs side by side with the shell (the profile
+# check pool): their pids are in FL_BG_PIDS, so a signal to benchbar can stop
+# them too. A job is a subshell that stops its own process group on TERM
+# (fl_bg_job_stop); FL_BG_DIR is the temp folder the pool leaves behind.
+FL_BG_PIDS=()
+FL_BG_DIR=""
+
+# fl_bg_job_stop: the TERM trap of a background job's subshell: its running
+# command's group goes down with it (the job table knows a command that
+# FL_RUN_PGID was not set for yet)
+fl_bg_job_stop() {
+  local job
+  trap - TERM INT HUP
+  for job in $(jobs -p 2>/dev/null); do
+    kill -TERM -- "-${job}" 2>/dev/null || kill -TERM "$job" 2>/dev/null || true
+  done
+  fl_run_group_kill
+  exit 143
+}
+
+# fl_bg_stop_all: TERM to every registered background job and wait for it
+# (each one has stopped its own group by then), then drop its temp folder
+fl_bg_stop_all() {
+  local p
+  for p in ${FL_BG_PIDS[@]+"${FL_BG_PIDS[@]}"}; do kill -TERM "$p" 2>/dev/null || true; done
+  for p in ${FL_BG_PIDS[@]+"${FL_BG_PIDS[@]}"}; do wait "$p" 2>/dev/null || true; done
+  FL_BG_PIDS=()
+  [[ -z "$FL_BG_DIR" ]] || rm -rf "$FL_BG_DIR"
+  FL_BG_DIR=""
 }
 
 # fl_tmp_new_v VAR PREFIX: a temp file for this run, removed by the exit trap
@@ -132,6 +165,7 @@ fl_on_signal() {
       kill -TERM -- "-${job}" 2>/dev/null || kill -TERM "$job" 2>/dev/null || true
     done
   fi
+  fl_bg_stop_all
   fl_run_group_kill
   fl_log "stopped by SIG${sig}"
   exit "$code"
@@ -322,26 +356,111 @@ fl_run_with_timeout() {
 # (fl_run_group_kill), so neither a child nor a command that ignores TERM
 # runs on; exit 124. FL_RUN_PGID is put back afterwards: a signal that
 # arrives later still reaches the right group.
+# The deadline is the clock's, not a count of polls: a command that is still
+# running after its first 20 ms poll gets a `sleep` of the rest as its timer,
+# because a poll that a loaded machine stretches from 100 ms to 400 ms would
+# stretch the deadline with it (the first CI run of this took 4 s for 1 s).
+# A command that ends within that poll starts no timer.
 fl_run_capture_timeout() {
-  local secs="$1" out="$2" saved_pgid="$FL_RUN_PGID" pid ticks=0 code=0
+  local secs="$1" out="$2" saved_pgid="$FL_RUN_PGID" pid waited=0 code=0 timer="" left expired=0
   local FL_RUN_ERR_FILE="$3"
   shift 3
   FL_RUN_PGID=""
   fl_run_bg_group "$out" "$@"
   pid="$FL_RUN_PID"
+  # a quick command is noticed within 20 ms; a slow one is polled every 100 ms
   while kill -0 "$pid" 2>/dev/null; do
-    if [[ "$ticks" -ge $((secs * 10)) ]]; then
+    if [[ -n "$timer" ]]; then
+      kill -0 "$timer" 2>/dev/null || expired=1
+    elif [[ "$waited" -ge $((secs * 1000)) ]]; then
+      expired=1
+    elif [[ "$waited" -ge 20 ]]; then
+      left=$((secs * 1000 - waited))
+      printf -v left '%d.%03d' $((left / 1000)) $((left % 1000))
+      sleep "$left" >/dev/null 2>&1 3>&- &
+      timer="$!"
+    fi
+    if [[ "$expired" -eq 1 ]]; then
       fl_run_group_kill
       printf 'timed out after %ss\n' "$secs" >>"$FL_RUN_ERR_FILE"
       FL_RUN_PGID="$saved_pgid"
+      fl__timer_stop "$timer"
       return 124
     fi
-    sleep 0.1
-    ticks=$((ticks + 1))
+    if [[ "$waited" -lt 100 ]]; then sleep 0.02; waited=$((waited + 20)); else sleep 0.1; waited=$((waited + 100)); fi
   done
   wait "$pid" || code=$?
   FL_RUN_PGID="$saved_pgid"
+  fl__timer_stop "$timer"
   return "$code"
+}
+
+# fl__timer_stop PID: ends the timer of fl_run_capture_timeout, quietly
+fl__timer_stop() {
+  [[ -n "$1" ]] || return 0
+  { kill "$1" && wait "$1"; } 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------- git over the network
+#
+# One place for every read of a remote (preflight, plan, profile check, lock):
+# git never prompts, ssh never waits for a password and gives up connecting
+# after FL_GIT_CONNECT_SECS, and the whole call dies with its process group
+# after the timeout (ssh included), so nothing is left running.
+
+FL_GIT_CONNECT_SECS="${FL_GIT_CONNECT_SECS:-5}"
+FL_GR_CODE=0     # exit code of the last fl_git_remote_run: 124 after a timeout
+FL_GR_ERR=""     # its first line of stderr (without warnings), "timed out after Ns" on 124
+FL_GR_OUT=""     # its stdout
+FL_GR_DEFAULT="" # fl_git_remote_default: the branch HEAD points at
+
+# git with your own keys and tokens, never a question
+fl_git_net() {
+  env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=${FL_GIT_CONNECT_SECS}" git "$@"
+}
+
+# fl_git_remote_run SECS GIT_ARGS...: fl_git_net with a deadline; sets
+# FL_GR_CODE, FL_GR_OUT and FL_GR_ERR, and puts git's stderr in the log
+fl_git_remote_run() {
+  local secs="$1" out err
+  shift
+  out="$(mktemp "${TMPDIR:-/tmp}/benchbar-gitnet.XXXXXX")"
+  err="$(mktemp "${TMPDIR:-/tmp}/benchbar-gitnet.XXXXXX")"
+  FL_GR_CODE=0
+  # the shell tells "Terminated" of a job it killed on a timeout: not a line for the user
+  { fl_run_capture_timeout "$secs" "$out" "$err" fl_git_net "$@" || FL_GR_CODE=$?; } 2>/dev/null
+  FL_GR_OUT="$(cat "$out" 2>/dev/null || true)"
+  fl_log_file_append "$err"
+  if [[ "$FL_GR_CODE" == "124" ]]; then
+    FL_GR_ERR="timed out after ${secs}s"
+  else
+    FL_GR_ERR="$(grep -v '^[[:space:]]*$' "$err" 2>/dev/null | grep -v '^warning:' | awk 'NR==1' || true)"
+  fi
+  rm -f "$out" "$err"
+  return 0
+}
+
+# fl_git_remote_ref REPO REF [SECS]: is REF a branch or tag of REPO?
+# Returns FL_GR_CODE: 0 found, 2 not there, 124 timeout, else git's own code.
+fl_git_remote_ref() {
+  fl_git_remote_run "${3:-${FL_GIT_TIMEOUT:-30}}" ls-remote --exit-code --heads --tags -- "$1" "$2"
+  return "$FL_GR_CODE"
+}
+
+# fl_git_remote_default REPO [SECS]: the branch HEAD points at, in FL_GR_DEFAULT
+# (nothing when unknown); returns FL_GR_CODE
+fl_git_remote_default() {
+  FL_GR_DEFAULT=""
+  fl_git_remote_run "${2:-${FL_GIT_TIMEOUT:-30}}" ls-remote --symref -- "$1" HEAD
+  [[ "$FL_GR_CODE" == "0" ]] && FL_GR_DEFAULT="$(printf '%s\n' "$FL_GR_OUT" | awk '$1 == "ref:" && $3 == "HEAD" {sub(/^refs\/heads\//, "", $2); print $2; exit}')"
+  return "$FL_GR_CODE"
+}
+
+# fl_git_remote_heads REPO [SECS]: the branch names of REPO, one per line (at most 20)
+fl_git_remote_heads() {
+  fl_git_remote_run "${2:-${FL_GIT_TIMEOUT:-30}}" ls-remote --heads -- "$1"
+  [[ "$FL_GR_CODE" == "0" ]] && printf '%s\n' "$FL_GR_OUT" | sed 's#.*refs/heads/##' | awk 'NR<=20 && NF'
+  return 0
 }
 
 fl_capture() {
