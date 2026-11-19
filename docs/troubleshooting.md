@@ -129,7 +129,9 @@ decrypt. Frappe encrypts every stored password (email accounts,
 integrations, `Password` fields) with `encryption_key` from the site's
 `site_config.json`, and `bench restore` never copies it: a restored site
 without it generates a new key, which cannot read the old rows.
-`benchbar pull` copies the production key for you. After a restore by
+`benchbar pull` copies the production key for you (and since 0.9 clears
+the stored passwords of the copy unless you pass `--keep-secrets`, so a
+neutralised copy has none to decrypt). After a restore by
 hand, or when production had no key, first copy the local
 `sites/SITE/site_config.json` aside (`cp site_config.json
 site_config.json.bak` in that folder), then copy `encryption_key` from
@@ -217,7 +219,8 @@ installed, doctor warns until the bench is in `~/.config/mole/whitelist`.
 | `bench update` or `bench setup procfile` | They rewrite `Procfile`. `Procfile.lean` is separate and untouched |
 
 The bench log is `<bench>/logs/bench.log`; `benchup` keeps the tail of the
-previous run in `logs/bench.previous.log`. `benchup` refuses to start
+previous run in `logs/bench.previous.log` and the three copies before it
+in `logs/bench.previous.1.log` to `.3.log`. `benchup` refuses to start
 when a running bench or another program holds its ports, and asks when
 only a stopped bench shares them; `benchbar ports setup` gives each bench
 its own ports.
@@ -230,8 +233,9 @@ moves the old agent aside and installs `com.benchbar.<bench>`, starting
 the bench again if it was running. `frappe-mac` keeps working as a name
 for `benchbar`.
 
-Per process LaunchAgents (one each for web, worker, socketio and so on)
-and hand made agents are listed by doctor with their launchctl state and
+Per process LaunchAgents of this bench (one each for web, worker,
+socketio and so on) and hand made agents that start this bench's honcho,
+runner, socketio, serve, worker or schedule are listed by doctor with their launchctl state and
 last exit code. Repair boots them out and moves the plists to
 `~/Library/LaunchAgents-disabled/<timestamp>/`. Nothing is deleted.
 
@@ -269,7 +273,8 @@ are reported so you can remove them by hand.
   mutating run
 - the state folder, `~/.local/state/benchbar` (`.benchbar/` in a git
   checkout): the remembered benches (`benches/<folder>-<hash>.env`), and
-  the logs and backups of every run
+  the logs and backups of every run (the newest 100 logs and 50 backup
+  folders are kept, see [what is kept](guides/benches-and-sites.md#backing-up-and-dropping-a-site))
 - the port keys in `<bench>/sites/common_site_config.json` and
   `<bench>/config/redis_*.conf`, only when a bench moves to another
   port block (with `bench set-config -g` and `bench setup redis`, after

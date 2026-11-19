@@ -405,6 +405,16 @@ management. **Team Profiles** creates a profile from a bench, imports or
 subscribes to one, exports, updates, checks access and removes. A Windows
 file path for import or export is converted with `wslpath`.
 
+**Labs** lists the experiments of `benchbar.exe labs list`, one row each,
+with a switch, a warning, the version it came in and what it is. The
+switch runs `benchbar.exe labs on NAME` or `labs off NAME`, the same calls
+as **Settings > Labs** in the Mac app, so the state is the same in the
+tray, in PowerShell and for an agent. Turning an experiment on is your
+decision, and the click is it: the warning is on the row. An experiment
+that does not list Linux among its platforms (the benches run in WSL)
+stays off and says why; `benchbar labs list` shows each experiment's
+platforms. Turning one off stops what it started.
+
 The log window filters by process, searches, follows the log (while the
 window is open), shows the previous log and opens `tail -f` in Windows
 Terminal. Follow asks every 2 seconds while lines arrive and waits up to 10
@@ -424,7 +434,7 @@ cleaned of them. An install can last long, so for that time the values
 can be read by another program of your own user.
 
 Settings: Open BenchBar at logon, notifications, check for updates when the window
-opens, the distro (switching runs `benchbar.exe adopt-distro`), the editor
+opens, **Ask before a link acts** (see [benchbar:// links](#benchbar-links)), the distro (switching runs `benchbar.exe adopt-distro`), the editor
 (VS Code, Cursor or VS Code Insiders), the command line tool's path, and
 the tray's appearance and runner. About: the versions of the tray,
 `benchbar.exe` and the CLI inside the distro, Check for Updates, Report a
@@ -433,7 +443,10 @@ Bug and the MCP line.
 When a bench crashes, is paused by the crash guard or meets a port
 conflict, the tray shows one Windows notification with the bench and
 the command that fixes it. It does not repeat it until the state
-changes again.
+changes again. The tray reads the pause the runner records in the bench's
+`state.json` (the same record `benchbar status` shows), and the runner
+inside the distro sends no desktop notification of its own in WSL, so
+there is one notification, not two.
 
 ### When the distro is stopped
 
@@ -461,6 +474,48 @@ When the window opens, the tray asks GitHub for the latest release, at
 most every six hours, and shows a banner when a newer one is out. Turn it
 off in Settings to stop those checks. Check for Updates in the menu and
 About always asks GitHub, and asks before it opens the release page.
+
+### benchbar:// links
+
+The tray answers `benchbar://` links, so a launcher, a script or a
+bookmark can start, stop and open a bench:
+
+```powershell
+Start-Process "benchbar://up?bench=frappe-bench"
+```
+
+The routes and the `bench=` and `site=` queries are the Mac app's: `up`,
+`down`, `restart`, `open`, `logs`, `window`, `doctor`, `console`, `db`
+and `editor`, plus the two profile links. They are listed in the
+[URL scheme](reference/url-scheme.md) page. On Windows `bench=` takes a
+name or the Linux path of the bench (`/home/you/frappe-bench`, or
+`~/frappe-bench` for a bench in your home folder in the distro).
+`console` and `db` open Windows Terminal inside the distro, like the
+More menu of a bench.
+
+The tray registers the scheme for your user (under
+`HKEY_CURRENT_USER\Software\Classes\benchbar`, so no administrator
+rights) the first time it starts, and the installer writes the same
+values. Uninstalling removes them. If another program already owns
+`benchbar://` (for you or for the whole PC), or another copy of
+`BenchBarTray.exe` that is still there does, the tray leaves it alone, and
+so does the installer. A registration of a copy that is gone is replaced.
+
+If the tray is running, a second start with a link hands the link to it
+and quits; if not, the link starts the tray first and the link waits for
+its first look at your benches. A link that is not one of the routes, or
+is not well formed, does nothing and is logged by its action only (or a
+short hash), never with the bench, the site or the address it carried.
+A link that holds a double quote, a backslash or one of `^ | < >` is
+ignored too; a real link writes those as `%22`, `%5C` and so on.
+
+Any web page can open a `benchbar://` link, and a browser can remember
+"always allow". **Settings > Ask before a link acts** makes the tray ask
+first for `up`, `down`, `restart`, `console` and `db`, with Cancel as the
+default. It is off by default, so launchers and scripts keep working.
+
+Share links (`benchbar://share/...`) need rooms, which are not on Windows
+yet: the tray shows a short note and does nothing else.
 
 ### What it costs
 
@@ -562,8 +617,10 @@ the question. With no terminal to answer on (input is redirected) and no
    resume shortcut. It removes only a `.lnk` file in the Start menu, the
    Startup folder or the install folder that points to the installed tray
    app; any other shortcut stays;
-4. removes the install folder from your user PATH;
-5. removes the files it installed (the list is `.installed-files.txt` in
+4. removes the `benchbar://` registration, when it points to the installed
+   tray app;
+5. removes the install folder from your user PATH;
+6. removes the files it installed (the list is `.installed-files.txt` in
    the install folder) and the folder, when it is empty.
 
 It never touches WSL, your distro, your benches or
@@ -580,11 +637,13 @@ To do it by hand instead:
    with Run, `shell:startup`), the **BenchBar Setup Resume** shortcut if
    there is one, and the **BenchBar** shortcut in the Start menu (Run,
    `shell:programs`).
-4. Remove `%LOCALAPPDATA%\Programs\BenchBar` from your user PATH: run
+4. Delete the registry key `HKEY_CURRENT_USER\Software\Classes\benchbar`
+   (Registry Editor), when its command points to `BenchBarTray.exe`.
+5. Remove `%LOCALAPPDATA%\Programs\BenchBar` from your user PATH: run
    `benchbar.exe path remove` while `benchbar.exe` is still there, or open
    Environment Variables (search for it in Start), edit the user `Path`
    and delete the entry for that folder.
-5. Delete the folder `%LOCALAPPDATA%\Programs\BenchBar`.
+6. Delete the folder `%LOCALAPPDATA%\Programs\BenchBar`.
 
 ### Removing the distro
 
@@ -643,6 +702,13 @@ every distro, so stop your benches first).
   setup check says so. Install it next to the other one with
   `wsl --install -d Ubuntu-24.04` and choose it with
   `benchbar.exe adopt-distro`.
+- **A `benchbar://` link does nothing.** The tray has to be installed
+  (or have started once) so that it registered the scheme, and the link
+  must be one of the routes. Open the [URL scheme](reference/url-scheme.md)
+  page for the list. A link that is ignored is written to
+  `%LOCALAPPDATA%\BenchBar\tray.log` with its action only. If another
+  program owns `benchbar://`, the log says "registered to another
+  program: left alone"; the tray does not take it over.
 - **A Windows path as an argument.** `benchbar.exe adopt C:\Users\you\bench`
   is accepted as a path: the shim turns a drive path such as `C:\...` into
   `/mnt/c/...`, and a `\\wsl.localhost\Ubuntu-24.04\...` path of the same
@@ -679,10 +745,7 @@ every distro, so stop your benches first).
 
 ## What the tray does not do
 
-- It has no `benchbar://` links yet, and no CPU source for the runner, so
-  the runner runs at one speed. Team Profiles copies a
-  `benchbar://profile/import` link for a team chat, but Windows has no
-  handler for that address yet, so the link does not open BenchBar.
+- It has no CPU source for the runner, so the runner runs at one speed.
 - It never reads files inside the distro: every fact comes from
   `benchbar.exe`.
 - It has no Open as menu yet. From PowerShell, `benchbar.exe site open-as on
@@ -692,12 +755,14 @@ every distro, so stop your benches first).
   a hosts line (see [`*.localhost` names](#localhost-names)). See [benchbar open](reference/cli/other.md).
 - It cannot join a room. Rooms (`benchbar share`) are Mac only for now:
   WSL 2 does not expose a port to the Wi-Fi by default and Windows has no
-  pf.
+  pf. A `benchbar://share/...` link shows a note that says so.
 
 ## Labs
 
-Labs work the same on Windows. `benchbar.exe labs list` shows them, and the
-ones that are not on Windows yet say so. `benchbar.exe labs on NAME` asks
-first in PowerShell. Turning one on is a person's decision, so an agent with
-`BENCHBAR_NONINTERACTIVE=1` is refused. See
+Labs work the same on Windows. The **Labs** page of the BenchBar window
+and `benchbar.exe labs list` show them, and the ones that are not on
+Windows yet say so. `benchbar.exe labs on NAME` asks first in PowerShell.
+Turning one on is a person's decision, so an agent with
+`BENCHBAR_NONINTERACTIVE=1` is refused; the tray's switch is your click,
+so it runs the same call with the question already answered. See
 [labs](reference/cli/labs.md).

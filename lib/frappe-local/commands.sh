@@ -71,8 +71,10 @@ flag~repair~--yes~~Do not ask.
 env~repair~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~repair~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
 cmd~status~benchbar status [--json] [--ping]~State, pid, stop reason, site ping.~no~no~no~no~document
+env~status~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 flag~status~--ping~~Ask every site, not only the default one.
 cmd~list~benchbar list [--json]~Every bench benchbar knows about. Never pings a site.~no~no~no~no~document
+env~list~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~scan~benchbar scan PATH [--json]~Find benches recursively in a folder (read only).~no~no~no~no~document
 cmd~register~benchbar register PATH...~Remember selected benches without changing their services.~no~no~no~yes~none
 cmd~up~benchbar up [--services-only] [--json]~Start the bench in the background.~yes~no~no~yes~stream
@@ -82,7 +84,7 @@ cmd~restart~benchbar restart [--json]~Restart the bench, for example after chang
 cmd~logs~benchbar logs [-nN] [--worker|--worker-error|--previous] [--process NAME] [--since TIMESTAMP] [--since-restart] [--no-follow] [--json]~Tail logs/bench.log.~no~no~no~no~document
 flag~logs~--worker~~Read logs/worker.log.
 flag~logs~--worker-error~~Read logs/worker.error.log.
-flag~logs~--previous~~Read logs/bench.previous.log.
+flag~logs~--previous~~Read logs/bench.previous.log (the starts before it are bench.previous.1.log to .3.log).
 flag~logs~--process~NAME~web, socketio, schedule or worker.
 flag~logs~--since~TIMESTAMP~Only lines at or after it (--json; ISO 8601, or HH:MM:SS today).
 flag~logs~--since-restart~~Only lines after the bench's last start (--json).
@@ -95,6 +97,7 @@ cmd~uninstall-service~benchbar uninstall-service [--all] [--yes] [--dry-run]~Rem
 flag~uninstall-service~--all~~Every bench with a benchbar agent, after one question.
 flag~uninstall-service~--yes~~Do not ask; required without a terminal.
 cmd~path~benchbar path~Print the bench directory.~no~no~no~no~none
+env~path~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~console~benchbar console [--site S]~bench --site SITE console: a Python shell with frappe.~yes~no~no~no~none
 cmd~db~benchbar db [--site S]~bench --site SITE mariadb: the site's database.~yes~no~no~no~none
 cmd~open~benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]~Open a site in the browser, or open it signed in as USER (developer_mode sites that were opted in with site open-as on).~no~no~no~no~document
@@ -112,7 +115,15 @@ flag~pull~--as~NAME~Local site name (default SITE.local).
 flag~pull~--from-dir~DIR~A backup set downloaded by hand, no SSH.
 flag~pull~--remote-bench~DIR~The bench folder on the server.
 flag~pull~--new-backup~~Run bench backup on the server first.
+flag~pull~--keep-secrets~~Keep the copy's integrations and stored secrets (by default they are switched off and cleared).
 flag~pull~--replace~~Restore over an existing local site, after backing it up.
+flag~pull~--confirm-site~SITE~With --new-backup: the site name, instead of typing it.
+flag~pull~--skip-app~APP~Restore without APP (its tables stay behind as orphans); repeat for more apps.
+flag~pull~--no-files~~Database only.
+flag~pull~--no-migrate~~Stop after the restore and the dev safety, before bench migrate.
+flag~pull~--before-migrate~SCRIPT~An executable run after the restore, before migrate, in the bench folder, with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME; a failing script stops the run.
+flag~pull~--keep-scheduler~~Leave the scheduler as production has it.
+flag~pull~--keep-staging~~Keep the downloaded backup in the bench's .benchbar/pulls/ after a successful run.
 env~pull~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~report~benchbar report [--print] [--json]~Redacted diagnostics zip on the Desktop for bug reports.~no~no~no~no~document
 flag~report~--print~~Print to the terminal instead of writing the zip.
@@ -120,10 +131,12 @@ cmd~docs~benchbar docs [TOPIC] [--print]~Open the documentation, or one topic's 
 cmd~self-update~benchbar self-update [--check] [--dry-run] [--json]~Update the benchbar CLI and the BenchBar app.~yes~no~yes~yes~document
 flag~self-update~--check~~This version against the latest.
 cmd~where~benchbar where [--json]~How this CLI was installed, its state folder and the app.~no~no~no~no~document
+env~where~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~mcp~benchbar mcp [--print-agents-md]~Model Context Protocol server on stdio for coding agents.~no~no~no~no~none
 flag~mcp~--print-agents-md~~Print a snippet for a project's AGENTS.md or CLAUDE.md and exit.
 cmd~help~benchbar help~The global help text.~no~no~no~no~none
 cmd~commands~benchbar commands --json~This table: every command, flag and environment variable.~no~no~no~no~document
+env~commands~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~ports~benchbar ports plan|setup|apply|check|mode ...~Port allocation for several benches.~no~no~no~no~none
 cmd~ports plan~benchbar ports plan [--json] -- PATH ...~Read only preview of the allocation and its approval token.~no~no~no~no~document
 cmd~ports setup~benchbar ports setup [--dry-run] -- PATH ...~Preview, confirm once, then apply.~yes~yes~no~yes~none
@@ -261,6 +274,7 @@ cmd~app install~benchbar app install NAME --site S~Install an app of the bench o
 cmd~app update~benchbar app update NAME [--skip-backup] [--dry-run] [--json]~Fast forward one app with a changelog first, back up its sites, migrate, build.~yes~no~yes~yes~stream
 flag~app update~--skip-backup~~Migrate without a backup first.
 flag~app update~--dry-run~~Print the plan as one JSON document with --json.
+flag~app update~--discard-pending~~Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs.
 cmd~app focus~benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]~Focus apps: the ones you work on.~no~no~no~no~document
 cmd~app unfocus~benchbar app unfocus NAME~Pin NAME as not a focus app.~no~no~no~yes~none
 cmd~lock~benchbar lock write|check|apply ...~The team lockfile benchbar.toml.~no~no~no~no~none
@@ -272,6 +286,10 @@ cmd~profile list~benchbar profile list [--json]~Built in and team profiles.~no~n
 cmd~profile show~benchbar profile show NAME~What a profile installs.~no~no~no~no~none
 cmd~profile create~benchbar profile create NAME --from-bench PATH [--dir DIR]~Write a team profile from a bench.~no~no~no~yes~none
 cmd~profile export~benchbar profile export NAME [--out FILE] [--plan] [--json]~A copy to share.~no~no~yes~yes~document
+flag~profile export~--out~FILE~Where to write (default ./NAME.toml).
+flag~profile export~--branch~APP=BR~Export APP on BR instead of its default branch; repeatable.
+flag~profile export~--drop~APP~Leave APP out of the copy; repeatable. Refused when a kept app requires it.
+flag~profile export~--plan~~Print the review only, write nothing.
 cmd~profile import~benchbar profile import FILE|URL [--as NAME] [--plan] [--json]~Add a profile someone sent.~yes~no~yes~yes~document
 cmd~profile subscribe~benchbar profile subscribe GIT_URL [--plan|--yes] [--json]~Clone a team's config repo.~yes~no~yes~yes~document
 cmd~profile update~benchbar profile update NAME|--all [--plan] [--json]~Fetch an import or subscription again.~yes~no~yes~yes~document
@@ -369,36 +387,52 @@ fl_cmd_help() {
 
 # fl_commands_json: benchbar commands --json. The commands of a lab that is
 # off are left out and named in "gated"; one of a lab that is on has "lab".
+# Built with the _v helpers and here strings: a subshell per value cost 1 s.
 fl_commands_json() {
   local line kind k a b c out="" body="" fsep="" esep="" envs="" open=0 gflags="" gsep="" tty sudo net mut json
-  local word="" lab="" skip=0 gated="" gsep2="" labs_on
+  local word="" lab="" skip=0 gated="" gsep2="" labs_on lab_on=0
+  local jk ja jb jc jt js jn jm jj jl jw
   while IFS= read -r line; do
     IFS='~' read -r kind k a b c <<<"$line"
     case "$kind" in
       cmd)
         if [[ "$open" == "1" ]]; then out="${out}${out:+,}${body}],\"env\":[${envs}]}"; fi
         open=0; skip=0
-        if [[ "${k%% *}" != "$word" ]]; then word="${k%% *}"; lab="$(fl_lab_of_cmd "$word")"; fi
-        if [[ -n "$lab" ]] && ! fl_lab_on "$lab"; then
+        if [[ "${k%% *}" != "$word" ]]; then
+          word="${k%% *}"; fl_lab_of_cmd_v lab "$word"
+          lab_on=0
+          if [[ -n "$lab" ]] && fl_lab_on "$lab"; then lab_on=1; fi
+        fi
+        if [[ -n "$lab" && "$lab_on" != "1" ]]; then
           skip=1
-          case ",${gated}" in *"\"name\":$(fl_json_str "$word"),"*) ;; *) gated="${gated}${gsep2}{\"name\":$(fl_json_str "$word"),\"lab\":$(fl_json_str "$lab")}"; gsep2="," ;; esac
+          fl_json_str_v jw "$word"
+          case ",${gated}" in *"\"name\":${jw},"*) ;; *) fl_json_str_v jl "$lab"; gated="${gated}${gsep2}{\"name\":${jw},\"lab\":${jl}}"; gsep2="," ;; esac
           continue
         fi
         IFS='~' read -r _ _ _ _ tty sudo net mut json <<<"$line"
-        body="{\"name\":$(fl_json_str "$k"),\"usage\":$(fl_json_str "$a"),\"summary\":$(fl_json_str "$b"),\"tty\":$(fl_json_bool "$tty"),\"sudo\":$(fl_json_bool "$sudo"),\"network\":$(fl_json_bool "$net"),\"mutating\":$(fl_json_bool "$mut"),\"json\":$(fl_json_str "$json"),"
-        [[ -z "$lab" ]] || body="${body}\"lab\":$(fl_json_str "$lab"),"
+        fl_json_str_v jk "$k"; fl_json_str_v ja "$a"; fl_json_str_v jb "$b"
+        fl_json_bool_v jt "$tty"; fl_json_bool_v js "$sudo"; fl_json_bool_v jn "$net"; fl_json_bool_v jm "$mut"; fl_json_str_v jj "$json"
+        body="{\"name\":${jk},\"usage\":${ja},\"summary\":${jb},\"tty\":${jt},\"sudo\":${js},\"network\":${jn},\"mutating\":${jm},\"json\":${jj},"
+        if [[ -n "$lab" ]]; then fl_json_str_v jl "$lab"; body="${body}\"lab\":${jl},"; fi
         body="${body}\"flags\":["
         envs=""; open=1; fsep=""; esep="" ;;
       flag)
-        [[ "$skip" == 1 ]] || { body="${body}${fsep}{\"name\":$(fl_json_str "$a"),\"value\":$(fl_json_str "$b"),\"help\":$(fl_json_str "$c")}"; fsep=","; } ;;
+        if [[ "$skip" != 1 ]]; then
+          fl_json_str_v ja "$a"; fl_json_str_v jb "$b"; fl_json_str_v jc "$c"
+          body="${body}${fsep}{\"name\":${ja},\"value\":${jb},\"help\":${jc}}"; fsep=","
+        fi ;;
       env)
-        [[ "$skip" == 1 ]] || { envs="${envs}${esep}{\"name\":$(fl_json_str "$a"),\"help\":$(fl_json_str "$b")}"; esep=","; } ;;
+        if [[ "$skip" != 1 ]]; then
+          fl_json_str_v ja "$a"; fl_json_str_v jb "$b"
+          envs="${envs}${esep}{\"name\":${ja},\"help\":${jb}}"; esep=","
+        fi ;;
     esac
-  done < <(fl_cmd_table)
+  done <<<"$FL_CMD_TABLE"
   [[ "$open" != "1" ]] || out="${out}${out:+,}${body}],\"env\":[${envs}]}"
   while IFS='~' read -r a b c; do
-    gflags="${gflags}${gsep}{\"name\":$(fl_json_str "$a"),\"value\":$(fl_json_str "$b"),\"help\":$(fl_json_str "$c")}"; gsep=","
-  done < <(fl_cmd_global_flags)
+    fl_json_str_v ja "$a"; fl_json_str_v jb "$b"; fl_json_str_v jc "$c"
+    gflags="${gflags}${gsep}{\"name\":${ja},\"value\":${jb},\"help\":${jc}}"; gsep=","
+  done <<<"$(fl_cmd_global_flags)"
   fl_lab_enabled_json_v labs_on
   printf '{"schema_version":%d,"cli_version":"%s","labs":%s,"gated":[%s],"global_flags":[%s],"commands":[%s]}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$labs_on" "$gated" "$gflags" "$out"
 }

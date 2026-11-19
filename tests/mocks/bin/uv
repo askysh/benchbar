@@ -25,6 +25,8 @@ if [[ "${1:-} ${2:-}" == "python install" && -n "${3:-}" ]]; then
   ver="${3#python}"; ver="${ver%%.*}.$(printf '%s' "$ver" | cut -d. -f2)"
   mkdir -p "$pydir/cpython-${ver}.9-linux-x86_64-gnu/bin"
   cp "${0%/*}/../python3.11" "$pydir/cpython-${ver}.9-linux-x86_64-gnu/bin/python${ver}"
+  # another series says its own version (a v16 bench runs Python 3.14)
+  [[ "$ver" == "3.11" ]] || printf '#!/bin/bash\ncase "$*" in\n  --version) printf "Python %s.9\\n" ;;\n  *) exit 0 ;;\nesac\n' "$ver" >"$pydir/cpython-${ver}.9-linux-x86_64-gnu/bin/python${ver}"
   chmod +x "$pydir/cpython-${ver}.9-linux-x86_64-gnu/bin/python${ver}"
   exit 0
 fi

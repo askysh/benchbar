@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_DIR="$ROOT"
+export FL_TESTING=1
 . "$ROOT/lib/frappe-local/ui.sh"
 . "$ROOT/lib/frappe-local/run.sh"
 . "$ROOT/lib/frappe-local/platform.sh"

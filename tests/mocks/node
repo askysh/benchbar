@@ -15,4 +15,10 @@ if [[ "${1:-}" == "-e" ]]; then
   printf 'ready %s %s\n' "$v4" "$v6"
   exec sleep 30
 fi
+# fnm's folder names the version: a Node other than 22 says its own (a v16 bench runs Node 24)
+case "$0" in
+  */node-versions/v*/installation/bin/node)
+    v="${0#*/node-versions/v}"; v="${v%%/*}"
+    case "$v" in 22.*) ;; *) printf 'v%s\n' "$v"; exit 0 ;; esac ;;
+esac
 printf 'v22.19.0\n'

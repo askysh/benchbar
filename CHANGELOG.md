@@ -19,6 +19,14 @@ All notable changes to this project are documented here.
 - Testing, Releasing and Decisions are under For contributors. Decisions and Releasing no longer show in the site search.
 - The Mac app page describes the Sharing tab, On your network and the Labs list, and the energy cost of both.
 
+### Backups
+
+- `site backup`, `site restore`, `site drop`, `pull --replace` and `app update` no longer delete the site's backups older than 23 hours. bench's backup did that silently; benchbar now keeps those files and puts them back. Nothing in a site's backup folder is pruned. On the same volume the kept files are hard links (no space); when the state folder is on another volume each run copies the whole backup folder and stops before bench starts when the free space does not cover it.
+- A run that is cut short between keeping and putting back (Ctrl-C, TERM) puts the files back as it exits. A run that is killed outright, or a file that could not go back, leaves the copy in the state folder, which is then never pruned: the next backup puts it back (`changed[]` says so), `doctor` warns (`kept_backups`) until then, and `repair` puts the files back.
+- `site restore` and `pull` read a backup set before they change anything: a dump that is empty or cut short, or a file archive tar cannot read, stops the command with the file named. `site backups` marks a set with an empty part `(incomplete)` and has `"complete"` in JSON.
+- benchbar's own state folder keeps to a limit: the newest 100 run logs, 50 backup folders and 14 update checks, and old `state.env.*` temp files go. The run's `changed[]` says what was removed.
+- `benchup` keeps the logs of the last three starts as `bench.previous.1.log` to `.3.log`, so the evidence of a crash survives a quick second start.
+
 ### Windows tray
 
 - A call to `benchbar.exe` that has finished no longer shows "did not finish" when a helper process it started keeps its output open: the tray waits a few seconds for the output and goes on.
@@ -37,6 +45,11 @@ All notable changes to this project are documented here.
 - Bug reports hide secrets in JSON files (`"db_password": "..."`, `encryption_key`, `Authorization`, cookies) as well as `key=value` ones, including values with escaped quotes, arrays of strings and nested objects.
 - `schtasks.exe` and streamed `wsl.exe` output are read in the right code page, so a user name with accents no longer breaks the keepalive checks or garbles the setup log.
 - `BENCHBAR_LABS`, `BENCH_INIT_TIMEOUT_SECONDS`, `BENCHBAR_PROFILE_PATH` and the `BENCHBAR_MCP_*` settings now reach the CLI in WSL.
+- A `.wslconfig` `memory` value you set is no longer raised to 4 GB; `doctor` only says it is small. The setup step is named "Keep WSL from stopping idle benches (uses more RAM)".
+- `benchbar.exe path install` and `remove` save the old user PATH in `%LOCALAPPDATA%\BenchBar\path-backup-<stamp>.txt` first.
+- When a command exits 2 and the CLI in WSL is another release than `benchbar.exe`, one line says so and how to update.
+- The advice when no distro is installed now names `benchbar.exe setup run distro_install`; `setup check` only reports.
+- A hung `wsl.exe` (bug report copy, setup streams) or `schtasks.exe` is ended at its deadline, and a setup action stops when the program reading its output has gone.
 
 ### Agents never see a secret
 

@@ -296,6 +296,20 @@ fl_keychain_delete() {
 # A socket whose owner ss may not show (another user's) gets pid 0 and
 # command "?". Addresses read like lsof's: *:3306, 127.0.0.1:3306, [::1]:3306.
 fl__ss_listeners() {
+  local all port pid cmd addr
+  # in a doctor run (facts.sh) one ss for every port, filtered here
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    fl_memo_v all ss-listeners fl__ss_listeners_run "" || true
+    if [[ -z "${1:-}" ]]; then printf '%s' "$all"; return 0; fi
+    while read -r port pid cmd addr; do
+      case ",${1}," in *",${port},"*) printf '%s %s %s %s\n' "$port" "$pid" "$cmd" "$addr" ;; esac
+    done <<<"$all"
+    return 0
+  fi
+  fl__ss_listeners_run "${1:-}"
+}
+
+fl__ss_listeners_run() {
   ss -Hltnp 2>/dev/null | awk -v want="${1:-}" '
     BEGIN { n = split(want, w, ","); for (i = 1; i <= n; i++) if (w[i] != "") ok[w[i]] = 1 }
     {
@@ -432,7 +446,7 @@ fl_install_port_blockers() {
 # whole command line with -a; -l prints only the name) and the folders in /proc
 fl_bench_status_pids() {
   local found line pid cmd first="" rest=""
-  found="$(pgrep -af 'honcho start -f Procfile\.lean|-m frappe\.utils\.bench_helper frappe (serve|worker|schedule)|apps/frappe/socketio\.js' 2>/dev/null)" || return 0
+  found="$(pgrep -af "honcho start -f Procfile\\.lean|$(fl_bench_helper_pattern)|apps/frappe/socketio\\.js" 2>/dev/null)" || return 0
   while IFS= read -r line; do
     pid="${line%% *}"; cmd="${line#* }"
     [[ "$pid" =~ ^[0-9]+$ ]] || continue
@@ -467,7 +481,8 @@ fl_phase00_script() { printf '00-linux-system-deps.sh'; }
 fl_service_start_hint() { printf 'sudo systemctl start %s' "$(fl__apt_unit "$1")"; }
 
 fl_preflight_not_root() {
-  local effective_uid="${FL_EFFECTIVE_UID:-$EUID}"
+  local effective_uid="$EUID"
+  [[ "${FL_TESTING:-}" == "1" ]] && effective_uid="${FL_EFFECTIVE_UID:-$EUID}"
   [[ "$effective_uid" != "0" ]] || fl_die "Do not run this installer as root." "Run it as your normal user; the scripts ask for sudo only where apt and MariaDB need it."
   fl_ok "Running as a regular user"
 }
@@ -490,17 +505,59 @@ fl_linux_os_summary() {
 # true when systemd runs as the init (WSL needs "systemd=true" in /etc/wsl.conf)
 fl_linux_systemd_booted() { [[ -d "$FL_SYSTEMD_RUN_DIR" ]]; }
 
-# Only v15-lts runs on Linux so far: its MariaDB 10.11, Python 3.11 and
-# Node 22 are what apt, uv and fnm give. Another profile needs a vendor
-# repository or another Python and is refused before anything is installed.
+# Which profiles Linux installs. Python comes from uv and Node from fnm, so
+# any series they ship works (Python 3.10 and newer, Node 18 and newer). The
+# MariaDB is the one apt gives: 10.11 on Ubuntu 24.04. A profile whose own
+# MariaDB is another series (v16-lts names 11.8) takes apt's when apt's is
+# inside the range the profile accepts (v16: 10.6 to 11.8), as the Mac takes a
+# running server in range; a MariaDB that apt cannot give is refused before
+# anything is installed, with the numbers. A team profile has its base's
+# toolchain, so it passes or fails with its base. The overrides are for tests.
+FL_LINUX_APT_MARIADB="${FL_LINUX_APT_MARIADB:-10.11}"
+
+# fl_linux_profile_adapt: the loaded profile's MariaDB becomes apt's when the
+# profile accepts it and no running server or bench pin chose another
+# shellcheck disable=SC2153  # FL_MARIADB_MIN and FL_MARIADB_MAX are set by the profile
+fl_linux_profile_adapt() {
+  [[ "${FL_MARIADB_SOURCE:-profile}" == "profile" && "$FL_MARIADB_MAJOR_MINOR" != "$FL_LINUX_APT_MARIADB" ]] || return 0
+  local n
+  n="$(fl_mm_to_num "$FL_LINUX_APT_MARIADB")"
+  [[ "$n" -ge "$(fl_mm_to_num "$FL_MARIADB_MIN")" && "$n" -le "$(fl_mm_to_num "$FL_MARIADB_MAX")" ]] || return 0
+  FL_MARIADB_FORMULA="mariadb@${FL_LINUX_APT_MARIADB}"
+  FL_MARIADB_MAJOR_MINOR="$FL_LINUX_APT_MARIADB"
+  FL_MARIADB_SOURCE="distro"
+}
+
+# fl_linux_profile_problems: why the loaded profile cannot be installed here,
+# one reason per line (nothing when it can)
+fl_linux_profile_problems() {
+  fl_linux_profile_adapt
+  case "$FL_PYTHON_BIN_NAME" in
+    python3.1[0-9]) ;;
+    *) printf 'it needs %s, and uv gives Python 3.10 and newer\n' "${FL_PYTHON_BIN_NAME:-no Python}" ;;
+  esac
+  case "$FL_NODE_MAJOR" in
+    ''|*[!0-9]*) printf 'it needs Node %s, and fnm gives a numbered Node\n' "${FL_NODE_MAJOR:-(none)}" ;;
+    *) [[ "$FL_NODE_MAJOR" -ge 18 ]] || printf 'it needs Node %s, and Frappe runs on Node 18 and newer\n' "$FL_NODE_MAJOR" ;;
+  esac
+  if [[ "$FL_MARIADB_SOURCE" == "profile" && "$FL_MARIADB_MAJOR_MINOR" != "$FL_LINUX_APT_MARIADB" ]]; then
+    printf 'it needs MariaDB %s, apt on this release gives %s, and the profile accepts %s to %s only\n' \
+      "$FL_MARIADB_MAJOR_MINOR" "$FL_LINUX_APT_MARIADB" "$FL_MARIADB_MIN" "$FL_MARIADB_MAX"
+  fi
+}
+
 fl_linux_profile_supported() {
-  [[ "$FL_PYTHON_BIN_NAME" == "python3.11" && "$FL_NODE_MAJOR" == "22" && "$FL_MARIADB_MAJOR_MINOR" == "10.11" ]]
+  [[ -z "$(fl_linux_profile_problems)" ]]
 }
 
 fl_linux_profile_require() {
-  fl_linux_profile_supported && return 0
-  fl_die "Profile ${FL_PROFILE} is not supported on Linux yet (it needs ${FL_PYTHON_BIN_NAME}, Node ${FL_NODE_MAJOR} and MariaDB ${FL_MARIADB_MAJOR_MINOR})." \
-    "v15-lts is: benchbar install --profile v15-lts"
+  local why
+  why="$(fl_linux_profile_problems | paste -sd ';' - | sed 's/;/; /g')"
+  # the adapt inside the check ran in a subshell: run it here for the caller
+  fl_linux_profile_adapt
+  [[ -z "$why" ]] && return 0
+  fl_die "Profile ${FL_PROFILE} is not supported on Linux yet: ${why}." \
+    "v15-lts and v16-lts are: benchbar install --profile v15-lts"
 }
 
 # fl_linux_toolchain_path: the PATH prefix for the loaded profile's uv Python,

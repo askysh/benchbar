@@ -16,7 +16,8 @@
 
 FL_LOCK_DIR=""
 FL_LOCK_DIRS=""
-FL_LOCK_GRACE_SECS="${FL_LOCK_GRACE_SECS:-5}"
+# a test seam: a production run (no FL_TESTING=1) always waits 5 seconds
+if [[ "${FL_TESTING:-}" == "1" ]]; then FL_LOCK_GRACE_SECS="${FL_LOCK_GRACE_SECS:-5}"; else FL_LOCK_GRACE_SECS=5; fi
 # the first lock of the run (the state folder's); locks a subshell takes
 # later (ports setup adopts each bench in one) are listed in its "held"
 # file, since a subshell cannot add to the parent's FL_LOCK_DIRS, and the

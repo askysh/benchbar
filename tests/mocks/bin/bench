@@ -147,6 +147,8 @@ PY
       disable-scheduler) exit 0 ;;
       set-config)
         # bench --site S set-config [-p] KEY VALUE: the site's own config
+        # MOCK_BENCH_SITE_SET_CONFIG_EXIT=N: it fails (the pull stops after the restore, before neutralise)
+        [[ -n "${MOCK_BENCH_SITE_SET_CONFIG_EXIT:-}" ]] && exit "$MOCK_BENCH_SITE_SET_CONFIG_EXIT"
         site="$2"; shift 3; parse=0
         [[ "${1:-}" == "-p" ]] && { parse=1; shift; }
         python3 - "sites/${site}/site_config.json" "$1" "$2" "$parse" <<'PY'
@@ -174,11 +176,18 @@ PY
             [[ -f "$old" && "$old" != "${base}"-* ]] && rm -f "$old"
           done
         fi
+        # MOCK_BENCH_BACKUP_SIGNAL=TERM: the run is cut short now (benchbar gets the signal, as on Ctrl-C),
+        # after the prune above and before the backup is written
+        if [[ -n "${MOCK_BENCH_BACKUP_SIGNAL:-}" ]]; then
+          kill -"$MOCK_BENCH_BACKUP_SIGNAL" "$(cat "$PWD/.benchbar.lock/pid")"
+          sleep 20
+          exit 1
+        fi
         # MOCK_BENCH_BACKUP_DB=FILE: the database file is a copy of FILE (a dump a restore can read)
-        if [[ -n "${MOCK_BENCH_BACKUP_DB:-}" ]]; then cp "$MOCK_BENCH_BACKUP_DB" "${base}-database.sql.gz"; else printf 'local backup\n' >"${base}-database.sql.gz"; fi
+        if [[ -n "${MOCK_BENCH_BACKUP_DB:-}" ]]; then cp "$MOCK_BENCH_BACKUP_DB" "${base}-database.sql.gz"; else printf 'local backup\n' | gzip -c >"${base}-database.sql.gz"; fi
         printf '{}\n' >"${base}-site_config_backup.json"
         # MOCK_BENCH_BACKUP_NOFILES=1: a backup that has no file archives
-        if [[ "${4:-}" == "--with-files" && -z "${MOCK_BENCH_BACKUP_NOFILES:-}" ]]; then printf 'public\n' >"${base}-files.tar"; printf 'private\n' >"${base}-private-files.tar"; fi
+        if [[ "${4:-}" == "--with-files" && -z "${MOCK_BENCH_BACKUP_NOFILES:-}" ]]; then mock_tar "${base}-files.tar"; mock_tar "${base}-private-files.tar"; fi
         exit 0 ;;
     esac
     exit 0 ;;

@@ -567,8 +567,17 @@ fl_bench_name_of() {
 # bench's for the rest of the run.
 fl_path_hash_v() {
   local __crc __rest
-  read -r __crc __rest < <(printf '%s' "$2" | cksum)
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    fl_memo_v __crc "pathhash:${2}" fl__path_crc "$2" || true
+  else
+    read -r __crc __rest < <(printf '%s' "$2" | cksum)
+  fi
   printf -v "$1" '%08x' "$__crc"
+}
+fl__path_crc() {
+  local crc rest
+  read -r crc rest < <(printf '%s' "$1" | cksum)
+  printf '%s' "$crc"
 }
 FL_BENCH_HASH=""
 FL_BENCH_HASH_DIR=""

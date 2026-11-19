@@ -59,8 +59,8 @@ make_backup_set() {
   # make_backup_set TIMESTAMP [ENC]: a complete set in the server's backup folder
   local base="$BK/$1-erp_example_com" enc="${2:+-enc}"
   cp "$MOCK_STATE/remote_dump.sql.gz" "${base}-database${enc}.sql.gz"
-  printf 'public files\n' >"${base}-files${enc}.tar"
-  printf 'private files\n' >"${base}-private-files${enc}.tar"
+  mktar "${base}-files${enc}.tar"
+  mktar "${base}-private-files${enc}.tar"
   cp "$RB/sites/$RS/site_config.json" "${base}-site_config_backup${enc}.json"
 }
 make_backup_set 20260924_020000
@@ -187,8 +187,16 @@ assert_calls_contain '^bench --site copy1 clear-cache$'
 assert_calls_contain '^python benchbar-frappe copy1 set-admin-password -$'
 assert_eq "adminpw" "$(cat "$MOCK_STATE/stdin-set-admin-password")"
 grep -q '^127.0.0.1 copy1$' "$FL_HOSTS_FILE" || fail "hosts line for the copy"
-assert_contains "$OUT" "stored passwords decrypt: 5 of 5"
 assert_contains "$OUT" "apps on copy1: erpnext frappe"
+# neutralised by default: the one shared routine ran on the copy, after the restore and before migrate, nothing secret in its call
+assert_calls_contain '^python benchbar-neutralise copy1 1$' "(the copy is neutralised, Administrator's login kept)"
+n="$(grep -n '^python benchbar-neutralise copy1 1$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+m="$(grep -n '^bench --site copy1 migrate$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+[[ -n "$n" && -n "$r" && -n "$m" && "$r" -lt "$n" && "$n" -lt "$m" ]] || fail "neutralise runs after the restore and before migrate (${r} ${n} ${m})"
+assert_contains "$OUT" "neutralised copy1: 2 webhooks switched off, 1 email accounts switched off, 7 stored secrets cleared"
+assert_contains "$OUT" "--keep-secrets"
+assert_contains "$OUT" "customer data"
+assert_not_contains "$OUT" "stored passwords decrypt"
 assert_eq "0" "$(pulled_files)" "(the download is removed afterwards)"
 assert_calls_not_contain ' backup( --with-files)?$'
 assert_no_file "$MOCK_STATE/remote_backup_taken"
@@ -198,6 +206,23 @@ assert_eq "devsite" "$(cat "$BENCH/sites/currentsite.txt")" "(the default site s
 # the default: pull again from the last source
 run_fm pull --as copy1 --dry-run --bench-dir "$BENCH"
 assert_contains "$OUT" "source from the last pull: prod:erp.example.com"
+
+# ---- --keep-secrets: the copy keeps production's integrations and stored passwords (the switch back)
+reset_calls
+run_fm pull "$SRC" --as keepcopy --skip-app hrms --keep-secrets --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_not_contain 'benchbar-neutralise'
+assert_contains "$OUT" "stored passwords decrypt: 5 of 5"
+assert_contains "$OUT" "not neutralised (--keep-secrets)"
+assert_eq "1" "$(conf_get keepcopy mute_emails)" "(email stays muted)"
+assert_eq "1" "$(conf_get keepcopy pause_scheduler)" "(and the scheduler paused)"
+assert_no_secrets "(keep secrets)"
+run_fm pull "$SRC" --as keepplan --skip-app hrms --keep-secrets --dry-run --bench-dir "$BENCH"
+assert_contains "$OUT" "kept as production had them (--keep-secrets)"
+assert_not_contains "$OUT" "Neutralise the copy"
+run_fm pull "$SRC" --as neutplan --skip-app hrms --dry-run --bench-dir "$BENCH"
+assert_contains "$OUT" "Neutralise the copy"
+assert_contains "$OUT" "outbound integrations off, stored secrets cleared"
 
 # ---- an existing site: stop, or --replace after a local backup
 reset_calls
@@ -212,9 +237,22 @@ r="$(grep -n '^python benchbar-frappe copy1 restore' "$MOCK_LOG" | head -n1 | cu
 [[ -n "$b" && -n "$r" && "$b" -lt "$r" ]] || fail "--replace backs the site up before the restore"
 assert_no_secrets "(replace)"
 
+# ---- a neutralisation that fails stops the run: a half neutralised copy is not handed over
+MOCK_NEUTRALISE_FAIL=1 run_fm pull "$SRC" --as neutfail --skip-app hrms --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "neutralis"
+assert_calls_not_contain '^bench --site neutfail migrate$'
+assert_contains "$OUT" "--replace"
+
+# ---- a step that fails between the restore and neutralise says the copy still holds production's secrets
+MOCK_BENCH_SITE_SET_CONFIG_EXIT=1 run_fm pull "$SRC" --as midfail --skip-app hrms --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "midfail was not neutralised: the copy still holds production's secrets and integrations"
+assert_calls_not_contain 'benchbar-neutralise midfail'
+assert_calls_not_contain '^bench --site midfail migrate$'
+
 # ---- no key on production: a warning, and the probe says so
 write_remote_config "backup_encryption_key=$BACKUP_KEY"
-run_fm pull "$SRC" --as nokey --skip-app hrms --yes --bench-dir "$BENCH"
+run_fm pull "$SRC" --as nokey --skip-app hrms --keep-secrets --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "[WARN] production has no encryption_key"
 assert_contains "$OUT" "5 of 5 stored passwords do not decrypt"
@@ -312,7 +350,11 @@ assert all(s["status"] in ("done", "unchanged", "skipped", "failed") for s in st
 assert any(e["event"] == "progress" and e["bytes"] == e["total"] for e in events), "progress"
 assert any(e["event"] == "gate" and e["name"] == "apply" and e["answer"] == "yes" for e in events)
 done = events[-1]
-assert done["exit"] == 0 and done["site"] == "jsoncopy" and done["decrypt"] == {"ok": 5, "failed": 0}, done
+assert done["exit"] == 0 and done["site"] == "jsoncopy" and done["decrypt"] == {"ok": 0, "failed": 0}, done
+n = done["neutralised"]
+assert n["on"] is True and n["counts"]["webhooks"] == 2 and n["counts"]["stored_secrets"] == 7, n
+assert n["labels"]["webhooks"] == "webhooks switched off", n
+assert plan["neutralise"] is True, plan
 ' || fail "pull --json events"$'\n'"$JOUT"
 set +e; JOUT="$("$FM" pull "$SRC" --as jsonfail --yes --json --bench-dir "$BENCH" 2>/dev/null)"; code=$?; set -e
 assert_eq "1" "$code"

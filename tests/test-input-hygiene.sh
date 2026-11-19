@@ -101,16 +101,16 @@ assert_contains "$r" '<string>a&amp;b&lt;c&gt;&quot;d</string>'
 assert_contains "$r" '<string>/p&amp;q</string>'
 assert_contains "$r" '<key>RunAtLoad</key><true/>'
 NASTY='/p "q" $(x) `y` \z'
-r="$(fl_template_render bench-run.sh "BENCH_DIR=${NASTY}" "BENCH_RE=$(fl_regex_escape "/a.b")" BENCH_NAME=b HONCHO=/h PORTS=8000 SITE=s WEB_PORT=8000 CLI_VERSION=1 LABEL=l MAX_STARTS=3 WINDOW=600)"
+r="$(fl_template_render bench-run.sh "BENCH_DIR=${NASTY}" BENCH_NAME=b HONCHO=/h PORTS=8000 SITE=s WEB_PORT=8000 CLI_VERSION=1 LABEL=l MAX_STARTS=3 WINDOW=600)"
 printf '%s' "$r" >"$TMP_DIR/nasty-runner"
 bash -n "$TMP_DIR/nasty-runner"
 assert_eq "$NASTY" "$(bash -c 'eval "$(sed -n "/^BENCH=/p" "$1")"; printf "%s" "$BENCH"' _ "$TMP_DIR/nasty-runner")" "(the value survives the double quotes)"
-assert_contains "$r" 'pkill -f "^/a\.b/env/bin/python' "(a regex value is not touched)"
+assert_not_contains "$r" '__BENCH_RE__' "(the runner has no bench path pattern: the folder decides)"
 # the headers (hash of the rendered body) of ordinary inputs are what the runner rendered before the quoting change
-r="$(fl_template_render bench-run.sh "BENCH_DIR=/Users/bob/dev/Bob's Bench" "BENCH_RE=$(fl_regex_escape "/Users/bob/dev/Bob's Bench")" "BENCH_NAME=Bob-s-Bench" \
+r="$(fl_template_render bench-run.sh "BENCH_DIR=/Users/bob/dev/Bob's Bench" "BENCH_NAME=Bob-s-Bench" \
   "HONCHO=/Users/bob/.local/pipx/venvs/frappe-bench/bin/honcho" "PORTS=8000,9000,11000,13000" "SITE=macdev" "WEB_PORT=8000" "CLI_VERSION=0.7.2" \
   "LABEL=com.benchbar.Bob-s-Bench" "MAX_STARTS=3" "WINDOW=600")"
-assert_eq "bench-run.sh v7 1f2195784c50" "$(fl_template_header_of "$r")" "(an ordinary runner renders as before: the hash is the body's, the version is bumped)"
+assert_eq "bench-run.sh v8 7251b0870ab0" "$(fl_template_header_of "$r")" "(an ordinary runner renders to a stable hash)"
 r="$(fl_template_render launchagent.plist "LABEL=com.benchbar.Bob-s-Bench" "APP_BUNDLE_ID=com.akashmishra.benchbar" "RUNNER=/Users/bob/dev/Bob's Bench/benchbar-run.sh" \
   "BENCH_DIR=/Users/bob/dev/Bob's Bench" "PATH=/opt/homebrew/bin:/usr/bin:/bin" "RUN_AT_LOAD=true" "LOG=/Users/bob/dev/Bob's Bench/logs/bench.log")"
 assert_eq "launchagent.plist v2 3b09ae107fcf" "$(fl_template_header_of "$r")" "(an ordinary plist renders as before)"
@@ -120,7 +120,7 @@ assert_contains "$r" 'export PATH="/opt/homebrew/opt/python@3.11/bin:$PATH"' "(t
 # the same renders under bash 3.2 semantics (BASH_COMPAT=32: a quoted replacement keeps its quotes there, BENCH=""..."")
 compat_out="$(BASH_COMPAT=32 SCRIPT_DIR="$ROOT" FL_STATE_DIR="$FL_STATE_DIR" bash -c '
   . "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/run.sh"; . "$1/lib/frappe-local/templates.sh"; . "$1/lib/frappe-local/process.sh"
-  r="$(fl_template_render bench-run.sh "BENCH_DIR=/Users/bob/dev/Bob'"'"'s Bench" "BENCH_RE=$(fl_regex_escape "/Users/bob/dev/Bob'"'"'s Bench")" "BENCH_NAME=Bob-s-Bench" \
+  r="$(fl_template_render bench-run.sh "BENCH_DIR=/Users/bob/dev/Bob'"'"'s Bench" "BENCH_NAME=Bob-s-Bench" \
     "HONCHO=/Users/bob/.local/pipx/venvs/frappe-bench/bin/honcho" "PORTS=8000,9000,11000,13000" "SITE=macdev" "WEB_PORT=8000" "CLI_VERSION=0.7.2" \
     "LABEL=com.benchbar.Bob-s-Bench" "MAX_STARTS=3" "WINDOW=600")"
   fl_template_header_of "$r"; printf "%s\n" "$r" | grep -c -x "BENCH=\"/Users/bob/dev/Bob'"'"'s Bench\""
@@ -131,7 +131,7 @@ compat_out="$(BASH_COMPAT=32 SCRIPT_DIR="$ROOT" FL_STATE_DIR="$FL_STATE_DIR" bas
   fl_template_header_of "$r"; printf "%s\n" "$r" | grep -c -x "BENCHBAR=\"/Users/bob/.local/bin/benchbar\""
   fl_xml_escape_v x "a&b<c>"; printf "%s\n" "$x"
 ' _ "$ROOT")"
-assert_eq "bench-run.sh v7 1f2195784c50
+assert_eq "bench-run.sh v8 7251b0870ab0
 1
 launchagent.plist v2 3b09ae107fcf
 1

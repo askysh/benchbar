@@ -18,6 +18,7 @@ public sealed class FixtureCliRunner : IStreamRunner
         (["app", "list"], "apps-list.json"),
         (["site", "backups"], "sites-backups.json"),
         (["profile", "list"], "profile-list.json"),
+        (["labs", "list"], "labs-list.json"),
         (["list"], "scan-list.json"),
     ];
 

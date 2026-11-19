@@ -92,7 +92,7 @@ final class Labs {
             if case CLIError.notFound = error {
                 availability = .cliMissing
                 refreshError = nil
-            } else if case CLIError.failed(_, _, let message) = error, message.contains("Unknown command") {
+            } else if (error as? CLIError)?.isUnknownCommand == true {
                 // only the CLI's own "Unknown command" means a CLI without `labs`
                 availability = .unsupported
                 refreshError = nil

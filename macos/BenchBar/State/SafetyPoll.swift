@@ -42,7 +42,13 @@ final class BackgroundSafetyPoll: SafetyPolling {
     /// it hops to the main actor for the work and reports back when done.
     nonisolated private static func schedule(_ scheduler: NSBackgroundActivityScheduler,
                                              _ work: @escaping @MainActor @Sendable () async -> Void) {
-        scheduler.schedule { completion in
+        scheduler.schedule { [weak scheduler] completion in
+            // macOS asks to hold the work back on a low battery or under
+            // thermal pressure: do not run it, ask again later
+            if scheduler?.shouldDefer == true {
+                completion(.deferred)
+                return
+            }
             let done = SendableCompletion(completion)
             Task { @MainActor in
                 await work()

@@ -18,12 +18,14 @@ if [[ " $* " == *" -d cwd "* ]]; then
   done
   exit "$rc"
 fi
-ports=""; terse=0
+ports=""; terse=0; all=0
 for a in "$@"; do
   case "$a" in
     -ti) terse=1 ;;
     tcp:*) ports="${a#tcp:}" ;;
     -iTCP:*) ports="${a#-iTCP:}" ;;
+    # "-iTCP" alone: every listener (doctor reads them all at once)
+    -iTCP) all=1 ;;
   esac
 done
 found=0
@@ -33,8 +35,8 @@ while read -r port pid cmd addr; do
   # a listener whose pid was killed (removed from the fake process table) is gone;
   # pids that were never in the table (mariadbd, other apps) are always shown
   if grep -q "^${pid} " "${MOCK_PROCS:-/dev/null}" 2>/dev/null || ! grep -q "^${pid} " "${MOCK_STATE:?}/ever_procs" 2>/dev/null; then :; else continue; fi
-  case ",${ports}," in
-    *",${port},"*)
+  case "${all}:,${ports}," in
+    1:*|*:*",${port},"*)
       found=1
       if [[ "$terse" == "1" ]]; then printf '%s\n' "$pid"; else printf '%s %s user 17u IPv4 0x1 0t0 TCP %s:%s (LISTEN)\n' "$cmd" "$pid" "$addr" "$port"; fi ;;
   esac

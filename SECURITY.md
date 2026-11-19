@@ -18,8 +18,8 @@ bench, never someone else's machine or data.
 
 ## What counts
 
-BenchBar runs with your user's rights and, twice per install, with
-`sudo`. Report anything in these areas, even when you are not sure it is
+BenchBar runs with your user's rights and, in the few steps listed
+below, with `sudo`. Report anything in these areas, even when you are not sure it is
 exploitable:
 
 - **The Keychain.** Anything that reads, writes or prints the MariaDB
@@ -31,7 +31,9 @@ exploitable:
   counts.
 - **sudo.** Anything that runs `sudo` for more than its platform's list,
   or lets input reach those commands. On macOS the list is the `/etc/hosts`
-  line and the wkhtmltopdf package. On Linux it is apt (the packages and
+  line, the wkhtmltopdf package, the LAN guard (`lan-guard install` and
+  `remove`: the pf anchor and its launch daemon) and the firewall allow
+  for node (`lan-guard allow-node`). On Linux it is apt (the packages and
   the wkhtmltopdf `.deb`), the MariaDB admin step (`sudo mariadb`, its
   config drop-in and a restart), and starting a stopped `mariadb` or
   `redis-server`. On Windows only `System32\wsl.exe --install --no-distribution`

@@ -26,6 +26,12 @@ nonisolated enum Editors {
     }
 
     /// Launch Services: the app for a bundle id, wherever it is installed.
+    /// A launched or quit app that may change which editors are installed.
+    nonisolated static func isEditor(_ bundleID: String?) -> Bool {
+        guard let bundleID else { return true }   // an app that does not say who it is: look, to be safe
+        return known.contains { $0.bundleID == bundleID }
+    }
+
     static func appURL(_ bundleID: String) -> URL? {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
     }
