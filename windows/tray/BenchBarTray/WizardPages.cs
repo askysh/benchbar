@@ -355,6 +355,16 @@ internal sealed partial class WizardView
         var bundle = new ComboBox { Width = 200, HorizontalAlignment = HorizontalAlignment.Left, ItemsSource = WizardModel.Bundles, SelectedItem = _model.Bundle };
         bundle.SelectionChanged += (_, _) => { if (bundle.SelectedItem is string b) _model.SetBundle(b); };
         Ui.Name(bundle, "App bundle");
+        var profile = new ComboBox { Width = 420, HorizontalAlignment = HorizontalAlignment.Left };
+        Ui.Name(profile, "Profile");
+        var profileNote = Note(); // what the chosen profile brings, or why one is off
+        var profileTry = Ui.Link("Try Again", () => _model.LoadProfilesAsync(force: true).Forget(), "Read the profiles again");
+        profileTry.Visibility = Visibility.Collapsed;
+        var syncingProfile = false;
+        profile.SelectionChanged += (_, _) =>
+        {
+            if (!syncingProfile && profile.SelectedItem is ComboBoxItem { Tag: string name }) _model.SetProfile(name);
+        };
         var admin = Ui.Password("Administrator password", s => SetSecret(_model.SetAdminPassword, s), 320);
         var problem = Note(error: true);
         var formHint = Note(); // says what Review is waiting for
@@ -362,6 +372,9 @@ internal sealed partial class WizardView
         var panel = new StackPanel();
         panel.Children.Add(Ui.Labeled("Bench folder", folder, "Inside Ubuntu. The default is in your Linux home folder."));
         panel.Children.Add(Ui.Labeled("Site name", site, "The site's address uses it, for example http://" + WizardModel.DefaultSite + ":8000. A name ending in .localhost needs no hosts line: browsers such as Edge and Chrome open it by themselves. PowerShell and ping do not resolve it."));
+        panel.Children.Add(Ui.Labeled("Profile", profile, "The Frappe version and its tools. v16-lts and the team profiles you added appear here when this Ubuntu can install them."));
+        panel.Children.Add(profileNote);
+        panel.Children.Add(profileTry);
         panel.Children.Add(Ui.Labeled("Apps", bundle, "minimal is Frappe only; common and extended add more apps."));
         panel.Children.Add(Ui.Labeled("Administrator password", admin, "The login of the new site. It is used for this install only and never saved."));
         panel.Children.Add(problem);
@@ -379,9 +392,39 @@ internal sealed partial class WizardView
             Show(problem, _model.FormProblem is { } p && typed ? p : null);
             Show(formHint, _model.FormProblem is { } waiting && !typed ? "Review is off. " + waiting : null);
             review.IsEnabled = _model.FormProblem is null;
+            RefreshProfiles(profile, profileNote, profileTry, ref syncingProfile);
             if (!folder.IsKeyboardFocusWithin && folder.Text != _model.Folder) folder.Text = _model.Folder;
         };
         return page;
+    }
+
+    private string _profileKey = "";
+
+    /// <summary>Fills the profile picker. It is rebuilt only when the lines change, so a poll or a typed key never closes an open list.</summary>
+    private void RefreshProfiles(ComboBox box, TextBlock note, Button tryAgain, ref bool syncing)
+    {
+        var key = string.Join('|', _model.ProfileChoiceList.Select(c => c.Name + c.Refusal)) + "|" + _model.Profile;
+        if (key != _profileKey)
+        {
+            _profileKey = key;
+            syncing = true;
+            box.Items.Clear();
+            foreach (var choice in _model.ProfileChoiceList)
+            {
+                var item = new ComboBoxItem { Content = choice.Text, Tag = choice.Name, IsEnabled = choice.Enabled, ToolTip = choice.Detail.Length == 0 ? null : choice.Detail };
+                box.Items.Add(item);
+                if (choice.Name == _model.Profile) box.SelectedItem = item;
+            }
+            syncing = false;
+        }
+        var lines = new List<string>();
+        if (_model.ProfilesLoading) lines.Add("Reading the profiles...");
+        else if (_model.ProfilesChecking) lines.Add("Asking BenchBar which profiles this Ubuntu can install...");
+        if (_model.ProfilesError is { } error) lines.Add("The profile list could not be read, so v15-lts is the only choice. " + error);
+        if (_model.SelectedProfile is { Versions: { } versions }) lines.Add(versions);
+        foreach (var refused in _model.ProfileChoiceList.Where(c => !c.Enabled)) lines.Add(refused.Name + ": " + refused.Refusal);
+        Show(note, lines.Count == 0 ? null : string.Join(Environment.NewLine, lines));
+        tryAgain.Visibility = _model.ProfilesError is not null && !_model.ProfilesLoading ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // --- 5 Review ---
@@ -433,6 +476,7 @@ internal sealed partial class WizardView
             summary.Children.Add(Summary("Bench folder", p.Bench));
             summary.Children.Add(Summary("Site", p.Site));
             if (p.WebUrl is not null) summary.Children.Add(Summary("Address", p.WebUrl));
+            summary.Children.Add(Summary("Profile", p.Profile ?? _model.Profile));
             summary.Children.Add(Summary("Apps", p.Bundle ?? _model.Bundle));
             plan.Children.Add(Ui.CardOf(summary));
             plan.Children.Add(Ui.Text("The install takes about 15 to 30 minutes, most of it downloads.", 13, opacity: 0.8, margin: new Thickness(0, 0, 0, 8)));
@@ -682,7 +726,25 @@ internal sealed partial class WizardView
         notify.Click += (_, _) => _model.Notifications = notify.IsChecked == true;
         Ui.Name(notify, "Show notifications");
         var logon = new CheckBox { Content = "Open BenchBar when I sign in to Windows", IsChecked = _model.OpenAtLogon, Margin = new Thickness(0, 0, 0, 12) };
-        logon.Click += (_, _) => _model.OpenAtLogon = logon.IsChecked == true;
+        // Checked/Unchecked (UI Automation's Toggle raises no Click); the box shows what Windows reports, never the click's guess.
+        var syncingLogon = false;
+        void ShowLogon()
+        {
+            syncingLogon = true;
+            try { logon.IsChecked = _model.OpenAtLogon; }
+            finally { syncingLogon = false; }
+        }
+        void LogonToggled()
+        {
+            if (syncingLogon) return;
+            var wanted = logon.IsChecked == true;
+            ShowLogon();
+            _model.OpenAtLogon = wanted;
+        }
+        logon.Checked += (_, _) => LogonToggled();
+        logon.Unchecked += (_, _) => LogonToggled();
+        _model.Changed += ShowLogon;
+        logon.Unloaded += (_, _) => _model.Changed -= ShowLogon;
         Ui.Name(logon, "Open BenchBar at logon");
         panel.Children.Add(notify);
         panel.Children.Add(logon);

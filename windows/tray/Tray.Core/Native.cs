@@ -71,4 +71,8 @@ internal static partial class Native
 
     [LibraryImport("shcore.dll")]
     public static partial int GetDpiForMonitor(IntPtr monitor, int type, out uint dpiX, out uint dpiY);
+
+    /// <summary>0 when packaged; <c>APPMODEL_ERROR_NO_PACKAGE</c> (15700) when not; 122 when the buffer is too small.</summary>
+    [LibraryImport("kernel32.dll")]
+    public static unsafe partial int GetCurrentPackageFamilyName(ref uint length, char* name);
 }

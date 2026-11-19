@@ -142,8 +142,7 @@ public sealed class TrayOnlyReport(string folder, Func<DateTime> now, string win
     public const int Keep = 10;
     private const string Prefix = "benchbar-tray-report-";
 
-    public static string DefaultFolder { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BenchBar", "reports");
+    public static string DefaultFolder { get; } = DataFolder.In("reports");
 
     public static TrayOnlyReport ForThisPc() => new(DefaultFolder, () => DateTime.Now,
         System.Runtime.InteropServices.RuntimeInformation.OSDescription, Environment.UserName,

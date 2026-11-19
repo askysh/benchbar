@@ -1,0 +1,3 @@
+  [FAIL] one.localhost is not in developer mode, so benchbar will not sign in as another user.
+
+Aborting. On a development site: bench --site one.localhost set-config developer_mode 1
