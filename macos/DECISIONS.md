@@ -120,7 +120,7 @@ One line per non obvious choice: the decision, then the reason.
 - The runner preview in Settings reuses RunnerAnimator at 2x, running at speed 3, and respects Reduce Motion.
 - Launch at login shows the SMAppService status; "not found" gets an explanation (a copy in DerivedData or a disk image cannot register).
 - The CLI file picker is shown automatically once, only when the CLI is not found anywhere (`askedForCLI`); after that, Settings and the popover have Choose buttons.
-- Snapshot tests render the popover and Settings to PNG, gated on `~/Library/Caches/BenchBarSnapshots` existing, because xcodebuild passes neither environment variables nor its TMPDIR to a hosted test.
+- Snapshot tests render the popover and Settings to PNG in `~/Library/Caches/BenchBarSnapshots`. Their switches (`record`, `on-screen`) are marker files in that folder, because xcodebuild passes neither environment variables nor its TMPDIR to a hosted test. The suite is no longer gated on the folder: it compares every render with a reference image (see the 0.9 line on snapshots).
 - The notifications toggle is stored now and used in Phase 6.
 
 ## Phase 6: notifications
@@ -223,7 +223,7 @@ Asked for after the phases, to stop naming drift before the first release.
 - `NSHostingController.sizingOptions = [.minSize]`: the default also follows each pane's ideal size, and the window jumped to 1285 points wide on General.
 - The change banner carries a scope (a bench's path, or profiles) and shows only there.
 - Opening BenchBar again (Finder, Spotlight) shows the window: an accessory app otherwise gives no sign it heard.
-- The README's window pictures are screenshots of the real window (`screencapture -l`); the offscreen snapshots draw a selected sidebar row and tab as solid black, since the view is in no key window.
+- The README's window pictures are screenshots of the real window (`screencapture -l`). Overturned in 0.9 for the offscreen snapshots (issue #43): they now draw the selected sidebar row (`NSTableRowView.isEmphasized`), the tab and the status dots (the `rendersOffscreen` environment value) like the real window. The README and docs images still come from the real window.
 
 ## Batch setup and port conflicts
 
@@ -419,7 +419,7 @@ Asked for after the phases, to stop naming drift before the first release.
 - Removing a custom runner asks first: it moves the folder to the Trash and was the one destructive action without a confirmation.
 - Spacing, padding and corner radius come from `WindowMetrics`; fonts stay the system text styles.
 - The NSAlert for Update to X… from the menu bar menu stays an alert: the window may be closed. Its wording and button order (Update Now, Cancel, then Release Notes and Copy Command on the left) already follow the sheet rules.
-- `.github/workflows/snapshots.yml` renders `SnapshotTests` on demand, or when a pull request is labelled `snapshots` (its head and base, for before and after); workflow_dispatch alone would need the file on main first. `scripts/ci-annotate.sh` turns compiler errors and failed tests into annotations, readable through the checks API without the log.
+- Overturned in 0.9: `.github/workflows/snapshots.yml` runs on every pull request that changes `macos/` (and on demand), and fails when a render differs from its reference; before, it rendered only when a pull request was labelled `snapshots`, which Dependabot's labels turned into skipped runs. `scripts/ci-annotate.sh` turns compiler errors and failed tests into annotations, readable through the checks API without the log.
 
 ## 0.8: the first run wizard and benches as the home
 
@@ -601,3 +601,16 @@ Asked for after the phases, to stop naming drift before the first release.
 - The room code is hidden by default, shown once after Start sharing and New code, and hidden again when the tab goes away (`codeRevealed` is view state, never stored). Copy and Copy invite are unchanged and work while it is hidden.
 - `setup_interrupted` makes the primary button `Finish setup` (the setup sheet in refresh mode), because `share setup` without `--refresh` and `share start` both refuse while it is set.
 - The lab off question is asked in Settings only for lan-rooms and only while a share is on or a joined room's forwarder is open (`SharePresentation.labOffConfirm`); the CLI's `labs off` itself stays unprompted.
+
+## 0.9: snapshot references and accessibility
+
+- Snapshot tests compare each render with a reference PNG in `BenchBarTests/Snapshots/macos<N>/` (`SnapshotCompare`): both are cut to 2 points per pixel, the size must match within one pixel, and at most 0.5% of the pixels may differ by 40 or more in a channel. One folder per macOS major version, because controls draw differently from one release to the next; with no folder for the running version the render only writes its PNG (the Snapshots workflow records the references then). `touch ~/Library/Caches/BenchBarSnapshots/record` writes new references.
+- A snapshot is an offscreen `cacheDisplay`, not a window on screen or `CGWindowListCreateImage`: a key window needs the app active, which would take the keyboard from the person at the Mac. Three things draw wrongly offscreen and are fixed in the renderer: the selected row (`isEmphasized` on every `NSTableRowView`), the macOS 27 tab picker (`pageTabs()` is segmented when `rendersOffscreen` is set) and filled status marks in the glass sidebar, which come out white (`offscreenSafe()` flattens them with `drawingGroup`). The app never sets `rendersOffscreen`. Text in the glass sidebar still draws dark in dark mode offscreen.
+- ci.yml leaves `SnapshotTests` out of its Swift run (`-skip-testing`) because the Snapshots workflow runs it, once, on the same pull requests. `CI result` does not wait for it; make `Render and compare snapshots` a required check to block on it.
+- The docs images (`DocsSnapshotTests`) open a real window and activate the app, so they run only with the `on-screen` marker in the snapshot folder, never in CI.
+- VoiceOver: the sidebar row of a bench is one element whose value is the state in words (`SidebarModel.Row.accessibilityValue`), the green or grey dot of a person says Online or Offline, and the check icons of the sharing tab say Passed, Warning, Failed or Skipped.
+- Repair and install run `--yes` after a dry run and the CLI takes no plan token for them, so the app cannot make the CLI refuse a changed plan. It says so instead: a step the real run has that the reviewed plan did not (`RepairRun.unreviewedSteps`, `WizardState.planChanges`) is marked in the step list. Both are idempotent, which is why a notice is enough; a token in the CLI is the stricter fix and is left for the CLI.
+- Quick Switch no longer turns the lab off through the CLI when another app holds its key: the lab is the person's choice, so the row keeps the lab on and says the key is taken (`QuickSwitchController.conflictNote`). Turning it off and on registers the key again. The shortcut is named by the letter the current layout shows on that physical key (`HotKey.name`). Overturns the 0.8.2 rule that a refused key rolls the lab back. A recorder for another key is not built yet.
+- `RunnerLibrary.reload` returns at once when the folder's files, sizes and modification times are as at the last load: Settings reloads on every appear, and new images made `isSame` false, which restarted the menu bar animation of a custom runner.
+- The back up spinner compares the bench's activity text with the exact strings `Workbench.backupActivity` builds, not a prefix.
+- A failed profile list in the wizard has Try Again (`WizardState.Event.retryProfiles`), one read at a time, and the Review problem text says to use it.

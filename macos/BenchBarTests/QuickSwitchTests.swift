@@ -357,24 +357,34 @@ struct QuickSwitchTests {
         #expect(key.registered)
     }
 
-    @MainActor @Test func aRefusedKeyRollsTheLabBackThroughTheCLIAndLeavesTheNote() async throws {
+    /// Another app holds the key: the person's choice stays, the CLI is not asked to turn the lab off.
+    @MainActor @Test func aRefusedKeyKeepsTheLabOnAndLeavesTheNote() async throws {
         let (labs, _, key, backend) = try wired(startsOn: false, accept: false)
         await labs.refresh()
         try await labs.set(.quickSwitch, on: true)
-        for _ in 0..<200 where labs.isOn(.quickSwitch) || labs.errors["quick-switch"] == nil { await Task.yield() }
-        #expect(!labs.isOn(.quickSwitch) && !key.registered)
-        #expect(backend.sets == ["quick-switch:true", "quick-switch:false"], "the CLI flag rolled back too")
+        for _ in 0..<200 where labs.errors["quick-switch"] == nil { await Task.yield() }
+        #expect(labs.isOn(.quickSwitch) && !key.registered)
+        #expect(backend.sets == ["quick-switch:true"], "no turn off through the CLI")
         #expect(labs.errors["quick-switch"] == QuickSwitchController.conflictNote)
+        #expect(QuickSwitchController.conflictNote.contains("stays on"))
     }
 
-    @MainActor @Test func aRefusedKeyWithAFailingRollbackKeepsTheCLITruthAndSaysHowToFixIt() async throws {
-        let (labs, _, key, backend) = try wired(startsOn: false, accept: false)
-        backend.failTurningOff = true
+    @MainActor @Test func aKeyThatIsFreeLaterIsRegisteredOnTheNextFlip() async throws {
+        let (labs, _, key, _) = try wired(startsOn: false, accept: false)
         await labs.refresh()
         try await labs.set(.quickSwitch, on: true)
-        for _ in 0..<200 where labs.errors["quick-switch"] != QuickSwitchController.stuckOnNote { await Task.yield() }
-        #expect(labs.isOn(.quickSwitch) && !key.registered, "the toggle reads what the CLI holds")
-        #expect(labs.errors["quick-switch"] == QuickSwitchController.stuckOnNote)
+        #expect(!key.registered)
+        key.accept = true
+        try await labs.set(.quickSwitch, on: false)
+        try await labs.set(.quickSwitch, on: true)
+        #expect(key.registered)
+    }
+
+    /// The key is a position on the keyboard: its name is the letter it carries now.
+    @Test func theShortcutIsNamedByTheLayoutsLetter() {
+        let label = HotKey.keyLabel()
+        #expect(label.count == 1 && label == label.uppercased())
+        #expect(HotKey.name == "⌃⌥" + label)
     }
 
     @MainActor @Test func thePanelDoesNotOpenWhileTheLabIsOff() throws {
@@ -400,8 +410,8 @@ struct QuickSwitchTests {
     @Test func theShortcutRowsForQuickSwitchShowOnlyWhileTheLabIsOn() {
         let off = SettingsView.shortcuts(quickSwitch: false).map(\.keys).joined(separator: " ")
         let on = SettingsView.shortcuts(quickSwitch: true).map(\.keys).joined(separator: " ")
-        #expect(!off.contains("⌃⌥U") && !off.contains("⇧⌘O"))
-        #expect(on.contains("⌃⌥U") && on.contains("⇧⌘O"))
+        #expect(!off.contains(HotKey.name) && !off.contains("⇧⌘O"))
+        #expect(on.contains(HotKey.name) && on.contains("⇧⌘O"))
     }
 
     @Test func theSpokenTitleDropsTheEllipsis() {

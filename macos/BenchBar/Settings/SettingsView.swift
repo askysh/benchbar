@@ -276,7 +276,7 @@ struct SettingsView: View {
         guard quickSwitch else { return shortcuts }
         return shortcuts + [
             ("Open as Administrator, a pinned user, or back", OpenAsShortcut.summary),
-            ("Quick Switch, from any app", "⌃⌥U"),
+            ("Quick Switch, from any app", HotKey.name),
         ]
     }
 

@@ -59,6 +59,31 @@ nonisolated extension EnvironmentValues {
     }
 }
 
+private nonisolated struct RendersOffscreenKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+nonisolated extension EnvironmentValues {
+    /// On in the snapshot tests, which draw the view with `cacheDisplay` in a
+    /// window that is on no screen. Only the parts that a sidebar's vibrancy or
+    /// the macOS 27 tab picker leave white or blank there look different; the
+    /// app itself never sets it. See macos/DECISIONS.md.
+    var rendersOffscreen: Bool {
+        get { self[RendersOffscreenKey.self] }
+        set { self[RendersOffscreenKey.self] = newValue }
+    }
+}
+
+/// Flattens a small status mark to an image when drawn offscreen, so its
+/// colour survives a sidebar that draws it as white.
+private struct OffscreenSafe: ViewModifier {
+    @Environment(\.rendersOffscreen) private var offscreen
+
+    func body(content: Content) -> some View {
+        if offscreen { content.drawingGroup() } else { content }
+    }
+}
+
 /// The style behind `primaryAction()`.
 private struct PrimaryActionStyle: ViewModifier {
     @Environment(\.drawsGlass) private var drawsGlass
@@ -79,18 +104,29 @@ extension View {
         modifier(PrimaryActionStyle())
     }
 
-    /// A row of page tabs: the macOS 27 tab picker, segmented before. The
-    /// compiler check keeps the build working with Xcode 26 (the CI
-    /// runners), whose SDK has no .tabs; #available alone is a run time check.
-    @ViewBuilder func pageTabs() -> some View {
+    /// A status mark that survives an offscreen render (see `rendersOffscreen`).
+    func offscreenSafe() -> some View { modifier(OffscreenSafe()) }
+
+    /// A row of page tabs: the macOS 27 tab picker, segmented before.
+    func pageTabs() -> some View { modifier(PageTabs()) }
+}
+
+/// The picker style of `pageTabs()`: segmented when drawn offscreen, where the
+/// macOS 27 tab picker draws its selected tab as a blank pill. The compiler
+/// check keeps the build working with Xcode 26 (the CI runners), whose SDK has
+/// no .tabs; #available alone is a run time check.
+private struct PageTabs: ViewModifier {
+    @Environment(\.rendersOffscreen) private var offscreen
+
+    @ViewBuilder func body(content: Content) -> some View {
         #if compiler(>=6.4)
-        if #available(macOS 27, *) {
-            pickerStyle(.tabs)
+        if #available(macOS 27, *), !offscreen {
+            content.pickerStyle(.tabs)
         } else {
-            pickerStyle(.segmented)
+            content.pickerStyle(.segmented)
         }
         #else
-        pickerStyle(.segmented)
+        content.pickerStyle(.segmented)
         #endif
     }
 }

@@ -272,6 +272,7 @@ struct BenchSites: View {
                     HStack(spacing: 8) {
                         Image(systemName: row.isDefault ? "star.fill" : "globe")
                             .foregroundStyle(row.isDefault ? .yellow : .secondary)
+                            .accessibilityLabel(row.isDefault ? "Default site" : "Site")
                         VStack(alignment: .leading, spacing: 1) {
                             Text(row.name)
                             Text(row.needsHosts ? "no /etc/hosts line yet" : row.url)
@@ -285,7 +286,7 @@ struct BenchSites: View {
                             }
                         }
                         Spacer()
-                        if bench.activity?.hasPrefix("Back up \(row.name)") == true {
+                        if Workbench.isBackingUp(row.name, activity: bench.activity) {
                             ProgressView().controlSize(.small)
                         }
                         OpenAsMenu(store: store, bench: bench, row: row) { findingUser = row.name }

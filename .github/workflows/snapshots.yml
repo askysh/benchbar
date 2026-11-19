@@ -1,21 +1,23 @@
-# Snapshots: render the popover, the BenchBar window, its panes and sheets to
-# PNG with fixture data, in light and dark, and upload them as an artifact.
-# A way to look at the UI without a Mac at hand.
+# Snapshots: render the popover, the BenchBar window, its panes and sheets with
+# fixture data, in light and dark, and compare each render with its reference
+# image in macos/BenchBarTests/Snapshots/macos<N>/ (SnapshotCompare.swift:
+# 2 pt per pixel, a small share of changed pixels is allowed).
 #
-# SnapshotTests.swift is off unless ~/Library/Caches/BenchBarSnapshots
-# exists, so this workflow creates the folder and runs only that suite. No
-# network and no real CLI: the tests answer every CLI call from
-# macos/BenchBarTests/Fixtures.
+# It runs on every pull request that changes macos/, so a layout, colour or
+# text change in a view shows as a red check here, and the PNGs of the failed
+# run are the artifact. ci.yml leaves this suite out so it runs once.
 #
-#   gh workflow run snapshots.yml -f ref=<branch>   render a branch, tag or commit
-#   label a pull request "snapshots"                 render its head and its base
-#   gh run download <run id>                         fetch the PNGs
+#   gh workflow run snapshots.yml -f ref=<branch>               render a branch, tag or commit
+#   gh workflow run snapshots.yml -f ref=<branch> -f record=true  also write the references
+#   gh run download <run id>                                    fetch the PNGs
 #
-# The label works before this file is on main (workflow_dispatch needs the
-# file on the default branch). Remove and add the label again to re-render.
+# References are per macOS major version, because the system draws controls
+# differently from one release to the next. When this runner's version has
+# none (a new runner image), the job records them instead of failing and
+# uploads them as the artifact "references": commit that folder.
 #
-# Known artifact: offscreen renders have no key window, so the selected
-# sidebar row and the selected tab draw solid black.
+# Offscreen only: nothing opens on a screen. The docs images
+# (DocsSnapshotTests) open a window, so they stay off here.
 name: Snapshots
 
 on:
@@ -25,27 +27,32 @@ on:
         description: Branch, tag or commit to render (empty for the ref the workflow runs on)
         required: false
         default: ''
+      record:
+        description: Write the reference images instead of comparing, and upload them
+        type: boolean
+        required: false
+        default: false
   pull_request:
-    types: [labeled]
+    paths:
+      - 'macos/**'
+      - '.github/workflows/snapshots.yml'
 
 permissions:
   contents: read
 
+concurrency:
+  group: snapshots-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   render:
-    name: Render snapshots (${{ matrix.side }})
-    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'snapshots'
+    name: Render and compare snapshots
     runs-on: macos-26
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        # a labeled pull request renders before (base) and after (head)
-        side: ${{ fromJSON(github.event_name == 'pull_request' && '["head","base"]' || '["ref"]') }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ matrix.side == 'base' && github.event.pull_request.base.sha || matrix.side == 'head' && github.event.pull_request.head.sha || inputs.ref || github.sha }}
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -62,16 +69,33 @@ jobs:
         id: rev
         run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
+      # a marker file in the output folder, because xcodebuild passes no
+      # environment variables to a hosted test
+      - name: Compare or record
+        id: mode
+        env:
+          RECORD: ${{ inputs.record }}
+        run: |
+          major="$(sw_vers -productVersion | cut -d. -f1)"
+          mkdir -p ~/Library/Caches/BenchBarSnapshots
+          if [ "$RECORD" = true ]; then
+            touch ~/Library/Caches/BenchBarSnapshots/record
+            echo "record=true" >> "$GITHUB_OUTPUT"
+          elif [ ! -d "macos/BenchBarTests/Snapshots/macos${major}" ]; then
+            touch ~/Library/Caches/BenchBarSnapshots/record
+            echo "record=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::No reference images for macOS ${major}: recording them. Commit the artifact 'references' to macos/BenchBarTests/Snapshots/."
+          fi
+
       # the same call as the Swift tests step in ci.yml, limited to the
-      # snapshot suite
+      # snapshot suites
       - name: Render
         run: |
           set -o pipefail
-          mkdir -p ~/Library/Caches/BenchBarSnapshots
           mkdir -p macos/build
           xcodebuild -project macos/BenchBar.xcodeproj -scheme BenchBar -configuration Debug \
             -derivedDataPath macos/build/DerivedData -destination 'platform=macOS,arch=arm64' \
-            -only-testing:BenchBarTests/SnapshotTests \
+            -only-testing:BenchBarTests/SnapshotTests -only-testing:BenchBarTests/SnapshotCompareTests \
             CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= test 2>&1 | tee macos/build/test.log | \
             grep -E '^(✔|✘)|Test run with|error:|\*\* TEST' || true
           ls ~/Library/Caches/BenchBarSnapshots
@@ -85,8 +109,17 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: snapshots-${{ matrix.side }}-${{ steps.rev.outputs.sha }}
+          name: snapshots-${{ steps.rev.outputs.sha }}
           path: ~/Library/Caches/BenchBarSnapshots/*.png
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload the references
+        if: always() && steps.mode.outputs.record == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: references
+          path: macos/BenchBarTests/Snapshots
           if-no-files-found: error
           retention-days: 30
 
@@ -94,6 +127,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: snapshots-test-log-${{ matrix.side }}-${{ steps.rev.outputs.sha }}
+          name: snapshots-test-log-${{ steps.rev.outputs.sha }}
           path: macos/build/test.log
           if-no-files-found: ignore

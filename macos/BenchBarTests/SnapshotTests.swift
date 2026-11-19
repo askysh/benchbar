@@ -3,17 +3,23 @@ import SwiftUI
 import Testing
 @testable import BenchBar
 
-/// Renders the popover and Settings window to PNG files, to look at them
-/// without clicking the menu bar. Off unless the output folder exists
-/// (xcodebuild passes no environment variables, and its own TMPDIR, to a
-/// hosted test):
+/// Renders the popover, the window, its panes and its sheets with fixture
+/// data, in light and dark, and checks each render against a reference image
+/// (SnapshotCompare, Snapshots/macos<N>/). The renders also go to
+/// ~/Library/Caches/BenchBarSnapshots, which the Snapshots workflow uploads.
 ///
-///   mkdir -p ~/Library/Caches/BenchBarSnapshots
-///   scripts/macos-build.sh --test
+///   scripts/macos-build.sh --test                         compare
+///   touch ~/Library/Caches/BenchBarSnapshots/record       write the references
+///
+/// Offscreen: nothing opens on screen and no app is activated. The docs
+/// images (DocsSnapshotTests) do open a window, so they run only when the
+/// `on-screen` marker is in that folder.
 nonisolated let snapshotDir = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/Caches/BenchBarSnapshots")
 
-@Suite("Snapshots", .serialized, .enabled(if: FileManager.default.fileExists(atPath: snapshotDir.path)))
+nonisolated let docsOnScreenEnabled = FileManager.default.fileExists(atPath: snapshotDir.appendingPathComponent("on-screen").path)
+
+@Suite("Snapshots", .serialized)
 struct SnapshotTests {
     let base: BenchStoreTests
     let out = snapshotDir
@@ -300,7 +306,13 @@ struct SnapshotTests {
 
     @Test func popoverCLIMissing() async throws {
         base.settings.cliPath = ""
-        let store = base.makeStore()
+        // the places it looked in name the home folder: a fixed one, not this test's temporary folder
+        let runner = base.cli.runner()
+        let store = BenchStore(
+            settings: base.settings,
+            locator: CLILocator(home: URL(fileURLWithPath: "/Users/you"), isExecutable: { _ in false }),
+            makeClient: { CLIClient(executable: $0, runner: runner) },
+            pinger: { _, _ in 200 })
         await store.start(polling: false)
         try render(PopoverView(store: store, commands: AppCommands()), "popover-cli-missing")
     }
@@ -431,7 +443,11 @@ struct SnapshotTests {
     func render(_ view: some View, _ name: String) throws {
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let look = try #require(NSAppearance(named: appearance))
-            let hosting = NSHostingView(rootView: view.padding(0).environment(\.drawsGlass, false))
+            // an offscreen window is never key: say so to SwiftUI, and
+            // draw what the system draws only in a key window (below)
+            let hosting = NSHostingView(rootView: view.padding(0)
+                .environment(\.drawsGlass, false).environment(\.rendersOffscreen, true).environment(\.controlActiveState, .key)
+                .environment(\.colorScheme, appearance == .darkAqua ? .dark : .light))
             hosting.appearance = look
             let window = NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
             window.appearance = look
@@ -450,6 +466,7 @@ struct SnapshotTests {
             window.setContentSize(size)
             hosting.frame = CGRect(origin: .zero, size: size)
             hosting.layoutSubtreeIfNeeded()
+            emphasizeSelectedRows(in: hosting)
             let rep = try #require(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
             look.performAsCurrentDrawingAppearance {
                 hosting.cacheDisplay(in: hosting.bounds, to: rep)
@@ -464,6 +481,20 @@ struct SnapshotTests {
             let png = try #require(NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]))
             try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
             try png.write(to: out.appendingPathComponent("\(name)-\(suffix).png"))
+            try SnapshotCompare.verify(png, points: size, name: "\(name)-\(suffix)")
         }
+    }
+
+    /// A selected sidebar row draws as a solid black bar in a window that is
+    /// on no screen (the system paints the selection only in a key window).
+    /// Marking the row emphasized draws it with the accent colour, as the
+    /// key window does (issue #43).
+    func emphasizeSelectedRows(in view: NSView) {
+        func mark(_ view: NSView) {
+            if let row = view as? NSTableRowView { row.isEmphasized = true }
+            view.subviews.forEach(mark)
+        }
+        mark(view)
+        view.layoutSubtreeIfNeeded()
     }
 }

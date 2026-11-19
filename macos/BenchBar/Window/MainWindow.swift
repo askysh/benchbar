@@ -234,6 +234,7 @@ struct MainSidebar: View {
                         Image(systemName: "circle.fill").font(.caption2).imageScale(.small)
                             .foregroundStyle(StatePill.color(for: row.state))
                             .environment(\.backgroundProminence, .standard)
+                            .offscreenSafe()
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                             Text(row.name)
@@ -245,6 +246,9 @@ struct MainSidebar: View {
                         if row.isBusy { ProgressView().controlSize(.mini) }
                     }
                     .help([row.path, row.guidance].compactMap { $0 }.joined(separator: "\n"))
+                    // the dot is colour only: one element, name plus the state in words
+                    .accessibilityElement(children: .combine)
+                    .accessibilityValue(row.accessibilityValue)
                     .tag(SidebarItem.bench(row.path))
                     .contextMenu {
                         if let bench = store.benches.first(where: { $0.path == row.path }) {
@@ -256,6 +260,7 @@ struct MainSidebar: View {
                             Image(systemName: site.isDefault ? "star.fill" : "globe").font(.caption2)
                                 .foregroundStyle(site.isDefault ? Color.yellow : Color.secondary)
                                 .environment(\.backgroundProminence, .standard)
+                                .offscreenSafe()
                                 .accessibilityLabel(site.isDefault ? "Default site" : "Site")
                             Text(site.name)
                         }

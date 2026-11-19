@@ -448,13 +448,16 @@ permission to "tell Terminal to do script".
 
 ### Seeing the UI without clicking
 
-`BenchBarTests/SnapshotTests.swift` renders the popover and Settings
-with fixture data to PNG files, light and dark:
+`BenchBarTests/SnapshotTests.swift` renders the popover, the window, its
+panes and its sheets with fixture data to PNG files, light and dark, and
+compares each one with its reference image in
+`BenchBarTests/Snapshots/macos<N>/`:
 
 ```bash
-mkdir -p ~/Library/Caches/BenchBarSnapshots
 scripts/macos-build.sh --test
 open ~/Library/Caches/BenchBarSnapshots
+# after a change you meant to make to a screen: write the references again
+touch ~/Library/Caches/BenchBarSnapshots/record
 ```
 
 The suite is off unless that folder exists.

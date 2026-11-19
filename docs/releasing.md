@@ -60,7 +60,8 @@ On `next-release`, then into `main`:
    changed, and add new ones where a page still has none:
    - The Mac first run wizard and the walkthrough: `WizardSnapshotTests`
      renders their pages with fixture data, in light and dark (the
-     Snapshots workflow, `snapshots.yml`, uploads them as an artifact).
+     Snapshots workflow, `snapshots.yml`, runs on every pull request that
+     changes `macos/` and uploads them as an artifact).
      Use them in `quick-start.md`, `install.md` and `app.md`.
    - The Windows first run wizard: take the screenshots on a Windows PC
      and use them in `windows.md`.

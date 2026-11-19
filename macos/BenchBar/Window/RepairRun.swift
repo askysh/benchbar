@@ -20,11 +20,15 @@ final class RepairRun {
         var sudo: Bool
         var status: String = "pending"
         var message: String = ""
+        /// Not in the plan the user reviewed: the bench changed before the real run.
+        var unreviewed = false
     }
 
     private(set) var phase: Phase = .planning
     private(set) var steps: [StepState] = []
     private(set) var log: String?
+    /// The steps of the plan the user confirmed.
+    private var reviewed: Set<String> = []
 
     let bench: BenchModel
     private let store: BenchStore
@@ -37,12 +41,16 @@ final class RepairRun {
     var hasSudoSteps: Bool { steps.contains(where: \.sudo) }
     var succeeded: Bool { phase == .finished(exitCode: 0) }
 
+    /// The steps that run although the reviewed plan did not have them.
+    var unreviewedSteps: [StepState] { steps.filter(\.unreviewed) }
+
     func loadPlan() async {
         guard let client = store.cliClient else { phase = .failed("The benchbar command line tool is not available."); return }
         phase = .planning
         do {
             let actions = try await client.repairPlan(bench: bench.path)
             steps = actions.map { StepState(id: $0.id, label: $0.label, sudo: $0.sudo) }
+            reviewed = Set(steps.map(\.id))
             phase = .review
         } catch {
             phase = .failed(error.localizedDescription)
@@ -79,10 +87,12 @@ final class RepairRun {
         switch event {
         case .plan(let actions, let log):
             self.log = log
-            // the real run's plan wins: the bench may have changed since the dry run
+            // the real run's plan wins: the bench may have changed since the dry
+            // run, and the repair has started by now. A step the user did not
+            // review is marked, so the list says so instead of changing silently
             steps = actions.map { a in
                 steps.first { $0.id == a.id }.map { var s = $0; s.label = a.label; return s }
-                    ?? StepState(id: a.id, label: a.label, sudo: a.sudo)
+                    ?? StepState(id: a.id, label: a.label, sudo: a.sudo, unreviewed: !reviewed.isEmpty && !reviewed.contains(a.id))
             }
         case .step(let action, let status, let message):
             if let i = steps.firstIndex(where: { $0.id == action }) {

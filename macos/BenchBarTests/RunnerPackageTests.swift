@@ -378,6 +378,29 @@ struct RunnerPackageTests {
         #expect(lib.runner("bad").id == Runner.defaultID)
     }
 
+    /// Settings reloads on every appear. A runner that did not change must keep
+    /// its images: new ones make the menu bar animation start over.
+    @Test func reloadingAnUnchangedFolderKeepsTheRunners() throws {
+        let lib = library()
+        let id = try lib.importRunner(from: RunnerFolder.valid(in: dir).url)
+        let before = try #require(lib.custom.first { $0.id == id })
+        lib.reload()
+        lib.reload()
+        #expect(lib.custom.first { $0.id == id }?.isSame(as: before) == true)
+        // a folder that is dropped in by hand is picked up
+        let bad = lib.folder.appendingPathComponent("bad")
+        try FileManager.default.createDirectory(at: bad, withIntermediateDirectories: true)
+        lib.reload()
+        #expect(lib.problems.map(\.id) == ["bad"])
+        #expect(lib.custom.first { $0.id == id } != nil)
+        // and a changed file is read again
+        let manifest = lib.folder.appendingPathComponent(id).appendingPathComponent("manifest.json")
+        try Data(contentsOf: manifest).write(to: manifest)
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(60)], ofItemAtPath: manifest.path)
+        lib.reload()
+        #expect(lib.custom.first { $0.id == id }?.isSame(as: before) == false)
+    }
+
     @Test func removeMovesToTrashAndFallsBack() throws {
         let lib = library()
         let id = try lib.importRunner(from: RunnerFolder.valid(in: dir).url)
