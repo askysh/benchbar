@@ -1074,7 +1074,7 @@ Written for the macOS arm64 runner shortage of November 2026 (pull requests wait
 - The Linux install supports Ubuntu 24.04 only. Debian 12 ships MariaDB 10.11 but nothing tests it, so it is stopped like Ubuntu 22.04 (10.6) and Debian 13 (11.8), before sudo and any package; `--allow-unsupported-distro` is the documented way to try.
 - `install` stops, before any change, when the systemd user manager cannot be reached after lingering was tried, and a dry run only warns: a bench with no loaded unit is not a finished install, and the failure used to come after the bench and the site were built. `status --json` keeps `agent_loaded` a bool (false when unknown); only the text says `unknown (no user bus)`.
 - A step that ended `failed` makes its install phase `failed`; `warning` is only for a phase whose actions worked and whose verify pass still has findings. Both exit 1.
-- The tools `sudo` runs on macOS are named by absolute path (`fl_root_tool`), and `/etc/hosts` and the wkhtmltopdf paths come from the environment only when `BENCHBAR_TEST=1`. The `sudo` program itself is still found through `PATH`.
+- The tools `sudo` runs on macOS are named by absolute path (`fl_root_tool`), and `sudo` itself is a function (`lib/frappe-local/sudo.sh`) that runs `/usr/bin/sudo`, so a `sudo` planted in a folder of the user's `PATH` is never found and no call site changes. `/etc/hosts`, the wkhtmltopdf paths and `FL_SUDO_BIN` (the program the function runs) come from the environment only when `FL_TESTING=1`, the one switch for test seams. Linux keeps the `PATH` lookup: Ubuntu's sudo has a `secure_path`, and the `BENCHBAR_SUDO=env` wrapper names its own binary.
 
 ## Backups and state limits (0.9)
 

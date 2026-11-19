@@ -62,6 +62,20 @@ assert_eq "0" "$CODE" "$OUT"
 printf '%s\n' "$OUT" | grep -q -E 'Background service +done' || fail "the summary row is not done: $OUT"
 assert_contains "$OUT" "benchup"
 
+# ---- an optional action (the wkhtmltopdf package) that fails in the engine pass is a warning for
+# the step, not a failed step: the bench and its service are fine
+forget_unit
+touch "$MOCK_STATE/wkhtml_missing"
+printf 'tampered\n' >"$MOCK_STATE/download_payload"
+run_fm install --yes --bench-dir "$BENCH" --site linuxdev.localhost
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "checksum mismatch"
+printf '%s\n' "$OUT" | grep -q -E 'Background service +warning' || fail "an optional action that failed labels step 3: $OUT"
+printf '%s\n' "$OUT" | grep -q -E 'Background service +failed' && fail "step 3 is failed for a failed wkhtmltopdf package: $OUT"
+assert_contains "$OUT" "benchbar repair"
+rm -f "$MOCK_STATE/wkhtml_missing"
+printf 'stub download\n' >"$MOCK_STATE/download_payload"
+
 # ---- status says "unknown" when systemd cannot be asked, not "loaded: no" (issue 115, SVC-7)
 run_fm service --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
@@ -92,10 +106,21 @@ run_fm install --yes --bench-dir "$BENCH" --site linuxdev.localhost
 assert_contains "$OUT" "the systemd user manager is not reachable for"
 assert_contains "$OUT" "sudo loginctl enable-linger"
 assert_contains "$OUT" "XDG_RUNTIME_DIR=/run/user/"
-assert_contains "$OUT" "Nothing was changed"
+# lingering may have been turned on already: only the packages and the bench are untouched
+assert_contains "$OUT" "No package or bench was changed"
+assert_not_contains "$OUT" "Nothing was changed"
 assert_not_contains "$OUT" "systemctl could not load"
 assert_calls_not_contain '^(sudo )?apt-get (install|update)'
 assert_calls_not_contain '^(uv|fnm|bench|sudo) '
+# the same stop in the stream: the closing done line is exit 1 with the stable error id
+reset_calls
+run_fm install --json --yes --bench-dir "$BENCH" --site linuxdev.localhost
+assert_eq "1" "$CODE" "$OUT"
+last="$(printf '%s\n' "$OUT" | grep '^{' | tail -1)"
+assert_contains "$last" '"event":"done"'
+assert_contains "$last" '"exit":1'
+assert_contains "$last" '"error_id":"user_bus_unreachable"'
+assert_calls_not_contain '^(sudo )?apt-get (install|update)'
 rm "$MOCK_STATE/user_manager_down"
 # the bus shows up (lingering started the manager): the environment is pointed at it
 mkdir -p "$TMP_DIR/run-user/$UID"
@@ -121,6 +146,12 @@ os_release "Debian GNU/Linux" debian 12
 run_fm install --dry-run --json --yes --bench-dir "$BENCH" --site linuxdev.localhost
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" '"id":"linux_distro_unsupported"'
+# a derivative that reports its own id (Pop!_OS 24.04 is Ubuntu underneath) is another system too
+os_release "Pop!_OS" pop 24.04
+run_fm install --dry-run --json --yes --bench-dir "$BENCH" --site linuxdev.localhost
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" '"id":"linux_distro_unsupported"'
+os_release "Debian GNU/Linux" debian 12
 # phase 00 on its own stops the same way, before apt
 reset_calls
 set +e; OUT="$("$ROOT/00-linux-system-deps.sh" --yes 2>&1)"; CODE=$?; set -e

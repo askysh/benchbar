@@ -805,7 +805,9 @@ fl_repair_engine() {
       fl_step_end failed
       fl_event_step "$action" failed "$(fl_log_step_message "${step_from:-0}")"
       status=1
-      FL_ENGINE_ACTION_FAILED=1
+      # an optional action (wkhtmltopdf, the hosts line) that fails is a warning
+      # for the step, not a failed step: the bench and the service are fine
+      case " $FL_OPTIONAL_ACTIONS " in *" $action "*) ;; *) FL_ENGINE_ACTION_FAILED=1 ;; esac
       case "$action" in
         # a legacy agent that is still loaded must not get a second agent for
         # the same bench next to it (two runners, two honchos)

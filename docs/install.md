@@ -195,7 +195,7 @@ once up front and not at all on a second run. Each bench runs as its own
 bench back after a reboot. The default site is `linuxdev.localhost`, and
 benchbar never edits `/etc/hosts` there. The `bench*` helpers go to
 `~/.bashrc`. `benchbar doctor --prerequisites` on Linux checks, without a bench and
-without sudo: the distro (Ubuntu 24.04 is tested, others warn), the CPU
+without sudo: the distro (Ubuntu 24.04 is tested: `--prerequisites` warns about another system, and `install` stops before it changes anything unless you pass `--allow-unsupported-distro`), the CPU
 (x86_64 is needed for the PDF package), that you are not root, sudo (your
 user is in the sudo group), apt, systemd, linger, the user bus (`systemctl --user` answers), memory, free disk, the
 bench folder, the default ports and the MariaDB root password state. Each

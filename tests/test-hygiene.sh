@@ -88,12 +88,39 @@ for tool in /usr/bin/mktemp /usr/bin/install /usr/bin/shasum /usr/sbin/installer
   grep -q -x "abs ${tool}" "$MOCK_STATE/sudo_argv0" || fail "sudo ran ${tool} by a bare name: $(cat "$MOCK_STATE/sudo_argv0")"
 done
 ! grep -q -E '^bare (mktemp|install|shasum|installer|rm|tee|awk|env|chmod|mv) ' "$MOCK_STATE/sudo_argv0" || fail "sudo ran a tool by its bare name: $(cat "$MOCK_STATE/sudo_argv0")"
-# the files sudo reads and writes do not come from the environment either (only the tests' BENCHBAR_TEST=1)
+# the files sudo reads and writes do not come from the environment either (only the tests' FL_TESTING=1)
 # shellcheck disable=SC2016  # the bash -c script is quoted on purpose
-got="$(env -u BENCHBAR_TEST FL_HOSTS_FILE=/tmp/evil-hosts FL_WKHTML_PKG_BIN=/tmp/evil-bin FL_WKHTML_DOWNLOAD_DIR=/tmp/evil-dl SCRIPT_DIR="$ROOT" bash -c '
+got="$(env -u FL_TESTING FL_HOSTS_FILE=/tmp/evil-hosts FL_WKHTML_PKG_BIN=/tmp/evil-bin FL_WKHTML_DOWNLOAD_DIR=/tmp/evil-dl SCRIPT_DIR="$ROOT" bash -c '
   . "$SCRIPT_DIR/lib/frappe-local/ui.sh"; . "$SCRIPT_DIR/lib/frappe-local/run.sh"; . "$SCRIPT_DIR/lib/frappe-local/checks.sh"; . "$SCRIPT_DIR/lib/frappe-local/wkhtmltopdf.sh"
   printf "%s %s %s" "$FL_HOSTS_FILE" "$FL_WKHTML_PKG_BIN" "$FL_WKHTML_DOWNLOAD_DIR"' 2>/dev/null || true)"
 assert_eq "/etc/hosts /usr/local/bin/wkhtmltopdf ${FL_STATE_DIR}/downloads" "$got" "(env overrides of what sudo touches are ignored)"
+# INST-6, the sudo program itself: on macOS "sudo" is a function that runs /usr/bin/sudo, so a
+# sudo planted in a PATH folder the user can write is never found. Outside the tests (no
+# FL_TESTING) neither the PATH nor FL_SUDO_BIN can change which program runs. The planted
+# one only writes a marker, and it runs below only in the case that names it on purpose.
+PLANT="$TMP_DIR/planted-bin"; mkdir -p "$PLANT"
+printf '#!/bin/bash\necho planted >"%s/planted-sudo-ran"\necho planted-sudo\n' "$TMP_DIR" >"$PLANT/sudo"
+chmod +x "$PLANT/sudo"
+# shellcheck disable=SC2016  # the bash -c script is quoted on purpose
+plant_probe() { env "$@" PATH="$PLANT:$PATH" FL_PLATFORM=macos SCRIPT_DIR="$ROOT" bash -c '
+  . "$SCRIPT_DIR/lib/frappe-local/sudo.sh"
+  [[ "$(type -t sudo)" == function ]] || { echo "sudo is not a function"; exit 3; }
+  printf "%s" "$FL_SUDO_BIN"' 2>&1; }
+got="$(plant_probe -u FL_TESTING FL_SUDO_BIN="$PLANT/sudo")"
+assert_eq "/usr/bin/sudo" "$got" "(outside the tests FL_SUDO_BIN is ignored)"
+[[ ! -e "$TMP_DIR/planted-sudo-ran" ]] || fail "the planted sudo ran"
+# a call goes to /usr/bin/sudo (-V prints the version and asks for nothing), never to the planted one
+# shellcheck disable=SC2016
+got="$(env -u FL_TESTING -u FL_SUDO_BIN PATH="$PLANT:$PATH" FL_PLATFORM=macos SCRIPT_DIR="$ROOT" bash -c '. "$SCRIPT_DIR/lib/frappe-local/sudo.sh"; sudo -V' 2>&1 | head -1)"
+assert_not_contains "$got" "planted-sudo"
+[[ ! -e "$TMP_DIR/planted-sudo-ran" ]] || fail "the planted sudo ran for a call of sudo"
+# a test names its own program (the mock) on purpose
+got="$(plant_probe FL_TESTING=1 FL_SUDO_BIN="$PLANT/sudo")"
+assert_eq "$PLANT/sudo" "$got" "(FL_TESTING=1 lets a test name the sudo program)"
+# Linux keeps the PATH lookup (Ubuntu's sudo has a secure_path)
+# shellcheck disable=SC2016
+got="$(env -u FL_TESTING FL_PLATFORM=linux SCRIPT_DIR="$ROOT" bash -c '. "$SCRIPT_DIR/lib/frappe-local/sudo.sh"; type -t sudo || true' 2>&1)"
+assert_not_contains "$got" "function"
 # F39: no third party child saw the passwords, yet the site was created with them
 for m in yarn brew bench; do
   assert_file "$MOCK_STATE/env/$m" "(the ${m} mock must have run)"

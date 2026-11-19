@@ -15,8 +15,8 @@
 
 # the folder the package is downloaded to and the file the package installs:
 # what sudo reads and what the check trusts are never taken from the
-# environment, but by the tests (BENCHBAR_TEST=1, which tests/lib/harness.sh sets)
-if [[ "${BENCHBAR_TEST:-0}" != "1" ]]; then FL_WKHTML_DOWNLOAD_DIR=""; FL_WKHTML_PKG_BIN=""; fi
+# environment, but by the tests (FL_TESTING=1, which tests/lib/harness.sh sets)
+if [[ "${FL_TESTING:-0}" != "1" ]]; then FL_WKHTML_DOWNLOAD_DIR=""; FL_WKHTML_PKG_BIN=""; fi
 FL_WKHTML_DOWNLOAD_DIR="${FL_WKHTML_DOWNLOAD_DIR:-${FL_STATE_DIR}/downloads}"
 # where the official package puts its binary
 FL_WKHTML_PKG_BIN="${FL_WKHTML_PKG_BIN:-/usr/local/bin/wkhtmltopdf}"

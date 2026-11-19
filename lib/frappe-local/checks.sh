@@ -17,8 +17,8 @@ FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 # or ask the site, which takes seconds each; the JSON names them (skipped_checks)
 FL_QUICK_SKIP="brew formula_dates python_leaves pdf_engine app_copies env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio dependency_behind apps_behind ping"
 # the file sudo writes: never taken from the environment, but by the tests
-# (BENCHBAR_TEST=1, which tests/lib/harness.sh sets)
-if [[ "${BENCHBAR_TEST:-0}" == "1" ]]; then FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"; else FL_HOSTS_FILE=/etc/hosts; fi
+# (FL_TESTING=1, which tests/lib/harness.sh sets)
+if [[ "${FL_TESTING:-0}" == "1" ]]; then FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"; else FL_HOSTS_FILE=/etc/hosts; fi
 
 # port_block only exists while a plan moves this bench's ports
 # (FL_PORT_TARGET, set by fl_ports_plan); doctor never shows it.

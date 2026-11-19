@@ -1000,7 +1000,7 @@ cmd_install() {
   if [[ "$FL_DRY_RUN" != "1" ]] && ! fl_user_bus_wait; then
     FL_ERROR_ID="user_bus_unreachable"
     FL_ERROR_FIX="$(fl_user_manager_fix)"
-    fl_die "$(fl_user_manager_msg). Nothing was changed." "$FL_ERROR_FIX"
+    fl_die "$(fl_user_manager_msg). No package or bench was changed." "$FL_ERROR_FIX"
   fi
   # from here on nothing runs as root: brew, pip, npm, yarn and bench get-app
   # must not find a cached sudo credential. On Linux the apt and MariaDB
