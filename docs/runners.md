@@ -125,7 +125,7 @@ file.
 - Keep the character in the same spot across frames and move only what
   should move, or it jitters.
 - 4 to 8 running frames are plenty. The running loop plays 5 frames per
-  second when idle and up to 60 when the bench is busy.
+  second when idle and up to 30 when the bench is busy.
 
 ## Making frames in code
 

@@ -122,6 +122,12 @@ public sealed class TrayConfig
     /// <summary>The person closed the beta banner at the top of the BenchBar window; it stays away from then on.</summary>
     public bool BetaBannerDismissed { get; set; }
 
+    /// <summary>
+    /// Ask before a <c>benchbar://</c> link starts, stops or restarts a bench or opens a console (Settings, "Ask before a link acts"). Off by
+    /// default, so Raycast style launchers and scripts keep working.
+    /// </summary>
+    public bool ConfirmLinkActions { get; set; }
+
     /// <summary>The tray version that last started (X.Y.Z), so the first start of a newer one can say "BenchBar was updated". Null before 0.8.4.</summary>
     public string? LastVersion { get; set; }
 
@@ -172,6 +178,7 @@ public sealed class TrayConfig
             config.Editor = EditorKind.Normalize(ReadString(tray, "editor"));
             if (tray["check_for_updates"] is JsonValue u && u.TryGetValue<bool>(out var check)) config.CheckForUpdates = check;
             if (tray["wizard_dismissed"] is JsonValue w && w.TryGetValue<bool>(out var dismissed)) config.WizardDismissed = dismissed;
+            if (tray["confirm_link_actions"] is JsonValue cl && cl.TryGetValue<bool>(out var confirmLinks)) config.ConfirmLinkActions = confirmLinks;
             if (tray["beta_banner_dismissed"] is JsonValue bb && bb.TryGetValue<bool>(out var betaDismissed)) config.BetaBannerDismissed = betaDismissed;
             config.ResumeFlow = ReadString(tray, "resume_flow") == "existing" ? "existing" : "new";
         }
@@ -239,6 +246,7 @@ public sealed class TrayConfig
         tray["check_for_updates"] = CheckForUpdates;
         tray["wizard_dismissed"] = WizardDismissed;
         tray["beta_banner_dismissed"] = BetaBannerDismissed;
+        tray["confirm_link_actions"] = ConfirmLinkActions;
         tray["resume_flow"] = ResumeFlow == "existing" ? "existing" : "new";
         if (LastVersion is { Length: > 0 } lastVersion) tray["last_version"] = lastVersion;
         tray["running_hint_shown"] = RunningHintShown;

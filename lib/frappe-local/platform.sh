@@ -59,7 +59,8 @@ fl_platform_init() {
 }
 
 fl_preflight_not_root() {
-  local effective_uid="${FL_EFFECTIVE_UID:-$EUID}"
+  local effective_uid="$EUID"
+  [[ "${FL_TESTING:-}" == "1" ]] && effective_uid="${FL_EFFECTIVE_UID:-$EUID}"
   [[ "$effective_uid" != "0" ]] || fl_die "Do not run this installer as root." "Run it as your normal macOS user; the scripts will ask for sudo only where macOS requires it."
   fl_ok "Running as a regular user"
 }
@@ -107,6 +108,21 @@ fl_crontab_denied() {
   return 1
 }
 
+# fl_uv_on_path: uv is runnable, after putting the folder of a uv that is not
+# on PATH there (Homebrew's <prefix>/bin, or ~/.local/bin, where uv's own
+# installer puts it). bench init needs uv: frappe-bench 5.31 and later make
+# the env with "uv venv", whoever installed bench itself (issue 112).
+fl_uv_on_path() {
+  local d
+  command -v uv >/dev/null 2>&1 && return 0
+  for d in "${FL_BREW_PREFIX:-}/bin" "$HOME/.local/bin"; do
+    [[ "$d" != /bin && -x "$d/uv" ]] || continue
+    export PATH="${PATH}:${d}"
+    return 0
+  done
+  return 1
+}
+
 fl_brew_ensure() {
   local formula="$1"
   if brew list --formula --versions "$formula" >/dev/null 2>&1; then
@@ -135,6 +151,50 @@ fl_brew_formula_dates() {
   printf '%s %s %s %s' "${deprecated:--}" "${disabled:--}" "${dep_date:--}" "${dis_date:--}"
 }
 
+# fl_brew_formulae_dates FORMULA...: fl_brew_formula_dates for each formula,
+# one line each, from ONE `brew info --json=v2 --formula F1 F2 F3` (brew takes
+# 0.3 s or more to start, whatever it is asked). The document is long (28 KB
+# for four formulae, and bash 3.2 matches patterns on a string in quadratic
+# time), so one grep cuts it to the five keys that matter, in order, and the
+# lines are read in bash. brew fails the whole call when it knows none of the
+# formulae (one removed from the tap), and a name it answers under another
+# one (an alias) is not found in the output: for any doubt each formula is
+# asked on its own, as before.
+fl_brew_formulae_dates() {
+  local f n="$#" args=("$@") i=-1 line key val out="" row
+  local r_dep=() r_dis=() r_depd=() r_disd=()
+  while IFS= read -r line; do
+    [[ "$line" =~ ^\"([a-z_]+)\":\ *(.*)$ ]] || continue
+    key="${BASH_REMATCH[1]}"; val="${BASH_REMATCH[2]}"
+    if [[ "$key" == "name" ]]; then
+      # the next formula asked for starts here; any other "name" is not a formula
+      if [[ "$((i + 1))" -lt "$n" && "$val" == "\"${args[$((i + 1))]}\"" ]]; then i=$((i + 1)); r_dep[i]="-"; r_dis[i]="-"; r_depd[i]="-"; r_disd[i]="-"; fi
+      continue
+    fi
+    [[ "$i" -ge 0 ]] || continue
+    # what the single call read with sed: the last field of that name in the formula
+    val="${val//\"/}"
+    case "$key" in
+      deprecated) r_dep[i]="${val:--}" ;;
+      disabled) r_dis[i]="${val:--}" ;;
+      deprecation_date) [[ "$val" =~ ^[0-9-]+$ ]] && r_depd[i]="$val" || r_depd[i]="-" ;;
+      disable_date) [[ "$val" =~ ^[0-9-]+$ ]] && r_disd[i]="$val" || r_disd[i]="-" ;;
+    esac
+  done < <(HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 brew info --json=v2 --formula "$@" 2>/dev/null | grep -oE '"(name|deprecated|disabled|deprecation_date|disable_date)": *("[^"]*"|[a-z]+)')
+  if [[ "$i" -ne "$((n - 1))" ]]; then
+    for f in "$@"; do out="${out}${out:+$'\n'}$(fl_brew_formula_dates "$f")"; done
+    printf '%s' "$out"
+    return 0
+  fi
+  i=0
+  while [[ "$i" -lt "$n" ]]; do
+    row="${r_dep[i]} ${r_dis[i]} ${r_depd[i]} ${r_disd[i]}"
+    out="${out}${out:+$'\n'}${row}"
+    i=$((i + 1))
+  done
+  printf '%s' "$out"
+}
+
 # fl_date_epoch YYYY-MM-DD: seconds since the epoch at midnight UTC of that
 # day (BSD date on macOS, GNU date elsewhere), nothing for a bad date.
 fl_date_epoch() {
@@ -153,8 +213,9 @@ fl_formula_disable_days_from() {
   [[ "$dis_date" != "-" ]] || return 0
   at="$(fl_date_epoch "$dis_date")"
   [[ -n "$at" ]] || return 0
-  # FL_NOW: the tests' clock (freshness.sh's fl_now reads it too)
-  now="${FL_NOW:-$(date +%s)}"
+  # FL_NOW: the tests' clock, read only under FL_TESTING=1 (freshness.sh's fl_now too)
+  now="$(date +%s)"
+  [[ "${FL_TESTING:-}" == "1" ]] && now="${FL_NOW:-$now}"
   if [[ "$now" -ge "$at" ]]; then printf '%s' "$(( -((now - at) / 86400) - 1 ))"; else printf '%s' "$(( (at - now) / 86400 ))"; fi
 }
 
@@ -207,6 +268,25 @@ fl_install_preflight_load() { return 0; }
 fl_install_env_blockers() { return 0; }
 fl_install_env_warnings() { return 0; }
 fl_bench_windows_fs_blocker() { return 0; }
+
+# fl_mariadb_listener_is_own: what listens on 3306 is the profile's own
+# Homebrew MariaDB, started by its brew service, and the root password the
+# Keychain holds logs in: benchbar's own server, not "an existing MariaDB".
+fl_mariadb_listener_is_own() {
+  local pid bin pw formula="${FL_MARIADB_FORMULA:-}"
+  [[ -n "$formula" ]] && fl_brew_service_running "$formula" || return 1
+  pid="$(lsof -ti tcp:3306 -sTCP:LISTEN 2>/dev/null | awk 'NR==1' || true)"
+  [[ -n "$pid" ]] || return 1
+  bin="$(ps -o command= -p "$pid" 2>/dev/null | awk '{print $1}' || true)"
+  # under Homebrew's own prefix, not any folder that has an opt/<formula> in its path
+  [[ -n "${FL_BREW_PREFIX:-}" ]] || return 1
+  case "$bin" in
+    "${FL_BREW_PREFIX}"/opt/"${formula}"/*|"${FL_BREW_PREFIX}"/Cellar/"${formula}"/*) ;;
+    *) return 1 ;;
+  esac
+  pw="$(fl_keychain_get 2>/dev/null || true)"
+  [[ -n "$pw" ]] && fl_mariadb_root_verify "$pw"
+}
 
 fl_mariadb_safe_mode_note() {
   fl_warn "Existing MariaDB/MySQL may already be using port 3306."

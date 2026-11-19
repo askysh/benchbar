@@ -157,6 +157,9 @@ fl_agent_target() {
 }
 
 fl_agent_loaded() {
+  local out
+  # in a doctor run (facts.sh) the one print of this target is shared with fl_agent_field
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then fl_memo_v out "launchctl:$(fl_agent_target)" launchctl print "$(fl_agent_target)"; return; fi
   launchctl print "$(fl_agent_target)" >/dev/null 2>&1
 }
 
@@ -189,7 +192,19 @@ fl_agent_read() {
 
 # fl_agent_field FIELD [TARGET]: reads "state", "pid" or "last exit code".
 fl_agent_field() {
-  local field="$1" target="${2:-$(fl_agent_target)}"
+  local field="$1" target="${2:-$(fl_agent_target)}" out line k v
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    fl_memo_v out "launchctl:${target}" launchctl print "$target" || true
+    while IFS= read -r line; do
+      [[ "$line" == *" = "* ]] || continue
+      k="${line%%" = "*}"; k="${k#"${k%%[![:space:]]*}"}"
+      [[ "$k" == "$field" ]] || continue
+      v="${line#*" = "}"; v="${v%%" = "*}"
+      v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
+      printf '%s\n' "$v"; return 0
+    done <<<"$out"
+    return 0
+  fi
   launchctl print "$target" 2>/dev/null | awk -F' = ' -v f="$field" '
     $1 ~ "^[[:space:]]*" f "$" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }' || true
 }
@@ -357,10 +372,22 @@ fl_dead_agents_list() {
   done < <(fl_agent_files)
 }
 
+# fl_plist_runs_this_bench PLIST: an agent that starts this bench's own
+# processes: its plist names this bench's folder and runs honcho, the old or
+# the new runner, socketio.js, or bench serve, worker, schedule, socketio or
+# start. A plist that only says "frappe" somewhere, runs honcho for another
+# project or runs a one off bench command in this folder (backup, migrate) is
+# a person's own agent and never matches.
+fl_plist_runs_this_bench() {
+  grep -q -E "$(fl_regex_escape "$FL_BENCH_DIR")(/|<)" "$1" 2>/dev/null || return 1
+  grep -q -E 'honcho|socketio\.js|frappe-mac-run\.sh|benchbar-run\.sh|bench_helper frappe (serve|worker|schedule)|<string>(serve|worker|schedule|start|socketio)</string>' "$1" 2>/dev/null
+}
+
 # Lists LaunchAgents to migrate for this bench. Prints "path|label|state|last-exit" lines.
 #   com.frappe-mac.*   the frappe-mac 0.2.0 agent, only when its WorkingDirectory is this bench
-#   anything else      older per-process Frappe setups or a hand-made agent
-# com.benchbar.* agents (this bench and others) are never listed.
+#   anything else      an older per-process setup of this bench (fl_plist_runs_this_bench)
+# com.benchbar.* agents (this bench and others) are never listed, and neither
+# is a person's own agent that merely mentions frappe.
 fl_legacy_agents_list() {
   local f label state code dir="$HOME/Library/LaunchAgents"
   [[ -d "$dir" ]] || return 0
@@ -371,7 +398,7 @@ fl_legacy_agents_list() {
       com.frappe-mac.*)
         [[ "$(fl_plist_working_dir "$f")" == "$FL_BENCH_DIR" ]] || continue ;;
       *)
-        grep -q -F "$FL_BENCH_DIR" "$f" 2>/dev/null || grep -q -i -E 'frappe|honcho|socketio\.js|bench_helper|bench-run' "$f" 2>/dev/null || continue ;;
+        fl_plist_runs_this_bench "$f" || continue ;;
     esac
     label="$(fl_plist_label "$f")"
     [[ -n "$label" ]] || label="$(basename "$f" .plist)"

@@ -52,6 +52,12 @@ internal sealed class SettingsWindow : ToolWindow
         panel.Children.Add(Check("Show notifications when a bench stops or crashes", () => _model.Notifications, v => _model.Notifications = v));
         panel.Children.Add(Check("Check for updates when the BenchBar window opens", () => _model.CheckForUpdates, v => _model.CheckForUpdates = v));
 
+        var askBox = Check("Ask before a link acts", () => _model.ConfirmLinkActions, v => _model.ConfirmLinkActions = v);
+        askBox.Margin = new Thickness(0, 0, 0, 2);
+        panel.Children.Add(askBox);
+        panel.Children.Add(Ui.Text("Any web page or app can open a benchbar:// link. With this on, BenchBar asks before a link starts, stops or restarts a bench or opens a console. It is off by default so launchers and scripts keep working.",
+            12, opacity: 0.7, margin: new Thickness(24, 0, 0, 12)));
+
         _distro.SelectionChanged += (_, _) =>
         {
             if (_syncing || _distro.SelectedItem is not string chosen) return;

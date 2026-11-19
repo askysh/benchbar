@@ -113,3 +113,18 @@ nonisolated struct BenchStateMachine: Equatable, Sendable {
         return effects
     }
 }
+
+/// A crash that came and went while the Mac slept or was locked. The state
+/// machine alerts only on a seen running to crashed change, and a bench that
+/// launchd had up again by the wake shows `running`: the one trace is a new
+/// run (`started_at` moved) whose last exit code is a failure.
+nonisolated enum CrashWhileAway {
+    /// The exit code to tell, nil when nothing crashed. `before` is the
+    /// status when the Mac went away (nil: the bench was not running then).
+    static func exitCode(before: BenchStatus?, after: BenchStatus?) -> Int? {
+        guard let before, let after, after.state == .running || after.state == .starting else { return nil }
+        guard let then = before.startedAt, let now = after.startedAt, now > then else { return nil }
+        guard let code = after.lastExitCode, code != 0 else { return nil }
+        return code
+    }
+}

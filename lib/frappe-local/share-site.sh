@@ -7,10 +7,15 @@
 # restore's own plan and run).
 #
 # The helpers run in the bench's Python (fl_bench_python_v) and print one
-# "BENCHBAR-RESULT " line: counts only, never a name or a secret. The roles
+# "BENCHBAR-RESULT " line: counts only, never a name or a secret. What the copy
+# must not keep (integrations, tokens, queued mail, stored passwords) is
+# neutralise.sh's one list, the same one benchbar pull runs. The roles
 # that can run code come from one function, FL_PY_SHARE_ROLES, which both the
 # user list and the hardening are built from, so what the picker warns about
 # is exactly what the copy removes.
+
+# shellcheck source=lib/frappe-local/neutralise.sh
+. "${BASH_SOURCE[0]%/*}/neutralise.sh"
 
 FL_SHARE_SITE="share.localhost"
 
@@ -100,8 +105,9 @@ ${FL_PY_SHARE_USERS_BODY}"
 #    ups off; Portal Settings: default_role empty, so a guest's sign in cannot
 #    make a Customer or Supplier (erpnext's on_session_creation)
 #  - Administrator and each allowed user get a random password nobody sees
-#  - every API key and secret, OAuth token and Token Cache row is gone
-#  - social logins, webhooks, notifications and mail accounts are switched off
+#  - everything neutralise.sh lists is gone or off: API keys and secrets, OAuth
+#    and Token Cache rows, stored passwords, social logins, webhooks,
+#    notifications, mail accounts, backup uploads, LDAP, payment keys
 #  - every enabled user but the allowed ones (and Administrator and Guest,
 #    which Frappe never lets be disabled) is disabled
 #  - every code-capable role is removed from each allowed user
@@ -132,31 +138,13 @@ try:
     frappe.db.set_single_value("Portal Settings", "default_role", "")
     counts["allow_error_traceback"] = 0
     counts["disable_signup"] = 1
+    # first what the copy must not keep (the one list of neutralise.sh, every stored
+    # password included), then the new passwords: they are stored passwords too
+    counts["neutralised"] = dict((key, count) for key, count, label in neutralise(frappe, False))
     for user in ["Administrator"] + allowed:
         update_password(user, secrets.token_urlsafe(32))
     counts["admin_rotated"] = 1
     counts["passwords_rotated"] = len(allowed)
-    counts["api_keys_cleared"] = frappe.db.sql("select count(*) from `tabUser` where ifnull(api_key, %s) != %s", ("", ""))[0][0]
-    frappe.db.sql("update `tabUser` set api_key = NULL")
-    frappe.db.delete("__Auth", {"doctype": "User", "fieldname": "api_secret"})
-    counts["token_tables_cleared"] = 0
-    for doctype in ("OAuth Bearer Token", "OAuth Authorization Code", "Token Cache"):
-        if frappe.db.table_exists(doctype):
-            frappe.db.truncate(doctype)
-            counts["token_tables_cleared"] += 1
-    def switch_off(doctype, fieldnames):
-        fieldnames = [f for f in fieldnames if frappe.db.table_exists(doctype) and frappe.db.has_column(doctype, f)]
-        if not fieldnames:
-            return 0
-        table = "`tab" + doctype + "`"
-        n = frappe.db.sql("select count(*) from " + table + " where " + " or ".join("`%s` = 1" % f for f in fieldnames))[0][0]
-        if n:
-            frappe.db.sql("update " + table + " set " + ", ".join("`%s` = 0" % f for f in fieldnames))
-        return n
-    counts["social_logins_disabled"] = switch_off("Social Login Key", ["enable_social_login"])
-    counts["webhooks_disabled"] = switch_off("Webhook", ["enabled"])
-    counts["notifications_disabled"] = switch_off("Notification", ["enabled"])
-    counts["email_accounts_disabled"] = switch_off("Email Account", ["enable_outgoing", "enable_incoming"])
     keep = tuple(allowed) + ("Administrator", "Guest")
     others = frappe.db.sql_list("select name from `tabUser` where enabled = 1 and name not in %(keep)s", {"keep": keep})
     if others:
@@ -197,7 +185,7 @@ try:
     print("\nBENCHBAR-RESULT " + json.dumps(counts, separators=(",", ":")), flush=True)
 finally:
     frappe.destroy()'
-FL_PY_SHARE_HARDEN="${FL_PY_SHARE_ROLES}${FL_PY_SHARE_HARDEN_BODY}"
+FL_PY_SHARE_HARDEN="${FL_PY_NEUTRALISE}${FL_PY_SHARE_ROLES}${FL_PY_SHARE_HARDEN_BODY}"
 
 # What share preflight reads from the copy (argv: SITE; the seats' users on
 # stdin, one per line). Read only: rows of "BENCHBAR-RESULT KIND\x1fNAME\x1fVALUE",

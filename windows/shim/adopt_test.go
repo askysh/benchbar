@@ -428,7 +428,7 @@ func TestAdoptNoDistroAtAllSuggestsInstall(t *testing.T) {
 	e := newEnv(t)
 	e.distros.list = nil
 	e.run("adopt-distro")
-	if !strings.Contains(e.stdout(), "fix: benchbar.exe setup check") {
+	if !strings.Contains(e.stdout(), "fix: benchbar.exe setup run distro_install") {
 		t.Errorf("output:\n%s", e.stdout())
 	}
 }

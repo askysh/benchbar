@@ -14,6 +14,18 @@ open "benchbar://up?bench=frappe-bench"
 The app has to be installed (it registers the scheme); if it is not
 running, the link starts it first.
 
+On Windows the tray answers the same links (BenchBar for Windows 0.9.0
+and later): from PowerShell, `Start-Process "benchbar://up?bench=frappe-bench"`.
+The tray registers the scheme for your user the first time it starts, and
+the installer writes the same values. The routes, `bench=`, `site=` and
+the rules below are the same, with these differences: `bench=` takes a
+name or the Linux path of the bench in the distro (`/home/you/frappe-bench`,
+or `~/frappe-bench`); `console` and `db` open Windows Terminal inside the
+distro; `editor` opens VS Code, Cursor or VS Code Insiders, the one chosen
+in Settings; and share links show a note, because rooms are not on Windows
+yet. **Settings, Ask before a link acts** is there too. See
+[Windows](../windows.md#benchbar-links).
+
 ## Routes
 
 | Link | What it does |
@@ -69,6 +81,9 @@ Encode a path in a query: `/` becomes `%2F`, a space `%20`.
 | `benchbar://share/FINGERPRINT/app` | Opens the joined room's site in your browser through the local forwarder. A room you have not joined only shows On your network |
 | `benchbar://share/join?...` | The join sheet, filled in from the invite. It waits for your click and never joins by itself |
 
+Share links work on the Mac only. On Windows they show "Rooms are not on
+Windows yet" and nothing else happens.
+
 `FINGERPRINT` is the first 16 hex characters of the room's pinned certificate
 fingerprint: it names a room, it is not a secret. The first link opens a room
 you already joined without asking, like `benchbar://open`. BenchBar logs only
@@ -102,12 +117,17 @@ Browsers ask before a page opens an app, but they also offer "always
 allow this site", and after that a page can open any route above without a
 click. That is the risk of the scheme: a page you visit can stop or restart
 your bench or open Terminal windows. **Settings, Links, Ask before a link acts**
+(on Windows: **Settings > Ask before a link acts**, in the tray's Settings window)
 makes BenchBar ask first for `up`, `down`, `restart`, `console` and `db`. The
 routes `open`, `logs`, `window`, `doctor` and `editor` never ask. The setting is
 off by default so Raycast and Shortcuts keep working; see
 [the app page](../app.md#links-for-raycast-and-shortcuts).
 
-To see ignored links, stream the app's log:
+On Windows the tray writes an ignored link to
+`%LOCALAPPDATA%\BenchBar\tray.log`, with its action only (or a short hash),
+never the bench, the site or the address.
+
+To see ignored links on the Mac, stream the app's log:
 
 ```bash
 log stream --predicate 'subsystem == "com.akashmishra.benchbar" && category == "url"'

@@ -99,6 +99,9 @@ fl_on_signal() {
   case "$sig" in INT) code=130 ;; HUP) code=129 ;; esac
   trap - TERM INT HUP
   fl_spinner_stop 2>/dev/null || true
+  # the background jobs of a doctor run (facts.sh): each is a group of its own,
+  # stopped and waited for here, quietly, before anything else is printed
+  if declare -F fl_par_stop >/dev/null; then fl_par_stop; fi
   # TERM to the child whatever came in: a background child of a shell
   # without job control has SIGINT ignored, so an INT would not reach it
   if [[ -n "$FL_RUN_CHILD_PID" ]]; then

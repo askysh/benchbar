@@ -81,11 +81,33 @@ nonisolated struct UpdatePlan: Equatable, Sendable {
         var sparkle: Bool = false
         /// For `<prefix>/Caskroom/benchbar-app`.
         var exists: @Sendable (String) -> Bool = { _ in false }
+        /// Where the `BenchBar.app` links of `<prefix>/Caskroom/benchbar-app/<version>` lead. A
+        /// Caskroom folder left by an earlier brew install links to nothing here, and is not proof
+        /// that the cask installed this copy. nil: not asked (a test of the older rule). An older
+        /// brew layout keeps the real bundle in the Caskroom (no link): then the entry is the
+        /// bundle's own path, and `appRealPath` (where /Applications/BenchBar.app leads) matches it.
+        var caskLinks: (@Sendable (String) -> [String])?
+        /// The running bundle with its symbolic links resolved; nil when it is not known.
+        var appRealPath: String?
 
         static func live() -> Environment {
             Environment(home: FileManager.default.homeDirectoryForCurrentUser.path,
                         appBundlePath: Bundle.main.bundlePath,
-                        exists: { FileManager.default.fileExists(atPath: $0) })
+                        exists: { FileManager.default.fileExists(atPath: $0) },
+                        caskLinks: { prefix in
+                            let root = prefix + "/Caskroom/benchbar-app"
+                            let versions = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
+                            return versions.compactMap { version in
+                                let app = root + "/" + version + "/BenchBar.app"
+                                if let target = try? FileManager.default.destinationOfSymbolicLink(atPath: app) {
+                                    return target.hasPrefix("/") ? target : root + "/" + version + "/" + target
+                                }
+                                var isDirectory: ObjCBool = false
+                                // a real bundle, as older brew layouts keep it
+                                return FileManager.default.fileExists(atPath: app, isDirectory: &isDirectory) && isDirectory.boolValue ? app : nil
+                            }
+                        },
+                        appRealPath: URL(fileURLWithPath: Bundle.main.bundlePath).resolvingSymlinksInPath().path)
         }
     }
 
@@ -93,7 +115,13 @@ nonisolated struct UpdatePlan: Equatable, Sendable {
         // the cask puts the app in /Applications; one in ~/Applications came from install.sh
         let home = (env.home as NSString).standardizingPath
         let parent = ((env.appBundlePath as NSString).standardizingPath as NSString).deletingLastPathComponent
-        let cask = parent == home + "/Applications" ? nil : Homebrew.prefixes.first { env.exists($0 + "/Caskroom/benchbar-app") }
+        let cask = parent == home + "/Applications" ? nil : Homebrew.prefixes.first { prefix in
+            env.exists(prefix + "/Caskroom/benchbar-app")
+                && (env.caskLinks?(prefix).contains { link in
+                    let target = (link as NSString).standardizingPath
+                    return [env.appBundlePath, env.appRealPath].compactMap { $0 }.contains { ($0 as NSString).standardizingPath == target }
+                } ?? true)
+        }
         return UpdatePlan(channel: env.sparkle ? .sparkle : .releasePage, cask: cask)
     }
 }

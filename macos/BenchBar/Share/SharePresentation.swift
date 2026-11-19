@@ -3,6 +3,8 @@ import Foundation
 /// The Sharing tab's one primary button, from the status alone.
 nonisolated enum SharePrimary: Equatable, Sendable {
     case setUp
+    /// A setup stopped halfway: the same sheet, as a refresh, finishes it.
+    case finishSetup
     case turnOnProtection
     /// Start; `enabled` is false while a check is red.
     case start(enabled: Bool)
@@ -12,6 +14,7 @@ nonisolated enum SharePrimary: Equatable, Sendable {
     static func from(_ status: ShareStatus) -> SharePrimary {
         if status.needsNewerCLI { return .updateCLI }
         if status.state == .on || status.state == .starting { return .stop }
+        if status.setupInterrupted { return .finishSetup }
         if status.copy == nil { return .setUp }
         if status.lanGuard != .installed { return .turnOnProtection }
         return .start(enabled: SharePresentation.canStart(status))
@@ -20,6 +23,7 @@ nonisolated enum SharePrimary: Equatable, Sendable {
     var title: String {
         switch self {
         case .setUp: "Set up sharing"
+        case .finishSetup: "Finish setup"
         case .turnOnProtection: "Turn on network protection"
         case .start: "Start sharing"
         case .stop: "Stop"
@@ -79,6 +83,35 @@ nonisolated enum SharePresentation {
     /// The popover and menu row while sharing is on.
     static func indicator(_ status: ShareStatus) -> String {
         "Sharing on your network · \(status.devicesOnline) online · \(countdown(status.secondsLeft)) left"
+    }
+
+    /// The notice while a setup stopped halfway; the CLI says the same ("benchbar share setup --refresh").
+    static let setupInterrupted = "Sharing setup was interrupted, so Start does not work yet. Choose Finish setup to refresh the copy (the command line: benchbar share setup --refresh)."
+
+    /// Turning the lan-rooms lab off ends what it started: asks first only while something is live.
+    /// `hosted` counts the benches sharing now, `online` the people connected to them, `joined` the
+    /// rooms of other people this Mac has open.
+    static func labOffConfirm(hosted: Int, online: Int, joined: Int) -> (message: String, detail: String)? {
+        guard hosted > 0 || joined > 0 else { return nil }
+        var ends: [String] = []
+        if hosted > 0 {
+            let people = switch online {
+            case 0: "Nobody is connected now."
+            case 1: "1 person is connected and will be signed out."
+            default: "\(online) people are connected and will be signed out."
+            }
+            ends.append("Sharing stops and the room code stops working. \(people)")
+        }
+        if joined > 0 {
+            ends.append(joined == 1 ? "The room you opened closes on this Mac." : "The \(joined) rooms you opened close on this Mac.")
+        }
+        return ("Turn off sharing on your network?", ends.joined(separator: " "))
+    }
+
+    /// The room code on the Sharing tab: dots until the host asks to see it.
+    static func codeText(_ code: ShareCode?, revealed: Bool) -> String {
+        guard revealed, let code else { return "••• •••" }
+        return code.spaced
     }
 
     static func stopConfirm(online: Int) -> String {

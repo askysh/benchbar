@@ -128,6 +128,16 @@ internal sealed class ProfilesView : UserControl
             _model.CreateAsync(sheet.ProfileNameText.Trim(), bench).Forget();
     }
 
+    /// <summary>
+    /// A <c>benchbar://profile/...</c> link: the Import or Subscribe sheet with the address filled in. The sheet waits for the click: the
+    /// link itself fetches nothing and installs nothing.
+    /// </summary>
+    internal void OpenFromLink(ProfileLinkKind kind, string address)
+    {
+        if (kind == ProfileLinkKind.Import) Import(address);
+        else Subscribe(address);
+    }
+
     internal ImportProfileSheet Import(string source = "", bool autoReview = false)
     {
         var run = new ProfileImportRun(_services.Cli, _wsl, source);
@@ -137,9 +147,9 @@ internal sealed class ProfilesView : UserControl
         return sheet;
     }
 
-    internal SubscribeProfilesSheet Subscribe()
+    internal SubscribeProfilesSheet Subscribe(string repo = "")
     {
-        var run = new ProfileSubscribeRun(_services.Cli, _wsl);
+        var run = new ProfileSubscribeRun(_services.Cli, _wsl, repo);
         var sheet = new SubscribeProfilesSheet(run, _services.Theme(), _services.Owner(), RevealLinuxPath);
         ShowSheet(sheet);
         _model.ReloadAsync().Forget();

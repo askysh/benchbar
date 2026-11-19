@@ -176,7 +176,7 @@ func TestNoDistroInstalled(t *testing.T) {
 	if code := e.run("up"); code != 1 {
 		t.Errorf("exit %d", code)
 	}
-	want := "benchbar.exe: no WSL distro is installed. fix: benchbar.exe setup check (it installs Ubuntu 24.04; by hand: wsl.exe --install -d Ubuntu-24.04)\n"
+	want := "benchbar.exe: no WSL distro is installed. fix: benchbar.exe setup run distro_install (installs Ubuntu 24.04; by hand: wsl.exe --install -d Ubuntu-24.04)\n"
 	if e.stderr() != want {
 		t.Errorf("stderr %q", e.stderr())
 	}

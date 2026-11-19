@@ -17,16 +17,17 @@ public static class BenchTabs
 }
 
 /// <summary>The rows below the benches in the sidebar. They open a pane that is not about one bench.</summary>
-public enum SidebarTool { None, FindBenches, TeamProfiles }
+public enum SidebarTool { None, FindBenches, TeamProfiles, Labs }
 
 public static class SidebarTools
 {
-    public static IReadOnlyList<SidebarTool> All { get; } = [SidebarTool.FindBenches, SidebarTool.TeamProfiles];
+    public static IReadOnlyList<SidebarTool> All { get; } = [SidebarTool.FindBenches, SidebarTool.TeamProfiles, SidebarTool.Labs];
 
     public static string Title(SidebarTool tool) => tool switch
     {
         SidebarTool.FindBenches => "Find Benches",
         SidebarTool.TeamProfiles => "Team Profiles",
+        SidebarTool.Labs => "Labs",
         _ => "",
     };
 }

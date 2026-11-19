@@ -36,37 +36,10 @@
 FL_LOCK_KEYS="top.schema=i bench.profile=s bench.frappe_bench=s bench.bundle=s app.name=s app.repo=s app.branch=s app.commit=s site.name=s site.default=b site.apps=a"
 FL_LOCK_REQUIRED="top.schema app.name app.repo app.branch site.name"
 
-FL_LOCK_FILE=""
-FL_LOCK_SOURCE=""
 FL_LOCK_ERROR=""
 LK_PROFILE=""; LK_FRAPPE_BENCH=""; LK_BUNDLE=""
 LK_APP_NAME=(); LK_APP_REPO=(); LK_APP_BRANCH=(); LK_APP_COMMIT=()
 LK_SITE_NAME=(); LK_SITE_DEFAULT=(); LK_SITE_APPS=()
-
-# fl_lock_file_resolve [FLAG] [no-env]: sets FL_LOCK_FILE (maybe a file
-# that does not exist yet) and FL_LOCK_SOURCE (flag, env, state, bench, or
-# none when nothing names one and <bench>/benchbar.toml does not exist).
-fl_lock_file_resolve() {
-  local flag="${1:-}" noenv="${2:-}" v
-  FL_LOCK_SOURCE=""
-  if [[ -n "$flag" ]]; then
-    case "$flag" in
-      /*) FL_LOCK_FILE="$flag" ;;
-      '~/'*) FL_LOCK_FILE="${HOME}/${flag#'~/'}" ;;
-      *) if [[ -e "${PWD}/${flag}" ]]; then FL_LOCK_FILE="${PWD}/${flag}"; else FL_LOCK_FILE="${FL_BENCH_DIR}/${flag}"; fi ;;
-    esac
-    FL_LOCK_SOURCE=flag
-  elif [[ -z "$noenv" && -n "${BENCHBAR_LOCK:-}" ]]; then
-    FL_LOCK_FILE="$BENCHBAR_LOCK"; FL_LOCK_SOURCE="env"
-  elif v="$(fl_bstate_get LOCK_FILE 2>/dev/null)" && [[ -n "$v" ]]; then
-    FL_LOCK_FILE="$v"; FL_LOCK_SOURCE=state
-  else
-    FL_LOCK_FILE="${FL_BENCH_DIR}/benchbar.toml"
-    FL_LOCK_SOURCE=bench
-    [[ -f "$FL_LOCK_FILE" ]] || FL_LOCK_SOURCE=none
-  fi
-  return 0
-}
 
 # fl_lock_load FILE: the LK_* globals; 1 with FL_LOCK_ERROR set
 fl_lock_load() {

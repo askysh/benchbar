@@ -156,8 +156,13 @@ fl_status_compute() {
   fi
 }
 
-# fl_pid_alive PID: kill -0, the builtin (FL_KILL_CMD stands in for it in the tests)
-fl_pid_alive() { "${FL_KILL_CMD:-kill}" -0 "$1" 2>/dev/null; }
+# fl_pid_alive PID: kill -0, the builtin (FL_KILL_CMD stands in for it in the
+# tests, and only under FL_TESTING=1)
+fl_pid_alive() {
+  local k=kill
+  [[ "${FL_TESTING:-}" == "1" ]] && k="${FL_KILL_CMD:-kill}"
+  "$k" -0 "$1" 2>/dev/null
+}
 
 # fl_bench_bin_v VAR: the `bench` executable the bench's service runs: the
 # first one on the PATH its agent (unit) bakes in, as a JSON string; null
@@ -276,19 +281,29 @@ fl_ports_json() { local j; fl_ports_json_v j; printf '%s' "$j"; }
 # bench first: state.env, agents in ~/Library/LaunchAgents, auto-detection.
 # In bash, without a pipeline: every command that looks for a bench label
 # runs it once.
-fl_known_benches() {
-  local f d c seen=$'\n' cands=()
+# fl_known_bench_candidates: every folder benchbar has been told of, one per
+# line, before the "is it a bench" filter: state.env, the registered list,
+# agents, auto-detection. A folder that is gone (an unmounted volume) is in
+# it; fl_known_benches leaves such ones out.
+fl_known_bench_candidates() {
+  local f d
   d="$(fl_state_get BENCH_DIR 2>/dev/null || true)"
-  cands+=("$d")
+  [[ -z "$d" ]] || printf '%s\n' "$d"
   if [[ -f "${FL_STATE_DIR}/registered-benches.txt" ]]; then
-    while IFS= read -r d || [[ -n "$d" ]]; do cands+=("$d"); done <"${FL_STATE_DIR}/registered-benches.txt"
+    while IFS= read -r d || [[ -n "$d" ]]; do [[ -z "$d" ]] || printf '%s\n' "$d"; done <"${FL_STATE_DIR}/registered-benches.txt"
   fi
   while IFS= read -r f; do
     [[ -n "$f" ]] || continue
-    cands+=("$(fl_plist_working_dir "$f")")
+    d="$(fl_plist_working_dir "$f")"
+    [[ -z "$d" ]] || printf '%s\n' "$d"
   done < <(fl_agent_files all)
-  while IFS= read -r d; do cands+=("$d"); done < <(fl_bench_candidates)
-  for d in "${cands[@]}"; do
+  fl_bench_candidates
+}
+
+fl_known_benches() {
+  local d c seen=$'\n' cands=()
+  while IFS= read -r d; do cands+=("$d"); done < <(fl_known_bench_candidates)
+  for d in ${cands[@]+"${cands[@]}"}; do
     if [[ -z "$d" ]] || ! fl_is_bench_dir "$d"; then continue; fi
     c="$(fl_abs_path "$d")"
     [[ -n "${c//[[:space:]]/}" ]] || continue
@@ -315,6 +330,35 @@ fl_bench_load() {
   fl_agent_label_prime
 }
 
+# The lockfile of a bench. Here, not in teamlock.sh: list --json asks for it and a
+# lean start does not load teamlock.sh.
+FL_LOCK_FILE=""
+FL_LOCK_SOURCE=""
+# fl_lock_file_resolve [FLAG] [no-env]: sets FL_LOCK_FILE (maybe a file
+# that does not exist yet) and FL_LOCK_SOURCE (flag, env, state, bench, or
+# none when nothing names one and <bench>/benchbar.toml does not exist).
+fl_lock_file_resolve() {
+  local flag="${1:-}" noenv="${2:-}" v
+  FL_LOCK_SOURCE=""
+  if [[ -n "$flag" ]]; then
+    case "$flag" in
+      /*) FL_LOCK_FILE="$flag" ;;
+      '~/'*) FL_LOCK_FILE="${HOME}/${flag#'~/'}" ;;
+      *) if [[ -e "${PWD}/${flag}" ]]; then FL_LOCK_FILE="${PWD}/${flag}"; else FL_LOCK_FILE="${FL_BENCH_DIR}/${flag}"; fi ;;
+    esac
+    FL_LOCK_SOURCE=flag
+  elif [[ -z "$noenv" && -n "${BENCHBAR_LOCK:-}" ]]; then
+    FL_LOCK_FILE="$BENCHBAR_LOCK"; FL_LOCK_SOURCE="env"
+  elif v="$(fl_bstate_get LOCK_FILE 2>/dev/null)" && [[ -n "$v" ]]; then
+    FL_LOCK_FILE="$v"; FL_LOCK_SOURCE=state
+  else
+    FL_LOCK_FILE="${FL_BENCH_DIR}/benchbar.toml"
+    FL_LOCK_SOURCE=bench
+    [[ -f "$FL_LOCK_FILE" ]] || FL_LOCK_SOURCE=none
+  fi
+  return 0
+}
+
 # One bench of list --json. Sites are listed with ping_code null: list never
 # asks a site or looks for listeners (status does, for one bench).
 fl_list_entry_json() {
@@ -323,10 +367,8 @@ fl_list_entry_json() {
   fl_agent_file_v f "$label"
   [[ -f "$f" ]] && installed=1
   # the bench's lockfile: remembered or <bench>/benchbar.toml (BENCHBAR_LOCK names one bench, not all)
-  if declare -F fl_lock_file_resolve >/dev/null; then
-    fl_lock_file_resolve "" no-env
-    [[ "$FL_LOCK_SOURCE" != "none" ]] && lock="$FL_LOCK_FILE"
-  fi
+  fl_lock_file_resolve "" no-env
+  [[ "$FL_LOCK_SOURCE" != "none" ]] && lock="$FL_LOCK_FILE"
   fl_json_str_v j_path "$FL_BENCH_DIR"; fl_json_str_v j_name "$FL_BENCH_NAME"; fl_json_str_v j_site "$FL_SITE"
   fl_json_str_v j_url "http://${FL_SITE}:${FL_WEB_PORT}"
   fl_ports_json_v j_ports
@@ -372,4 +414,14 @@ fl_cmd_list() {
     rows+=("${FL_BENCH_NAME}${is_default}|${FL_SITE}|${FL_WEB_PORT}|${FL_BENCH_DIR}")
   done
   fl_table "${rows[@]}"
+}
+
+# fl_site_ping_code [SECONDS]: the default site's ping (3 s; status asks with 1)
+fl_site_ping_code() {
+  local code
+  code="$(curl -s -o /dev/null -m "${1:-3}" -w '%{http_code}' -H "Host: ${FL_SITE}" "http://127.0.0.1:${FL_WEB_PORT}/api/method/ping" 2>/dev/null || true)"
+  case "$code" in
+    [0-9][0-9][0-9]) printf '%s' "$code" ;;
+    *) printf '000' ;;
+  esac
 }

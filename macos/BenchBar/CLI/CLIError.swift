@@ -12,6 +12,9 @@ nonisolated enum CLIError: Error, Equatable, Sendable {
     case launchFailed(detail: String)
     /// The command ran longer than its timeout and was stopped.
     case timedOut(command: String, seconds: Int)
+    /// The caller stopped waiting (its task was cancelled) and the command
+    /// was stopped. Not a timeout: nothing is shown for it.
+    case cancelled(command: String)
     /// The command exited with a non zero code.
     case failed(command: String, exitCode: Int32, message: String)
     /// stdout was not the JSON we expected.
@@ -31,6 +34,8 @@ extension CLIError: LocalizedError {
             return "Could not run benchbar: \(detail)"
         case .timedOut(let command, let seconds):
             return "benchbar \(command) did not finish within \(seconds) seconds."
+        case .cancelled(let command):
+            return "benchbar \(command) was cancelled."
         case .failed(let command, let code, let message):
             let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
             return text.isEmpty ? "benchbar \(command) failed (exit code \(code))." : text
@@ -41,6 +46,13 @@ extension CLIError: LocalizedError {
         }
     }
 
+    /// The CLI's own answer to a command it does not have ("Unknown command: labs"), which is how
+    /// an older CLI shows. One place, so the checks cannot drift apart.
+    nonisolated var isUnknownCommand: Bool {
+        if case .failed(_, _, let message) = self { return message.localizedCaseInsensitiveContains("unknown command") }
+        return false
+    }
+
     nonisolated var recoverySuggestion: String? {
         switch self {
         case .notFound(let searched):
@@ -49,12 +61,14 @@ extension CLIError: LocalizedError {
             return "Choose the benchbar file again in Settings."
         case .timedOut:
             return "Check the bench with benchbar doctor in Terminal."
+        case .cancelled:
+            return nil
         case .failed:
             return "Open the logs, or run benchbar doctor in Terminal."
         case .invalidJSON(_, let preview):
             return "Output started with: \(preview)"
         case .unsupportedSchema:
-            return "Build BenchBar from the same checkout as the CLI."
+            return "Update BenchBar, or choose a different benchbar in Settings."
         case .launchFailed:
             return nil
         }
