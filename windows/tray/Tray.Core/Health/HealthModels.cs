@@ -9,6 +9,9 @@ public sealed record HealthCheck(string Id, string Group, string Label, CheckLev
     public string RowKey => Id + "|" + Message;
 
     public bool Repairable => Level != CheckLevel.Ok && Action is { Length: > 0 };
+
+    /// <summary>A warning can be acknowledged; a failure cannot (the CLI refuses it).</summary>
+    public bool CanAck => Level == CheckLevel.Warn && !Acked;
 }
 
 /// <summary><c>doctor --json</c> for the Health tab (macos DoctorReport). Counts come from <c>summary</c>, else from the checks.</summary>
