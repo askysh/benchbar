@@ -13,6 +13,10 @@ public class WizardProfileTests
     private static IReadOnlyList<ProfileInfo> Listed() =>
         ProfileListJson.Parse(JsonNode.Parse(File.ReadAllText(Path.Combine(FixtureFiles.Dir("cli"), "profile-list-linux.json")))!.AsObject());
 
+    /// <summary>The same list from a CLI older than 0.9: its entries have no <c>linux_supported</c>, so the gate is asked with a dry run per profile.</summary>
+    private static IReadOnlyList<ProfileInfo> ListedByOlderCli() =>
+        Listed().Select(p => p with { LinuxSupported = null, UnsupportedReason = null }).ToList();
+
     /// <summary>Answers the list from the fixture and the gate from a table; every gate call is recorded.</summary>
     private sealed class ProfileSetup(FixtureSetupService inner, IReadOnlyList<ProfileInfo> profiles, string? listError = null) : DelegatingSetup(inner)
     {
@@ -21,17 +25,36 @@ public class WizardProfileTests
         public List<string> GatedBench { get; } = [];
         public int Lists { get; private set; }
 
-        public override Task<ProfileListResult> ListProfilesAsync(CancellationToken ct)
+        /// <summary>The first read of the list waits for this, and ends when its token is cancelled.</summary>
+        public TaskCompletionSource? FirstListHold { get; init; }
+
+        public List<CancellationToken> ListTokens { get; } = [];
+
+        /// <summary>The gate call of this profile waits for <see cref="GateRelease"/>; <see cref="GateEntered"/> says it has begun.</summary>
+        public string? HoldGateFor { get; init; }
+
+        public TaskCompletionSource GateEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource GateRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async Task<ProfileListResult> ListProfilesAsync(CancellationToken ct)
         {
             Lists++;
-            return Task.FromResult(listError is null ? new ProfileListResult(profiles, null) : new ProfileListResult([], listError));
+            ListTokens.Add(ct);
+            if (Lists == 1 && FirstListHold is { } hold) await hold.Task.WaitAsync(ct);
+            return listError is null ? new ProfileListResult(profiles, null) : new ProfileListResult([], listError);
         }
 
-        public override Task<ProfileGate> CheckProfileAsync(string profile, string benchDir, CancellationToken ct)
+        public override async Task<ProfileGate> CheckProfileAsync(string profile, string benchDir, CancellationToken ct)
         {
             Gated.Add(profile);
             GatedBench.Add(benchDir);
-            return Task.FromResult(new ProfileGate(profile, Refusals.GetValueOrDefault(profile)));
+            if (profile == HoldGateFor)
+            {
+                GateEntered.TrySetResult();
+                await GateRelease.Task.WaitAsync(ct);
+            }
+            return new ProfileGate(profile, Refusals.GetValueOrDefault(profile));
         }
     }
 
@@ -79,9 +102,44 @@ public class WizardProfileTests
     }
 
     [Fact]
-    public async Task OpeningNewBenchReadsTheListAndAsksTheGateAboutEachProfile()
+    public async Task OpeningNewBenchReadsTheListOnceAndAsksNoGateWhenTheListHasTheAnswers()
     {
         var (model, setup) = await OnNewBenchPage();
+        Assert.Equal(1, setup.Lists);
+        Assert.Empty(setup.Gated);
+        Assert.Equal(["v15-lts", "v16-lts", "acme", "acme-next"], model.ProfileChoiceList.Select(c => c.Name));
+        Assert.All(model.ProfileChoiceList, c => Assert.True(c.Enabled && c.Answered));
+        Assert.False(model.ProfilesChecking);
+    }
+
+    [Fact]
+    public async Task AProfileTheListSaysLinuxCannotInstallIsOffWithTheListsReasonAndNoDryRunIsMade()
+    {
+        var reason = "it needs MariaDB 12.0, apt on this release gives 10.11, and the profile accepts 11.4 to 12.0 only";
+        var listed = Listed().Select(p => p.Name == "v16-lts" ? p with { LinuxSupported = false, UnsupportedReason = reason } : p).ToList();
+        var (model, setup) = await OnNewBenchPage(listed);
+        Assert.Empty(setup.Gated);
+        var v16 = model.ProfileChoiceList.Single(c => c.Name == "v16-lts");
+        Assert.False(v16.Enabled);
+        Assert.Equal("Not supported on Linux yet: " + reason + ".", v16.Refusal);
+        Assert.EndsWith("(not available here)", v16.Text);
+        Assert.True(model.ProfileChoiceList.Single(c => c.Name == "acme").Enabled);
+        model.SetProfile("v16-lts");
+        Assert.Equal("v15-lts", model.Profile);
+    }
+
+    [Fact]
+    public void TheListsReasonIsWordedWithOneFullStop()
+    {
+        Assert.Equal("Not supported on Linux yet: it needs Node 16.", ProfileChoices.Unsupported("it needs Node 16"));
+        Assert.Equal("Not supported on Linux yet: it needs Node 16.", ProfileChoices.Unsupported("it needs Node 16. "));
+        Assert.Equal("Not supported on Linux yet.", ProfileChoices.Unsupported(null));
+    }
+
+    [Fact]
+    public async Task OpeningNewBenchWithAnOlderCliAsksTheGateAboutEachProfile()
+    {
+        var (model, setup) = await OnNewBenchPage(ListedByOlderCli());
         Assert.Equal(WizardPage.NewBench, model.Page);
         Assert.Equal(1, setup.Lists);
         Assert.Equal(["v15-lts", "v16-lts", "acme", "acme-next"], setup.Gated);
@@ -98,7 +156,7 @@ public class WizardProfileTests
     {
         var fixture = new SetupFixture();
         fixture.Check("check.json", ready: true);
-        var setup = new ProfileSetup(fixture.Service, Listed());
+        var setup = new ProfileSetup(fixture.Service, ListedByOlderCli());
         // the real refusal line, recorded from the CLI: its done event
         var done = (InstallEvent.Done)InstallJson.ParseLine(File.ReadAllLines(Path.Combine(fixture.Setup, "profile-gate-refused.jsonl"))[0])!;
         setup.Refusals["v16-lts"] = ProfileChoices.Read("v16-lts", null, done.Value).Refusal;
@@ -149,7 +207,7 @@ public class WizardProfileTests
     {
         var fixture = new SetupFixture();
         fixture.Check("check.json", ready: true);
-        var setup = new ProfileSetup(fixture.Service, Listed());
+        var setup = new ProfileSetup(fixture.Service, ListedByOlderCli());
         setup.Refusals["v15-lts"] = "Profile v15-lts is not supported on Linux yet: (a made up reason for this test)";
         var (model, _) = await Go(setup);
         Assert.Equal("v16-lts", model.Profile);
@@ -161,13 +219,64 @@ public class WizardProfileTests
     {
         var fixture = new SetupFixture();
         fixture.Check("check.json", ready: true);
-        var setup = new ProfileSetup(fixture.Service, Listed().Where(p => p.Name == "v15-lts").ToList());
+        var setup = new ProfileSetup(fixture.Service, ListedByOlderCli().Where(p => p.Name == "v15-lts").ToList());
         setup.Refusals["v15-lts"] = "Profile v15-lts is not supported on Linux yet: (a made up reason for this test)";
         var (model, _) = await Go(setup);
         model.SetAdminPassword(Secret.From("admin-pass"));
-        Assert.Equal("Profile v15-lts is not supported on Linux yet: (a made up reason for this test)", model.FormProblem);
+        Assert.Equal("v15-lts cannot be used here. Profile v15-lts is not supported on Linux yet: (a made up reason for this test)", model.FormProblem);
         await model.ReviewAsync();
         Assert.Equal(WizardPage.NewBench, model.Page); // Review stays off
+    }
+
+    [Fact]
+    public async Task AProfileThePersonPickedThatTheGateRefusesLaterStaysPickedAndTheFormSaysWhy()
+    {
+        var fixture = new SetupFixture();
+        fixture.Check("check.json", ready: true);
+        var setup = new ProfileSetup(fixture.Service, ListedByOlderCli()) { HoldGateFor = "acme-next" };
+        var model = new WizardModel(setup, new FakeWizardHost());
+        await model.ChooseNewBench();
+        await model.ContinueFromCheckAsync();
+        await setup.GateEntered.Task; // the gate is at the last profile; every one is still on offer
+        Assert.True(model.ProfilesChecking);
+        model.SetProfile("acme-next");
+        Assert.Equal("acme-next", model.Profile);
+        setup.Refusals["acme-next"] = "Profile acme-next is not supported on Linux yet: (a made up reason for this test)";
+        setup.GateRelease.SetResult();
+        await model.ProfilesTask;
+
+        Assert.Equal("acme-next", model.Profile); // not moved to another profile behind the person's back
+        Assert.False(model.SelectedProfile!.Enabled);
+        model.SetAdminPassword(Secret.From("admin-pass"));
+        Assert.Equal("acme-next cannot be used here. Profile acme-next is not supported on Linux yet: (a made up reason for this test)", model.FormProblem);
+        await model.ReviewAsync();
+        Assert.Equal(WizardPage.NewBench, model.Page);
+    }
+
+    [Fact]
+    public async Task ANewerReadOfTheListStopsTheOlderOneThatIsStillAsking()
+    {
+        var fixture = new SetupFixture();
+        fixture.Check("check.json", ready: true);
+        var setup = new ProfileSetup(fixture.Service, Listed()) { FirstListHold = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        var model = new WizardModel(setup, new FakeWizardHost());
+        await model.ChooseNewBench();
+        await model.ContinueFromCheckAsync();
+        var first = model.ProfilesTask;
+        Assert.True(model.ProfilesLoading);
+
+        await model.LoadProfilesAsync(force: true); // Try Again, or another distro: a second read while the first waits
+        Assert.True(setup.ListTokens[0].IsCancellationRequested);
+        Assert.False(setup.ListTokens[1].IsCancellationRequested);
+        Assert.Equal(["v15-lts", "v16-lts", "acme", "acme-next"], model.ProfileChoiceList.Select(c => c.Name));
+
+        await first; // the older read ends without touching what the newer one set
+        Assert.Equal(2, setup.Lists);
+        Assert.False(model.ProfilesLoading);
+        Assert.Null(model.ProfilesError);
+        Assert.Equal(4, model.ProfileChoiceList.Count);
+        await model.LoadProfilesAsync();
+        Assert.Equal(2, setup.Lists); // the newer read is the one that counts for the distro
     }
 
     [Fact]

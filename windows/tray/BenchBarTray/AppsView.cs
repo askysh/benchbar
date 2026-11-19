@@ -28,10 +28,11 @@ internal sealed class AppsView : UserControl, IBenchPageView
     private bool _messageIsError;
 
     // the Add App form is built once per opening, so a rebuild does not empty it
-    private TextBox? _addSource;
-    private TextBox? _addBranch;
-    private TextBox? _addCommit;
-    private List<CheckBox> _addSites = [];
+    private sealed record AddRow(TextBox Source, TextBox Branch, TextBox Commit, List<CheckBox> Sites, UIElement View);
+
+    private List<AddRow> _addRows = [];
+    private StackPanel? _addRowsHost;
+    private Button? _addAnother;
     private TextBlock? _addProblem;
 
     public AppsView(PageServices services)
@@ -256,10 +257,9 @@ internal sealed class AppsView : UserControl, IBenchPageView
 
     private void ClosePanel()
     {
-        _addSource = null;
-        _addBranch = null;
-        _addCommit = null;
-        _addSites = [];
+        _addRows = [];
+        _addRowsHost = null;
+        _addAnother = null;
         _addProblem = null;
         _update = null;
         SetPanel(null);
@@ -361,32 +361,67 @@ internal sealed class AppsView : UserControl, IBenchPageView
 
     private void OpenAdd()
     {
-        _addSource = Ui.Field("App or repository", "", _ => HideAddProblem(), 420);
-        _addBranch = Ui.Field("Branch", "", _ => HideAddProblem(), 220);
-        _addCommit = Ui.Field("Commit", "", _ => HideAddProblem(), 220);
         _addProblem = PagePanels.Line("", error: true);
         _addProblem.Visibility = Visibility.Collapsed;
-        _addSites = [];
-        var sites = new StackPanel();
+        _addRows = [];
+        _addRowsHost = new StackPanel();
+        AddAnotherRow();
+        _addAnother = Ui.Button("Add Another App", () => { AddAnotherRow(); _addRows[^1].Source.Focus(); }, "Add another app to this plan");
+        UpdateAddAnother();
+        var body = new List<UIElement> { _addRowsHost, _addAnother, _addProblem };
+        SetPanel(PagePanels.Panel($"Add apps to {Bench.Name}",
+            "Clones apps from the app registry or git repositories and installs them. You see one plan for all of them first.",
+            body, [Ui.Button("Review Plan...", () => Start(AddAppAsync), primary: true), Ui.Button("Cancel", ClosePanel)]));
+        _addRows[0].Source.Focus();
+    }
+
+    /// <summary>A form for one more app. The first keeps the labels of the single app form; the others say which app they are.</summary>
+    private void AddAnotherRow()
+    {
+        if (_addRowsHost is null || _addRows.Count >= AppAddBatch.MaxApps) return;
+        var n = _addRows.Count + 1;
+        var tag = n == 1 ? "" : $"App {n} ";
+        var source = Ui.Field(n == 1 ? "App or repository" : $"App {n} repository", "", _ => HideAddProblem(), 420);
+        var branch = Ui.Field(n == 1 ? "Branch" : $"App {n} branch", "", _ => HideAddProblem(), 220);
+        var commit = Ui.Field(n == 1 ? "Commit" : $"App {n} commit", "", _ => HideAddProblem(), 220);
+        var sites = new List<CheckBox>();
+        var sitePanel = new StackPanel();
         foreach (var name in SiteList)
         {
             var box = new CheckBox { Content = name, Margin = new Thickness(0, 2, 0, 2) };
-            Ui.Name(box, $"Install on {name}");
-            _addSites.Add(box);
-            sites.Children.Add(box);
+            Ui.Name(box, $"{tag}Install on {name}");
+            sites.Add(box);
+            sitePanel.Children.Add(box);
         }
-        var body = new List<UIElement>
+        var view = new StackPanel { Margin = new Thickness(0, n == 1 ? 0 : 14, 0, 0) };
+        if (n > 1) view.Children.Add(Ui.Text($"App {n}", 14, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 4)));
+        view.Children.Add(Ui.Labeled("App or repository", source, "erpnext, or a git URL such as https://github.com/org/app. Private repositories work when your SSH key can read them."));
+        view.Children.Add(Ui.Labeled("Branch (optional)", branch, "Empty: the profile's branch for a registry name, the repository's default for a URL."));
+        view.Children.Add(Ui.Labeled("Commit (optional)", commit, "Pins the app to this commit (7 to 40 hex characters)."));
+        if (sites.Count > 0) view.Children.Add(Ui.Labeled("Install on", sitePanel, "None ticked: the app is cloned and built, and installed on no site yet."));
+        var row = new AddRow(source, branch, commit, sites, view);
+        if (n > 1)
         {
-            Ui.Labeled("App or repository", _addSource, "erpnext, or a git URL such as https://github.com/org/app. Private repositories work when your SSH key can read them."),
-            Ui.Labeled("Branch (optional)", _addBranch, "Empty: the profile's branch for a registry name, the repository's default for a URL."),
-            Ui.Labeled("Commit (optional)", _addCommit, "Pins the app to this commit (7 to 40 hex characters)."),
-        };
-        if (_addSites.Count > 0) body.Add(Ui.Labeled("Install on", sites, "None ticked: the app is cloned and built, and installed on no site yet."));
-        body.Add(_addProblem);
-        SetPanel(PagePanels.Panel($"Add an app to {Bench.Name}",
-            "Clones an app from the app registry or a git repository and installs it. You see the plan first.",
-            body, [Ui.Button("Review Plan...", () => Start(AddAppAsync), primary: true), Ui.Button("Cancel", ClosePanel)]));
-        _addSource.Focus();
+            var remove = Ui.Button("Remove", () => RemoveRow(row), $"Remove app {n}");
+            view.Children.Add(remove);
+        }
+        _addRows.Add(row);
+        _addRowsHost.Children.Add(view);
+        UpdateAddAnother();
+        HideAddProblem();
+    }
+
+    private void RemoveRow(AddRow row)
+    {
+        if (_addRowsHost is null || !_addRows.Remove(row)) return;
+        _addRowsHost.Children.Remove(row.View);
+        UpdateAddAnother();
+        HideAddProblem();
+    }
+
+    private void UpdateAddAnother()
+    {
+        if (_addAnother is not null) _addAnother.IsEnabled = _addRows.Count < AppAddBatch.MaxApps;
     }
 
     private void HideAddProblem()
@@ -394,18 +429,24 @@ internal sealed class AppsView : UserControl, IBenchPageView
         if (_addProblem is not null) _addProblem.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>The fields of the open Add App form (for tests); null when it is not open.</summary>
+    /// <summary>The fields of the first app of the open Add App form (for tests); null when it is not open.</summary>
     internal (TextBox Source, TextBox Branch, TextBox Commit, IReadOnlyList<CheckBox> Sites)? AddForm =>
-        _addSource is not null && _addBranch is not null && _addCommit is not null ? (_addSource, _addBranch, _addCommit, _addSites) : null;
+        _addRows.Count > 0 ? (_addRows[0].Source, _addRows[0].Branch, _addRows[0].Commit, _addRows[0].Sites) : null;
+
+    /// <summary>The fields of every app of the open form, in order (for tests).</summary>
+    internal IReadOnlyList<(TextBox Source, TextBox Branch, TextBox Commit, IReadOnlyList<CheckBox> Sites)> AddFormRows =>
+        _addRows.Select(r => (r.Source, r.Branch, r.Commit, (IReadOnlyList<CheckBox>)r.Sites)).ToList();
+
+    internal void AddAnotherAppForTest() => AddAnotherRow();
 
     internal string? AddProblemText => _addProblem is { Visibility: Visibility.Visible } p ? p.Text : null;
 
     internal async Task AddAppAsync()
     {
-        if (_addSource is null || _addBranch is null || _addCommit is null) return;
-        var input = new AppAddInput(_addSource.Text, _addBranch.Text, _addCommit.Text,
-            _addSites.Where(b => b.IsChecked == true).Select(b => (string)b.Content).ToList());
-        if (input.Problem is { } problem)
+        if (_addRows.Count == 0) return;
+        var inputs = _addRows.Select(r => new AppAddInput(r.Source.Text, r.Branch.Text, r.Commit.Text,
+            r.Sites.Where(b => b.IsChecked == true).Select(b => (string)b.Content).ToList())).ToList();
+        if (AppAddBatch.Problem(inputs) is { } problem)
         {
             if (_addProblem is not null)
             {
@@ -416,9 +457,11 @@ internal sealed class AppsView : UserControl, IBenchPageView
         }
         if (PanelIsStale) return;
         var benchPath = PanelBench;
-        var request = PlanReviewRequest.Tokened($"Add {input.DisplayName}", AppCommands.Add(input, benchPath)) with
+        var title = AppAddBatch.Title(inputs);
+        var request = PlanReviewRequest.Tokened(title, AppCommands.AddMany(inputs, benchPath)) with
         {
-            ConfirmLabel = "Add App",
+            ConfirmLabel = inputs.Count == 1 ? "Add App" : "Add Apps",
+            Describe = AppAddBatch.PlanLines,
             CanStop = false,
             UsesSudoEnv = false,
             Summary = "Clones the app, installs its requirements and builds its assets, which can take several minutes. The bench keeps running.",
@@ -446,7 +489,7 @@ internal sealed class AppsView : UserControl, IBenchPageView
             if (outcome.Applied)
             {
                 ClosePanel();
-                Say($"{input.DisplayName} was added.", false);
+                Say(inputs.Count == 1 ? $"{inputs[0].DisplayName} was added." : $"{string.Join(", ", inputs.Select(i => i.DisplayName))} were added.", false);
                 _services.RefreshNow();
             }
             Rebuild();

@@ -198,6 +198,10 @@ internal sealed class PlanReviewSheet : Window
         panel.Children.Add(Ui.Text(_model.Request.Title, 18, FontWeights.SemiBold));
         if (_model.Request.Summary is { Length: > 0 } summary) panel.Children.Add(Ui.Text(summary, 14, opacity: 0.85, margin: new Thickness(0, 6, 0, 0)));
         if (_model.Message is { Length: > 0 } message) panel.Children.Add(Ui.CriticalText(message));
+        if (_model.Request.Describe is { } describe)
+        {
+            foreach (var line in describe(plan)) panel.Children.Add(Ui.Text(line, 13, opacity: 0.9, margin: new Thickness(0, 4, 0, 0)));
+        }
         if (!plan.HasChanges && plan.Errors.Count == 0) panel.Children.Add(Ui.Text("There is nothing to change.", 14, opacity: 0.85, margin: new Thickness(0, 8, 0, 0)));
         if (plan.Steps.Count > 0)
         {
