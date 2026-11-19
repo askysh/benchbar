@@ -1,5 +1,5 @@
 #!/bin/bash
-#@version 8
+#@version 9
 #@unhashed CLI_VERSION
 #@default NOTIFY_BODY pgrep -xq BenchBar 2>/dev/null && return 0\n  osascript -e "display notification \"$1\" with title \"BenchBar: __BENCH_NAME__\"" >/dev/null 2>&1
 #@default CWD_OF lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
@@ -17,7 +17,8 @@
 # Every transition is written to logs/.benchbar/state.json (temp file, then
 # mv) for the BenchBar app. The format is docs/json-schema.md, schema 1.
 # While honcho runs, logs/.benchbar/heartbeat is rewritten in place every
-# 30 seconds: its mtime tells the app this runner is alive.
+# 30 seconds: its mtime tells the app this runner is alive. The same loop
+# keeps bench.log, worker.log and worker.error.log under a size (trim_logs).
 
 BENCH="__BENCH_DIR__"
 HONCHO="__HONCHO__"
@@ -35,6 +36,10 @@ PING_TRIES="${BENCHBAR_PING_TRIES:-120}"
 PING_EVERY="${BENCHBAR_PING_EVERY:-2}"
 HEARTBEAT="$STATE_DIR/heartbeat"
 HEARTBEAT_EVERY="${BENCHBAR_HEARTBEAT_EVERY:-30}"
+# log size cap (SVC-14): every LOG_CHECK_EVERY beats, a log over LOG_MAX_KB is cut to its last lines
+LOG_MAX_KB="${BENCHBAR_LOG_MAX_KB:-20480}"
+LOG_CHECK_EVERY="${BENCHBAR_LOG_CHECK_EVERY:-10}"
+LOG_KEEP_LINES=2000
 # the stop command: always kill, except in the tests (FL_TESTING=1 and BENCHBAR_KILL_CMD)
 KILLER=kill
 if [ "${FL_TESTING:-}" = 1 ]; then KILLER="${BENCHBAR_KILL_CMD:-kill}"; fi
@@ -61,6 +66,25 @@ write_state() {
 # existing file changes no folder entry, so it wakes no folder watcher, and
 # costs no process. The content is this runner's age in seconds.
 beat() { printf '%s\n' "$SECONDS" >"$HEARTBEAT" 2>/dev/null; }
+
+# trim_logs: a log over LOG_MAX_KB keeps its last LOG_KEEP_LINES lines. In
+# place, never a rename: launchd and systemd append to the same file, so a
+# rename would leave the live log empty for good. A line written between the
+# copy and the cut can be lost, which a log of this size can bear.
+trim_logs() {
+  for f in "$BENCH/logs/bench.log" "$BENCH/logs/worker.log" "$BENCH/logs/worker.error.log"; do
+    [ -f "$f" ] || continue
+    kb=$(( $(wc -c <"$f" 2>/dev/null | tr -d ' ') / 1024 ))
+    [ "$kb" -ge "$LOG_MAX_KB" ] || continue
+    keep="$(mktemp "$STATE_DIR/.trim.XXXXXX" 2>/dev/null)" || continue
+    # the last lines, and never more than a quarter of the cap (long lines); the first, cut line goes
+    if tail -n "$LOG_KEEP_LINES" "$f" 2>/dev/null | tail -c $((LOG_MAX_KB * 256)) | sed 1d >"$keep" 2>/dev/null; then
+      : >"$f" 2>/dev/null
+      { printf '%s log truncated by size (it was %s KB); the last %s lines follow\n' "$(date '+%F %T')" "$kb" "$LOG_KEEP_LINES"; cat "$keep"; } >>"$f" 2>/dev/null
+    fi
+    rm -f "$keep"
+  done
+}
 
 prev_exit() {
   sed -n 's/.*"last_exit_code":\([0-9-]*\).*/\1/p' "$STATE" 2>/dev/null
@@ -201,7 +225,7 @@ PINGER=$!
 # the heartbeat loop, for as long as honcho runs. sleep runs as a child the
 # loop waits for, so a TERM ends the loop at once and takes the sleep along.
 (
-  s=""
+  s=""; n=0
   trap 'kill "$s" 2>/dev/null; exit 0' TERM
   while :; do
     sleep "$HEARTBEAT_EVERY" &
@@ -209,6 +233,8 @@ PINGER=$!
     wait "$s"
     kill -0 "$HPID" 2>/dev/null || exit 0
     beat
+    n=$((n + 1))
+    [ $((n % LOG_CHECK_EVERY)) -eq 0 ] && trim_logs
   done
 ) &
 BEATER=$!
