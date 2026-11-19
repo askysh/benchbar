@@ -27,6 +27,11 @@ the apply tool with the same arguments and the token (the CLI form is
   plan (`apps`), with `commit` to pin one and `install_on` per app.
 - `benchbar_site_add_plan` / `benchbar_site_add`: a throwaway or test
   site. Use it instead of `bench new-site`; the default site never moves.
+- `benchbar_app_install_plan` / `benchbar_app_install`: an app that is
+  already in the bench, on one site. `benchbar_app_update_plan` /
+  `benchbar_app_update`: fast forward one app; every site that has it is
+  backed up first and the backup cannot be skipped. Both plan again at apply
+  and refuse a plan that changed (new commits, a changed site): plan again.
 - `benchbar_site_backup`, then `benchbar_site_restore_plan` /
   `benchbar_site_restore` (`new: true` for a copy of a site for QA,
   `no_migrate` to stop before migrate).

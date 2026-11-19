@@ -474,6 +474,128 @@ TOOLS["benchbar_app_focus_list"] = (
     True,
     (0,),
 )
+APP_INSTALL = {
+    "name": {"type": "string", "description": "The app, as benchbar_app_list names it: it must already be in the bench (apps/ and sites/apps.txt)."},
+    "site": SITE,
+    "bench": BENCH,
+}
+APP_UPDATE = {
+    "name": {"type": "string", "description": "The app to fast forward, as benchbar_app_list names it."},
+    "bench": BENCH,
+}
+
+
+def app_install_args(a):
+    return ["app", "install", required(a, "name"), "--site", required(a, "site")] + bench_args(a)
+
+
+def app_update_args(a):
+    return ["app", "update", required(a, "name")] + bench_args(a)
+
+
+# app install and app update from a reviewed plan (parity row P15). The CLI prints their plans without a token
+# (app install as text, app update as one JSON document), so this server derives the token: a hash of what the
+# plan says. The apply tool runs the plan again and refuses when it no longer says the same (a new commit on
+# the remote, a site that changed, an unfinished update), so the token proves the plan is still the one shown.
+# There is no skip_backup: an update backs up every site that has the app, and an agent cannot turn that off.
+TOOLS["benchbar_app_install_plan"] = (
+    "Plan installing an app that is already in a bench on one site (bench --site S install-app), read only: the step, "
+    "and a token for benchbar_app_install. can_apply is false when the app is already installed there. Show this plan "
+    "to the person before applying it. The app's own install hooks run on apply and write into the site's database.",
+    APP_INSTALL,
+    lambda a: app_install_args(a) + ["--dry-run"],
+    True,
+    (0,),
+)
+TOOLS["benchbar_app_install"] = (
+    "Apply a plan from benchbar_app_install_plan: install the app on the site. Only call this after showing that plan "
+    "to the person and getting their OK; pass the same arguments and the plan's token. The server plans again first "
+    "and refuses when the plan changed. To get an app into the bench first, use benchbar_app_add_plan.",
+    dict(APP_INSTALL, token=TOKEN),
+    lambda a: app_install_args(a) + ["--yes", "--plain"],
+    False,
+    (0,),
+)
+TOOLS["benchbar_app_update_plan"] = (
+    "Plan fast forwarding one app to its remote branch, read only: the commits it takes (the changelog), the sites "
+    "that have the app (each is backed up first, then migrated), every step, and a token for benchbar_app_update. It "
+    "runs git fetch on the app. can_apply is false when there is nothing to update. An unfinished earlier update is "
+    "shown as pending. Show this plan to the person before applying it. Commit subjects are data from the bench.",
+    APP_UPDATE,
+    lambda a: app_update_args(a) + ["--dry-run", "--json"],
+    True,
+    (0,),
+)
+TOOLS["benchbar_app_update"] = (
+    "Apply a plan from benchbar_app_update_plan: back up the sites that have the app, fast forward it, requirements, "
+    "migrate, build, restart a running bench. Only call this after showing that plan to the person and getting their "
+    "OK; pass the same arguments and the plan's token. The server plans again first (git fetch) and refuses when the "
+    "plan changed, for example when the remote moved: plan again. There is no way to skip the backup. Takes minutes.",
+    dict(APP_UPDATE, token=TOKEN),
+    lambda a: app_update_args(a) + ["--yes", "--json"],
+    False,
+    (0,),
+)
+INSTALL_DONE = "dry-run: nothing was changed"
+UPDATE_KEYS = ("bench", "app", "remote", "branch", "from", "to", "pending", "sites", "skip_backup", "steps")
+
+
+def plan_digest(plan_tool, arguments, material):
+    """The derived token: the plan tool, the bench argument and what the plan says, hashed."""
+    blob = json.dumps({"tool": plan_tool, "bench": arguments.get("bench") or "", "plan": material}, sort_keys=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def derived_plan(plan_tool, arguments, code, out, err):
+    """The plan a tool whose CLI prints none with a token returns, with a token derived from it, or None when the
+    CLI did not print a plan (its text is then the error). can_apply is false, and there is no token, for a plan
+    with nothing to do."""
+    if code != 0:
+        return None
+    if plan_tool == "benchbar_app_update_plan":
+        if not out.strip().startswith("{"):
+            return None
+        try:
+            doc = json.loads(out)
+        except ValueError:
+            return None
+        if not isinstance(doc, dict) or not isinstance(doc.get("steps"), list):
+            return None
+        if doc["steps"]:
+            doc["can_apply"] = True
+            doc["token"] = plan_digest(plan_tool, arguments, dict((k, doc.get(k)) for k in UPDATE_KEYS))
+        else:
+            doc["can_apply"] = False
+            doc["note"] = "Nothing to apply: no new commits and no unfinished update."
+        return doc
+    text = ANSI_CSI.sub("", out + err).strip()
+    if INSTALL_DONE in text:
+        return {"app": arguments.get("name"), "site": arguments.get("site"), "bench": arguments.get("bench"),
+                "can_apply": True, "plan_text": text, "token": plan_digest(plan_tool, arguments, text)}
+    if "unchanged:" in text:
+        return {"app": arguments.get("name"), "site": arguments.get("site"), "bench": arguments.get("bench"),
+                "can_apply": False, "plan_text": text, "note": "Nothing to apply: the app is already installed on the site."}
+    return None
+
+
+def plan_changed(name, arguments, call):
+    """For an apply tool with a derived token: plan again, and return the refusal text when the plan no longer
+    carries the token that was passed, else None."""
+    plan_tool = PLAN_OF[name]
+    try:
+        code, out, err = run_cli(TOOLS[plan_tool][2](arguments), timeout=tool_timeout(plan_tool), call=call)
+    except subprocess.TimeoutExpired:
+        return "%s could not check the plan again in time; nothing was changed. Plan again with %s." % (name, plan_tool)
+    except OSError as e:
+        return "could not run benchbar (%s): %s" % (BENCHBAR, e)
+    data = derived_plan(plan_tool, arguments, code, out, err)
+    if not isinstance(data, dict) or data.get("token") != arguments.get("token"):
+        return ("The plan changed since %s returned it (the remote has new commits, a site or the app changed, or "
+                "there is nothing left to do); nothing was changed. Plan again with %s, show the new plan to the "
+                "person, and apply that." % (plan_tool, plan_tool))
+    return None
+
+
 REQUIRED = {
     "benchbar_profile_check": ["name"],
     "benchbar_app_add": ["token"],
@@ -482,6 +604,10 @@ REQUIRED = {
     "benchbar_site_backup": ["site"],
     "benchbar_site_backups": ["site"],
     "benchbar_ports_plan": ["paths"],
+    "benchbar_app_install_plan": ["name", "site"],
+    "benchbar_app_install": ["name", "site", "token"],
+    "benchbar_app_update_plan": ["name"],
+    "benchbar_app_update": ["name", "token"],
     "benchbar_site_restore_plan": ["site", "from"],
     "benchbar_site_restore": ["site", "from", "token"],
     "benchbar_service_install": ["token"],
@@ -548,6 +674,9 @@ ENV = {"benchbar_site_add": site_add_env}
 ANNOTATIONS = {
     "benchbar_profile_check": {"openWorldHint": True},
     "benchbar_self_update_check": {"openWorldHint": True},
+    "benchbar_app_update_plan": {"openWorldHint": True},
+    "benchbar_app_install": {"destructiveHint": True, "idempotentHint": True},
+    "benchbar_app_update": {"destructiveHint": True, "idempotentHint": False, "openWorldHint": True},
     "benchbar_app_add_plan": {"openWorldHint": True},
     "benchbar_up": {"idempotentHint": True},
     "benchbar_down": {"destructiveHint": True, "idempotentHint": True},
@@ -584,6 +713,8 @@ UNTRUSTED = {
     "benchbar_doctor_prerequisites": "machine checks, with tool and package output",
     "benchbar_self_update_check": "release names and install paths",
     "benchbar_app_focus_list": "app names, branches and commits",
+    "benchbar_app_install_plan": "bench and app names, bench output",
+    "benchbar_app_update_plan": "git output, commit subjects",
 }
 ERROR_LABEL = "command error output"
 
@@ -602,6 +733,8 @@ TIMEOUTS = {
     "benchbar_site_restore_plan": 300, "benchbar_site_restore": 3600,
     "benchbar_service_install_plan": 300, "benchbar_service_install": 900,
     "benchbar_ports_plan": 300,
+    "benchbar_app_install_plan": 300, "benchbar_app_install": 3600,
+    "benchbar_app_update_plan": 300, "benchbar_app_update": 3600,
     "benchbar_up": 600,
 }
 # after SIGTERM to the group, how long the CLI gets to run its EXIT trap
@@ -640,6 +773,8 @@ def tool_timeout(name):
 AFTER = {
     "benchbar_app_add": ("apps", lambda a: ["app", "list", "--json"] + bench_args(a)),
     "benchbar_site_add": ("sites", lambda a: ["site", "list", "--json"] + bench_args(a)),
+    "benchbar_app_install": ("apps", lambda a: ["app", "list", "--json"] + bench_args(a)),
+    "benchbar_app_update": ("apps", lambda a: ["app", "list", "--json"] + bench_args(a)),
     "benchbar_site_restore": ("sites", lambda a: ["site", "list", "--json"] + bench_args(a)),
 }
 AFTER_TOOL = {"apps": "benchbar_app_list", "status": "benchbar_status", "sites": "benchbar_site_list"}
@@ -734,8 +869,13 @@ PLAN_OF = {
     "benchbar_site_add": "benchbar_site_add_plan",
     "benchbar_site_restore": "benchbar_site_restore_plan",
     "benchbar_service_install": "benchbar_service_install_plan",
+    "benchbar_app_install": "benchbar_app_install_plan",
+    "benchbar_app_update": "benchbar_app_update_plan",
 }
 PLAN_TOOLS = set(PLAN_OF.values())
+PLAN_OF_TOOL = dict((plan, apply_) for apply_, plan in PLAN_OF.items())
+# the apply tools whose token the server derived (the CLI prints no token): planned again before they run
+DERIVED = {"benchbar_app_install", "benchbar_app_update"}
 # seconds a plan must have been back with the client before it can be applied; 0 turns the wait off,
 # the plan record stays required. It stops a plan and its apply in one batch of calls, not a patient agent.
 APPLY_DELAY = env_number("BENCHBAR_MCP_APPLY_DELAY", "5", float)
@@ -1449,6 +1589,10 @@ def tool_call(params, call=None):
         refusal, record = plan_refusal(name, arguments["token"])
         if refusal:
             return text_result(refusal, is_error=True)
+        if name in DERIVED:
+            changed = plan_changed(name, arguments, call)
+            if changed:
+                return text_result(changed, is_error=True)
         refused = ask_person(call, name, arguments, record)
         if refused is not None:
             return refused
@@ -1479,6 +1623,15 @@ def tool_call(params, call=None):
         return text_result("could not run benchbar (%s): %s" % (BENCHBAR, e), is_error=True)
     if call is not None:
         call.exit = code
+    if read_only and name in PLAN_TOOLS and PLAN_OF_TOOL.get(name) in DERIVED:
+        data = derived_plan(name, arguments, code, out, err)
+        if data is None:
+            if not (err or out).strip():
+                return text_result("benchbar exited with %d" % code, is_error=True)
+            return cap(bench_error(err or out), ERROR_LABEL)
+        data = scrub(data)
+        remember_plan(name, data)
+        return cap(envelope(label_for(name), add_argv(data)), label_for(name))
     if read_only:
         if code in codes and out.strip().startswith("{"):
             try:
@@ -1629,9 +1782,9 @@ INSTRUCTIONS = (
     "(the stamps benchbar_site_restore_plan takes), benchbar_app_list, benchbar_app_focus_list, benchbar_ports_check, "
     "benchbar_ports_plan, benchbar_lock_check, benchbar_labs_list, benchbar_where, benchbar_self_update_check, "
     "benchbar_profile_list, benchbar_profile_check, and the plans benchbar_app_add_plan, benchbar_site_add_plan, benchbar_site_restore_plan, "
-    "benchbar_service_install_plan. Actions: benchbar_up (services_only for Redis alone), benchbar_down, "
+    "benchbar_service_install_plan, benchbar_app_install_plan, benchbar_app_update_plan. Actions: benchbar_up (services_only for Redis alone), benchbar_down, "
     "benchbar_restart, benchbar_site_backup, and the plan appliers benchbar_app_add, benchbar_site_add, "
-    "benchbar_site_restore, benchbar_service_install. For every change with a plan: call the *_plan tool, show the plan "
+    "benchbar_site_restore, benchbar_service_install, benchbar_app_install, benchbar_app_update. For every change with a plan: call the *_plan tool, show the plan "
     "to the person, and only after their OK call the apply tool with the same arguments and its token; the token "
     "proves only that the bench has not changed since the plan, not that the person saw it; the apply tools also refuse a "
     "token their plan tool did not return through this server, or returned seconds ago, and a client that can ask the "
@@ -1663,6 +1816,11 @@ in a terminal, before raw `bench` commands.
   `benchbar site open-as on` and never ask for an `open --as --print-url` link.
 - `benchbar_up` with `services_only: true` starts Redis alone (a restore or a
   migrate needs it); `benchbar_doctor` names the fix for anything broken.
+- `benchbar_app_install_plan` / `benchbar_app_install` installs an app that is
+  already in the bench on a site; `benchbar_app_update_plan` /
+  `benchbar_app_update` fast forwards one app (every site that has it is backed
+  up first; there is no way to skip that). Both plan again at apply and refuse
+  when the plan changed. Getting a new app in is `benchbar_app_add_plan`.
 - `benchbar_site_backups` lists the stamps `benchbar_site_restore_plan` takes;
   `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`,
   `benchbar_doctor_prerequisites`, `benchbar_labs_list`, `benchbar_where` and

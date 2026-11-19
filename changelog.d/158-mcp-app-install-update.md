@@ -1,0 +1,4 @@
+### Agents and MCP
+
+- New MCP tools `benchbar_app_install_plan` and `benchbar_app_install` (install an app that is already in the bench on one site), and `benchbar_app_update_plan` and `benchbar_app_update` (fast forward one app: the plan lists the commits, every site that has the app is backed up first, then it migrates and builds). Each follows the plan, token, apply rule of the other changes: a plan the person sees first, a token this server returned at least 5 seconds ago, and the person's yes when the client can ask.
+- `app install` and `app update` print their plans without a token, so the server derives one from the plan, and the apply plans again and refuses when the plan changed (the remote has new commits, a site changed, or an earlier update was left half done). There is no way to skip the backup of an update over MCP.

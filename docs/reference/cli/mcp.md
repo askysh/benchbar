@@ -191,9 +191,25 @@ claude mcp add benchbar -- benchbar mcp
 | `benchbar_doctor_prerequisites` | read | What this machine needs before a bench can be installed (tools, Homebrew or apt packages, MariaDB, free disk), each check with its level and fix, no bench needed. | `bench` |
 | `benchbar_self_update_check` | read | This benchbar and the BenchBar app against the latest release, and the command that would update them (available is null when GitHub could not be asked). | none |
 | `benchbar_app_focus_list` | read | Every app of one bench with whether it is a focus app (the ones being worked on), why, and how far behind its remote it is, from the last git fetch. | `bench` |
+| `benchbar_app_install_plan` | plan (read only) | Plan installing an app that is already in a bench on one site (bench --site S install-app), read only: the step, and a token for benchbar_app_install. | `name`*, `site`*, `bench` |
+| `benchbar_app_install` | acts | Apply a plan from benchbar_app_install_plan: install the app on the site. | `name`*, `site`*, `bench`, `token`* |
+| `benchbar_app_update_plan` | plan (read only) | Plan fast forwarding one app to its remote branch, read only: the commits it takes (the changelog), the sites that have the app (each is backed up first, then migrated), every step, and a token for benchbar_app_update. | `name`*, `bench` |
+| `benchbar_app_update` | acts | Apply a plan from benchbar_app_update_plan: back up the sites that have the app, fast forward it, requirements, migrate, build, restart a running bench. | `name`*, `bench`, `token`* |
 
 An argument marked `*` is required. `bench` (the bench's path, from `benchbar_list`) is optional on every tool that has it: without it the tool uses the default bench.
 <!-- /generated:mcp-tools -->
+
+`benchbar_app_install_plan` and `benchbar_app_update_plan` return a token that the
+server derives from the plan, because `app install` and `app update` print
+their plans without one: it is a hash of the plan tool, the `bench` argument
+and what the plan says (for an update: the app, the branch, the commits it
+goes `from` and `to`, the sites, any unfinished update and the steps). The
+apply tool (`benchbar_app_install`, `benchbar_app_update`) checks the
+record and the 5 second wait like every apply, then runs the plan tool again
+(an update fetches the remote) and refuses, naming the plan tool, when the
+token no longer matches: nothing is changed. A plan with nothing to do
+(`can_apply: false`) has no token. `benchbar_app_update` has no `skip_backup`:
+a person can run `benchbar app update NAME --skip-backup` in a terminal.
 
 `benchbar_site_backups` lists the backup sets of a site; its `stamp` is the
 `from` of `benchbar_site_restore_plan`. `benchbar_ports_plan` takes the bench

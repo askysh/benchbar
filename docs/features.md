@@ -129,6 +129,7 @@ Windows (`benchbar.exe mcp`) since 0.8.0. The tools below are the ones in
 | Site plan and apply | `benchbar_site_add_plan` and `benchbar_site_add`, `benchbar_site_restore_plan` and `benchbar_site_restore`. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
 | `benchbar_site_backup` | Backs up one site. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
 | Service plan and apply | `benchbar_service_install_plan` and `benchbar_service_install`, for a bench that has no service. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
+| App install and update | `benchbar_app_install_plan` then `benchbar_app_install`, and `benchbar_app_update_plan` then `benchbar_app_update`, each with the plan's token. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
 | More read tools | `benchbar_site_backups`, `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`, `benchbar_labs_list`, `benchbar_where`, `benchbar_doctor_prerequisites`, `benchbar_self_update_check` and `benchbar_app_focus_list`. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
 
 A person approves each plan before the agent applies it. Rooms, Labs,
