@@ -115,12 +115,29 @@ rm -rf "$HOME/dev/frappe-bench"
 
 # ---------------------------------------------------------------- CORE-9: not as root
 FL_EFFECTIVE_UID=0 run_fm status --bench-dir "$BENCH"
-assert_eq "1" "$CODE" "$OUT"
+assert_eq "64" "$CODE" "$OUT"
 assert_contains "$OUT" "Do not run benchbar as root"
 assert_contains "$OUT" "asks for sudo itself"
-FL_EFFECTIVE_UID=0 run_fm down --dry-run --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"
+FL_EFFECTIVE_UID=0 run_fm down --dry-run --bench-dir "$BENCH"; assert_eq "64" "$CODE" "$OUT"
 FL_EFFECTIVE_UID=0 run_fm --version; assert_eq "0" "$CODE" "(the version needs no account)"
 FL_EFFECTIVE_UID=0 run_fm --help; assert_eq "0" "$CODE"
+# a client that asked for JSON gets JSON (exit 64, error_id root_refused), on stdout alone
+out="$(FL_EFFECTIVE_UID=0 FL_TESTING=1 "$FM" status --json --bench-dir "$BENCH" 2>/dev/null)" && code=0 || code=$?
+assert_eq "64" "$code" "$out"
+assert_eq "root_refused" "$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["error_id"])')" "$out"
+assert_eq "64" "$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["exit"])')" "$out"
+assert_contains "$out" "Do not run benchbar as root"
+assert_contains "$out" "asks for sudo itself"
+out="$(FL_EFFECTIVE_UID=0 FL_TESTING=1 "$FM" down --dry-run --for-agent --bench-dir "$BENCH" 2>/dev/null)" && code=0 || code=$?
+assert_eq "64" "$code" "$out"
+assert_contains "$out" '"event":"done"'
+assert_contains "$out" '"error_id":"root_refused"'
+out="$(FL_EFFECTIVE_UID=0 FL_TESTING=1 "$FM" status --jsonl --bench-dir "$BENCH" 2>/dev/null)" && code=0 || code=$?
+assert_eq "64" "$code" "$out"
+assert_contains "$out" '"event":"done"'
+# without a JSON flag it is the text, and the exit is the same
+out="$(FL_EFFECTIVE_UID=0 FL_TESTING=1 "$FM" status --bench-dir "$BENCH" 2>&1)" && code=0 || code=$?
+assert_not_contains "$out" "error_id"; assert_eq "64" "$code"
 # the seam is for the tests: a production run (no FL_TESTING) reads the real uid
 out="$(env -u FL_TESTING FL_EFFECTIVE_UID=0 "$FM" status --bench-dir "$BENCH" 2>&1)" && code=0 || code=$?
 assert_not_contains "$out" "Do not run benchbar as root"

@@ -70,6 +70,16 @@ fl_refuse_root() {
   if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]]; then
     hint="${hint} If a run with sudo left root owned files behind, give them back: sudo chown -R ${SUDO_USER} ${FL_STATE_DIR:-~/.local/state/benchbar} (and the logs folder of the bench)."
   fi
+  # A client that asked for JSON gets the refusal as JSON (error_id root_refused, exit 64 like
+  # every refusal of the command line, which the Mac app, the tray and the shim already read
+  # as a plain failure). Without the commands table loaded (the installer) it is the text.
+  if declare -F fl_refuse_json >/dev/null; then
+    local key=""
+    if [[ -n "${COMMAND:-}" ]] && declare -F fl_cmd_key_for >/dev/null; then
+      key="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}" 2>/dev/null)" || key=""
+    fi
+    fl_refuse_json root_refused "Do not run benchbar as root or with sudo." "$hint" "$key"
+  fi
   fl_die "Do not run benchbar as root or with sudo." "$hint"
 }
 

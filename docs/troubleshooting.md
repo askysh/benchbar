@@ -408,6 +408,9 @@ and PATH) do not stop you.
 - **A restart is pending.** When the `reboot` step is missing, restart
   Windows, then run `setup check` again. The tray's **Restart Now** asks
   first.
+- **"Do not run benchbar as root or with sudo" in the distro.** The distro's
+  default user is `root`. Create a user and make it the default: see
+  [the Windows page](windows.md#troubleshooting).
 - **Something else.** Use **Report a Bug** in the tray menu, the wizard
   footer or next to a failed step. It writes a redacted zip and opens the
   bug form. See [Report a bug](windows.md#report-a-bug).
@@ -424,6 +427,8 @@ and PATH) do not stop you.
   logs and the bench's lock, which later runs as you cannot write. If that
   happened, give them back: `sudo chown -R $USER ~/.local/state/benchbar` (or
   `.benchbar` next to a checkout's CLI) and the bench's `logs` folder.
+  With `--json`, `--jsonl` or `--for-agent` the refusal is JSON (exit 64,
+  `error_id` `root_refused`, `error`, `fix`).
 - Do not use the unversioned Homebrew `mariadb` formula for the v15
   profile. Pin to `mariadb@10.11`.
 - Do not `brew install wkhtmltopdf`. Use the official patched Qt package,

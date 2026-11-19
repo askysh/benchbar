@@ -2,6 +2,7 @@
 
 - benchbar refuses to run as root or with `sudo`. A `sudo benchbar repair` left root owned files in your state folder, logs and bench, and the next normal run then failed on them. It asks for `sudo` itself where a step needs it.
   If an earlier run with `sudo` left such files, give them back: `sudo chown -R $USER ~/.local/state/benchbar`.
+  With `--json`, `--jsonl` or `--for-agent` the refusal is JSON (exit 64, `error_id` `root_refused`). A WSL distro whose default user is `root` gets it: create a user and make it the default, see the Windows page.
 - A command that changes things (`up`, `down`, `restart`, `repair`, `service` and the like) on a bench it found on its own now says which one: `benchbar: acting on PATH (auto-detected ...)`. With `--for-agent` or `BENCHBAR_NONINTERACTIVE=1` and more than one bench known, it stops and lists them: pass `--bench-dir`.
 
 ### Command line

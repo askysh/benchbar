@@ -533,7 +533,11 @@ fl_cmd_usage_v() {
   done <<<"$FL_CMD_TABLE"
   printf -v "$1" '%s' "$__u"
 }
-fl_usage_refuse() {
+fl_usage_refuse() { fl_refuse_json "$1" "$2" "$3" "${4:-}"; }
+# fl_refuse_json ERROR_ID MESSAGE FIX [KEY]: the refusal in the shape --json, --jsonl and
+# --for-agent want (above), always exit 64. A refusal of the whole run (benchbar as root)
+# uses it too: a client that asked for JSON gets JSON, never a text line it cannot parse.
+fl_refuse_json() {
   local id="$1" msg="$2" fix="$3" key="${4:-}" a want_json=0 want_jsonl=0 want_agent=0 kind="" mut="" f
   [[ "${OPT_JSON:-0}" != 1 ]] || want_json=1
   [[ "${OPT_JSONL:-0}" != 1 ]] || want_jsonl=1

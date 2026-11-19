@@ -693,6 +693,17 @@ every distro, so stop your benches first).
   setup check says so. Install it next to the other one with
   `wsl --install -d Ubuntu-24.04` and choose it with
   `benchbar.exe adopt-distro`.
+- **"Do not run benchbar as root or with sudo."** The distro's default user
+  is `root`, so every command runs as root and `benchbar` refuses (exit 64,
+  `error_id` `root_refused`; with `--json` the refusal is JSON). This happens
+  when the distro was imported from a tarball or set up without a user. Create
+  a normal user and make it the default. In PowerShell:
+  `wsl -d Ubuntu-24.04 -u root -- adduser --gecos "" YOURNAME`, then
+  `wsl -d Ubuntu-24.04 -u root -- usermod -aG sudo YOURNAME`, then
+  `wsl -d Ubuntu-24.04 -u root -- sh -c "printf '[user]\ndefault=YOURNAME\n' >> /etc/wsl.conf"`,
+  then `wsl --terminate Ubuntu-24.04`. Install BenchBar again for that user
+  (`benchbar.exe setup run` or the install line from inside the distro), as
+  the files `root` made are not the new user's.
 - **A `benchbar://` link does nothing.** The tray has to be installed
   (or have started once) so that it registered the scheme, and the link
   must be one of the routes. Open the [URL scheme](reference/url-scheme.md)
