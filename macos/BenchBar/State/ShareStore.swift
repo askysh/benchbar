@@ -156,6 +156,7 @@ final class ShareStore {
     }
 
     var isSharing: Bool { status?.isOn == true }
+    var isSharingOrStarting: Bool { status?.isLive == true }
     var shouldPoll: Bool { tabVisible || status?.state == .on || status?.state == .starting }
     /// The 5 second poll runs only while someone looks at the tab.
     var currentPollInterval: Duration { tabVisible ? Self.pollInterval : Self.backgroundPollInterval }

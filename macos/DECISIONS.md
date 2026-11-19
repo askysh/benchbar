@@ -595,3 +595,9 @@ Asked for after the phases, to stop naming drift before the first release.
 - `status` fan out is capped at 3 (`BenchStore.maxParallelStatus`). On screen triggers share one queued reload (`requestReload`). A `noFile` bench the CLI called final leaves the minute loop; one running by hand stays.
 - `share status` is polled at 15 s with 20 percent tolerance, at 5 s only while the Sharing tab shows.
 - A second copy of the app opens the running one and exits (`SingleInstance`), unless `BENCHBAR_ALLOW_SECOND_COPY=1`. A `benchbar://` link that launched the second copy is lost: accepted. The CLI link: a copy in `/Applications` always keeps or takes it, and on one level it never goes to an older version (`AppCLILink.mayReplace`).
+## Rooms UI (0.9.0)
+
+- The guest health loop is `GuestRoomStore.healthTick()` (pure steps, tested) and runs only while the pane is visible or a loopback forwarder is open; it ends when no saved room can still be asked. A room that does not answer is asked after 20 s, 40 s and so on up to 5 minutes (`pingDelay`), and an answer resets it. Turning the lab off calls `shutDown()`, which now stops the loop as well.
+- The room code is hidden by default, shown once after Start sharing and New code, and hidden again when the tab goes away (`codeRevealed` is view state, never stored). Copy and Copy invite are unchanged and work while it is hidden.
+- `setup_interrupted` makes the primary button `Finish setup` (the setup sheet in refresh mode), because `share setup` without `--refresh` and `share start` both refuse while it is set.
+- The lab off question is asked in Settings only for lan-rooms and only while a share is on or a joined room's forwarder is open (`SharePresentation.labOffConfirm`); the CLI's `labs off` itself stays unprompted.

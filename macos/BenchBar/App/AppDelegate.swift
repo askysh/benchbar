@@ -18,7 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updateOffer: UpdateOffer!
     private var quickSwitch: QuickSwitchController!
     /// The guest side of rooms; filled only while the lan-rooms lab is on.
-    private let guestSlot = GuestSlot()
+    private let guestSlot = GuestSlot.shared
     private var guest: GuestRoomStore? { guestSlot.store }
     /// benchbar:// links that arrived before the bench list was loaded
     /// (a link can launch the app).
