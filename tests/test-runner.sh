@@ -261,7 +261,7 @@ grep -q 'truncated by size' "$LOGS/worker.log" || fail "worker.log is bounded to
 assert_eq "small and under the limit" "$(cat "$LOGS/worker.error.log")" "(a log under the limit is left alone)"
 # a writer that appends (honcho's output) lands after the kept tail
 printf 'after the cut\n' >>"$LOGS/bench.log"
-tail -n 1 "$LOGS/bench.log" | grep -q 'after the cut' || fail "appends after the truncation must land at the end"
+grep -q 'after the cut' <<<"$(tail -n 1 "$LOGS/bench.log")" || fail "appends after the truncation must land at the end"
 kill -TERM "$rpid"
 set +e; wait "$rpid"; set -e
 rm -f "$LOGS"/worker.log "$LOGS"/worker.error.log
