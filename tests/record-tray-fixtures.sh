@@ -54,7 +54,8 @@ assert_eq "0" "$CODE" "$OUT"
 # replaced by the paths the fixtures have always used. Fails when the command does.
 cli_out() {
   run_fm "$@" </dev/null
-  [[ "$CODE" == 0 ]] || fail "benchbar $* exited $CODE: $OUT"
+  # a command that is expected to refuse (ALLOW_EXIT=1) still prints what the tray reads
+  [[ "$CODE" == 0 || "${ALLOW_EXIT:-0}" == 1 ]] || fail "benchbar $* exited $CODE: $OUT"
   printf '%s\n' "$OUT" | TMP="$TMP_DIR" python3 -c '
 import os, sys
 tmp = os.environ["TMP"]
@@ -74,14 +75,28 @@ generated() {
     "cli/scan-empty.json|scan --json $HOME/empty"
 }
 
+# GENERATED_TEXT: fixture file, then the command; commands that print no JSON (autostart) or are
+# refused (lock write on a bench whose apps are not git checkouts, exit 1). A leading "!" allows a
+# non zero exit. autostart is read twice, off first, then on again (a run leaves it on).
+generated_text() {
+  printf '%s\n' \
+    "cli/autostart-off.txt|autostart --bench-dir $BENCH" \
+    "cli/lock-write-refused.txt|!lock write --dry-run --bench-dir $BENCH"
+}
+
 # SHAPES: fixture file, then the command it stands for (a CLI of today prints
 # every field of it, or says so below).
 shapes() {
   printf '%s\n' \
     "cli/apps-list.json|app list --json --bench-dir $BENCH" \
+    "cli/commands.json|commands --json" \
+    "cli/doctor-ack.json|doctor --ack mariadb_utf8 --json --bench-dir $BENCH" \
     "cli/health-doctor.json|doctor --json --bench-dir $BENCH" \
     "cli/labs-list.json|labs list --json" \
     "cli/logs-first.json|logs --json -n5 --bench-dir $BENCH" \
+    "cli/prerequisites.json|doctor --prerequisites --json --bench-dir $BENCH" \
+    "cli/prerequisites-fail.json|doctor --prerequisites --json --bench-dir $BENCH" \
+    "cli/up-services-only.jsonl|!up --services-only --json --bench-dir $BENCH" \
     "cli/ports-check-conflict.json|ports check --json --bench-dir $BENCH" \
     "cli/ports-check-running.json|ports check --json --bench-dir $BENCH" \
     "cli/profile-list.json|profile list --json" \
@@ -95,7 +110,12 @@ shapes() {
 paths() {
   python3 -I -c '
 import json, sys
-doc = json.load(open(sys.argv[1]))
+text = open(sys.argv[1]).read()
+try:
+    docs = [json.loads(text)]
+except ValueError:
+    # a JSON Lines stream (a fixture of a command that streams): every line that is an object
+    docs = [json.loads(l) for l in text.splitlines() if l.strip().startswith("{")]
 out = {}
 def walk(v, p):
     if isinstance(v, dict):
@@ -106,7 +126,8 @@ def walk(v, p):
         for x in v: walk(x, p + "[]")
     else:
         if p: out[p] = v is None
-walk(doc, "")
+for doc in docs:
+    walk(doc, "")
 for p, empty in sorted(out.items()):
     print(p + ("+" if empty else ""))
 ' "$1"
@@ -133,11 +154,37 @@ while IFS='|' read -r file cmd; do
   fi
 done < <(generated)
 
+# ---- generated text files: what the CLI prints, word for word, when it has no JSON
+text_fixture() {
+  local file="$1" new="$2"
+  if [[ "$CHECK" == 1 ]]; then
+    if ! cmp -s "$new" "$FIXTURES/$file"; then
+      printf 'windows/tray/fixtures/%s differs from what the CLI prints now:\n' "$file" >&2
+      diff -u "$FIXTURES/$file" "$new" >&2 || true
+      status=1
+    fi
+  else
+    cp "$new" "$FIXTURES/$file"
+    printf 'wrote windows/tray/fixtures/%s\n' "$file"
+  fi
+}
+while IFS='|' read -r file cmd; do
+  allow=0; [[ "$cmd" == "!"* ]] && { allow=1; cmd="${cmd#!}"; }
+  run_fm autostart off --bench-dir "$BENCH"
+  # shellcheck disable=SC2086
+  ALLOW_EXIT="$allow" cli_out $cmd >"$TMP_OUT/new.txt"
+  text_fixture "$file" "$TMP_OUT/new.txt"
+done < <(generated_text)
+run_fm autostart on --bench-dir "$BENCH"
+cli_out autostart --bench-dir "$BENCH" >"$TMP_OUT/new.txt"
+text_fixture cli/autostart-on.txt "$TMP_OUT/new.txt"
+
 # ---- hand shaped files: every field of the fixture is still printed
 while IFS='|' read -r file cmd; do
   [[ -f "$FIXTURES/$file" ]] || { printf 'windows/tray/fixtures/%s: no such file (fix SHAPES in tests/record-tray-fixtures.sh)\n' "$file" >&2; status=1; continue; }
+  allow=0; [[ "$cmd" == "!"* ]] && { allow=1; cmd="${cmd#!}"; }
   # shellcheck disable=SC2086
-  cli_out $cmd >"$TMP_OUT/now.json"
+  ALLOW_EXIT="$allow" cli_out $cmd >"$TMP_OUT/now.json"
   paths "$TMP_OUT/now.json" >"$TMP_OUT/now.paths"
   paths "$FIXTURES/$file" >"$TMP_OUT/fix.paths"
   missing="$(python3 -I -c '

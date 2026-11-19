@@ -212,6 +212,12 @@ internal sealed class PlanReviewSheet : Window
                 panel.Children.Add(line);
             }
         }
+        if (plan.Preview.Count > 0)
+        {
+            var preview = Ui.Mono(string.Join(Environment.NewLine, plan.Preview));
+            preview.Margin = new Thickness(0, 12, 0, 0);
+            panel.Children.Add(preview);
+        }
         if (plan.Touches.Count > 0) panel.Children.Add(Ui.Text("Changes: " + string.Join(", ", plan.Touches), 13, opacity: 0.8, margin: new Thickness(0, 8, 0, 0)));
         if (_model.AsksPassword)
             panel.Children.Add(Ui.Text($"{plan.SudoSteps} {(plan.SudoSteps == 1 ? "step uses" : "steps use")} sudo. BenchBar asks for your Linux password when you confirm; it is used for this run only.", 13, margin: new Thickness(0, 10, 0, 0)));

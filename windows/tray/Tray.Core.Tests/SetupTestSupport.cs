@@ -188,6 +188,8 @@ internal class DelegatingSetup(FixtureSetupService inner) : ISetupService
     public virtual Task<ProfileListResult> ListProfilesAsync(CancellationToken ct) => inner.ListProfilesAsync(ct);
 
     public virtual Task<ProfileGate> CheckProfileAsync(string profile, string benchDir, CancellationToken ct) => inner.CheckProfileAsync(profile, benchDir, ct);
+
+    public virtual Task<PrerequisiteResult> PrerequisitesAsync(string benchDir, CancellationToken ct) => inner.PrerequisitesAsync(benchDir, ct);
 }
 
 /// <summary>A setup action that runs until it is cancelled.</summary>
