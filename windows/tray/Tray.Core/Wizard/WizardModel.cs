@@ -335,6 +335,8 @@ public sealed partial class WizardModel : IDisposable
     public string? ProfilesError { get; private set; }
 
     private string? _profilesFor;
+    private CancellationTokenSource? _profilesRun;
+    private bool _profilePicked;
     private List<ProfileChoice> _listed = [];
 
     public string ExistingPath { get; private set; } = "";
@@ -364,7 +366,7 @@ public sealed partial class WizardModel : IDisposable
             if (!IsValidSite(Site)) return SiteRule;
             if (!Bundles.Contains(Bundle)) return "Choose a bundle.";
             if (SelectedProfile is not { } profile) return "Choose a profile.";
-            if (profile.Refusal is { } refusal) return refusal;
+            if (profile.Refusal is { } refusal) return $"{profile.Name} cannot be used here. {refusal}";
             if (_adminPassword.IsEmpty) return "Choose the Administrator password for the site.";
             var admin = _adminPassword.Reveal();
             if (HasLineBreak(admin)) return "The Administrator password cannot contain a line break.";
@@ -1000,26 +1002,43 @@ public sealed partial class WizardModel : IDisposable
     {
         if (_profileChoices.FirstOrDefault(c => c.Name == name) is not { Enabled: true }) return;
         Profile = name;
+        _profilePicked = true;
         Raise();
     }
 
     /// <summary>
-    /// Reads <c>profile list</c> once per distro (again with <paramref name="force"/>, the Try Again link), then asks the install's own gate
-    /// about each profile in turn, so a profile Linux cannot install shows the CLI's reason and stays off. The picker works from the first
-    /// moment with v15-lts alone and fills in as the answers come.
+    /// Reads <c>profile list</c> once per distro (again with <paramref name="force"/>, the Try Again link). Each profile of a current CLI
+    /// carries the install's own gate (<c>linux_supported</c>, <c>unsupported_reason</c>), so that one call answers for all of them;
+    /// only a profile whose entry has no answer (an older CLI) is asked of the gate with a dry run, one at a time. The picker works
+    /// from the first moment with v15-lts alone and fills in as the answers come. A newer read (another distro, Try Again) stops an older
+    /// one that is still asking.
     /// </summary>
     public async Task LoadProfilesAsync(bool force = false)
     {
         var key = Distro ?? "";
         if (!force && _profilesFor == key) return;
+        if (_profilesFor is not null && _profilesFor != key)
+        {
+            // another distro has other profiles: nothing of the first one stays picked or on offer
+            _listed = [];
+            _profileChoices = [ProfileChoices.Fallback];
+            Profile = DefaultProfile;
+            _profilePicked = false;
+        }
+        _profilesRun?.Cancel();
+        var run = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        _profilesRun = run;
+        var ct = run.Token;
         _profilesFor = key;
         ProfilesLoading = true;
+        ProfilesChecking = false;
         ProfilesError = null;
         Raise();
         var refusals = new Dictionary<string, string?>();
         try
         {
-            var list = await _setup.ListProfilesAsync(_lifetime.Token).ConfigureAwait(true);
+            var list = await _setup.ListProfilesAsync(ct).ConfigureAwait(true);
+            ct.ThrowIfCancellationRequested();
             if (list.Error is not null || list.Profiles.Count == 0)
             {
                 ProfilesError = list.Error ?? "The profile list was empty.";
@@ -1032,28 +1051,35 @@ public sealed partial class WizardModel : IDisposable
             if (_listed.Count == 0) _listed = [ProfileChoices.Fallback];
             _profileChoices = _listed;
             ProfilesLoading = false;
-            ProfilesChecking = true;
+            var unanswered = _listed.Where(c => !c.Answered).ToList();
+            ProfilesChecking = unanswered.Count > 0;
             Raise();
             var bench = IsValidFolder(Folder) ? Folder : Home + "/frappe-bench";
-            foreach (var choice in _listed)
+            foreach (var choice in unanswered)
             {
-                var gate = await _setup.CheckProfileAsync(choice.Name, bench, _lifetime.Token).ConfigureAwait(true);
+                var gate = await _setup.CheckProfileAsync(choice.Name, bench, ct).ConfigureAwait(true);
+                ct.ThrowIfCancellationRequested();
                 refusals[choice.Name] = gate.Refusal;
                 _profileChoices = ProfileChoices.Apply(_listed, refusals);
                 Raise();
             }
-            // the chosen profile may be one the CLI refuses: move to the first it takes, and say nothing is chosen when there is none
-            if (SelectedProfile is not { Enabled: true } && _profileChoices.FirstOrDefault(c => c.Enabled) is { } first) Profile = first.Name;
+            // a profile nobody picked (the default) that is refused moves to the first the CLI takes; one the person picked stays, and
+            // the form says why it cannot be used
+            if (!_profilePicked && SelectedProfile is not { Enabled: true } && _profileChoices.FirstOrDefault(c => c.Enabled) is { } first) Profile = first.Name;
         }
         catch (OperationCanceledException)
         {
-            _profilesFor = null; // closed or left mid way: the next visit reads again
+            // closed or left mid way: the next visit reads again. A read a newer one replaced leaves its key alone.
+            if (ReferenceEquals(_profilesRun, run)) _profilesFor = null;
         }
         finally
         {
-            ProfilesLoading = false;
-            ProfilesChecking = false;
-            Raise();
+            if (ReferenceEquals(_profilesRun, run))
+            {
+                ProfilesLoading = false;
+                ProfilesChecking = false;
+                Raise();
+            }
         }
     }
 
