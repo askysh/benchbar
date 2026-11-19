@@ -24,6 +24,14 @@ FL_OP_COMMAND="${FL_OP_COMMAND:-}"
 FL_OP_JSON="${FL_OP_JSON:-}"
 FL_OP_BACKGROUND="${FL_OP_BACKGROUND:-0}"
 FL_OP_ENDED=0
+# the state the record says while the run goes on: "starting" for a detached run until it holds the lock
+# (fl_op_running), else "running"
+FL_OP_STATE="running"
+# the process's start time (see fl_op_pid_start_v), so a reader can tell the run from a process that reuses its pid
+FL_OP_PID_START="${FL_OP_PID_START:-}"
+# the site the command works on (site add NAME ...), and the bench found before the run's context is set up
+FL_OP_SITE="${FL_OP_SITE:-}"
+FL_OP_BENCH="${FL_OP_BENCH:-}"
 # what the record says about the step that runs and the last progress line of this process
 FL_OP_STEP_ID=""
 FL_OP_STEP_NAME=""
@@ -63,17 +71,51 @@ fl_op_new_id_v() {
   printf -v "$1" '%s' "$__id"
 }
 
+# fl_op_pid_start_v VAR PID: when the process started, as text (empty when it cannot be read). Linux: field 22 of
+# /proc/PID/stat (after the last ")", the command name may hold spaces), no process; macOS: ps -o lstart=.
+# Only the writer of a record and `benchbar op` ask: the lean status path never does.
+fl_op_pid_start_v() {
+  local __line="" __rest __w
+  if [[ -r /proc/self/stat ]]; then
+    IFS= read -r __line <"/proc/${2}/stat" 2>/dev/null || __line=""
+    if [[ -n "$__line" ]]; then
+      __rest="${__line##*) }"
+      # shellcheck disable=SC2206
+      __w=($__rest)
+      __line="${__w[19]:-}"
+    fi
+  else
+    __line="$(ps -o lstart= -p "$2" 2>/dev/null || true)"
+    __line="${__line#"${__line%%[![:space:]]*}"}"; __line="${__line%"${__line##*[![:space:]]}"}"
+  fi
+  printf -v "$1" '%s' "$__line"
+}
+
+# fl_op_context: the site this command works on (the NAME of site add|backup|restore|drop NAME) and the bench,
+# found before the run's own context exists: a run that is refused at the lock still says which bench and site
+fl_op_context() {
+  FL_OP_SITE=""
+  if [[ "${COMMAND:-}" == "site" ]] && declare -F fl_site_arg_name >/dev/null; then FL_OP_SITE="$(fl_site_arg_name 2>/dev/null || true)"; fi
+  [[ -n "$FL_OP_SITE" ]] || FL_OP_SITE="${OPT_SITE:-}"
+  FL_OP_BENCH="${FL_BENCH_DIR:-}"
+  [[ -n "$FL_OP_BENCH" ]] || FL_OP_BENCH="${OPT_BENCH_DIR:-}"
+  if [[ -z "$FL_OP_BENCH" ]] && declare -F fl_bench_detect >/dev/null; then
+    FL_OP_BENCH="$( (fl_bench_detect "" >/dev/null 2>&1; printf '%s' "${FL_BENCH_DIR:-}") 2>/dev/null || true)"
+  fi
+}
+
 # fl_op_write STATE [EXIT]: the record of the run that FL_OP_ID names, whole, through a temp file and a
 # rename. STATE is starting, running, done or failed. Never ends the run: a folder that cannot be
 # written leaves the run without a record, nothing more.
 fl_op_write() {
-  local state="$1" code="${2:-}" dir f_bench f_site f_log f_out f_cmd step="null" prog="null" now fin="null" ex="null" tmp pid
+  local state="$1" code="${2:-}" dir f_bench f_site f_log f_out f_cmd f_ps step="null" prog="null" now fin="null" ex="null" tmp pid
   [[ -n "$FL_OP_ID" ]] || return 0
   [[ "$FL_OP_ENDED" != "1" || "$state" == "done" || "$state" == "failed" ]] || return 0
   dir="$(fl_ops_dir)"
   now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  fl__op_str_v f_bench "${FL_BENCH_DIR:-}"
-  fl__op_str_v f_site "${FL_SITE:-}"
+  fl__op_str_v f_bench "${FL_BENCH_DIR:-${FL_OP_BENCH:-}}"
+  fl__op_str_v f_site "${FL_OP_SITE:-${FL_SITE:-}}"
+  fl__op_str_v f_ps "$FL_OP_PID_START"
   fl__op_str_v f_log "${FL_LOG_FILE:-}"
   fl__op_str_v f_cmd "$FL_OP_COMMAND"
   f_out=null
@@ -88,8 +130,8 @@ fl_op_write() {
   pid="${FL_OP_OWNER:-null}"
   tmp="${dir}/.${FL_OP_ID}.$$.tmp"
   {
-    printf '{"schema_version":%d,"cli_version":"%s","op_id":"%s","state":"%s","command":%s,"bench":%s,"site":%s,"pid":%s,"started_at":"%s","updated_at":"%s","finished_at":%s,"step":%s,"progress":%s,"exit":%s,"log":%s,"output":%s,"background":%s}\n' \
-      "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$FL_OP_ID" "$state" "$f_cmd" "$f_bench" "$f_site" "$pid" \
+    printf '{"schema_version":%d,"cli_version":"%s","op_id":"%s","state":"%s","command":%s,"bench":%s,"site":%s,"pid":%s,"pid_start":%s,"started_at":"%s","updated_at":"%s","finished_at":%s,"step":%s,"progress":%s,"exit":%s,"log":%s,"output":%s,"background":%s}\n' \
+      "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$FL_OP_ID" "$state" "$f_cmd" "$f_bench" "$f_site" "$pid" "$f_ps" \
       "${FL_OP_STARTED:-$now}" "$now" "$fin" "$step" "$prog" "$ex" "$f_log" "$f_out" \
       "$([[ "$FL_OP_BACKGROUND" == "1" ]] && printf true || printf false)" >"$tmp" \
       && mv -f "$tmp" "${dir}/${FL_OP_ID}.json"
@@ -114,6 +156,11 @@ fl_op_begin() {
   key="${FL_JSON_KEY:-}"
   if [[ -z "$key" ]] && declare -F fl_cmd_key_for >/dev/null; then key="$(fl_cmd_key_for "${COMMAND:-}" "${ARGS[0]:-}" 2>/dev/null || true)"; fi
   FL_OP_COMMAND="${key:-${COMMAND:-}}"
+  fl_op_context
+  fl_op_pid_start_v FL_OP_PID_START "$$"
+  # a detached run says "starting" until it holds the lock: its launcher waits for that (fl_op_background)
+  FL_OP_STATE="running"
+  [[ "$FL_OP_BACKGROUND" != "1" ]] || FL_OP_STATE="starting"
   FL_OP_ID="$id"
   FL_OP_OWNER="$$"
   FL_OP_STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -121,7 +168,15 @@ fl_op_begin() {
   FL_OP_JSON=",\"op_id\":\"${id}\""
   FL_OP_ENDED=0
   # shellcheck disable=SC2090
-  export FL_OP_ID FL_OP_OWNER FL_OP_STARTED FL_OP_COMMAND FL_OP_JSON FL_OP_BACKGROUND
+  export FL_OP_ID FL_OP_OWNER FL_OP_STARTED FL_OP_COMMAND FL_OP_JSON FL_OP_BACKGROUND FL_OP_PID_START FL_OP_SITE FL_OP_BENCH
+  fl_op_write "$FL_OP_STATE"
+}
+
+# fl_op_running: the run holds its lock (the dispatcher calls this after taking it); a detached run leaves
+# "starting" here, so a launcher that waits for it knows the run was not refused
+fl_op_running() {
+  [[ -n "$FL_OP_ID" && "$FL_OP_OWNER" == "$$" && "$FL_OP_STATE" == "starting" ]] || return 0
+  FL_OP_STATE="running"
   fl_op_write running
 }
 
@@ -130,14 +185,14 @@ fl_op_note_step() {
   [[ -n "$FL_OP_ID" ]] || return 0
   FL_OP_STEP_ID="$1"; FL_OP_STEP_NAME="$2"; FL_OP_STEP_STATUS="$3"
   FL_OP_PROG_LABEL=""; FL_OP_PROG_ELAPSED=""; FL_OP_PROG_BYTES=""
-  fl_op_write running
+  fl_op_write "$FL_OP_STATE"
 }
 
 # fl_op_note_progress LABEL ELAPSED [BYTES]: the last progress line
 fl_op_note_progress() {
   [[ -n "$FL_OP_ID" ]] || return 0
   FL_OP_PROG_LABEL="$1"; FL_OP_PROG_ELAPSED="${2:-0}"; FL_OP_PROG_BYTES="${3:-}"
-  fl_op_write running
+  fl_op_write "$FL_OP_STATE"
 }
 
 # fl_op_end CODE: the run is over (the exit trap calls this after the done line is out, so a reader
@@ -146,6 +201,12 @@ fl_op_end() {
   [[ -n "$FL_OP_ID" && "$FL_OP_OWNER" == "$$" && "$FL_OP_ENDED" != "1" ]] || return 0
   local code="${1:-0}" state="done"
   [[ "$code" == "0" ]] || state=failed
+  # a step that was running when the run ended did not end on its own: the run's exit says how
+  if [[ "$FL_OP_STEP_STATUS" == "running" ]]; then
+    FL_OP_STEP_STATUS="done"
+    [[ "$code" == "0" ]] || FL_OP_STEP_STATUS="failed"
+  fi
+  FL_OP_PROG_LABEL=""
   fl_op_write "$state" "$code"
   FL_OP_ENDED=1
 }
@@ -174,16 +235,29 @@ fl_op_read_v() {
 # fl_op_effective_v VAR RECORD: the state to show. A run that says running whose process is gone, or a
 # launch that never took over, is interrupted.
 fl_op_effective_v() {
-  local __s __pid __id __age=0
+  local __s __pid __id __age=0 __ps __now
   fl_op_field_v __s "$2" state
+  fl_op_field_v __pid "$2" pid
   case "$__s" in
-    running)
-      fl_op_field_v __pid "$2" pid
-      if [[ ! "$__pid" =~ ^[0-9]+$ ]] || ! kill -0 "$__pid" 2>/dev/null; then __s=interrupted; fi ;;
-    starting)
-      fl_op_field_v __id "$2" op_id
-      if declare -F fl__lock_age >/dev/null && [[ -f "$(fl_ops_dir)/${__id}.json" ]]; then __age="$(fl__lock_age "$(fl_ops_dir)/${__id}.json")"; fi
-      if [[ "$__age" -gt "$FL_OP_START_GRACE" ]]; then __s=interrupted; fi ;;
+    running|starting)
+      if [[ "$__pid" =~ ^[0-9]+$ ]]; then
+        # a run that is gone, or a pid that another process has taken since: the start time of the pid says
+        if ! kill -0 "$__pid" 2>/dev/null; then __s=interrupted
+        else
+          fl_op_field_v __ps "$2" pid_start
+          if [[ -n "$__ps" ]]; then
+            fl_op_pid_start_v __now "$__pid"
+            [[ -z "$__now" || "$__now" == "$__ps" ]] || __s=interrupted
+          fi
+        fi
+      elif [[ "$__s" == "running" ]]; then
+        __s=interrupted
+      else
+        # a launch no process took over yet
+        fl_op_field_v __id "$2" op_id
+        if declare -F fl__lock_age >/dev/null && [[ -f "$(fl_ops_dir)/${__id}.json" ]]; then __age="$(fl__lock_age "$(fl_ops_dir)/${__id}.json")"; fi
+        if [[ "$__age" -gt "$FL_OP_START_GRACE" ]]; then __s=interrupted; fi
+      fi ;;
   esac
   printf -v "$1" '%s' "$__s"
 }
@@ -372,6 +446,39 @@ fl_op_background_ok() {
   return 1
 }
 
+# fl_op_launch_wait ID: the launcher looks at the record of the run it started, up to FL_OP_LAUNCH_WAIT seconds
+# (5; the tests shorten it), until the run leaves "starting": it holds its lock then. A run that was refused
+# (another run holds the lock, a check that the preflight cannot see) is the launcher's refusal, with the run's
+# own message and exit code; sets FL_OP_LAUNCH_STATE (starting, running or done) and FL_OP_LAUNCH_PID.
+FL_OP_LAUNCH_STATE="starting"
+FL_OP_LAUNCH_PID=""
+fl_op_launch_wait() {
+  local id="$1" rec st="starting" i=0 tries msg hint code line
+  tries=$(( ${FL_OP_LAUNCH_WAIT:-5} * 5 ))
+  [[ "${FL_TESTING:-}" == "1" ]] || tries=25
+  while :; do
+    fl_op_read_v rec "$id"
+    fl_op_effective_v st "$rec"
+    [[ "$st" == "starting" && "$i" -lt "$tries" ]] || break
+    sleep 0.2
+    i=$((i + 1))
+  done
+  fl_op_field_v FL_OP_LAUNCH_PID "$rec" pid
+  case "$st" in
+    failed|interrupted)
+      fl_op_field_v code "$rec" exit
+      [[ "$code" =~ ^[0-9]+$ ]] || code=1
+      line=""; fl_op_result_v line "$id"
+      msg=""; [[ -z "$line" ]] || fl_op_field_v msg "$line" error
+      [[ -n "$msg" ]] || msg="$(grep -m1 -v '^[[:space:]]*$' "$(fl_ops_dir)/${id}.err" 2>/dev/null || true)"
+      [[ -n "$msg" ]] || msg="The detached run ended without a result."
+      hint="$(sed -n 's/^Aborting\. //p' "$(fl_ops_dir)/${id}.err" 2>/dev/null | tail -n 1)"
+      fl_die "$msg" "${hint:-See benchbar op status ${id} and its log.} Nothing was started; the attempt is recorded as ${id}." "$code" ;;
+    done|running) FL_OP_LAUNCH_STATE="$st" ;;
+    *) FL_OP_LAUNCH_STATE="starting" ;;
+  esac
+}
+
 # fl_op_background ARGS...: starts this command again, detached, with its stream in ops/OP_ID.jsonl, and
 # prints the op_id; the caller exits. Everything that can be refused is refused here, before the start
 # (a missing input, a dry run, a command that may not run detached), so a refusal is the answer and not an op.
@@ -390,7 +497,8 @@ fl_op_background() {
   # the launcher writes the first record ("starting"); the detached run takes it over
   FL_OP_ID="$id"; FL_OP_OWNER=""; FL_OP_COMMAND="$key"; FL_OP_BACKGROUND=1
   FL_OP_STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  FL_BENCH_DIR="${OPT_BENCH_DIR:-}"; FL_SITE="${OPT_SITE:-}"; FL_LOG_FILE=""
+  FL_LOG_FILE=""
+  fl_op_context
   fl_op_write starting
   FL_OP_ID=""; FL_OP_BACKGROUND=0
   (
@@ -404,14 +512,15 @@ fl_op_background() {
       nohup "$BASH" "${SCRIPT_DIR}/benchbar" "${args[@]}" >"$out" 2>"$err" </dev/null &
     fi
   ) 2>/dev/null
+  fl_op_launch_wait "$id"
   if [[ "$OPT_JSON" == "1" ]]; then
     fl_next_action "$(fl_fix_cmd benchbar op wait "$id")" "Wait for it to end (add --timeout SECS to give up waiting; --json for the result)"
     fl_next_action "$(fl_fix_cmd benchbar op status "$id" --json)" "Where it is now: the step, the last progress line, the exit"
     fl_json_str_v doc "$key"
-    printf '{"schema_version":%d,"cli_version":"%s","op_id":"%s","command":%s,"state":"starting","background":true,"output":%s,"exit":0,"next_actions":[%s]}\n' \
-      "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$id" "$doc" "$(fl_json_str "$out")" "$FL_DONE_NEXT"
+    printf '{"schema_version":%d,"cli_version":"%s","op_id":"%s","command":%s,"state":"%s","pid":%s,"background":true,"output":%s,"exit":0,"next_actions":[%s]}\n' \
+      "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$id" "$doc" "$FL_OP_LAUNCH_STATE" "${FL_OP_LAUNCH_PID:-null}" "$(fl_json_str "$out")" "$FL_DONE_NEXT"
   else
-    printf 'Started in the background: %s (benchbar %s)\n' "$id" "$key"
+    printf 'Started in the background (%s): %s (benchbar %s)\n' "$FL_OP_LAUNCH_STATE" "$id" "$key"
     printf '  benchbar op status %s    where it is now\n' "$id"
     printf '  benchbar op wait %s      wait for it to end\n' "$id"
   fi

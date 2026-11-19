@@ -210,11 +210,12 @@ assert_eq "0" "$CODE" "$OUT$ERR"
 BG="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
 assert_eq "site backup True" "$(printf '%s' "$OUT" | jget - 'd["command"] + " " + str(d["background"])')"
 assert_eq "benchbar op wait $BG" "$(printf '%s' "$OUT" | jget - 'd["next_actions"][0]["command"]')"
-assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["state"] == "starting" and d["exit"] == 0 and d["output"].endswith("/ops/" + "'"$BG"'" + ".jsonl")')"
-# it returned at once: the run is still going (it sleeps 3 seconds), and op status follows it
+assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["state"] == "running" and d["pid"] > 0 and d["exit"] == 0 and d["output"].endswith("/ops/" + "'"$BG"'" + ".jsonl")')" "(the launcher waited for the lock: running, not starting)"
+# it returned once the run held its lock: the run is still going (it sleeps 3 seconds), and op status follows it
 run_json op status "$BG" --json
 assert_eq "0" "$CODE" "$OUT"
-case "$(printf '%s' "$OUT" | jget - 'd["state"]')" in starting|running) ;; *) fail "the detached run should still go: $OUT" ;; esac
+assert_eq "running" "$(printf '%s' "$OUT" | jget - 'd["state"]')" "$OUT"
+assert_eq "$BENCH bbtest.localhost" "$(printf '%s' "$OUT" | jget - 'd["bench"] + " " + str(d["site"])')" "(the record names the site the command works on, not the default site)"
 run_json op wait "$BG" --timeout 60 --json
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "done 0 True" "$(printf '%s' "$OUT" | jget - 'd["state"] + " " + str(d["exit"]) + " " + str(d["background"])')" "$OUT"
@@ -225,19 +226,63 @@ assert_file "$OPS/$BG.jsonl"
 # the text form of the launch
 MOCK_BENCH_BACKUP_SLEEP=0 run_fm site backup bbtest.localhost --background --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-assert_contains "$OUT" "Started in the background: op-"
+assert_contains "$OUT" "Started in the background ("
 assert_contains "$OUT" "benchbar op wait op-"
-BG2="$(printf '%s' "$OUT" | sed -n 's/^Started in the background: \(op-[0-9-]*\).*/\1/p')"
+BG2="$(printf '%s' "$OUT" | sed -n 's/^Started in the background ([a-z]*): \(op-[0-9-]*\).*/\1/p')"
 run_json op wait "$BG2" --timeout 60 --json
 assert_eq "done" "$(printf '%s' "$OUT" | jget - 'd["state"]')" "$OUT"
 # a detached run that fails ends failed, and says why in its result
-MOCK_BENCH_BACKUP_EXIT=1 run_json site backup bbtest.localhost --background --yes --json --bench-dir "$BENCH"
+MOCK_BENCH_BACKUP_SLEEP=1 MOCK_BENCH_BACKUP_EXIT=1 run_json site backup bbtest.localhost --background --yes --json --bench-dir "$BENCH"
 BG3="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
 run_json op wait "$BG3" --timeout 60 --json
 assert_eq "1" "$CODE" "$OUT"
 assert_eq "failed 1" "$(printf '%s' "$OUT" | jget - 'd["state"] + " " + str(d["result"]["exit"])')" "$OUT"
-# a secret in the environment reaches the detached run, and never its record or output
-assert_eq "False" "$(grep -rqs rootpw "$OPS" && echo True || echo False)" "(the root password is in no record)"
+# a secret in the environment reaches the detached run, and never its record, its output or the run's log
+ADMIN_PASSWORD=adminpw-0451 MOCK_BENCH_BACKUP_SLEEP=1 run_json site backup bbtest.localhost --background --yes --json --bench-dir "$BENCH"
+run_json op wait "$(printf '%s' "$OUT" | jget - 'd["op_id"]')" --timeout 60 --json
+assert_eq "0" "$CODE" "$OUT"
+for secret in rootpw adminpw-0451; do
+  assert_eq "False" "$(grep -rqs -- "$secret" "$OPS" "$FL_STATE_DIR/logs" && echo True || echo False)" "($secret is in no record, output or run log)"
+done
+
+# ---- 6b. the lock is held by a live run: the launcher says so, with the run's message and exit code, and starts nothing
+mkdir -p "$FL_STATE_DIR/lock"; printf '%s\n' "$LIVE" >"$FL_STATE_DIR/lock/pid"
+run_json site backup bbtest.localhost --background --yes --json --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_contains "$OUT$ERR" "Another benchbar run is active"
+assert_not_contains "$OUT" '"state":"starting"' "(not an exit 0 with state starting)"
+run_json op list --limit 1 --json
+LK="$(printf '%s' "$OUT" | jget - 'd["ops"][0]["op_id"]')"
+assert_eq "failed 1 $BENCH bbtest.localhost" "$(printf '%s' "$OUT" | jget - 'd["ops"][0]["state"] + " " + str(d["ops"][0]["exit"]) + " " + str(d["ops"][0]["bench"]) + " " + str(d["ops"][0]["site"])')" "(the refused attempt is recorded, with its bench and site)"
+run_fm site backup bbtest.localhost --background --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Another benchbar run is active"
+# in front, the refusal is the run's own, and its record names the bench and the site as well
+run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "1" "$CODE"
+run_json op list --limit 1 --json
+assert_eq "failed 1 $BENCH bbtest.localhost False" "$(printf '%s' "$OUT" | jget - 'd["ops"][0]["state"] + " " + str(d["ops"][0]["exit"]) + " " + str(d["ops"][0]["bench"]) + " " + str(d["ops"][0]["site"]) + " " + str(d["ops"][0]["background"])')"
+rm -f "$FL_STATE_DIR/lock/pid"; rmdir "$FL_STATE_DIR/lock"
+
+# ---- 6c. a record whose pid another process now holds is interrupted, and op wait does not hang on it
+# LIVE is alive: a record with its pid and its real start time is running, one with another start time is a reused pid
+LIVE_START="$(sed 's/^.*) //' "/proc/$LIVE/stat" | awk '{print $20}')"
+[[ -n "$LIVE_START" ]] || fail "could not read the start time of $LIVE"
+fake_op op-20260102-000001-21 running "$LIVE"
+sed_inplace "s/\"pid\":$LIVE,/\"pid\":$LIVE,\"pid_start\":\"$LIVE_START\",/" "$OPS/op-20260102-000001-21.json"
+fake_op op-20260102-000002-22 running "$LIVE"
+sed_inplace "s/\"pid\":$LIVE,/\"pid\":$LIVE,\"pid_start\":\"12345\",/" "$OPS/op-20260102-000002-22.json"
+assert_eq "running" "$(run_json op status op-20260102-000001-21 --json; printf '%s' "$OUT" | jget - 'd["state"]')" "(the pid and its start time are the run's)"
+assert_eq "interrupted" "$(run_json op status op-20260102-000002-22 --json; printf '%s' "$OUT" | jget - 'd["state"]')" "(the pid is alive but it is another process)"
+run_json op wait op-20260102-000002-22 --timeout 20 --json
+assert_eq "1 interrupted" "$CODE $(printf '%s' "$OUT" | jget - 'd["state"]')" "(op wait returns at once, no timeout needed)"
+# a real run's record carries the start time of its own process
+run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "True" "$(jget "$OPS/$(printf '%s' "$OUT" | jget - 'd["op_id"]').json" 'bool(d["pid_start"])')"
+
+# ---- 6d. a finished record does not keep its last step running
+run_json service --json --yes --bench-dir "$BENCH"
+SV="$(printf '%s' "$OUT" | tail -n 1 | jget - 'd["op_id"]')"
+assert_eq "True" "$(rec_field "$SV" 'd["step"] is not None and d["step"]["status"] != "running" and d["progress"] is None')" "(a done run has no running step)"
 
 # ---- 7. the MCP server: op_id in an action's result, the read only op status tool
 BENCHBAR_MCP_APPLY_DELAY=0
@@ -249,7 +294,7 @@ R="$(mcp "$(call 1 benchbar_site_backup '{"site":"bbtest.localhost","bench":"'"$
 assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 MID="$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["op_id"]')"
 assert_eq "$MID" "$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["result"]["op_id"]')" "(the op_id is at the top of the result and in the done line)"
-R="$(mcp "$(call 1 benchbar_op_status '{"op_id":"'"$MID"'"}')" "$(call 2 benchbar_op_status '{}')" "$(call 3 benchbar_op_status '{"op_id":"--help"}')" "$(call 4 benchbar_op_status '{"op_id":"op-1"}')" "$(call 5 benchbar_op_status '{"op_id":"op-20200101-000000-77"}')")"
+R="$(mcp "$(call 1 benchbar_op_status '{"op_id":"'"$MID"'"}')" "$(call 2 benchbar_op_status '{}')" "$(call 3 benchbar_op_status '{"op_id":"--help"}')" "$(call 4 benchbar_op_status '{"op_id":"op-1"}')" "$(call 5 benchbar_op_status '{"op_id":"op-20200101-000000-77"}')" "$(call 6 benchbar_op_status '{"op_id":"'"$MID"'\n"}')")"
 printf '%s' "$R" | python3 -c '
 import json, sys
 by = {json.loads(l)["id"]: json.loads(l) for l in sys.stdin.read().splitlines()}
@@ -258,7 +303,8 @@ one = by[1]["result"]
 assert not one["isError"] and one["structuredContent"]["state"] == "done" and one["structuredContent"]["command"] == "site backup", one
 assert one["content"][0]["text"].startswith("Data from the bench (operation records"), one["content"][0]["text"][:120]
 assert len(by[2]["result"]["structuredContent"]["ops"]) >= 3, by[2]   # without an op_id: the newest operations
-assert bad(by[3]) and bad(by[4]) and bad(by[5]), (by[3], by[4], by[5])   # an option, a short id and an unknown id' || fail "benchbar_op_status replies: $R"
+assert bad(by[3]) and bad(by[4]) and bad(by[5]), (by[3], by[4], by[5])
+assert bad(by[6]) and "not valid" in by[6]["result"]["content"][0]["text"], by[6]   # a trailing newline is not an op id   # an option, a short id and an unknown id' || fail "benchbar_op_status replies: $R"
 assert_eq "True" "$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | jget - 'any(t["name"] == "benchbar_op_status" and t["annotations"]["readOnlyHint"] is True for t in d["result"]["tools"])')"
 assert_eq "True" "$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | jget - 'all("background" in t["inputSchema"]["properties"] for t in d["result"]["tools"] if t["name"] in ("benchbar_app_add", "benchbar_site_restore")) and not any("background" in t["inputSchema"]["properties"] for t in d["result"]["tools"] if t["name"] in ("benchbar_site_add", "benchbar_up"))')"
 

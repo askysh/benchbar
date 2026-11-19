@@ -454,8 +454,8 @@ did not start the run can follow it. The newest 100 records are kept.
 
 `state` is `starting` (a `--background` run that has not taken over yet),
 `running`, `done`, `failed` (it ended with an exit other than 0) or
-`interrupted`: the record says `running` but its process is gone, so the
-run was killed and wrote no `done` line. Check `log` for how far it got.
+`interrupted`: the record says `running` but its process is gone (or its pid
+belongs to another process now), so the run was killed and wrote no `done` line. Check `log` for how far it got.
 `op wait` exits 0 when the run ended with exit 0 and 1 for anything else (a
 failed run, an interrupted one, a timeout: `--json` says which, with
 `timed_out: true` for a timeout). The `op` commands only read; they take no
@@ -484,9 +484,11 @@ environment (`ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD`, a `sudo` that does
 not ask), and refuses before it starts when one is missing, as an agent run
 does. It refuses `--dry-run` (a plan is instant) and
 `BENCHBAR_SUDO_PASSWORD` (the password travels on a pipe the detached run
-cannot read; cache the sudo credential, or run in front). The launch prints
-`{"op_id", "command", "state": "starting", "output", "next_actions"}` with
-`--json`, or two lines of text.
+cannot read; cache the sudo credential, or run in front). The launcher waits up
+to 5 seconds for the run to hold its lock: when another run holds it, that is the
+launcher's refusal (the run's message, exit 1) and nothing was started. Else it
+prints `{"op_id", "command", "state": "running", "pid", "output", "next_actions"}`
+with `--json`, or two lines of text.
 
 Exit codes: 0; 1 for an op that does not exist, a bad id or option, and
 for `op wait` when the operation did not end with exit 0.

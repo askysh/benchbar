@@ -1286,10 +1286,11 @@ kept (`FL_KEEP_OPS`), and never one of a run that still runs.
 | Field | Type | Notes |
 |---|---|---|
 | `schema_version`, `cli_version`, `op_id` | | as everywhere |
-| `state` | string | `starting` (a `--background` run that has not taken over yet), `running`, `done` (exit 0), `failed` (any other exit). `op status` and `op list` print `interrupted` instead of `running` or `starting` when the process is gone (`kill -0` on `pid`; a start that did not take over within 60 seconds): the run was killed and wrote no `done` line. The file is not rewritten. Treat an unknown value as unknown |
+| `state` | string | `starting` (a `--background` run that is not holding its lock yet), `running`, `done` (exit 0), `failed` (any other exit). `op status`, `op list` and `op wait` print `interrupted` instead of `running` or `starting` when the run is gone: its pid is not alive, or belongs to another process now (`pid_start` differs from the start time of that pid), or a launch did not take over within 60 seconds. The run was killed and wrote no `done` line; the file is not rewritten. Treat an unknown value as unknown |
 | `command` | string or null | the command's key in `benchbar commands --json` (`install`, `site restore`, `app add`) |
-| `bench`, `site` | string or null | the bench and the site the run works on, as far as it knew when the record was last written (null at the first write) |
-| `pid` | number or null | the run's process; null for `starting` |
+| `bench`, `site` | string or null | the bench the run works on and its site: for `site add\|backup\|restore\|drop NAME` the NAME, else `--site`, else the bench's default site. A run that the lock refused still names them |
+| `pid` | number or null | the run's process; null for a launch that no process took over yet |
+| `pid_start` | string or null | when that process started (Linux: field 22 of `/proc/PID/stat`; macOS: `ps -o lstart=`), so a reader can tell the run from an unrelated process that reuses its pid. Opaque: compare, do not parse |
 | `started_at`, `updated_at` | string | ISO 8601 UTC |
 | `finished_at` | string or null | null until the run ends |
 | `step` | object or null | the step that runs now, or the last one: `id`, `name`, `status` (`running`, `done`, `unchanged`, `skipped`, `warning` or `failed`; as in the `step` lines) |
@@ -1309,10 +1310,10 @@ newest first. `benchbar op wait OP_ID --json` prints the same document as
 `op status` when the run is not running any more, or when `--timeout` ran
 out (then with `"timed_out": true`).
 
-`--background` prints, and exits 0:
+`--background` waits up to 5 seconds for the run to hold its lock, then prints, and exits 0 (`state` is `running`, or `done` when the run was that quick, or `starting` when it is still not holding the lock; a run that was refused, for example because another run holds the lock, is a refusal with its own message and exit code instead, and its record says `failed`):
 
 ```json
-{"schema_version":1,"cli_version":"0.9.0","op_id":"op-20261119-101500-4242","command":"install","state":"starting","background":true,"output":"/home/me/.local/state/benchbar/ops/op-20261119-101500-4242.jsonl","exit":0,"next_actions":[{"command":"benchbar op wait op-20261119-101500-4242","why":"...","quoted":true}]}
+{"schema_version":1,"cli_version":"0.9.0","op_id":"op-20261119-101500-4242","command":"install","state":"running","pid":4243,"background":true,"output":"/home/me/.local/state/benchbar/ops/op-20261119-101500-4242.jsonl","exit":0,"next_actions":[{"command":"benchbar op wait op-20261119-101500-4242","why":"...","quoted":true}]}
 ```
 
 `pending_operations[]` of `status --json` is a different thing: the record

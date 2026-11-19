@@ -1235,7 +1235,7 @@ def validate(props, arguments):
             return "%s must be at most %d, got %d" % (key, schema["maximum"], value)
         if "enum" in schema and value not in schema["enum"]:
             return "%s must be one of %s, got %s" % (key, ", ".join(schema["enum"]), json.dumps(value))
-        if "pattern" in schema and not re.match(schema["pattern"], value):
+        if "pattern" in schema and not re.fullmatch(schema["pattern"], value):
             return "%s is not valid: %s" % (key, json.dumps(value[:80]))
     return None
 

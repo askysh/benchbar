@@ -1619,6 +1619,9 @@ case "$COMMAND" in
   *) ;;
 esac
 
+# a detached run (--background) says "running" now: it holds the lock, so it was not refused (ops.sh)
+fl_op_running
+
 # BENCHBAR_SUDO=env: the sudo password is checked once, before anything changes
 # (repair does it in cmd_repair, once its events have started)
 case "$COMMAND ${ARGS[0]:-}" in
