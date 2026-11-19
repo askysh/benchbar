@@ -360,9 +360,18 @@ fl_cmd_lan_guard_allow_node() {
   [[ "${OPT_JSON:-0}" != 1 ]] || fl_doc_emit 0 "$doc"
 }
 
+# fl_lg_platform_ok SUB: stops the command, before anything is asked or run as root, on a platform whose
+# guard this file does not have. Every root script below names pf, launchd and macOS paths, so they must
+# never be reached from another platform.
+fl_lg_platform_ok() {
+  [[ "${FL_PLATFORM:-}" == macos ]] && return 0
+  fl_die "benchbar lan-guard ${1} is not available on ${FL_PLATFORM:-this platform}: the guard is written for macOS (a pf anchor and a launch daemon)."     "Nothing was changed. Run it on a Mac."
+}
+
 fl_cmd_lan_guard() {
   local sub="${1:-}"
   shift || true
+  case "$sub" in install|status|remove|allow-node) fl_lg_platform_ok "$sub" ;; esac
   case "$sub" in
     install) fl_cmd_lan_guard_install "$@" ;;
     status) fl_cmd_lan_guard_status "$@" ;;
