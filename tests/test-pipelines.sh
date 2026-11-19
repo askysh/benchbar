@@ -58,7 +58,9 @@ heads="$(grep -nE '\| *head -n' "$ROOT/benchbar" "$ROOT"/lib/frappe-local/*.sh "
 TEST_PIPE_EXCEPTIONS=(
   "test-systemd.sh:*sed -n 's/^n//p' | head -n1)*in*"
 )
-PIPE_RE='[[:space:]]\| *(head($|[^[:alnum:]_])|grep( +-[^ ]+)* +(-[a-zA-Z]*[qm][a-zA-Z0-9]*|--quiet|--max-count))'
+# a pipe (not ||, with or without spaces, also |&) into head, or into grep, egrep or fgrep with -q, -m,
+# --quiet or --max-count anywhere in its arguments; `command` and a path in front count too
+PIPE_RE='(^|[^|])\|&? *(command +)?([^[:space:]|]*/)?(head($|[[:space:];)&])|[ef]?grep([[:space:]][^|]*)?[[:space:]](-[a-zA-Z]*[qm][a-zA-Z0-9]*|--quiet|--max-count)([[:space:]]|$|=))'
 test_files=()
 for f in "$ROOT"/tests/*.sh "$ROOT"/tests/lib/*.sh "$ROOT"/tests/mocks/* "$ROOT"/tests/mocks/bin/*; do
   [[ -f "$f" && "$f" != "$ROOT/tests/test-pipelines.sh" ]] && test_files[${#test_files[@]}]="$f"
