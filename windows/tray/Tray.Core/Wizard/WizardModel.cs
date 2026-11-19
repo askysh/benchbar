@@ -883,6 +883,38 @@ public sealed partial class WizardModel : IDisposable
         Go(WizardPage.NewBench);
         ProfilesTask = LoadProfilesAsync();
         ProfilesTask.Forget();
+        PrerequisitesTask = LoadPrerequisitesAsync();
+        PrerequisitesTask.Forget();
+    }
+
+    /// <summary>The read of <c>doctor --prerequisites</c> that Continue started (for tests); completed when none is running.</summary>
+    public Task PrerequisitesTask { get; private set; } = Task.CompletedTask;
+
+    /// <summary>The prerequisites of the CLI inside the distro, null until they were read (or when they could not be).</summary>
+    public PrerequisiteReport? Prerequisites { get; private set; }
+
+    /// <summary>Why the prerequisites were not read. Nothing blocks on it: the install's own plan still names what is in the way.</summary>
+    public string? PrerequisitesError { get; private set; }
+
+    /// <summary>
+    /// Reads <c>doctor --prerequisites</c> for the folder in the form: the failures and warnings show on the New Bench page. A warning never
+    /// stops an install; a failure is shown above Review and the plan on the Review page says the same in its own words.
+    /// </summary>
+    public async Task LoadPrerequisitesAsync()
+    {
+        PrerequisitesError = null;
+        try
+        {
+            var bench = IsValidFolder(Folder) ? Folder : Home + "/frappe-bench";
+            var result = await _setup.PrerequisitesAsync(bench, _lifetime.Token).ConfigureAwait(true);
+            Prerequisites = result.Report;
+            PrerequisitesError = result.Report is null ? result.Error : null;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        Raise();
     }
 
     /// <summary>The read of the profile list that Continue started (for tests); completed when none is running.</summary>
