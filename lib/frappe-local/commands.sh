@@ -27,6 +27,7 @@ flag~install~--profile~NAME~Release profile (default v15-lts) or a team profile.
 flag~install~--bundle~NAME~App bundle: minimal, common or extended.
 flag~install~--port-offset~N~Use port block N (web 8000+N).
 flag~install~--make-default~~Make this the default bench even when another one is.
+flag~install~--repair-bench~~Move a bench folder that is incomplete aside and start over (never one that holds a site). With --dry-run it shows the move.
 flag~install~--allow-windows-fs~~WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p). It is refused by default: slow, no file watching, broken permissions.
 flag~install~--offline~~Skip the remote branch checks.
 flag~install~--frappe-commit~SHA~Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile).
@@ -54,8 +55,8 @@ flag~service~--dry-run~~Print the plan and its token, change nothing.
 flag~service~--apply~TOKEN~Run exactly that plan (with --yes).
 env~service~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~service~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
-cmd~mariadb-password~benchbar mariadb-password [--yes]~Print the MariaDB root password (asks first).~yes~no~no~no~none
-flag~mariadb-password~--yes~~Do not ask.
+cmd~mariadb-password~benchbar mariadb-password [--yes]~Print the MariaDB root password to a person at a terminal (asks first). Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal, whatever --yes says.~yes~no~no~no~none
+flag~mariadb-password~--yes~~Do not ask (still refused without a person at a terminal).
 cmd~doctor~benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack CHECK] [--prerequisites] [--fetch]~Read only health report. Exit 1 when something FAILs.~no~no~no~no~document
 flag~doctor~--json~~One JSON document.
 flag~doctor~--fix-hints~~Only the fix commands, one per line.
@@ -81,7 +82,7 @@ cmd~restart~benchbar restart [--json]~Restart the bench, for example after chang
 cmd~logs~benchbar logs [-nN] [--worker|--worker-error|--previous] [--process NAME] [--since TIMESTAMP] [--since-restart] [--no-follow] [--json]~Tail logs/bench.log.~no~no~no~no~document
 flag~logs~--worker~~Read logs/worker.log.
 flag~logs~--worker-error~~Read logs/worker.error.log.
-flag~logs~--previous~~Read logs/bench.previous.log.
+flag~logs~--previous~~Read logs/bench.previous.log (the starts before it are bench.previous.1.log to .3.log).
 flag~logs~--process~NAME~web, socketio, schedule or worker.
 flag~logs~--since~TIMESTAMP~Only lines at or after it (--json; ISO 8601, or HH:MM:SS today).
 flag~logs~--since-restart~~Only lines after the bench's last start (--json).
@@ -99,7 +100,7 @@ cmd~open~benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print
 flag~open~--as~USER~Sign in as this user, no password. Refused unless site open-as is on for the site and developer_mode is on. A sign in runs the apps' on_login and on_session_creation hooks as a real login does: last_login, an Activity Log entry, a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User, and Frappe may end the user's oldest session (simultaneous_sessions).
 flag~open~--path~P~Where to land, for example /app/todo. Default: /app, or / for a Website User.
 flag~open~--no-browser~~Start the session, open nothing.
-flag~open~--print-url~~Print the link (it holds the session id) instead of opening it; in --json as url.
+flag~open~--print-url~~Print the link (it holds the session id) instead of opening it; in --json as url. With --as, refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.
 flag~open~--json~~One JSON document; url only with --print-url.
 cmd~users~benchbar users [--site S] [--search Q] [--limit N] [--json]~Enabled users of a site, for open --as (needs site open-as on).~no~no~no~no~document
 flag~users~--search~TEXT~Only users whose id or full name contains TEXT.
@@ -111,6 +112,13 @@ flag~pull~--from-dir~DIR~A backup set downloaded by hand, no SSH.
 flag~pull~--remote-bench~DIR~The bench folder on the server.
 flag~pull~--new-backup~~Run bench backup on the server first.
 flag~pull~--replace~~Restore over an existing local site, after backing it up.
+flag~pull~--confirm-site~SITE~With --new-backup: the site name, instead of typing it.
+flag~pull~--skip-app~APP~Restore without APP (its tables stay behind as orphans); repeat for more apps.
+flag~pull~--no-files~~Database only.
+flag~pull~--no-migrate~~Stop after the restore and the dev safety, before bench migrate.
+flag~pull~--before-migrate~SCRIPT~An executable run after the restore, before migrate, in the bench folder, with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME; a failing script stops the run.
+flag~pull~--keep-scheduler~~Leave the scheduler as production has it.
+flag~pull~--keep-staging~~Keep the downloaded backup in the bench's .benchbar/pulls/ after a successful run.
 env~pull~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~report~benchbar report [--print] [--json]~Redacted diagnostics zip on the Desktop for bug reports.~no~no~no~no~document
 flag~report~--print~~Print to the terminal instead of writing the zip.
@@ -259,6 +267,7 @@ cmd~app install~benchbar app install NAME --site S~Install an app of the bench o
 cmd~app update~benchbar app update NAME [--skip-backup] [--dry-run] [--json]~Fast forward one app with a changelog first, back up its sites, migrate, build.~yes~no~yes~yes~stream
 flag~app update~--skip-backup~~Migrate without a backup first.
 flag~app update~--dry-run~~Print the plan as one JSON document with --json.
+flag~app update~--discard-pending~~Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs.
 cmd~app focus~benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]~Focus apps: the ones you work on.~no~no~no~no~document
 cmd~app unfocus~benchbar app unfocus NAME~Pin NAME as not a focus app.~no~no~no~yes~none
 cmd~lock~benchbar lock write|check|apply ...~The team lockfile benchbar.toml.~no~no~no~no~none
@@ -270,6 +279,10 @@ cmd~profile list~benchbar profile list [--json]~Built in and team profiles.~no~n
 cmd~profile show~benchbar profile show NAME~What a profile installs.~no~no~no~no~none
 cmd~profile create~benchbar profile create NAME --from-bench PATH [--dir DIR]~Write a team profile from a bench.~no~no~no~yes~none
 cmd~profile export~benchbar profile export NAME [--out FILE] [--plan] [--json]~A copy to share.~no~no~yes~yes~document
+flag~profile export~--out~FILE~Where to write (default ./NAME.toml).
+flag~profile export~--branch~APP=BR~Export APP on BR instead of its default branch; repeatable.
+flag~profile export~--drop~APP~Leave APP out of the copy; repeatable. Refused when a kept app requires it.
+flag~profile export~--plan~~Print the review only, write nothing.
 cmd~profile import~benchbar profile import FILE|URL [--as NAME] [--plan] [--json]~Add a profile someone sent.~yes~no~yes~yes~document
 cmd~profile subscribe~benchbar profile subscribe GIT_URL [--plan|--yes] [--json]~Clone a team's config repo.~yes~no~yes~yes~document
 cmd~profile update~benchbar profile update NAME|--all [--plan] [--json]~Fetch an import or subscription again.~yes~no~yes~yes~document

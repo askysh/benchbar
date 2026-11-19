@@ -14,7 +14,9 @@ import (
 	"testing"
 )
 
-const wantWrapper = `PATH="$HOME/.local/bin:$PATH"; command -v "$0" >/dev/null 2>&1 || exit 127; exec "$0" "$@"`
+const wantWrapper = `PATH="$HOME/.local/bin:$PATH"; command -v "$0" >/dev/null 2>&1 || exit 127; ` +
+	`if [ -n "$BENCHBAR_SHIM_CWD" ]; then d=$(wslpath -a -u -- "$BENCHBAR_SHIM_CWD" 2>/dev/null) && [ -d "$d" ] && cd -- "$d" 2>/dev/null || printf 'benchbar.exe: %s has no path in WSL, running in ~\n' "$BENCHBAR_SHIM_CWD" >&2; unset BENCHBAR_SHIM_CWD; fi; ` +
+	`exec "$0" "$@"`
 
 // fakeBlob is what the fake writes after echoing stdin.
 var fakeBlob = []byte("bin\r\nline\nnul\x00end é 日本 \U0001F600 \xff\xfe\r\n")
@@ -174,7 +176,7 @@ func TestNoDistroInstalled(t *testing.T) {
 	if code := e.run("up"); code != 1 {
 		t.Errorf("exit %d", code)
 	}
-	want := "benchbar.exe: no WSL distro is installed. fix: benchbar.exe setup check (it installs Ubuntu 24.04; by hand: wsl.exe --install -d Ubuntu-24.04)\n"
+	want := "benchbar.exe: no WSL distro is installed. fix: benchbar.exe setup run distro_install (installs Ubuntu 24.04; by hand: wsl.exe --install -d Ubuntu-24.04)\n"
 	if e.stderr() != want {
 		t.Errorf("stderr %q", e.stderr())
 	}

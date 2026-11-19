@@ -27,5 +27,13 @@ mock_log() {
     if MOCK_NO_LOG=1 sudo -n true 2>/dev/null; then printf 'ok\n'; else printf 'denied\n'; fi >>"${MOCK_STATE}/sudo_probe/${name}"
   fi
 }
+# mock_tar FILE: a real tar archive with one member (a backup reader runs tar -tf on it)
+mock_tar() {
+  local d
+  d="$(mktemp -d "${TMPDIR:-/tmp}/mock-tar.XXXXXX")"
+  printf 'x\n' >"$d/member"
+  tar -cf "$1" -C "$d" member
+  rm -rf "$d"
+}
 # programs a mock starts are the mock's, not benchbar's (test-status-cost counts benchbar's)
 export BENCHBAR_TEST_MOCK=1

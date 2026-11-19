@@ -93,7 +93,7 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 
 | What | Where it lives | When you need it |
 |---|---|---|
-| MariaDB root | your Keychain, item `benchbar-mariadb` (on Linux a 0600 file in the state folder); `benchbar mariadb-password` prints it after a confirmation | rarely: another `bench new-site`, or `mariadb -u root -p` |
+| MariaDB root | your Keychain, item `benchbar-mariadb` (on Linux a 0600 file in the state folder); `benchbar mariadb-password` prints it to a person at a terminal after a confirmation (it refuses under `--for-agent`, `benchbar mcp` and without a terminal; a process of your user that fakes a terminal is not stopped) | rarely: another `bench new-site`, or `mariadb -u root -p` |
 | Administrator | you choose it during `benchbar install` or `site add`, or `ADMIN_PASSWORD` | every login at `http://<site>:<port>`, by default `http://macdev:8000` |
 
 ## Environment variables
@@ -112,7 +112,8 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 | `NO_COLOR` | every command | `NO_COLOR=1` turns off colors and spinners, like `--plain` |
 | `BENCHBAR_NO_HANDOFF` | every command | `BENCHBAR_NO_HANDOFF=1`: Homebrew's or the one line installer's `benchbar` runs itself instead of handing off to the CLI inside BenchBar.app (0.7.1) |
 | `BENCHBAR_NONINTERACTIVE` | every command | `BENCHBAR_NONINTERACTIVE=1`: nothing is asked. A command that lacks an input names all of them in one error before it takes the lock. `--for-agent` and `benchbar mcp` set it |
-| `BENCHBAR_SUDO` | `install`, `adopt`, `repair`, `ports apply`, `site hosts` | `BENCHBAR_SUDO=gui` (macOS): each root step asks in macOS's own password dialog, at most two per run. The BenchBar app sets it |
+| `BENCHBAR_SUDO` | `install`, `adopt`, `repair`, `ports apply`, `site hosts`, `site add` | `BENCHBAR_SUDO=gui` (macOS): each root step asks in macOS's own password dialog, at most two per run; the BenchBar app sets it. `BENCHBAR_SUDO=env` (Linux): the root steps use `BENCHBAR_SUDO_PASSWORD` and need no terminal; the Windows tray sets it. Any other value is the terminal path |
+| `BENCHBAR_SUDO_PASSWORD` | with `BENCHBAR_SUDO=env` | The sudo password (Linux). Read once at startup and removed from the environment; never in an argument, the log or a child process. A wrong one fails at once with `error_id` `sudo_password_wrong`, before any change |
 
 The one line installer reads `BENCHBAR_HOME` (the checkout, default
 `~/.local/share/benchbar`), `BENCHBAR_BIN_DIR` (default `~/.local/bin`),
@@ -138,7 +139,7 @@ keeps the first as the default unless you pass `--make-default`. See
 Each bench uses a block of four ports: web `8000 + n`, socketio
 `9000 + n`, Redis `11000 + n` and `13000 + n`. `--port-offset N` picks
 block N for `install`, `adopt` or `service`. How a clashing bench is
-moved is in [Port blocks](../guides/benches-and-sites.md#port-blocks).
+moved is in [Port blocks](../concepts/port-blocks.md).
 
 ## Where state lives
 

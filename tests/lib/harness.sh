@@ -24,6 +24,7 @@ export MOCK_PROCS="$MOCK_STATE/procs"
 export MOCK_LISTEN="$MOCK_STATE/listen"
 export MOCK_BREW_PREFIX="$TMP_DIR/brew"
 export MOCK_BREW_INSTALLED="python@3.11 node@22 mariadb@10.11 redis openssl@3 libffi zlib pipx pkgconf mariadb-connector-c"
+export MOCK_UV_SRC="$ROOT/tests/mocks/bin/uv"
 export MOCK_BREW_LEAVES="$MOCK_STATE/leaves"
 export MOCK_BREW_SERVICES="$MOCK_STATE/services"
 export MOCK_CURL_CODE="000"
@@ -40,6 +41,9 @@ export FL_UP_WAIT_SECS=2
 # in bash: off, so no test ever meets a real service of this machine; the
 # tests of the probes set FL_LOCAL_PROBES=1 and bring their own listeners
 export FL_LOCAL_PROBES=0
+# every FL_* and BENCHBAR_* test seam below is read only when this is 1;
+# a production run ignores them (docs/DECISIONS.md)
+export FL_TESTING=1
 export FL_KILL_CMD=mockkill
 export BENCHBAR_KILL_CMD=mockkill
 export FL_APP_DIRS="$HOME/Applications"
@@ -100,6 +104,27 @@ FM="$ROOT/benchbar"
 # the CLI's own version, so a release bump needs no test edits
 VER="$(sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$FM")"
 
+# use_mocks_without NAME...: PATH holds a copy of the mocks without the named
+# commands, and no folder that has any of them (a uv or pipx of the machine
+# running the suite): the Mac of a first time user. use_all_mocks puts it back.
+SAVED_PATH="$PATH"
+use_mocks_without() {
+  local d="$TMP_DIR/mocks-without" n dir newpath="" parts hit
+  rm -rf "$d"; mkdir -p "$d"; cp -R "$ROOT/tests/mocks/." "$d/"
+  for n in "$@"; do rm -f "$d/bin/$n"; done
+  IFS=: read -r -a parts <<<"$SAVED_PATH"
+  for dir in "${parts[@]}"; do
+    if [[ "$dir" == "$ROOT/tests/mocks/bin" ]]; then dir="$d/bin"; fi
+    hit=0
+    for n in "$@"; do [[ -x "$dir/$n" ]] && hit=1; done
+    [[ "$hit" == "0" ]] && newpath="${newpath:+${newpath}:}${dir}"
+  done
+  PATH="$newpath"
+  for n in "$@"; do ! command -v "$n" >/dev/null 2>&1 || fail "use_mocks_without: ${n} is still on PATH ($(command -v "$n"))"; done
+  command -v python3 >/dev/null 2>&1 || fail "use_mocks_without: python3 left PATH with the folders that hold ${*}"
+}
+use_all_mocks() { PATH="$SAVED_PATH"; }
+
 # ---------------------------------------------------------------- platform
 
 # use_linux: the CLI sees Ubuntu on x86_64 under WSL. Call it right after
@@ -159,6 +184,19 @@ run_fm() {
   CODE="$?"
   set -e
 }
+# run_fm_tty ARGS...: as run_fm, with a terminal (a pty) on stdin, the one thing a
+# person at a prompt has and an agent's plain shell lacks; stdout and stderr stay a pipe
+run_fm_tty() {
+  set +e
+  OUT="$(python3 -c '
+import os, pty, subprocess, sys
+master, slave = pty.openpty()
+p = subprocess.run(sys.argv[1:], stdin=slave, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+sys.stdout.buffer.write(p.stdout)
+sys.exit(p.returncode)' "$FM" "$@" 2>&1)"
+  CODE="$?"
+  set -e
+}
 reset_calls() { : >"$MOCK_LOG"; }
 # BSD stat on macOS, GNU stat on Linux (the suite also runs on Linux machines).
 if stat --version >/dev/null 2>&1; then STAT_GNU=1; else STAT_GNU=0; fi
@@ -166,6 +204,17 @@ if stat --version >/dev/null 2>&1; then STAT_GNU=1; else STAT_GNU=0; fi
 sed_inplace() { sed "$1" "$2" >"$2.tmp" && mv "$2.tmp" "$2"; }
 # mtime_of FILE: modification time in seconds
 mtime_of() { if [[ "$STAT_GNU" == "1" ]]; then stat -c %Y "$1"; else stat -f %m "$1"; fi; }
+
+# mkgz FILE [TEXT]: a real gzip file, the way a backup reader checks it (gzip -t)
+mkgz() { printf '%s\n' "${2:-dump}" | gzip -c >"$1"; }
+# mktar FILE: a real tar archive with one member (tar -tf reads it)
+mktar() {
+  local d
+  d="$(mktemp -d "${TMP_DIR}/mktar.XXXXXX")"
+  printf 'x\n' >"$d/member"
+  tar -cf "$1" -C "$d" member
+  rm -rf "$d"
+}
 
 # Snapshot of every file (path, size, mtime) under the given dirs, for
 # "second run writes nothing" assertions.

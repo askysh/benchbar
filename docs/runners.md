@@ -109,6 +109,9 @@ file.
 - At most **30 frames** per state.
 - At most **2 MB** for the whole folder.
 - No symbolic links.
+- `manifest.json` is read only when it is a plain file of at most 64 KB, never
+  through a link. A zip that holds a symbolic link or another file that is
+  not a plain file is refused whole.
 - Only `manifest.json` and the files it lists are copied on import;
   anything else in the folder or zip is left behind.
 
@@ -122,7 +125,7 @@ file.
 - Keep the character in the same spot across frames and move only what
   should move, or it jitters.
 - 4 to 8 running frames are plenty. The running loop plays 5 frames per
-  second when idle and up to 60 when the bench is busy.
+  second when idle and up to 30 when the bench is busy.
 
 ## Making frames in code
 

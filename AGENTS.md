@@ -102,9 +102,10 @@ MARIADB_ROOT_PASSWORD='...' ADMIN_PASSWORD='...' ./benchbar install --yes
 `ADMIN_PASSWORD` is the site's Administrator login; ask the user for it,
 or run without `--yes` and let them type it. `MARIADB_ROOT_PASSWORD` is
 optional: a fresh MariaDB gets a generated password, an existing password
-is read from the Keychain (`benchbar mariadb-password --yes` prints it). Only
+is read from the Keychain, and no command hands it to an agent. Only
 when MariaDB already has a password that neither the environment nor the
-Keychain knows does the run stop with exit code 2 and say what to pass. A
+Keychain knows does the run stop with exit code 2: ask the person for it
+and do not look for it. A
 fresh Homebrew MariaDB, whose root logs in over the socket only, is
 secured through the macOS user's socket account and needs no password.
 The patched wkhtmltopdf package and the `/etc/hosts` line need `sudo`;
@@ -196,8 +197,14 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   exceptions are its own lock folders (the run lock and
   `<bench>/.benchbar.lock`, with the `.stale.<pid>` name a stale one is
   renamed to and the `.reclaim` guard), the oldest `.old` log copies
-  beyond three, and `share teardown`'s removal of the share state folder
-  (`<state>/share`, outside the bench, confirmed first).
+  beyond three, the pruning of benchbar's own state folder beyond its
+  documented limits (run logs, backup stamp folders, update checks, old
+  `state.env.*` temp files; the newest are kept and `changed[]` says what
+  went), and `share teardown`'s removal of the share state folder
+  (`<state>/share`, outside the bench, confirmed first). Backups in a
+  site's `private/backups` are never pruned, and neither is a state backup
+  folder that holds `kept-sets` files (older backups that a cut short run
+  did not put back; `benchbar repair` puts them back).
 - Never run `bench update` unless the user asked for it by name.
 - Two hooks in `.claude/` check every Bash call: `guard-rm.sh` blocks a
   recursive delete (`rm -r`, `find -delete`, `git clean`, `git reset --hard`,
@@ -234,16 +241,30 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   (`BENCHBAR_SUDO=gui`), macOS asks in its own dialog once per step instead,
   at most two per run.
 - Open as is the person's choice. Never run `benchbar site open-as on`
-  (it refuses an agent anyway) and never ask for or use an
+  (it refuses an agent anyway, but a process of the same user can set
+  the variables that tell the CLI a person is at the keyboard, so the rule is
+  yours to keep) and never ask for or use an
   `open --as --print-url` link: it holds a login session for that user.
+  The CLI guards it: `open --as USER --print-url` refuses under
+  `--for-agent`, `BENCHBAR_NONINTERACTIVE=1` and `benchbar mcp`, and when
+  stdin is not a terminal unless the caller sets `BENCHBAR_NONINTERACTIVE=0`
+  itself (the Mac app does), as `site open-as on` does. A process of the same
+  user that fakes a terminal or sets that variable is not stopped: the guard
+  is against a mistake, not a boundary, so the rule above is the rule.
 - Experiments are the person's choice. `benchbar labs` lists them; never
-  run `benchbar labs on` (it refuses an agent anyway). A command of an
+  run `benchbar labs on` (it refuses an agent anyway, and a process of the same
+  user can set the variables it looks at, so keep the rule). A command of an
   experiment that is off exits 2 with "Turn it on: benchbar labs on NAME":
   tell the user, do not work around it. `status --json` and
   `commands --json` list the `labs` that are on.
 - Never print or log the MariaDB root password. It lives in the Keychain
-  (a 0600 file on Linux);
-  `benchbar mariadb-password --yes` prints it when a user asks for it.
+  (a 0600 file on Linux). `benchbar mariadb-password` is the person's own
+  command: it refuses under `--for-agent`, `BENCHBAR_NONINTERACTIVE`,
+  `benchbar mcp` and without a terminal, whatever `--yes` says. That stops
+  the documented agent modes and a missing terminal; a process of the same
+  user that fakes a terminal, or reads the Keychain itself, is not stopped
+  (SECURITY.md says so). If you need the password, ask the person; never
+  try to read it another way.
 - When something is wrong, `./benchbar report --print` shows the redacted
   diagnostics; `./benchbar report` writes the zip for a bug report.
 - If doctor warns about CleanMyMac or Mole, tell the user to add the
@@ -253,8 +274,13 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 
 ## Contributing a change
 
-- Run `bash tests/affected.sh` for the tests your change touches; the full
-  suite (`bash tests/run-tests.sh`) before you hand the work back.
+- Run `bash tests/affected.sh` for the tests your change touches. CI runs
+  the full suite; run it yourself only when the selector says everything.
+- A change a user can see updates its guide or app page, `docs/features.md`
+  and `CHANGELOG.md`; a new command, flag or MCP tool also needs
+  `python3 scripts/docs-reference.py --write` (the reference tables are
+  generated, and `test-docs` fails when they drift). The pull request
+  template lists the same checks.
 - Branch from `next-release` and open the pull request against it.
   `main` holds the last release and moves only when one is cut
   (docs/releasing.md).
@@ -265,8 +291,11 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 - Everything under `docs/` is published on the documentation site, so
   add a page there only when it is for users.
 - Record a non obvious choice as one line in `docs/DECISIONS.md` (CLI)
-  or `macos/DECISIONS.md` (app), and user facing changes under
-  `## Unreleased` in `CHANGELOG.md`. The PR description holds the rest.
+  or `macos/DECISIONS.md` (app). Put a user facing change in a fragment,
+  `changelog.d/<issue number>-<short-slug>.md` (format in
+  `changelog.d/README.md`), and never edit `CHANGELOG.md` for it: the
+  release step folds the fragments in. `scripts/changelog-fold.sh --check`
+  validates them. The PR description holds the rest.
 
 ## Reading the output
 

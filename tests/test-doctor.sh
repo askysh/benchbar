@@ -106,7 +106,8 @@ assert_contains "$OUT" "assets.json is missing (never built)"
 mv "$BENCH/sites/assets/assets.json.gone" "$BENCH/sites/assets/assets.json"
 
 # 7. a crash-looping legacy agent shows its exit code
-printf '<?xml version="1.0"?><plist version="1.0"><dict><key>Label</key><string>com.akash.frappe-bench.worker</string></dict></plist>\n' >"$HOME/Library/LaunchAgents/com.akash.frappe-bench.worker.plist"
+# an old per-process agent of this bench, as the frappe_mac_dev_server setup wrote them
+printf '<?xml version="1.0"?><plist version="1.0"><dict><key>Label</key><string>com.akash.frappe-bench.worker</string><key>ProgramArguments</key><array><string>bench</string><string>worker</string></array><key>WorkingDirectory</key><string>%s</string></dict></plist>\n' "$BENCH" >"$HOME/Library/LaunchAgents/com.akash.frappe-bench.worker.plist"
 set_agent com.akash.frappe-bench.worker "not running" "" 1
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Legacy agents: 1 legacy agent(s): com.akash.frappe-bench.worker (not running, last exit 1)"

@@ -16,7 +16,7 @@ export GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GI
 export HOME="$TMP_DIR/home"
 mkdir -p "$HOME"
 REPO="$TMP_DIR/repo"
-mkdir -p "$REPO/tests/lib" "$REPO/tests/mocks/bin" "$REPO/lib/frappe-local" "$REPO/docs" "$REPO/templates" "$REPO/macos"
+mkdir -p "$REPO/tests/lib" "$REPO/tests/mocks/bin" "$REPO/lib/frappe-local/share" "$REPO/docs" "$REPO/templates" "$REPO/macos/BenchBarTests/Fixtures" "$REPO/scripts" "$REPO/site"
 cp "$ROOT/tests/affected.sh" "$REPO/tests/affected.sh"
 # run-tests.sh stand in: says what it was asked to run
 printf '#!/usr/bin/env bash\nprintf "RUN:%%s\\n" "$*"\n' >"$REPO/tests/run-tests.sh"
@@ -30,11 +30,12 @@ fl_site_two() {
 }
 EOF
 printf 'fl_ports_x() { :; }\n' >"$REPO/lib/frappe-local/ports.sh"
-for t in sites cli agent-contracts mentions-two ports other affected; do printf '# test\n' >"$REPO/tests/test-$t.sh"; done
+for t in sites cli agent-contracts mentions-two ports other affected docs docs-command doctor doctor-hardening repair repair-json json share share-gateway release-notes changelog install-json lock; do printf '# test\n' >"$REPO/tests/test-$t.sh"; done
 printf 'run fl_site_two here\n' >"$REPO/tests/test-mentions-two.sh"
 printf 'page\n' >"$REPO/docs/a.md"
 printf 'harness\n' >"$REPO/tests/lib/harness.sh"
 printf 'mock\n' >"$REPO/tests/mocks/bin/git"
+for d in lib/frappe-local/share macos/BenchBarTests/Fixtures scripts site; do printf 'keep\n' >"$REPO/$d/.keep"; done
 printf 'entry\n' >"$REPO/benchbar"
 printf 'web: x\n' >"$REPO/templates/Procfile.lean"
 git -C "$REPO" init -q -b main
@@ -53,28 +54,123 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "nothing to test"
 assert_eq "1" "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')"
 
-# ---- docs only (committed): no tests
+# ---- docs (committed): the two tests that read docs/, no shellcheck
 printf 'more\n' >>"$REPO/docs/a.md"
 git -C "$REPO" commit -q -am docs
-aff --base main
-assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "nothing to test"
-# app files only: no shell tests either
+aff --base main --list
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "affected: test-docs test-docs-command"
+assert_not_contains "$OUT" "shellcheck"
+reset
+# app, site and tray files only: no tests at all
 printf 'x\n' >"$REPO/macos/a.swift"
+printf 'x\n' >"$REPO/site/index.md"
 aff --base main
 assert_contains "$OUT" "nothing to test"
+aff --base main --machine
+assert_contains "$OUT" "mode=none"
 reset
+
+# ---- CI-8: files whose tests the function match alone misses
+# the doctor check library: the doctor and repair tests run the command, never name chk_runner
+printf '\nchk_runner() {\n  :\n}\n' >"$REPO/lib/frappe-local/checks.sh"
+git -C "$REPO" add -A && git -C "$REPO" commit -q -m checks
+aff --base main --list
+for t in test-doctor test-doctor-hardening test-repair test-repair-json test-json test-cli; do assert_contains "$OUT" " $t" "(checks.sh)"; done
+reset
+# the LAN gateway's JavaScript and Python
+printf 'x\n' >"$REPO/lib/frappe-local/share/gateway.js"
+aff --base main --list
+for t in test-share test-share-gateway; do assert_contains "$OUT" " $t" "(share/gateway.js)"; done
+reset
+# the LAN gateway's own JavaScript tests and their helpers
+mkdir -p "$REPO/tests/share"
+for f in tests/share/join.test.js tests/share/gateway_harness.js; do
+  printf 'x\n' >"$REPO/$f"
+  aff --base main --list
+  assert_contains "$OUT" "test-share-gateway" "($f)"; assert_not_contains "$OUT" "every test" "($f)"
+  reset
+  mkdir -p "$REPO/tests/share"
+done
+# a file no test is known to cover runs everything; the files another job covers run nothing
+for f in scripts/unknown-tool.py .shellcheckrc .gitignore tests/data.json; do
+  printf 'x\n' >"$REPO/$f"
+  aff --base main --machine
+  assert_contains "$OUT" "mode=full" "($f)"
+  reset
+done
+for f in install.ps1 scripts/app-icon.py windows/tray/a.cs macos/a.swift examples/x.json CHANGELOG.md .github/workflows/other.yml; do
+  case "$f" in */*) mkdir -p "$REPO/${f%/*}" ;; esac
+  printf 'x\n' >"$REPO/$f"
+  aff --base main --machine
+  assert_contains "$OUT" "mode=none" "($f)"
+  reset
+done
+# the fixtures the macOS app tests share with the CLI tests
+printf '{}\n' >"$REPO/macos/BenchBarTests/Fixtures/x.json"
+aff --base main --list
+assert_contains "$OUT" "affected: test-json test-install-json test-lock" "(Fixtures)"
+reset
+# the tray's recorded CLI output: its own test, not the app's
+mkdir -p "$REPO/windows/tray/fixtures/cli"
+printf '{}\n' >"$REPO/windows/tray/fixtures/cli/x.json"
+aff --base main --list
+assert_contains "$OUT" "affected: test-tray-fixtures" "(windows/tray/fixtures)"
+reset
+# scripts: the tests that run them
+printf '#!/bin/sh\n' >"$REPO/scripts/release-notes.sh"
+printf '#!/bin/sh\n' >"$REPO/scripts/other.sh"
+aff --base main --list
+assert_contains "$OUT" "affected: test-release-notes shellcheck" "(scripts/)"
+reset
+printf '#!/bin/sh\n' >"$REPO/scripts/changelog-fold.sh"
+aff --base main --list
+assert_contains "$OUT" "affected: test-changelog test-release-notes shellcheck" "(scripts/changelog-fold.sh)"
+reset
+mkdir -p "$REPO/changelog.d"
+printf '### Docs\n' >"$REPO/changelog.d/1-x.md"
+aff --base main --list
+assert_contains "$OUT" "affected: test-changelog" "(changelog.d)"
+reset
+# the harness, the mocks, run-tests.sh, the entry point, templates and the selector itself run everything
+printf '# x\n' >>"$REPO/tests/affected.sh"
+aff --base main --list
+assert_contains "$OUT" "every test" "(affected.sh)"
+reset
+
+# ---- --machine and --files: what CI reads
+aff --base main --machine
+assert_eq "mode=none
+tests=
+shellcheck=false
+shellcheck_files=" "$OUT"
+printf '\n# touched\n' >>"$REPO/lib/frappe-local/sites.sh"
+printf '# x\n' >>"$REPO/tests/test-ports.sh"
+aff --base main --machine
+assert_contains "$OUT" "mode=affected"
+assert_contains "$OUT" "tests=test-sites"; assert_contains "$OUT" " test-ports "; assert_contains "$OUT" "shellcheck=true"
+assert_contains "$OUT" "shellcheck_files=lib/frappe-local/sites.sh tests/test-ports.sh"
+reset
+aff --machine --files "lib/frappe-local/sites.sh docs/a.md"
+assert_contains "$OUT" "mode=affected"
+assert_contains "$OUT" " test-docs" "(--files)"; assert_contains "$OUT" "test-sites"; assert_contains "$OUT" "test-mentions-two" "(--files counts every function as touched)"
+aff --machine --files "tests/lib/harness.sh"
+assert_contains "$OUT" "mode=full"
+aff --machine --files "macos/a.swift windows/x.cs"
+assert_contains "$OUT" "mode=none"
+aff --files
+assert_eq "1" "$CODE"; assert_contains "$OUT" "--files needs a list"
 
 # ---- a lib file, edited inside one function and not committed: its test, the
 # test that names the function, test-cli, test-agent-contracts, shellcheck
 sed 's/echo two/echo TWO/' "$REPO/lib/frappe-local/sites.sh" >"$TMP_DIR/s" && mv "$TMP_DIR/s" "$REPO/lib/frappe-local/sites.sh"
 aff --base main --list
 assert_eq "0" "$CODE" "$OUT"
-assert_contains "$OUT" "affected: test-sites test-mentions-two test-cli test-agent-contracts shellcheck"
+assert_contains "$OUT" "affected: test-sites test-install-json test-mentions-two test-cli test-agent-contracts shellcheck"
 assert_contains "$OUT" "functions touched: fl_site_two"
 assert_not_contains "$OUT" "test-ports"; assert_not_contains "$OUT" "test-other"
 # without --list it hands the names to run-tests.sh
 aff --base main
-assert_contains "$OUT" "RUN:test-sites test-mentions-two test-cli test-agent-contracts shellcheck"
+assert_contains "$OUT" "RUN:test-sites test-install-json test-mentions-two test-cli test-agent-contracts shellcheck"
 reset
 
 # ---- a new function in a committed change, a new untracked lib file without a test
@@ -86,8 +182,9 @@ aff --base main --list
 assert_contains "$OUT" "test-sites"; assert_contains "$OUT" "test-other"
 assert_contains "$OUT" "fl_new_thing"; assert_contains "$OUT" "fl_site_three"
 # code added after fl_site_two sits in a hunk git labels fl_site_two: one test
-# too many is the safe side
-assert_not_contains "$OUT" "test-ports"
+# too many is the safe side. A lib file with no test of its name and no family
+# (newthing.sh here) selects the end to end core set
+assert_contains "$OUT" "test-doctor"; assert_contains "$OUT" "test-ports"
 reset
 
 # ---- a test split into parts: a change to its lib file picks every part
@@ -135,6 +232,21 @@ aff --base no-such-ref
 assert_eq "1" "$CODE"; assert_contains "$OUT" "no such ref no-such-ref"
 aff --sideways
 assert_eq "1" "$CODE"; assert_contains "$OUT" "unknown argument --sideways"
+
+# ---- the real repository: every lib file has a test of its own name or a family (--lib-coverage)
+OUT="$(cd "$ROOT" && bash tests/affected.sh --lib-coverage 2>&1)" && CODE=0 || CODE=$?
+assert_eq "0" "$CODE" "$OUT"
+# and the selector's families name real tests (a typo would silently select nothing)
+while IFS= read -r t; do
+  [[ -f "$ROOT/tests/$t.sh" ]] || fail "tests/affected.sh names $t, which is not a test file"
+done < <(sed -n '/^lib_family()/,/^}/p;/^script_tests()/,/^}/p' "$ROOT/tests/affected.sh" | grep -oE 'test-[a-z0-9-]+' | sort -u)
+# the examples of CI-8, on the real tree
+OUT="$(cd "$ROOT" && bash tests/affected.sh --files "lib/frappe-local/checks.sh" --machine)"
+for t in test-doctor test-doctor-hardening test-repair; do assert_contains "$OUT" " $t" "(real checks.sh)"; done
+OUT="$(cd "$ROOT" && bash tests/affected.sh --files "lib/frappe-local/share/gateway.js macos/BenchBarTests/Fixtures/app-list.json docs/index.md scripts/homebrew-render.sh" --machine)"
+for t in test-share-gateway test-share test-share-run test-share-admin test-json test-install-json test-lock test-docs test-docs-command test-packaging test-homebrew; do
+  assert_contains "$OUT" "$t" "(real tree)"
+done
 
 # ---- run-tests.sh: a share test passes only with its own ok line. Under bash 3.2 a set -u abort inside a
 # function, with an EXIT trap, exits 0; the exit code alone would count it as passed. Other tests keep

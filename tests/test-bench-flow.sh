@@ -50,6 +50,9 @@ fi
 exit 0
 SH
 chmod +x "$TMP_DIR/bin/bench"
+# bench init needs uv (fl_bench_require_uv); a runner without one must not fail the flow
+printf '#!/bin/sh\nexit 0\n' >"$TMP_DIR/bin/uv"
+chmod +x "$TMP_DIR/bin/uv"
 export PATH="$TMP_DIR/bin:$PATH"
 export BENCH_LOG="$TMP_DIR/bench.log"
 : >"$BENCH_LOG"
@@ -59,6 +62,7 @@ export BENCH_LOG="$TMP_DIR/bench.log"
 . "$ROOT/lib/frappe-local/run.sh"
 . "$ROOT/lib/frappe-local/state.sh"
 . "$ROOT/lib/frappe-local/platform.sh"
+. "$ROOT/lib/frappe-local/mariadb.sh"
 . "$ROOT/lib/frappe-local/version-policy.sh"
 . "$ROOT/lib/frappe-local/bench.sh"
 
@@ -86,11 +90,80 @@ fl_bench_init_if_needed "$BENCH_DIR" version-15 /usr/bin/python3 0
 after="$(wc -l <"$BENCH_LOG")"
 assert_eq "$before" "$after"
 
+# a folder with something of the user's in it is not a skeleton: it stops until --repair-bench
 INCOMPLETE="$TMP_DIR/incomplete-bench"
 mkdir -p "$INCOMPLETE/apps"
+printf 'mine\n' >"$INCOMPLETE/notes.txt"
 assert_fails fl_bench_init_if_needed "$INCOMPLETE" version-15 /usr/bin/python3 0
 fl_bench_init_if_needed "$INCOMPLETE" version-15 /usr/bin/python3 1
 [[ -d "$INCOMPLETE/apps/frappe" ]]
+# a folder of empty folders (what a bench init that failed early leaves) is moved aside by a plain rerun
+SKEL="$TMP_DIR/skeleton-bench"
+mkdir -p "$SKEL/apps" "$SKEL/sites" "$SKEL/config" "$SKEL/logs"
+fl_bench_is_skeleton "$SKEL"
+fl_bench_init_if_needed "$SKEL" version-15 /usr/bin/python3 0 >/dev/null 2>&1
+[[ -d "$SKEL/apps/frappe" && -d "$SKEL/env" ]]
+set -- "$TMP_DIR"/skeleton-bench.incomplete.*
+assert_eq "1" "$#"
+[[ -d "$1/logs" ]]
+# a folder with an app, a site, a link or a file with content is not one
+for d in apps/x sites/s; do mkdir -p "$TMP_DIR/notskel/$d"; assert_fails fl_bench_is_skeleton "$TMP_DIR/notskel"; rmdir "$TMP_DIR/notskel/$d"; done
+printf 'x\n' >"$TMP_DIR/notskel/config/f" 2>/dev/null || { mkdir -p "$TMP_DIR/notskel/config"; printf 'x\n' >"$TMP_DIR/notskel/config/f"; }
+assert_fails fl_bench_is_skeleton "$TMP_DIR/notskel"
+
+# fl_site_incomplete reads what fl_site_recover left once: the next call (a site add) does not see a stale "foreign"
+mkdir -p "$TMP_DIR/fb/sites/half" "$TMP_DIR/fb/logs/.benchbar"
+printf '2026-10-03T10:00:00Z\n' >"$TMP_DIR/fb/logs/.benchbar/creating-half"
+FL_SITE_RECOVER_FOREIGN=1 FL_SITE_RECOVER_DB=_aaaaaaaaaaaaaaaa
+out="$(fl_site_incomplete "$TMP_DIR/fb" half "why" 2>&1)"
+[[ "$out" == *"leave the database _aaaaaaaaaaaaaaaa alone"* && "$out" != *"bench drop-site"* ]] || { printf 'foreign: %s\n' "$out"; exit 1; }
+FL_SITE_RECOVER_FOREIGN=1 FL_SITE_RECOVER_DB=_aaaaaaaaaaaaaaaa
+fl_site_incomplete "$TMP_DIR/fb" half "why" >/dev/null 2>&1
+assert_eq "0" "$FL_SITE_RECOVER_FOREIGN"
+assert_eq "" "$FL_SITE_RECOVER_DB"
+out="$(fl_site_incomplete "$TMP_DIR/fb" half 2>&1)"
+[[ "$out" == *"bench drop-site half --force"* ]] || { printf 'plain: %s\n' "$out"; exit 1; }
+
+# ---- the last condition of the database drop (d): a person's OK, or --yes; without either nothing is dropped
+export MOCK_STATE="$TMP_DIR/mstate"
+mkdir -p "$MOCK_STATE"
+cp "$ROOT/tests/mocks/mariadb" "$TMP_DIR/bin/mariadb"
+printf 'pw' >"$MOCK_STATE/mariadb_root_pw"
+DROPDB=_0123456789abcdef
+RB="$TMP_DIR/rb"
+mkdir -p "$RB/sites/dsite" "$RB/logs/.benchbar"
+printf '2026-10-03T10:00:00Z\ndb_name=%s\n' "$DROPDB" >"$RB/logs/.benchbar/creating-dsite"
+printf '{"db_name": "%s"}\n' "$DROPDB" >"$RB/sites/dsite/site_config.json"
+printf '%s\n' "$DROPDB" >"$MOCK_STATE/mariadb_dbs"
+printf 'Administrator\nGuest\n' >"$MOCK_STATE/mariadb_users.$DROPDB"
+fl_site_record_write "$RB" dsite "$DROPDB"
+rc=0
+FL_ASSUME_YES=0 fl_site_recover "$RB" dsite pw </dev/null >/dev/null 2>&1 || rc=$?
+assert_eq "1" "$rc"
+[[ "$FL_SITE_RECOVER_WHY" == *"needs your OK"* ]] || { printf 'why: %s\n' "$FL_SITE_RECOVER_WHY"; exit 1; }
+grep -qx "$DROPDB" "$MOCK_STATE/mariadb_dbs"
+[[ -d "$RB/sites/dsite" && -f "$RB/logs/.benchbar/creating-dsite" ]]
+rc=0
+FL_ASSUME_YES=0 BENCHBAR_NONINTERACTIVE=1 fl_site_recover "$RB" dsite pw >/dev/null 2>&1 || rc=$?
+assert_eq "1" "$rc"
+grep -qx "$DROPDB" "$MOCK_STATE/mariadb_dbs"
+# a database that holds a user besides Administrator and Guest is not dropped, whatever --yes says
+printf 'Administrator\nGuest\nalice@example.com\n' >"$MOCK_STATE/mariadb_users.$DROPDB"
+rc=0
+FL_ASSUME_YES=1 fl_site_recover "$RB" dsite pw >/dev/null 2>&1 || rc=$?
+assert_eq "1" "$rc"
+assert_eq "1" "$FL_SITE_RECOVER_FOREIGN"
+grep -qx "$DROPDB" "$MOCK_STATE/mariadb_dbs"
+# a database with no tables at all (a new-site cut short at once) is just created
+printf 'Administrator\nGuest\n' >"$MOCK_STATE/mariadb_users.$DROPDB"
+fl_mariadb_db_fresh pw "$DROPDB"
+# with --yes and all of the conditions: dropped, folder moved, marker and record gone
+rc=0
+FL_ASSUME_YES=1 fl_site_recover "$RB" dsite pw >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc"
+if grep -qx "$DROPDB" "$MOCK_STATE/mariadb_dbs"; then exit 1; fi
+[[ ! -d "$RB/sites/dsite" && ! -e "$RB/logs/.benchbar/creating-dsite" ]]
+[[ ! -e "$(fl_site_record_file "$RB" dsite)" ]]
 
 # ---- a bench init that stopped half way is resumed by the next run, never deleted
 # (frappe cloned, no env or no apps.txt, no site): moved aside, then init again

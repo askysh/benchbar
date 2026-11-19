@@ -36,6 +36,10 @@ sites or databases.
 
 ## Features
 
+The full list, by surface (CLI, Mac app, Windows, MCP) with the platform and
+the version of each feature, is on the [Features](features.md) page. These
+are the main ones.
+
 - **One command installs everything.** Homebrew formulae (Python, Node,
   MariaDB, Redis), a MariaDB root password kept in your Keychain, the
   patched Qt wkhtmltopdf, a bench and a site. Re-running it changes only
@@ -69,7 +73,7 @@ sites or databases.
   same; `benchbar pull` copies a production site into a local one, email
   muted and scheduler paused. See
   [Teams: profiles, lockfile and pull](guides/teams.md).
-- **Linux and Windows.** The same CLI runs on Ubuntu 24.04 with each
+- **Linux and Windows.** The same CLI runs on Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them), with each
   bench under `systemd --user`. On Windows (a beta) the benches run in
   WSL, `benchbar.exe` runs the CLI from PowerShell and a tray app shows
   them. The Windows programs are not signed yet: see
@@ -79,6 +83,11 @@ sites or databases.
   other agents read and drive your benches. In Terminal, `--for-agent`
   prints JSON and asks nothing, and every change ends in one `done`
   line. See [Coding agents and MCP](guides/agents.md).
+- **Newer: Open as, Quick Switch and rooms.** Open a site as another
+  user, switch users from a key, or share a hardened copy of a site with
+  colleagues on your Wi-Fi. Rooms and Quick Switch are
+  [Labs](reference/cli/labs.md): experiments that stay off until you turn
+  them on. See [Features](features.md).
 - **Shell helpers.** `benchup`, `benchdown`, `benchrestart`,
   `benchstatus`, `benchlogs`, `benchwatch` and friends.
 - **Bug reports without secrets.** `benchbar report` writes a redacted
@@ -87,7 +96,7 @@ sites or databases.
 ## Requirements
 
 - macOS 14 or later on Apple Silicon. On Intel Macs the CLI works and the
-  app is skipped. On Linux, Ubuntu 24.04; on Windows, WSL 2 with such a
+  app is skipped. On Linux, Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them); on Windows, WSL 2 with such a
   distro.
 - Homebrew and the Xcode Command Line Tools. The installer offers both.
 - About 5 GB of free disk under your home folder, and internet access.
@@ -117,8 +126,11 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
   listeners on its ports that run inside the bench folder. Another
   bench, an unrelated server, and your own `bench migrate` or `bench
   console` keep running.
-- `sudo` is used for two things, lines in `/etc/hosts` and the
-  wkhtmltopdf package, once per run and only after saying why.
+- `sudo` is used for a short, fixed list, once per run and only after saying
+  why. On macOS: the line in `/etc/hosts`, the wkhtmltopdf package, and the
+  two [LAN guard](reference/cli/share.md#lan-guard-install) steps of a
+  room (the firewall rule and letting `node` through it). On Linux: apt,
+  the MariaDB admin step and starting a stopped `mariadb` or `redis-server`.
 - The MariaDB root password lives in the Keychain and reaches the client
   through `MYSQL_PWD`, never on a command line.
 - Full logs of every mutating run: `logs/<date>-<time>-<pid>.log` in the same
@@ -126,6 +138,7 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 
 ## Documentation
 
+- [Features](features.md): every feature by platform, with the version it came in.
 - [Install](install.md): Homebrew, the one line installer, the DMG,
   building from source, moving to Homebrew, and uninstalling.
 - [Quick start](quick-start.md): adopt a bench or install a new one.
@@ -138,11 +151,13 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 - [Troubleshooting](troubleshooting.md): common stumbles, the cleanup tool
   case, what recovers on its own, migrating from frappe-mac 0.2, what
   benchbar writes, wiping a bench.
-- [Testing](testing.md): the ten minute guide for testers.
 - [JSON schema](json-schema.md): the JSON the app and scripts read.
 - [Runners](runners.md): custom runners for the menu bar.
-- [Releasing](releasing.md): how releases are built and signed.
-- [Decisions](DECISIONS.md): every non obvious choice, one line each.
+- [Concepts](concepts/port-blocks.md): [port blocks](concepts/port-blocks.md) and
+  [how sharing keeps your bench safe](concepts/sharing-safety.md).
+- For contributors: [Testing](testing.md), [Releasing](releasing.md) and
+  [Decisions](DECISIONS.md), the ten minute guide for testers, how releases
+  are built and every non obvious choice.
 - [AGENTS.md](../AGENTS.md): guidance for AI coding agents working on a
   bench.
 - [CHANGELOG.md](../CHANGELOG.md) and the [Roadmap](../ROADMAP.md).

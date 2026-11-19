@@ -334,8 +334,11 @@ plan line of its stream) as `structuredContent`. The apply tools and
 (the `done` line, or the one document with the done fields) and the state
 after: `sites` (`site list --json`) for `benchbar_site_add` and
 `benchbar_site_restore`, `status` for the others. `benchbar_site_add` adds
-`admin_password` and `admin_password_generated: true` when it generated the
-new site's Administrator password. `benchbar_up` on a bench whose `state` is
+`admin_password_generated: true`, `admin_password_file` (a 0600 file in
+benchbar's state folder, `site-admin/SITE`, where the person reads the
+password) and `admin_password_note` when it generated the new site's
+Administrator password; the password itself is never in a result. If the file
+could not be written, `admin_password_file` is absent and the note says so. `benchbar_up` on a bench whose `state` is
 `not_adopted` returns `service: "missing"`, `started: false`, `next_tool:
 "benchbar_service_install_plan"` and the `status` instead of starting it.
 Any line of CLI text that would name where the MariaDB root password is kept
@@ -1091,7 +1094,7 @@ Exit 0. An argument other than `--json` exits 1.
 `labs list --json` is one document, with no done fields:
 
 ```json
-{"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.9.0","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false}]}
+{"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.8.2","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false}]}
 ```
 
 `commands` are the top level commands the lab gates (it may be empty, or name
@@ -1128,13 +1131,15 @@ share one timestamp:
   "size_bytes": 5242880,
   "with_files": true,
   "encrypted": false,
-  "partial": false
+  "partial": false,
+  "complete": true
 }
 ```
 
 | Field | Meaning |
 |---|---|
 | `stamp` | the timestamp at the start of the file names, in the site's time zone |
+| `complete` | `false` for a partial set, a set without a database file, or one with an empty part (a cheap check: `site restore` also reads the files to their end) |
 | `time` | when the database file was written, UTC |
 | `path` | the database file, the one a restore needs (else the first file of the set) |
 | `database`, `files`, `private_files`, `config` | each part, `null` when the set has none |
@@ -1452,6 +1457,15 @@ shim itself. The full contract, with the step ids, is in
   `exit`, `reboot_required`, `cancelled`, `warnings` and `next_actions`, and
   `error_id` when the action failed with a stable id (`distro_running`: the
   action must stop the running distro, and nothing was changed).
+- `benchbar.exe doctor --json` (also `--jsonl` and `--for-agent`) is the CLI's
+  document with one more key at the end, `windows_checks`: an array of the
+  Windows side's checks (PATH, `distro`, `.wslconfig`, `keepalive`, tray,
+  `cli_version`), each with `id`, `label`, `level`, `message`, `fix_command`
+  and the older `status` and `fix`. `summary` counts only the CLI's checks.
+  Stdout holds the document and nothing else, and the exit code is 1 when a
+  Windows check has the level `fail`. With `--jsonl` the key is added to the
+  `done` line. With `--fix-hints` the fix commands of
+  the failing and warning Windows checks follow the CLI's.
 - `benchbar.exe report-windows --json` prints one line: `schema_version`,
   `zip`, `included`, `skipped` (what was left out, and why) and `issue_url`.
 - `benchbar.exe self-update --check --json` prints one document and exits 0

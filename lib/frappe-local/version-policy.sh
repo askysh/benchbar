@@ -23,9 +23,12 @@ FL_BUILD_FORMULAE="pkgconf mariadb-connector-c"
 FL_SELECTED_APPS=()
 FL_INSTALL_SPECS=()
 
-# FL_CONFIG_DIR overrides the config folder (the tests pin their own checksums)
+# FL_CONFIG_DIR overrides the config folder (the tests pin their own
+# checksums); only under FL_TESTING=1, a production run ignores it
 fl_config_file() {
-  printf '%s/%s\n' "${FL_CONFIG_DIR:-${SCRIPT_DIR}/config}" "$1"
+  local dir="${SCRIPT_DIR}/config"
+  [[ "${FL_TESTING:-}" == "1" ]] && dir="${FL_CONFIG_DIR:-$dir}"
+  printf '%s/%s\n' "$dir" "$1"
 }
 
 fl_load_profile() {

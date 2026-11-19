@@ -416,6 +416,23 @@ Fix: `benchbar repair` copies each large log to `<name>.old.<stamp>` and
 empties the live file in place, so the bench's processes keep writing to
 the file they have open. At most three copies are kept.
 
+### kept_backups
+
+A site's older backups that a run of bench's backup did not put back.
+Before bench takes a backup (`site backup`, the backup first of `site
+restore`, `site drop`, `pull --replace`, `app update`), benchbar holds a
+second name for each file of the site's backup folder in the state
+folder, because bench deletes backups older than 23 hours. When benchbar
+is killed before it puts them back, or a file could not go back (the
+folder is read only, or the site was dropped and no archive was found),
+that copy may be the only one. benchbar never prunes such a folder. The
+row names the site, the number of files and the folder.
+
+Fix: `benchbar repair` puts the files back into the site's backup
+folder (the archived folder of a dropped site). So does the next backup
+of any site, which says so in `changed[]`. A file whose name is taken by
+a different file is left where it is and named in a warning.
+
 ## Service checks
 
 ### port_block
@@ -622,8 +639,14 @@ nothing is offered for the Trash then. Nothing is ever deleted for you.
 
 ### legacy_agents
 
-No per process LaunchAgents (one each for web, worker, socketio and so
-on) and no agent from frappe-mac 0.2.
+No per process LaunchAgents of this bench (one each for web, worker,
+socketio and so on) and no agent from frappe-mac 0.2. An agent counts
+only when its plist names this bench's folder and runs honcho, a
+BenchBar or frappe-mac runner, socketio, or `bench` with serve, worker,
+schedule, socketio or start.
+Your own agents never count, even when their name or script says
+"frappe" or they run honcho for another project or a one off command
+such as `bench backup` in this folder.
 
 Fix: `benchbar repair` boots them out and moves the plists to
 `~/Library/LaunchAgents-disabled/<timestamp>/`.
@@ -656,7 +679,7 @@ at the same time.
 
 Fix: `benchbar service --port-offset <n> --bench-dir <bench>` moves this
 bench to the next free block (or stop the other bench). See
-[Port blocks](benches-and-sites.md#port-blocks).
+[Port blocks](../concepts/port-blocks.md).
 
 ### orphans
 

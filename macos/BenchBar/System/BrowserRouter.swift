@@ -18,7 +18,10 @@ final class BrowserRouter: BrowserOpening {
 
     private(set) var testingBrowser: String?
 
-    init() {
+    /// One router for the whole run: each one adds a workspace observer that is never removed.
+    static let shared = BrowserRouter()
+
+    private init() {
         testingBrowser = NSWorkspace.shared.frontmostApplication?.bundleIdentifier.flatMap(Self.supportedID)
         // lives as long as the app: the router is made once, when Open as is first used
         _ = NSWorkspace.shared.notificationCenter.addObserver(

@@ -59,7 +59,8 @@ fl_platform_init() {
 }
 
 fl_preflight_not_root() {
-  local effective_uid="${FL_EFFECTIVE_UID:-$EUID}"
+  local effective_uid="$EUID"
+  [[ "${FL_TESTING:-}" == "1" ]] && effective_uid="${FL_EFFECTIVE_UID:-$EUID}"
   [[ "$effective_uid" != "0" ]] || fl_die "Do not run this installer as root." "Run it as your normal macOS user; the scripts will ask for sudo only where macOS requires it."
   fl_ok "Running as a regular user"
 }
@@ -104,6 +105,21 @@ fl_crontab_denied() {
   local out
   out="$(crontab -l 2>&1 </dev/null || true)"
   case "$out" in *"Operation not permitted"*|*"not permitted"*) return 0 ;; esac
+  return 1
+}
+
+# fl_uv_on_path: uv is runnable, after putting the folder of a uv that is not
+# on PATH there (Homebrew's <prefix>/bin, or ~/.local/bin, where uv's own
+# installer puts it). bench init needs uv: frappe-bench 5.31 and later make
+# the env with "uv venv", whoever installed bench itself (issue 112).
+fl_uv_on_path() {
+  local d
+  command -v uv >/dev/null 2>&1 && return 0
+  for d in "${FL_BREW_PREFIX:-}/bin" "$HOME/.local/bin"; do
+    [[ "$d" != /bin && -x "$d/uv" ]] || continue
+    export PATH="${PATH}:${d}"
+    return 0
+  done
   return 1
 }
 
@@ -153,8 +169,9 @@ fl_formula_disable_days_from() {
   [[ "$dis_date" != "-" ]] || return 0
   at="$(fl_date_epoch "$dis_date")"
   [[ -n "$at" ]] || return 0
-  # FL_NOW: the tests' clock (freshness.sh's fl_now reads it too)
-  now="${FL_NOW:-$(date +%s)}"
+  # FL_NOW: the tests' clock, read only under FL_TESTING=1 (freshness.sh's fl_now too)
+  now="$(date +%s)"
+  [[ "${FL_TESTING:-}" == "1" ]] && now="${FL_NOW:-$now}"
   if [[ "$now" -ge "$at" ]]; then printf '%s' "$(( -((now - at) / 86400) - 1 ))"; else printf '%s' "$(( (at - now) / 86400 ))"; fi
 }
 
@@ -207,6 +224,25 @@ fl_install_preflight_load() { return 0; }
 fl_install_env_blockers() { return 0; }
 fl_install_env_warnings() { return 0; }
 fl_bench_windows_fs_blocker() { return 0; }
+
+# fl_mariadb_listener_is_own: what listens on 3306 is the profile's own
+# Homebrew MariaDB, started by its brew service, and the root password the
+# Keychain holds logs in: benchbar's own server, not "an existing MariaDB".
+fl_mariadb_listener_is_own() {
+  local pid bin pw formula="${FL_MARIADB_FORMULA:-}"
+  [[ -n "$formula" ]] && fl_brew_service_running "$formula" || return 1
+  pid="$(lsof -ti tcp:3306 -sTCP:LISTEN 2>/dev/null | awk 'NR==1' || true)"
+  [[ -n "$pid" ]] || return 1
+  bin="$(ps -o command= -p "$pid" 2>/dev/null | awk '{print $1}' || true)"
+  # under Homebrew's own prefix, not any folder that has an opt/<formula> in its path
+  [[ -n "${FL_BREW_PREFIX:-}" ]] || return 1
+  case "$bin" in
+    "${FL_BREW_PREFIX}"/opt/"${formula}"/*|"${FL_BREW_PREFIX}"/Cellar/"${formula}"/*) ;;
+    *) return 1 ;;
+  esac
+  pw="$(fl_keychain_get 2>/dev/null || true)"
+  [[ -n "$pw" ]] && fl_mariadb_root_verify "$pw"
+}
 
 fl_mariadb_safe_mode_note() {
   fl_warn "Existing MariaDB/MySQL may already be using port 3306."

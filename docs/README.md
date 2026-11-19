@@ -15,7 +15,35 @@ cd site && bun install && bun run dev
 ```
 
 `bun run build` builds the static site into `site/dist`, and `bun run
-linkcheck` checks every internal link and anchor in it.
+linkcheck` checks every internal link and anchor in it. The external
+links are checked once a week by the Docs workflow (`bun run
+linkcheck:external` runs the same check by hand).
+
+## What the site shows
+
+The site is built and deployed from `main` only, so it describes the last
+release and never a feature that has not shipped. You write docs on
+`next-release`, in the pull request of the feature, and they go live with
+the release. Every pull request to `next-release` runs the docs test, the
+build and the link check. A page's "Edit page" link opens the file on
+`next-release`.
+
+## Generated tables
+
+The tables of flags, needs and environment variables in
+`reference/cli/` and the MCP tool table in `guides/agents.md` and
+`reference/cli/mcp.md` come from the code (`benchbar commands --json`
+and `lib/frappe-local/mcp.py`). They sit between
+`<!-- generated:... -->` comments; the prose and the examples around them
+are yours. After you change a command, a flag or an MCP tool, run
+
+```bash
+python3 -I scripts/docs-reference.py --write
+```
+
+and commit the result. `tests/test-docs.sh` fails when a table differs
+from the code, when a command is on no page, and when a page documents a
+flag no command has.
 
 ## Writing a page
 
@@ -24,7 +52,10 @@ linkcheck` checks every internal link and anchor in it.
 - Link to other pages with relative paths to their `.md` files, for
   example `[Apps](guides/apps.md)`. The site turns them into its own URLs,
   and links to other files in the repo into GitHub links.
-- A new page goes into the sidebar in `site/astro.config.mjs`.
+- A new page goes into the sidebar in `site/astro.config.mjs`;
+  `tests/test-docs.sh` fails for a page that is in no group. A new user
+  feature also gets a row in `features.md` (platform and version), and a
+  new Lab must be named there.
 - `ROADMAP.md` and `CONTRIBUTING.md` stay at the repo root; the build
   copies them in as `/roadmap/` and `/contributing/`.
 - A new doctor check needs a `### <check_id>` heading in

@@ -23,8 +23,9 @@ export default defineConfig({
       logo: { src: '../docs/images/app-icon.png', alt: 'BenchBar' },
       favicon: '/favicon.png',
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/askysh/benchbar' }],
-      // entry.filePath is relative to site/, so "../docs/x.md" resolves to docs/x.md on main
-      editLink: { baseUrl: 'https://github.com/askysh/benchbar/edit/main/site/' },
+      // entry.filePath is relative to site/, so "../docs/x.md" resolves to docs/x.md; the edit link opens
+      // next-release, where every pull request goes (the site itself is built from main)
+      editLink: { baseUrl: 'https://github.com/askysh/benchbar/edit/next-release/site/' },
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],
       components: {
@@ -59,15 +60,17 @@ export default defineConfig({
         // custom events (copied commands, downloads, outbound links): public/analytics-events.js
         { tag: 'script', attrs: { defer: true, src: '/analytics-events.js' } },
       ],
+      // The sidebar groups pages by what the reader wants to do. A page's URL
+      // follows its file, not its group, so moving a page between groups
+      // breaks no link. tests/test-docs.sh checks that every page is listed.
       sidebar: [
         {
           label: 'Start',
           items: [
             { label: 'Introduction', slug: 'index' },
+            { label: 'Features', slug: 'features' },
             { label: 'Install', slug: 'install' },
             { label: 'Quick start', slug: 'quick-start' },
-            { label: 'The menu bar app', slug: 'app' },
-            { label: 'Windows', slug: 'windows' },
           ],
         },
         {
@@ -75,9 +78,16 @@ export default defineConfig({
           items: [
             { label: 'Benches and sites', slug: 'guides/benches-and-sites' },
             { label: 'Apps', slug: 'guides/apps' },
-            { label: 'Doctor and repair', slug: 'guides/doctor-and-repair' },
             { label: 'Teams: profiles, lockfile and pull', slug: 'guides/teams' },
             { label: 'Coding agents and MCP', slug: 'guides/agents' },
+            { label: 'Troubleshooting', slug: 'troubleshooting' },
+          ],
+        },
+        {
+          label: 'Concepts',
+          items: [
+            { label: 'Port blocks', slug: 'concepts/port-blocks' },
+            { label: 'How sharing keeps your bench safe', slug: 'concepts/sharing-safety' },
           ],
         },
         {
@@ -97,25 +107,36 @@ export default defineConfig({
                 { label: 'lock', slug: 'reference/cli/lock' },
                 { label: 'pull', slug: 'reference/cli/pull' },
                 { label: 'mcp', slug: 'reference/cli/mcp' },
+                { label: 'labs (experiments)', slug: 'reference/cli/labs' },
                 { label: 'share and lan-guard', slug: 'reference/cli/share' },
                 { label: 'report and other commands', slug: 'reference/cli/other' },
               ],
             },
+            { label: 'Doctor checks', slug: 'guides/doctor-and-repair' },
             { label: 'JSON schema', slug: 'json-schema' },
-            { label: 'Runners', slug: 'runners' },
             { label: 'Configuration', slug: 'reference/configuration' },
             { label: 'URL scheme', slug: 'reference/url-scheme' },
           ],
         },
         {
-          label: 'Project',
+          label: 'App',
           items: [
-            { label: 'Troubleshooting', slug: 'troubleshooting' },
-            { label: 'Decisions', slug: 'decisions' },
-            ...rootPage('Roadmap', 'ROADMAP.md', 'roadmap'),
-            { label: 'Releasing', slug: 'releasing' },
+            { label: 'The menu bar app', slug: 'app' },
+            { label: 'Runners', slug: 'runners' },
+          ],
+        },
+        {
+          label: 'Windows',
+          items: [{ label: 'BenchBar for Windows', slug: 'windows' }],
+        },
+        {
+          label: 'For contributors',
+          items: [
             ...rootPage('Contributing', 'CONTRIBUTING.md', 'contributing'),
             { label: 'Testing', slug: 'testing' },
+            { label: 'Releasing', slug: 'releasing' },
+            { label: 'Decisions', slug: 'decisions' },
+            ...rootPage('Roadmap', 'ROADMAP.md', 'roadmap'),
           ],
         },
       ],

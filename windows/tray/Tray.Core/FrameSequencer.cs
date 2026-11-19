@@ -60,7 +60,7 @@ public abstract record RunnerPlan
 /// <summary>
 /// A clock with ONE pending one shot callback. Each shell implements it with
 /// its own UI dispatcher timer, so ticks run on the UI thread and the cost of
-/// each dispatcher is part of what the spike measures.
+/// each dispatcher is part of what the 0.8.0 shell comparison measured (DECISIONS.md).
 /// </summary>
 public interface IFrameClock
 {
