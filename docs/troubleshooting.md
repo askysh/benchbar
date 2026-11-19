@@ -129,7 +129,9 @@ decrypt. Frappe encrypts every stored password (email accounts,
 integrations, `Password` fields) with `encryption_key` from the site's
 `site_config.json`, and `bench restore` never copies it: a restored site
 without it generates a new key, which cannot read the old rows.
-`benchbar pull` copies the production key for you. After a restore by
+`benchbar pull` copies the production key for you (and since 0.9 clears
+the stored passwords of the copy unless you pass `--keep-secrets`, so a
+neutralised copy has none to decrypt). After a restore by
 hand, or when production had no key, first copy the local
 `sites/SITE/site_config.json` aside (`cp site_config.json
 site_config.json.bak` in that folder), then copy `encryption_key` from
