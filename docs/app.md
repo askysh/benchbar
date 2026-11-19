@@ -482,14 +482,16 @@ every call it makes this way says that it comes from the app: it sets
 `BENCHBAR_NONINTERACTIVE=0` and `BENCHBAR_SUDO=gui`, and its process id in
 `BENCHBAR_APP_PID`. The command line tool honors the two variables only
 when that process id is a running parent (or grandparent, and so on) of the
-`benchbar` process and runs a `BenchBar.app` binary, so a shell that sets
+`benchbar` process and has a name inside a `BenchBar.app` (the path `ps`
+prints). That is a name check on the parent chain, so a shell that only sets
 the variables itself is refused, and the refusal says why. This stops an
 agent that follows the rules in
 [AGENTS.md](https://github.com/askysh/benchbar/blob/main/AGENTS.md), a
 script that runs by mistake and a process that copies the variables. It does
-not stop another process of the same macOS user that is started inside the
-app's process tree: such a process can already read your files and run your
-commands. It is a safety rail, not a boundary. The steps that need the Mac's
+not stop a process of the same macOS user that deliberately fakes a parent
+named like the app, or that runs inside the app's process tree: such a
+process can already read your files and run your commands. It is a safety
+rail, not a boundary, on every platform (on Linux and WSL there is no check). The steps that need the Mac's
 password still ask in macOS's own dialog, and that dialog is a real barrier.
 
 The app does not write plists, edit bench files, or run `bench`, `brew`,

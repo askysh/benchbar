@@ -175,12 +175,13 @@ benchbar doctor --for-agent  # one JSON document
   `lan-guard`, `share`): a safety rail, not a boundary. The Mac app lifts the
   missing terminal with `BENCHBAR_SUDO=gui` or `BENCHBAR_NONINTERACTIVE=0`
   together with `BENCHBAR_APP_PID`, and on a Mac the CLI honors that only when
-  the pid is a running ancestor of the CLI whose executable is a
-  `BenchBar.app` binary, so an agent that sets the variables in its own shell
-  is refused. On Linux and WSL the CLI cannot check that (the Windows tray's
-  process is not visible from inside WSL), and a process that already runs
-  inside the app is not stopped on a Mac either. Do not set those variables
-  to get past a refusal; give the person the command.
+  the pid is a running ancestor of the CLI whose name (the path `ps` prints)
+  is inside a `BenchBar.app`. That is a name check on the parent chain: it
+  stops an agent that only sets the variables in its own shell, not one that
+  deliberately fakes a parent named like the app. On Linux and WSL there is
+  no check (the Windows tray's process is not visible from inside WSL). Do
+  not set those variables to get past a refusal; give the person the command.
+  `labs on` follows the same rule.
 - `benchbar doctor --quick` skips the slow checks and names them.
   `doctor --ack CHECK` silences one warning until its message changes;
   `--unack CHECK` undoes it. A failure cannot be acknowledged, and

@@ -114,7 +114,7 @@ for env in "BENCHBAR_APP_PID=999" "BENCHBAR_APP_PID="; do
   assert_eq "1" "$CODE" "($env lan-guard) $OUT"
   assert_contains "$OUT" "counts only when the BenchBar app made the run"; assert_contains "$OUT" "benchbar lan-guard install"
   assert_calls_not_contain '^(sudo|pfctl|osascript)' "($env lan-guard)"
-  for sub in "share start" "share setup --users priya@example.com --acknowledge-data --yes" "share code" "share invite" "share teardown --yes"; do
+  for sub in "share start" "share open-as priya@example.com" "share setup --users priya@example.com --acknowledge-data --yes" "share code" "share invite" "share teardown --yes"; do
     read -r -a words <<<"$sub"
     set +e; OUT="$(env "$env" BENCHBAR_SUDO=gui "$FM" "${words[@]}" --bench-dir "$BENCH" 2>&1)"; CODE="$?"; set -e
     assert_eq "1" "$CODE" "($env $sub) $OUT"
@@ -130,3 +130,39 @@ open_as_off
   FL_PLATFORM=linux BENCHBAR_SUDO=gui open_as_on
   assert_eq "0" "$CODE" "$OUT"
 ) || exit 1
+
+# ---- labs on: no terminal and no claim from the app is refused (a plain agent shell, exit 2), the
+# app's own run (BENCHBAR_NONINTERACTIVE=0 from the app tree) and a terminal pass, --for-agent, mcp
+# and BENCHBAR_NONINTERACTIVE=1 stay refused, labs off is never gated
+labs_state() { { grep quick-switch "$FL_STATE_FILE" 2>/dev/null || true; } | wc -l | tr -d ' '; }
+labs_refused() { # WHAT: the last labs on was refused with exit 2 and left no state
+  assert_eq "2" "$CODE" "($1) $OUT"
+  assert_contains "$OUT" "turning on an experiment is a person's decision" "($1)"
+  assert_eq "0" "$(labs_state)" "($1) a refused run wrote the lab"
+}
+(
+  unset BENCHBAR_LABS
+  # a plain shell: nothing says a person is here (unset is not a claim)
+  run_fm labs on quick-switch --yes; labs_refused "plain shell"; assert_contains "$OUT" "has no terminal"
+  # the variable alone, from a process that is not the app
+  BENCHBAR_NONINTERACTIVE=0 BENCHBAR_APP_PID=999 run_fm labs on quick-switch --yes; labs_refused "no app"
+  assert_contains "$OUT" "counts only when the BenchBar app made the run"
+  (unset BENCHBAR_APP_PID; BENCHBAR_NONINTERACTIVE=0 run_fm labs on quick-switch --yes; labs_refused "no marker"
+   assert_contains "$OUT" "BENCHBAR_APP_PID is not set")
+  # the agent modes stay refused, whatever the app tree says
+  BENCHBAR_NONINTERACTIVE=1 run_fm labs on quick-switch --yes; labs_refused "mode 1"
+  BENCHBAR_NONINTERACTIVE=0 run_fm labs on quick-switch --for-agent; labs_refused "--for-agent"
+  OUT="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | BENCHBAR_NONINTERACTIVE=0 "$FM" mcp 2>&1 || true)"
+  assert_eq "0" "$(labs_state)" "(mcp)"
+  # the app's own run, and a terminal
+  BENCHBAR_NONINTERACTIVE=0 BENCHBAR_SUDO=gui run_fm labs on quick-switch --yes
+  assert_eq "0" "$CODE" "$OUT"; assert_eq "1" "$(labs_state)" "(the app's run)"
+  run_fm labs off quick-switch; assert_eq "0" "$CODE" "$OUT"
+  run_fm_tty labs on quick-switch --yes; assert_eq "0" "$CODE" "$OUT"; assert_eq "1" "$(labs_state)" "(terminal)"
+  # off is allowed to anyone, without a terminal
+  run_fm labs off quick-switch; assert_eq "0" "$CODE" "$OUT"; assert_eq "0" "$(labs_state)" "(off)"
+  # a dry run changes nothing, so it needs no claim
+  run_fm labs on quick-switch --dry-run; assert_eq "0" "$CODE" "$OUT"; assert_eq "0" "$(labs_state)" "(dry-run)"
+) || exit 1
+
+echo "test-person-guard: ok"

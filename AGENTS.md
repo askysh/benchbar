@@ -267,12 +267,13 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   without a terminal. On a Mac the Mac app lifts the missing terminal with
   `BENCHBAR_SUDO=gui` or `BENCHBAR_NONINTERACTIVE=0`, and the CLI honors
   either only when `BENCHBAR_APP_PID` names a running process that is an
-  ancestor of this CLI and whose executable is a `BenchBar.app` binary
-  (`fl_person_env_ok`); so a shell that sets the variables by itself is
-  refused, and the refusal names the reason. On Linux and WSL no such
-  check is possible (the Windows tray's process is not visible from inside
-  WSL), and on a Mac a process that already runs inside the app's process
-  tree is not stopped: there the variables and a faked terminal still pass.
+  ancestor of this CLI and whose name (the path `ps` prints) is
+  `*/BenchBar.app/Contents/MacOS/*` (`fl_person_env_ok`). It is a name check
+  on the parent chain: it stops an agent that only sets the variables, and
+  the refusal names the reason. It does not stop one that deliberately fakes
+  a parent named like the app, a process inside the app's process tree, a
+  faked terminal or the `FL_TESTING` seams. On Linux and WSL there is no
+  check at all (the Windows tray's process is not visible from inside WSL).
   So do not set `BENCHBAR_SUDO`, `BENCHBAR_NONINTERACTIVE=0` or
   `BENCHBAR_APP_PID` yourself to get past a refusal; the rule is yours to
   keep, and the command is the person's to run.
@@ -289,8 +290,10 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   a terminal, or that runs inside the app or on Linux, is not stopped: the
   guard is against a mistake, not a boundary, so the rule above is the rule.
 - Experiments are the person's choice. `benchbar labs` lists them; never
-  run `benchbar labs on` (it refuses an agent anyway, and a process of the same
-  user can set the variables it looks at, so keep the rule). A command of an
+  run `benchbar labs on` (it refuses `--for-agent`, `benchbar mcp`,
+  `BENCHBAR_NONINTERACTIVE=1` and a run without a terminal unless the app
+  passes `BENCHBAR_NONINTERACTIVE=0`, and a guard of that kind is a safety
+  rail, so keep the rule). A command of an
   experiment that is off exits 2 with "Turn it on: benchbar labs on NAME":
   tell the user, do not work around it. `status --json` and
   `commands --json` list the `labs` that are on.

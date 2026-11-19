@@ -1034,7 +1034,7 @@ fl_noninteractive() { [[ "${BENCHBAR_NONINTERACTIVE:-0}" == "1" ]]; }
 # person runs (open-as on, open --as --print-url, lan-guard, share) is refused without a terminal;
 # the Mac app has none and says so with BENCHBAR_SUDO=gui or BENCHBAR_NONINTERACTIVE=0, after its own
 # alert. Any process can set those two, so on macOS the claim counts only when BENCHBAR_APP_PID names
-# a process that is above this one in the process tree and runs a BenchBar.app binary (the app sets
+# a process that is above this one in the process tree and whose name (the path ps prints) is inside a BenchBar.app (a name check, not a proof; the app sets
 # it for every run that makes the claim). Returns 0 when NAME is VALUE and the claim holds, 1
 # otherwise; FL_PERSON_WHY then says why a claim that was made did not count, for the refusal.
 # Only the paths above call it, and only without a terminal: nothing else pays for the walk.
