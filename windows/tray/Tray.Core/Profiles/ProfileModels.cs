@@ -26,6 +26,16 @@ public enum ProfileOrigin { Builtin, User, Imported, Subscribed, Path }
 public sealed record ProfileInfo(string Name, string Kind, string? Source, string File, string? Base, string? Label, string? FrappeBranch,
     bool Valid, string? Error, string? SourceUrl, ProfileSubscription? Subscription, string? ShadowedBy)
 {
+    /// <summary>The versions the profile brings (<c>python</c>, <c>node</c>, <c>mariadb</c>; a team profile's come from its base). Null from a CLI older than 0.8 and for an invalid file.</summary>
+    public string? Python { get; init; }
+
+    public string? Node { get; init; }
+
+    public string? Mariadb { get; init; }
+
+    /// <summary>"Python 3.11, Node 22, MariaDB 10.11", the parts the CLI gave; empty when it gave none.</summary>
+    public string Versions => string.Join(", ", new[] { Python is null ? null : "Python " + Python, Node is null ? null : "Node " + Node, Mariadb is null ? null : "MariaDB " + Mariadb }.OfType<string>());
+
     /// <summary>A shadowed file has the same name as the one that wins, so the file is part of the id.</summary>
     public string Id => Name + "\t" + File;
 
@@ -92,7 +102,12 @@ public static class ProfileListJson
             profiles.Add(new ProfileInfo(name, JsonRead.Str(p, "kind") ?? "team", JsonRead.Str(p, "source"), JsonRead.Str(p, "file") ?? "",
                 JsonRead.Str(p, "base"), JsonRead.Str(p, "label"), JsonRead.Str(p, "frappe_branch"),
                 !(p["valid"] is JsonValue v && v.TryGetValue<bool>(out var valid)) || valid,
-                JsonRead.Str(p, "error"), JsonRead.Str(p, "source_url"), sub, JsonRead.Str(p, "shadowed_by")));
+                JsonRead.Str(p, "error"), JsonRead.Str(p, "source_url"), sub, JsonRead.Str(p, "shadowed_by"))
+            {
+                Python = JsonRead.Str(p, "python"),
+                Node = JsonRead.Str(p, "node"),
+                Mariadb = JsonRead.Str(p, "mariadb"),
+            });
         }
         return profiles;
     }

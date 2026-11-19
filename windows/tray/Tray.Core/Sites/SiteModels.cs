@@ -23,7 +23,7 @@ public static class SiteNames
 }
 
 /// <summary>One row of the Sites tab.</summary>
-public sealed record SiteRowInfo(string Name, bool IsDefault, string? Url, bool CanOpen, bool NeedsSetUp)
+public sealed record SiteRowInfo(string Name, bool IsDefault, string? Url, bool CanOpen, bool NeedsSetUp, SiteOpenAs? OpenAs = null)
 {
     /// <summary>"Open" for a site Windows can reach, "Set Up..." for one it cannot.</summary>
     public string ActionLabel => NeedsSetUp ? "Set Up..." : "Open";
@@ -38,7 +38,7 @@ public static class SiteRows
         {
             var needsSetUp = !SiteNames.ResolvesOnWindows(site.Name);
             var url = UrlFor(bench.WebUrl, site.Name);
-            rows.Add(new SiteRowInfo(site.Name, site.IsDefault, url, !needsSetUp && url is not null && bench.State == BenchState.Running, needsSetUp));
+            rows.Add(new SiteRowInfo(site.Name, site.IsDefault, url, !needsSetUp && url is not null && bench.State == BenchState.Running, needsSetUp, site.OpenAs));
         }
         return rows;
     }
@@ -51,17 +51,24 @@ public static class SiteRows
     }
 }
 
-public enum SiteAction { MakeDefault, BackUp, BackUpWithFiles, Backups, Restore, Console, Database, Drop }
+public enum SiteAction { MakeDefault, OpenAs, AllowOpenAs, TurnOffOpenAs, BackUp, BackUpWithFiles, Backups, Restore, Console, Database, Drop }
 
 public sealed record SiteMenuItem(SiteAction Action, string Label, bool Enabled, bool Destructive = false);
 
 /// <summary>The per site menu: what it lists and which entries are off.</summary>
 public static class SiteMenu
 {
-    public static IReadOnlyList<SiteMenuItem> For(SiteRowInfo row, bool onlySite)
+    /// <summary>
+    /// <paramref name="openAs"/> is the verdict of <see cref="OpenAsRules.For"/> for the row: "Open as..." is in the menu when the person turned Open as
+    /// on for a name Windows can reach (disabled when it cannot be used now), and the opt in itself ("Allow Open as...", "Turn Off Open as")
+    /// whenever the CLI reports it and Windows can reach the name.
+    /// </summary>
+    public static IReadOnlyList<SiteMenuItem> For(SiteRowInfo row, bool onlySite, OpenAsRules.Availability openAs = OpenAsRules.Availability.Hidden)
     {
         var items = new List<SiteMenuItem>();
         if (!row.IsDefault) items.Add(new(SiteAction.MakeDefault, "Make Default", true));
+        if (openAs != OpenAsRules.Availability.Hidden) items.Add(new(SiteAction.OpenAs, "Open as...", openAs == OpenAsRules.Availability.Available));
+        if (row.OpenAs is { } state && !row.NeedsSetUp) items.Add(new(state.Enabled ? SiteAction.TurnOffOpenAs : SiteAction.AllowOpenAs, state.Enabled ? "Turn Off Open as" : "Allow Open as...", true));
         items.Add(new(SiteAction.BackUp, "Back Up", true));
         items.Add(new(SiteAction.BackUpWithFiles, "Back Up with Files", true));
         items.Add(new(SiteAction.Backups, "Backups...", true));

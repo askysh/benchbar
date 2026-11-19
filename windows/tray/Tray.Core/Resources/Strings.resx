@@ -59,6 +59,9 @@
   <data name="MenuSettings" xml:space="preserve">
     <value>Settings...</value>
   </data>
+  <data name="MenuQuickSwitch" xml:space="preserve">
+    <value>Quick Switch...</value>
+  </data>
   <data name="MenuQuit" xml:space="preserve">
     <value>Quit</value>
   </data>

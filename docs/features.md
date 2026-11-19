@@ -74,7 +74,7 @@ JSON. See [The menu bar app](app.md).
 | Log window | Follows the bench log, with search and a filter per process. | 0.5.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | Find Benches | Finds benches in a folder you choose and adds them. | 0.5.7 | macOS | [Find existing benches](app.md#find-existing-benches-in-a-folder) |
 | Ports | Port Settings and Setup: a preview, Automatic or Fixed mode, and Resolve & Start. | 0.5.8 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
-| Backups | Backs up a site, with or without files, and drops one after a backup. The app has no restore yet. | 0.5.8 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Backups | Backs up a site, with or without files, and drops one after a backup. | 0.5.8 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | CPU and memory charts | The last ten minutes of a running bench. | 0.5.8 | macOS | [Energy](app.md#energy) |
 | URL scheme | `benchbar://` links for Raycast, Shortcuts and your own scripts. | 0.5.8 | macOS | [URL scheme](reference/url-scheme.md) |
 | Team Profiles | Imports and subscribes to profiles. | 0.6.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
@@ -85,6 +85,8 @@ JSON. See [The menu bar app](app.md).
 | Sharing tab | Sets up, starts and stops a room, shows the room code and the people in it. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Share on your network](app.md#share-on-your-network) |
 | On your network | Finds the rooms of colleagues on your Wi-Fi and joins them. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Join a room](app.md#join-a-room-on-your-network) |
 | Settings > Labs | Lists the experiments, with a switch, a warning and the version of each. | 0.8.2 | macOS | [The menu bar app](app.md#the-benchbar-window) |
+| Restore a backup | Restores one of a site's backups into the site or into a copy, from the plan the CLI shows, by its token. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Unfinished changes | Lists an app update or add that stopped part way, with Resume and Drop the Record. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 
 ## BenchBar for Windows
 
@@ -100,6 +102,8 @@ BenchBar for Windows is a beta. The benches run in WSL 2. See
 | Window: Sites, Apps, Health | A page per bench: Overview, Sites (backups, restore, drop), Apps and Health with Repair. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Ports | Port Settings and Setup in a bench's Overview. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Profiles, Find Benches | Team Profiles and Find Benches in the sidebar. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
+| Window: Open as | **Allow Open as...** per site, then **Open as...** and Find User open the site in your browser signed in as any enabled user. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
+| Quick Switch | The tray menu opens a panel that opens a site as Administrator or a pinned user, by digit, arrows or typing. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Labs | Lists the experiments with a switch, a warning, the version and, for one that is not on Windows yet, why. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | URL scheme | `benchbar://` links start, stop and open a bench from a launcher or a script. **Settings > Ask before a link acts** is off by default. | 0.9.0 | Windows | [benchbar:// links](windows.md#benchbar-links), [URL scheme](reference/url-scheme.md) |
 | Report a bug | The tray writes the diagnostics zip. | 0.8.1 | Windows | [Report a bug](windows.md#report-a-bug) |

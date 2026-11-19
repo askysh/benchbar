@@ -52,6 +52,32 @@ assert_not_contains "$OUT" "not signed"
 
 notes 1.2.3
 assert_eq "1" "$CODE"; assert_contains "$OUT" 'no "## 1.2.3 " section'
+
+# a release candidate: no Update section, no Homebrew line, the pinned install
+# line, and its changes from "## Unreleased" plus the fragments
+mkdir -p "$TMP_DIR/frags"
+printf '### Docs\n\n- A waiting fragment.\n' >"$TMP_DIR/frags/7-waiting.md"
+export CHANGELOG_DIR="$TMP_DIR/frags"
+notes 9.2.0-rc.1 --signed
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "## Release candidate" "${OUT%%$'\n'*}"
+assert_contains "$OUT" "pre-release** of BenchBar 9.2.0"
+assert_contains "$OUT" "askysh/benchbar/v9.2.0-rc.1/install.sh | bash -s -- --version v9.2.0-rc.1"
+assert_contains "$OUT" "- not yet"
+assert_contains "$OUT" "A waiting fragment."
+assert_contains "$OUT" "Signed with a Developer ID and notarized"
+assert_not_contains "$OUT" "## Update"
+assert_not_contains "$OUT" "brew install"
+assert_not_contains "$OUT" "self-update --yes"
+# its own section wins when CHANGELOG.md has one
+printf '\n## 9.3.0-rc.2 - 2026-11-01\n\n- own section\n' >>"$TMP_DIR/CHANGELOG.md"
+notes 9.3.0-rc.2
+assert_contains "$OUT" "- own section"; assert_not_contains "$OUT" "A waiting fragment."
+assert_contains "$OUT" "not signed with an Apple Developer ID"
+unset CHANGELOG_DIR
+# only the strict form is a version
+notes "1.2.3 --draft"; assert_eq "1" "$CODE"; assert_contains "$OUT" "is not a version"
+notes 9.1.0-beta.1; assert_eq "1" "$CODE"
 notes
 assert_eq "1" "$CODE"; assert_contains "$OUT" "Usage:"
 

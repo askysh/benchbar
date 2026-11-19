@@ -1,3 +1,5 @@
+using BenchBar.Tray.Core;
+
 namespace BenchBar.Tray;
 
 /// <summary>
@@ -7,13 +9,16 @@ namespace BenchBar.Tray;
 /// </summary>
 internal sealed class RunMarker(string? path = null)
 {
-    private readonly string _path = path ?? System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BenchBar", "running");
+    private readonly string _path = path ?? DataFolder.In("running");
 
     public string Path => _path;
 
-    /// <summary>Writes the marker and says whether the previous run ended without removing it. Never throws.</summary>
-    public bool Begin(string version)
+    /// <summary>
+    /// Writes the marker and says whether the previous run ended without removing it. Never throws. <paramref name="restartedByWindows"/>
+    /// is a start by <c>RegisterApplicationRestart</c> (after a package update): Windows ended the earlier run on purpose, so a marker left
+    /// behind is not a crash (a crash or a hang is never restarted: the registration says so).
+    /// </summary>
+    public bool Begin(string version, bool restartedByWindows = false)
     {
         var crashed = false;
         try
@@ -21,7 +26,7 @@ internal sealed class RunMarker(string? path = null)
             if (File.Exists(_path))
             {
                 var earlier = File.ReadAllText(_path).Trim();
-                crashed = earlier.Length == 0 || string.Equals(earlier, version, StringComparison.Ordinal);
+                crashed = !restartedByWindows && (earlier.Length == 0 || string.Equals(earlier, version, StringComparison.Ordinal));
             }
             var dir = System.IO.Path.GetDirectoryName(_path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);

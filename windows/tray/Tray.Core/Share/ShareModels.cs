@@ -21,6 +21,11 @@ public sealed record ShareCopy(string? SourceSite, int? AgeSeconds, bool Drifted
 
 public sealed record SharePerson(string Id, string Name, string? Model, string? Ip, string? SeatId, string? SeatName, bool Online, string? LastSeen);
 
+public sealed record ShareUser(string Name, string FullName, IReadOnlyList<string> Roles, IReadOnlyList<string> CodeCapableRoles, bool Selectable);
+
+/// <summary><c>share setup --dry-run --json</c>: what the copy will be, shown before anything is made.</summary>
+public sealed record ShareSetupPlan(string Site, double SizeGb, int EstMinutes, int? SourceAgeSeconds, IReadOnlyDictionary<string, int> DataClasses);
+
 /// <summary><c>share status [--preflight] --json</c>. It never carries the code.</summary>
 public sealed record ShareStatus(int Protocol, ShareState State, string? Site, string ShareSite, string? Label, string? LanIp, int? Port, int SecondsLeft,
     int CanExtendSeconds, ShareCopy? Copy, IReadOnlyList<string> AllowedUsers, int Seats, int People, int DevicesOnline, bool? Locked, string? LockReason,
@@ -114,4 +119,26 @@ public static class ShareJson
                 JsonRead.Str(p, "name") ?? JsonRead.Str(p, "id")!, JsonRead.Str(p, "model"), JsonRead.Str(p, "ip"), JsonRead.Str(p, "seat_id"),
                 JsonRead.Str(p, "seat_full_name"), JsonRead.Bool(p, "online"), JsonRead.Str(p, "last_seen")))]
             : [];
+
+    public static IReadOnlyList<ShareUser> Users(JsonObject o) =>
+        o["users"] is JsonArray a
+            ? [.. a.OfType<JsonObject>().Where(u => JsonRead.Str(u, "name") is { Length: > 0 }).Select(u =>
+            {
+                var name = JsonRead.Str(u, "name")!;
+                var selectable = u["selectable"] is JsonValue s && s.TryGetValue<bool>(out var pick)
+                    ? pick
+                    : (u["enabled"] is not JsonValue e || !e.TryGetValue<bool>(out var on) || on) && (JsonRead.Str(u, "user_type") ?? "System User") == "System User";
+                return new ShareUser(name, JsonRead.Str(u, "full_name") ?? name, JsonRead.Strings(u, "roles"), JsonRead.Strings(u, "code_capable_roles"), selectable);
+            })]
+            : [];
+
+    public static ShareSetupPlan SetupPlan(JsonObject o)
+    {
+        var classes = new Dictionary<string, int>();
+        if (o["data_classes"] is JsonObject d)
+            foreach (var (key, value) in d)
+                if (value is JsonValue v && v.TryGetValue<int>(out var n)) classes[key] = n;
+        double size = o["size_gb"] is JsonValue g && g.TryGetValue<double>(out var gb) ? gb : 0;
+        return new ShareSetupPlan(JsonRead.Str(o, "site") ?? "", size, JsonRead.Int(o, "est_minutes") ?? 0, JsonRead.Int(o, "source_age_s"), classes);
+    }
 }

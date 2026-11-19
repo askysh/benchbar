@@ -211,10 +211,28 @@ Every bench has a page:
   bench. The default site can be dropped only by naming the site that
   takes its place, and the only site of a bench cannot be dropped. Removing the site's `/etc/hosts` line needs
   your password, so the sheet shows that command to run in Terminal.
+  **Restore a Backup…** (the same menu) puts one of the site's backups
+  back, either into the site itself or into a copy under a new name. It
+  shows the CLI's plan first (`benchbar site restore --dry-run --json`)
+  and runs exactly that plan by its token. Restoring into the site asks
+  you to type its name, never sits on Return, and has the CLI back the
+  site up with its files first; the backup is listed on the Sites tab
+  afterwards. A copy leaves the original alone. Encrypted and partial
+  backups are not offered. The sheet asks for no password: the MariaDB
+  password stays with `benchbar`, and when it does not have it (the plan
+  says `MARIADB_ROOT_PASSWORD` is needed) the sheet tells you to run the
+  command in Terminal.
 - **Apps**: add an app from the registry or any GitHub URL, and update it
   after reading the changelog. Each app's ⋯ menu installs it on a site
   that lacks it and sets its focus (Auto, Focus, Ignore). The ⋯ menu
   beside **Add App…** has **Refresh Site Lists** and **Check Remotes**.
+  An update or an add that stopped part way (a failed migrate, build or
+  restart) shows under **Unfinished changes** at the top of the tab, with
+  the step it stopped at and the steps left (`pending_operations` of
+  `benchbar status --json`). **Resume…** opens the usual Update or Add
+  App sheet, which plans only those steps. **Drop the Record…** runs
+  `benchbar app update NAME --discard-pending` after asking: none of the
+  steps run and the app stays where it is.
   Right click a bench in the sidebar for its actions.
 - **Health**: doctor's checks, and Repair with its plan shown before
   anything changes and each step as it runs.

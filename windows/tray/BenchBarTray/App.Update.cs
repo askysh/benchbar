@@ -12,7 +12,7 @@ public partial class App
     private SelfUpdateClient? _updateClient;
     private SelfUpdateLauncher? _updateLauncher;
 
-    private SelfUpdateClient UpdateClient => _updateClient ??= new SelfUpdateClient(new SystemProcessRunner(), () => ShimLocator.Find(), UpdateCheck.CurrentVersion());
+    private SelfUpdateClient UpdateClient => _updateClient ??= new SelfUpdateClient(new SystemProcessRunner(), () => ShimLocator.Find(), UpdateCheck.CurrentVersion(), _package);
 
     private SelfUpdateLauncher UpdateLauncher
     {
@@ -21,7 +21,7 @@ public partial class App
             if (_updateLauncher is null)
             {
                 _updateLauncher = new SelfUpdateLauncher(() => ShimLocator.Find(), StartedProcess.Start, Environment.SystemDirectory,
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), _package);
                 // the window closed while this tray still runs (a failure, or closed early): Update Now comes back
                 _updateLauncher.Ended += () => Dispatcher.BeginInvoke(ShowUpdateEverywhere);
             }
@@ -49,6 +49,7 @@ public partial class App
     /// </summary>
     private async Task<SelfUpdateCheck> RunUpdateCheckAsync()
     {
+        if (!UpdatePolicy.ChecksForUpdates(_package)) return SelfUpdateCheck.ForStore(UpdateCheck.CurrentVersion()); // the Store updates the package
         var check = await UpdateClient.CheckAsync(CancellationToken.None);
         var problem = check.Problem ?? check.Status?.Error;
         if (problem is not null)
@@ -89,7 +90,7 @@ public partial class App
     /// </summary>
     private void UpdateNow()
     {
-        if (_quitting) return;
+        if (_quitting || !UpdatePolicy.ChecksForUpdates(_package)) return; // a packaged tray never runs the zip self-update
         var start = UpdateLauncher.Start();
         switch (start.Kind)
         {
@@ -110,6 +111,7 @@ public partial class App
     /// <summary>Check for Updates in the tray menu: says the answer in a dialog, with Update Now when it can.</summary>
     private async Task CheckForUpdatesAsync()
     {
+        if (!UpdatePolicy.ChecksForUpdates(_package)) return; // the Store updates the package
         var check = await RunUpdateCheckAsync();
         var text = UpdatePlanner.CheckText(check);
         var offer = UpdatePlanner.Offer(check.Status);
