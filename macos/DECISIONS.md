@@ -615,3 +615,11 @@ Asked for after the phases, to stop naming drift before the first release.
 - `RunnerLibrary.reload` returns at once when the folder's files, sizes and modification times are as at the last load: Settings reloads on every appear, and new images made `isSame` false, which restarted the menu bar animation of a custom runner.
 - The back up spinner compares the bench's activity text with the exact strings `Workbench.backupActivity` builds, not a prefix.
 - A failed profile list in the wizard has Try Again (`WizardState.Event.retryProfiles`), one read at a time, and the Review problem text says to use it.
+
+## Swift package pins (issue 133, MAC-2)
+
+- `macos/Package.resolved` is committed and is the only source of package versions for a build. `scripts/macos-build.sh` and `snapshots.yml` run `scripts/macos-packages.sh` after `xcodegen generate`, which copies it into the generated project, and the builds pass `-disableAutomaticPackageResolution`. Two builds of one commit use the same Sparkle and swift-subprocess.
+- `macos/Package.swift` exists for Dependabot only (it never builds the app). It must say what `project.yml` and `sparkle.yml` say: `tests/test-supply-chain.sh` compares the URLs, the `from` versions and the pins.
+- A new version: take Dependabot's pull request (it changes Package.swift and Package.resolved), and move the `from:` in `project.yml` or `sparkle.yml` too when the range moves. Or by hand: `swift package --package-path macos update`, then commit `Package.resolved`.
+- One file serves a build with Sparkle and a build without it: the project without Sparkle ignores the Sparkle pin, and `--check` accepts a pin that Xcode leaves out.
+- Xcode `26.6` is named in the workflows (not `latest-stable`): see docs/DECISIONS.md, "Supply chain".

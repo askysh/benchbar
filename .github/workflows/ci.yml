@@ -110,10 +110,11 @@ jobs:
     steps:
       # the whole history: the plan diffs against the pull request's base, and
       # affected.sh names the functions a change touched
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       # Everything from the event goes in through env, never into the script text
       - name: Plan the run (scripts/ci-plan.sh)
@@ -146,9 +147,10 @@ jobs:
       matrix:
         shard: ${{ fromJSON(needs.changes.outputs.macos_shards) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
       - name: Versions
         run: |
@@ -179,9 +181,10 @@ jobs:
       matrix:
         shard: ${{ fromJSON(needs.changes.outputs.linux_shards) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
       - name: Versions
         run: |
@@ -212,9 +215,10 @@ jobs:
       matrix:
         shard: ${{ fromJSON(needs.changes.outputs.bash32_shards) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
       # Packages, each for what the suite runs that busybox does not do the
       # GNU way: coreutils (stat -c, date, mktemp, timeout), findutils (find),
@@ -238,9 +242,13 @@ jobs:
           ONLY_TESTS: ${{ needs.changes.outputs.tests }}
           SHELLCHECK: '0'
           SKIP_TESTS: ${{ needs.changes.outputs.bash32_skip }}
+          # bash 3.2.57 by its digest, not only its tag: a tag can be moved.
+          # The digest is of the multi-architecture index of the official
+          # image; a new base image is a change to this line.
+          BASH32_IMAGE: bash:3.2.57@sha256:2556c2da19c32c1614d318645c73a7bf64d38be21cf69e98e3ca51f053983719
         run: |
-          for attempt in 1 2 3; do docker pull -q bash:3.2.57 >/dev/null && break; [ "$attempt" = 3 ] && exit 1; sleep 5; done
-          docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS bash:3.2.57 sh -euc '
+          for attempt in 1 2 3; do docker pull -q "$BASH32_IMAGE" >/dev/null && break; [ "$attempt" = 3 ] && exit 1; sleep 5; done
+          docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS "$BASH32_IMAGE" sh -euc '
             for attempt in 1 2 3; do
               apk add --no-cache coreutils findutils diffutils grep sed gawk procps git python3 zip unzip curl perl-utils musl-locales >/dev/null && break
               [ "$attempt" = 3 ] && exit 1
@@ -262,24 +270,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
       # Homebrew's 0.11.0, the version contributors run on a Mac: Ubuntu's
       # apt package is older and reports findings 0.11.0 does not. The binary
-      # for this runner's CPU, each with its checksum.
-      - name: Install shellcheck 0.11.0
-        run: |
-          case "$(uname -m)" in
-            x86_64) arch=x86_64; sum=4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b ;;
-            aarch64) arch=aarch64; sum=127f13925eadd52c341bca0ebaf9ab0dbd78c6468f30a8f262a528bf8de47546 ;;
-            *) echo "no shellcheck binary pinned for $(uname -m)"; exit 1 ;;
-          esac
-          curl -fsSL -o "$RUNNER_TEMP/sc.tar.xz" "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.$arch.tar.xz"
-          tar -xJf "$RUNNER_TEMP/sc.tar.xz" -C "$RUNNER_TEMP"
-          echo "$sum  $RUNNER_TEMP/shellcheck-v0.11.0/shellcheck" | sha256sum -c -
-          echo "$RUNNER_TEMP/shellcheck-v0.11.0" >>"$GITHUB_PATH"
+      # for this runner's CPU, checked against its sha256
+      # (scripts/ci-install-tool.sh).
+      - name: Install shellcheck
+        run: scripts/ci-install-tool.sh shellcheck
 
       - name: shellcheck
         env:
@@ -287,6 +288,41 @@ jobs:
         run: |
           shellcheck --version | sed -n 2p
           bash tests/run-tests.sh shellcheck
+
+  # The workflows themselves: actionlint (syntax, expressions, and shellcheck
+  # of every run: block) and zizmor (security audits: unpinned actions,
+  # credentials left on disk, template injection, cache poisoning, excessive
+  # permissions). Both fail the job on any finding. What the repository
+  # accepts on purpose is listed, each with its reason, in
+  # .github/actionlint.yaml and .github/zizmor.yml. Always on (about 30
+  # seconds): a workflow is code that runs with the release keys' neighbours.
+  # Both tools and shellcheck are pinned with a sha256 in
+  # scripts/ci-install-tool.sh. zizmor's online audits (an action's commit
+  # must belong to the repository it names, known vulnerable actions) use the
+  # job's own read-only token.
+  workflows:
+    name: Workflow lint (actionlint, zizmor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
+
+      - name: Install actionlint, zizmor and shellcheck
+        run: |
+          scripts/ci-install-tool.sh shellcheck
+          scripts/ci-install-tool.sh actionlint
+          scripts/ci-install-tool.sh zizmor
+
+      - name: actionlint
+        run: actionlint -color
+
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: zizmor --no-progress .github
 
   # A real install on Linux: phase 00 from apt, uv and fnm, a v15 bench and
   # site, the bench under systemd --user, up, the site answering, status and
@@ -305,9 +341,10 @@ jobs:
       ADMIN_PASSWORD: admin-ci-only
       SITE: linuxdev.localhost
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
       # The image ships MySQL (stopped) and its /etc/mysql: mariadb-server
       # cannot install over them. A throwaway VM, so purging is safe here.
@@ -389,14 +426,17 @@ jobs:
       run:
         working-directory: windows/shim
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: windows/shim/go.mod
-          cache-dependency-path: windows/shim/go.sum
+          # no module cache: this job (and wsl) uploads what it builds, and
+          # the one module is a quick download that go.sum verifies
+          cache: false
 
       - name: gofmt and go vet
         run: |
@@ -407,6 +447,15 @@ jobs:
 
       - name: go test
         run: go test ./...
+
+      # Known vulnerabilities in the Go standard library and in x/sys, for
+      # the Windows build (the code it calls, not everything it imports). The
+      # tool is pinned by version, and the Go checksum database checks its
+      # modules. A new advisory fails this job: bump Go (go.mod) or x/sys.
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+          GOOS=windows "$(go env GOPATH)/bin/govulncheck" ./...
 
       - name: Build windows/amd64 and windows/arm64
         run: |
@@ -419,7 +468,7 @@ jobs:
           ls -l "$RUNNER_TEMP"/shim/*/benchbar.exe
 
       - name: Upload the exes
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: benchbar-shim-${{ github.sha }}
           path: ${{ runner.temp }}/shim
@@ -454,16 +503,19 @@ jobs:
         shell: pwsh
         working-directory: windows/shim
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: windows/shim/go.mod
-          cache-dependency-path: windows/shim/go.sum
+          # no module cache: this job (and wsl) uploads what it builds, and
+          # the one module is a quick download that go.sum verifies
+          cache: false
 
-      # v7.2.0
       - name: Install the Ubuntu 24.04 WSL distro
-        uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4
+        uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
         with:
           distribution: Ubuntu-24.04
           use-cache: 'true'
@@ -505,30 +557,26 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
+      # the same Xcode as release.yml and snapshots.yml (the macos-26 default
+      # today), so the app is tested with the compiler it ships with
       - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
-          xcode-version: latest-stable
-
-      - name: Cache Homebrew downloads
-        uses: actions/cache@v6
-        with:
-          path: ~/Library/Caches/Homebrew
-          key: brew-${{ runner.os }}-${{ runner.arch }}-xcodegen
-          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
+          xcode-version: '26.6'
 
       - name: Install XcodeGen
-        run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
+        run: scripts/ci-install-tool.sh xcodegen
 
       - name: Cache DerivedData and Swift packages
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: macos/build/DerivedData
-          key: deriveddata-${{ runner.os }}-${{ hashFiles('macos/project.yml', 'macos/BenchBar/**/*.swift', 'macos/BenchBarTests/**/*.swift') }}
+          key: deriveddata-${{ runner.os }}-${{ hashFiles('macos/project.yml', 'macos/sparkle.yml', 'macos/Package.resolved', 'macos/BenchBar/**/*.swift', 'macos/BenchBarTests/**/*.swift') }}
           restore-keys: deriveddata-${{ runner.os }}-
 
       # The Release build of the app, ad hoc signed, zipped, imaged and
@@ -541,7 +589,7 @@ jobs:
           set -o pipefail
           xcodebuild -project macos/BenchBar.xcodeproj -scheme BenchBar -configuration Debug \
             -derivedDataPath macos/build/DerivedData -destination 'platform=macOS,arch=arm64' \
-            -skip-testing:BenchBarTests/SnapshotTests \
+            -skip-testing:BenchBarTests/SnapshotTests -disableAutomaticPackageResolution \
             CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= test 2>&1 | tee macos/build/test.log | \
             grep -E '^(✔|✘)|Test run with|Test Suite|error:|\*\* TEST|Executed' || true
           grep -q -E '\*\* TEST SUCCEEDED \*\*|Test run with [0-9]+ tests? passed' macos/build/test.log
@@ -551,7 +599,7 @@ jobs:
         run: scripts/ci-annotate.sh macos/build/build.log macos/build/test.log
 
       - name: Upload the bundle
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: BenchBar-unsigned-${{ github.sha }}
           path: |
@@ -563,7 +611,7 @@ jobs:
 
       - name: Upload the test log on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: swift-test-log
           # the build log too: xcbeautify --quiet can hide an error that has
@@ -580,7 +628,7 @@ jobs:
   ci-result:
     name: CI result
     if: always()
-    needs: [changes, cli-macos, cli-linux, cli-bash32, shellcheck, cli-linux-real, shim, wsl, app]
+    needs: [changes, cli-macos, cli-linux, cli-bash32, shellcheck, workflows, cli-linux-real, shim, wsl, app]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

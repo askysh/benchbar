@@ -70,6 +70,12 @@ mkdir -p "\$dir"
 printf '#!/usr/bin/env bash\nexec "$ROOT/tests/mocks/bin/fnm" "\$@"\n' >"\$dir/fnm"
 chmod +x "\$dir/fnm"
 SCRIPT
+# the installers are pinned by URL and sha256 (INST-9); a test is a mirror, so it
+# names its own URLs and the sums of the scripts above
+export UV_INSTALLER_URL=https://astral.sh/uv/install.sh FNM_INSTALLER_URL=https://fnm.vercel.app/install
+UV_INSTALLER_SHA256="$(shasum -a 256 "$MOCK_STATE/http/$(key "$UV_INSTALLER_URL")" | awk '{print $1}')"
+FNM_INSTALLER_SHA256="$(shasum -a 256 "$MOCK_STATE/http/$(key "$FNM_INSTALLER_URL")" | awk '{print $1}')"
+export UV_INSTALLER_SHA256 FNM_INSTALLER_SHA256
 
 
 # the machine's sudo asks for this password and has no terminal (see the sudo mock)
