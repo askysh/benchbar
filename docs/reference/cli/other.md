@@ -554,6 +554,10 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar docs [TOPIC] [--print]` | no | no | no | no | none |
 | `benchbar self-update [--check] [--dry-run] [--json]` | yes | no | yes | yes | document |
 | `benchbar where [--json]` | no | no | no | no | document |
+| `benchbar op status\|list\|wait ...` | no | no | no | no | none |
+| `benchbar op status [OP_ID] [--json]` | no | no | no | no | document |
+| `benchbar op list [--running] [--limit N] [--json]` | no | no | no | no | document |
+| `benchbar op wait OP_ID [--timeout SECS] [--json]` | no | no | no | no | document |
 | `benchbar help` | no | no | no | no | none |
 | `benchbar commands --json` | no | no | no | no | document |
 
@@ -575,6 +579,9 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `users` | `--json` |  | One JSON document. |
 | `report` | `--print` |  | Print to the terminal instead of writing the zip. |
 | `self-update` | `--check` |  | This version against the latest. |
+| `op list` | `--running` |  | Only the ones that run now. |
+| `op list` | `--limit` | `N` | At most N (1 to 100, default 20). |
+| `op wait` | `--timeout` | `SECS` | Give up after SECS seconds (the operation goes on); default: wait for it. |
 
 | Command | Environment variable | What it does |
 |---|---|---|

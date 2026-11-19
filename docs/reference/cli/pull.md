@@ -121,6 +121,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
+| `pull` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `pull` | `--as` | `NAME` | Local site name (default SITE.local). |
 | `pull` | `--from-dir` | `DIR` | A backup set downloaded by hand, no SSH. |
 | `pull` | `--remote-bench` | `DIR` | The bench folder on the server. |
