@@ -308,10 +308,12 @@ function Install-BenchBar {
   # signed in, or the check failed). It never stops the install.
   function Test-ZipAttestation([string]$ZipPath) {
     $leaf = Split-Path -Leaf $ZipPath
+    # the release-windows workflow attests the Windows zips
+    $signer = 'askysh/benchbar/.github/workflows/release-windows.yml'
     $gh = Get-Command gh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $gh) {
       Say-Info 'gh (the GitHub CLI) is not installed: only the SHA256 was checked, not the build provenance.'
-      Say-Info "  to check by hand: gh attestation verify $leaf -R askysh/benchbar"
+      Say-Info "  to check by hand: gh attestation verify $leaf -R askysh/benchbar --signer-workflow $signer"
       return $false
     }
     # 5.1 turns native stderr into a terminating error under 'Stop'
@@ -321,10 +323,10 @@ function Install-BenchBar {
       $null = & $gh.Source auth status 2>&1
       if ($LASTEXITCODE -ne 0) {
         Say-Info 'gh is not signed in (gh auth login): only the SHA256 was checked, not the build provenance.'
-        Say-Info "  to check by hand: gh attestation verify $leaf -R askysh/benchbar"
+        Say-Info "  to check by hand: gh attestation verify $leaf -R askysh/benchbar --signer-workflow $signer"
         return $false
       }
-      $said = (& $gh.Source attestation verify $ZipPath -R askysh/benchbar 2>&1 | ForEach-Object { "$_" } | Out-String).Trim()
+      $said = (& $gh.Source attestation verify $ZipPath -R askysh/benchbar --signer-workflow $signer 2>&1 | ForEach-Object { "$_" } | Out-String).Trim()
       if ($LASTEXITCODE -eq 0) {
         Say-Ok 'Build provenance verified (gh attestation verify)'
         return $true

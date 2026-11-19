@@ -112,8 +112,17 @@ jobs:
           # nothing about where the files were built. The attestation does:
           # release.yml attested these files and SHA256SUMS, and a formula
           # is rendered from files that verify only.
-          for f in $files SHA256SUMS; do
-            gh attestation verify "$f" -R askysh/benchbar || {
+          # Releases before 0.9.0 have no attestation (the Mac files were first
+          # attested then): a run by hand for one of them skips the check.
+          IFS=. read -r major minor _ <<<"${VERSION%%-*}"
+          if [ "$major" -eq 0 ] && [ "$minor" -lt 9 ]; then
+            echo "::notice title=No build provenance check::v$VERSION is older than 0.9.0, the first release whose files are attested, so only SHA256SUMS was checked."
+            files_to_verify=""
+          else
+            files_to_verify="$files SHA256SUMS"
+          fi
+          for f in $files_to_verify; do
+            gh attestation verify "$f" -R askysh/benchbar --signer-workflow askysh/benchbar/.github/workflows/release.yml || {
               echo "::error::$f has no build provenance from askysh/benchbar (gh attestation verify failed); the formula is not rendered"; exit 1; }
           done
           [ "$signed" = "true" ] || echo "::notice title=Formula only::v$VERSION is not a signed release; the cask stays as it is."

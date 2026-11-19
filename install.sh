@@ -24,7 +24,9 @@ What it does, in this order, and says so before each step:
   3. installs or updates the BenchBar app from the latest GitHub release:
      the zip is checked against the release's SHA256SUMS, and when gh (the
      GitHub CLI) is installed and signed in, against its build provenance
-     (gh attestation verify -R askysh/benchbar; a failure stops the install);
+     (gh attestation verify, pinned to this repository's release workflow; a
+     failure stops the install, except that a release older than 0.9.0 has
+     none and is installed on its checksum);
      the unpacked app must pass codesign --verify --deep --strict and
      spctl --assess (a Developer ID signature, notarized); then it is
      copied next to the old app and swapped in with one rename; skipped
@@ -65,6 +67,12 @@ is Homebrew's own installer, and it says so first. Works on macOS
 /bin/bash 3.2. Prompts read from /dev/tty, so it works when piped.
 USAGE
 }
+
+# the release workflow that attests the Mac files, and the deadline of each gh
+# call (the tests shorten it; only under FL_TESTING=1)
+ATTEST_WORKFLOW="askysh/benchbar/.github/workflows/release.yml"
+ATTEST_TIMEOUT=30
+[[ "${FL_TESTING:-}" != "1" ]] || ATTEST_TIMEOUT="${BENCHBAR_ATTEST_TIMEOUT:-30}"
 
 BENCHBAR_REPO="${BENCHBAR_REPO:-https://github.com/askysh/benchbar.git}"
 BENCHBAR_API="${BENCHBAR_API:-https://api.github.com/repos/askysh/benchbar}"
@@ -540,15 +548,16 @@ install_app() {
     die "checksum mismatch for ${zipname} (SHA256SUMS: ${expected:-not listed}, file: ${actual}); nothing installed" "try again later, or download the dmg by hand and check it yourself"
   fi
   ok "sha256 verified against SHA256SUMS"
-  verify_provenance "${tmp}/${zipname}" || { rm -rf "$tmp"; die "the build provenance of ${zipname} did not verify; nothing installed" "download the dmg by hand from github.com/askysh/benchbar/releases and check it: gh attestation verify BenchBar-${want}.dmg -R askysh/benchbar"; }
-  quit_app
-  mkdir -p "$APP_DIR"
+  verify_provenance "${tmp}/${zipname}" "$REL_TAG" || { rm -rf "$tmp"; die "the build provenance of ${zipname} did not verify; nothing installed" "download the dmg by hand from github.com/askysh/benchbar/releases and check it: gh attestation verify BenchBar-${want}.dmg -R askysh/benchbar --signer-workflow ${ATTEST_WORKFLOW}"; }
   rm -rf "${tmp}/unpacked"; mkdir -p "${tmp}/unpacked"
   ditto -x -k "${tmp}/${zipname}" "${tmp}/unpacked" || { rm -rf "$tmp"; die "could not unpack ${zipname}"; }
   [[ -d "${tmp}/unpacked/BenchBar.app" ]] || { rm -rf "$tmp"; die "${zipname} does not contain BenchBar.app"; }
   # curl does not set the quarantine flag, so Gatekeeper never looked at this
   # app: look for it here, on the unpacked copy, before it replaces anything
   verify_app "${tmp}/unpacked/BenchBar.app" || { rm -rf "$tmp"; die "the unpacked app did not pass the signature check; nothing installed" "download the dmg by hand from github.com/askysh/benchbar/releases"; }
+  # only now: the running app is quit and replaced after every check passed
+  quit_app
+  mkdir -p "$APP_DIR"
   swap_app "${tmp}/unpacked/BenchBar.app" || { rm -rf "$tmp"; die "could not put the app into ${APP_DIR}; the old app is as it was" "check the folder's permissions and the free space"; }
   touch "$APP"  # ditto keeps the build's mtime; a fresh one makes Finder reread the icon
   rm -rf "$tmp"
@@ -557,29 +566,75 @@ install_app() {
   info "start it with: open ${APP}"
 }
 
-# verify_provenance FILE: the build provenance of a download, with `gh
-# attestation verify`. The checksum comes from the same release as the file,
-# so it finds a damaged download, not a swapped one; the attestation says the
-# file was built by this repository's release workflow. Without gh, or when
-# gh is not signed in, it says only the checksum was checked and how to do
-# the rest by hand, and returns 0. A failed check returns 1.
+# before_attestations TAG: true for a release older than 0.9.0, the first
+# whose Mac files carry build provenance
+before_attestations() {
+  local v="${1#v}" major minor
+  v="${v%%-*}"
+  IFS=. read -r major minor _ <<<"$v"
+  [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]] || return 1
+  [[ "$major" -eq 0 && "$minor" -lt 9 ]]
+}
+
+# with_deadline SECONDS CMD...: CMD's exit code, or 124 when it did not end in
+# time and was stopped (macOS has no timeout command)
+with_deadline() {
+  local secs="$1" pid watcher rc=0
+  shift
+  "$@" &
+  pid=$!
+  ( sleep "$secs"; kill "$pid" ) >/dev/null 2>&1 &
+  watcher=$!
+  wait "$pid" || rc=$?
+  kill "$watcher" >/dev/null 2>&1 || true
+  wait "$watcher" >/dev/null 2>&1 || true
+  [[ "$rc" != 143 && "$rc" != 137 ]] || rc=124
+  return "$rc"
+}
+
+# verify_provenance FILE TAG: the build provenance of a download, with `gh
+# attestation verify`, pinned to this repository's release workflow. The
+# checksum comes from the same release as the file, so it finds a damaged
+# download, not a swapped one; the attestation says the file was built by
+# that workflow. Without gh, with gh signed out, with gh that does not answer
+# within the deadline, and for a release older than 0.9.0 that has no
+# attestation, it says only the checksum was checked and returns 0. Any other
+# failure of gh returns 1 after printing what gh said.
 verify_provenance() {
-  local f="$1" out
+  local f="$1" tag="${2:-}" out rc=0 name
+  name="$(basename "$f")"
+  local byhand="to check by hand: gh attestation verify ${name} -R askysh/benchbar --signer-workflow ${ATTEST_WORKFLOW}"
   if ! command -v gh >/dev/null 2>&1; then
     info "gh (the GitHub CLI) is not installed: only the checksum was checked, not where the file was built"
-    info "to check by hand: gh attestation verify $(basename "$f") -R askysh/benchbar"
+    info "$byhand"
     return 0
   fi
-  if ! gh auth status >/dev/null 2>&1; then
+  with_deadline "$ATTEST_TIMEOUT" gh auth status >/dev/null 2>&1 || rc=$?
+  if [[ "$rc" == 124 ]]; then
+    info "gh did not answer within ${ATTEST_TIMEOUT} s: only the checksum was checked, not where the file was built"
+    info "$byhand"
+    return 0
+  elif [[ "$rc" != 0 ]]; then
     info "gh is not signed in (gh auth login): only the checksum was checked, not where the file was built"
-    info "to check by hand: gh attestation verify $(basename "$f") -R askysh/benchbar"
+    info "$byhand"
     return 0
   fi
-  if out="$(gh attestation verify "$f" -R askysh/benchbar 2>&1)"; then
+  rc=0
+  out="$(with_deadline "$ATTEST_TIMEOUT" gh attestation verify "$f" -R askysh/benchbar --signer-workflow "$ATTEST_WORKFLOW" 2>&1)" || rc=$?
+  if [[ "$rc" == 0 ]]; then
     ok "build provenance verified (gh attestation verify)"
     return 0
   fi
-  fail "gh attestation verify did not accept $(basename "$f"):"
+  if [[ "$rc" == 124 ]]; then
+    info "gh attestation verify did not answer within ${ATTEST_TIMEOUT} s: only the checksum was checked, not where the file was built"
+    info "$byhand"
+    return 0
+  fi
+  if before_attestations "$tag" && printf '%s' "$out" | grep -qiE 'no attestations? found|HTTP 404|not found'; then
+    info "${tag} is older than 0.9.0, the first release with build provenance: only the checksum was checked, not where the file was built"
+    return 0
+  fi
+  fail "gh attestation verify did not accept ${name}:"
   printf '%s\n' "$out" | sed 's/^/      /' >&2
   return 1
 }

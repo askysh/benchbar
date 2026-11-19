@@ -1,9 +1,12 @@
 #!/bin/bash
 # gh mock (install.sh and self-update check build provenance with it).
 #   auth status                     exits 1 when $MOCK_STATE/gh_signed_out exists
-#   attestation verify FILE -R REPO exits 1, saying why on stderr, when
-#                                   $MOCK_STATE/gh_attest_fail exists; the file
-#                                   it was asked about is kept in $MOCK_STATE/gh_verified
+#   attestation verify FILE ...     exits 1, saying why on stderr, when
+#                                   $MOCK_STATE/gh_attest_fail exists (its text
+#                                   is the message; empty: no attestations
+#                                   found); hangs for a minute when
+#                                   $MOCK_STATE/gh_hang exists; the file it was
+#                                   asked about is kept in $MOCK_STATE/gh_verified
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "${0%/*}/_mocklib.sh"
 mock_log "$@"
@@ -13,8 +16,10 @@ case "${1:-} ${2:-}" in
     exit 0 ;;
   "attestation verify")
     [[ -d "${MOCK_STATE:-/nonexistent}" ]] && printf '%s\n' "${3:-}" >>"${MOCK_STATE}/gh_verified"
+    [[ ! -f "${MOCK_STATE:-/nonexistent}/gh_hang" ]] || exec sleep 60
     if [[ -f "${MOCK_STATE:-/nonexistent}/gh_attest_fail" ]]; then
-      echo "Error: verification failed: no attestations found for the subject" >&2
+      msg="$(cat "${MOCK_STATE}/gh_attest_fail")"
+      echo "Error: ${msg:-verification failed: no attestations found for the subject}" >&2
       exit 1
     fi
     echo "Verification succeeded!"

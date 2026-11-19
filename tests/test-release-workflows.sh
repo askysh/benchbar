@@ -232,6 +232,10 @@ v = tap.find("gh attestation verify \"$f\"")
 r = tap.find("scripts/homebrew-render.sh")
 if v < 0 or r < 0 or v > r:
     bad.append("homebrew-tap.yml does not run gh attestation verify before it renders the formula")
+if "askysh/benchbar/.github/workflows/release.yml" not in tap:
+    bad.append("homebrew-tap.yml does not pin the signer workflow")
+if '-lt 9' not in tap or "files_to_verify" not in tap:
+    bad.append("homebrew-tap.yml does not skip the check for a version below 0.9.0")
 if "attestations: read" not in tap:
     bad.append("homebrew-tap.yml has no attestations: read permission")
 win = open(root + "/.github/workflows/release-windows.yml").read()
