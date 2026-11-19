@@ -673,7 +673,7 @@ run_json_status() { set +e; OUT="$("$FM" share status --json --bench-dir "$BENCH
 run_json_status
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["setup_interrupted"]')"
-# the app's fixtures (macos/BenchBarTests/Fixtures) hold only keys the CLI prints, and every key it prints that the app reads
+# the app's fixtures (macos/BenchBarTests/Fixtures) hold only keys the CLI prints: their keys are a subset of the live keys, and both carry setup_interrupted
 printf '%s' "$OUT" | python3 -I -c '
 import json, sys
 live = json.load(sys.stdin)

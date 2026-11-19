@@ -128,6 +128,7 @@ struct SharingTab: View {
                     .accessibilityLabel(codeRevealed ? "Room code" : "Room code, hidden")
                 Spacer()
                 Button(codeRevealed ? "Hide" : "Show") { codeRevealed.toggle() }
+                    .accessibilityLabel(codeRevealed ? "Hide room code" : "Show room code")
                     .disabled(share.code == nil)
                     .help("The code lets anyone on this Wi-Fi join. Hide it while you share your screen.")
                 Button("Copy") { if let code = share.code { ShareClipboard.copy(code.code) } }

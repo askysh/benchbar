@@ -191,6 +191,8 @@ nonisolated struct ShareStatus: Codable, Sendable, Equatable {
     }
 
     var isOn: Bool { state == .on }
+    /// On or on its way up: turning the lan-rooms lab off ends both.
+    var isLive: Bool { state == .on || state == .starting }
     var needsNewerCLI: Bool { protocolVersion < Self.roomProtocol }
 
     init(protocolVersion: Int = ShareStatus.roomProtocol, state: ShareState, shareSite: String = "share.localhost",

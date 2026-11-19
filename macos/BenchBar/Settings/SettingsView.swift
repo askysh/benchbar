@@ -133,7 +133,7 @@ struct SettingsView: View {
     /// Turning lan-rooms off ends a live room: asks first, with what ends (the Sharing tab's Stop asks the same).
     private static func confirmLabOff(_ entry: LabEntry) -> Bool {
         guard entry.name == Lab.lanRooms.rawValue else { return true }
-        let sharing = ShareCenter.shared.stores.values.filter(\.isSharing)
+        let sharing = ShareCenter.shared.stores.values.filter(\.isSharingOrStarting)
         let online = sharing.reduce(0) { $0 + ($1.status?.devicesOnline ?? 0) }
         let joined = GuestSlot.shared.store?.runningForwarderCount ?? 0
         guard let ask = SharePresentation.labOffConfirm(hosted: sharing.count, online: online, joined: joined) else { return true }

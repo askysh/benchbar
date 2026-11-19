@@ -127,6 +127,9 @@ final class GuestRoomStore {
     /// The pane is on screen: its rows show each room's health, so the rooms are asked.
     func paneAppeared() {
         paneVisible = true
+        // Opening the pane asks every room now, not after the wait a long silence had grown to.
+        pingFailures.removeAll()
+        pingDue.removeAll()
         startHealthLoop()
     }
 
@@ -435,6 +438,8 @@ final class GuestRoomStore {
             deps.rooms.save(entry)
             saved = deps.rooms.load()
             health[entry.id] = .unknown
+            // A first room (or one after the loop ended) must be asked again, whether or not the seat sheet follows.
+            if paneVisible { startHealthLoop() }
             // Joined even if Cancel came late: the room is kept, only the seat sheet is not shown.
             guard attempt == joinAttempt else { return }
             await chooseSeat(entry)

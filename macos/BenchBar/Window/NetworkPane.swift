@@ -151,7 +151,7 @@ private struct JoinedRoomRow: View {
 
     private func forget(_ health: GuestRoomStore.RoomHealth) {
         let ask = NetworkPanePresentation.forgetConfirm(room, identityChanged: health == .identityChanged)
-        guard ShareConfirm.ask(ask.message, detail: ask.detail, button: ask.button) else { return }
+        guard ShareConfirm.ask(ask.message, detail: ask.detail, button: ask.button, cancelIsDefault: true) else { return }
         Task { await store.forget(room) }
     }
 }

@@ -490,6 +490,33 @@ private final class Harness {
         #expect(await h.store.healthTick() == .seconds(10))
     }
 
+    @Test func aJoinWhileThePaneIsOpenStartsTheLoopEvenIfTheSeatSheetIsCancelled() async {
+        let h = Harness()
+        h.store.paneVisible = true
+        #expect(!h.store.isHealthLooping)
+        await h.store.submit(code: "482913", for: Harness.room)
+        #expect(h.store.isHealthLooping)
+        h.store.stopHealthLoop()
+    }
+
+    @Test func openingThePaneAsksARoomThatWentQuietAtOnce() async {
+        let h = Harness()
+        await h.store.submit(code: "482913", for: Harness.room)
+        h.store.paneVisible = true
+        h.transport.remove("/_benchbar/hello")
+        #expect(await h.store.healthTick() == .seconds(20))
+        h.transport.clearCalls()
+        #expect(await h.store.healthTick() != nil)
+        #expect(h.transport.calls.isEmpty)
+        h.store.paneAppeared()
+        h.store.stopHealthLoop()
+        h.transport.clearCalls()
+        // asked now (not after the wait), and counted as a first failure again, not a second
+        #expect(await h.store.healthTick() == .seconds(20))
+        #expect(h.transport.calls.contains("GET /_benchbar/hello"))
+        h.store.stopHealthLoop()
+    }
+
     @Test func theBackoffIsDoubledUpToAFiveMinuteCap() {
         #expect([0, 1, 2, 3, 4, 5, 9].map { GuestRoomStore.pingDelay(failures: $0) }
             == [.seconds(10), .seconds(20), .seconds(40), .seconds(80), .seconds(160), .seconds(300), .seconds(300)])
