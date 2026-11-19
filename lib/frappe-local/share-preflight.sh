@@ -310,7 +310,7 @@ fl_sp_no_web_port() {
 }
 
 fl_sp_critical() {
-  local ip i code gateway_sock="${FL_SHARE_CONTROL_SOCK:-$(fl_share_dir)/control.sock}" violations
+  local ip i code gateway_sock="${FL_SHARE_CONTROL_SOCK:-$(fl_share_dir)/control.sock}" violations bound
   local urls=("/" "/?__debugger__=yes&cmd=resource&f=style.css" "/console")
   fl_sp_lan_v
   fl_share_cfg_str_v SP_WEB_PORT web_port
@@ -331,7 +331,13 @@ fl_sp_critical() {
     elif fl_sp_nc_open "$ip" "$FL_SHARE_GATEWAY_PORT"; then
       fl_sp_add gateway_reachable critical ok "the gateway answers on ${ip}:${FL_SHARE_GATEWAY_PORT}"
     else
-      fl_sp_add gateway_reachable critical fail "The gateway does not answer on ${ip}:${FL_SHARE_GATEWAY_PORT}." "Stop sharing and start it again." restart_sharing
+      bound="$(sed -n 's/.*"listen": {"host": "\([^"]*\)".*/\1/p' "$(fl_share_dir)/gateway.json" 2>/dev/null | awk 'NR == 1')"
+      if [[ -n "$bound" && "$bound" != "$ip" && "$bound" != "0.0.0.0" ]]; then
+        # the gateway listens on the address it started with, so a new address (another network, a new lease) ends the room
+        fl_sp_add gateway_reachable critical fail "This Mac's network address changed from ${bound} to ${ip}, and the gateway listens only on ${bound}." "Stop sharing and start it again." restart_sharing
+      else
+        fl_sp_add gateway_reachable critical fail "The gateway does not answer on ${ip}:${FL_SHARE_GATEWAY_PORT}." "Stop sharing and start it again." restart_sharing
+      fi
     fi
     if [[ -z "$SP_WEB_PORT" ]]; then
       fl_sp_no_web_port share_web_lan_closed

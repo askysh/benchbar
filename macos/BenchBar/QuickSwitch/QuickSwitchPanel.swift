@@ -56,12 +56,15 @@ protocol HotKeyRegistering: AnyObject {
 
 extension HotKey: HotKeyRegistering {}
 
-/// Owns the hot key and the panel: ⌃⌥U shows it, or hides it when it is up.
+/// Owns the hot key and the panel: ⌃⌥U (the key's letter in the current layout) shows it, or hides it when it is up.
 /// Settings > Labs is the one switch (`Labs.isOn(.quickSwitch)`): off, the key is
 /// not registered and the panel opens from nowhere.
 final class QuickSwitchController {
-    static let conflictNote = "⌃⌥U is used by another app, so Quick Switch was turned off. Turn it on again to retry."
-    static let stuckOnNote = "The key is held by another app, and BenchBar could not turn the lab off: run benchbar labs off quick-switch"
+    /// The Labs row's note while another app holds the key. The lab stays on:
+    /// the choice is the person's, and it works again once the other app lets go.
+    static var conflictNote: String {
+        "\(HotKey.name) is used by another app, so Quick Switch has no key for now. It stays on: turn it off and on to try again."
+    }
 
     private let store: BenchStore
     private let labs: Labs
@@ -75,8 +78,8 @@ final class QuickSwitchController {
         self.hotKey = hotKey ?? HotKey { [weak self] in self?.toggle() }
     }
 
-    /// Makes the hot key match the lab. A key another app holds turns the lab
-    /// back off (through the CLI too) with a note under its row; the next flip tries again.
+    /// Makes the hot key match the lab. A key another app holds leaves the lab
+    /// on (the CLI keeps what the person chose) with a note under its row; the next flip tries again.
     func sync() {
         guard labs.isOn(.quickSwitch) else {
             hotKey.unregister()
@@ -84,15 +87,7 @@ final class QuickSwitchController {
             return
         }
         guard !hotKey.register() else { return }
-        Task { [labs] in
-            do {
-                try await labs.set(.quickSwitch, on: false)
-                labs.note(.quickSwitch, Self.conflictNote)
-            } catch {
-                // the CLI flag is still on and no key is registered: the toggle keeps showing the CLI's truth
-                labs.note(.quickSwitch, Self.stuckOnNote)
-            }
-        }
+        labs.note(.quickSwitch, Self.conflictNote)
     }
 
     var isShowing: Bool { panel != nil }

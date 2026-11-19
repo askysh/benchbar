@@ -438,10 +438,15 @@ struct CheckRow: View {
 struct Uptime<Content: View>: View {
     let since: Date
     @ViewBuilder let content: (String) -> Content
+    @Environment(\.pinnedNow) private var pinnedNow
 
     var body: some View {
-        TimelineView(.periodic(from: since, by: 30)) { context in
-            content(BenchText.uptime(since: since, now: context.date))
+        if let pinnedNow {
+            content(BenchText.uptime(since: since, now: pinnedNow))
+        } else {
+            TimelineView(.periodic(from: since, by: 30)) { context in
+                content(BenchText.uptime(since: since, now: context.date))
+            }
         }
     }
 }

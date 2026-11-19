@@ -220,7 +220,7 @@ assert_calls_not_contain '^bench update'
 [[ "$(app_head "$BENCH/apps/acme_crm")" != "$old" ]] || fail "update moves the app"
 assert_eq "$(git -C "$REMOTES/acme_crm.git" rev-parse main)" "$(app_head "$BENCH/apps/acme_crm")"
 # backups come before the code changes: the first backup before the merge
-b="$(grep -n 'backup$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"; m="$(grep -n 'merge --ff-only' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+b="$(grep -m1 -n 'backup$' "$MOCK_LOG" | cut -d: -f1)"; m="$(grep -m1 -n 'merge --ff-only' "$MOCK_LOG" | cut -d: -f1)"
 [[ "$b" -lt "$m" ]] || fail "site backups run before the merge"
 reset_calls
 run_fm app update acme_crm --yes --bench-dir "$BENCH"

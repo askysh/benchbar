@@ -44,7 +44,9 @@ letters, digits, `.`, `-` and `_` turned into `-`. Importing a runner
 with the same id again replaces it. **Remove** moves it to the Trash.
 
 You can also copy a folder into that Runners folder by hand (**Show
-Runners Folder** opens it); it is loaded the next time Settings opens.
+Folder**, in the **…** menu next to **Import…**, opens it). BenchBar reads
+the folder again each time Settings opens, and keeps the runners that did
+not change, so the animation in the menu bar does not restart.
 
 ## The folder
 
@@ -85,7 +87,7 @@ blob/
 
 | State | When it plays | How |
 |---|---|---|
-| `running` | the bench is up | loops; faster when the bench is busy (up to 12 times) |
+| `running` | the bench is up | loops; faster when the bench is busy (up to 6 times, which is 30 frames per second) |
 | `starting` | the bench is starting | loops |
 | `sleeping` | the bench is stopped | loops, slowly |
 | `crashed` | the bench crashed or the crash guard paused it | plays 3 times |

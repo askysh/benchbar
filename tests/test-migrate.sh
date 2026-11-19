@@ -124,7 +124,7 @@ assert_no_file "$BENCH/logs/.bench-stopped" "(a running bench must not get a man
 assert_file "$BENCH/benchbar-run.sh"
 grep -q "$BENCH/benchbar-run.sh" "$new" || fail "the new agent must run benchbar-run.sh"
 assert_no_file "$BENCH/frappe-mac-run.sh"
-[[ -n "$(find "$FL_BACKUP_ROOT" -name '*frappe-mac-run.sh' | head -n1)" ]] || fail "the old runner must be backed up"
+[[ -n "$(find "$FL_BACKUP_ROOT" -name '*frappe-mac-run.sh' | awk 'NR==1')" ]] || fail "the old runner must be backed up"
 # the frappe-mac block became the benchbar block, in the same place
 assert_eq "1" "$(grep -c -x -F '# >>> benchbar >>>' "$HOME/.zshrc")"
 assert_eq "0" "$(grep -c -x -F '# >>> frappe-mac >>>' "$HOME/.zshrc")"
@@ -165,6 +165,6 @@ assert_calls_not_contain '^launchctl kickstart'
 assert_eq "manual" "$(cat "$BENCH2/logs/.bench-stopped")"
 
 # ---- the frappe-mac alias still works
-"$ROOT/frappe-mac" --version | grep -q "benchbar ${VER}" || fail "frappe-mac alias must run benchbar"
+grep -q "benchbar ${VER}" <<<"$("$ROOT/frappe-mac" --version)" || fail "frappe-mac alias must run benchbar"
 
 printf 'test-migrate: ok\n'

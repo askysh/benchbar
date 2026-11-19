@@ -165,8 +165,8 @@ assert_calls_contain "^sudo chmod 644 ${FL_HOSTS_FILE}.benchbar.new\$"
 assert_calls_contain "^sudo mv ${FL_HOSTS_FILE}.benchbar.new ${FL_HOSTS_FILE}\$"
 assert_calls_not_contain '^sudo cp '
 assert_no_file "${FL_HOSTS_FILE}.benchbar.new"
-awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$FL_HOSTS_FILE" | grep -q -x '127.0.0.1 second' || fail "second inside the block"
-awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$FL_HOSTS_FILE" | grep -q -x '127.0.0.1 third' || fail "third inside the block"
+grep -q -x '127.0.0.1 second' <<<"$(awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$FL_HOSTS_FILE")" || fail "second inside the block"
+grep -q -x '127.0.0.1 third' <<<"$(awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$FL_HOSTS_FILE")" || fail "third inside the block"
 assert_eq "1" "$(grep -c -x -F "# >>> benchbar >>>" "$FL_HOSTS_FILE")" "(one block only)"
 grep -q -x '127.0.0.1 localhost' "$FL_HOSTS_FILE" || fail "the lines outside the block stay"
 # again: unchanged, no sudo at all
@@ -181,7 +181,7 @@ printf '%s' "$(cat "$FL_HOSTS_FILE")" >"$FL_HOSTS_FILE"
 mkdir -p "$BENCH/sites/fifth"; printf '{}\n' >"$BENCH/sites/fifth/site_config.json"
 run_fm site hosts --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$FL_HOSTS_FILE" | grep -q -x '127.0.0.1 fifth' || fail "fifth inside the block"
+grep -q -x '127.0.0.1 fifth' <<<"$(awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$FL_HOSTS_FILE")" || fail "fifth inside the block"
 [[ "$(tail -c1 "$FL_HOSTS_FILE")" == "" ]] || fail "the rewritten file ends with a newline"
 rm -rf "$BENCH/sites/fifth"
 
@@ -225,7 +225,7 @@ reset_calls
 run_fm site hosts --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_calls_contain "^sudo mv ${FL_HOSTS_FILE}.benchbar.new ${FL_HOSTS_FILE}\$"
-awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$FL_HOSTS_FILE" | grep -q -x '127.0.0.1 sixth' || fail "sixth inside the block"
+grep -q -x '127.0.0.1 sixth' <<<"$(awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$FL_HOSTS_FILE")" || fail "sixth inside the block"
 cmp -s "$TMP_DIR/hosts.apple" <(grep -v -x '127.0.0.1 sixth' "$FL_HOSTS_FILE") || fail "every other line must be byte identical after the add"
 export MARIADB_ROOT_PASSWORD=rootpw
 run_fm site drop sixth --confirm-site sixth --bench-dir "$BENCH"

@@ -247,7 +247,7 @@ struct SettingsView: View {
 
     private var shortcutsSection: some View {
         Section {
-            ForEach(Self.shortcuts(quickSwitch: Labs.shared.isOn(.quickSwitch)), id: \.keys) { item in
+            ForEach(Self.shortcuts(quickSwitch: Labs.shared.isOn(.quickSwitch), keyHeld: Self.quickSwitchKeyHeld), id: \.keys) { item in
                 LabeledContent(item.action) {
                     Text(item.keys).font(.callout.monospaced()).foregroundStyle(.secondary)
                 }
@@ -271,12 +271,18 @@ struct SettingsView: View {
         (BenchShortcut.manage.action, BenchShortcut.manage.display),
     ]
 
+    /// Another app holds Quick Switch's key: the lab is on and the Labs row says so.
+    static var quickSwitchKeyHeld: Bool {
+        Labs.shared.errors[Lab.quickSwitch.rawValue] == QuickSwitchController.conflictNote
+    }
+
     /// Quick Switch's rows show only while the lab is on, and so do the Open as keys it brought.
-    static func shortcuts(quickSwitch: Bool) -> [(action: String, keys: String)] {
+    /// While another app holds the key, its row says so instead of listing a key that does nothing.
+    static func shortcuts(quickSwitch: Bool, keyHeld: Bool = false) -> [(action: String, keys: String)] {
         guard quickSwitch else { return shortcuts }
         return shortcuts + [
             ("Open as Administrator, a pinned user, or back", OpenAsShortcut.summary),
-            ("Quick Switch, from any app", "⌃⌥U"),
+            ("Quick Switch, from any app", keyHeld ? "\(HotKey.name) is used by another app" : HotKey.name),
         ]
     }
 

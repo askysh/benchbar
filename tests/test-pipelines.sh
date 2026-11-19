@@ -46,4 +46,52 @@ left="$(grep -nE '(^|[^|])\| *grep -[a-zA-Z]*q' "$ROOT/benchbar" "$ROOT"/lib/fra
 heads="$(grep -nE '\| *head -n' "$ROOT/benchbar" "$ROOT"/lib/frappe-local/*.sh "$ROOT"/0*.sh | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' | grep -v 'head -n 40' || true)"
 [[ -z "$heads" ]] || fail "producer | head under pipefail gets SIGPIPE (141); use awk 'NR==1' or take the first line of a captured variable:"$'\n'"$heads"
 
+# ---- the tests themselves: the same rule, the same reason. Under
+# "set -o pipefail" (tests/lib/harness.sh) a writer that is cut off by "| head"
+# or by "| grep -q" / "| grep -m1" dies of SIGPIPE, and on the bash 3.2
+# container leg the test then ends with exit 141 and no message (test-apps,
+# test-release-workflows). Use "grep -q PAT <<<"$VAR"", "grep -m1 ... FILE",
+# "${VAR%%$'\n'*}" for the first line of a variable, or awk 'NR==1' (reads it
+# all). A line that has to keep a pipe goes in the list below, with the reason.
+#   test-systemd.sh: the text of bench-run.sh.tmpl's CWD_OF, asserted as is
+#   (a change to the template moves its pinned hash; not a pipe of this test)
+TEST_PIPE_EXCEPTIONS=(
+  "test-systemd.sh:*sed -n 's/^n//p' | head -n1)*in*"
+)
+# a pipe (not ||, with or without spaces, also |&) into head, or into grep, egrep or fgrep with -q, -m,
+# --quiet or --max-count anywhere in its arguments; `command` and a path in front count too
+PIPE_RE='(^|[^|])\|&? *(command +)?([^[:space:]|]*/)?(head($|[[:space:];)&])|[ef]?grep([[:space:]][^|]*)?[[:space:]](-[a-zA-Z]*[qm][a-zA-Z0-9]*|--quiet|--max-count)([[:space:]]|$|=))'
+test_files=()
+for f in "$ROOT"/tests/*.sh "$ROOT"/tests/lib/*.sh "$ROOT"/tests/mocks/* "$ROOT"/tests/mocks/bin/*; do
+  [[ -f "$f" && "$f" != "$ROOT/tests/test-pipelines.sh" ]] && test_files[${#test_files[@]}]="$f"
+done
+test_pipes="$(cd "$ROOT/tests" && grep -nE "$PIPE_RE" "${test_files[@]#"$ROOT/tests/"}" /dev/null | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' || true)"
+test_hits=""
+while IFS= read -r line; do
+  [[ -n "$line" ]] || continue
+  skip=0
+  for pat in "${TEST_PIPE_EXCEPTIONS[@]}"; do
+    # shellcheck disable=SC2053
+    [[ "$line" == $pat ]] && skip=1
+  done
+  [[ "$skip" == 1 ]] || test_hits="${test_hits}${line}"$'\n'
+done <<<"$test_pipes"
+[[ -z "$test_hits" ]] || fail "a test pipes into head or grep -q/-m under pipefail (SIGPIPE, exit 141 on bash 3.2); see the note above this check:"$'\n'"$test_hits"
+
+# the check sees what it should: a pipe into head or grep -q is a hit, a
+# here string or grep -m1 on a file is not
+line_hits() { grep -cE "$PIPE_RE" <<<"$1" || true; }
+# shellcheck disable=SC2016  # the samples are text, not code to expand
+assert_eq "1" "$(line_hits 'x="$(seq 5 | head -n1)"')" "(head)"
+assert_eq "1" "$(line_hits 'seq 5 | grep -q 3')" "(grep -q)"
+assert_eq "1" "$(line_hits 'seq 5 | grep -F -q -- 3')" "(grep -F -q)"
+assert_eq "1" "$(line_hits 'seq 5 | grep -m1 3')" "(grep -m1)"
+assert_eq "1" "$(line_hits 'seq 5 | grep -qE 3')" "(grep -qE)"
+# shellcheck disable=SC2016  # the samples are text, not code to expand
+assert_eq "0" "$(line_hits 'grep -q 3 <<<"$v"')" "(here string)"
+# shellcheck disable=SC2016  # the samples are text, not code to expand
+assert_eq "0" "$(line_hits 'grep -m1 -n 3 "$FILE" | cut -d: -f1')" "(grep on a file)"
+assert_eq "0" "$(line_hits "seq 5 | awk 'NR==1'")" "(awk)"
+assert_eq "0" "$(line_hits 'seq 5 | grep -v 3 | tr a b')" "(grep -v)"
+
 printf 'test-pipelines: ok\n'
