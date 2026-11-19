@@ -47,7 +47,7 @@ That installs the CLI (the `benchbar` formula) and the menu bar app (the
 `benchbar-app` cask). Type both names: Homebrew trusts a third party tap
 only for the names you type. The app needs Apple Silicon and macOS
 Sonoma or later; on an Intel Mac, `brew install askysh/tap/benchbar`
-installs the CLI alone. The app carries its own copy of the CLI, and
+installs the CLI alone (written for Intel, not checked on real hardware). The app carries its own copy of the CLI, and
 Homebrew's `benchbar` hands off to it, so one update of the app (Update
 Now in the app, or `brew upgrade`) updates both. Without the app, `brew
 upgrade askysh/tap/benchbar` updates the CLI.

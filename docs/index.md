@@ -97,8 +97,9 @@ are the main ones.
 
 ## Requirements
 
-- macOS 14 or later on Apple Silicon. On Intel Macs the CLI works and the
-  app is skipped. On Linux, Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them); on Windows, WSL 2 with such a
+- macOS 14 or later on Apple Silicon. On Intel Macs the CLI is written to
+  work and the app is skipped; an Intel Mac has not been checked on real
+  hardware yet (see [supported platforms](install.md#supported-platforms)). On Linux, Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them); on Windows, WSL 2 with such a
   distro.
 - On a Mac, Homebrew and the Xcode Command Line Tools. The installer offers both.
 - About 5 GB of free disk under your home folder, and internet access.
