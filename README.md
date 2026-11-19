@@ -88,11 +88,12 @@ Linux distro and the bench:
 irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex
 ```
 
-The Windows programs are not signed yet. On our Windows 11 test PC the
-line above showed no SmartScreen warning, but Smart App Control blocks
-unsigned programs: when it is on, the installer stops first and says what
-to do. What that means in practice is in
-[Before you install](https://benchbar.akashmishra.com/windows/#before-you-install).
+The Windows programs are not signed, and 0.9.0 has no signed or Store
+route. On our Windows 11 test PC the line above showed no SmartScreen
+warning, but Smart App Control blocks unsigned programs: when it is on,
+the installer stops first and says what to do. The command line inside
+WSL still works then. What that means in practice is in
+[Smart App Control](https://benchbar.akashmishra.com/windows/#smart-app-control).
 Every release has SHA256SUMS, and the Windows zips have build provenance
 you can verify. To remove BenchBar again, run the installer
 with `-Uninstall`. For a bug, use **Report a Bug** in the tray: it writes

@@ -78,10 +78,12 @@ file watch latency, startup) before the README keeps its performance
 wording, and a four week pilot with about ten developers across three
 teams.
 
-**Windows past the beta.** Signed programs. The SignPath Foundation
-declined the application in November 2026. 0.9.0 plans an MSIX package
-with every release, and a signing route comes after it. The programs are
-unsigned until then.
+**Windows past the beta.** Signed programs have no route in 0.9.0:
+SignPath Foundation declined the project on 2026-11-13, and the
+Microsoft Store submission (the MSIX package, PR 124) is dropped from
+this release. The package code is landing in parts and CI builds it, but
+nobody submits it. Until a signed route exists, Smart App Control users
+run the command line inside WSL.
 
 **1.0.** A stable JSON API and runner format, an official Homebrew cask,
 full doctor coverage for v15 and v16. Vouch
