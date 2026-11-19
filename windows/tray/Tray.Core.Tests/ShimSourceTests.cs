@@ -215,4 +215,43 @@ public class DistroProbeTests
 
     [Fact]
     public void TheRegistryReadDoesNotThrow() => _ = DistroName.FromRegistry();
+
+    private const string KeepShim = @"C:\bin\benchbar.exe";
+
+    [Fact]
+    public async Task ARestartedStartRunsKeepaliveStartOnceAndANormalStartDoesNot()
+    {
+        var runner = new FakeProcessRunner();
+        await KeepaliveRestart.RunAsync(false, runner, () => KeepShim, _ => { });
+        Assert.Empty(runner.Calls);
+        Assert.Empty(runner.Detached);
+
+        await KeepaliveRestart.RunAsync(true, runner, () => KeepShim, _ => { });
+        var call = Assert.Single(runner.Calls);
+        Assert.Equal(KeepShim, call.File);
+        Assert.Equal(["keepalive", "start"], call.Args);
+        Assert.Equal(TimeSpan.FromSeconds(30), runner.LastTimeout);
+        Assert.Empty(runner.Detached);
+    }
+
+    [Fact]
+    public async Task AFailedKeepaliveStartIsOnlyLoggedAndAMissingShimIsQuiet()
+    {
+        var faults = new List<Exception>();
+        var runner = new FakeProcessRunner { Throws = new Win32Exception(5) };
+        await KeepaliveRestart.RunAsync(true, runner, () => KeepShim, faults.Add);
+        Assert.Single(faults);
+
+        faults.Clear();
+        runner.Throws = null;
+        runner.Answer = (_, _) => new ProcessResult(1, "", "no\n");
+        await KeepaliveRestart.RunAsync(true, runner, () => KeepShim, faults.Add);
+        Assert.Single(faults);
+
+        faults.Clear();
+        var none = new FakeProcessRunner();
+        await KeepaliveRestart.RunAsync(true, none, () => null, faults.Add);
+        Assert.Empty(none.Calls);
+        Assert.Empty(faults);
+    }
 }
