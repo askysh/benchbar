@@ -17,6 +17,12 @@ public sealed class BenchPoller : IDisposable
     /// <summary>The running rate on battery: each poll starts several processes inside WSL, so it is stretched to twice the mains rate.</summary>
     public static readonly TimeSpan RunningOnBatteryDelay = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// While the distro is up and every bench was stopped on the last poll, a timer poll asks the distro probe only (no CLI call: each one
+    /// touches the VM and keeps WSL from its idle shutdown). A full poll still runs this often, so a bench started from a terminal shows up.
+    /// </summary>
+    public static readonly TimeSpan IdleFullPollEvery = TimeSpan.FromMinutes(20);
+
     /// <summary>How long polling stays fast after an up, down or restart.</summary>
     public static readonly TimeSpan ActionBoost = TimeSpan.FromSeconds(60);
 
@@ -40,8 +46,8 @@ public sealed class BenchPoller : IDisposable
         return IdleSteps[Math.Clamp(idleStep, 0, IdleSteps.Count - 1)];
     }
 
-    public const string WslSilentMessage = "wsl.exe did not answer: WSL may be starting or stuck. Run wsl.exe --status.";
-    public const string WslMissingMessage = "WSL is not installed: wsl.exe --install";
+    public static string WslSilentMessage => UiText.Get("WslSilent");
+    public static string WslMissingMessage => UiText.Get("WslMissing");
 
     private readonly IBenchSource _source;
     private readonly TimeProvider _time;
@@ -60,6 +66,8 @@ public sealed class BenchPoller : IDisposable
     private bool _viewerIdle;
     private bool _onBattery;
     private bool _disposed;
+    private bool _woken = true;
+    private DateTimeOffset _lastFullPoll;
     private int _idleStep;
     private DateTimeOffset _boostUntil;
     private bool _boostEndsWhenDistroUp;
@@ -76,6 +84,12 @@ public sealed class BenchPoller : IDisposable
         _distro = distro;
         _ct = _cts.Token; // read once: a poll that starts as the poller is disposed must not touch a disposed source
         _timer = time.CreateTimer(_ => Trigger(resetBackoff: false), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>True while a poll runs or is queued.</summary>
+    internal bool IsPolling
+    {
+        get { lock (_gate) return _polling; }
     }
 
     /// <summary>Raised on a thread pool thread after every poll.</summary>
@@ -185,7 +199,11 @@ public sealed class BenchPoller : IDisposable
         lock (_gate)
         {
             if (_disposed || _suspended || !_started) return;
-            if (resetBackoff) _idleStep = 0;
+            if (resetBackoff)
+            {
+                _idleStep = 0;
+                _woken = true; // an action, unlock or the flyout: the next poll asks the CLI
+            }
             if (_polling)
             {
                 _kickPending = true; // coalesced into one more poll
@@ -240,6 +258,12 @@ public sealed class BenchPoller : IDisposable
     private async Task<TraySnapshot> PollOnceAsync()
     {
         var ct = _ct;
+        bool woken;
+        lock (_gate)
+        {
+            woken = _woken;
+            _woken = false;
+        }
 
         string? distro = null;
         if (_probe is not null && _distro?.Invoke() is { } name && !string.IsNullOrWhiteSpace(name))
@@ -286,8 +310,10 @@ public sealed class BenchPoller : IDisposable
                     _boostEndsWhenDistroUp = false;
                     _boostUntil = default;
                 }
+                if (CanSkipCliPoll(woken)) return _last;
             }
         }
+        lock (_gate) _lastFullPoll = _time.GetUtcNow();
 
         IReadOnlyList<BenchEntry> entries;
         try
@@ -325,6 +351,15 @@ public sealed class BenchPoller : IDisposable
         }
         CpuPercent = (_source as ILoadSource)?.CpuPercent;
         return new TraySnapshot(result, false, distro);
+    }
+
+    /// <summary>The distro is up, the last poll found every bench stopped, nothing woke the tray, no one watches and no full poll is due. Call with the gate held.</summary>
+    private bool CanSkipCliPoll(bool woken)
+    {
+        var now = _time.GetUtcNow();
+        if (woken || now < _boostUntil || (_flyoutOpen && !_viewerIdle) || now - _lastFullPoll >= IdleFullPollEvery) return false;
+        return _last.Problem is null && !_last.DistroStopped && _last.Benches.Count > 0
+            && _last.Benches.All(b => b.State == BenchState.Stopped && b.Problem is null);
     }
 
     private static BenchStatus UnknownStatus(BenchEntry entry) =>

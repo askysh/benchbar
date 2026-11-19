@@ -56,15 +56,7 @@ public class BenchPageSafetyTests
         }
     }
 
-    private static async Task Until(Func<bool> condition)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (!condition())
-        {
-            if (DateTime.UtcNow > deadline) throw new TimeoutException("the condition was not met");
-            await Task.Delay(5, TestContext.Current.CancellationToken);
-        }
-    }
+    private static Task Until(Func<bool> condition) => Eventually.Async(condition);
 
     [Fact]
     public async Task FollowPausesWhenTheDistroStoppedAndResumesOnlyWhenTheUserTurnsItOn()
