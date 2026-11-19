@@ -286,4 +286,58 @@ assert_calls_not_contain '^bench (build|--site macdev install-app)'
 assert_eq "failed skipped skipped skipped skipped skipped" "$(printf '%s' "$OUT" | jget - '" ".join(s["status"] for s in d["steps"])')"
 assert_eq "" "$(pending_file acme_c1)$(pending_file acme_c2)" "(nothing was cloned, so nothing to resume)"
 
+# ---------------------------------------------------------------- finishing an add of an app that is in no profile
+# an app added by URL is in no apps.tsv, so a finish by name must not need a policy
+url_of() { printf 'file://%s/%s.git' "$REMOTES" "$1"; }
+make_app_remote acme_url1
+make_app_remote acme_url2
+make_app_remote acme_url3
+plan "$(url_of acme_url1)" --branch main --site macdev
+assert_eq "0" "$CODE" "$ERR"
+TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+MOCK_BENCH_BUILD_EXIT=1 apply "$(url_of acme_url1)" --branch main --site macdev
+assert_eq "1" "$CODE" "$ERR"
+assert_eq "build" "$(jget "$(pending_file acme_url1)" 'd["failed_step"]')"
+assert_eq "$(url_of acme_url1)" "$(jget "$(pending_file acme_url1)" 'd["url"]')" "(the record keeps the URL)"
+plan acme_url1 --site macdev
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "Build,Install on macdev,Restart" "$(steps_of)" "(the steps left of an app that is in no profile)"
+TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+reset_calls
+apply acme_url1 --site macdev
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "0" "$(calls 'get-app')" "(already cloned)"
+assert_eq "" "$(pending_file acme_url1)"
+
+# a batch whose second clone fails: the record of the app that was never cloned keeps its URL
+plan "$(url_of acme_url2)" --branch main "$(url_of acme_url3)" --branch main
+assert_eq "0" "$CODE" "$ERR"
+TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+MOCK_BENCH_GET_APP_FAIL_FOR=acme_url3 apply "$(url_of acme_url2)" --branch main "$(url_of acme_url3)" --branch main
+assert_eq "1" "$CODE" "$ERR"
+[[ ! -d "$BENCH/apps/acme_url3" ]] || fail "acme_url3 was never cloned"
+assert_eq "$(url_of acme_url3)" "$(jget "$(pending_file acme_url3)" 'd["url"]')"
+run_json status --json --bench-dir "$BENCH"
+assert_eq "$(url_of acme_url3)" "$(printf '%s' "$OUT" | jget - '[o["url"] for o in d["pending_operations"] if o["app"]=="acme_url3"][0]')" "(status lists the URL)"
+run_json doctor --json --bench-dir "$BENCH"
+assert_contains "$(printf '%s' "$OUT" | jget - '" ".join(c.get("fix_command") or "" for c in d["checks"] if c["id"]=="app_add_pending")')" "app add acme_url3"
+# the finish by name takes the repo and branch from the record
+plan acme_url3
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "Clone acme_url3,Build,Restart" "$(steps_of)"
+TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+reset_calls
+apply acme_url3
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "1" "$(calls '^bench get-app .*acme_url3.git$')"
+assert_eq "" "$(pending_file acme_url3)"
+
+# an app that is in apps/ but in no profile is found by name; a name that is nowhere still fails with the hint
+plan acme_url3
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "" "$(steps_of)" "(present, in no profile: nothing to do)"
+run_json app add acme_nowhere --dry-run --json --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$ERR"
+assert_contains "$ERR" "Unknown app 'acme_nowhere'"
+
 printf 'test-app-batch (%s): ok\n' "$BATCH_PASS"
