@@ -37,9 +37,12 @@
 # same checkout and DerivedData instead of a second job.
 #
 # The Windows shim (windows/shim, Go) is vetted, tested and built for
-# windows/amd64 and windows/arm64 on Linux in the "shim" job; the "wsl" job
-# runs its tests on Windows and against a real WSL distro on a GitHub hosted
-# Windows runner.
+# windows/amd64 and windows/arm64 on Linux in the "shim" job. Its Windows only
+# code (the registry, the job object, the named mutex, ShellExecuteEx) runs in
+# "shim-windows" (windows-latest, amd64) and "shim-arm64" (windows-11-arm, with
+# a run of the arm64 exe); the "wsl" job runs the tests again and the real WSL
+# integration tests on a GitHub hosted Windows runner. No job uses a self
+# hosted runner.
 #
 # A job that has nothing to do is skipped as a whole (a skipped job passes
 # "CI result"), so a pull request that changes only docs starts no macOS job
@@ -105,6 +108,8 @@ jobs:
       shellcheck_files: ${{ steps.plan.outputs.shellcheck_files }}
       app: ${{ steps.plan.outputs.app }}
       shim: ${{ steps.plan.outputs.shim }}
+      shim_win: ${{ steps.plan.outputs.shim_win }}
+      shim_arm: ${{ steps.plan.outputs.shim_arm }}
       wsl: ${{ steps.plan.outputs.wsl }}
       real: ${{ steps.plan.outputs.real }}
     steps:
@@ -475,6 +480,87 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # The Windows only code of the shim (host_windows.go, platform_windows.go,
+  # selfupdate_windows.go) cannot run on Linux. Its tests use a throwaway HKCU
+  # key, a named mutex and child processes of their own, and never elevate or
+  # change the PATH of the runner's user.
+  shim-windows:
+    name: Windows shim on Windows (go vet, go test)
+    needs: changes
+    if: needs.changes.outputs.shim_win == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: windows/shim
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: windows/shim/go.mod
+          cache-dependency-path: windows/shim/go.sum
+
+      - name: go vet and go test
+        run: |
+          go version
+          go vet ./...
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          go test -count=1 ./...
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+  # The same on a GitHub hosted Arm64 Windows runner (free for a public repo),
+  # so the arm64 build is run and not only cross compiled: go test with an
+  # arm64 test binary, then a smoke run of an arm64 benchbar.exe.
+  shim-arm64:
+    name: Windows shim on Windows Arm64 (go test, run benchbar.exe)
+    needs: changes
+    if: needs.changes.outputs.shim_arm == 'true'
+    runs-on: windows-11-arm
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: windows/shim
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: windows/shim/go.mod
+          cache-dependency-path: windows/shim/go.sum
+
+      - name: go test
+        run: |
+          go version
+          go env GOOS GOARCH
+          if ((go env GOARCH) -ne 'arm64') { Write-Error 'this runner is not arm64'; exit 1 }
+          go test -count=1 ./...
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Build and run the arm64 benchbar.exe
+        env:
+          CGO_ENABLED: '0'
+          GOARCH: arm64
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'benchbar-arm64.exe'
+          $v = "smoke-$($env:GITHUB_SHA.Substring(0, 12))"
+          go build -trimpath -ldflags "-s -w -X main.version=$v" -o $exe .
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          go version -m $exe
+          $out = (& $exe --shim-version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0) { Write-Error "--shim-version exited $LASTEXITCODE"; exit 1 }
+          Write-Host "benchbar.exe said: $out"
+          if ($out -ne "benchbar.exe $v") { Write-Error "unexpected --shim-version output: $out"; exit 1 }
+          if (-not ((go version -m $exe | Out-String) -match 'GOARCH=arm64')) { Write-Error 'the exe is not an arm64 build'; exit 1 }
+
   # The shim against a real WSL distro on a GitHub hosted Windows runner:
   # Ubuntu 24.04 is installed with Vampire/setup-wsl and the CLI of this
   # checkout is put on the distro's PATH the way the installer does
@@ -655,7 +741,7 @@ jobs:
   ci-result:
     name: CI result
     if: always()
-    needs: [changes, cli-macos, cli-linux, cli-bash32, shellcheck, workflows, cli-linux-real, shim, wsl, app]
+    needs: [changes, cli-macos, cli-linux, cli-bash32, shellcheck, workflows, cli-linux-real, shim, shim-windows, shim-arm64, wsl, app]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

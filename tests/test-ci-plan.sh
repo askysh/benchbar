@@ -50,14 +50,18 @@ assert_contains "$(val tests)" "test-json"; assert_eq "true" "$(val app)"
 # ---- the Windows shim and the tray's own files
 plan EVENT=pull_request FILES="windows/shim/main.go"
 assert_eq "true" "$(val shim)"; assert_eq "true" "$(val wsl)"; assert_eq "[]" "$(val linux_shards)"
+# the Windows and Arm Windows test jobs follow the shim job
+assert_eq "true" "$(val shim_win)"; assert_eq "true" "$(val shim_arm)"
 plan EVENT=pull_request FILES="windows/tray/App.xaml.cs"
 assert_eq "false" "$(val shim)"; assert_eq "[]" "$(val linux_shards)"
+assert_eq "false" "$(val shim_win)"; assert_eq "false" "$(val shim_arm)"; assert_eq "false" "$(val wsl)"
 # the CLI's env records: the shim must forward or exclude every name they document
 # ---- the tool pins (xcodegen among them): the app job checks the new sum
 plan EVENT=pull_request FILES="scripts/ci-install-tool.sh"
 assert_eq "true" "$(val app)"
 plan EVENT=pull_request FILES="lib/frappe-local/commands.sh"
 assert_eq "true" "$(val shim)"; assert_eq "true" "$(val wsl)"
+assert_eq "true" "$(val shim_win)"; assert_eq "true" "$(val shim_arm)"
 
 # ---- a path that needs macOS adds the macOS leg, with the Linux layer left out
 plan EVENT=pull_request FILES="lib/frappe-local/platform.sh"
@@ -135,6 +139,7 @@ done
 for f in .github/workflows/ci.yml scripts/ci-plan.sh; do
   plan EVENT=pull_request FILES="$f"
   assert_eq "true" "$(val full)" "($f)"; assert_eq "true" "$(val app)" "($f)"; assert_eq "true" "$(val shim)" "($f)"
+  assert_eq "true" "$(val shim_win)" "($f)"; assert_eq "true" "$(val shim_arm)" "($f)"
 done
 # no base to diff against: everything
 plan EVENT=pull_request
@@ -143,10 +148,12 @@ assert_eq "true" "$(val full)" "(unknown base)"
 # ---- a push to next-release or main: everything, unless only docs, site or markdown changed
 plan EVENT=push FILES="lib/frappe-local/ports.sh"
 assert_eq "true" "$(val full)"; assert_eq "[1,2,3,4]" "$(val macos_shards)"; assert_eq "true" "$(val app)"; assert_eq "true" "$(val real)"
+assert_eq "true" "$(val shim_win)"; assert_eq "true" "$(val shim_arm)"
 plan EVENT=push FILES="docs/a.md site/src/x.astro CHANGELOG.md"
 assert_eq "false" "$(val code)"; assert_eq "false" "$(val full)"
 for k in linux_shards bash32_shards macos_shards; do assert_eq "[]" "$(val $k)" "($k, docs push)"; done
 assert_eq "false" "$(val app)"; assert_eq "false" "$(val real)"; assert_eq "false" "$(val shellcheck)"
+assert_eq "false" "$(val shim_win)"; assert_eq "false" "$(val shim_arm)"
 plan EVENT=push BASE_SHA=0000000000000000000000000000000000000000
 assert_eq "true" "$(val full)" "(a new branch: no before)"
 # the nightly: everything, whatever the files
@@ -164,6 +171,9 @@ plan EVENT=workflow_dispatch INPUT_TESTS="test-run-lock" INPUT_LEGS="macos"
 assert_eq "[]" "$(val linux_shards)"; assert_eq "[1]" "$(val macos_shards)"
 plan EVENT=workflow_dispatch INPUT_LEGS="shellcheck shim"
 assert_eq "true" "$(val shellcheck)"; assert_eq "true" "$(val shim)"; assert_eq "false" "$(val app)"
+assert_eq "true" "$(val shim_win)"; assert_eq "true" "$(val shim_arm)"
+plan EVENT=workflow_dispatch INPUT_LEGS="app"
+assert_eq "false" "$(val shim_win)"; assert_eq "false" "$(val shim_arm)"
 # a name that is not a test name is dropped; a list with none is refused
 # shellcheck disable=SC2016  # the shell syntax in the names must stay literal
 plan EVENT=workflow_dispatch INPUT_TESTS='test-lock x;y $(y)'
