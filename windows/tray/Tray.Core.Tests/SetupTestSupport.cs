@@ -184,6 +184,10 @@ internal class DelegatingSetup(FixtureSetupService inner) : ISetupService
     public virtual Task<int?> AdoptSudoStepsAsync(string benchPath, CancellationToken ct) => Task.FromResult<int?>(null);
 
     public virtual Task<string?> ShimVersionAsync(CancellationToken ct) => inner.ShimVersionAsync(ct);
+
+    public virtual Task<ProfileListResult> ListProfilesAsync(CancellationToken ct) => inner.ListProfilesAsync(ct);
+
+    public virtual Task<ProfileGate> CheckProfileAsync(string profile, string benchDir, CancellationToken ct) => inner.CheckProfileAsync(profile, benchDir, ct);
 }
 
 /// <summary>A setup action that runs until it is cancelled.</summary>

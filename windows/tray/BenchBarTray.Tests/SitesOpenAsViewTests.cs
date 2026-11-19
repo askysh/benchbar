@@ -1,4 +1,6 @@
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using BenchBar.Tray.Core;
 using Xunit;
 using static BenchBar.Tray.Tests.PageKit;
@@ -141,6 +143,50 @@ public class SitesOpenAsViewTests
         Assert.Equal(["open", "--site", "one.localhost", "--as", "priya@example.com", "--json", "--bench-dir", PageKit.BenchPath], open.Args);
         Assert.Contains("one.localhost opened in your browser as Priya N.", Texts(view));
         Assert.Empty(kit.Opened); // the tray opens nothing itself: the CLI did, and no link came back
+    });
+
+    [Fact]
+    public void PinKeepsAUserInQuickSwitchAndUnpinRemovesItButAdministratorHasNoPin() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make(WithOpenAs(new SiteOpenAs(true, true, true)));
+        ClickMenu(view, "More actions for one.localhost", "Open as...");
+        Wait(view.Pending);
+        Drain();
+        Assert.Equal(["priya@example.com", "web@example.com"], view.PinButtons.Keys); // Administrator is always in the panel
+        Click(view.PinButtons["priya@example.com"]);
+        Assert.True(kit.Services.Pins.IsPinned("priya@example.com", PageKit.BenchPath, "one.localhost"));
+        Assert.Equal("Priya N", kit.Services.Pins.Of(PageKit.BenchPath, "one.localhost").Single().FullName);
+        Assert.Equal("Unpin", System.Windows.Automation.AutomationProperties.GetName(view.PinButtons["priya@example.com"]).Split(' ')[0]);
+        var label = Walk(view).OfType<TextBox>().Single(t => System.Windows.Automation.AutomationProperties.GetName(t) == "Label for priya@example.com");
+        var saves = 0;
+        kit.Services.Pins.Changed += () => saves++;
+        foreach (var typed in new[] { " N", " NE", " NE " }) label.Text = typed; // every key is a change of text, none is a save
+        Assert.Equal(0, saves);
+        Assert.Null(kit.Services.Pins.Of(PageKit.BenchPath, "one.localhost").Single().Label);
+        label.RaiseEvent(new RoutedEventArgs(UIElement.LostFocusEvent)); // leaving the field commits
+        Assert.Equal(1, saves);
+        Assert.Equal("NE", kit.Services.Pins.Of(PageKit.BenchPath, "one.localhost").Single().Label);
+        label.RaiseEvent(new RoutedEventArgs(UIElement.LostFocusEvent)); // nothing new: no save
+        Assert.Equal(1, saves);
+        label.Text = "Network";
+        label.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, new System.Windows.Interop.HwndSource(new System.Windows.Interop.HwndSourceParameters()), 0, Key.Enter) { RoutedEvent = Keyboard.KeyDownEvent }); // Enter commits
+        Assert.Equal(2, saves);
+        Assert.Equal("Network", kit.Services.Pins.Of(PageKit.BenchPath, "one.localhost").Single().Label);
+        Click(view.PinButtons["priya@example.com"]);
+        Assert.Empty(kit.Services.Pins.Map);
+    });
+
+    [Fact]
+    public void ATenthPinIsRefusedWithAnExplanation() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make(WithOpenAs(new SiteOpenAs(true, true, true)));
+        for (var i = 1; i <= 9; i++) kit.Services.Pins.Pin($"u{i}@example.com", null, PageKit.BenchPath, "one.localhost");
+        ClickMenu(view, "More actions for one.localhost", "Open as...");
+        Wait(view.Pending);
+        Drain();
+        Click(view.PinButtons["priya@example.com"]);
+        Assert.False(kit.Services.Pins.IsPinned("priya@example.com", PageKit.BenchPath, "one.localhost"));
+        Assert.Contains("A site keeps 9 pinned users at most. Unpin one first.", Texts(view));
     });
 
     [Fact]

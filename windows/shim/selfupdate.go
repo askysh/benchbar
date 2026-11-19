@@ -34,7 +34,8 @@ and asks first. Your settings, benches and sites stay as they are.
   --check          this version against the latest release, changes nothing
   --json           the check as one JSON document (implies --check)
   --yes            do not ask
-  --version X.Y.Z  install this release (also an older one) instead of the latest
+  --version X.Y.Z  install this release (also an older one, or a release candidate
+                   X.Y.Z-rc.N) instead of the latest
   --zip PATH       install this benchbar-windows-VERSION-ARCH.zip (a test build)
   --installer FILE use this install.ps1 instead of the one on GitHub (for tests)
   --dry-run        the plan and the command, nothing runs
@@ -55,7 +56,7 @@ var installerEnvDropped = []string{
 	"BENCHBAR_VERSION", "BENCHBAR_ZIP", "BENCHBAR_SOURCE", "BENCHBAR_UNINSTALL", "BENCHBAR_NO_TRAY", "BENCHBAR_YES",
 }
 
-var zipNameRE = regexp.MustCompile(`^benchbar-windows-(\d+\.\d+\.\d+)-(amd64|arm64)\.zip$`)
+var zipNameRE = regexp.MustCompile(`^benchbar-windows-(\d+\.\d+\.\d+(?:-rc\.\d+)?)-(amd64|arm64)\.zip$`)
 
 type suOpts struct {
 	check, asJSON, yes, dryRun bool
@@ -353,8 +354,8 @@ func selfUpdateRun(sys *System, o suOpts) int {
 		}
 		target = m[1]
 	case o.version != "":
-		if !plainVersionRE.MatchString(o.version) {
-			errorf(sys, "'%s' is not a version. fix: use X.Y.Z, for example --version 0.8.3", o.version)
+		if !namedVersionRE.MatchString(o.version) {
+			errorf(sys, "'%s' is not a version. fix: use X.Y.Z, for example --version 0.8.3 (a release candidate is X.Y.Z-rc.N)", o.version)
 			return 1
 		}
 		target = strings.TrimPrefix(o.version, "v")

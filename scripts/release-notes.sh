@@ -5,11 +5,18 @@
 #
 #   scripts/release-notes.sh 0.6.0            ad hoc signed build
 #   scripts/release-notes.sh 0.6.0 --signed   Developer ID and notarized
+#   scripts/release-notes.sh 0.9.0-rc.1 --signed   a release candidate
 #
 # An "Update" section first (the command people on an older version copy,
 # and the app's Update Now), then the version's CHANGELOG.md section, then
 # how to install and the checksums. CHANGELOG defaults to CHANGELOG.md in
 # the repository; the release workflow runs this.
+#
+# A release candidate (X.Y.Z-rc.N) is a pre-release that no updater offers,
+# so it gets no Update section and no Homebrew line: it says what it is and
+# gives the command that names its version. Its changes are the section of
+# its own version when CHANGELOG.md has one, else "## Unreleased" with the
+# fragments in changelog.d folded in (scripts/changelog-fold.sh --print).
 
 set -euo pipefail
 
@@ -21,8 +28,32 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CHANGELOG="${CHANGELOG:-$ROOT/CHANGELOG.md}"
 INSTALLER="https://raw.githubusercontent.com/askysh/benchbar/main/install.sh"
 
+"$ROOT/scripts/check-version.sh" --valid "$VERSION" || exit 1
+RC=0
+[[ "$VERSION" == *-rc.* ]] && RC=1
+
 section="$(awk -v v="$VERSION" '/^## /{p = ($2 == v)} p' "$CHANGELOG" | tail -n +2)"
+if [[ -z "$section" && "$RC" == "1" ]]; then
+  section="$(CHANGELOG="$CHANGELOG" bash "$ROOT/scripts/changelog-fold.sh" --print | tail -n +2)"
+fi
 [[ -n "$section" ]] || { printf 'CHANGELOG has no "## %s " section\n' "$VERSION" >&2; exit 1; }
+
+if [[ "$RC" == "1" ]]; then
+  printf '## Release candidate\n\n'
+  printf 'This is a **pre-release** of BenchBar %s, for testing before the release. It is not offered as an update: Sparkle, the app'"'"'s update banner, `benchbar self-update`, the one line installers and Homebrew all stay on the last release. To try it, name the version:\n\n' "${VERSION%%-*}"
+  printf '```bash\ncurl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v%s/install.sh | bash -s -- --version v%s\n```\n\n' "$VERSION" "$VERSION"
+  printf 'On Windows, the notes below give the PowerShell line. To go back, run the normal installer without a version.\n\n'
+  printf '## Changes so far\n'
+  printf '%s\n' "$section"
+  printf '\n---\n\n'
+  if [[ "$SIGNED" == "1" ]]; then
+    printf 'Signed with a Developer ID and notarized by Apple. Download the DMG or zip below, or use the line above.\n\n'
+  else
+    printf 'This build is **not signed with an Apple Developer ID** (ad hoc signature): use the line above, which downloads with curl and opens without the Gatekeeper prompt.\n\n'
+  fi
+  printf 'Checksums are in `SHA256SUMS`.\n'
+  exit 0
+fi
 
 printf '## Update\n\n'
 printf 'Already using BenchBar? In the app, click **Update Now** in the update banner or the menu bar menu (BenchBar 0.6 and later check once a day). On 0.5.x, run this in Terminal:\n\n'

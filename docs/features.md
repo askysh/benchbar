@@ -103,6 +103,7 @@ BenchBar for Windows is a beta. The benches run in WSL 2. See
 | Window: Ports | Port Settings and Setup in a bench's Overview. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Profiles, Find Benches | Team Profiles and Find Benches in the sidebar. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Open as | **Allow Open as...** per site, then **Open as...** and Find User open the site in your browser signed in as any enabled user. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
+| Quick Switch | The tray menu opens a panel that opens a site as Administrator or a pinned user, by digit, arrows or typing. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Labs | Lists the experiments with a switch, a warning, the version and, for one that is not on Windows yet, why. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | URL scheme | `benchbar://` links start, stop and open a bench from a launcher or a script. **Settings > Ask before a link acts** is off by default. | 0.9.0 | Windows | [benchbar:// links](windows.md#benchbar-links), [URL scheme](reference/url-scheme.md) |
 | Report a bug | The tray writes the diagnostics zip. | 0.8.1 | Windows | [Report a bug](windows.md#report-a-bug) |
