@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# benchbar: one entrypoint (also installed as frappe-mac) for a local Frappe/ERPNext bench on macOS.
+# benchbar: one entrypoint (also installed as frappe-mac) for a local Frappe/ERPNext bench on macOS and Linux.
 #
 #   benchbar install        phases 00, 01 and the background service, idempotent
 #   benchbar up | down      start or stop the bench in the background
@@ -211,7 +211,7 @@ ARGS=()
 
 usage() {
   cat <<USAGE | fl_lab_usage_filter
-benchbar ${FL_VERSION}: local Frappe/ERPNext bench on macOS, in the background.
+benchbar ${FL_VERSION}: local Frappe/ERPNext bench on macOS and Linux, in the background.
 
 Usage: benchbar <command> [options]
 

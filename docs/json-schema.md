@@ -1094,7 +1094,7 @@ Exit 0. An argument other than `--json` exits 1.
 `labs list --json` is one document, with no done fields:
 
 ```json
-{"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.9.0","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false}]}
+{"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.8.2","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false}]}
 ```
 
 `commands` are the top level commands the lab gates (it may be empty, or name
