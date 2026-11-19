@@ -122,6 +122,9 @@ fl_template_render() {
         if [[ "$given" == "0" ]]; then dkeys[nd]="$dk"; dvals[nd]="${dv//"$bsn"/$nl}"; nd=$((nd + 1)); fi
         continue ;;
     esac
+    # a line with no __ in it holds no token, no default and no header: it goes in as it is
+    # (almost every line, and each of the others costs a substitution per key)
+    if [[ "$line" != *__* ]]; then body="${body}${line}"$'\n'; hbody="${hbody}${line}"$'\n'; continue; fi
     only_token=0
     [[ "$line" =~ ^__[A-Z_]+__$ ]] && only_token=1
     # a default stands in first, so the tokens inside it are filled below
