@@ -1,6 +1,8 @@
 # Updates askysh/homebrew-tap when a release is published: the benchbar
 # formula always, the benchbar-app cask only for a signed release (one with
-# a Sparkle appcast). Runs on publish, not in release.yml: a draft's asset
+# a Sparkle appcast). A pre-release (a release candidate, X.Y.Z-rc.N) leaves
+# the tap alone: the job is skipped before it asks for the release
+# environment, and a run by hand for a version with a suffix stops at once. Runs on publish, not in release.yml: a draft's asset
 # URLs answer 404, so a formula merged before publishing breaks brew install.
 #
 # The formula and cask are rendered from packaging/homebrew with the sha256
@@ -29,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Published version (X.Y.Z) to put in the tap"
+        description: "Published version (X.Y.Z) to put in the tap. A release candidate is refused"
         required: true
 
 permissions:
@@ -42,6 +44,9 @@ concurrency:
 jobs:
   tap:
     name: Formula and cask for askysh/homebrew-tap
+    # A pre-release is skipped here, not in a step: a step would run only after
+    # the maintainer approved the release environment for nothing.
+    if: github.event_name != 'release' || !github.event.release.prerelease
     environment: release
     runs-on: macos-latest
     timeout-minutes: 30
@@ -58,10 +63,12 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
           if [ -n "$INPUT_VERSION" ]; then v="${INPUT_VERSION#v}"; else v="${TAG_NAME#v}"; fi
-          case "$v" in
-            [0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "::error::'$v' is not a version (expected X.Y.Z)"; exit 1 ;;
-          esac
+          # the same pattern as scripts/check-version.sh; test-version-sources keeps them equal
+          if ! [[ "$v" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]]; then
+            echo "::error::'$v' is not a version (expected X.Y.Z or X.Y.Z-rc.N)"; exit 1
+          fi
+          # a suffix is a pre-release whatever GitHub says (a run by hand has no release event)
+          case "$v" in *-rc.*) PRERELEASE=true ;; esac
           if [ "$PRERELEASE" = "true" ]; then
             echo "::notice title=Prerelease::v$v is a prerelease; the tap keeps the last release."
             echo "skip=true" >> "$GITHUB_OUTPUT"

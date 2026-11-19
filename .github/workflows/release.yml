@@ -19,6 +19,13 @@
 #
 # The version comes from the tag (v0.3.0 -> 0.3.0) and is written into
 # CFBundleShortVersionString; CFBundleVersion is the commit count.
+#
+# A tag with a suffix (v0.9.0-rc.1) is a release candidate: the same build,
+# signed the same way, drafted as a GitHub pre-release. GitHub's "latest"
+# release, which Sparkle's feed, install.sh, benchbar self-update and the
+# Mac app's update check all read, skips pre-releases, and homebrew-tap.yml
+# leaves the tap alone for one. Only a person who names the version
+# (install.sh --version v0.9.0-rc.1) gets it.
 name: Release
 
 on:
@@ -27,7 +34,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (X.Y.Z). Run it on the tag (--ref vX.Y.Z) for the signed release"
+        description: "Version to build (X.Y.Z or X.Y.Z-rc.N). Run it on the tag (--ref vX.Y.Z) for the signed release"
         required: true
       adhoc:
         description: "Build an ad hoc signed app with no secrets, for a test. Off: the run must be on a v* tag and is signed"
@@ -50,6 +57,7 @@ jobs:
     outputs:
       mode: ${{ steps.mode.outputs.mode }}
       version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - id: version
         env:
@@ -57,12 +65,15 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
           if [ -n "$INPUT_VERSION" ]; then v="${INPUT_VERSION#v}"; else v="${REF_NAME#v}"; fi
-          case "$v" in
-            [0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "::error::'$v' is not a version (expected X.Y.Z)"; exit 1 ;;
-          esac
+          # the same pattern as scripts/check-version.sh; test-version-sources keeps them equal
+          if ! [[ "$v" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]]; then
+            echo "::error::'$v' is not a version (expected X.Y.Z or X.Y.Z-rc.N)"; exit 1
+          fi
+          pre=false
+          case "$v" in *-rc.*) pre=true ;; esac
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          echo "Building version $v"
+          echo "prerelease=$pre" >> "$GITHUB_OUTPUT"
+          echo "Building version $v (pre-release: $pre)"
       - id: mode
         env:
           REF: ${{ github.ref }}
@@ -103,6 +114,23 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # The keys sign what the tag points at, so the tag must point at work
+      # that was merged: a release at main, a candidate at next-release or
+      # main. A commit that only lives on a pull request branch is refused.
+      - name: Check that the tagged commit is on main or next-release
+        env:
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+        run: |
+          # fetch-depth 0 above brought every branch
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main 2>/dev/null; then
+            echo "$GITHUB_SHA is on main."
+          elif [ "$PRERELEASE" = "true" ] && git merge-base --is-ancestor "$GITHUB_SHA" origin/next-release 2>/dev/null; then
+            echo "$GITHUB_SHA is on next-release (a release candidate)."
+          else
+            echo "::error title=Unmerged commit::$GITHUB_SHA is not on main$([ "$PRERELEASE" = "true" ] && echo ' or next-release'). A release is built from merged work only."
+            exit 1
+          fi
+
       # A missing secret fails the release; it never falls back to ad hoc.
       - name: Check that every signing secret is set
         env:
@@ -131,6 +159,7 @@ jobs:
       - uses: ./.github/actions/release-prepare
         with:
           version: ${{ env.VERSION }}
+          prerelease: ${{ needs.check.outputs.prerelease }}
 
       # The certificate, the notary key and the Sparkle key exist only from
       # here to the cleanup step below. The certificate is imported in this
@@ -185,6 +214,7 @@ jobs:
         with:
           version: ${{ env.VERSION }}
           signed: "true"
+          prerelease: ${{ needs.check.outputs.prerelease }}
 
   # A test build for a manual run with the adhoc input. No environment, no
   # secret: nothing here can reach the release keys.
@@ -205,6 +235,7 @@ jobs:
       - uses: ./.github/actions/release-prepare
         with:
           version: ${{ env.VERSION }}
+          prerelease: ${{ needs.check.outputs.prerelease }}
 
       - name: Build, ad hoc sign, package
         run: scripts/release-local.sh "$VERSION"
@@ -213,3 +244,4 @@ jobs:
         with:
           version: ${{ env.VERSION }}
           signed: "false"
+          prerelease: ${{ needs.check.outputs.prerelease }}

@@ -100,6 +100,8 @@ lib_family() {
 script_tests() {
   case "$1" in
     release-notes) echo "test-release-notes" ;;
+    docs-only) echo "test-release-workflows" ;;
+    check-version|bump-version) echo "test-version-sources test-release-notes test-release-workflows" ;;
     changelog-fold) echo "test-changelog test-release-notes" ;;
     app-embed-cli|cli-tarball|homebrew-render) echo "test-packaging test-homebrew" ;;
     macos-appcast) echo "test-macos-appcast" ;;
@@ -180,7 +182,7 @@ while IFS= read -r f; do
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;
     scripts/macos-release.sh) pick test-release-workflows; pick test-supply-chain; shell=1 ;;
-    .github/workflows/release.yml | .github/workflows/release-windows.yml | .github/workflows/homebrew-tap.yml | .github/workflows/auto-tag.yml | .github/actions/*) pick test-release-workflows; pick test-supply-chain ;;
+    .github/workflows/release.yml | .github/workflows/release-windows.yml | .github/workflows/homebrew-tap.yml | .github/workflows/auto-tag.yml | .github/actions/*) pick_family "test-release-workflows test-version-sources"; pick test-supply-chain ;;
     .github/workflows/* | .github/dependabot.yml | .github/zizmor.yml | .github/actionlint.yaml | macos/Package.swift | macos/Package.resolved | macos/project.yml | macos/sparkle.yml | windows/shim/go.mod) pick test-supply-chain ;;
     macos/BenchBarTests/Fixtures/*) pick_family "test-json test-install-json test-lock" ;;
     windows/tray/fixtures/* | tests/record-tray-fixtures.sh) pick test-tray-fixtures; shell=1 ;;

@@ -64,6 +64,11 @@ jobs:
         id: tap
         run: |
           version="$(sed -n 's/^FL_VERSION="\([^"]*\)"$/\1/p' benchbar | head -n 1)"
+          # a release candidate (X.Y.Z-rc.N) is a pre-release: the tap never takes one
+          case "$version" in
+            *-rc.*) echo "::notice title=Release candidate::$version is a pre-release, which the tap never takes; the formula check is skipped."
+                    echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0 ;;
+          esac
           dist="$RUNNER_TEMP/dist"
           scripts/cli-tarball.sh "$version" "$dist"
           # a stand in for the signed DMG: enough for style and audit
@@ -78,17 +83,20 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: brew style and brew audit
+        if: steps.tap.outputs.skip != 'true'
         run: |
           brew style askysh/tap/benchbar askysh/tap/benchbar-app
           brew audit --strict --formula askysh/tap/benchbar
           brew audit --strict --cask askysh/tap/benchbar-app
 
       - name: brew install and brew test
+        if: steps.tap.outputs.skip != 'true'
         run: |
           brew install askysh/tap/benchbar
           brew test askysh/tap/benchbar
 
       - name: The installed CLI in an empty HOME
+        if: steps.tap.outputs.skip != 'true'
         env:
           VERSION: ${{ steps.tap.outputs.version }}
         run: |
@@ -124,6 +132,7 @@ jobs:
           fi
 
       - name: brew uninstall
+        if: steps.tap.outputs.skip != 'true'
         run: |
           brew uninstall askysh/tap/benchbar
           [ ! -e "$(brew --prefix)/bin/benchbar" ] || { echo "::error::bin/benchbar is left after brew uninstall"; exit 1; }
