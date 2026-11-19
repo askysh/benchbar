@@ -37,8 +37,10 @@ the first run bugs of Linux and macOS, and gives agents safer tools.
    [pull](reference/cli/pull.md).
 4. **Run `benchbar repair` once after you update.** It rewrites the
    service files of each bench. Until then, `doctor` says that
-   `Procfile.lean` is outdated. Run `benchbar restart` afterwards, so a
-   running bench picks up the new files. The bench stops for a moment.
+   `Procfile.lean` is outdated. When the agent or the unit file changed,
+   `repair` restarts a running bench itself. If it did not, run
+   `benchbar restart` so the bench picks up the new files. The bench stops
+   for a moment.
 
 ### Safer defaults
 
@@ -57,9 +59,10 @@ the first run bugs of Linux and macOS, and gives agents safer tools.
 
 - **macOS.** A first install on a Mac without `uv` works. A rerun after a
   failed `bench init` moves the empty folder aside and starts over.
-- **Linux.** `install` says when it failed and exits with 1. It works
-  under `sudo -iu`, `su -` and cron, and `benchbar status` says
-  `unknown (no user bus)` when systemd cannot be reached.
+- **macOS, Linux.** `install` says when it failed and exits with 1.
+- **Linux.** `install` works under `sudo -iu`, `su -` and cron, and
+  `benchbar status` says `unknown (no user bus)` when systemd cannot be
+  reached.
 - **Linux.** `install` takes `v16-lts` and team profiles. A bench that
   crashes three times shows a desktop notification.
 - All entries are on [First run problems](first-run-problems.md).

@@ -8,8 +8,6 @@ og-image.png	the site (site/scripts/prepare.mjs copies it to og.png)	scripts/soc
 open-as-find-user.png	docs/app.md	DocsSnapshotTests.docsFindUser	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
 popover-dark.png	docs/app.md, README.md	by hand (no snapshot test yet)	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
 popover-light.png	docs/index.md, README.md	by hand (no snapshot test yet)	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
-popover-paused.png	none (unused: delete or use it)	by hand (no snapshot test yet)	2026-09-29	stale: captured before 0.7.2
-popover-two-benches.png	none (unused: delete or use it)	by hand (no snapshot test yet)	2026-09-29	stale: captured before 0.7.2
 profile-export.png	docs/guides/teams.md	by hand (no snapshot test yet)	2026-09-29	stale: captured before 0.7.2
 profile-import.png	docs/guides/teams.md	by hand (no snapshot test yet)	2026-09-29	stale: captured before 0.7.2
 runners-more.png	docs/runners.md, docs/app.md	by hand (no snapshot test yet)	2026-11-01	review: the app changed in 0.8.2 and 0.9.0

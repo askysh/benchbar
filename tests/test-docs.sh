@@ -83,13 +83,16 @@ while IFS=$'\t' read -r img _; do
   [[ -f "$ROOT/docs/images/$img" ]] || fail "docs/images/manifest.tsv lists $img, which is not in docs/images"
 done < "$MANIFEST"
 
-# ---- What's new has a section for the next release and every release from 0.8.0 (DOC-4)
+# ---- What's new has a section for the next release and every version of CHANGELOG.md from 0.8.0 on (DOC-4)
 NEW="$ROOT/docs/whats-new.md"
 assert_file "$NEW"
 grep -q '^## 0\.9\.0' "$NEW" || fail "docs/whats-new.md has no section for the next release (0.9.0)"
 while IFS= read -r ver; do
   grep -q "^## ${ver} " "$NEW" || fail "docs/whats-new.md has no section for ${ver}"
-done < <(sed -n 's/^## \(0\.8\.[0-9]*\) - .*/\1/p' "$ROOT/CHANGELOG.md")
+done < <(awk '/^## [0-9]+\.[0-9]+\.[0-9]+ /{ split($2, v, "."); if (v[1] > 0 || v[2] >= 8) print $2 }' "$ROOT/CHANGELOG.md")
+grep -q 'whats-new' "$ROOT/docs/releasing.md" || fail "docs/releasing.md has no step that writes the What's new section"
+grep -q 'data-exclude-search' "$ROOT/site/astro.config.mjs" || fail "the Umami script lacks data-exclude-search (docs/privacy.md says no query string is sent)"
+
 
 # ---- claims that were fixed stay fixed (DOC-7, DOC-8)
 for f in README.md SECURITY.md docs/index.md docs/reference/configuration.md; do

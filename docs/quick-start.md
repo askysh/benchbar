@@ -19,9 +19,10 @@ and the address of your site.
 
 **Linux (Ubuntu 24.04).**
 
-- You need an x86_64 or arm64 PC with systemd, a user in the `sudo` group
-  (not root) and about 5 GB of free disk. `benchbar doctor --prerequisites`
-  checks this and changes nothing.
+- You need an x86_64 or arm64 PC with systemd, a user that can run `sudo`
+  (not root) and about 5 GB of free disk. Run
+  `benchbar doctor --prerequisites` first: it checks what it can and
+  changes nothing.
 - Install with the one line installer, then open a new terminal. It
   installs the command line tool only. See
   [Install: Linux](install.md#linux).

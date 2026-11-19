@@ -12,7 +12,13 @@ The site uses [Umami](https://umami.is), a web analytics tool. The
 maintainer runs it at `analytics.akashmishra.com`. No other analytics
 company receives the data. Umami sets no cookie.
 
-It counts page views, and it sends three custom events:
+A page view sends the URL path (not the query string), the referrer, the
+browser language, the screen size, the browser and the operating system.
+The request carries your IP address, as every web request does. Umami
+uses it only to find the country and does not store it. The page view
+has no cookie and no ID that follows you to another site.
+
+Besides page views, the site sends three custom events:
 
 | Event | When | What it sends |
 | --- | --- | --- |
@@ -20,8 +26,9 @@ It counts page views, and it sends three custom events:
 | `download-click` | You click a link to a GitHub release. | The path of the link, and the page. |
 | `outbound-click` | You click any other link that leaves the site. | The host and the path of the link, and the page. |
 
-Query strings are never sent. No event carries anything you typed. The
-site has no forms and no sign in.
+The script has `data-exclude-search`, so the query string of a page is
+never sent, with a page view or an event. No event carries anything you
+typed. The site has no forms and no sign in.
 
 The script counts only on `benchbar.akashmishra.com`, so a local preview of
 the docs is not counted. The code is `site/astro.config.mjs` and
@@ -36,8 +43,11 @@ to write next. The data stays on the maintainer's server.
 
 ## How to opt out
 
-- Turn on **Do Not Track** in your browser. The site honors it.
-- Or block `analytics.akashmishra.com` with a content blocker.
+- Block `analytics.akashmishra.com` with a content blocker. This works in
+  every browser, and it is the way to opt out in Safari, which no longer
+  has a Do Not Track setting.
+- Or turn on **Do Not Track** in a browser that has the setting. The site
+  honors it.
 - Or run `localStorage.setItem('umami.disabled', 1)` in your browser's
   console on this site.
 

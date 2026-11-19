@@ -59,7 +59,12 @@ On `next-release`, then into `main`:
    empty `## Unreleased` above it. The workflow refuses a version without
    a `## X.Y.Z` section, and uses the section as the release notes
    (`scripts/release-notes.sh` reads it as it is, folded or not).
-3. Refresh the screenshots in `docs/images` for every screen the release
+3. Write the section of this release in `docs/whats-new.md`: change
+   `## X.Y.Z (coming)` to `## X.Y.Z (date)`, check its platform tags and
+   upgrade notes against the folded `CHANGELOG.md` section, and add a
+   section for a version that has none. `tests/test-docs.sh` fails when a
+   version in `CHANGELOG.md` from 0.8.0 on has no section there.
+4. Refresh the screenshots in `docs/images` for every screen the release
    changed, and add new ones where a page still has none:
    - The Mac first run wizard and the walkthrough: `WizardSnapshotTests`
      renders their pages with fixture data, in light and dark (the
@@ -74,17 +79,17 @@ On `next-release`, then into `main`:
      Find User sheet and three wizard pages in a real key window (the
      window panes are captured as the window server draws them, so the
      sidebar and the selection look as in the app).
-4. Merge those changes into `next-release`, then open a pull request
+5. Merge those changes into `next-release`, then open a pull request
    from `next-release` into `main` and **squash merge** it (`main` keeps a
    linear history: one commit per release).
-5. `auto-tag.yml` checks that `FL_VERSION` and `MARKETING_VERSION` agree
+6. `auto-tag.yml` checks that `FL_VERSION` and `MARKETING_VERSION` agree
    and that CHANGELOG.md has the section, tags `vX.Y.Z` on that commit,
    starts `release.yml` and `release-windows.yml` for the tag, and merges
    `main` back into `next-release`. A push to `main` that keeps the version
    tags nothing. A tag pushed by hand still starts both release workflows.
-6. Wait for the release workflows, open the draft on the Releases page,
+7. Wait for the release workflows, open the draft on the Releases page,
    check the files, publish.
-7. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
+8. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
    below). It opens a pull request on `askysh/homebrew-tap` and stops.
    Read it (the formula and cask diff) and merge it yourself; until then
    `brew install` still gives the old version.

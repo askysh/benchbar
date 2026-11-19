@@ -113,13 +113,19 @@ bus. The error is `Failed to connect to bus: No medium found`.
 ```bash
 sudo loginctl enable-linger "$USER"
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
+sleep 5
+systemctl --user status
 benchbar install
 ```
+
+Wait a few seconds after `enable-linger`: the user manager needs them to
+start. Run `benchbar install` once `systemctl --user status` prints the
+manager's units and not `Failed to connect to bus`.
 
 Or log in again with a real login (`ssh`, or the console) and run
 `benchbar install` there.
 
-## `install` printed `[FAIL]` and still exited with 0
+## macOS and Linux: `install` printed `[FAIL]` and still exited with 0
 
 Issue [#116](https://github.com/askysh/benchbar/issues/116). A step of the
 background service phase failed, but the summary said `warning`, the exit

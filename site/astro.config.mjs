@@ -57,6 +57,8 @@ export default defineConfig({
             'data-domains': 'benchbar.akashmishra.com',
             // a browser with Do Not Track on is not counted (docs/privacy.md says so)
             'data-do-not-track': 'true',
+            // the query string of a page view is not sent (docs/privacy.md says so)
+            'data-exclude-search': 'true',
           },
         },
         // custom events (copied commands, downloads, outbound links): public/analytics-events.js
