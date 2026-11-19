@@ -21,6 +21,9 @@
 #   - apps the bench lacks stop the run with the bench get-app commands,
 #     unless --skip-app names them
 #   - email is muted and the scheduler paused before the copy ever starts
+#   - the copy is neutralised (neutralise.sh, the routine the rooms copy of
+#     share setup runs too): outbound integrations off, stored secrets
+#     cleared; --keep-secrets leaves the copy as production had it
 #
 # The restore steps (fl_pull_step_*) are shared with site-restore.sh, which
 # restores a backup set of this bench the same way.
@@ -44,6 +47,10 @@ FL_PULL_CONFIRM_SITE=""
 FL_PULL_SKIP_APPS=""
 FL_PULL_NO_FILES=0
 FL_PULL_KEEP_SCHEDULER=0
+FL_PULL_KEEP_SECRETS=0
+# what neutralise did: its rows (see neutralise.sh) and the done line's JSON
+FL_PULL_NEUTRALISE_ROWS=""
+FL_PULL_NEUTRALISE_JSON='{"on":false}'
 FL_PULL_KEEP_STAGING=0
 FL_PULL_STAGING=""
 # the backup set: file names (remote) and their sizes
@@ -365,6 +372,7 @@ fl_pull_parse_args() {
       --replace) FL_PULL_REPLACE=1; shift ;;
       --no-files) FL_PULL_NO_FILES=1; shift ;;
       --keep-scheduler) FL_PULL_KEEP_SCHEDULER=1; shift ;;
+      --keep-secrets) FL_PULL_KEEP_SECRETS=1; shift ;;
       --keep-staging) FL_PULL_KEEP_STAGING=1; shift ;;
       -*) fl_die "Unknown option for pull: $1" "Run: benchbar --help" ;;
       *)
@@ -721,6 +729,7 @@ fl_pull_plan_steps() {
   FL_PULL_STEPS+=("restore|Restore into ${FL_PULL_AS}")
   FL_PULL_STEPS+=("encryption_key|Carry the encryption key over")
   FL_PULL_STEPS+=("dev_safety|Mute email and pause the scheduler")
+  [[ "$FL_PULL_KEEP_SECRETS" == "1" ]] || FL_PULL_STEPS+=("neutralise|Neutralise the copy: integrations off, stored secrets cleared")
   [[ "$FL_PULL_QUIESCE" == "1" ]] && FL_PULL_STEPS+=("resume|Resume this bench's scheduler")
   [[ -n "$FL_PULL_SKIP_APPS" ]] && FL_PULL_STEPS+=("skip_apps|Remove skipped apps from the site: ${FL_PULL_SKIP_APPS}")
   [[ -n "$FL_PULL_HOOK" ]] && FL_PULL_STEPS+=("before_migrate|Run ${FL_PULL_HOOK##*/} (--before-migrate)")
@@ -741,7 +750,8 @@ fl_pull_print_plan() {
     "backup   $(fl_pull_backup_label)" \
     "into     ${FL_PULL_AS} in ${FL_BENCH_DIR}$([[ "$FL_PULL_SITE_EXISTS" == "1" ]] && printf ' (replaced, backup first)')$([[ "$FL_PULL_SITE_CREATE" == "1" ]] && printf ' (a new site)')" \
     "key      $([[ "$FL_PULL_HAS_KEY" == "1" ]] && printf 'encryption_key carried over (never shown)' || printf 'none on production: stored passwords will not decrypt')" \
-    "safety   mute_emails$([[ "$FL_PULL_KEEP_SCHEDULER" == "1" ]] && printf ', scheduler kept' || printf ', scheduler paused'), host_name http://${FL_PULL_AS}:${FL_WEB_PORT}"
+    "safety   mute_emails$([[ "$FL_PULL_KEEP_SCHEDULER" == "1" ]] && printf ', scheduler kept' || printf ', scheduler paused'), host_name http://${FL_PULL_AS}:${FL_WEB_PORT}" \
+    "secrets  $([[ "$FL_PULL_KEEP_SECRETS" == "1" ]] && printf 'kept as production had them (--keep-secrets)' || printf 'outbound integrations off, stored secrets cleared (--keep-secrets keeps them)')"
   if [[ "$FL_PULL_NEW_BACKUP" == "1" ]]; then
     fl_warn "--new-backup runs bench backup on ${FL_PULL_HOST}: it writes a full dump there and deletes backup files older than keep_backups_for_hours (default 23) in sites/${FL_PULL_RSITE}/private/backups"
   elif [[ -z "$FL_PULL_FROM_DIR" ]]; then
@@ -754,7 +764,7 @@ fl_pull_print_plan() {
     json_steps="${json_steps}${json_steps:+,}$(fl_json_str "${s#*|}")"
     i=$((i + 1))
   done
-  fl_pull_emit plan ",\"source\":$(fl_json_str "$(fl_pull_source_label)"),\"host\":$(fl_json_str "$FL_PULL_HOST"),\"remote_site\":$(fl_json_str "$FL_PULL_RSITE"),\"remote_bench\":$(fl_json_str "$FL_PULL_RBENCH"),\"from_dir\":$(fl_json_str "$FL_PULL_FROM_DIR"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_PULL_AS"),\"replace\":$(fl_json_bool "$FL_PULL_SITE_EXISTS"),\"backup\":{\"name\":$(fl_json_str "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_DB")"),\"new\":$(fl_json_bool "$FL_PULL_NEW_BACKUP"),\"bytes\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_TOTAL_BYTES")"),\"age_hours\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || fl_pull_age_hours "${FL_PULL_DB%%-*}")"),\"encrypted\":$(fl_json_bool "$FL_PULL_ENCRYPTED")},\"encryption_key\":$(fl_json_bool "$FL_PULL_HAS_KEY"),\"apps\":[${FL_PULL_APPS_JSON:-}],\"migrate\":$(fl_json_bool "$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf 0 || printf '%s' "$FL_PULL_NEED_MIGRATE")"),\"create_site\":$(fl_json_bool "$FL_PULL_SITE_CREATE"),\"before_migrate\":$(fl_json_str "$FL_PULL_HOOK"),\"needs\":[${FL_PULL_NEEDS}],\"steps\":[${json_steps}],\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}")"
+  fl_pull_emit plan ",\"source\":$(fl_json_str "$(fl_pull_source_label)"),\"host\":$(fl_json_str "$FL_PULL_HOST"),\"remote_site\":$(fl_json_str "$FL_PULL_RSITE"),\"remote_bench\":$(fl_json_str "$FL_PULL_RBENCH"),\"from_dir\":$(fl_json_str "$FL_PULL_FROM_DIR"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_PULL_AS"),\"replace\":$(fl_json_bool "$FL_PULL_SITE_EXISTS"),\"backup\":{\"name\":$(fl_json_str "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_DB")"),\"new\":$(fl_json_bool "$FL_PULL_NEW_BACKUP"),\"bytes\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_TOTAL_BYTES")"),\"age_hours\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || fl_pull_age_hours "${FL_PULL_DB%%-*}")"),\"encrypted\":$(fl_json_bool "$FL_PULL_ENCRYPTED")},\"encryption_key\":$(fl_json_bool "$FL_PULL_HAS_KEY"),\"neutralise\":$([[ "$FL_PULL_KEEP_SECRETS" == "1" ]] && printf false || printf true),\"apps\":[${FL_PULL_APPS_JSON:-}],\"migrate\":$(fl_json_bool "$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf 0 || printf '%s' "$FL_PULL_NEED_MIGRATE")"),\"create_site\":$(fl_json_bool "$FL_PULL_SITE_CREATE"),\"before_migrate\":$(fl_json_str "$FL_PULL_HOOK"),\"needs\":[${FL_PULL_NEEDS}],\"steps\":[${json_steps}],\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}")"
 }
 
 # ---------------------------------------------------------------- gates
@@ -984,6 +994,33 @@ fl_pull_step_dev_safety() {
     fl_ok "scheduler paused (bench --site ${FL_PULL_AS} enable-scheduler, and remove pause_scheduler, to run jobs)"
   fi
   fl_pull_bench_site set-config host_name "http://${FL_PULL_AS}:${FL_WEB_PORT}" || fl_warn "could not set host_name"
+  if [[ "$FL_PULL_KEEP_SECRETS" == "1" ]]; then
+    fl_pull_warn "the copy is not neutralised (--keep-secrets): its integrations, webhooks and stored passwords are production's; keep the scheduler and workers off until you have switched them off"
+  fi
+}
+
+# The copy loses what could reach production or act as it: the one routine of
+# neutralise.sh, run by the bench's Python on the restored site, before migrate
+# and before anything can start a worker. A failure stops the run.
+fl_pull_step_neutralise() {
+  local tmp code=0 summary
+  fl_bench_env_exports
+  [[ -n "$FL_SETUP_REDIS_PORTS" ]] || fl_bench_redis_up "$FL_BENCH_DIR"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-neutralise.XXXXXX")"
+  # in a subshell: the helper stops the command itself when the bench's Python fails
+  # shellcheck disable=SC2154  # __rows is set by fl_neutralise_run_v inside the subshell
+  ( fl_neutralise_run_v __rows "$FL_PULL_AS" 1 && printf '%s' "$__rows" >"$tmp" ) || code=$?
+  FL_PULL_NEUTRALISE_ROWS="$(cat "$tmp" 2>/dev/null || true)"
+  rm -f "$tmp"
+  if [[ "$code" != "0" || -z "$FL_PULL_NEUTRALISE_ROWS" ]]; then
+    fl_fail "could not neutralise ${FL_PULL_AS}: its integrations and stored passwords are still production's"
+    fl_fix "the log has the bench's message: ${FL_LOG_FILE:-}. Run the same pull with --replace once it is fixed, or with --keep-secrets to leave the copy as production had it."
+    return 1
+  fi
+  fl_neutralise_summary_v summary "$FL_PULL_NEUTRALISE_ROWS"
+  fl_neutralise_json_v FL_PULL_NEUTRALISE_JSON "$FL_PULL_NEUTRALISE_ROWS"
+  fl_ok "neutralised ${FL_PULL_AS}: ${summary}"
+  fl_info "not touched: customer data (names, emails, phones, documents) is still in the copy; --keep-secrets would have left the integrations and passwords as production had them"
 }
 
 # pause_scheduler in common_site_config.json: set by the user, or left by
@@ -1125,18 +1162,23 @@ fl_pull_step_verify() {
     want="$(printf '%s' "$FL_PULL_R_APPS" | cut -d'|' -f1 | while read -r a; do [[ -n "$a" ]] && ! fl_pull_skipped "$a" && printf '%s\n' "$a"; done | sort | tr '\n' ' ' || true)"
     if [[ "$apps" == "$want" ]]; then fl_ok "apps on ${FL_PULL_AS}: ${apps% }"; else fl_pull_warn "apps on ${FL_PULL_AS} are '${apps% }', production had '${want% }'"; fi
   fi
-  out="$(cd "${FL_BENCH_DIR}/sites" && "${FL_BENCH_DIR}/env/bin/python" -c "$FL_PULL_PY_PROBE" benchbar-probe "$FL_PULL_AS" 2>>"${FL_LOG_FILE:-/dev/null}" | grep '^benchbar-probe ' | tail -n1 || true)"
-  if [[ -n "$out" ]]; then
-    # shellcheck disable=SC2086  # "benchbar-probe OK BAD"
-    set -- $out
-    FL_PULL_PROBE_OK="$2"; FL_PULL_PROBE_BAD="$3"
-    if [[ "$FL_PULL_PROBE_BAD" == "0" ]]; then
-      fl_ok "stored passwords decrypt: ${FL_PULL_PROBE_OK} of ${FL_PULL_PROBE_OK}"
-    else
-      fl_pull_warn "${FL_PULL_PROBE_BAD} of $((FL_PULL_PROBE_OK + FL_PULL_PROBE_BAD)) stored passwords do not decrypt with the site's encryption_key (see docs/troubleshooting.md)"
-    fi
+  if [[ "$FL_PULL_KEEP_SECRETS" != "1" ]]; then
+    FL_PULL_PROBE_OK=0; FL_PULL_PROBE_BAD=0
+    fl_ok "stored passwords were cleared, so there is nothing to decrypt"
   else
-    fl_warn "the decrypt check did not run; see the log"
+    out="$(cd "${FL_BENCH_DIR}/sites" && "${FL_BENCH_DIR}/env/bin/python" -c "$FL_PULL_PY_PROBE" benchbar-probe "$FL_PULL_AS" 2>>"${FL_LOG_FILE:-/dev/null}" | grep '^benchbar-probe ' | tail -n1 || true)"
+    if [[ -n "$out" ]]; then
+      # shellcheck disable=SC2086  # "benchbar-probe OK BAD"
+      set -- $out
+      FL_PULL_PROBE_OK="$2"; FL_PULL_PROBE_BAD="$3"
+      if [[ "$FL_PULL_PROBE_BAD" == "0" ]]; then
+        fl_ok "stored passwords decrypt: ${FL_PULL_PROBE_OK} of ${FL_PULL_PROBE_OK}"
+      else
+        fl_pull_warn "${FL_PULL_PROBE_BAD} of $((FL_PULL_PROBE_OK + FL_PULL_PROBE_BAD)) stored passwords do not decrypt with the site's encryption_key (see docs/troubleshooting.md)"
+      fi
+    else
+      fl_warn "the decrypt check did not run; see the log"
+    fi
   fi
   if fl_bench_is_running; then
     code="$(fl_site_ping_code_for "$FL_PULL_AS")"
@@ -1224,6 +1266,13 @@ fl_cmd_pull() {
       if [[ -d "${FL_BENCH_DIR}/sites/${FL_PULL_AS}" && "$i" -gt 0 ]]; then
         fl_info "site ${FL_PULL_AS} may be half set up; after fixing the cause run the same pull with --replace"
       fi
+      # between the restore and the neutralise step the copy holds production's data as it was: say so
+      case "${FL_PULL_STEPS[$i]%%|*}" in
+        restore|encryption_key|dev_safety)
+          if [[ "$FL_PULL_KEEP_SECRETS" != "1" ]]; then
+            fl_warn "${FL_PULL_AS} was not neutralised: the copy still holds production's secrets and integrations (stored passwords, webhooks, API keys). Do not start the scheduler or workers on it; run the same pull with --replace once the cause is fixed."
+          fi ;;
+      esac
       if [[ "${FL_PULL_QUIESCED:-0}" == "1" ]]; then
         fl_warn "the scheduler of every site on this bench stays paused (pause_scheduler in common_site_config.json)"
         fl_fix "once ${FL_PULL_AS} is fixed or removed: cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"
@@ -1240,8 +1289,9 @@ fl_cmd_pull() {
   fl_box "Pulled" \
     "site     http://${FL_PULL_AS}:${FL_WEB_PORT}  (benchup, then open it)" \
     "email    muted (mute_emails)$([[ "$FL_PULL_KEEP_SCHEDULER" == "1" ]] || printf ', scheduler paused')" \
+    "secrets  $([[ "$FL_PULL_KEEP_SECRETS" == "1" ]] && printf 'not neutralised (--keep-secrets): production integrations and passwords are in this copy' || printf 'neutralised: integrations off, stored secrets cleared (Administrator login kept)')" \
     "default  stays ${FL_SITE}; benchbar site default ${FL_PULL_AS} changes it"
   FL_PULL_DONE_SENT=1
   fl_changed site "$FL_PULL_AS" "restored from ${FL_PULL_HOST:-a backup set}"
-  fl_pull_emit "done" ",\"exit\":0,\"site\":$(fl_json_str "$FL_PULL_AS"),\"url\":$(fl_json_str "http://${FL_PULL_AS}:${FL_WEB_PORT}"),\"decrypt\":{\"ok\":$(fl_json_num "$FL_PULL_PROBE_OK"),\"failed\":$(fl_json_num "$FL_PULL_PROBE_BAD")},\"warnings\":[${FL_PULL_WARNINGS}]$(fl_pull_done_extra)"
+  fl_pull_emit "done" ",\"exit\":0,\"site\":$(fl_json_str "$FL_PULL_AS"),\"url\":$(fl_json_str "http://${FL_PULL_AS}:${FL_WEB_PORT}"),\"decrypt\":{\"ok\":$(fl_json_num "$FL_PULL_PROBE_OK"),\"failed\":$(fl_json_num "$FL_PULL_PROBE_BAD")},\"neutralised\":${FL_PULL_NEUTRALISE_JSON},\"warnings\":[${FL_PULL_WARNINGS}]$(fl_pull_done_extra)"
 }
