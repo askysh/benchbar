@@ -144,6 +144,15 @@ your Linux password right before the steps that use sudo.
 
 ![The New Bench page](images/windows-wizard-bench.png)
 
+The **Profile** list on the New Bench page holds the built in profiles
+(`v15-lts`, `v16-lts`) and the valid team profiles from
+`benchbar.exe profile list`. It starts on `v15-lts`; the choice goes to
+the install as `--profile NAME`. BenchBar asks the CLI about each
+profile with a dry run (`install --dry-run --json --offline --profile
+NAME`), so a profile that this Ubuntu cannot install shows off, with the
+CLI's own reason under the list. If the list cannot be read, `v15-lts` is
+the only choice and **Try Again** reads it again.
+
 ![Review, the plan before Install](images/windows-wizard-review.png)
 
 Every wizard page has a **Report a Bug** button in its footer, and a
@@ -402,7 +411,20 @@ A bench has four tabs:
   without files), **Backups...**, **Restore...**, **Drop Site...** (type
   the site's name to confirm) and Open. Browsers open `*.localhost` names
   without a hosts line, so BenchBar never edits a hosts file (see
-  [`*.localhost` names](#localhost-names)).
+  [`*.localhost` names](#localhost-names)). **Allow Open as...** in a
+  site's menu turns Open as on for that site, after the Mac app's question
+  (it signs in as any user without a password, and each sign in is a real
+  login that the apps' hooks and the Activity Log see). Turning it on is
+  your decision: nothing in BenchBar does it for you, and **Turn Off Open
+  as** needs no question. While it is on the site says "Open as is on", or
+  why it cannot be used (developer mode off, not the default site, the bench
+  stopped), and **Open as...** opens **Find User**: the site's enabled users,
+  searched by name or email, each with **Open**, which opens the site in your
+  Windows browser signed in as that user. `benchbar.exe` opens the browser
+  itself, so the sign in link, which holds a session, never passes through
+  the tray, a log or the screen. A site whose name Windows cannot find has no
+  Open as. **Pin** in Find User keeps a user (nine at most per site,
+  Administrator is always there) for Quick Switch.
 - **Apps**: Add App (from a git URL, with a branch or a commit, and the
   sites to install it on), Update after the dry run, Install on a site,
   focus pins and Check Remotes. An app with local changes cannot be
@@ -415,24 +437,37 @@ A bench has four tabs:
 
 A fifth tab, **Sharing**, is there only while the **Share with people on
 the same Wi-Fi** experiment (`lan-rooms`) is on in Labs. It is the host
-side of a room, with the Mac app's words: **Start sharing** for 1 to 12
-hours after a question, **Stop**, **Extend**, **Lock room**, the room code
-(hidden until you press **Show**), **Copy invite** and **New code**, the
-checks, the copy, and the people in the room with **Remove**. Every one of
-those calls is made from your click and asks first where it ends a room or
-a person's session; nothing runs when the tab opens, it only reads. The
-room code and the invite are read only on your click, kept in memory,
-never written to a log and copied with a mark that keeps them out of the
-Windows clipboard history. Setting up the copy and the network protection
-are not in the tab yet: run `benchbar.exe share setup` and
-`benchbar.exe lan-guard install` in PowerShell, where they ask first. The tab shows
-what `benchbar.exe` reports, including where a platform has no network
-protection yet (Linux). While the experiment says it is not on Windows
-yet in Labs, the tab does not appear.
+side of a room, with the Mac app's words: **Set up sharing** (the people
+who get a seat, the source of the copy, the plan sheet with what the copy
+holds, and your tick that it holds real data), **Start sharing** for 1 to
+12 hours after a question, **Stop**, **Extend**, **Lock room**, the room
+code (hidden until you press **Show**), **Copy invite** and **New code**,
+the checks, the copy and **Refresh copy**, and the people in the room with
+**Remove**. Every one of those calls is made from your click and asks
+first; nothing runs when the tab opens, it only reads. The room code and
+the invite are read only on your click, kept in memory, never written to a
+log and copied with a mark that keeps them out of the Windows clipboard
+history. The network protection (`benchbar lan-guard install`, and
+`allow-node`) is a button with its own question and runs only when you
+press it; the tray never runs it by itself. Where the command line tool
+has no network protection yet (Linux), the tab shows what `benchbar.exe`
+says and nothing else. While the experiment says it is not on Windows yet
+in Labs, the tab does not appear.
 
 Start and Restart check the bench's ports first, from the window and from
 the flyout. A port another program holds stops the start with the reason
 and Review Port Conflict; BenchBar never stops that program.
+
+**Quick Switch...** in the tray menu opens a small panel over any window:
+Administrator, your pinned users and, when you type two letters or more,
+the site's other users. Up, Down and Enter choose, **0** to **9** open a row
+at once while the field is empty, and Esc closes it. It opens the site of a
+running bench that has Open as on (a list picks the site when there are
+several) in your browser signed in as that user, with the same
+`benchbar.exe open --as` call as Find User, and says why when there is
+nothing to open, for example that Open as is off for the site. The row of the
+last user it opened this run says "last opened". It never turns Open as on.
+There is no keyboard shortcut for it yet.
 
 **Find Benches** scans a folder inside the distro (default your Linux
 home), adds the benches it finds, sets up their ports and their
@@ -794,11 +829,10 @@ every distro, so stop your benches first).
 - It has no CPU source for the runner, so the runner runs at one speed.
 - It never reads files inside the distro: every fact comes from
   `benchbar.exe`.
-- It has no Open as menu yet. From PowerShell, `benchbar.exe site open-as on
-  NAME` turns it on for a site (it asks first), then `benchbar.exe open --as
-  USER` opens the site signed in as that user in your Windows browser. The
-  site needs a `*.localhost` name, which the Windows browser reaches without
-  a hosts line (see [`*.localhost` names](#localhost-names)). See [benchbar open](reference/cli/other.md).
+- Quick Switch has no global keyboard shortcut yet: open it from the tray
+  menu. Open as needs a `*.localhost` name, which the Windows browser reaches
+  without a hosts line (see [`*.localhost` names](#localhost-names)). See
+  [benchbar open](reference/cli/other.md).
 - It cannot join a room as a guest. The guest side (the room code
   exchange, the pinned certificate and the local forwarder) is part of the
   Mac app and has no `benchbar` command, so it is not on Windows yet. A

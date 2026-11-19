@@ -243,6 +243,42 @@ public class SelfUpdateTests : IDisposable
     }
 
     [Fact]
+    public async Task APackagedTrayRunsNoCheckAndNoZipUpdate()
+    {
+        var packaged = PackageInfo.Packaged("Askysh.BenchBar_0f196q1bwh8q6");
+        var runner = new FakeProcessRunner();
+        var check = await new SelfUpdateClient(runner, () => Shim, "0.9.0", packaged).CheckAsync(CancellationToken.None);
+        Assert.Empty(runner.Calls); // the shim is not even asked for its version
+        Assert.Null(check.Problem);
+        Assert.Equal(InstallKind.Store, check.Status!.Install);
+        Assert.Null(UpdatePlanner.Offer(check.Status));
+        Assert.Equal(UpdateLinks.StoreLine, UpdatePlanner.CheckText(check));
+
+        var launcher = new SelfUpdateLauncher(() => Shim, _ => throw new InvalidOperationException("must not start"), @"C:\Windows\system32", @"C:\", packaged);
+        var start = launcher.Start();
+        Assert.Equal(UpdateStartKind.StoreManaged, start.Kind);
+        Assert.False(start.Started);
+        Assert.False(launcher.IsRunning);
+    }
+
+    [Fact]
+    public async Task AnUnpackagedTrayStillChecksAndUpdates()
+    {
+        var runner = new FakeProcessRunner
+        {
+            Answer = (_, args) => args[0] == "--shim-version" ? new ProcessResult(0, "benchbar.exe 0.8.4\n", "") : new ProcessResult(0, Json("installer"), ""),
+        };
+        var check = await new SelfUpdateClient(runner, () => Shim, "0.8.4", PackageInfo.Unpackaged).CheckAsync(CancellationToken.None);
+        Assert.Equal(2, runner.Calls.Count);
+        Assert.Equal(InstallKind.Installer, check.Status!.Install);
+
+        var started = new List<ProcessStartInfo>();
+        var launcher = new SelfUpdateLauncher(() => Shim, info => { started.Add(info); return new FakeStarted(); }, @"C:\Windows\system32", @"C:\", PackageInfo.Unpackaged);
+        Assert.Equal(UpdateStartKind.Started, launcher.Start().Kind);
+        Assert.Single(started);
+    }
+
+    [Fact]
     public void ASecondUpdateNowWhileTheWindowRunsStartsNothing()
     {
         var started = new List<ProcessStartInfo>();
