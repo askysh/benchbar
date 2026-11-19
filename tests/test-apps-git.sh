@@ -13,6 +13,8 @@
 . "$ROOT/lib/frappe-local/ui.sh"
 # shellcheck source=lib/frappe-local/run.sh
 . "$ROOT/lib/frappe-local/run.sh"
+# shellcheck source=lib/frappe-local/bench.sh
+. "$ROOT/lib/frappe-local/bench.sh"
 
 git config --global user.email me@example.com
 run_json() { set +e; OUT="$("$FM" "$@" 2>"$MOCK_STATE/stderr")"; CODE="$?"; ERR="$(cat "$MOCK_STATE/stderr")"; set -e; }
@@ -173,6 +175,23 @@ assert_contains "$OUT$ERR" "timed out after 1s"
 [[ "$SECONDS" -lt 60 ]] || fail "lock apply waited ${SECONDS}s for a hanging fetch"
 assert_eq "$L2" "$(app_head "$BENCH/apps/acme_lh")" "(nothing moved)"
 
+# ---------------------------------------------------------------- APP-5: a pin whose fetch hangs says so
+PINBENCH="$TMP_DIR/pinbench"
+mkdir -p "$PINBENCH/apps"
+git clone -q --origin upstream --branch main "file://$REMOTES/acme_lh.git" "$PINBENCH/apps/acme_lh"
+push_commits acme_lh 1
+FUTURE="$(remote_head acme_lh)"
+SECONDS=0
+set +e
+MSG="$(HANG_FETCH=1 FL_GIT_CLONE_TIMEOUT=1 fl_pin_app_commit "$PINBENCH" acme_lh "$FUTURE" main 2>&1)"
+PCODE=$?
+set -e
+assert_eq "1" "$PCODE" "$MSG"
+assert_contains "$MSG" "a git fetch for it timed out (timed out after 1s)"
+assert_contains "$MSG" "FL_GIT_CLONE_TIMEOUT"
+assert_not_contains "$MSG" "did not hand it out"
+[[ "$SECONDS" -lt 60 ]] || fail "the pin waited ${SECONDS}s for a hanging fetch"
+
 # ---------------------------------------------------------------- APP-10: an app for another Frappe
 printf '__version__ = "15.113.4"\n' >"$BENCH/apps/frappe/frappe/__init__.py"
 make_app_remote acme_f16
@@ -208,6 +227,11 @@ assert_contains "$OUT$ERR" "set erpnext_branch"
 run_json profile show fork2
 assert_eq "0" "$CODE" "$OUT $ERR"
 assert_eq "my-erp" "$(field erpnext)"
+
+printf 'schema = 1\nbase = "v15-lts"\nfrappe_branch = "my-fork"\n' >"$USER_DIR/fork4.toml"
+run_json profile show fork4
+assert_eq "1" "$CODE" "(no bundle and no apps installs erpnext too) $OUT $ERR"
+assert_contains "$OUT$ERR" "set erpnext_branch"
 run_json profile show fork3
 assert_eq "0" "$CODE" "(no erpnext in the profile, nothing to pair) $OUT $ERR"
 

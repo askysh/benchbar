@@ -38,7 +38,9 @@ backups, not left half done.
 The check is exact (`refs/heads/NAME` or `refs/tags/NAME`), so a branch
 `feature/main` does not pass for `main`. benchbar uses your own SSH setup
 for it: a key, config file or proxy in `GIT_SSH_COMMAND` or `core.sshCommand`
-is kept, and only `BatchMode` and a connect timeout are added. Every call
+is kept, and only `BatchMode` and a connect timeout are added. The options
+are appended as `-o BatchMode=yes -o ConnectTimeout=N`, so a command that is not
+ssh compatible (plink, a wrapper script) gets them too and has to accept them. Every call
 to a remote has a deadline (30 s to read, 120 s to fetch or clone;
 `FL_GIT_TIMEOUT` and `FL_GIT_CLONE_TIMEOUT` change them), so a stalled VPN
 ends the command with "timed out after Ns" instead of a hang.

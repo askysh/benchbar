@@ -1003,7 +1003,7 @@ fl__ap_apply() {
           # would run code nobody reviewed
           res="failed"
           fl_fail "${arg}: ${AP_CI_BRANCH} moved after the plan was made (planned ${AP_CI_SHA:0:12}, cloned ${AP__GOT:0:12}); get-app cloned it and installed its Python requirements, but nothing was built or installed on a site."
-          fl_fix "Review a fresh plan: benchbar app add ${target} ... --dry-run --json"
+          fl_fix "Remove the clone, then review a fresh plan: cd $(printf '%q' "$FL_BENCH_DIR") && bench remove-app $(printf '%q' "$FL_CLONED_DIR"); benchbar app add ${target} ... --dry-run --json"
         elif [[ -n "$AP_CI_PIN" && "$AP__PRE" != "$AP_CI_PIN" ]] && ! fl__ap_pin_requirements "$FL_CLONED_DIR"; then
           # get-app installed the requirements of the tip it cloned; the pin has its own
           res="failed"

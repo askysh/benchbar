@@ -172,11 +172,12 @@ fl_team_profile_read() {
   if [[ -n "$FL_TEAM_BUNDLE" && -z "$(fl_bundle_apps "$FL_TEAM_BUNDLE")" ]]; then FL_TEAM_ERROR="$(basename "$file"): unknown bundle ${FL_TEAM_BUNDLE}"; return 1; fi
   # erpnext has to fit the frappe it is installed on: a frappe branch that is
   # neither version-N nor develop gives no way to tell which erpnext goes with it
-  if [[ -n "$FL_TEAM_FRAPPE_BRANCH" && -z "$FL_TEAM_ERPNEXT_BRANCH" && -n "$FL_TEAM_BUNDLE" ]]; then
+  # (no bundle and no [[apps]] installs the default erpnext too; [[apps]] name their own branches)
+  if [[ -n "$FL_TEAM_FRAPPE_BRANCH" && -z "$FL_TEAM_ERPNEXT_BRANCH" && "${#FL_TEAM_APPS[@]}" -eq 0 ]]; then
     case "$FL_TEAM_FRAPPE_BRANCH" in
       version-[0-9]*|develop) ;;
-      *) case " $(fl_bundle_apps "$FL_TEAM_BUNDLE") " in
-        *" erpnext "*) FL_TEAM_ERROR="$(basename "$file"): frappe_branch \"${FL_TEAM_FRAPPE_BRANCH}\" is not a version branch or develop, and bundle ${FL_TEAM_BUNDLE} has erpnext: set erpnext_branch for the erpnext that goes with it"; return 1 ;;
+      *) case " $([[ -n "$FL_TEAM_BUNDLE" ]] && fl_bundle_apps "$FL_TEAM_BUNDLE" || printf erpnext) " in
+        *" erpnext "*) FL_TEAM_ERROR="$(basename "$file"): frappe_branch \"${FL_TEAM_FRAPPE_BRANCH}\" is not a version branch or develop, and the profile installs erpnext${FL_TEAM_BUNDLE:+ (bundle ${FL_TEAM_BUNDLE})}: set erpnext_branch for the erpnext that goes with it"; return 1 ;;
       esac ;;
     esac
   fi
