@@ -143,7 +143,18 @@ PY
         [[ -n "${MOCK_BENCH_INSTALL_APP_EXIT:-}" ]] && exit "$MOCK_BENCH_INSTALL_APP_EXIT"
         mkdir -p "sites/$2"; printf '%s 1.0.0\n' "$4" >>"sites/$2/installed_apps"; exit 0 ;;
       migrate) [[ -n "${MOCK_BENCH_MIGRATE_SLEEP:-}" ]] && sleep "$MOCK_BENCH_MIGRATE_SLEEP"; exit "${MOCK_BENCH_MIGRATE_EXIT:-0}" ;;
-      doctor|clear-cache|clear-website-cache) exit 0 ;;
+      clear-cache|clear-website-cache) exit 0 ;;
+      doctor)
+        # the environment a benchbar run hands over: the folder and the exports of the runner
+        printf 'doctor cwd=%s ldflags=%s\n' "$PWD" "${LDFLAGS:-}"; exit "${MOCK_BENCH_DOCTOR_EXIT:-0}" ;;
+      run-tests)
+        # MOCK_BENCH_RUN_TESTS_SLEEP=N: runs for N seconds (a grandchild too); MOCK_BENCH_RUN_TESTS_EXIT=N: fails with N;
+        # MOCK_BENCH_RUN_TESTS_LINES=N: prints N lines first (the output is cut to the last 60)
+        for n in $(seq 1 "${MOCK_BENCH_RUN_TESTS_LINES:-0}"); do printf 'line %s\n' "$n"; done
+        printf 'Ran 3 tests args=%s\n' "$*"
+        printf '\033[31mred\033[0m fetching https://user:hunter2@example.test/x.git\n'
+        [[ -n "${MOCK_BENCH_RUN_TESTS_SLEEP:-}" ]] && { sleep "$MOCK_BENCH_RUN_TESTS_SLEEP" & wait; }
+        exit "${MOCK_BENCH_RUN_TESTS_EXIT:-0}" ;;
       disable-scheduler) exit 0 ;;
       set-config)
         # bench --site S set-config [-p] KEY VALUE: the site's own config
