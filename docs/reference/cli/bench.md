@@ -34,6 +34,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `bench remove` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
 | `bench remove` | `--confirm-bench` | `NAME` | Repeat the bench folder's name exactly. |
 | `bench scratch` | `--ttl` | `DAYS` | Days until the bench expires. |
+| `bench scratch` | `--yes` |  | Required to mark (it asks otherwise): marking is what lets bench gc remove the bench and its databases, and gc shows who marked it and when. |
 | `bench scratch` | `--clear` |  | Not scratch any more. |
 | `bench gc` | `--dry-run` |  | Print the plan (expired, pending, skipped) and its token, change nothing. |
 | `bench gc` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
@@ -73,12 +74,16 @@ benchbar bench remove PATH --dry-run --json
 benchbar bench remove PATH --confirm-bench NAME --apply TOKEN --yes
 ```
 
-`forget`, plus: each site is backed up with its files and its database is
-dropped (`bench drop-site`, which moves the site folder to `archived/sites`),
-then the bench folder is renamed into `<parent>/.benchbar-trash/NAME-DATE`.
+`forget`, plus: for each site the older backups are kept (frappe's own backup
+deletes the files older than 23 hours, as with `site drop`), a backup with files
+is taken and read to its end **before** anything is dropped, then the database
+is dropped (`bench drop-site`, which moves the site folder to `archived/sites`)
+and the archive is checked. Any failure stops with nothing moved. Then the bench
+folder is renamed into `<parent>/.benchbar-trash/NAME-DATE`.
 Benchbar never deletes that folder; it holds the backups, so empty it yourself
 when you are sure. `--confirm-bench` repeats the folder's name, as
-`site drop --confirm-site` does. The default bench is refused. Needs the
+`site drop --confirm-site` does. The default bench is refused, and so is a folder that is a mount point (a rename
+would copy and delete). Needs the
 MariaDB root password like `site drop`.
 
 A person's decision: refused under `BENCHBAR_NONINTERACTIVE`, `--for-agent` and
@@ -91,10 +96,13 @@ benchbar bench scratch PATH [--ttl DAYS] [--clear] [--json]
 benchbar install --scratch [--ttl DAYS]
 ```
 
-Marks a bench scratch: it expires after `--ttl` days (1 to 90, default 7).
+Marks a bench scratch (it asks, and an agent must pass `--yes`): it expires after `--ttl` days (1 to 90, default 7).
 `install --scratch` marks the new bench once it is set up; it cannot be
 combined with `--make-default`. `--clear` keeps the bench. The mark is in the
-bench's settings file, so `forget` and `remove` take it away too.
+bench's settings file with who made it (`install`, `person`, `agent`) and when,
+and `bench gc` shows both in its plan. `forget` and `remove` take it away too.
+`bench gc` only collects benches benchbar knows: for one that is not registered,
+`bench scratch` says so (`benchbar register PATH`).
 
 ## bench gc
 

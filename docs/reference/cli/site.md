@@ -83,9 +83,11 @@ inside benchbar's markers, with one `sudo` prompt.
 
 With `--prune` it removes instead the lines of benchbar's block whose site no
 bench benchbar knows has (a site that was dropped, or a bench that was
-forgotten): one backup, one `sudo` rewrite. A line outside the block, or with
+removed; a bench that was forgotten but whose folder is still there keeps its
+lines): one backup, one `sudo` rewrite. A line outside the block, or with
 more than one name, is never touched. Without a terminal, or with
-`BENCHBAR_SUDO=gui`, it prints the `sed` command to run instead. macOS only:
+`BENCHBAR_SUDO=gui`, it prints the `sed` command to run instead (it keeps a
+`.bak` copy of the file). macOS only:
 Linux has no hosts block.
 
 Exit codes: 0; 1 when the hosts file could not be written.
@@ -326,7 +328,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site add` | `--yes` |  | Do not ask. |
 | `site open-as` | `--yes` |  | Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1). |
 | `site open-as` | `--json` |  | JSON lines for on and off, one document for status. |
-| `site hosts` | `--prune` |  | Remove the stale lines of benchbar's block instead of adding the missing ones. macOS only. |
+| `site hosts` | `--prune` |  | Remove the stale lines of benchbar's block instead of adding the missing ones (sites of a forgotten bench whose folder is still there count as sites). The printed fallback command keeps a .bak copy. macOS only. |
 | `site backup` | `--with-files` |  | Include the uploads. |
 | `site restore` | `--from` | `STAMP\|PATH` | The backup set: its stamp in the target's (or --from-site's) backup folder, or the database file's path. |
 | `site restore` | `--from-site` | `S` | Read the stamp from this site's backups. |

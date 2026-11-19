@@ -1101,7 +1101,7 @@ cmd_install() {
   fl_remember_bench || fl_info "the default bench stays $(fl_state_get BENCH_DIR) (--make-default changes it)"
   # install --scratch: this bench expires (benchbar bench gc removes it, never when it is the default bench)
   if [[ "$OPT_SCRATCH" == "1" && "$FL_DRY_RUN" != "1" ]]; then
-    fl_lc_scratch_mark "$FL_BENCH_DIR" "$SCRATCH_DAYS"
+    fl_lc_scratch_mark "$FL_BENCH_DIR" "$SCRATCH_DAYS" install
     fl_ok "scratch bench: expires in ${SCRATCH_DAYS} day(s); benchbar bench scratch ${FL_BENCH_DIR} --clear keeps it"
   fi
   if [[ -n "$FL_SCHEDULER" ]]; then fl_bstate_set SCHEDULER "$FL_SCHEDULER"; fi

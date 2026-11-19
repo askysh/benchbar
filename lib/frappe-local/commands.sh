@@ -102,7 +102,7 @@ cmd~path~benchbar path~Print the bench directory.~no~no~no~no~none
 env~path~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~console~benchbar console [--site S]~bench --site SITE console: a Python shell with frappe.~yes~no~no~no~none
 cmd~db~benchbar db [--site S] | benchbar db orphans [--json]~bench --site SITE mariadb: the site's database.~yes~no~no~no~none
-cmd~db orphans~benchbar db orphans [--json]~Databases of frappe's shape (an underscore and 16 hex digits) that no site of any bench benchbar knows refers to. Read only: benchbar never drops them. Needs the MariaDB root password.~no~no~no~no~document
+cmd~db orphans~benchbar db orphans [--json]~Databases of frappe's shape (an underscore and 16 hex digits) that no site of any bench benchbar knows (or was told to forget, while its folder is there) refers to. A listed database may belong to a bench or program benchbar does not know. Read only: benchbar never drops them. Needs the MariaDB root password.~no~no~no~no~document
 flag~db orphans~--json~~One document: checked and orphans, each with the archived site folder that names it, if any.
 env~db orphans~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~open~benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]~Open a site in the browser, or open it signed in as USER (developer_mode sites that were opted in with site open-as on).~no~no~no~no~document
@@ -249,7 +249,7 @@ cmd~lan-guard allow-node~benchbar lan-guard allow-node [--yes] [--json]~Add the 
 flag~lan-guard allow-node~--yes~~Do not ask first.
 flag~lan-guard allow-node~--json~~JSON lines: done, with node (the realpath).
 cmd~site hosts~benchbar site hosts [--prune] [--dry-run]~Add a 127.0.0.1 line for every site to /etc/hosts. --prune removes instead the lines in benchbar's block whose site no bench benchbar knows has (one backup, one sudo; without a terminal it prints the command).~yes~yes~no~yes~none
-flag~site hosts~--prune~~Remove the stale lines of benchbar's block instead of adding the missing ones. macOS only.
+flag~site hosts~--prune~~Remove the stale lines of benchbar's block instead of adding the missing ones (sites of a forgotten bench whose folder is still there count as sites). The printed fallback command keeps a .bak copy. macOS only.
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
 flag~site backup~--with-files~~Include the uploads.
 cmd~site backups~benchbar site backups NAME [--json]~The site's backups, newest first.~no~no~no~no~document
@@ -299,8 +299,9 @@ flag~bench remove~--dry-run~~Print the plan and its token, change nothing.
 flag~bench remove~--apply~TOKEN~Run exactly that plan (with --yes).
 flag~bench remove~--confirm-bench~NAME~Repeat the bench folder's name exactly.
 env~bench remove~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
-cmd~bench scratch~benchbar bench scratch PATH [--ttl DAYS] [--clear] [--json]~Mark an existing bench scratch: it expires after DAYS (default 7, 1 to 90), or --clear keeps it. install --scratch marks a new one.~no~no~no~yes~document
+cmd~bench scratch~benchbar bench scratch PATH [--ttl DAYS] [--clear] [--json]~Mark an existing bench scratch (asks; --yes in a mode that cannot ask): it expires after DAYS (default 7, 1 to 90), or --clear keeps it. bench gc only collects benches benchbar knows (benchbar register PATH). install --scratch marks a new one.~no~no~no~yes~document
 flag~bench scratch~--ttl~DAYS~Days until the bench expires.
+flag~bench scratch~--yes~~Required to mark (it asks otherwise): marking is what lets bench gc remove the bench and its databases, and gc shows who marked it and when.
 flag~bench scratch~--clear~~Not scratch any more.
 cmd~bench gc~benchbar bench gc --dry-run --json, then --apply TOKEN --yes~List the scratch benches that expired (never the default bench) and remove each as bench remove does. Applying is a person's decision (refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal); the plan is open to agents.~yes~no~no~yes~document
 flag~bench gc~--dry-run~~Print the plan (expired, pending, skipped) and its token, change nothing.

@@ -215,6 +215,11 @@ one up (`mariadb-dump`) and drop it yourself. After
 so a name here is a leftover of an interrupted `new-site`, a deleted bench
 folder or a restore that went wrong.
 
+A bench you told benchbar to forget, whose folder is still there, counts as
+known. Even so, a listed database may belong to a bench or a program benchbar
+does not know (a folder it was never told of, another user, a restore in
+progress): check the name before you do anything. The JSON says this in `note`.
+
 Exit codes: 0; 2 when the MariaDB root password is unknown.
 
 ```bash
