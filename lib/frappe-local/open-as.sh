@@ -218,11 +218,13 @@ fl_cmd_open() {
   done
   # the link holds a login session: printing it hands that session to whatever reads the output, so
   # it is a person's, as site open-as on is. Refused under BENCHBAR_NONINTERACTIVE=1 (--for-agent,
-  # mcp) and when stdin is not a terminal, unless the caller says BENCHBAR_NONINTERACTIVE=0 itself
-  # (the Mac app does). This stops the documented agent modes and a plain pipe; a process of the
-  # same user that fakes a terminal or sets the 0 is not stopped: it is a guard against mistakes.
-  if [[ -n "$user" && "$print_url" == 1 ]] && { fl_noninteractive || { [[ ! -t 0 ]] && [[ "${BENCHBAR_NONINTERACTIVE:-}" != "0" ]]; }; }; then
-    fl_die "Printing a sign-in link is a person's decision, so a run without a terminal does not do it: the link holds a login session." \
+  # mcp) and when stdin is not a terminal, unless the Mac app says BENCHBAR_NONINTERACTIVE=0 and is
+  # an ancestor of this run (fl_person_env_ok). This stops the documented agent modes, a plain pipe and,
+  # on a Mac, a process outside the app that sets the 0. A process that fakes a terminal, or one inside
+  # the app's process tree, or any process on Linux and WSL (no ancestor check there) is not stopped:
+  # it is a safety rail against mistakes, not a boundary.
+  if [[ -n "$user" && "$print_url" == 1 ]] && { fl_noninteractive || { [[ ! -t 0 ]] && ! fl_person_env_ok BENCHBAR_NONINTERACTIVE 0; }; }; then
+    fl_die "Printing a sign-in link is a person's decision, so a run without a terminal does not do it: the link holds a login session.${FL_PERSON_WHY:+ $FL_PERSON_WHY}" \
       "Ask the person to run it in a terminal of their own."
   fi
   fl_require_bench
@@ -353,7 +355,7 @@ fl_cmd_site_open_as() {
     fl_noninteractive && fl_die "Turning on Open as is a person's decision, so nothing run without a terminal can do it." \
       "Run it in a terminal: benchbar site open-as on ${name}"
     # --yes skips the question, not the person: a terminal on stdin, or the app (BENCHBAR_SUDO=gui, after its own alert)
-    [[ "${FL_DRY_RUN:-0}" == 1 || -t 0 || "${BENCHBAR_SUDO:-}" == gui ]] || fl_die "Turning on Open as needs a person at a terminal, and this run has none." \
+    [[ "${FL_DRY_RUN:-0}" == 1 || -t 0 ]] || fl_person_env_ok BENCHBAR_SUDO gui || fl_die "Turning on Open as needs a person at a terminal, and this run has none.${FL_PERSON_WHY:+ $FL_PERSON_WHY}" \
       "Run it in a terminal: benchbar site open-as on ${name}"
     if ! fl_open_as_enabled "$name" && [[ "${FL_DRY_RUN:-0}" != "1" ]]; then
       fl_info "Open as signs in as any enabled user of ${name} with no password: benchbar open --as USER."

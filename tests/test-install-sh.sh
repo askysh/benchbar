@@ -112,6 +112,22 @@ assert_eq "0.3.0" "$(installed_app_version)"
 run_install --yes --version 0.3.0
 assert_contains "$OUT" "BenchBar 0.3.0 in ${HOME}/Applications (unchanged)"
 
+# ---- a release candidate is a GitHub pre-release: installed only when named.
+# The default asks for "latest", which GitHub answers without pre-releases.
+make_release 0.9.0-rc.1
+reset_calls
+run_install --yes --version 0.9.0-rc.1
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain 'releases/tags/v0.9.0-rc.1'
+assert_eq "0.9.0-rc.1" "$(installed_app_version)"
+make_release 0.3.0
+reset_calls
+run_install --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain 'api.github.com/repos/askysh/benchbar/releases/latest'
+assert_calls_not_contain 'releases/tags/|releases\?'
+assert_eq "0.3.0" "$(installed_app_version)"
+
 # ---- a tampered zip is refused and the installed app is left alone
 make_release 0.5.0
 printf 'evil\n' >>"$MOCK_STATE/release.zip"
@@ -253,6 +269,28 @@ PATH="$TMP_DIR/intel:$PATH" run_install --yes
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "Intel Mac"
 assert_not_contains "$OUT" "==> BenchBar app"
+
+# ---- macOS 13: the app needs 14, so only the CLI is installed, with a warning
+MOCK_SW_VERS=13.6.1 run_install --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "macOS 13.6.1 is older than 14 (Sonoma)"
+assert_not_contains "$OUT" "==> BenchBar app"
+assert_no_file "$APP"
+# macOS 14 and a two digit major version are fine
+MOCK_SW_VERS=14.0 run_install --yes --dry-run
+assert_not_contains "$OUT" "older than 14"
+MOCK_SW_VERS=26.1 run_install --yes --dry-run
+assert_not_contains "$OUT" "older than 14"
+
+# ---- a fish user gets the PATH line to run; a bash user on a Mac the line for ~/.bash_profile
+SHELL=/opt/homebrew/bin/fish run_install --yes --no-app
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "fish_add_path ${HOME}/.local/bin"
+SHELL=/bin/bash run_install --yes --no-app
+assert_contains "$OUT" "add this line to ~/.bash_profile: export PATH=\"\$HOME/.local/bin:\$PATH\""
+SHELL=/bin/zsh run_install --yes --no-app
+assert_not_contains "$OUT" "fish_add_path"
+assert_not_contains "$OUT" "bash_profile"
 
 # ---- --uninstall --dry-run: the whole plan, nothing removed, the app keeps running
 run_install --yes --app-only

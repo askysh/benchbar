@@ -305,7 +305,7 @@ flag~labs~--json~~One JSON document.
 env~labs~BENCHBAR_LABS~Comma separated lab names that replace the saved list (tests and CI).
 cmd~labs list~benchbar labs list [--json]~The experiments, whether each is on, and the commands each gates.~no~no~no~no~document
 flag~labs list~--json~~One JSON document.
-cmd~labs on~benchbar labs on NAME [--yes] [--json]~Turn an experiment on after its warning. Refused without a person (BENCHBAR_NONINTERACTIVE, --for-agent, mcp).~yes~no~no~yes~stream
+cmd~labs on~benchbar labs on NAME [--yes] [--json]~Turn an experiment on after its warning. Refused without a person (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an app passes BENCHBAR_NONINTERACTIVE=0.~yes~no~no~yes~stream
 flag~labs on~--json~~JSON lines, ending in a done line.
 flag~labs on~--yes~~Do not ask before turning on (still refused without a person, BENCHBAR_NONINTERACTIVE=1).
 cmd~labs off~benchbar labs off NAME [--json]~Turn an experiment off and undo what it started. Always allowed.~no~no~no~yes~stream
