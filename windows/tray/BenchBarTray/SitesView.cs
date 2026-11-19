@@ -12,7 +12,7 @@ namespace BenchBar.Tray;
 /// and Add Site. Add, Backups, Restore, Drop and Set Up show a panel in the page; the plan sheet and the typed confirmation come from
 /// <see cref="PageServices"/>. Nothing here edits a hosts file: Windows resolves <c>*.localhost</c> by itself.
 /// </summary>
-internal sealed class SitesView : UserControl, IBenchPageView
+internal sealed partial class SitesView : UserControl, IBenchPageView
 {
     private readonly PageServices _services;
     private readonly StackPanel _root = new() { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
@@ -69,7 +69,7 @@ internal sealed class SitesView : UserControl, IBenchPageView
     public void Bind(BenchContext context)
     {
         var key = string.Join('|', context.Bench.Path, context.Bench.State, context.Bench.WebUrl, context.Site,
-            string.Join(',', context.Bench.Sites.Select(s => s.Name + (s.IsDefault ? "*" : ""))));
+            string.Join(',', context.Bench.Sites.Select(s => s.Name + (s.IsDefault ? "*" : "") + (s.OpenAs is { } o ? $"[{o.Enabled}{o.DeveloperMode}{o.Usable}]" : ""))));
         // one view serves every bench: a panel opened for another bench must not outlive the switch
         if (_context is not null && _context.Bench.Path != context.Bench.Path)
         {
@@ -133,6 +133,7 @@ internal sealed class SitesView : UserControl, IBenchPageView
         var detail = Ui.Text(row.NeedsSetUp ? "Windows cannot find this name" : row.Url ?? "no address", 12, opacity: row.NeedsSetUp ? 1 : 0.7);
         if (row.NeedsSetUp) detail.Foreground = Ui.CautionTextBrush;
         text.Children.Add(detail);
+        if (OpenAsLine(row) is { } openAsLine) text.Children.Add(openAsLine);
         grid.Children.Add(text);
 
         var action = Ui.Button(row.ActionLabel, () => RowAction(row), $"{row.ActionLabel} {row.Name}", minWidth: 84);
@@ -142,7 +143,7 @@ internal sealed class SitesView : UserControl, IBenchPageView
         Grid.SetColumn(action, 1);
         grid.Children.Add(action);
 
-        var entries = SiteMenu.For(row, onlySite).Select(item => new PageMenuEntry(item.Label, item.Enabled, item.Destructive, () => MenuAction(row, item.Action)));
+        var entries = SiteMenu.For(row, onlySite, OpenAsFor(row).State).Select(item => new PageMenuEntry(item.Label, item.Enabled, item.Destructive, () => MenuAction(row, item.Action)));
         var more = PagePanels.MoreButton($"More actions for {row.Name}", entries, !_busy);
         Grid.SetColumn(more, 2);
         grid.Children.Add(more);
@@ -168,6 +169,7 @@ internal sealed class SitesView : UserControl, IBenchPageView
         switch (action)
         {
             case SiteAction.MakeDefault: Start(() => MakeDefaultAsync(row.Name)); break;
+            case SiteAction.OpenAs or SiteAction.AllowOpenAs or SiteAction.TurnOffOpenAs: OpenAsAction(row, action); break;
             case SiteAction.BackUp: Start(() => BackUpAsync(row.Name, false)); break;
             case SiteAction.BackUpWithFiles: Start(() => BackUpAsync(row.Name, true)); break;
             case SiteAction.Backups: Start(() => ShowBackupsAsync(row.Name, restore: false)); break;
@@ -224,6 +226,7 @@ internal sealed class SitesView : UserControl, IBenchPageView
 
     private void ClosePanel()
     {
+        _find = null;
         _addName = null;
         _addPassword = null;
         _addConfirm = null;

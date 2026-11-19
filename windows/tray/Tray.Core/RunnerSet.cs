@@ -23,8 +23,7 @@ public sealed class RunnerSet
 {
     private RunnerSet(IReadOnlyList<RunnerInfo> runners) => Runners = runners;
 
-    public static string DefaultFolder { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BenchBar", "runners");
+    public static string DefaultFolder { get; } = DataFolder.In("runners");
 
     public IReadOnlyList<RunnerInfo> Runners { get; }
 

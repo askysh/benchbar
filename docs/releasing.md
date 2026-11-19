@@ -110,18 +110,13 @@ the Mac app. The workflow never publishes. Re-run it after a re-run of
 release.yml, which replaces the notes and with them the Windows
 paragraph.
 
-The signing step is dormant: it runs only when `SIGNPATH_API_TOKEN` and
-`SIGNPATH_ORGANIZATION_ID` are set (repo
-secrets; there are none today, so every Windows program ships unsigned; `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG` and
-`SIGNPATH_ARTIFACT_CONFIGURATION_SLUG` variables override `benchbar`,
-`release-signing` and `windows-exe`), the project's own exe and DLLs (not NuGet packages) go through SignPath, only for a tag build, and each is
-checked with `Get-AuthenticodeSignature`. A missing secret, a failed
-request or a signature that does not check leaves that exe unsigned;
-the release still completes, and its notes say which binaries are
-unsigned. To make a release fail instead when a program of ours is
-unsigned, set the repository variable `SIGNING_REQUIRED` to `true`. It is
-unset today; set it only once signing works, or no Windows release can be
-attached.
+Nothing in the zips is code signed: SignPath Foundation declined the
+project on 2026-11-13 and the workflow has no signing step, no signing
+secrets and no gate on signing. Every package job stops after 40
+minutes. The package job still records what `Get-AuthenticodeSignature`
+says about every `.exe` and `.dll` (`signing-ARCH.json`), and `README.txt`
+and the release notes quote it, so a download says plainly what is
+unsigned. When a signing route exists, add it back as its own job.
 
 The release job also attests both zips with `actions/attest-build-provenance`
 (it needs the `id-token` and `attestations` write permissions), so

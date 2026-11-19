@@ -27,8 +27,7 @@ public sealed class RecentFolders
         }
     }
 
-    public static string DefaultPath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BenchBar", "recent-scan-folders.txt");
+    public static string DefaultPath { get; } = DataFolder.In("recent-scan-folders.txt");
 
     public IReadOnlyList<string> Items => _items;
 

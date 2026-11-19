@@ -71,6 +71,7 @@ internal sealed class MainWindow : Window
         _discovery = new DiscoveryView(actions.Services);
         _profiles = new ProfilesView(actions.Services);
         _labs = new LabsView(actions.Services);
+        _labs.Model.Changed += () => _page.SetSharingVisible(_labs.Model.IsOn("lan-rooms") && _labs.Model.Entries.Any(e => e.Name == "lan-rooms" && !e.NotHere));
 
         Title = BetaText.WindowTitle;
         Width = 1000;
@@ -444,6 +445,7 @@ internal sealed class MainWindow : Window
             var shown = ReferenceEquals(_content.Content, _page);
             if (!shown) _content.Content = _page;
             _page.Bind(bench, selected.Kind == SidebarKind.Site ? selected.Title : null, navigate || !shown);
+            if (navigate || !shown) _labs.OnShown(); // the Sharing tab follows the lan-rooms switch: one throttled labs call per selection, none per poll
             SyncContentKey();
         }
     }
