@@ -246,8 +246,10 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   package (which includes Rosetta 2, when the package needs it and it is
   missing), the LAN guard (`benchbar lan-guard install` and `remove`: the
   pf anchor, its launch daemon and the pf reference it took) and the firewall allow for node
-  (`benchbar lan-guard allow-node`); on Linux for apt, the wkhtmltopdf .deb
-  and MariaDB (see above). The `lan-guard` commands are a person's
+  (`benchbar lan-guard allow-node`); on Linux for apt, the wkhtmltopdf .deb,
+  MariaDB (see above) and the LAN guard (`benchbar lan-guard install` and
+  `remove`: the `inet benchbar` nftables table, its systemd unit and
+  `/etc/benchbar`). The `lan-guard` commands are a person's
   decision: never run them under `--for-agent`, `mcp` or
   `BENCHBAR_NONINTERACTIVE`, which refuse them; give the user the command.
   The run asks for it once up front; with `--yes` the confirmation is
