@@ -45,7 +45,7 @@ fl_snap_slug() {
 # (the manifest is read back line by line), at most 120 characters
 fl_snap_label_ok() {
   [[ "${#1}" -le 120 ]] || return 1
-  case "$1" in *[[:cntrl:]]*|*'"'*|*'\'*) return 1 ;; esac
+  case "$1" in *[[:cntrl:]]*|*'"'*|*\\*) return 1 ;; esac
   return 0
 }
 
@@ -118,7 +118,8 @@ fl_snap_apps_list() {
 fl_snap_bench_apps() {
   local a
   while IFS= read -r a; do
-    [[ -n "$a" ]] && fl_app_has_git "$a" || continue
+    [[ -n "$a" ]] || continue
+    fl_app_has_git "$a" || continue
     printf '%s|%s|%s\n' "$a" "$(fl_app_commit "$a")" "$(fl_app_branch "$a")"
   done < <(fl_apps_all)
 }
@@ -248,7 +249,8 @@ fl_snap_take() {
   id="${stamp}${slug:+-${slug}}"
   while [[ -e "${root}/${id}" ]]; do n=$((n + 1)); id="${stamp}${slug:+-${slug}}-${n}"; done
   sdir="${root}/${id}"
-  mkdir -p "$sdir" 2>/dev/null && chmod 700 "$root" 2>/dev/null || { FL_SNAP_ERR="could not make ${sdir}."; FL_SNAP_HINT="Look at the permissions of sites/${site}"; return 1; }
+  if ! mkdir -p "$sdir" 2>/dev/null; then FL_SNAP_ERR="could not make ${sdir}."; FL_SNAP_HINT="Look at the permissions of sites/${site}"; return 1; fi
+  chmod 700 "$root" 2>/dev/null || true
   # a rename inside sites/SITE: no copy, no second set of bytes
   for f in "$bdir/${stamp}"-*; do
     [[ -f "$f" ]] || continue

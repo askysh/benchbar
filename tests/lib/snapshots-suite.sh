@@ -25,6 +25,8 @@ gzip -c "$SQL" >"$MOCK_BENCH_BACKUP_DB"
 # line numbers of the first mock call matching a pattern
 at() { grep -m1 -n -E -- "$1" "$MOCK_LOG" | cut -d: -f1; }
 git_commit() { (cd "$BENCH/apps/$1" && printf '%s\n' "$2" >>README && git add README && git -c user.email=t@example.com -c user.name=t commit -q -m "$2"); }
+snap_names() { local d; for d in "$SNAPS"/2026*; do [[ -d "$d" ]] && basename "$d"; done; return 0; }
+snap_count() { snap_names | wc -l | tr -d ' '; }
 git_head() { git -C "$BENCH/apps/$1" rev-parse HEAD; }
 
 suite() {
@@ -63,6 +65,8 @@ suite() {
   run_fm site snapshot nosuch --bench-dir "$BENCH"
   assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "No site 'nosuch'"
   run_fm site snapshot acme.localhost --label 'a"b' --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "no quotes, backslashes or control characters"
+  run_fm site snapshot acme.localhost --label 'a\b' --bench-dir "$BENCH"
   assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "no quotes, backslashes or control characters"
   run_fm site snapshot acme.localhost --bogus --bench-dir "$BENCH"
   assert_eq "64" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown option for site snapshot: --bogus"
@@ -113,7 +117,7 @@ assert [a["name"] for a in s["apps"]] == ["frappe", "erpnext"] and s["apps_match
   # a failed backup leaves no snapshot folder
   MOCK_BENCH_BACKUP_EXIT=1 run_json site snapshot acme.localhost --json --bench-dir "$BENCH"
   assert_eq "1" "$CODE"; assert_eq "" "$OUT"
-  assert_eq "2" "$(ls "$SNAPS" | grep -c '^2026')" "(a failed backup adds nothing)"
+  assert_eq "2" "$(snap_count)" "(a failed backup adds nothing)"
   # a dry run runs nothing
   reset_calls
   run_fm site snapshot acme.localhost --dry-run --bench-dir "$BENCH"
@@ -260,7 +264,7 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   assert_eq "1" "$CODE" "$OUT"
   assert_contains "$OUT" "acme.localhost was snapshotted first as"
   assert_contains "$OUT" "put that back with: benchbar site rollback acme.localhost --to"
-  assert_eq "$(cat "$SNAPS/.last-rollback")" "$(ls "$SNAPS" | grep 'before-rollback' | sort | tail -n 1)" "(the snapshot of the failed run is the undo point)"
+  assert_eq "$(cat "$SNAPS/.last-rollback")" "$(snap_names | grep 'before-rollback' | sort | tail -n 1)" "(the snapshot of the failed run is the undo point)"
 
   # ---- the default site: an agent never rolls it back, a person can
   run_fm site snapshot macdev --label "default" --bench-dir "$BENCH"
@@ -299,12 +303,12 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   assert_file "$SNAPS/$id1/manifest.json"
 
   # ---- retention: the newest N stay, the rest are named, nothing goes on its own
-  n="$(ls "$SNAPS" | grep -c '^2026')"
+  n="$(snap_count)"
   run_json site snapshots acme.localhost --keep 2 --json --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT$ERR"
   assert_eq "2" "$(printf '%s' "$OUT" | jget - 'd["keep"]')"
   assert_eq "$((n - 2))" "$(printf '%s' "$OUT" | jget - 'len(d["over_limit"])')" "(all beyond the two newest)"
-  assert_eq "$n" "$(ls "$SNAPS" | grep -c '^2026')" "(listing removes nothing)"
+  assert_eq "$n" "$(snap_count)" "(listing removes nothing)"
   run_fm site snapshots acme.localhost --keep 2 --bench-dir "$BENCH"
   assert_contains "$OUT" "retention keeps the newest 2"; assert_contains "$OUT" "nothing is removed on its own"
   # the undo point of the last rollback is never on the list, though it is old enough
@@ -317,7 +321,7 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   run_json site snapshot drop acme.localhost --prune --keep 2 --yes --json --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT$ERR"
   assert_eq "$((n - 2))" "$(printf '%s' "$OUT" | jget - 'len(d["dropped"])')"
-  assert_eq "$((2))" "$(ls "$SNAPS" | grep -c '^2026')"
+  assert_eq "$((2))" "$(snap_count)"
   assert_file "$SNAPS/$before/manifest.json" "(the undo point stays)"
   run_json site snapshot drop acme.localhost --prune --keep 2 --yes --json --bench-dir "$BENCH"
   assert_eq "0" "$(printf '%s' "$OUT" | jget - 'len(d["dropped"])')" "(a second prune changes nothing)"

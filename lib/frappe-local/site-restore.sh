@@ -305,7 +305,7 @@ fl_srestore_print_plan() {
   local s i=1 e
   printf '\n'
   fl_box "$([[ "$SR_ROLLBACK" == "1" ]] && printf Rollback || printf Restore)" \
-    "site     ${SR_TARGET} in ${FL_BENCH_DIR}$([[ "$SR_ROLLBACK" == "1" ]] && printf ' (snapshotted first)' || { [[ "$SR_EXISTS" == "1" ]] && printf ' (backed up first)'; })$([[ "$SR_NEW" == "1" ]] && printf ' (a new site)')" \
+    "site     ${SR_TARGET} in ${FL_BENCH_DIR}$(if [[ "$SR_ROLLBACK" == "1" ]]; then printf ' (snapshotted first)'; elif [[ "$SR_EXISTS" == "1" ]]; then printf ' (backed up first)'; fi)$([[ "$SR_NEW" == "1" ]] && printf ' (a new site)')" \
     "from     ${SR_SET_STAMP:-?} in ${SR_SET_DIR:-?}$([[ -n "$SR_SET_SITE" ]] && printf ' (a backup of %s)' "$SR_SET_SITE")" \
     "files    $([[ "$FL_PULL_NO_FILES" == "1" ]] && printf 'database only (--with-files restores the uploads)' || printf 'database, public and private files')" \
     "key      $([[ "$FL_PULL_HAS_KEY" == "1" ]] && printf 'encryption_key of the set carried over (never shown)' || printf 'none in the set: stored passwords will not decrypt')" \
