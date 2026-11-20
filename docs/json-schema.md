@@ -320,6 +320,7 @@ listener: it is polled at rest (0.6.1).
 | `processes_running` | bool | any honcho, serve, worker, schedule or socketio process of this bench (before 0.6.1 a port listener counted too) |
 | `sites` | array | added in 0.4, see [Sites](#sites) |
 | `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
+| `autostart` | bool | added in 0.9: the bench may come back after a login (`benchbar autostart on`, the default; `off` keeps it down until `benchbar up`) |
 | `listen` | string | added in 0.9: `"local"` (the web server and socketio listen on 127.0.0.1) or `"all"` (every interface, `benchbar listen all`) |
 | `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
 | `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null), `url` (an add's repo URL, so `app add NAME` can finish an app that was never cloned or that no profile lists; null for an update and for a record an older version wrote) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
@@ -532,7 +533,10 @@ stream ends in the usual `done` line.
 The plan line of the service stream (as for `adopt --json`) carries a `token`:
 a SHA-256 of the planned actions, the bench, the port block, the scheduler
 choice and the site. `benchbar service --apply TOKEN --yes [--json]` runs that
-plan and refuses, before any action, a token that no longer matches.
+plan and refuses, before any action, a token that no longer matches. Since 0.9 the
+apply takes `--with-schedule` or `--without-schedule` too (the one the dry run was
+made with): the choice is stored only after the run succeeded, and a refused token
+stores nothing.
 
 ## MCP results of the site and service tools
 
@@ -1384,12 +1388,21 @@ dry run.
   "schema_version": 1, "cli_version": "0.5.8",
   "bench": "/Users/you/frappe-bench", "site": "bbtest.localhost",
   "dry_run": true, "is_default": false, "new_default": null,
+  "database": "_bbtest",
+  "token": "9f2c...64 hex characters",
   "steps": [
     {"title": "Back up bbtest.localhost with files, drop its database and user, move the folder to archived/sites", "command": "bench drop-site bbtest.localhost", "needs_password": false},
     {"title": "Remove '127.0.0.1 bbtest.localhost' from /etc/hosts", "command": "sudo, backup first", "needs_password": true}
   ]
 }
 ```
+
+Since 0.9 the plan has a `token`, a SHA-256 of the plan and of the site list,
+the default site, the hosts line and the database name (`database`, from the site's own
+`site_config.json`: it is the database that gets dropped). `benchbar site drop NAME --confirm-site
+NAME --apply TOKEN --yes [--json]` runs that plan and refuses, before anything
+changes, a token that no longer matches (exit 1). The MCP tools
+`benchbar_site_drop_plan` and `benchbar_site_drop` pass it on as it is.
 
 And the result, without `--dry-run`:
 

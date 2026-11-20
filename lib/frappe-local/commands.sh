@@ -298,10 +298,11 @@ flag~site restore~--with-files~~Restore the uploads too.
 flag~site restore~--dry-run~~Print the plan and its token.
 flag~site restore~--apply~TOKEN~Run exactly that plan (with --yes).
 env~site restore~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
-cmd~site drop~benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run] [--json]~bench drop-site: a backup with files first, the folder moved to archived/sites.~no~yes~no~yes~document
+cmd~site drop~benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run|--apply TOKEN --yes] [--json]~bench drop-site: a backup with files first, the folder moved to archived/sites.~no~yes~no~yes~document
 flag~site drop~--confirm-site~NAME~Repeat the site name exactly.
 flag~site drop~--new-default~OTHER~Required when NAME is the default site.
-flag~site drop~--dry-run~~Print the plan, change nothing.
+flag~site drop~--dry-run~~Print the plan, change nothing. With --json the plan carries a token.
+flag~site drop~--apply~TOKEN~Run the plan of a dry run; refused when the sites, the default or the hosts line changed since (needs --yes).
 env~site drop~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~app~benchbar app list|add|install|update|focus|unfocus ...~The apps of a bench.~no~no~no~no~none
 cmd~app list~benchbar app list [--json] [--no-sites]~Every app: branch, commit, local changes, the sites that have it.~no~no~no~no~document
