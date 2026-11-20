@@ -266,6 +266,14 @@ ls dist/
 `release-local.sh` needs full Xcode, XcodeGen and nothing else. It is the
 ad hoc path of the workflow, running on your Mac.
 
+### When a test pass finds a bug
+
+Write it in [Known issues](troubleshooting.md#known-issues) in the same
+pull request that files or fixes it: the version, what a person sees, and
+the way around it. Remove the line in the pull request that fixes it. A
+bug found while a release is being cut and not fixed before the tag goes
+in that list before the draft is published.
+
 ## Release candidates
 
 A release candidate (`X.Y.Z-rc.N`, for example `0.9.0-rc.1`) is the release
@@ -495,6 +503,32 @@ If a key may have leaked (a run you did not approve, a laptop lost),
 revoke first and rotate after. For Sparkle there is no revoke: ship a
 release with a new key pair signed by the old one, and say so in
 `SECURITY.md`.
+
+### If someone else cuts the release
+
+Every step above is in this page or in a workflow, but four things are
+settings and accounts that a second person must be given first. Until the
+maintainer does, only the maintainer can finish a release:
+
+- **Repository admin**, to push the fast forward to `main` (step 5): the
+  `main` ruleset lets only admins bypass it.
+- **Required reviewer of the `release` environment** (Settings,
+  Environments, `release`), to approve the signed build and the tap job.
+  Today the list is the maintainer alone; add the second person.
+- **The ten secrets.** Their values live outside GitHub, in the
+  maintainer's password manager: the Developer ID certificate and its
+  `.p12` password, the App Store Connect key (`.p8`, Key ID, Issuer ID),
+  the Sparkle private key and the tap token. A second person cannot read
+  them back from GitHub; they re-create the certificate and the notary key
+  from the Apple Developer account (the Team ID is in "Membership
+  details") and set them with the table under "Secrets". The Sparkle
+  private key cannot be re-created (see "Rotating a key"), so keep a
+  backup of it with a second holder.
+- **Merge rights on `askysh/homebrew-tap`**, for the pull request of
+  step 8.
+
+`.github/CODEOWNERS` names the maintainer on the release code, so a
+second reviewer's approval counts for it only once CODEOWNERS lists them.
 
 ### Who may change the release code
 

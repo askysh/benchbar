@@ -162,6 +162,17 @@ passwords are too: enter them again in the copy.
 report; attach it to an issue at
 <https://github.com/askysh/benchbar/issues>.
 
+## Known issues
+
+Problems a test pass found that a release has not fixed yet. Each line
+names the version, what you see, and the way around it. The list is empty
+when there is nothing open; an entry is removed once the fix ships and
+the release notes say so. For a bug that is not listed, search the
+[open issues](https://github.com/askysh/benchbar/issues) and file one with
+the bug form.
+
+None at the moment.
+
 ## Resetting the MariaDB root password
 
 This changes the root password of the one MariaDB server every bench on

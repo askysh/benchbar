@@ -31,6 +31,7 @@ export default defineConfig({
       components: {
         SocialIcons: './src/components/TopNav.astro',
         ThemeSelect: './src/components/ThemeToggle.astro',
+        Footer: './src/components/Footer.astro',
       },
       // code blocks take the page's surface colours (src/styles/custom.css);
       // shell snippets get a plain frame instead of a terminal window
