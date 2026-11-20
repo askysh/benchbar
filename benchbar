@@ -160,6 +160,8 @@ fi
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/share-admin.sh"
 # shellcheck source=lib/frappe-local/lan-guard.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/lan-guard.sh"
+# shellcheck source=lib/frappe-local/lan-guard-linux.sh
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/lan-guard-linux.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 # shellcheck source=lib/frappe-local/freshness.sh
@@ -327,9 +329,10 @@ Daily
   share preflight     The checks that say whether this Mac is safe to share the copy: the pf block
                       probed from the LAN address, the share web process, the firewall, the copy and
                       its seats. --static or --critical for half, --quiet, --json; exit 1 on a fail.
-  lan-guard install   The pf anchor that keeps the bench ports off the LAN, and the daemon that loads it
-                      at boot (sudo, once; a person at a terminal). status (--json), remove, and
-                      allow-node (lets the share gateway's node through the macOS firewall).
+  lan-guard install   The pf anchor (macOS) or nftables table (Linux) that keeps the bench ports off
+                      the LAN, and the daemon or systemd unit that loads it at boot (sudo, once; a
+                      person at a terminal). status (--json), remove, and allow-node (macOS only:
+                      lets the share gateway's node through the macOS firewall).
   mariadb-password    Print the MariaDB root password (Keychain; a 0600 file on Linux; asks first).
                       A person's command: refused for agents, mcp and without a terminal.
   mcp                 Model Context Protocol server on stdio for coding agents
