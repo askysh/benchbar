@@ -308,7 +308,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 
 | Command | Terminal | `sudo` | Network | Changes things | JSON |
 |---|---|---|---|---|---|
-| `benchbar site list\|add\|default\|hosts\|backup\|backups\|restore\|drop\|open-as ...` | no | no | no | no | none |
+| `benchbar site list\|add\|default\|hosts\|backup\|backups\|restore\|snapshot\|snapshots\|rollback\|drop\|open-as ...` | no | no | no | no | none |
 | `benchbar site list [--json]` | no | no | no | no | document |
 | `benchbar site add NAME [--bundle NAME\|--apps "a b"] [--dry-run\|--apply TOKEN] [--yes] [--json]` | yes | yes | no | yes | stream |
 | `benchbar site default NAME [--json]` | no | no | no | yes | stream |
@@ -317,6 +317,9 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar site backup NAME [--with-files] [--json]` | no | no | no | yes | document |
 | `benchbar site backups NAME [--json]` | no | no | no | no | document |
 | `benchbar site restore NAME --from STAMP\|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
+| `benchbar site snapshot NAME [--label TEXT] [--json]; benchbar site snapshot drop NAME SNAPSHOT\|--prune [--keep N] [--yes] [--dry-run]` | no | no | no | yes | document |
+| `benchbar site snapshots NAME [--keep N] [--json]` | no | no | no | no | document |
+| `benchbar site rollback NAME --to SNAPSHOT\|latest [--no-migrate] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
 | `benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run\|--apply TOKEN --yes] [--json]` | no | yes | no | yes | document |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
@@ -344,6 +347,18 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site restore` | `--with-files` |  | Restore the uploads too. |
 | `site restore` | `--dry-run` |  | Print the plan and its token. |
 | `site restore` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
+| `site snapshot` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
+| `site snapshot` | `--label` | `TEXT` | What the snapshot is for (up to 120 characters, no quotes); it is part of the folder name. |
+| `site snapshot` | `--prune` |  | With drop: remove the snapshots beyond the newest N (never the undo point of the last rollback). |
+| `site snapshot` | `--keep` | `N` | With drop --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's state file). |
+| `site snapshot` | `--yes` |  | With drop: do not ask. Refused for an agent (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1): drop is a person's choice. |
+| `site snapshot` | `--dry-run` |  | Print what would happen (for drop: what would be removed), change nothing. |
+| `site snapshots` | `--keep` | `N` | Say which snapshots are beyond the newest N (default 10, or SNAPSHOT_KEEP in the bench's state file). Nothing is removed. |
+| `site rollback` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
+| `site rollback` | `--to` | `SNAPSHOT` | The snapshot: its name, its stamp, or latest (benchbar site snapshots NAME lists them). |
+| `site rollback` | `--no-migrate` |  | Stop after the restore, before bench migrate. |
+| `site rollback` | `--dry-run` |  | Print the plan and its token. |
+| `site rollback` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
 | `site drop` | `--confirm-site` | `NAME` | Repeat the site name exactly. |
 | `site drop` | `--new-default` | `OTHER` | Required when NAME is the default site. |
 | `site drop` | `--dry-run` |  | Print the plan, change nothing. With --json the plan carries a token. |
@@ -356,5 +371,6 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site add` | `BENCHBAR_SUDO` | Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change). |
 | `site add` | `BENCHBAR_SUDO_PASSWORD` | The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child. |
 | `site restore` | `MARIADB_ROOT_PASSWORD` | Only when MariaDB has a password benchbar does not know. |
+| `site rollback` | `MARIADB_ROOT_PASSWORD` | Only when MariaDB has a password benchbar does not know. |
 | `site drop` | `MARIADB_ROOT_PASSWORD` | Only when MariaDB has a password benchbar does not know. |
 <!-- /generated:cli-commands -->
