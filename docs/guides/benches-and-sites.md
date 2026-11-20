@@ -192,10 +192,19 @@ Retention keeps the newest 10 snapshots (`SNAPSHOT_KEEP` in the bench's
 state file, or `--keep N`), but only reports it: `site snapshots` lists the
 ones beyond the limit, and a person removes them with
 `benchbar site snapshot drop SITE --prune` or one by name with
-`benchbar site snapshot drop SITE SNAPSHOT`. Both ask first, are refused
-for an agent, and never remove the `before rollback` snapshot of the last
-rollback with `--prune`. A snapshot holds the whole database and the files,
-so it is as big as a backup with files. See
+`benchbar site snapshot drop SITE SNAPSHOT`. Both ask first and are refused
+for an agent. `--prune` never removes the `before rollback` snapshot of the
+last rollback, and dropping it by name is refused too, because it is the way
+back from that rollback; a person who is sure adds `--force-undo-point`.
+
+A snapshot holds the whole database and the files, so it is as big as a
+backup with files, and `bench backup` writes that set before anything is
+moved (a rollback writes one more before it replaces anything). So both
+commands first check the free space of the volume against the site's files
+plus its largest database dump, and stop with a message when it does not fit;
+`site snapshots` shows what the snapshots hold and what is free. The snapshots
+live in the site's folder: `site drop` and `bench remove` move them into
+`archived/sites/` with it, and their plans say how many and how big. See
 [site snapshot](../reference/cli/site.md#site-snapshot).
 
 `site drop` removes a site for good: its database and database user are

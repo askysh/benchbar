@@ -1442,7 +1442,9 @@ Added in 0.9.0. A snapshot is a backup with files kept in
 
 `benchbar site snapshots NAME --json`: `{"schema_version", "cli_version",
 "bench", "site", "folder", "keep", "snapshots": [snapshot, ...],
-"over_limit": [id, ...], "last_rollback_snapshot"}`, newest first.
+"over_limit": [id, ...], "last_rollback_snapshot", "total_bytes",
+"free_bytes"}`, newest first. `total_bytes` is what the snapshots hold,
+`free_bytes` the free space of the volume (`null` when `df` does not say).
 `over_limit` is what retention would remove, never the undo point of the
 last rollback. Nothing is removed by either command.
 
@@ -1460,6 +1462,10 @@ The result of `--apply TOKEN --yes --json` is the restore result with
 snapshot of the state before the rollback and `undo` the command that goes
 back to it. `benchbar site snapshot drop` prints `{"dropped": [id, ...],
 "freed_bytes"}` (a plan with `would_drop`); it is for a person at a terminal.
+
+`site drop`'s plan and result and the `sites[]` of `bench remove`'s plan carry
+`snapshots: {"count", "size_bytes"}` when the site has snapshots: they move
+into `archived/sites/` with the site folder. The key is absent otherwise.
 
 ### `benchbar site restore --json`
 
