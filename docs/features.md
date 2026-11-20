@@ -54,6 +54,7 @@ macOS version. A row that says "macOS" does not work on Linux.
 | Open as a user | `open --as USER` signs in to a development site as another user, with no password. Off until you turn it on for a site. | 0.8.1 | macOS, Linux | [open](reference/cli/other.md#open), [site open-as](reference/cli/site.md#site-open-as) |
 | Rooms on your Wi-Fi (`share`, `lan-guard`) | Lets colleagues on the same Wi-Fi use a hardened copy of a site behind a room code. **Lab** `lan-rooms`. | 0.8.2 | macOS | [share and lan-guard](reference/cli/share.md), [How sharing keeps your bench safe](concepts/sharing-safety.md) |
 | Labs | `benchbar labs` lists, turns on and turns off experiments. | 0.8.2 | macOS, Linux | [labs](reference/cli/labs.md) |
+| Notices after an update | Every default an update changes shows a notice once, with its switch back. `benchbar notices` lists and dismisses them, and the Mac app shows a banner. | 0.9.0 | macOS, Linux | [notices](reference/cli/other.md#notices), [What's new](whats-new.md) |
 
 On Linux, only the v15-lts bench is supported, and the site is
 `linuxdev.localhost`. See [Install](install.md#linux).

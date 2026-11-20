@@ -237,12 +237,14 @@ nonisolated struct BenchStatus: Codable, Sendable, Equatable {
     var scheduler: Bool?
     /// An `app update` or `app add` that stopped part way (CLI 0.8); nil from an older CLI.
     var pendingOperations: [PendingOperation]?
+    /// Added in 0.9.0: the defaults an update changed, until dismissed. nil from an older CLI.
+    var notices: [BenchNotice]?
     // state.json only
     var updatedAt: Date?
     var source: String?
 
     enum CodingKeys: String, CodingKey {
-        case bench, name, site, label, state, pid, ports, log, source, sites, scheduler
+        case bench, name, site, label, state, pid, ports, log, source, sites, scheduler, notices
         case schemaVersion = "schema_version"
         case cliVersion = "cli_version"
         case stopReason = "stop_reason"
