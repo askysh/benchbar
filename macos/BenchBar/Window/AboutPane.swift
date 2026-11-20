@@ -174,7 +174,7 @@ struct AboutPane: View {
             }
             Section {
                 LinkRow(title: "Documentation", address: "benchbar.akashmishra.com", url: BenchBarLinks.docs)
-                LinkRow(title: "Release notes", detail: "What changed in each version", address: "CHANGELOG.md", url: BenchBarLinks.changelog)
+                LinkRow(title: "What's new", detail: "What changed in each version", address: "benchbar.akashmishra.com/whats-new", url: BenchBarLinks.whatsNew)
                 LinkRow(title: "Source code", address: "github.com/askysh/benchbar", url: BenchBarLinks.repository)
                 LabeledContent {
                     Button("Report a Bug…") { showBugReport = true }

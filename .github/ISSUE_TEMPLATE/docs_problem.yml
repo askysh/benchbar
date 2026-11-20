@@ -1,0 +1,31 @@
+name: Docs problem
+description: A page of the documentation is wrong, unclear, out of date or missing something.
+labels: [documentation, "area:docs"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for telling us. A command that does not work belongs in the bug form instead.
+        A security problem goes through a private report: see SECURITY.md.
+  - type: input
+    id: page
+    attributes:
+      label: Page URL
+      description: The address of the page, for example https://benchbar.akashmishra.com/troubleshooting/
+      placeholder: https://benchbar.akashmishra.com/...
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What is wrong
+      description: Quote the sentence or command if you can, and say what is wrong, unclear or missing.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What the page should say, or what you were trying to do when you read it.
+    validations:
+      required: true

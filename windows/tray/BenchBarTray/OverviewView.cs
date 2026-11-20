@@ -66,6 +66,10 @@ internal sealed class OverviewView : UserControl
     private readonly Dictionary<string, (string Message, BenchState State)> _failures = [];
     private readonly Dictionary<string, string> _portConflict = [];
     private readonly Dictionary<string, LockOutcome> _locks = [];
+    private readonly Dictionary<string, bool?> _autostart = [];
+    private readonly HashSet<string> _autostartAsked = [];
+    private readonly HashSet<string> _autostartBusy = [];
+    private CommandCatalogue? _catalogue;
     private PageServices? _services;
     private Action<BenchTab, bool> _navigate = (_, _) => { };
     private BenchStatus? _bench;
@@ -102,6 +106,12 @@ internal sealed class OverviewView : UserControl
     public MenuItem? DatabaseItem { get; private set; }
 
     public CheckBox? SchedulerToggle { get; private set; }
+
+    /// <summary>"Start again after Ubuntu restarts", present only when the CLI has <c>autostart</c> (for tests).</summary>
+    public CheckBox? AutostartToggle { get; private set; }
+
+    /// <summary>The items of the More menu by title (for tests).</summary>
+    public IReadOnlyDictionary<string, MenuItem> MoreMenuItems { get; private set; } = new Dictionary<string, MenuItem>();
 
     public Button? PortSettingsButton { get; private set; }
 
@@ -141,7 +151,8 @@ internal sealed class OverviewView : UserControl
         UptimeText = OverviewFacts.Uptime(bench, Now());
         var key = string.Join('|', bench.Path, bench.Name, bench.State, bench.RawState, bench.StopReason, bench.WebUrl, bench.Site, site,
             _busy.Contains(bench.Path), _failures.TryGetValue(bench.Path, out var g) ? g.Message : "", bench.Problem, MessageText,
-            bench.Scheduler, UptimeText, _portConflict.ContainsKey(bench.Path), _schedulerBusy.Contains(bench.Path), _version, _showDrift);
+            bench.Scheduler, UptimeText, _portConflict.ContainsKey(bench.Path), _schedulerBusy.Contains(bench.Path), _version, _showDrift,
+            _autostart.GetValueOrDefault(bench.Path), _autostartBusy.Contains(bench.Path), _catalogue is not null);
         _bench = bench;
         _site = site;
         if (key == _key) return;
@@ -158,6 +169,26 @@ internal sealed class OverviewView : UserControl
         if (_services is null || _bench is not { } bench) return Task.CompletedTask;
         if (_locks.ContainsKey(bench.Path) || _lockRunning.Contains(bench.Path)) return Task.CompletedTask;
         return CheckLockAsync(bench);
+    }
+
+    /// <summary>
+    /// Asks the CLI what it can do (once for the window) and, when it has <c>autostart</c>, what the setting is (once per bench). Nothing
+    /// new is offered until the CLI has said it knows the command.
+    /// </summary>
+    public async Task EnsureCliFactsAsync()
+    {
+        if (_services is null || _bench is not { } bench) return;
+        if (_catalogue is null && await _services.Commands.GetAsync().ConfigureAwait(true) is { } catalogue)
+        {
+            _catalogue = catalogue;
+            _version++;
+            Refresh();
+        }
+        if (_catalogue?.Has("autostart") != true || OverviewFacts.NeedsService(bench) || !_autostartAsked.Add(bench.Path)) return;
+        var read = await _services.Cli.RunStreamAsync(OverviewArgs.AutostartRead(bench.Path), null, CliTimeouts.Read, _ => { }).ConfigureAwait(true);
+        _autostart[bench.Path] = read.Ok ? AutostartText.Parse(read.TextLines) : null;
+        _version++;
+        Refresh();
     }
 
     private async Task CheckLockAsync(BenchStatus bench)
@@ -299,27 +330,88 @@ internal sealed class OverviewView : UserControl
     private UIElement MoreMenu(BenchStatus bench)
     {
         var menu = new ContextMenu();
-        ConsoleItem = new MenuItem { Header = "Open Console" };
-        DatabaseItem = new MenuItem { Header = "Open Database" };
-        ConsoleItem.ToolTip = "bench console, in Windows Terminal";
-        DatabaseItem.ToolTip = "bench mariadb, in Windows Terminal";
-        ConsoleItem.Click += (_, _) => OpenShell(_site, WslCommands.Console);
-        DatabaseItem.Click += (_, _) => OpenShell(_site, WslCommands.Database);
-        Ui.Name(ConsoleItem, "Open Console");
-        Ui.Name(DatabaseItem, "Open Database");
-        menu.Items.Add(ConsoleItem);
-        menu.Items.Add(DatabaseItem);
-        MoreItems = ["Open Console", "Open Database"];
+        var titles = new List<string>();
+        var items = new Dictionary<string, MenuItem>();
+        MenuItem Item(string title, string tip, bool enabled, Action click)
+        {
+            var item = new MenuItem { Header = title, ToolTip = tip, IsEnabled = enabled };
+            item.Click += (_, _) => click();
+            Ui.Name(item, title);
+            menu.Items.Add(item);
+            titles.Add(title);
+            items[title] = item;
+            return item;
+        }
+        ConsoleItem = Item("Open Console", "bench console, in Windows Terminal", true, () => OpenShell(_site, WslCommands.Console));
+        DatabaseItem = Item("Open Database", "bench mariadb, in Windows Terminal", true, () => OpenShell(_site, WslCommands.Database));
+        var needs = OverviewFacts.NeedsService(bench);
+        var stopped = bench.State == BenchState.Stopped && !needs;
+        if (_catalogue is { } cli)
+        {
+            if (cli.HasFlag("up", "--services-only"))
+            {
+                Item("Start Services Only", "up --services-only: the bench's Redis and nothing else, for a restore or a migrate", stopped, () => RunAsync(bench, ServicesCall(true)).Forget());
+                Item("Stop Services", "down: stops the Redis that Start Services Only started", stopped, () => RunAsync(bench, ServicesCall(false)).Forget());
+            }
+            if (cli.Has("service"))
+                Item(needs ? "Install Service..." : "Refresh Service...", "service: shows its plan first", true, () => ReviewServiceAsync(bench, null).Forget());
+            if (cli.Has("lock write")) Item("Write Lockfile...", "lock write: shows what it would write first", !needs, () => ReviewLockAsync("write").Forget());
+            if (cli.Has("lock apply"))
+                Item("Apply Lockfile...", "lock apply: shows the plan first", !needs && _locks.TryGetValue(bench.Path, out var known) && known.Check is not null, () => ReviewLockAsync("apply").Forget());
+            if (cli.Has("watch")) Item("Watch Assets in Terminal", "benchbar watch, in Windows Terminal. Close the window to stop it.", !needs, () => OpenShell(null, _ => OverviewArgs.InTerminal("watch", bench.Path)));
+            if (cli.Has("fg"))
+                Item("Run in Foreground in Terminal", "benchbar fg: stops the background bench and runs it in a terminal. Closing the window stops it.", !needs, () => OpenShell(null, _ => OverviewArgs.InTerminal("fg", bench.Path)));
+        }
+        MoreItems = titles;
+        MoreMenuItems = items;
         var more = Ui.Button("...", () =>
         {
             menu.PlacementTarget = MoreButton;
             menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
             menu.IsOpen = true;
         }, "More actions " + bench.Name, minWidth: 40);
-        more.ToolTip = "Console and database, in Windows Terminal";
-        more.IsEnabled = !OverviewFacts.NeedsService(bench);
+        more.ToolTip = "Console, database, services, lockfile and terminal commands";
+        more.IsEnabled = !needs || _catalogue?.Has("service") == true;
         MoreButton = more;
         return more;
+    }
+
+    /// <summary><c>up --services-only</c> or its <c>down</c>: the CLI has no plan for either; the person's click is the decision.</summary>
+    private Func<BenchStatus, Task<ActionResult>> ServicesCall(bool start) => async bench =>
+    {
+        if (_services is null) return ActionResult.Success;
+        var args = start ? OverviewArgs.ServicesOnly(bench.Path) : OverviewArgs.StopServices(bench.Path);
+        var result = await _services.Cli.RunStreamAsync(args, null, TimeSpan.FromMinutes(3), _ => { }).ConfigureAwait(true);
+        if (!result.Ok) return ActionResult.Failure(result.Problem ?? $"It did not work (exit {result.Exit}).");
+        MessageText = start
+            ? "The Redis of this bench is up for a restore or a migrate. Nothing else was started. Stop Services puts it away."
+            : "The bench's services are stopped.";
+        _services.RefreshNow();
+        return ActionResult.Success;
+    };
+
+    /// <summary>Shows the lockfile sheet (<c>lock write</c> or <c>lock apply</c>: the dry run's text, then the apply after a yes), then compares again.</summary>
+    internal async Task ReviewLockAsync(string verb)
+    {
+        if (_services is null || _bench is not { } bench) return;
+        await _services.ReviewPlan(LockArgs.Review(verb, bench.Path)).ConfigureAwait(true);
+        _locks.Remove(bench.Path);
+        await CheckLockAsync(bench).ConfigureAwait(true);
+    }
+
+    /// <summary><c>service</c> through its plan and token: install or refresh the background service, with or without the scheduler.</summary>
+    internal async Task<PlanOutcome> ReviewServiceAsync(BenchStatus bench, bool? scheduler)
+    {
+        if (_services is null) return PlanOutcome.None;
+        var title = scheduler is { } on ? (on ? "Run the scheduler" : "Stop the scheduler") : OverviewFacts.NeedsService(bench) ? "Install the service" : "Refresh the service";
+        var request = PlanReviewRequest.Tokened(title, OverviewArgs.ServiceBase(bench.Path, scheduler)) with
+        {
+            UsesSudoEnv = true,
+            Summary = "Writes the files that run the bench in the background (Procfile.lean, the runner and the service unit). It never runs migrate or update.",
+        };
+        var outcome = await _services.ReviewPlan(request).ConfigureAwait(true);
+        if (outcome.Applied) _services.RefreshNow();
+        return outcome;
     }
 
     internal void OpenShell(string? site, Func<string?, string[]> command)
@@ -427,7 +519,47 @@ internal sealed class OverviewView : UserControl
         panel.Children.Add(Ui.Text("Background jobs", 16, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 6)));
         panel.Children.Add(toggle);
         panel.Children.Add(Ui.Text(busy ? "Changing the scheduler..." : OverviewFacts.SchedulerNote(bench.Scheduler), 12, opacity: 0.7, margin: new Thickness(22, 2, 0, 0)));
+        AutostartToggle = null;
+        if (_catalogue?.Has("autostart") == true) AutostartRow(panel, bench, needsService);
         return Ui.CardOf(panel);
+    }
+
+    private void AutostartRow(StackPanel panel, BenchStatus bench, bool needsService)
+    {
+        _autostart.TryGetValue(bench.Path, out var known);
+        var busy = _autostartBusy.Contains(bench.Path);
+        var toggle = new CheckBox
+        {
+            Content = "Start again after Ubuntu restarts",
+            IsChecked = known == true,
+            IsEnabled = known is not null && !busy && !needsService,
+            Margin = new Thickness(0, 10, 0, 0),
+        };
+        Ui.Name(toggle, "Autostart " + bench.Name, "The bench comes back by itself when Ubuntu starts, if it was running");
+        toggle.Click += (_, _) =>
+        {
+            var want = toggle.IsChecked == true;
+            toggle.IsChecked = !want; // what the CLI says is what shows
+            SetAutostartAsync(bench, want).Forget();
+        };
+        AutostartToggle = toggle;
+        panel.Children.Add(toggle);
+        var note = busy ? "Changing it..." : needsService ? "Set up the service first." : known is null ? "Reading the setting..." : "If the bench was running when Ubuntu stopped, it starts again by itself.";
+        panel.Children.Add(Ui.Text(note, 12, opacity: 0.7, margin: new Thickness(22, 2, 0, 0)));
+    }
+
+    /// <summary><c>autostart on</c> or <c>off</c>. The CLI has no plan for it: it only sets a flag of this bench and rewrites its service files.</summary>
+    public async Task SetAutostartAsync(BenchStatus bench, bool on)
+    {
+        if (_services is null || !_autostartBusy.Add(bench.Path)) return;
+        _failures.Remove(bench.Path);
+        Refresh();
+        var result = await _services.Cli.RunStreamAsync(OverviewArgs.Autostart(on, bench.Path), null, CliTimeouts.Apply, _ => { }).ConfigureAwait(true);
+        _autostartBusy.Remove(bench.Path);
+        if (result.Ok) _autostart[bench.Path] = on;
+        else _failures[bench.Path] = (result.Problem ?? $"Autostart could not be turned {(on ? "on" : "off")} (exit {result.Exit}).", _bench?.State ?? bench.State);
+        _version++;
+        Refresh();
     }
 
     /// <summary>
@@ -437,6 +569,17 @@ internal sealed class OverviewView : UserControl
     public async Task SetSchedulerAsync(BenchStatus bench, bool on)
     {
         if (_services is null) return;
+        if (_catalogue?.HasFlag("service", "--apply") == true)
+        {
+            if (!_schedulerBusy.Add(bench.Path)) return;
+            var outcome = await ReviewServiceAsync(bench, on).ConfigureAwait(true);
+            _schedulerBusy.Remove(bench.Path);
+            if (outcome.Applied && (_bench ?? bench).State is BenchState.Running or BenchState.Starting)
+                await RunAsync(_bench ?? bench, Guarded(_actions.Restart, _ => PortGuardAction.Restart)).ConfigureAwait(true);
+            else
+                Refresh();
+            return;
+        }
         var title = on ? $"Run the scheduler for {bench.Name}?" : $"Stop the scheduler for {bench.Name}?";
         var message = $"BenchBar runs benchbar service {(on ? "--with-schedule" : "--without-schedule")}, then restarts the bench if it is running.";
         if (!Confirm(title, message)) return;

@@ -345,6 +345,31 @@ fl__ap_parse() {
   done
 }
 
+# fl__ap_resolve_local TARGET BRANCH NAME: sets FL_RES_* for a plain name that
+# no profile lists, from what the bench itself holds: its folder in apps/
+# (the repo is its remote), else the URL and branch its unfinished add kept.
+# An app added by URL is such a name, and so is one whose clone was never
+# reached, so finishing an add by name does not need a profile. 1 when the
+# name is a URL or a listed app, or the bench knows nothing of it (the
+# resolve then says "unknown app").
+fl__ap_resolve_local() {
+  local target="$1" branch="$2" name="$3" cur r repo=""
+  fl_is_url "$target" && return 1
+  [[ "$target" != "frappe" ]] || return 1
+  [[ -z "$(fl_lookup_app_policy "$target" "$FL_PROFILE" 2>/dev/null || true)" ]] || return 1
+  cur="$(fl_app_existing_dir "$target")"
+  if [[ -n "$cur" ]]; then
+    r="$(fl_app_remote "$cur")"
+    [[ -z "$r" ]] || repo="$(fl_app_git "$cur" remote get-url "$r" 2>/dev/null || true)"
+    FL_RES_NAME="${name:-$cur}"; FL_RES_REPO="$(fl_url_strip_userinfo "$repo")"; FL_RES_BRANCH="$branch"
+    return 0
+  fi
+  fl_pending_load "$target" && [[ "$PD_OP" == "app_add" && -n "$PD_URL" ]] || return 1
+  # a record is a local file, but a repo URL with a token in it is never used
+  fl_is_url "$PD_URL" && [[ "$(fl_url_strip_userinfo "$PD_URL")" == "$PD_URL" ]] || return 1
+  FL_RES_NAME="${name:-$target}"; FL_RES_REPO="$PD_URL"; FL_RES_BRANCH="${branch:-$PD_BRANCH}"
+}
+
 # fl__ap_target I: resolves target I (AP_T_*) and stores what it finds in
 # M_*. Its required apps are walked in a second pass, when every target is
 # known (one of them may be what another requires).
@@ -358,7 +383,7 @@ fl__ap_target() {
     [[ "$pin" =~ $pre ]] || fl_die "Invalid commit: '${pin}'." "Pass a commit hash of 7 to 40 hex characters: --commit 0123abc"
     pin="$(printf '%s' "$pin" | tr 'A-F' 'a-f')"
   fi
-  fl_app_resolve "$target" "$branch" "$name"
+  fl__ap_resolve_local "$target" "$branch" "$name" || fl_app_resolve "$target" "$branch" "$name"
   a_name="$FL_RES_NAME"; a_repo="$FL_RES_REPO"; a_branch="$FL_RES_BRANCH"
   if [[ -n "$branch" ]]; then a_bsrc="given"; elif [[ -n "$a_branch" ]]; then a_bsrc="policy"; fi
 
@@ -643,7 +668,8 @@ fl_app_add_plan() {
   # the bench state the plan was made against: a changed apps.txt, apps/
   # folder or site list makes the token stale
   state="$(printf 'apps.txt\n%s\napps\n%s\nsites\n%s\n' "$(fl_apps_txt)" "$(fl__apps_dirs)" "$(fl_sites_list)")"
-  AP_TOKEN="$(printf '%s\n%s\n' "$body" "$state" | shasum -a 256 | awk '{print $1}')"
+  AP_TOKEN_DATA="$(printf '%s\n%s\n' "$body" "$state")"
+  fl_plan_token_v AP_TOKEN "$AP_TOKEN_DATA"
   AP_JSON="$(printf '{"schema_version":%d,"cli_version":"%s",%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$body" "$AP_TOKEN")"
 }
 
@@ -752,7 +778,7 @@ fl_cmd_app_add() {
 # ---------------------------------------------------------------- the command
 
 fl_cmd_app_add_planned() {
-  local json="$OPT_JSON" code=0 target usage="Use: benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on SITES] [NAME|URL ...] [--site S | --all-sites] --dry-run --json, then --apply TOKEN --yes"
+  local json="$OPT_JSON" code=0 ap_code=0 target usage="Use: benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on SITES] [NAME|URL ...] [--site S | --all-sites] --dry-run --json, then --apply TOKEN --yes"
   # JSON on fd 3, every line of text on stderr
   if [[ "$json" == "1" ]]; then fl_json_doc_begin; elif [[ "${FL_JSONL:-0}" != "1" ]]; then exec 3>&1; fi
   fl__ap_parse "$usage" "$@"
@@ -775,8 +801,13 @@ fl_cmd_app_add_planned() {
   fi
 
   fl_header "benchbar app add --apply" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "${AP_INSTALL[*]:-no site}"
-  [[ "$AP_TOKEN_IN" == "$AP_TOKEN" ]] || fl_die "The app add plan changed since it was shown (apps.txt, apps/, the sites or the remote). Nothing was changed." \
-    "Review a fresh plan: benchbar app add ${target} ... --dry-run --json, then pass its token."
+  ap_code=0; fl_plan_token_check "$AP_TOKEN_DATA" "$AP_TOKEN_IN" || ap_code=$?
+  case "$ap_code" in
+    0) ;;
+    2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: benchbar app add ${target} ... --dry-run --json, then pass its token." ;;
+    *) fl_die "The app add plan changed since it was shown (apps.txt, apps/, the sites or the remote). Nothing was changed." \
+      "Review a fresh plan: benchbar app add ${target} ... --dry-run --json, then pass its token." ;;
+  esac
   fl__ap_print_plan
   [[ "$AP_CAN_APPLY" == "1" ]] || fl_die "The plan cannot be applied (see above). Nothing was changed."
   if [[ "${#AP_STEPS[@]}" == "0" ]]; then
@@ -813,7 +844,7 @@ fl__ap_record() {
       esac
       i=$((i + 1))
     done
-    fl_pending_write app_add "${M_NAME[$m]}" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$1" "$2" ${left[@]+"${left[@]}"} || code=1
+    FL_PENDING_URL="${M_REPO[$m]}" fl_pending_write app_add "${M_NAME[$m]}" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$1" "$2" ${left[@]+"${left[@]}"} || code=1
   done
   return "$code"
 }
@@ -995,9 +1026,9 @@ fl__ap_apply() {
         [[ "${M_INVOLVED[$m]}" == "1" ]] || continue
         nm="${M_NAME[$m]}"
         if [[ -n "$s" && -n "$e" ]]; then
-          fl_pending_write app_add "$nm" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$first_kind" "$first_reason" "requirements_python|${e}|Python requirements" "build|${s}|Build" "restart||Restart" || code=1
+          FL_PENDING_URL="${M_REPO[$m]}" fl_pending_write app_add "$nm" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$first_kind" "$first_reason" "requirements_python|${e}|Python requirements" "build|${s}|Build" "restart||Restart" || code=1
         elif [[ -n "$s" ]]; then
-          fl_pending_write app_add "$nm" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$first_kind" "$first_reason" "build|${s}|Build" "restart||Restart" || code=1
+          FL_PENDING_URL="${M_REPO[$m]}" fl_pending_write app_add "$nm" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$first_kind" "$first_reason" "build|${s}|Build" "restart||Restart" || code=1
         else
           fl_pending_remove "$nm"
         fi

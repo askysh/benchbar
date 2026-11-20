@@ -280,12 +280,26 @@ reset_order() {
   rm -f "$MOCK_STATE/pre_script" "$MOCK_STATE/gw_exit" "$MOCK_STATE/dns_die" "$MOCK_STATE/web_deaf" "$MOCK_STATE/wipe_fail" \
     "$MOCK_STATE/wipe_hang" "$MOCK_STATE/caf_die" "$MOCK_STATE/web_op_fail" "$MOCK_STATE/lsof_flip"
 }
-# wait_for SECONDS CMD...: until CMD succeeds, or fail
+# progress_mark: changes whenever the runner logged or a stand-in recorded a call
+progress_mark() { cat "$MOCK_STATE/order" "$TMP_DIR/runner.log" 2>/dev/null | wc -c | tr -d ' '; }
+# wait_for SECONDS CMD...: until CMD succeeds, or fail. SECONDS is how long the runner may sit without a
+# sign of life (a call in the order file or a line in its log), not how long the whole wait may take: a
+# loaded machine runs the same steps slower, and a fixed limit then failed a runner that was still working.
+# A runner that is stuck, or is not going to do it, shows no sign and fails after SECONDS as before;
+# one that keeps going is cut off after six times that.
 wait_for() {
-  local secs="$1" i=0
+  local secs="$1" i=0 idle=0 seen now
   shift
+  seen="$(progress_mark)"
   while ! "$@"; do
-    i=$((i + 1)); [[ "$i" -lt $((secs * 10)) ]] || fail "timed out after ${secs} s waiting for: $*"$'\n'"--- order ---"$'\n'"$(order)"$'\n'"--- runner log ---"$'\n'"$(cat "$TMP_DIR/runner.log" 2>/dev/null || true)"
+    i=$((i + 1)); idle=$((idle + 1))
+    if [[ $((i % 10)) -eq 0 ]]; then
+      now="$(progress_mark)"
+      if [[ "$now" != "$seen" ]]; then seen="$now"; idle=0; fi
+    fi
+    if [[ "$idle" -ge $((secs * 10)) || "$i" -ge $((secs * 60)) ]]; then
+      fail "timed out after ${secs} s without a sign of life (${i} ticks in all) waiting for: $*"$'\n'"--- order ---"$'\n'"$(order)"$'\n'"--- runner log ---"$'\n'"$(cat "$TMP_DIR/runner.log" 2>/dev/null || true)"
+    fi
     sleep 0.1
   done
 }
@@ -734,7 +748,7 @@ done
 cli start --for
 assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "--for"
 cli start --bogus
-assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "Unknown argument for share start: --bogus"
+assert_eq "64" "$CODE"; assert_contains "$OUT$ERR" "Unknown option for share start: --bogus"
 redis_down
 cli start
 assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "The bench is not running"

@@ -127,6 +127,11 @@ FL_AF_TXT=""       # sites/apps.txt as of the load
 FL_AF_PINS=""      # the focus pins as of the load
 FL_AF_NOW=""       # the time of the load
 FL_AF_JOBS="${FL_AF_JOBS:-8}"
+# the folder and the collectors of a load in progress: fl_facts_end (the exit
+# trap's) stops them and removes the folder when a signal ends the run during
+# the load, so a stop leaves nothing behind
+FL_AF_DIR=""
+FL_AF_PIDS=()
 FL_AF_LIGHT=0      # 1: only branch, commit and local changes (the table of app list)
 
 # fl__af_collect APP: the record of APP on stdout (see fl_app_facts_load)
@@ -220,11 +225,13 @@ fl__af_collect() {
 fl_app_facts_load() {
   local apps=() app dir i=0 pids=() p now_keep rec
   if [[ "$#" -gt 0 ]]; then apps=("$@"); else while IFS= read -r app; do [[ -n "$app" ]] && apps+=("$app"); done < <(fl_apps_all); fi
-  dir="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-facts.XXXXXX")"
+  # inside the run's own folder when there is one (its end removes this too)
+  dir="$(mktemp -d "${FL_FACTS_DIR:-${TMPDIR:-/tmp}}/benchbar-facts.XXXXXX")"
+  FL_AF_DIR="$dir"; FL_AF_PIDS=()
   FL_AF_NOW="$(fl_now)"
   for app in ${apps[@]+"${apps[@]}"}; do
     fl__af_collect "$app" >"${dir}/${i}" 2>/dev/null &
-    pids+=("$!")
+    pids+=("$!"); FL_AF_PIDS+=("$!")
     if [[ "${#pids[@]}" -ge "$FL_AF_JOBS" ]]; then wait "${pids[0]}" 2>/dev/null || true; pids=("${pids[@]:1}"); fi
     i=$((i + 1))
   done
@@ -243,6 +250,7 @@ fl_app_facts_load() {
     i=$((i + 1))
   done
   rm -rf "$dir"
+  FL_AF_DIR=""; FL_AF_PIDS=()
   FL_AF_TXT="$(fl_apps_txt || true)"
   FL_AF_PINS="$(fl_bstate_get APP_FOCUS)"
   FL_AF_ON=1; FL_AF_BEHIND=1
@@ -1004,6 +1012,7 @@ fl_cmd_app_install() {
   if fl_app_install_on_sites "$app" "$OPT_SITE"; then fl_step_end "done"; else fl_step_end failed; fl_bench_redis_down; fl_steps_summary; return 1; fi
   fl_bench_redis_down
   fl_app_verify "$app" "" "$OPT_SITE" || { fl_steps_summary; return 1; }
+  fl_changed app "$app" "installed on ${OPT_SITE}"
   fl_steps_summary
 }
 
@@ -1022,7 +1031,10 @@ fl_cmd_app_install() {
 #
 #   {"schema_version":1,"op":"app_update","app":"acme","branch":"main","from":SHA,"to":SHA,
 #    "steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},...],
-#    "failed_step":"migrate","reason":"...","started_at":"...Z","updated_at":"...Z"}
+#    "failed_step":"migrate","reason":"...","url":null,"started_at":"...Z","updated_at":"...Z"}
+#
+# url is the repo of an app add (null for an update, and for a record an
+# older version wrote): the finish by name clones from it.
 #
 # The values are benchbar's own (kinds, site and app names, a [FAIL] line
 # with quotes and backslashes turned into ' and /), so the reader below needs
@@ -1087,7 +1099,9 @@ fl_pending_reason_v() {
 
 # fl_pending_write OP APP BRANCH FROM TO FAILED REASON STEP...: STEP is
 # kind|target|name (more fields are ignored). started_at stays what an
-# earlier record of this app says.
+# earlier record of this app says. FL_PENDING_URL, when set for the call,
+# is the repo URL of an app add: an app that was never cloned is finished by
+# name from it.
 fl_pending_write() {
   local op="$1" app="$2" branch="$3" from="$4" to="$5" failed="$6" reason="$7" file dir tmp now started="" sep="" st kind target name line
   shift 7
@@ -1105,7 +1119,7 @@ fl_pending_write() {
     IFS='|' read -r kind target name _ <<<"$st"
     line="${line}${sep}{\"kind\":\"${kind}\",\"target\":\"$(fl_json_escape "$target")\",\"name\":\"$(fl_json_escape "$name")\"}"; sep=","
   done
-  line="${line}],\"failed_step\":$(fl_json_str "$failed"),\"reason\":$(fl_json_str "$(fl_pending_clean "$reason")"),\"started_at\":\"${started:-$now}\",\"updated_at\":\"${now}\"}"
+  line="${line}],\"failed_step\":$(fl_json_str "$failed"),\"reason\":$(fl_json_str "$(fl_pending_clean "$reason")"),\"url\":$(fl_json_str "${FL_PENDING_URL:-}"),\"started_at\":\"${started:-$now}\",\"updated_at\":\"${now}\"}"
   tmp="${file}.tmp.$$"
   if ! { mkdir -p "$dir" && printf '%s\n' "$line" >"$tmp" && mv "$tmp" "$file"; }; then
     rm -f "$tmp"
@@ -1124,20 +1138,20 @@ fl_pending_remove() {
 }
 
 # fl_pending_read FILE: sets PD_OP, PD_APP, PD_BRANCH, PD_FROM, PD_TO,
-# PD_FAILED, PD_REASON, PD_STARTED, PD_UPDATED, PD_LINE and PD_STEPS
+# PD_FAILED, PD_REASON, PD_URL, PD_STARTED, PD_UPDATED, PD_LINE and PD_STEPS
 # (kind|target|name each); 1 when FILE is not a record of this version.
 # bash builtins only: status reads it on every poll.
 PD_STEPS=()
 fl_pending_read() {
   local line="" rest re
-  PD_OP=""; PD_APP=""; PD_BRANCH=""; PD_FROM=""; PD_TO=""; PD_FAILED=""; PD_REASON=""; PD_STARTED=""; PD_UPDATED=""; PD_LINE=""; PD_STEPS=()
+  PD_OP=""; PD_APP=""; PD_BRANCH=""; PD_FROM=""; PD_TO=""; PD_FAILED=""; PD_REASON=""; PD_URL=""; PD_STARTED=""; PD_UPDATED=""; PD_LINE=""; PD_STEPS=()
   [[ -f "$1" && -r "$1" ]] || return 1
   IFS= read -r line <"$1" || [[ -n "$line" ]] || return 1
   [[ "$line" == '{"schema_version":1,'*'}' ]] || return 1
   PD_LINE="$line"
   fl__pd_get PD_OP op "$line"; fl__pd_get PD_APP app "$line"; fl__pd_get PD_BRANCH branch "$line"
   fl__pd_get PD_FROM from "$line"; fl__pd_get PD_TO to "$line"; fl__pd_get PD_FAILED failed_step "$line"
-  fl__pd_get PD_REASON reason "$line"; fl__pd_get PD_STARTED started_at "$line"; fl__pd_get PD_UPDATED updated_at "$line"
+  fl__pd_get PD_REASON reason "$line"; fl__pd_get PD_URL url "$line"; fl__pd_get PD_STARTED started_at "$line"; fl__pd_get PD_UPDATED updated_at "$line"
   [[ -n "$PD_OP" && -n "$PD_APP" ]] || return 1
   rest="$line"
   re='\{"kind":"([^"]*)","target":"([^"]*)","name":"([^"]*)"\}(.*)'
@@ -1168,14 +1182,14 @@ fl_pending_corrupt() {
 # fl_pending_json_v VAR: the records of this bench as a JSON array for
 # status --json ("[]" when there are none)
 fl_pending_json_v() {
-  local __out="[" __sep="" dir f st kind target name ssep j_from j_to j_failed j_reason j_updated j_branch j_app j_target j_name
+  local __out="[" __sep="" dir f st kind target name ssep j_from j_to j_failed j_reason j_updated j_branch j_app j_target j_name j_url
   fl_pending_dir_v dir
   if [[ -d "$dir" ]]; then
     for f in "$dir"/*.json; do
       [[ -f "$f" ]] || continue
       fl_pending_read "$f" || continue
       fl_json_str_v j_branch "$PD_BRANCH"; fl_json_str_v j_from "$PD_FROM"; fl_json_str_v j_to "$PD_TO"
-      fl_json_str_v j_failed "$PD_FAILED"; fl_json_str_v j_reason "$PD_REASON"; fl_json_str_v j_updated "$PD_UPDATED"
+      fl_json_str_v j_failed "$PD_FAILED"; fl_json_str_v j_reason "$PD_REASON"; fl_json_str_v j_updated "$PD_UPDATED"; fl_json_str_v j_url "$PD_URL"
       fl_json_escape_v j_app "$PD_APP"
       __out="${__out}${__sep}{\"op\":\"${PD_OP}\",\"app\":\"${j_app}\",\"branch\":${j_branch},\"from\":${j_from},\"to\":${j_to},\"steps\":["
       ssep=""
@@ -1184,7 +1198,7 @@ fl_pending_json_v() {
         fl_json_escape_v j_target "$target"; fl_json_escape_v j_name "$name"
         __out="${__out}${ssep}{\"kind\":\"${kind}\",\"target\":\"${j_target}\",\"name\":\"${j_name}\"}"; ssep=","
       done
-      __out="${__out}],\"failed_step\":${j_failed},\"reason\":${j_reason},\"updated_at\":${j_updated}}"; __sep=","
+      __out="${__out}],\"failed_step\":${j_failed},\"reason\":${j_reason},\"url\":${j_url},\"updated_at\":${j_updated}}"; __sep=","
     done
   fi
   printf -v "$1" '%s' "${__out}]"

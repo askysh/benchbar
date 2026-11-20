@@ -39,6 +39,8 @@ case "$1" in
     app="${*: -1}"; app="${app##*/}"; app="${app%.git}"
     # MOCK_BENCH_GET_APP_EARLY_EXIT: fails before anything is cloned (the network went away)
     [[ -n "${MOCK_BENCH_GET_APP_EARLY_EXIT:-}" ]] && exit "$MOCK_BENCH_GET_APP_EARLY_EXIT"
+    # MOCK_BENCH_GET_APP_FAIL_FOR=NAME: get-app of that one app fails before it clones anything; the others run
+    [[ -n "${MOCK_BENCH_GET_APP_FAIL_FOR:-}" && "$app" == "$MOCK_BENCH_GET_APP_FAIL_FOR" ]] && exit 1
     if [[ "${MOCK_GIT_REAL:-0}" == "1" ]]; then
       # like bench: clone with --origin upstream (shallow when asked), apps.txt
       shift; branch=""; repo=""
@@ -143,7 +145,18 @@ PY
         [[ -n "${MOCK_BENCH_INSTALL_APP_EXIT:-}" ]] && exit "$MOCK_BENCH_INSTALL_APP_EXIT"
         mkdir -p "sites/$2"; printf '%s 1.0.0\n' "$4" >>"sites/$2/installed_apps"; exit 0 ;;
       migrate) [[ -n "${MOCK_BENCH_MIGRATE_SLEEP:-}" ]] && sleep "$MOCK_BENCH_MIGRATE_SLEEP"; exit "${MOCK_BENCH_MIGRATE_EXIT:-0}" ;;
-      doctor|clear-cache|clear-website-cache) exit 0 ;;
+      clear-cache|clear-website-cache) exit 0 ;;
+      doctor)
+        # the environment a benchbar run hands over: the folder and the exports of the runner
+        printf 'doctor cwd=%s ldflags=%s\n' "$PWD" "${LDFLAGS:-}"; exit "${MOCK_BENCH_DOCTOR_EXIT:-0}" ;;
+      run-tests)
+        # MOCK_BENCH_RUN_TESTS_SLEEP=N: runs for N seconds (a grandchild too); MOCK_BENCH_RUN_TESTS_EXIT=N: fails with N;
+        # MOCK_BENCH_RUN_TESTS_LINES=N: prints N lines first (the output is cut to the last 60)
+        for n in $(seq 1 "${MOCK_BENCH_RUN_TESTS_LINES:-0}"); do printf 'line %s\n' "$n"; done
+        printf 'Ran 3 tests args=%s\n' "$*"
+        printf '\033[31mred\033[0m fetching https://user:hunter2@example.test/x.git\n'
+        [[ -n "${MOCK_BENCH_RUN_TESTS_SLEEP:-}" ]] && { sleep "$MOCK_BENCH_RUN_TESTS_SLEEP" & wait; }
+        exit "${MOCK_BENCH_RUN_TESTS_EXIT:-0}" ;;
       disable-scheduler) exit 0 ;;
       set-config)
         # bench --site S set-config [-p] KEY VALUE: the site's own config
@@ -165,6 +178,8 @@ PY
         mv "sites/$2/installed_apps.tmp" "sites/$2/installed_apps"; exit 0 ;;
       backup)
         # frappe's names; one second later each call ($MOCK_STATE/backup_n)
+        # MOCK_BENCH_BACKUP_SLEEP=N: a backup that takes N seconds (a detached run that is seen running)
+        [[ -n "${MOCK_BENCH_BACKUP_SLEEP:-}" ]] && sleep "$MOCK_BENCH_BACKUP_SLEEP"
         [[ -n "${MOCK_BENCH_BACKUP_EXIT:-}" ]] && exit "$MOCK_BENCH_BACKUP_EXIT"
         n="$(cat "${MOCK_STATE:?}/backup_n" 2>/dev/null || printf 0)"; n=$((n + 1)); printf '%s' "$n" >"${MOCK_STATE}/backup_n"
         base="sites/$2/private/backups/${MOCK_BENCH_BACKUP_STAMP:-20260929_1000$(printf '%02d' "$n")}-${2//./_}"

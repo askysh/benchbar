@@ -24,6 +24,13 @@ nonisolated enum Fixture {
         return String(decoding: try Data(contentsOf: url), as: UTF8.self)
     }
 
+    /// A text fixture (what a command with no JSON prints): BenchBarTests/Fixtures/NAME.EXT.
+    static func text(_ name: String, ext: String) throws -> String {
+        let bundle = Bundle(for: Token.self)
+        guard let url = bundle.url(forResource: name, withExtension: ext) else { throw FixtureError.missing(name) }
+        return String(decoding: try Data(contentsOf: url), as: UTF8.self)
+    }
+
     enum FixtureError: Error { case missing(String) }
 }
 

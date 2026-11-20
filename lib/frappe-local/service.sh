@@ -241,15 +241,99 @@ fl_require_service() {
 
 fl_site_url() { printf 'http://%s:%s' "$FL_SITE" "$FL_WEB_PORT"; }
 
+# fl_wait_for_ping [SECS]: up and restart wait for the web part of the
+# readiness contract (benchstate.sh): the site's ping answers 2xx or 3xx
 fl_wait_for_ping() {
   local secs="${1:-$FL_UP_WAIT_SECS}" i=0 code
   while [[ "$i" -lt "$secs" ]]; do
     code="$(fl_site_ping_code)"
-    [[ "$code" == "200" ]] && return 0
+    ! fl_ready_web_ok "$code" || return 0
     sleep 1
     i=$((i + 1))
   done
   return 1
+}
+
+# fl_cmd_wait [--ready] [--for PART] [--timeout SECS]: block until the bench
+# is ready (every part of the contract in benchstate.sh), or until one part
+# is. Exit 0 when it is, 1 on a timeout or a bench that cannot get there on
+# its own (paused, not managed), with what is not ready and the fix. It only
+# reads: no lock, nothing is started.
+fl_cmd_wait() {
+  local arg prev="" timeout=60 part="" json="${OPT_JSON:-0}" start p elapsed=0 ok=0 waited_on="" code=0 doc j_ready j_w="" j_for
+  for arg in "$@"; do
+    if [[ "$prev" == "--timeout" ]]; then timeout="$arg"; prev=""; continue; fi
+    if [[ "$prev" == "--for" ]]; then part="$arg"; prev=""; continue; fi
+    case "$arg" in
+      --ready) part="" ;;
+      --timeout|--for) prev="$arg" ;;
+      --timeout=*) timeout="${arg#*=}" ;;
+      --for=*) part="${arg#*=}" ;;
+      *) fl_die "Unknown argument for wait: $arg" "Use: ${FL_SELF} wait [--ready] [--for PART] [--timeout SECS] [--json]" ;;
+    esac
+  done
+  [[ -z "$prev" ]] || fl_die "wait: $prev needs a value." "Use: ${FL_SELF} wait [--ready] [--for PART] [--timeout SECS] [--json]"
+  [[ "$timeout" =~ ^[0-9]+$ && "$timeout" -le 3600 ]] || fl_die "wait: --timeout takes whole seconds, 0 to 3600 (got: ${timeout})." "Example: ${FL_SELF} wait --timeout 60"
+  case "$part" in
+    ""|agent|processes|web|socketio|redis|workers|stale) ;;
+    *) fl_die "wait: unknown part ${part}." "The parts are agent, processes, web, socketio, redis, workers and stale; without --for it waits for all of them." ;;
+  esac
+  [[ "$json" != "1" ]] || fl_json_doc_begin
+  fl_require_bench
+  if [[ "$part" == "stale" ]]; then
+    # stale is null (not known) for a bench that does not run or has no started_at, and
+    # a null part counts as holding: waiting for it would end at once and say nothing
+    FL_RD_REDIS_Q=""
+    fl_status_compute
+    fl_ready_compute 1
+    [[ "$RD_STALE" != "null" ]] || fl_die "wait: --for stale cannot tell: ${FL_BENCH_NAME} is ${ST_STATE} and its start time is $([[ "$ST_PROCS" == "1" ]] && printf 'not known (no logs/.benchbar/state.json with started_at)' || printf 'not known while it does not run')." "Start it first (${FL_SELF} up), or wait for the whole bench: ${FL_SELF} wait"
+  fi
+  fl_daily_steps wait:"Wait for the bench"
+  fl_step_begin 0
+  [[ "$json" == "1" ]] || fl_spinner_start "waiting for ${part:-the bench} (${FL_BENCH_NAME})" "$(fl_bench_log_path)"
+  start="$SECONDS"
+  while :; do
+    FL_RD_REDIS_Q=""
+    fl_status_compute
+    fl_ready_compute 1
+    if [[ -n "$part" ]]; then fl_ready_part_ok "$part" && ok=1; else [[ "$RD_READY" == true ]] && ok=1; fi
+    [[ "$ok" == "0" ]] || break
+    # a bench that cannot start by itself (auto-restart paused, not managed)
+    # will not become ready while we wait
+    [[ "$ST_STATE" != "paused" && "$ST_STATE" != "not_adopted" ]] || break
+    elapsed=$((SECONDS - start))
+    [[ "$elapsed" -lt "$timeout" ]] || break
+    if [[ -n "$part" ]]; then waited_on="$part"; else waited_on="${RD_WAITING// /, }"; fi
+    fl_jsonl_progress "waiting on ${waited_on}" "$elapsed"
+    sleep 1
+  done
+  elapsed=$((SECONDS - start))
+  [[ "$json" == "1" ]] || fl_spinner_stop
+  if [[ "$ok" == "1" ]]; then
+    fl_step_end "done"
+    fl_ok "${FL_BENCH_NAME} is ready: $(fl_site_url)"
+  else
+    code=1
+    if [[ -n "$part" ]]; then waited_on="$part"; else waited_on="${RD_WAITING// /, }"; fi
+    fl_step_end warning "not ready"
+    if [[ "$ST_STATE" == "paused" || "$ST_STATE" == "not_adopted" ]]; then
+      fl_warn "${FL_BENCH_NAME} is ${ST_STATE}${ST_REASON:+ (${ST_REASON})} and will not become ready by itself; not ready: ${waited_on}"
+    else
+      fl_warn "${FL_BENCH_NAME} is not ready after ${elapsed}s; waiting on: ${waited_on}${RD_STALE_FILE:+ (${RD_STALE_FILE} changed after the bench started)}"
+    fi
+    [[ -z "$RD_FIX" ]] || fl_fix "${RD_FIX#"${FL_SELF} "}"
+  fi
+  if [[ "$json" == "1" ]]; then
+    fl_ready_json_v j_ready
+    for p in ${waited_on//,/}; do j_w="${j_w}${j_w:+,}\"${p}\""; done
+    [[ "$ok" == "1" ]] && j_w=""
+    fl_json_str_v j_for "${part:-ready}"
+    doc="$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"name":%s,"site":%s,"for":%s,"satisfied":%s,"timed_out":%s,"waited_s":%d,"timeout_s":%d,"waiting_on":[%s],"ready":%s}' \
+      "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_BENCH_NAME")" "$(fl_json_str "$FL_SITE")" "$j_for" \
+      "$([[ "$ok" == "1" ]] && printf true || printf false)" "$([[ "$ok" == "0" && "$elapsed" -ge "$timeout" ]] && printf true || printf false)" "$elapsed" "$timeout" "$j_w" "$j_ready")"
+    fl_doc_emit "$code" "$doc"
+  fi
+  return "$code"
 }
 
 # fl_stop_flag_reason_v VAR: the stop flag's word (manual, crash, broken, port_conflict),
@@ -512,10 +596,21 @@ fl_cmd_restart() {
   fi
 }
 
+# the agent's cell of status: "loaded: no" is said only when systemd answered
+# (a user manager that cannot be asked, FL_UMGR_DOWN from fl_agent_read, is unknown)
+fl_status_agent_word() {
+  if [[ "$ST_LOADED" != "1" ]] && fl_user_manager_down; then
+    printf '(unknown (no user bus))'
+    return 0
+  fi
+  printf '(loaded: %s%s)' "$([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)" "${ST_AGENT_STATE:+, ${ST_AGENT_STATE}}"
+}
+
 fl_cmd_status() {
   local json="${1:-0}"
   fl_require_bench
   fl_status_compute
+  if [[ "$json" != "1" ]]; then fl_ready_compute "${OPT_DEEP:-0}"; fi
   if [[ "$json" == "1" ]]; then
     # --ping asks every site; without it sites[].ping_code is null
     if [[ "${OPT_PING:-0}" == "1" ]]; then fl_status_print_json ask; else fl_status_print_json; fi
@@ -525,12 +620,17 @@ fl_cmd_status() {
     "bench|${FL_BENCH_DIR}" \
     "site|$(fl_site_url)" \
     "state|${ST_STATE}${ST_PID:+, pid ${ST_PID}}${ST_REASON:+ (${ST_REASON})}${ST_EXIT:+, last exit code ${ST_EXIT}}" \
-    "agent|$(fl_agent_label) (loaded: $([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)${ST_AGENT_STATE:+, ${ST_AGENT_STATE}})" \
+    "agent|$(fl_agent_label) $(fl_status_agent_word)" \
     "stop flag|${ST_FLAG:-none (auto-restart armed)}" \
     "processes|$([[ "$ST_PROCS" == "1" ]] && printf yes || printf no)" \
     "web ping|${ST_PING}" \
+    "ready|$([[ "$RD_READY" == true ]] && printf yes || printf 'no, waiting on %s' "${RD_WAITING// /, }")" \
     "ports|web ${FL_WEB_PORT}, socketio ${FL_SOCKETIO_PORT}, redis ${FL_REDIS_QUEUE_PORT}/${FL_REDIS_CACHE_PORT}" \
     "log|$(fl_bench_log_path)"
+  if [[ "$ST_LOADED" != "1" ]] && fl_user_manager_down; then
+    fl_warn "$(fl_user_manager_msg)"
+    fl_fix "$(fl_user_manager_fix)"
+  fi
   if [[ "$ST_PING" == "200" ]]; then
     fl_ok "site responds"
   elif [[ "$ST_PROCS" == "1" ]]; then
@@ -756,18 +856,21 @@ fl_cmd_watch() {
 }
 
 fl_cmd_autostart() {
-  local mode="${1:-}"
+  local mode="${1:-}" was
   case "$mode" in
     on|off) fl_require_plain_bench ;;
     "") fl_require_service; if fl_autostart_enabled; then fl_ok "autostart is on (bench returns after login if it was running)"; else fl_ok "autostart is off"; fi; return 0 ;;
     *) fl_die "Usage: benchbar autostart on|off" ;;
   esac
   fl_require_service
+  was=off
+  fl_autostart_enabled && was=on
   fl_bench_state_migrate "$FL_BENCH_DIR"
   fl_bstate_set AUTOSTART "$mode"
   fl_render_all
   act_write_plist || return 1
   [[ "$mode" == "on" ]] && fl_linger_ensure
+  [[ "$was" == "$mode" ]] || fl_changed service "$FL_BENCH_NAME" "autostart ${mode}"
   fl_ok "autostart ${mode}"
 }
 
@@ -778,7 +881,7 @@ fl_cmd_autostart() {
 # lands in Procfile.lean (and the two files it starts) the way the scheduler
 # choice does. A running bench takes it at its next restart.
 fl_cmd_listen() {
-  local mode="${1:-}" running=0
+  local mode="${1:-}" running=0 was=local
   case "$mode" in
     local|all) fl_require_plain_bench ;;
     "")
@@ -792,6 +895,7 @@ fl_cmd_listen() {
     *) fl_die "Usage: benchbar listen [local|all]" ;;
   esac
   fl_require_service
+  fl_listen_is_all && was=all
   if [[ "$mode" == "all" ]] && ! fl_listen_is_all; then
     # opening the dev server to the network is a person's decision, like the LAN guard and Open as
     fl_noninteractive && fl_die "benchbar listen all puts the dev web server and its debugger on the network, a person's decision, so nothing run without a terminal can do it." "Run it in a terminal: benchbar listen all"
@@ -808,6 +912,7 @@ fl_cmd_listen() {
   fl_bench_is_running && running=1
   fl_render_all
   act_write_procfile || return 1
+  [[ "$was" == "$mode" ]] || fl_changed service "$FL_BENCH_NAME" "listen ${mode}"
   fl_ok "listen ${mode}"
   if [[ "$running" == "1" && "${FL_DRY_RUN:-0}" != "1" ]]; then
     fl_warn "the running bench still listens as before; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"
@@ -820,7 +925,7 @@ fl_cmd_listen() {
 # agent whose WorkingDirectory is that path. Nothing else is touched.
 # "confirmed": --all asked once already.
 fl_uninstall_orphan_agents() {
-  local list plist label dest code=0
+  local list plist label code=0
   list="$(fl_agents_for_dir "$FL_BENCH_DIR")"
   [[ -n "$list" ]] || fl_die "No bench at ${FL_BENCH_DIR}, and no com.benchbar agent points at it." \
     "Check the path, or list the agents: $(fl_agent_list_hint)"
@@ -829,36 +934,41 @@ fl_uninstall_orphan_agents() {
   [[ "${1:-}" == confirmed ]] || fl_confirm "Remove the agent for ${FL_BENCH_DIR}?" || { fl_warn "Cancelled."; return 1; }
   while IFS='|' read -r plist label; do
     [[ -n "$plist" ]] || continue
-    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-      fl_info "dry-run: would boot out ${label} and move ${plist} to ${FL_LEGACY_DIR}/"
-      continue
-    fi
-    if fl_agent_listed "$(fl_launchd_domain)/${label}"; then
-      # still loaded: keep the plist, or the job would go on restarting
-      # with nothing left on disk to remove it by
-      if ! fl_agent_unload "$(fl_launchd_domain)/${label}" "$plist"; then
-        fl_fail "${FL_AGENT_MANAGER} still runs ${label}; its plist stays at ${plist}"
-        fl_fix "$(fl_agent_bootout_hint "$(fl_launchd_domain)/${label}"), then run this command again"
-        code=1
-        continue
-      fi
-      fl_ok "booted out ${label}"
-    fi
-    dest="${FL_LEGACY_DIR}/${label}-$(fl_backup_stamp)"
-    if ! mkdir -p "$dest" 2>/dev/null || ! mv "$plist" "$dest/" 2>/dev/null; then
-      fl_fail "could not move ${plist} to ${dest}/"; code=1; continue
-    fi
-    fl_ok "moved ${plist} to ${dest}/"
-    fl_agent_files_changed
+    fl_agent_retire "$plist" "$label" || code=1
   done <<<"$list"
   [[ "$code" == "0" ]] || return 1
   fl_ok "agent removed; nothing else in ${FL_BENCH_DIR} was touched"
 }
 
+# fl_agent_retire PLIST LABEL: boots the agent out and moves its plist aside
+# (never deletes it). A job the manager still holds keeps its plist, or it
+# would go on restarting with nothing left on disk to remove it by.
+fl_agent_retire() {
+  local plist="$1" label="$2" dest
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: would boot out ${label} and move ${plist} to ${FL_LEGACY_DIR}/"
+    return 0
+  fi
+  if fl_agent_listed "$(fl_launchd_domain)/${label}"; then
+    if ! fl_agent_unload "$(fl_launchd_domain)/${label}" "$plist"; then
+      fl_fail "${FL_AGENT_MANAGER} still runs ${label}; its plist stays at ${plist}"
+      fl_fix "$(fl_agent_bootout_hint "$(fl_launchd_domain)/${label}"), then run this command again"
+      return 1
+    fi
+    fl_ok "booted out ${label}"
+  fi
+  dest="${FL_LEGACY_DIR}/${label}-$(fl_backup_stamp)"
+  if ! mkdir -p "$dest" 2>/dev/null || ! mv "$plist" "$dest/" 2>/dev/null; then
+    fl_fail "could not move ${plist} to ${dest}/"; return 1
+  fi
+  fl_ok "moved ${plist} to ${dest}/"
+  fl_agent_files_changed
+}
+
 # fl_cmd_uninstall_service [confirmed]: "confirmed" when --all asked once
 # for every bench already
 fl_cmd_uninstall_service() {
-  local plist rc dest
+  local plist rc dest had=0 keep f
   if ! fl_is_bench_dir "$FL_BENCH_DIR"; then
     fl_uninstall_orphan_agents "${1:-}"
     return $?
@@ -869,7 +979,16 @@ fl_cmd_uninstall_service() {
   fl_info "This removes the launchd agent, runner, Procfile.lean and the shell helper block."
   fl_info "The bench, its sites, apps and databases are not touched."
   [[ "${1:-}" == confirmed ]] || fl_confirm "Uninstall the background service for ${FL_BENCH_NAME}?" || { fl_warn "Cancelled."; return 1; }
+  # a second run has nothing to stop or remove: changed[] stays empty then
+  fl_bench_is_running && had=1
+  fl_agent_loaded && had=1
+  for f in "$plist" "$(fl_runner_path)" "$(fl_runner_path_legacy)" "$(fl_procfile_path)" "$(fl_listen_py_path)" "$(fl_listen_js_path)"; do
+    [[ ! -f "$f" ]] || had=1
+  done
+  case "$(fl_rc_block_state "$rc")" in present|legacy) had=1 ;; esac
+  keep="$FL_DONE_CHANGED"
   fl_cmd_down || true
+  [[ "$had" == "1" ]] || FL_DONE_CHANGED="$keep"
   # a job launchd keeps must keep its plist too, or it would go on
   # restarting with nothing left on disk to remove it by (the orphan path
   # does the same)
@@ -898,6 +1017,7 @@ fl_cmd_uninstall_service() {
   [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_procfile_path)" ]] || { rm -f "$(fl_procfile_path)"; fl_ok "removed Procfile.lean (backup: ${FL_LAST_BACKUP})"; }
   fl_uninstall_listen_files || return 1
   fl_uninstall_helper_block "$rc"
+  [[ "$had" == "0" ]] || fl_changed service "$FL_BENCH_NAME" "uninstalled"
   fl_ok "service uninstalled; start the bench by hand with: cd ${FL_BENCH_DIR} && bench start"
 }
 
@@ -998,8 +1118,8 @@ fl_cmd_uninstall_service_all() {
   fl_confirm "Uninstall the background service of these ${#dirs[@]} bench(es)?" || { fl_warn "Cancelled."; return 1; }
   # a subshell per bench: its own context, and a bench that fails (a job
   # launchd keeps) stops only itself. Not under if or ||, which would turn
-  # errexit off inside it. The ERR trap does not run in a function (no
-  # errtrace), so only this function's own return reaches it.
+  # errexit off inside it. The failure is collected under set +e, where
+  # fl_on_error stays silent (errtrace hands it the subshell's exit status too).
   for dir in "${dirs[@]}"; do
     fl_section "$dir"
     set +e

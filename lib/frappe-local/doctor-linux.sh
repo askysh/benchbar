@@ -24,7 +24,7 @@ if fl_is_wsl; then FL_CHECK_ORDER="${FL_CHECK_ORDER/ mariadb_bind/ wsl_time_sync
 # repair: no python_leaves, legacy_migrate, hosts_entry or redis_stop. The sudo
 # steps come first: the credential is dropped right after them
 # (fl_sudo_phase_done), before pip, npm and bench run
-FL_ACTION_ORDER="mariadb_bind mariadb_utf8 wkhtmltopdf_install node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache port_block write_procfile write_runner write_plist write_helpers write_cli_link kept_backups rotate_logs"
+FL_ACTION_ORDER="mariadb_bind mariadb_utf8 wkhtmltopdf_install node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache dead_agents port_block write_procfile write_runner write_plist write_helpers write_cli_link kept_backups rotate_logs"
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install"
 
 # the apt packages a bench needs: the first two groups fail, the build ones warn
@@ -544,6 +544,14 @@ fl_prereq_platform_first() {
     fl_prereq_add linger ok "lingering is on for ${user}" "" ",\"enabled\":true"
   else
     fl_prereq_add linger warn "lingering is off for ${user}; a bench returns after a reboot only once you log in (install turns it on)" "sudo loginctl enable-linger ${user}" ",\"enabled\":false"
+  fi
+
+  # the user manager the bench unit runs under: sudo -iu, su - and cron have no login
+  # session, so systemctl --user finds no bus (the fix of issue 115)
+  if fl_user_manager_reachable; then
+    fl_prereq_add user_bus ok "the systemd user manager answers for ${user}"
+  else
+    fl_prereq_add user_bus warn "$(fl_user_manager_msg)" "$(fl_user_manager_fix)"
   fi
 
   # memory: MariaDB, Redis, the web server, workers and the asset build

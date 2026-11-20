@@ -382,7 +382,7 @@ struct SnapshotTests {
         // the plan states: the CLI's dry run (fixtures from its real output), then the stale token
         func appStart(_ fixture: String, _ stage: (AppAddPlan) -> PlanReviewFlow<AppAddPlan>.Stage) throws -> AddAppSheet.Start {
             let plan = try BenchJSON.decode(AppAddPlan.self, from: Fixture.data(fixture))
-            return .init(source: plan.repo, branch: "", site: plan.sites.first?.name ?? "", flow: .init(stage: stage(plan)))
+            return .init(entries: [AppAddEntry(source: plan.repo, site: plan.sites.first?.name ?? "")], flow: .init(stage: stage(plan)))
         }
         try render(AddAppSheet(workbench: workbench, bench: bench, sites: sites, start: appStart("app-add-plan-required") { .reviewing($0) }) {},
                    "add-app-plan")
@@ -410,8 +410,8 @@ struct SnapshotTests {
         try render(CreateProfileSheet(benches: store.benches) { _, _ in } cancel: {}, "profile-create")
     }
 
-    /// Restore and the unfinished operations (0.9 parity part 1): the plans are the CLI's own output.
-    @Test func restoreAndPendingSheets() async throws {
+    /// Restore, pull and the unfinished operations (0.9 parity part 1): the plans are the CLI's own output.
+    @Test func restorePullAndPendingSheets() async throws {
         let store = try await windowStore()
         base.cli.answer("site backups", json: try Fixture.string("site-backups"))
         let workbench = Workbench(store: store)
@@ -437,6 +437,16 @@ struct SnapshotTests {
         try render(SiteRestoreSheet(workbench: workbench, bench: bench, site: "acme.localhost", start: restoreStart("site-restore-plan", stale: true)) {},
                    "site-restore-plan-stale")
 
+        func pullStart(_ name: String) throws -> PullSheet.Start {
+            let plan = try #require(PullStream.plan(in: try Fixture.lines(name)))
+            return .init(target: plan.source, name: plan.site, flow: .init(stage: .reviewing(plan)))
+        }
+        try render(PullSheet(workbench: workbench, bench: bench) {}, "pull-sheet")
+        try render(PullSheet(workbench: workbench, bench: bench, start: .init(target: "prod:erp.example.com", name: "erp.example.com.local", keepSecrets: true)) {},
+                   "pull-sheet-keep-secrets")
+        try render(PullSheet(workbench: workbench, bench: bench, start: try pullStart("pull-plan")) {}, "pull-plan")
+        try render(PullSheet(workbench: workbench, bench: bench, start: try pullStart("pull-plan-keep-secrets")) {}, "pull-plan-keep-secrets")
+
         let status = try BenchJSON.decode(BenchStatus.self, from: Fixture.data("status-pending"))
         var operations = status.pendingOperations ?? []
         operations.append(PendingOperation(op: "app_add", app: "acme_leaf", branch: "main", from: nil, to: "0301d720e23521bb5d8b8ab6bb8d8969de188db2",
@@ -446,6 +456,44 @@ struct SnapshotTests {
                        .formStyle(.grouped).frame(width: 640), "pending-operations")
         base.cli.answer("app update", json: try Fixture.string("app-update-plan-pending"))
         try render(UpdateAppSheet(workbench: workbench, bench: bench, app: "acme_crm") {}, "update-app-pending-sheet")
+    }
+
+    /// Mac app parity, part 2 (0.9): several apps in one plan, Acknowledge and Undo, the service plan, and the
+    /// Overview rows a CLI that lists `autostart` and `service` gets. The documents are the CLI's own output.
+    @Test func parityPartTwo() async throws {
+        let store = try await windowStore()
+        let workbench = Workbench(store: store)
+        let bench = try #require(store.benches.last)
+        let sites = bench.siteRows.map(\.name)
+
+        let many = try BenchJSON.decode(AppAddPlan.self, from: Fixture.data("app-add-plan-many"))
+        let entries = [AppAddEntry(source: "acme_i1", commit: String((many.apps?.first?.commit ?? "").prefix(9)), site: "v16two"),
+                       AppAddEntry(source: "https://github.com/acme/acme_i2", branch: "develop")]
+        try render(AddAppSheet(workbench: workbench, bench: bench, sites: sites, start: .init(entries: entries)) {}, "add-app-several-form")
+        try render(AddAppSheet(workbench: workbench, bench: bench, sites: sites, start: .init(entries: entries, flow: .init(stage: .reviewing(many)))) {},
+                   "add-app-plan-several")
+
+        let service = try ServiceInstallPlan.parse(stream: try Fixture.lines("service-plan"))
+        func serviceStart(_ stage: PlanReviewFlow<ServiceInstallPlan>.Stage) -> ServiceSheet.Start { .init(flow: .init(stage: stage)) }
+        try render(ServiceSheet(workbench: workbench, bench: bench, start: serviceStart(.reviewing(service))) {}, "service-plan")
+        var settled = service
+        settled.steps = settled.steps.map { var step = $0; step.willRun = false; return step }
+        try render(ServiceSheet(workbench: workbench, bench: bench, start: serviceStart(.reviewing(settled))) {}, "service-plan-nothing")
+        try render(ServiceSheet(workbench: workbench, bench: bench, start: serviceStart(.stale("The service plan changed since it was shown."))) {},
+                   "service-plan-stale")
+
+        let warn = try #require(BenchJSON.decode(DoctorReport.self, from: Fixture.data("doctor-warn")).checks.first { $0.level == .warn })
+        let acked = try #require(BenchJSON.decode(DoctorReport.self, from: Fixture.data("doctor-acked")).acknowledged.first)
+        try render(Form { CheckRow(check: warn, acknowledge: { _ in }); CheckRow(check: acked, acknowledge: { _ in }) }
+                       .formStyle(.grouped).frame(width: 640), "health-acknowledge")
+
+        base.cli.answer("commands", json: try Fixture.string("commands"))
+        base.cli.answer("autostart", .ok(try Fixture.text("autostart-on", ext: "txt")))
+        store.setWindow(WindowSight(isOpen: true, isVisible: true))
+        await workbench.loadCommands()
+        await workbench.showAutostart(bench)
+        try render(BenchOverview(store: store, workbench: workbench, bench: bench, router: WindowRouter()).frame(width: 704, height: 800),
+                   "overview-background-jobs")
     }
 
     @Test func windowHealthAndDiscovery() async throws {

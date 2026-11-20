@@ -60,12 +60,18 @@ printf 'UV_NO_MODIFY_PATH=%s\n' "\$UV_NO_MODIFY_PATH" >>"$MOCK_STATE/installer_e
 SCRIPT
 cat >"$MOCK_STATE/http/$(key https://fnm.vercel.app/install)" <<SCRIPT
 #!/usr/bin/env bash
-dir=""; while [[ "\$#" -gt 0 ]]; do case "\$1" in --install-dir) dir="\$2"; shift 2 ;; *) shift ;; esac; done
-printf 'fnm installer args: --install-dir %s\n' "\$dir" >>"$MOCK_STATE/installer_env"
+dir=""; rel=""; while [[ "\$#" -gt 0 ]]; do case "\$1" in --install-dir) dir="\$2"; shift 2 ;; --release) rel="\$2"; shift 2 ;; *) shift ;; esac; done
+printf 'fnm installer args: --install-dir %s --release %s\n' "\$dir" "\$rel" >>"$MOCK_STATE/installer_env"
 mkdir -p "\$dir"
 printf '#!/usr/bin/env bash\nexec "$ROOT/tests/mocks/bin/fnm" "\$@"\n' >"\$dir/fnm"
 chmod +x "\$dir/fnm"
 SCRIPT
+# the installers are pinned by URL and sha256 (INST-9); a test is a mirror, so it
+# names its own URLs and the sums of the scripts above
+export UV_INSTALLER_URL=https://astral.sh/uv/install.sh FNM_INSTALLER_URL=https://fnm.vercel.app/install
+UV_INSTALLER_SHA256="$(shasum -a 256 "$MOCK_STATE/http/$(key "$UV_INSTALLER_URL")" | awk '{print $1}')"
+FNM_INSTALLER_SHA256="$(shasum -a 256 "$MOCK_STATE/http/$(key "$FNM_INSTALLER_URL")" | awk '{print $1}')"
+export UV_INSTALLER_SHA256 FNM_INSTALLER_SHA256
 
 run00() { set +e; OUT="$("$ROOT/00-linux-system-deps.sh" "$@" 2>&1)"; CODE=$?; set -e; }
 run01() { set +e; OUT="$("$ROOT/01-install-bench-and-site.sh" "$@" 2>&1)"; CODE=$?; set -e; }
@@ -103,6 +109,26 @@ FL_CONFIG_DIR="$TMP_DIR/config-future" run_fm install --profile v17-future --dry
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "not supported on Linux yet"
 assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl .*(wkhtmltox|astral\.sh/uv|fnm\.vercel))'
+
+# profile list says the same, per profile, with the same reason: the wizard asks once and never plans a dry run per profile
+FL_CONFIG_DIR="$TMP_DIR/config-future" run_fm profile list --json
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "True None" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in next((p["linux_supported"], p["unsupported_reason"]) for p in d["profiles"] if p["name"]=="v15-lts"))')"
+assert_eq "False" "$(printf '%s' "$OUT" | jget - 'next(p["linux_supported"] for p in d["profiles"] if p["name"]=="v17-future")')"
+assert_contains "$(printf '%s' "$OUT" | jget - 'next(p["unsupported_reason"] for p in d["profiles"] if p["name"]=="v17-future")')" "it needs MariaDB 12.0, apt on this release gives 10.11, and the profile accepts 11.4 to 12.0 only"
+mkdir -p "$HOME/.config/benchbar/profiles"
+printf 'schema = 1
+base = "v17-future"
+' >"$HOME/.config/benchbar/profiles/futureteam.toml"
+printf 'schema = 1
+base = "v15-lts"
+' >"$HOME/.config/benchbar/profiles/okteam.toml"
+printf 'base = "v15-lts"
+bogus = 1
+' >"$HOME/.config/benchbar/profiles/brokenteam.toml"
+FL_CONFIG_DIR="$TMP_DIR/config-future" run_fm profile list --json
+assert_eq "False True None None" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [next(p["linux_supported"] for p in d["profiles"] if p["name"]=="futureteam"), next(p["linux_supported"] for p in d["profiles"] if p["name"]=="okteam"), next(p["linux_supported"] for p in d["profiles"] if p["name"]=="brokenteam"), next(p["unsupported_reason"] for p in d["profiles"] if p["name"]=="brokenteam")])')" "(a team profile passes or fails with its base; an invalid file is not asked)"
+find "$HOME/.config/benchbar/profiles" -name '*team.toml' -delete
 
 # ---- v16-lts on Linux: Python 3.14 from uv, Node 24 from fnm, and the MariaDB
 # apt gives (10.11 is inside v16's range, 10.6 to 11.8); the plan says so
@@ -219,6 +245,26 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" '"blockers":[]'
 printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
 
+# ---- the installers as shipped: a version in the URL and a sha256, no "latest"
+fresh_machine
+OUT="$(env -u UV_INSTALLER_URL -u UV_INSTALLER_SHA256 -u FNM_INSTALLER_URL -u FNM_INSTALLER_SHA256 "$ROOT/00-linux-system-deps.sh" --profile v15-lts --dry-run 2>&1)"
+assert_contains "$OUT" "download https://github.com/astral-sh/uv/releases/download/0.13.9/uv-installer.sh, check sha256 ccc888115ac831bd9c30855c1d4abeae32fce679701d2aac8e72eb0beffb41c2"
+assert_contains "$OUT" "download https://raw.githubusercontent.com/Schniz/fnm/v1.39.0/.ci/install.sh, check sha256 a732195fcf0e69199a21043b9e987a0240d4b12488850c6b13abf2b3b517b522"
+assert_contains "$OUT" "bash --release v1.39.0 --skip-shell"
+assert_not_contains "$OUT" "astral.sh/uv/install.sh"
+assert_not_contains "$OUT" "fnm.vercel.app"
+
+# ---- an installer whose sha256 is not the pinned one is not run
+fresh_machine
+UV_INSTALLER_SHA256="0000000000000000000000000000000000000000000000000000000000000000" run00 --yes --profile v15-lts
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "The uv installer from https://astral.sh/uv/install.sh has sha256 "
+assert_contains "$OUT" "It was not run."
+assert_contains "$OUT" "The uv install failed."
+assert_not_contains "$OUT" "uv installer matches its pinned sha256"
+assert_eq "no" "$([[ -e "$MOCK_STATE/installer_env" ]] && echo yes || echo no)" "(the installer script never ran)"
+assert_calls_not_contain '^uv python install'
+
 # ---- 00 on a fresh machine: apt, uv, fnm, the socket-only root, the drop-in, the .deb
 fresh_machine
 run00 --yes --profile v15-lts
@@ -231,8 +277,10 @@ assert_calls_contain '^sudo apt-get install -y mariadb-server mariadb-client red
 # uv and fnm installers (no sudo, no shell edits), then Python and Node through them
 assert_calls_contain '^curl .*https://astral.sh/uv/install.sh'
 # the installers' downloads: a connect limit and retries, a slow network is not a hang
-assert_calls_contain '^curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o .* https://astral.sh/uv/install.sh$'
-assert_calls_contain '^curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o .* https://fnm.vercel.app/install$'
+assert_calls_contain "^curl -fsSL --proto =https --connect-timeout 15 --retry 3 --retry-delay 2 -o .* https://astral.sh/uv/install.sh\$"
+assert_calls_contain "^curl -fsSL --proto =https --connect-timeout 15 --retry 3 --retry-delay 2 -o .* https://fnm.vercel.app/install\$"
+assert_contains "$OUT" "uv installer matches its pinned sha256"
+assert_contains "$OUT" "fnm installer matches its pinned sha256"
 # every apt call: no questions, a wait for the dpkg lock, the old config kept (fl_apt_get)
 apt_calls="$(cat "$MOCK_STATE/apt_sudo_raw")"
 assert_contains "$apt_calls" "env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confold update"
@@ -241,7 +289,7 @@ assert_contains "$apt_calls" "-o Dpkg::Options::=--force-confold install -y /tmp
 assert_eq "0" "$(grep -c -v 'DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o DPkg::Lock::Timeout=600' "$MOCK_STATE/apt_sudo_raw" || true)" "(no apt call without them)"
 assert_calls_contain '^curl .*https://fnm.vercel.app/install'
 assert_contains "$(cat "$MOCK_STATE/installer_env")" "UV_NO_MODIFY_PATH=1"
-assert_contains "$(cat "$MOCK_STATE/installer_env")" "fnm installer args: --install-dir $HOME/.local/share/fnm"
+assert_contains "$(cat "$MOCK_STATE/installer_env")" "fnm installer args: --install-dir $HOME/.local/share/fnm --release v1.39.0"
 assert_calls_contain '^uv python install 3.11$'
 assert_calls_contain '^fnm install 22$'
 assert_contains "$OUT" "[OK] python3.11 - 3.11.9"
@@ -411,7 +459,8 @@ fresh_machine
 rm -rf "$BENCH"; : >"$FL_STATE_FILE"
 export ADMIN_PASSWORD=adminpw
 # what ran before the background service step (its own sudo needs are the service layer's)
-before_service() { sed '/^systemctl --user/,$d' "$MOCK_LOG"; }
+# (the plan and install ask the user manager whether it answers, before sudo: the service step is the daemon-reload)
+before_service() { sed '/^systemctl --user daemon-reload/,$d' "$MOCK_LOG"; }
 run_fm install --yes --bench-dir "$BENCH" --site linuxdev.localhost
 assert_contains "$OUT" "1. System dependencies (00-linux-system-deps.sh)"
 assert_contains "$OUT" "install the apt packages: mariadb-server"

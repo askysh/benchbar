@@ -6,6 +6,11 @@
 # Every run appends its arguments' first word to $MOCK_STATE/node_calls; the listener writes its PID
 # (the sleep it becomes) to $MOCK_STATE/listener_pid.
 [[ ! -d "${MOCK_STATE:-/nonexistent}" ]] || printf '%s\n' "${1:-}" >>"$MOCK_STATE/node_calls"
+# "-e SCRIPT log ... MODE": share log's reader; an empty log (json: {"entries":[],"truncated":0})
+if [[ "${1:-}" == "-e" && "${3:-}" == "log" ]]; then
+  [[ "${10:-}" != json ]] || printf '{"entries":[],"truncated":0}'
+  exit 0
+fi
 if [[ "${1:-}" == "-e" ]]; then
   [[ ! -f "${MOCK_STATE:-/nonexistent}/listener_dead" ]] || exit 1
   v4="${MOCK_LISTENER_V4:-8097 18097}"; v6="0 0"
