@@ -62,28 +62,6 @@ nonisolated struct LabsDocument: Codable, Sendable, Equatable {
     }
 }
 
-/// The closing line of a command that changes things.
-nonisolated struct DoneLine: Codable, Sendable, Equatable {
-    var exit: Int?
-    var changed: [String]?
-    var warnings: [String]?
-    var nextActions: [String]?
-
-    enum CodingKeys: String, CodingKey {
-        case exit, changed, warnings
-        case nextActions = "next_actions"
-    }
-
-    /// The last line of stdout that is a JSON object; an empty line if there is none.
-    static func parse(_ stdout: String) -> DoneLine {
-        let decoder = JSONDecoder()
-        for line in stdout.split(separator: "\n").reversed() {
-            if let done = try? decoder.decode(DoneLine.self, from: Data(line.utf8)) { return done }
-        }
-        return DoneLine()
-    }
-}
-
 /// Labs (experimental features) through the CLI. The CLI keeps the flags.
 extension CLIClient {
     /// `labs list --json`. A CLI without the command exits non zero: `.failed`.
@@ -102,10 +80,10 @@ extension CLIClient {
     /// call sets the mode to 0 and says it comes from the app with
     /// BENCHBAR_SUDO=gui. `--yes` skips only the CLI's own question.
     @discardableResult
-    func labsSet(name: String, on: Bool) async throws(CLIError) -> DoneLine {
+    func labsSet(name: String, on: Bool) async throws(CLIError) -> ResultEnvelope {
         let output = try await run(["labs", on ? "on" : "off", name, "--yes", "--json"],
                                    timeout: Timeout.action, acceptExitCodes: [0],
                                    extraEnvironment: ["BENCHBAR_NONINTERACTIVE": "0"].merging(Self.guiSudo) { _, new in new })
-        return DoneLine.parse(output.stdout)
+        return output.envelope
     }
 }

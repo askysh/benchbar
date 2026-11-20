@@ -95,6 +95,36 @@ exploitable:
 - **The installer and releases.** A way to make `install.sh` or a
   release download run code it should not.
 
+## What the installers verify
+
+A checksum from the same release only finds a damaged download. Since
+0.9.0 the release workflow also attests the build provenance of the DMG,
+the app zip, the CLI tarball, `SHA256SUMS` (`release.yml`) and the Windows
+zips and their checksums file (`release-windows.yml`), so
+`gh attestation verify FILE -R askysh/benchbar` says that this
+repository's workflow built the file. The tap workflow
+(`homebrew-tap.yml`) verifies every file before it renders the formula.
+
+- `install.sh` on a Mac checks the zip's attestation when `gh` is installed
+  and signed in, and refuses on a failure. Without `gh` it says that only
+  the checksum was checked and prints the command. It then runs
+  `codesign --verify --deep --strict` and `spctl --assess` on the unpacked
+  app, which `curl` would otherwise skip because it sets no quarantine
+  flag.
+- `install.ps1` removes Windows' internet mark only when the zip's
+  attestation verified.
+
+- `benchbar self-update` and `benchbar.exe self-update` run the installer
+  of the release they install, after checking its SHA256 against that
+  release's sums, not whatever `main` holds at that moment. The Mac CLI
+  is checked out at the release's tag. Installing the CLI inside WSL from
+  a release build of `benchbar.exe` follows the same rule.
+
+What this does not cover: an attestation proves where a file was built,
+not that the code is good. A `gh` that is not signed in leaves only the
+checksum. On Linux `install.sh` downloads no file: git fetches the CLI
+over https.
+
 ## The Keychain items
 
 BenchBar for macOS keeps two kinds of item. One is the MariaDB root

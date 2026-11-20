@@ -27,18 +27,34 @@ func installerURL() string {
 	return installerBase + "main/install.sh"
 }
 
-// installerPipe is the one shell line that downloads the installer and runs
-// it. pipefail makes a failed download (curl exit 22 on a 404) the exit code
-// of the whole line; without it the pipe would end with bash's 0. The line
-// is for bash, which every distro BenchBar supports has, and the commands
-// that run it name bash explicitly. A release build passes --version, so
-// install.sh checks out that release of the CLI too.
+// installerSumsURL is the SHA256SUMS of this shim's own release, which lists
+// install.sh of its tag (a release before 0.9.0 does not).
+func installerSumsURL() string {
+	return "https://github.com/askysh/benchbar/releases/download/v" + version + "/SHA256SUMS"
+}
+
+// installerPipe is the one shell line that installs the CLI in the distro.
+// A release build downloads install.sh of its own tag to a file, compares its
+// sha256 with the line for install.sh in that release's SHA256SUMS, and only
+// then runs it with --version, so the CLI is the release's and the file is
+// the one the release lists. The line has no double quote and no dollar sign:
+// it is pasted into cmd and PowerShell inside bash -c "...". The first
+// download is first in an && chain, so a failed download ends the line with
+// curl's own exit code (22 on a 404, which the hints read); pipefail does the
+// same for the checksum pipe. A dev build has no release to check against:
+// it pipes main's installer, as before. The commands that run it name bash
+// explicitly.
 func installerPipe() string {
-	line := "set -o pipefail; curl -fsSL " + installerURL() + " | bash"
-	if releaseRE.MatchString(version) {
-		line += " -s -- --version v" + version
+	if !releaseRE.MatchString(version) {
+		return "set -o pipefail; curl --proto '=https' --tlsv1.2 -fsSL " + installerURL() + " | bash"
 	}
-	return line
+	const dir = "~/.cache/benchbar-install"
+	const curl = "curl --proto '=https' --tlsv1.2 -fsSL"
+	return "set -o pipefail; mkdir -p " + dir + " && cd " + dir +
+		" && " + curl + " -o install.sh " + installerURL() +
+		" && { " + curl + " " + installerSumsURL() + " | grep -x '.\\{64\\}  install.sh' | sha256sum -c - || " +
+		"{ echo 'install.sh was not run: it does not match the SHA256SUMS of v" + version + ", or those could not be read' >&2; exit 1; }; }" +
+		" && bash install.sh --version v" + version
 }
 
 // installerCommand runs the installer inside the distro; without a name it

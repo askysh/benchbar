@@ -4,7 +4,13 @@
 # parents) answers from $MOCK_STATE/pstree/PID, one line "PPID COMM", and
 # exits 1 for a pid that has no file there (no such process); everything else
 # goes to the real ps.
-if [[ "${1:-}" == "-o" && "${2:-}" == "command=" && "${3:-}" == "-p" && -f "${MOCK_STATE:-/nonexistent}/ps/${4:-x}" ]]; then
+# "ps -axo pid=,ppid=,%cpu=,rss=" (benchbar stats) answers from $MOCK_STATE/pstable,
+# one "PID PPID %CPU RSS" line per process, when a test wrote one.
+if [[ "${1:-}" == "-axo" && "${2:-}" == "pid=,ppid=,%cpu=,rss=" && -f "${MOCK_STATE:-/nonexistent}/pstable" ]]; then
+  cat "$MOCK_STATE/pstable"
+  exit 0
+fi
+if [[ "${1:-}" == "-o" && "${2:-}" == "command="&& "${3:-}" == "-p" && -f "${MOCK_STATE:-/nonexistent}/ps/${4:-x}" ]]; then
   cat "${MOCK_STATE}/ps/$4"
   exit 0
 fi

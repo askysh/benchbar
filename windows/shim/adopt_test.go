@@ -139,7 +139,7 @@ func TestAdoptBenchbarMissing(t *testing.T) {
 	if code := e.run("adopt-distro"); code != 1 {
 		t.Fatalf("exit %d", code)
 	}
-	want := `fix: wsl.exe -d Ubuntu-24.04 -- bash -c "set -o pipefail; curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash"`
+	want := `fix: wsl.exe -d Ubuntu-24.04 -- bash -c "set -o pipefail; curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash"`
 	if !strings.Contains(e.stdout(), "[FAIL] benchbar: ") || !strings.Contains(e.stdout(), want) {
 		t.Errorf("output:\n%s", e.stdout())
 	}

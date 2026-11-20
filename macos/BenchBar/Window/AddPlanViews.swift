@@ -64,7 +64,7 @@ struct AppAddPlanView: View {
         if let branch = plan.branch {
             parts.append("branch \(branch)" + (plan.branchSourceText.map { " (\($0))" } ?? ""))
         }
-        if let commit = plan.commit { parts.append("commit \(commit.prefix(7))") }
+        if let commit = plan.commit { parts.append("commit \(commit.prefix(7))" + (plan.commitSource == "pin" ? " (pinned)" : "")) }
         return parts.joined(separator: ", ")
     }
 
@@ -80,8 +80,11 @@ struct AppAddPlanView: View {
     private var facts: [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
         if !plan.touches.isEmpty { out.append(("Touches", plan.touches.joined(separator: ", "))) }
-        let targets = plan.sites.map { $0.installed ? "\($0.name) (already has it)" : $0.name }
-        out.append(("Sites", targets.isEmpty ? "No site: the app is only added to the bench." : targets.joined(separator: ", ")))
+        // several apps say their own sites in their rows
+        if !plan.isBatch {
+            let targets = plan.sites.map { $0.installed ? "\($0.name) (already has it)" : $0.name }
+            out.append(("Sites", targets.isEmpty ? "No site: the app is only added to the bench." : targets.joined(separator: ", ")))
+        }
         out.append(("Restart", plan.restarts ? "Restarts the bench, only if it is running." : "No restart."))
         out.append(("Left alone", "/etc/hosts and the default site. Other apps and sites are not changed."))
         return out
@@ -89,10 +92,29 @@ struct AppAddPlanView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
-            VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
-                Text(plan.app).font(.headline)
-                Text(headline).font(.caption).foregroundStyle(.secondary)
-                    .lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+            if let apps = plan.apps, plan.isBatch {
+                Text("\(apps.count) apps in one plan").font(.headline)
+                VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
+                    ForEach(apps) { app in
+                        VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
+                            Text(app.app).font(.callout.weight(.medium))
+                            Text(app.summary).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            if let repo = app.repo {
+                                Text(repo).font(.caption.monospaced()).foregroundStyle(.secondary)
+                                    .lineLimit(1).truncationMode(.middle).textSelection(.enabled).help(repo)
+                            }
+                        }
+                    }
+                }
+                .padding(WindowMetrics.bannerPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: WindowMetrics.cornerRadius))
+            } else {
+                VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
+                    Text(plan.app).font(.headline)
+                    Text(headline).font(.caption).foregroundStyle(.secondary)
+                        .lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+                }
             }
             if !plan.errors.isEmpty {
                 SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: "This plan cannot run",
@@ -106,7 +128,8 @@ struct AppAddPlanView: View {
             }
             if plan.canApply && !plan.changes {
                 SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: "Nothing to do",
-                             detail: "\(plan.app) is already in the bench\(plan.sites.isEmpty ? "" : " and on the chosen site").")
+                             detail: plan.isBatch ? "Every app is already in the bench and on its chosen sites."
+                                 : "\(plan.app) is already in the bench\(plan.sites.isEmpty ? "" : " and on the chosen site").")
             }
             // a plan that cannot run shows why, not the steps it will not take
             if plan.canApply {

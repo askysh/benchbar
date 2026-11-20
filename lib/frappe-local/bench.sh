@@ -179,7 +179,7 @@ fl_bench_require_uv() {
     return 0
   fi
   local hint="brew install uv"
-  fl_is_linux && hint="curl -LsSf https://astral.sh/uv/install.sh | sh"
+  fl_is_linux && hint="curl -LsSf https://astral.sh/uv/0.13.9/install.sh | sh"
   fl_die "uv is not installed, and bench init needs it to make the bench's environment." \
     "Run ./$(fl_phase00_script) --profile ${FL_PROFILE:-v15-lts} (it installs uv), or by hand: ${hint}"
 }
@@ -320,19 +320,28 @@ fl_commit_present() {
 # fl_commit_reach DIR SHA: true when the clone in DIR has commit SHA, after
 # fetching it when it does not (every remote's branches and tags, then the
 # rest of a shallow history). Git never asks a question here.
+# A fetch that timed out is remembered in FL_REACH_TIMEOUT (its message, else
+# empty) for the caller's error: a missing commit and a stalled remote differ.
+FL_REACH_TIMEOUT=""
+fl__reach_fetch() {
+  fl_git_in "$@" || { [[ "$FL_GR_CODE" != "124" ]] || FL_REACH_TIMEOUT="$FL_GR_ERR"; }
+  return 0
+}
+
 fl_commit_reach() {
   local dir="$1" sha="$2" remote
+  FL_REACH_TIMEOUT=""
   fl_commit_present "$dir" "$sha" && return 0
-  fl_git_net -C "$dir" fetch --all --tags --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+  fl__reach_fetch "$dir" fetch --all --tags --quiet
   fl_commit_present "$dir" "$sha" && return 0
   if [[ "$(git -C "$dir" rev-parse --is-shallow-repository 2>/dev/null || true)" == "true" ]]; then
-    fl_git_net -C "$dir" fetch --all --tags --unshallow --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+    fl__reach_fetch "$dir" fetch --all --tags --unshallow --quiet
   fi
   fl_commit_present "$dir" "$sha" && return 0
   # a single branch clone has not seen a commit that is on another branch: the
   # remote may hand out a commit it has by its hash (GitHub does)
   for remote in $(git -C "$dir" remote 2>/dev/null || true); do
-    fl_git_net -C "$dir" fetch --quiet "$remote" "$sha" >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+    fl__reach_fetch "$dir" fetch --quiet "$remote" "$sha"
     fl_commit_present "$dir" "$sha" && return 0
   done
   return 1
@@ -365,8 +374,12 @@ fl_pin_app_commit() {
     return 0
   fi
   fl_warn "Pinning ${app} to commit ${sha}"
-  fl_commit_reach "$dir" "$sha" || fl_die "The pinned commit ${sha} of ${app} is not in its clone${branch:+ (branch ${branch})} and its remote did not hand it out; nothing was built." \
+  fl_commit_reach "$dir" "$sha" || {
+    [[ -z "$FL_REACH_TIMEOUT" ]] || fl_die "The pinned commit ${sha} of ${app} is not in its clone and a git fetch for it timed out (${FL_REACH_TIMEOUT}); nothing was built." \
+      "Check the network and run it again; for a slow remote raise the deadline: FL_GIT_CLONE_TIMEOUT=300 (seconds, default 120). The clone is ${dir}."
+    fl_die "The pinned commit ${sha} of ${app} is not in its clone${branch:+ (branch ${branch})} and its remote did not hand it out; nothing was built." \
     "Check the commit (it must be on a branch or tag of that repo)$([[ "${#sha}" -ge 40 ]] || printf '; a remote cannot hand out an abbreviated hash, so use the full 40 character hash'), or drop the pin: the next install builds what is there. The clone is ${dir}."
+  }
   fl_run git -C "$dir" checkout --quiet "$sha" \
     || fl_die "commit checkout failed for ${app}." "Manual command: git -C ${dir} checkout ${sha}"
   FL_PINS_APPLIED=1
