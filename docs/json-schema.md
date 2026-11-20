@@ -12,6 +12,7 @@ Raycast extensions and the like can rely on it too.
 |---|---|
 | `benchbar list --json` | every bench benchbar knows about |
 | `benchbar status --json [--bench-dir DIR]` | the live state of one bench |
+| `benchbar stats --json [--bench-dir DIR]` | CPU and memory of the running bench's own processes (0.9) |
 | `benchbar doctor --json [--bench-dir DIR]` | every health check with its fix |
 | `benchbar app list --json` | the bench's apps, their git state and sites (0.5) |
 | `benchbar app update NAME --dry-run --json` | the changelog and plan of an update (0.5) |
@@ -336,6 +337,52 @@ service or when no such file is there. It is read from the agent file in
 bash, so `status` still starts no process for it. With `--ping`, every
 site is asked only while the bench's processes run; a stopped bench is
 never pinged and never started.
+
+## `benchbar stats --json`
+
+CPU and memory of a running bench, for the Windows tray (which cannot sample
+processes inside WSL) and for agents. It is its own command, not a flag of
+`status`, because status is polled for every bench and its process count is
+pinned; `stats` reads the process table once, on request. Read only: no lock,
+no log, no site ping.
+
+```json
+{
+  "schema_version": 1,
+  "cli_version": "0.9.0",
+  "bench_dir": "/Users/me/frappe-bench",
+  "running": true,
+  "resources": {
+    "cpu_percent": 112.8,
+    "memory_bytes": 26624000,
+    "processes": 4,
+    "sampled_at": "2026-11-20T11:09:20Z",
+    "cpu_source": "ps",
+    "window_ms": null,
+    "speed": {"raw": 12.0, "min": 1, "max": 12, "smoothing_alpha": 0.35,
+              "formula": "clamp(1 + cpu_percent / 10, min, max)"}
+  }
+}
+```
+
+`resources` is `null` (and `running` false) while nothing serves the site: a
+stopped bench, a bench with no processes, or a Redis kept alone by
+`up --services-only`. The processes are the ones `benchbar down` stops (honcho,
+serve, worker, schedule, socketio and the bench's listeners, each proven to
+run in this bench's folder) and every descendant of them.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `cpu_percent` | number | summed over those processes, in percent of one core (250 is two and a half cores busy), one decimal |
+| `memory_bytes` | number | the sum of their resident set sizes (RSS), in bytes. The Mac app reads the physical footprint instead, which is a little different |
+| `processes` | number | how many processes were measured |
+| `sampled_at` | string | ISO 8601 UTC time of the sample |
+| `cpu_source` | string | `ps` (macOS: ps's own `%cpu`, the system's decaying average, one call) or `proc_delta` (Linux and WSL: two reads of `/proc` `window_ms` apart, so it is the load over that window) |
+| `window_ms` | number or null | the time between the two samples; `null` for `ps` |
+| `speed.raw` | number | the runner speed of the Mac app for this sample: `clamp(1 + cpu_percent / 10, 1, 12)`. 110 percent is already the top speed |
+| `speed.smoothing_alpha` | number | a client smooths successive raw values the way the Mac app does: `value = alpha * raw + (1 - alpha) * value`, starting at 1 |
+
+`benchbar_stats` is the same document through the MCP server.
 
 ## Readiness
 

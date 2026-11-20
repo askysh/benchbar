@@ -54,6 +54,7 @@ the argument `mcp`.
 | `benchbar_doctor_prerequisites` | read | What this machine needs before a bench can be installed (tools, Homebrew or apt packages, MariaDB, free disk), each check with its level and fix, no bench needed. | `bench` |
 | `benchbar_self_update_check` | read | This benchbar and the BenchBar app against the latest release, and the command that would update them (available is null when GitHub could not be asked). | none |
 | `benchbar_app_focus_list` | read | Every app of one bench with whether it is a focus app (the ones being worked on), why, and how far behind its remote it is, from the last git fetch. | `bench` |
+| `benchbar_stats` | read | CPU, memory and process count of one running bench's own processes (the set benchbar_down stops, with their children), sampled now: resources.cpu_percent (percent of one core, so 250 is two and a half cores), memory_bytes (RSS), processes, sampled_at, and the speed the Mac app's runner uses (speed.raw = clamp(1 + cpu_percent / 10, 1, 12)). | `bench` |
 | `benchbar_app_install_plan` | plan (read only) | Plan installing an app that is already in a bench on one site (bench --site S install-app), read only: the step, and a token for benchbar_app_install. | `name`*, `site`*, `bench` |
 | `benchbar_app_install` | acts | Apply a plan from benchbar_app_install_plan: install the app on the site. | `name`*, `site`*, `bench`, `token`* |
 | `benchbar_app_update_plan` | plan (git fetch) | Plan fast forwarding one app to its remote branch; it runs git fetch on the app (which writes the app's .git/FETCH_HEAD and remote refs and nothing else): the commits it takes (the changelog), the sites that have the app (each is backed up first, then migrated), every step, and a token for benchbar_app_update. | `name`*, `bench` |
@@ -78,7 +79,7 @@ not need a terminal: `benchbar_site_backups` for the backups of a site
 and `benchbar_ports_plan` for port conflicts, `benchbar_lock_check` for a
 bench against its team lockfile, `benchbar_doctor_prerequisites` for what a
 machine needs before an install, `benchbar_labs_list`, `benchbar_where` and
-`benchbar_self_update_check`, and `benchbar_app_focus_list`. Turning a lab
+`benchbar_self_update_check`, `benchbar_stats` and `benchbar_app_focus_list`. Turning a lab
 on, applying ports, sharing, the LAN guard, `self-update`, `site default`
 and `app focus NAME` are your decisions and have no tool: the agent tells
 you the command.

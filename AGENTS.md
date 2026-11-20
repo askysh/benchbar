@@ -15,7 +15,7 @@ progress notifications), `benchbar_doctor`,
 `benchbar_logs_tail` (`file`: `bench`, `worker`, `worker_error` or
 `previous`), `benchbar_site_list`, `benchbar_site_backups` (the stamps a
 restore takes), `benchbar_app_list`, `benchbar_app_focus_list`,
-`benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`,
+`benchbar_stats` (CPU and memory of the running bench), `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`,
 `benchbar_doctor_prerequisites`, `benchbar_labs_list`, `benchbar_where`,
 `benchbar_self_update_check`, `benchbar_op_status` (a long run by `op_id`, which
 every apply tool returns; `benchbar_app_add` and `benchbar_site_restore` take

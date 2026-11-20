@@ -600,6 +600,17 @@ TOOLS["benchbar_app_focus_list"] = (
     True,
     (0,),
 )
+TOOLS["benchbar_stats"] = (
+    "CPU, memory and process count of one running bench's own processes (the set benchbar_down stops, with their "
+    "children), sampled now: resources.cpu_percent (percent of one core, so 250 is two and a half cores), "
+    "memory_bytes (RSS), processes, sampled_at, and the speed the Mac app's runner uses (speed.raw = clamp(1 + "
+    "cpu_percent / 10, 1, 12)). resources is null while the bench is stopped. Read only; benchbar_status stays "
+    "cheap and does not carry it.",
+    {"bench": BENCH},
+    lambda a: ["stats", "--json"] + bench_args(a),
+    True,
+    (0,),
+)
 APP_INSTALL = {
     "name": {"type": "string", "description": "The app, as benchbar_app_list names it: it must already be in the bench (apps/ and sites/apps.txt)."},
     "site": SITE,
@@ -852,6 +863,7 @@ UNTRUSTED = {
     "benchbar_doctor_prerequisites": "machine checks, with tool and package output",
     "benchbar_self_update_check": "release names and install paths",
     "benchbar_app_focus_list": "app names, branches and commits",
+    "benchbar_stats": "bench folder names and process counts",
     "benchbar_app_install_plan": "bench and app names, bench output",
     "benchbar_app_update_plan": "git output, commit subjects",
 }
@@ -1978,7 +1990,7 @@ class RpcError(Exception):
 INSTRUCTIONS = (
     "Local Frappe benches managed by benchbar. Read tools, safe any time: benchbar_list, benchbar_status, "
     "benchbar_wait (until the bench is ready), benchbar_doctor, benchbar_doctor_prerequisites, benchbar_logs_tail, benchbar_site_list, benchbar_site_backups "
-    "(the stamps benchbar_site_restore_plan takes), benchbar_app_list, benchbar_app_focus_list, benchbar_ports_check, "
+    "(the stamps benchbar_site_restore_plan takes), benchbar_app_list, benchbar_app_focus_list, benchbar_stats, benchbar_ports_check, "
     "benchbar_ports_plan, benchbar_lock_check, benchbar_labs_list, benchbar_where, benchbar_self_update_check, "
     "benchbar_profile_list, benchbar_profile_check, benchbar_op_status (the long runs by op_id), and the plans benchbar_app_add_plan, benchbar_site_add_plan, benchbar_site_restore_plan, "
     "benchbar_service_install_plan, benchbar_app_install_plan, benchbar_app_update_plan (it runs git fetch on the app), benchbar_run_plan, and benchbar_run_read (doctor, list-apps, version of a site). Actions: benchbar_up (services_only for Redis alone), benchbar_down, "

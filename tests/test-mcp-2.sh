@@ -103,7 +103,7 @@ from mcpclient import Client, text
 fake, mode, tok = sys.argv[1], sys.argv[2], sys.argv[3]
 c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "FAKE_MODE": mode})
 tools = c.tools()
-assert len(tools) == 38, [t["name"] for t in tools]
+assert len(tools) == 39, [t["name"] for t in tools]
 LABEL = "Data from the bench ("
 tokens = {}                                                    # the token each plan tool returned: its apply tool takes that one
 for t in tools:
@@ -622,6 +622,7 @@ cases = [
     ("benchbar_doctor_prerequisites", {"bench": "/b"}, "doctor --prerequisites --json --bench-dir /b"),
     ("benchbar_self_update_check", {}, "self-update --check --json"),
     ("benchbar_app_focus_list", {"bench": "/b"}, "app focus --list --json --bench-dir /b"),
+    ("benchbar_stats", {"bench": "/b"}, "stats --json --bench-dir /b"),
 ]
 for tool, args, argv in cases:
     r = c.call(tool, args)
