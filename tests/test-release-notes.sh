@@ -33,6 +33,10 @@ assert_eq "## Update" "${OUT%%$'\n'*}" "(the Update section comes first)"
 assert_contains "$OUT" "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes"
 assert_contains "$OUT" "**Update Now**"
 assert_contains "$OUT" "benchbar self-update"
+# the cask updates itself, so plain "brew upgrade" skips it: the notes name the cask
+assert_contains "$OUT" 'brew upgrade --cask askysh/tap/benchbar-app'
+# shellcheck disable=SC2016 # the backticks are Markdown, not a command
+assert_contains "$OUT" 'a plain `brew upgrade` skips a cask that updates itself'
 assert_contains "$OUT" "--app-only"
 assert_contains "$OUT" "The summary line."
 assert_contains "$OUT" "- a thing"
@@ -65,6 +69,8 @@ assert_eq "## Release candidate" "${OUT%%$'\n'*}"
 assert_contains "$OUT" "pre-release** of BenchBar 9.2.0"
 assert_contains "$OUT" "askysh/benchbar/v9.2.0-rc.1/install.sh | bash -s -- --version v9.2.0-rc.1"
 assert_contains "$OUT" "- not yet"
+assert_contains "$OUT" "Homebrew and \`benchbar self-update\` cannot install a candidate"
+assert_contains "$OUT" "(add \`--no-app\` for the tool alone)"
 assert_contains "$OUT" "A waiting fragment."
 assert_contains "$OUT" "Signed with a Developer ID and notarized"
 assert_not_contains "$OUT" "## Update"

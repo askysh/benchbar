@@ -49,6 +49,7 @@ SR_PLAN_BODY=""
 SR_NEEDS=""
 SR_PLAN_JSON=""
 SR_TOKEN=""
+SR_TOKEN_DATA=""
 SR_CAN_APPLY=0
 SR_VERIFY_JSON="null"
 SR_STEP_PARENT=""
@@ -195,7 +196,7 @@ fl_srestore_plan() {
     case "$FL_PULL_HOOK" in /*) ;; '~/'*) FL_PULL_HOOK="${HOME}/${FL_PULL_HOOK#'~/'}" ;; *) FL_PULL_HOOK="${PWD}/${FL_PULL_HOOK}" ;; esac
     if [[ ! -f "$FL_PULL_HOOK" ]]; then fl_srestore_err "--before-migrate: no file ${FL_PULL_HOOK}"
     elif [[ ! -x "$FL_PULL_HOOK" ]]; then fl_srestore_err "--before-migrate: ${FL_PULL_HOOK} is not executable (chmod +x)"
-    else SR_HOOK_SHA="$(shasum -a 256 "$FL_PULL_HOOK" | awk '{print $1}')"; fi
+    else SR_HOOK_SHA="$(shasum -a 256 "$FL_PULL_HOOK" | awk '{print $1}')"; FL_PULL_HOOK_SHA="$SR_HOOK_SHA"; fi
   fi
   # the apps of the set against this bench
   if [[ -n "$FL_PULL_DB" && "${#SR_ERRORS[@]}" == "0" ]]; then
@@ -257,7 +258,8 @@ fl_srestore_plan() {
   # site, the hook and the set's files; a change of any makes the token stale
   fl_site_default_file_v default
   s="$(printf 'sites\n%s\ndefault\n%s\nhook\n%s\nset\n%s\nbench-running\n%s\n' "$(fl_sites_list)" "$default" "$SR_HOOK_SHA" "$SR_SET_JSON" "$FL_PULL_QUIESCE")"
-  SR_TOKEN="$(printf '%s\n%s\n' "$SR_PLAN_BODY" "$s" | shasum -a 256 | awk '{print $1}')"
+  SR_TOKEN_DATA="$(printf '%s\n%s\n' "$SR_PLAN_BODY" "$s")"
+  fl_plan_token_v SR_TOKEN "$SR_TOKEN_DATA"
   SR_PLAN_JSON="$(printf '{"schema_version":%d,"cli_version":"%s","dry_run":true,%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$SR_PLAN_BODY" "$SR_TOKEN")"
 }
 
@@ -565,9 +567,14 @@ fl_cmd_site_restore() {
   fi
 
   fl_header "benchbar site restore" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$SR_TARGET"
-  if [[ "$SR_APPLY" == "1" && "$SR_TOKEN_IN" != "$SR_TOKEN" ]]; then
-    fl_die "The site restore plan changed since it was shown (the backup set, the sites, the default site or the hook). Nothing was changed." \
-      "Review a fresh plan: benchbar site restore ${SR_TARGET} --from ... --dry-run --json, then pass its token."
+  if [[ "$SR_APPLY" == "1" ]]; then
+    code=0; fl_plan_token_check "$SR_TOKEN_DATA" "$SR_TOKEN_IN" || code=$?
+    case "$code" in
+      0) code=0 ;;
+      2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: benchbar site restore ${SR_TARGET} --from ... --dry-run --json, then pass its token." ;;
+      *) fl_die "The site restore plan changed since it was shown (the backup set, the sites, the default site or the hook). Nothing was changed." \
+        "Review a fresh plan: benchbar site restore ${SR_TARGET} --from ... --dry-run --json, then pass its token." ;;
+    esac
   fi
   fl_srestore_print_plan
   if [[ "$SR_CAN_APPLY" != "1" ]]; then

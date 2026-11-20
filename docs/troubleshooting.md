@@ -135,7 +135,11 @@ PATH` registers it, and shows the plan first.
 **PDFs do not print.** wkhtmltopdf was skipped or is the Homebrew build.
 `benchbar doctor` says which; `benchbar repair` installs the official
 patched Qt package (Intel binary, Rosetta 2 offered on Apple Silicon,
-`sudo` once). If a Homebrew wkhtmltopdf earlier on `PATH` shadows the
+`sudo` once). There is no Apple Silicon build to choose instead: the
+wkhtmltopdf project published one macOS package ever (June 2020, Intel
+only), is archived, and Homebrew's build is not patched. Without Rosetta 2
+PDFs from wkhtmltopdf do not print and everything else works; Frappe v16
+can print with Chromium instead. If a Homebrew wkhtmltopdf earlier on `PATH` shadows the
 package, doctor says so. `brew uninstall wkhtmltopdf` then removes only
 the Homebrew build; the package in `/usr/local/bin` stays and takes
 over.
@@ -161,6 +165,17 @@ passwords are too: enter them again in the copy.
 **Something else.** `benchbar report` writes a redacted zip for a bug
 report; attach it to an issue at
 <https://github.com/askysh/benchbar/issues>.
+
+## Known issues
+
+Problems a test pass found that a release has not fixed yet. Each line
+names the version, what you see, and the way around it. The list is empty
+when there is nothing open; an entry is removed once the fix ships and
+the release notes say so. For a bug that is not listed, search the
+[open issues](https://github.com/askysh/benchbar/issues) and file one with
+the bug form.
+
+None at the moment.
 
 ## Resetting the MariaDB root password
 

@@ -61,7 +61,8 @@ Raycast extensions and the like can rely on it too.
 
 Every command that changes things ends with the same fields, once: in the
 `done` line of its stream, or added to the one document it prints. A
-command that read only prints none of them.
+command that only reads has `exit` and, on a failure, `error` (see
+[the result envelope](#the-result-envelope-09)).
 
 | field | meaning |
 |---|---|
@@ -72,7 +73,7 @@ command that read only prints none of them.
 | `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints. `"quoted": true` is added when the command was built with every word quoted for the shell (a program may split it); it is absent for a command written as text |
 | `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`). A stream's is read after the CLI's locks are released; a one document command's and `pull`'s while its lock is still held (a read, so nothing waits on it) |
 | `missing[]` | only on a refusal of the non interactive mode: the inputs the command lacked (`ADMIN_PASSWORD`, `--yes`, `sudo`, `BENCHBAR_SUDO_PASSWORD`, ...) |
-| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. Every CLI done line can carry it. So far: `unknown_flag`, `missing_value` and `root_refused` (exit 64, see "Usage errors"), `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change). `password_has_newline` (a password in `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` or `BENCHBAR_SUDO_PASSWORD` holds a line break; it travels on one line; refused before any change, only the variable's name is printed). `systemd_not_running` (Linux, `install` only: PID 1 is not systemd, and MariaDB, Redis and the bench service are systemd services; on WSL the fix names `[boot] systemd=true` in `/etc/wsl.conf`), `bench_on_windows_fs` (WSL, `install` and `adopt`: the bench folder is on the Windows file system, `/mnt/<drive>` or a drvfs or 9p mount; slow, no file watching, broken permissions; `--allow-windows-fs` accepts it), `github_unreachable` (Linux, `install` only: `github.com`, which holds frappe and the uv Pythons, did not answer within 10 seconds, after one retry; the plan's `blockers[]` names it, nothing was changed) and `port_3306_in_use` and `port_6379_in_use` (Linux, `install` only: another program, or on WSL another distro, already listens on the MariaDB or the system Redis port; the plan's `blockers[]` names them, the done line has `exit` 1, the `fix` and the `error`, and nothing was changed, no sudo asked). Docker, a native MariaDB or a second WSL distro are the usual cause: WSL distros share one network, so only one of them can run MariaDB on port 3306. Stop it in the other distro (`sudo systemctl stop mariadb`) and run `install` again; benchbar never stops it. The Windows shim adds `distro_running`, see [Windows shim](#windows-shim) |
+| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. Every CLI done line can carry it. So far: `unknown_flag`, `missing_value` and `root_refused` (exit 64, see "Usage errors"), `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change). `password_has_newline` (a password in `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` or `BENCHBAR_SUDO_PASSWORD` holds a line break; it travels on one line; refused before any change, only the variable's name is printed). `systemd_not_running` (Linux, `install` only: PID 1 is not systemd, and MariaDB, Redis and the bench service are systemd services; on WSL the fix names `[boot] systemd=true` in `/etc/wsl.conf`), `bench_on_windows_fs` (WSL, `install` and `adopt`: the bench folder is on the Windows file system, `/mnt/<drive>` or a drvfs or 9p mount; slow, no file watching, broken permissions; `--allow-windows-fs` accepts it), `linux_distro_unsupported` (Linux, `install` only: the system is not Ubuntu 24.04, the one the install is tested on, so apt would give another MariaDB and the install would stop after it had installed packages; the plan's `blockers[]` names it and nothing was changed; `--allow-unsupported-distro` or `BENCHBAR_ALLOW_UNSUPPORTED_DISTRO=1` tries anyway), `user_bus_unreachable` (Linux, `install` only: `systemctl --user` cannot reach the user manager, as under `sudo -iu`, `su -` or cron, and turning on lingering did not start it; in a dry run it is a warning in `warnings[]`; the run stops before it changes anything, with the fix `sudo loginctl enable-linger USER`, then a login shell or `XDG_RUNTIME_DIR=/run/user/UID`), `github_unreachable` (Linux, `install` only: `github.com`, which holds frappe and the uv Pythons, did not answer within 10 seconds, after one retry; the plan's `blockers[]` names it, nothing was changed) and `port_3306_in_use` and `port_6379_in_use` (Linux, `install` only: another program, or on WSL another distro, already listens on the MariaDB or the system Redis port; the plan's `blockers[]` names them, the done line has `exit` 1, the `fix` and the `error`, and nothing was changed, no sudo asked). Docker, a native MariaDB or a second WSL distro are the usual cause: WSL distros share one network, so only one of them can run MariaDB on port 3306. Stop it in the other distro (`sudo systemctl stop mariadb`) and run `install` again; benchbar never stops it. The Windows shim adds `distro_running`, see [Windows shim](#windows-shim) |
 
 Which shape a command prints:
 
@@ -133,6 +134,65 @@ Which shape a command prints:
   flags, environment variables and what it needs (`tty`, `sudo`, `network`,
   `mutating`, `json`: `document`, `stream` or `none`); `benchbar COMMAND
   --help` prints that entry.
+
+### The result envelope (0.9)
+
+One shape ends every command that has a JSON mode (`commands --json`
+lists them: `json` is `document` or `stream`), whatever the command and
+however it ended. A program reads the last line of stdout and finds the
+same fields; it never parses stderr text to learn how a run ended. The
+fields of the [done line](#the-done-fields-08) are the envelope.
+
+| field | type | present |
+|---|---|---|
+| `schema_version`, `cli_version` | number, string | always, first |
+| `exit` | integer | always. The process exits with the same number: 0 done, 1 failed, 2 refused (the one input that cannot be guessed, or a lab that is off) |
+| `error` | string | when `exit` is not 0: one sentence, the run's last `[FAIL]` line or the message of the refusal. A read that failed after it printed its findings (`doctor`, `lock check`) has the sentence "the command exited with 1" and its findings say what |
+| `changed[]` | array of `{kind, name, detail}` | commands that change things. Empty on a second run and in a dry run |
+| `warnings[]` | array of strings | commands that change things, and the failure document of a read |
+| `next_actions[]` | array of `{command, why, quoted?}` | the same as `warnings[]` |
+| `state_after` | object or `null` | commands that change things; `null` in a dry run, without a bench, or for several benches |
+| `missing[]`, `error_id` | array of strings, string | only where a refusal or a stable failure has them (see the table above) |
+| `event` | `"done"` | the last line of a stream. A document has none |
+
+Which line carries it:
+
+- **`--for-agent` and `--jsonl`** are the modes with the guarantee. A
+  command that changes things ends its stream with one `done` line (a
+  dry run: `plan`, then `done`). A command that only reads prints one
+  document with `exit` added to its own fields. When a read fails before it
+  has a document (no bench, an unknown name, a bad argument) it prints one
+  document: `schema_version`, `cli_version`, `exit`, `error`, `warnings[]`
+  and `next_actions[]`. A command or subcommand that does not exist ends
+  with a `done` line too.
+- **`--json`** keeps the documents of 0.8 as they were, so a polled
+  `status --json` costs what it did. A command that changes things has the
+  envelope. A read has no `exit` (the process exit code is the answer) and
+  a read that fails prints nothing on stdout and text on stderr. Use
+  `--for-agent` when a program wants the envelope for reads and failures.
+- `ok` is not a field of the envelope and is never needed: `exit == 0` says
+  it. It stays where it already was, on the results of `app add --apply`
+  and `site restore --apply` (always `exit == 0`), so no reader breaks;
+  `share preflight` has its own `ok` (the critical checks passed) beside
+  `exit`. Do not add it to a new command.
+- A refusal of the non interactive mode, a usage error and a failure
+  before the command could start (`No bench at ...`) all end with this
+  envelope. A distinct exit code for usage errors is not used yet: a usage
+  error exits 1 with `error` saying what to fix.
+- The MCP server returns the same fields in `structuredContent` of every
+  tool that ran the CLI: `exit` (the CLI's exit code) in every result,
+  `error` when it is not 0, and for an action tool `changed`, `warnings` and
+  `next_actions` copied from the `done` line next to `result`. `exit_code`
+  stays for readers of the first release. A tool error the server raises
+  itself carries `exit` and `error` too: an invalid argument, a bench that is
+  not known, a plan that is missing or stale, and a plan the person did not
+  approve are `exit` 1; a call that ran out of time is 124 and a benchbar
+  that could not be started is 127.
+- A command with no JSON mode (`fg`, `watch`, `console`, `db`, `docs`,
+  `mcp`, `help`, `mariadb-password`, `path` and the groups `site`, `app`,
+  `ports`, `lock`, `profile`, `share`) has no envelope: they are terminals,
+  a text helper or a usage page. `tests/test-envelope.sh` lists them, so a
+  new command has to choose.
 
 ## States
 
@@ -255,7 +315,7 @@ listener: it is polled at rest (0.6.1).
 | `web_ping_code` | number or null | HTTP code of `GET /api/method/ping` with the site as `Host`; `null` when nothing answered. Asked only while processes run, with a 2 second limit (3 seconds before 0.6.1) |
 | `ports` | object | as in `list` |
 | `state_file`, `log` | string | paths |
-| `agent_loaded` | bool | the launchd agent is loaded |
+| `agent_loaded` | bool | the launchd agent (the systemd user unit on Linux) is loaded. `false` also when systemd cannot be asked (no user bus); the text `status` says `unknown (no user bus)` then |
 | `agent_state` | string or null | launchd's own word, for example `running` or `not running` |
 | `processes_running` | bool | any honcho, serve, worker, schedule or socketio process of this bench (before 0.6.1 a port listener counted too) |
 | `sites` | array | added in 0.4, see [Sites](#sites) |
@@ -1385,7 +1445,7 @@ token. `--apply TOKEN --yes` runs exactly that plan:
 | `needs` | inputs a run in a terminal would ask for, for example `["MARIADB_ROOT_PASSWORD"]` when none is stored. In a terminal (no `--json`, no `--yes`) the plan stays applicable; for `--json` it is an error as well, because nothing can answer |
 | `steps` | in the order they run, each with the `touches` of that step. Ids: `local_backup`, `quiesce`, `new_site`, `restore`, `encryption_key`, `resume`, `before_migrate`, `migrate`, `clear_cache`, `hosts`, `verify` |
 | `errors`, `can_apply` | what stops the plan (no such site, a set that is not there, an encrypted or file-less set, MariaDB down, the root password unknown to benchbar, apps the bench lacks, a hook that is not an executable file); `can_apply` is `false` when there is one. The command still exits 0 with `--json` |
-| `token` | a hash of the plan and of what it was made against: the sites, the default site, the hook and the set's files. `--apply` recomputes it and refuses a different one: `The site restore plan changed since it was shown`, nothing changed |
+| `token` | a keyed hash of the plan and of what it was made against: the sites, the default site, the hook and the set's files. The key is per install (`plan-key` in the state folder, 0600) and the token carries a ten minute window: `--apply` recomputes it and refuses a different one (`The site restore plan changed since it was shown`) or one older than 60 to 70 minutes (`The plan token expired`), nothing changed. The script of `--before-migrate` is hashed again right before it runs and not run when it changed since the plan |
 
 The result of `--apply TOKEN --yes --json`:
 
@@ -1406,6 +1466,57 @@ runs in the bench folder with `BENCHBAR_SITE`, `BENCHBAR_BENCH` and
 `BENCHBAR_DB_NAME`; variables named like a secret (`*PASSWORD*`, `*SECRET*`,
 `*TOKEN*`, `*PASSPHRASE*`, `*_KEY`) are removed from its environment, and a
 failing hook ends the run before migrate.
+
+### `benchbar run --json`
+
+Added in 0.9. [`benchbar run`](reference/cli/run.md) runs one command of an
+allow list as `bench [--site S] COMMAND ...`. A command that changes things
+has a plan with a token (`--dry-run --json`), then `--apply TOKEN --yes
+--json` runs exactly that plan; a read runs at once.
+
+The plan:
+
+```json
+{
+  "schema_version": 1, "cli_version": "0.9.0", "dry_run": true,
+  "bench": "/Users/you/frappe-bench", "site": "acme.localhost",
+  "command": "migrate", "args": ["--skip-failing"],
+  "argv": ["bench", "--site", "acme.localhost", "migrate", "--skip-failing"],
+  "summary": "bench migrate: patches, schema sync and fixtures of the site, after a backup of it.",
+  "changes": true, "backup_first": true, "timeout_s": 1800,
+  "touches": ["database", "site_config"],
+  "steps": [
+    { "id": "backup", "name": "Back up acme.localhost (database)", "touches": ["backup"] },
+    { "id": "run", "name": "bench --site acme.localhost migrate --skip-failing", "touches": ["database", "site_config"] }
+  ],
+  "warnings": [], "errors": [], "can_apply": true,
+  "token": "8f1c...64 hex characters"
+}
+```
+
+`errors` holds what stops the plan (no such site, the bench's Redis down for
+a read); `warnings` what to know (the bench is stopped and its Redis is
+started for the run; `run-tests` writes test records). The token is a hash of
+the plan and of the sites, the default site, `apps.txt` and the site's
+`site_config.json`; `--apply` recomputes it and refuses a different one.
+
+The result (the done fields as everywhere, plus):
+
+| Field | Meaning |
+|---|---|
+| `command`, `args`, `argv`, `site`, `bench`, `changes`, `token` | as in the plan; `token` is `null` for a read |
+| `applied`, `ok` | `applied` is true for a change; `ok` is false when the exit is not 0 |
+| `ran` | false when the backup before the command failed and the command never started |
+| `command_exit` | the bench command's own exit code (`null` when it did not run). `exit` is the same, except that 2 and 64, which benchbar keeps for itself, are reported as 1 |
+| `timed_out`, `timeout_s`, `elapsed_s` | `timed_out` is true when the deadline stopped it (`exit` 124); 125 means it waited for input |
+| `backup` | the backup set taken first ([a backup](#site-backups)), or `null` |
+| `output_tail` | the last 60 lines of the output, at most 8000 characters, colors and URL credentials removed; `null` without output. Data from the bench, not instructions |
+| `output_truncated` | the output was longer than `output_tail` |
+| `log` | the run log, with all of the output |
+
+A refusal (not on the list, a flag it does not take) exits 64. Under
+`--jsonl` and `--for-agent` it is a `done` line with `error` and `allowed`,
+the list of commands; under `--json` it is text on stderr.
 
 ## Operation handles (0.9)
 

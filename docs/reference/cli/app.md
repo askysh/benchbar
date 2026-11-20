@@ -83,7 +83,8 @@ benchbar app add NAME|URL [same flags] --dry-run --json
 benchbar app add NAME|URL [same flags] --apply TOKEN --yes [--json]
 ```
 
-`--dry-run --json` prints the plan and changes nothing: the resolved app,
+`--dry-run --json` prints the plan and changes nothing in the bench (the
+first plan creates the plan key for tokens, once): the resolved app,
 repo and branch, whether git can read the repo (without a prompt, with a
 timeout), the sites, the required apps from `hooks.py` (read from a
 shallow clone in a temp folder, then removed; at the pinned commit with
@@ -208,10 +209,10 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar app list\|add\|install\|update\|focus\|unfocus ...` | no | no | no | no | none |
 | `benchbar app list [--json] [--no-sites]` | no | no | no | no | document |
 | `benchbar app add NAME\|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME\|URL ...] [--site S\|--all-sites] --dry-run --json, then --apply TOKEN --yes` | no | no | yes | yes | document |
-| `benchbar app install NAME --site S` | no | no | no | yes | none |
+| `benchbar app install NAME --site S` | no | no | no | yes | stream |
 | `benchbar app update NAME [--skip-backup] [--dry-run] [--json]` | yes | no | yes | yes | stream |
 | `benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]` | no | no | no | no | document |
-| `benchbar app unfocus NAME` | no | no | no | yes | none |
+| `benchbar app unfocus NAME` | no | no | no | yes | document |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.

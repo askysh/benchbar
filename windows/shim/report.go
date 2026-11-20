@@ -81,18 +81,33 @@ var (
 	// word. The value after it is read by secretValueEnd, not by the pattern:
 	// a quoted string with backslash escapes, an array or an object (with
 	// any nesting) cannot be matched by a regular expression.
-	secretNameRE = regexp.MustCompile(`(?i)(\b(?:[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|encryption[_-]?key|private[_-]?key|session[_-]?id|cookie)[A-Za-z0-9_.-]*|sid))(["']?\s*[=:]\s*)`)
+	secretNameRE = regexp.MustCompile(`(?i)(\b(?:[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|encryption[_-]?key|private[_-]?key|session[_-]?id|cookie|credential)[A-Za-z0-9_.-]*|(?:[A-Za-z0-9_.-]*[_.-])?pass(?:[_.-][A-Za-z0-9_.-]*)?|[A-Za-z0-9_.-]*[_.-]pwd(?:[_.-][A-Za-z0-9_.-]*)?|sid))(["']?\s*[=:]\s*)`)
 	// an Authorization header or field: the scheme (Bearer, Basic) and the
 	// credential after it; a bare "Bearer xxxx" is covered by bearerRE
 	authorizationRE = regexp.MustCompile(`(?i)(\bauthorization["']?\s*[=:]\s*["']?)[^\r\n"']+`)
 	bearerRE        = regexp.MustCompile(`(?i)\b(bearer\s+)[A-Za-z0-9._~+/=-]{16,}`)
 	// a Cookie or Set-Cookie header holds the whole line as secrets
 	cookieLineRE = regexp.MustCompile(`(?im)^(\s*(?:set-)?cookie\s*:\s*).+$`)
-	winUsersRE   = regexp.MustCompile(`(?i)([A-Za-z]:[\\/]+Users[\\/]+)[^\\/\s"'<>|:*?]+`)
-	wslHomeRE    = regexp.MustCompile(`(?i)(\\\\wsl(?:\.localhost|\$)\\[^\\\s"']+\\home\\)[^\\\s"'<>]+`)
-	mntUsersRE   = regexp.MustCompile(`(?i)(/mnt/[a-z]/Users/)[^/\s"'<>]+`)
-	linuxHomeRE  = regexp.MustCompile(`(/home/)[^/\s"'<>:]+`)
-	pathTokenRE  = regexp.MustCompile(`(?i)(?:[A-Za-z]:[\\/][^\s"']*|\\\\[^\s"']+|/(?:home|mnt|tmp|usr|etc|var|opt|root)/[^\s"']*)`)
+	// a flag whose value follows after a space (--password VALUE), and -pVALUE
+	// glued to the flag on a line that runs a SQL client; the value is a quoted
+	// string or one word that does not start with a dash
+	flagSecretRE = regexp.MustCompile(`(?im)(^|\s)(--(?:[A-Za-z0-9-]*(?:password|passwd|passphrase|secret|token|credential|api-key|apikey)[A-Za-z0-9-]*|pass|pwd)\s+)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s'"-]\S*)`)
+	// curl: -u and --user (user:password), -b and --cookie (cookie text), on a
+	// line that runs curl; --cookie on any line; --user elsewhere only with a
+	// colon in the value (systemctl --user restart is not a credential)
+	curlCmdLineRE = regexp.MustCompile(`(?im)^.*curl.*$`)
+	curlArgRE     = regexp.MustCompile(`(^|\s)(-[ub]|--user|--cookie)(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s'"-]\S*)`)
+	cookieFlagRE  = regexp.MustCompile(`(?im)(^|\s)(--cookie)(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s'"-]\S*)`)
+	userColonRE   = regexp.MustCompile(`(?im)(^|\s)(--user\s+)[^\s'"-]\S*:\S*`)
+	// a header whose name ends in -Token or -Key, also inside quotes
+	tokenHeaderRE = regexp.MustCompile(`(?i)(^|[^A-Za-z0-9_-])((?:[A-Za-z0-9]+-)+(?:token|key)\s*:\s*)[^"'\r\n]*`)
+	sqlLineRE     = regexp.MustCompile(`(?im)^.*(?:mysql|mariadb).*$`)
+	sqlPassRE     = regexp.MustCompile(`(^|\s)(-p)("[^"]*"|'[^']*'|[^\s'"-]\S*)`)
+	winUsersRE    = regexp.MustCompile(`(?i)([A-Za-z]:[\\/]+Users[\\/]+)[^\\/\s"'<>|:*?]+`)
+	wslHomeRE     = regexp.MustCompile(`(?i)(\\\\wsl(?:\.localhost|\$)\\[^\\\s"']+\\home\\)[^\\\s"'<>]+`)
+	mntUsersRE    = regexp.MustCompile(`(?i)(/mnt/[a-z]/Users/)[^/\s"'<>]+`)
+	linuxHomeRE   = regexp.MustCompile(`(/home/)[^/\s"'<>:]+`)
+	pathTokenRE   = regexp.MustCompile(`(?i)(?:[A-Za-z]:[\\/][^\s"']*|\\\\[^\s"']+|/(?:home|mnt|tmp|usr|etc|var|opt|root)/[^\s"']*)`)
 )
 
 type redactor struct {
@@ -224,6 +239,16 @@ func (r *redactor) text(s string) string {
 	s = authorizationRE.ReplaceAllString(s, "${1}<redacted>")
 	s = cookieLineRE.ReplaceAllString(s, "${1}<redacted>")
 	s = bearerRE.ReplaceAllString(s, "${1}<redacted>")
+	s = flagSecretRE.ReplaceAllString(s, "${1}${2}<redacted>")
+	s = sqlLineRE.ReplaceAllStringFunc(s, func(line string) string {
+		return sqlPassRE.ReplaceAllString(line, "${1}${2}<redacted>")
+	})
+	s = curlCmdLineRE.ReplaceAllStringFunc(s, func(line string) string {
+		return curlArgRE.ReplaceAllString(line, "${1}${2}${3}<redacted>")
+	})
+	s = cookieFlagRE.ReplaceAllString(s, "${1}${2}${3}<redacted>")
+	s = userColonRE.ReplaceAllString(s, "${1}${2}<redacted>")
+	s = tokenHeaderRE.ReplaceAllString(s, "${1}${2}<redacted>")
 	s = redactSecrets(s)
 	if r.profile != nil {
 		s = r.profile.ReplaceAllString(s, `C:\Users\<user>`)

@@ -98,11 +98,19 @@ for f in scripts/unknown-tool.py .shellcheckrc .gitignore tests/data.json; do
   assert_contains "$OUT" "mode=full" "($f)"
   reset
 done
-for f in install.ps1 scripts/app-icon.py windows/tray/a.cs macos/a.swift examples/x.json CHANGELOG.md .github/workflows/other.yml; do
+for f in install.ps1 scripts/app-icon.py windows/tray/a.cs macos/a.swift examples/x.json CHANGELOG.md .github/CODEOWNERS; do
   case "$f" in */*) mkdir -p "$REPO/${f%/*}" ;; esac
   printf 'x\n' >"$REPO/$f"
   aff --base main --machine
   assert_contains "$OUT" "mode=none" "($f)"
+  reset
+done
+# a workflow, Dependabot's file and the pinned Swift packages: the supply chain test
+for f in .github/workflows/other.yml .github/dependabot.yml macos/Package.resolved windows/shim/go.mod; do
+  case "$f" in */*) mkdir -p "$REPO/${f%/*}" ;; esac
+  printf 'x\n' >"$REPO/$f"
+  aff --base main --list
+  assert_contains "$OUT" "affected: test-supply-chain" "($f)"
   reset
 done
 # the fixtures the macOS app tests share with the CLI tests

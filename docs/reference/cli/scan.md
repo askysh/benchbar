@@ -72,7 +72,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | Command | Terminal | `sudo` | Network | Changes things | JSON |
 |---|---|---|---|---|---|
 | `benchbar scan PATH [--json]` | no | no | no | no | document |
-| `benchbar register PATH...` | no | no | no | yes | none |
+| `benchbar register PATH...` | no | no | no | yes | document |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.

@@ -31,7 +31,7 @@ struct BenchPage: View {
                 case .overview: BenchOverview(store: store, workbench: workbench, bench: bench, router: router)
                 case .sites: BenchSites(store: store, workbench: workbench, bench: bench, router: router)
                 case .apps: BenchApps(store: store, workbench: workbench, bench: bench)
-                case .health: BenchHealth(store: store, bench: bench, router: router)
+                case .health: BenchHealth(store: store, workbench: workbench, bench: bench, router: router)
                 case .sharing:
                     if Labs.shared.isOn(.lanRooms), let share = ShareCenter.shared.store(for: bench.path) { SharingTab(bench: bench, share: share) }
                 }
@@ -91,8 +91,11 @@ struct BenchOverview: View {
     @Bindable var router: WindowRouter
     @State private var schedulerChange: Bool?
     @State private var portSetup: PortSetupRun?
+    @State private var servicing = false
 
     private var controls: BenchControls { store.controls(for: bench) }
+    /// What this CLI lists (`commands --json`): a button of a newer command shows only when it is there.
+    private var catalog: CommandCatalog? { workbench.commandState.catalog }
 
     var body: some View {
         let ports = bench.status?.ports ?? bench.summary.ports
@@ -138,12 +141,34 @@ struct BenchOverview: View {
                          : "Runs scheduled jobs (bench schedule) in the background. Changing it restarts a running bench.")
                 }
                 .disabled(bench.schedulerOn == nil || !store.canChange(bench))
+                if catalog?.has("autostart") == true, !bench.needsService {
+                    Toggle(isOn: Binding(get: { workbench.autostartOn[bench.path] ?? false },
+                                         set: { on in Task { await workbench.setAutostart(on, on: bench) } })) {
+                        Text("Start after login")
+                        Text(workbench.autostartOn[bench.path] == nil ? "Reading the setting…"
+                             : "The bench comes back after you log in, if it was running when you logged out.")
+                    }
+                    .disabled(workbench.autostartOn[bench.path] == nil || !store.canChange(bench))
+                }
+                if catalog?.has("service") == true {
+                    LabeledContent {
+                        Button(bench.needsService ? "Install Service…" : "Refresh Service…") { servicing = true }
+                            .disabled(!store.canChange(bench))
+                    } label: {
+                        Text("Service")
+                        Text(bench.needsService ? "Not installed. Shows its plan first." : "Writes the agent and runner files again. Shows its plan first.")
+                    }
+                }
             }
-
         }
         .formStyle(.grouped)
         .sheet(item: $portSetup) { run in PortSetupSheet(run: run) { portSetup = nil } }
+        .sheet(isPresented: $servicing) { ServiceSheet(workbench: workbench, bench: bench) { servicing = false } }
         .task { openRequestedSetup() }
+        .task(id: store.stamp(for: bench)) {
+            await workbench.loadCommands()
+            await workbench.showAutostart(bench)
+        }
         .onChange(of: router.setupRequest) { _, _ in openRequestedSetup() }
         .alert(schedulerChange == true ? "Run the scheduler for \(bench.name)?" : "Stop the scheduler for \(bench.name)?",
                isPresented: Binding(get: { schedulerChange != nil }, set: { if !$0 { schedulerChange = nil } })) {
@@ -215,6 +240,10 @@ struct BenchOverview: View {
                     editorButton(editor)
                     Divider()
                 }
+                if catalog?.hasFlag("up", "--services-only") == true, !bench.needsService {
+                    servicesItems
+                    Divider()
+                }
                 Button { Workspace.openShell(.console, site: bench.summary.site, bench: bench, store: store) } label: {
                     Label("Open Console", systemImage: "terminal")
                 }
@@ -228,6 +257,23 @@ struct BenchOverview: View {
                 Button("Copy Path", systemImage: "doc.on.doc") { Workspace.copy(bench.path) }
             }
         }
+    }
+
+    /// Start Services Only and Stop Services, for a stopped bench: no plan, the click is the decision.
+    /// The status says whether each Redis answers; without it (an older CLI) both are offered.
+    @ViewBuilder private var servicesItems: some View {
+        let redis = bench.status?.redis
+        let stopped = bench.state == .stopped && store.canChange(bench)
+        Button { Task { await workbench.setServices(true, on: bench) } } label: {
+            Label("Start Services Only", systemImage: "externaldrive.badge.plus")
+        }
+        .disabled(!stopped || redis?.allRunning == true)
+        .help("up --services-only: the bench's Redis and nothing else, for a restore or a migrate")
+        Button { Task { await workbench.setServices(false, on: bench) } } label: {
+            Label("Stop Services", systemImage: "externaldrive.badge.minus")
+        }
+        .disabled(!stopped || redis?.anyRunning == false)
+        .help("down: stops the Redis that Start Services Only started")
     }
 
     private func editorButton(_ editor: Editor?) -> some View {

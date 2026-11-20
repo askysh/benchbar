@@ -560,9 +560,10 @@ fl_cmd_app_focus() {
   fl_focus_apps >/dev/null
   if [[ "$OPT_JSON" == "1" ]]; then
     while IFS= read -r a; do [[ -n "$a" ]] && reasons+=("$a"); done < <(fl_app_focus_reasons "$app")
-    printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"pin":%s,"focus":%s,"reasons":%s}\n' \
+    fl_json_doc_begin
+    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"pin":%s,"focus":%s,"reasons":%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$pin")" \
-      "$(fl_json_bool "$(fl_is_focus_app "$app" && printf 1 || printf 0)")" "$(fl_json_str_array ${reasons[@]+"${reasons[@]}"})"
+      "$(fl_json_bool "$(fl_is_focus_app "$app" && printf 1 || printf 0)")" "$(fl_json_str_array ${reasons[@]+"${reasons[@]}"})")"
     return 0
   fi
   case "$pin" in
