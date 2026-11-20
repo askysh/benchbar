@@ -297,7 +297,7 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   # ---- the default site: an agent never rolls it back, a person can
   run_fm site snapshot macdev --label "default" --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"
-  id3="$(ls "$BENCH/sites/macdev/snapshots" | grep default)"
+  for d in "$BENCH"/sites/macdev/snapshots/*default*; do id3="${d##*/}"; done
   BENCHBAR_NONINTERACTIVE=1 run_json site rollback macdev --to "$id3" --dry-run --json --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT$ERR"
   assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')"
