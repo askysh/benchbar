@@ -1081,4 +1081,21 @@ struct BenchTrustTests {
         #expect(merged.processesRunning == true, "the file's state, not the last status's")
         #expect(fromFile.merged(over: nil) == fromFile)
     }
+
+    @Test func theFileKeepsReadinessOfTheSameRun() {
+        let ready = ReadyInfo(ready: true)
+        let seen = BenchStatus(schemaVersion: 1, bench: "/b", state: .running, pid: 4242, ready: ready)
+        // the runner's heartbeat, the same run: state.json has no `ready`, the pill keeps it
+        let same = BenchStatus(schemaVersion: 1, bench: "/b", state: .running, pid: 4242, webPingCode: 200, source: "runner")
+        #expect(same.merged(over: seen).ready == ready)
+        // another state or another process: what the CLI saw is stale, so it is dropped
+        let stopped = BenchStatus(schemaVersion: 1, bench: "/b", state: .stopped, source: "runner")
+        #expect(stopped.merged(over: seen).ready == nil)
+        let restarted = BenchStatus(schemaVersion: 1, bench: "/b", state: .running, pid: 5000, source: "runner")
+        #expect(restarted.merged(over: seen).ready == nil)
+        // a status that has its own `ready` keeps it
+        let own = ReadyInfo(ready: false)
+        let fresh = BenchStatus(schemaVersion: 1, bench: "/b", state: .running, pid: 4242, ready: own)
+        #expect(fresh.merged(over: seen).ready == own)
+    }
 }

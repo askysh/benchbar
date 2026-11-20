@@ -1,0 +1,39 @@
+#!/bin/bash
+# nft mock for the Linux LAN guard: logs the call and changes nothing of this machine.
+#   -c -f FILE          a syntax check; fails while $MOCK_STATE/nft_invalid exists
+#   -f FILE             loads the table: $MOCK_STATE/nft_table holds the rules, and while
+#                       $MOCK_STATE/nft_loads exists the LAN then reaches only the ports that file lists
+#                       ($MOCK_STATE/lan_reachable_ports, read by the nc mock): the block working
+#   delete table ...    deletes it (an error when there is none, like the real one)
+#   list table ...      prints it
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+st="${MOCK_STATE:-/nonexistent}"
+check=0; file=""; args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case "${args[$i]}" in
+    -c) check=1 ;;
+    -f) file="${args[$((i + 1))]:-}" ;;
+  esac
+done
+if [[ -n "$file" ]]; then
+  [[ -r "$file" ]] || { echo "nft: cannot read $file" >&2; exit 1; }
+  if [[ "$check" == 1 ]]; then
+    [[ ! -f "$st/nft_invalid" ]] || { echo "Error: syntax error" >&2; exit 1; }
+    exit 0
+  fi
+  cp "$file" "$st/nft_table"
+  [[ ! -f "$st/nft_loads" ]] || cp "$st/nft_loads" "$st/lan_reachable_ports"
+  exit 0
+fi
+case "${1:-}" in
+  delete)
+    [[ -f "$st/nft_table" ]] || { echo "Error: No such file or directory" >&2; exit 1; }
+    command rm -f "$st/nft_table"
+    # the block is gone: the bench ports answer on the LAN
+    printf '8097\n18097\n' >"$st/lan_reachable_ports"
+    exit 0 ;;
+  list) [[ -f "$st/nft_table" ]] && { cat "$st/nft_table"; exit 0; }; exit 1 ;;
+esac
+exit 0

@@ -133,7 +133,8 @@ nonisolated struct LiveBenchFiles: BenchFiles {
 
 extension BenchStatus {
     /// state.json carries the core fields only: keep what the last full
-    /// status said about ports, sites and the scheduler, so a transition
+    /// status said about ports, sites, the scheduler and (for the same run)
+    /// readiness, so a transition
     /// from the file does not blank them in the window.
     nonisolated func merged(over previous: BenchStatus?) -> BenchStatus {
         guard let previous else { return self }
@@ -146,6 +147,10 @@ extension BenchStatus {
         merged.sites = sites ?? previous.sites
         merged.scheduler = scheduler ?? previous.scheduler
         merged.processesRunning = processesRunning ?? (state == .running || state == .starting)
+        // `ready` is the CLI's word and state.json has none. It holds only for the run
+        // it was read in: a changed state or pid makes it stale, so it is dropped and
+        // the pill says what the file says until the CLI is asked again.
+        if ready == nil, state == previous.state, pid == previous.pid { merged.ready = previous.ready }
         return merged
     }
 }

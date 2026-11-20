@@ -37,7 +37,13 @@ nonisolated struct BenchControls: Equatable, Sendable {
 
 /// Words for the popover.
 nonisolated enum BenchText {
-    static func headline(_ state: BenchState, reason: StopReason?, exitCode: Int?) -> String {
+    /// `ready` (0.9 CLIs) says more than "running": a bench whose code changed needs a restart,
+    /// and one whose site answers but whose realtime server or Redis does not is not ready yet.
+    static func headline(_ state: BenchState, reason: StopReason?, exitCode: Int?, ready: ReadyInfo? = nil) -> String {
+        if state == .running, let ready {
+            if ready.stale == true { return "Needs restart (code changed)" }
+            return ready.ready ? "Ready" : "Running, not ready"
+        }
         switch state {
         case .stopped:
             return reason == .broken ? "Stopped: needs repair" : "Stopped"

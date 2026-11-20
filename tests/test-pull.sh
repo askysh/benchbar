@@ -90,7 +90,7 @@ conf_get() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get
 
 # ---- refusals before anything happens
 run_fm pull --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Usage: benchbar pull HOST:SITE"
-run_fm pull "-oProxyCommand=x:$RS" --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"
+run_fm pull "-oProxyCommand=x:$RS" --bench-dir "$BENCH"; assert_eq "64" "$CODE" "$OUT"
 run_fm pull "$SRC" --as "Bad_Name" --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Invalid site name"
 run_fm pull "$SRC" --skip-app frappe --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "frappe cannot be skipped"
 touch "$MOCK_STATE/ssh_refused"

@@ -1,0 +1,20 @@
+#!/bin/bash
+# ip mock: "ip -4 route get ADDR" names $MOCK_STATE/lan_iface and $MOCK_STATE/lan_ip as the default route's
+# interface and source address (no route without lan_iface); "ip -o -6 addr show dev IF scope global"
+# prints $MOCK_STATE/lan_ip6 when there is one
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+st="${MOCK_STATE:-/nonexistent}"
+case "$*" in
+  "-4 route get "*)
+    if [[ -s "$st/lan_iface" && -s "$st/lan_ip" ]]; then
+      printf '%s via 192.168.1.1 dev %s src %s uid 1000 \n    cache \n' "${4:-1.1.1.1}" "$(cat "$st/lan_iface")" "$(cat "$st/lan_ip")"
+      exit 0
+    fi
+    echo "RTNETLINK answers: Network is unreachable" >&2; exit 2 ;;
+  "-o -6 addr show dev "*)
+    [[ -s "$st/lan_ip6" ]] && printf '2: %s    inet6 %s/64 scope global dynamic \\       valid_lft 86396sec preferred_lft 14396sec\n' "$6" "$(cat "$st/lan_ip6")"
+    exit 0 ;;
+esac
+exit 0

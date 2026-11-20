@@ -40,7 +40,7 @@ be merged back. A fast forward needs `main` to be an ancestor of
 `next-release`. The one exception to "only a release moves `main`" is a
 docs only pull request, which may target `main` so that it goes live on the
 site at once (see [The docs site](#the-docs-site)): the next release first
-brings those commits into `next-release` with one merge commit (step 5 of
+brings those commits into `next-release` with one merge commit (step 6 of
 [Cutting a release](#cutting-a-release)). A commit on `main` that changes
 anything but docs makes the release refuse.
 
@@ -76,7 +76,7 @@ rule of `scripts/docs-only.sh`) may target `main`, and the site shows it as
 soon as it is merged. Everything else, and every pull request that also
 touches code, targets `next-release`. The squash commit on `main` is a commit
 `next-release` does not have, so the next release brings it in first, with one
-merge commit of `main` into `next-release` (step 5). That merge changes only
+merge commit of `main` into `next-release` (step 6). That merge changes only
 docs, so CI runs no tests on it and the release gate walks back to the last
 commit that did.
 
@@ -92,15 +92,20 @@ On `next-release`, then into `main`:
    `## X.Y.Z - date` with a new empty `## Unreleased` above it, and records
    the tray's CLI fixtures again (`tests/record-tray-fixtures.sh`: they hold
    `cli_version`). Commit what it changed.
-2. Write the release paragraph in `README.md` and in `ROADMAP.md`: the only
-   places the script cannot write for you. `scripts/check-version.sh` (the
+2. Change the "The latest release is X.Y.Z" line in `README.md` and in
+   `ROADMAP.md`: the only places the script cannot write for you. `scripts/check-version.sh` (the
    one check that `auto-tag.yml`, `release.yml` and
    `tests/test-version-sources.sh` all run) fails until both name the
    version, until the changelog has the section and until no fragment is
    left, so a gap shows on the release pull request and not after the
    merge. The workflow uses the changelog section as the release notes
    (`scripts/release-notes.sh`).
-3. Refresh the screenshots in `docs/images` for every screen the release
+3. Write the section of this release in `docs/whats-new.md`: change
+   `## X.Y.Z (coming)` to `## X.Y.Z (date)`, check its platform tags and
+   upgrade notes against the folded `CHANGELOG.md` section, and add a
+   section for a version that has none. `tests/test-docs.sh` fails when a
+   version in `CHANGELOG.md` from 0.8.0 on has no section there.
+4. Refresh the screenshots in `docs/images` for every screen the release
    changed, and add new ones where a page still has none:
    - The Mac first run wizard and the walkthrough: `WizardSnapshotTests`
      renders their pages with fixture data, in light and dark (the
@@ -115,12 +120,12 @@ On `next-release`, then into `main`:
      Find User sheet and three wizard pages in a real key window (the
      window panes are captured as the window server draws them, so the
      sidebar and the selection look as in the app).
-4. Merge those changes into `next-release` by pull request (squash, as
+5. Merge those changes into `next-release` by pull request (squash, as
    always). For a release with a big change, cut a
    [release candidate](#release-candidates) first. Wait until the push run
    of CI on the new `next-release` head is green: that run is the one the
    release is built on. Merge nothing else until the tag exists.
-5. Fast forward `main` to that commit. You need to be a repository admin who
+6. Fast forward `main` to that commit. You need to be a repository admin who
    can bypass the `main` ruleset:
 
    ```bash
@@ -138,7 +143,7 @@ On `next-release`, then into `main`:
    changes only docs (`scripts/docs-only.sh --commit <sha>` for each), bring
    them into `next-release` with one merge commit and push it (a fast
    forward of `next-release`; the admin bypasses its ruleset), then wait for
-   the "CI result" of the merge before step 5 again:
+   the "CI result" of the merge before step 6 again:
 
    ```bash
    git checkout --detach origin/next-release
@@ -149,7 +154,7 @@ On `next-release`, then into `main`:
    On a conflict, stop (`git merge --abort`) and bring the change over by
    pull request. If any commit of `main` changes code, do not merge: ask the
    maintainer how to put `main` right.
-6. `auto-tag.yml` runs `scripts/check-version.sh` (every place says the same
+7. `auto-tag.yml` runs `scripts/check-version.sh` (every place says the same
    version, CHANGELOG.md has its section, no fragment is left), refuses a
    release candidate version on `main`, tags `vX.Y.Z` on that commit and
    starts `release.yml` and `release-windows.yml` for the tag. A push to
@@ -158,12 +163,12 @@ On `next-release`, then into `main`:
    version bump?"). A tag pushed by hand still starts both release workflows.
    If `main` has a commit that `next-release` has not, the push is not a
    fast forward and git refuses it: do not force it. Docs fixes are brought
-   over by the merge of step 5; a code commit on `main` was pushed by
+   over by the merge of step 6; a code commit on `main` was pushed by
    mistake, and it is a decision about history (not a script) how to put
    `main` right.
-7. Wait for the release workflows, open the draft on the Releases page,
+8. Wait for the release workflows, open the draft on the Releases page,
    check the files, publish.
-8. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
+9. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
    below). It opens a pull request on `askysh/homebrew-tap` and stops.
    Read it (the formula and cask diff) and merge it yourself; until then
    `brew install` still gives the old version.

@@ -174,7 +174,8 @@ struct BenchPanel: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 3) {
                 StatePill(state: bench.state, text: BenchText.headline(
-                    bench.state, reason: bench.machine.stopReason, exitCode: bench.status?.lastExitCode))
+                    bench.state, reason: bench.machine.stopReason, exitCode: bench.status?.lastExitCode,
+                    ready: bench.status?.ready))
                 if let since = bench.upSince {
                     Uptime(since: since) { Text("up \($0)").font(.caption).monospacedDigit().foregroundStyle(.secondary) }
                 }

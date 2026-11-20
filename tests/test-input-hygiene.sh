@@ -110,7 +110,7 @@ assert_not_contains "$r" '__BENCH_RE__' "(the runner has no bench path pattern: 
 r="$(fl_template_render bench-run.sh "BENCH_DIR=/Users/bob/dev/Bob's Bench" "BENCH_NAME=Bob-s-Bench" \
   "HONCHO=/Users/bob/.local/pipx/venvs/frappe-bench/bin/honcho" "PORTS=8000,9000,11000,13000" "SITE=macdev" "WEB_PORT=8000" "CLI_VERSION=0.7.2" \
   "LABEL=com.benchbar.Bob-s-Bench" "MAX_STARTS=3" "WINDOW=600")"
-assert_eq "bench-run.sh v9 4e61ca0b087e" "$(fl_template_header_of "$r")" "(an ordinary runner renders to a stable hash)"
+assert_eq "bench-run.sh v10 d164eb650257" "$(fl_template_header_of "$r")" "(an ordinary runner renders to a stable hash)"
 r="$(fl_template_render launchagent.plist "LABEL=com.benchbar.Bob-s-Bench" "APP_BUNDLE_ID=com.akashmishra.benchbar" "RUNNER=/Users/bob/dev/Bob's Bench/benchbar-run.sh" \
   "BENCH_DIR=/Users/bob/dev/Bob's Bench" "PATH=/opt/homebrew/bin:/usr/bin:/bin" "RUN_AT_LOAD=true" "LOG=/Users/bob/dev/Bob's Bench/logs/bench.log")"
 assert_eq "launchagent.plist v2 3b09ae107fcf" "$(fl_template_header_of "$r")" "(an ordinary plist renders as before)"
@@ -131,7 +131,7 @@ compat_out="$(BASH_COMPAT=32 SCRIPT_DIR="$ROOT" FL_STATE_DIR="$FL_STATE_DIR" bas
   fl_template_header_of "$r"; printf "%s\n" "$r" | grep -c -x "BENCHBAR=\"/Users/bob/.local/bin/benchbar\""
   fl_xml_escape_v x "a&b<c>"; printf "%s\n" "$x"
 ' _ "$ROOT")"
-assert_eq "bench-run.sh v9 4e61ca0b087e
+assert_eq "bench-run.sh v10 d164eb650257
 1
 launchagent.plist v2 3b09ae107fcf
 1

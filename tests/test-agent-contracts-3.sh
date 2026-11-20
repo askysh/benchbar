@@ -26,10 +26,10 @@ INIT='{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVers
 mcp_call() { printf '%s\n' "$INIT" "$1" | BENCHBAR_MCP_CLI="$FAKE" "$FM" mcp 2>/dev/null | tail -n +2; }
 : >"$TMP_DIR/mcp-argv.log"
 R="$(mcp_call '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_status","arguments":{}}}')"
-assert_contains "$(cat "$TMP_DIR/mcp-argv.log")" "status --json --ping|1" "(status pings every site; the CLI is told nothing can be asked)"
+assert_contains "$(cat "$TMP_DIR/mcp-argv.log")" "status --json --ping --deep|1" "(status pings every site; the CLI is told nothing can be asked)"
 R="$(mcp_call '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_up","arguments":{}}}')"
 assert_contains "$(cat "$TMP_DIR/mcp-argv.log")" "up --plain --json|1"
-assert_contains "$(cat "$TMP_DIR/mcp-argv.log")" "status --json --ping|1" "(the status after an action pings too)"
+assert_contains "$(cat "$TMP_DIR/mcp-argv.log")" "status --json --ping --deep|1" "(the status after an action pings too)"
 assert_eq "0 [OK] bench is up True" "$(printf '%s' "$R" | jget - '" ".join(str(x) for x in (d["result"]["structuredContent"]["exit_code"], d["result"]["structuredContent"]["output"], d["result"]["structuredContent"]["result"]["changed"][0]["kind"] == "process"))')" "(the result keeps its fields; the done line is added)"
 : >"$TMP_DIR/mcp-argv.log"
 R="$(mcp_call '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"since":"2026-10-29T00:00:03Z","since_restart":true,"lines":5}}}')"
