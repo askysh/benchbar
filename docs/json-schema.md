@@ -70,7 +70,7 @@ command that only reads has `exit` and, on a failure, `error` (see
 |---|---|
 | `op_id` | (0.9) the run's handle, also on every `plan`, `step` and `progress` line; absent when the run ended before it started (a refusal) and in a dry run. See [operation handles](#operation-handles-09) |
 | `exit` | the exit code; the process exits with the same number, so a pipe cannot hide a failure |
-| `changed[]` | what the run changed: `{"kind": "bench"\|"site"\|"app"\|"service"\|"ports"\|"hosts"\|"backup"\|"process"\|"state", "name", "detail"}`. Only what the run really changed: empty on a second run, and in a dry run. `install` reports the bench, the site and the apps its phase scripts create |
+| `changed[]` | what the run changed: `{"kind": "bench"\|"site"\|"app"\|"service"\|"ports"\|"hosts"\|"backup"\|"process"\|"state", "name", "detail"}`. Only what the run really changed: empty on a second run, and in a dry run. A step that failed after it began to change something is listed with a `detail` that starts with `partial:` (a clone that was not built, an `install-app` or `migrate` that failed). `install` reports the bench, the site and the apps its phase scripts create |
 | `warnings[]` | the run's `[WARN]` lines, as text |
 | `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints. `"quoted": true` is added when the command was built with every word quoted for the shell (a program may split it); it is absent for a command written as text |
 | `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`). A stream's is read after the CLI's locks are released; a one document command's and `pull`'s while its lock is still held (a read, so nothing waits on it) |
@@ -1178,14 +1178,18 @@ app's branch, so it writes exactly what the sheet showed.
  "exists":true,"diff":"@@ -3 +3 @@\n-description = \"Acme\"\n+description = \"Acme ERP\"","base":"v15-lts",
  "apps":[{"name":"acme_ecr","repo":"git@github.com:acme/acme_ecr.git","branch":"develop","access":"private","requires":["acme_base"]}],
  "check":{"repos":[{"app":"acme_ecr","repo":"git@github.com:acme/acme_ecr.git","reachable":false,"reason":"Permission denied (publickey)."}]},
- "skipped_apps":["acme_ecr"],"digest":"c2a1f0...64 hex characters"}
+ "skipped_apps":["acme_ecr"],"runs_code_from":["github.com/acme"],"new_owners":["github.com/acme"],
+ "digest":"c2a1f0...64 hex characters"}
 ```
 
 `exists` is whether `~/.config/benchbar/profiles/NAME.toml` is there;
 `diff` is the unified diff against it (`null` when there is none or they
 are equal). `apps[].access` is `null` when the file does not say.
 `skipped_apps` are the apps `install --profile` would leave out: the
-unreachable ones and every app that requires one. `digest` is the SHA-256
+unreachable ones and every app that requires one. `runs_code_from` is the
+host and owner of each repo the profile names (installing it runs their
+code: `pip install`, a build, the apps' hooks), and `new_owners` the ones
+no app of the bench and no line of `config/apps.tsv` uses yet. `digest` is the SHA-256
 of the file the import would write. With `--yes --json` it writes and
 prints `{"name","path","source"}`; with `--expect DIGEST` as well, it
 refuses (exit 1, nothing written) when the source changed since that plan.

@@ -6,6 +6,8 @@
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 # shellcheck source=tests/lib/apps-fixtures.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/apps-fixtures.sh"
+# these tests import, subscribe and read a profile folder whose repos are file:// folders: files from others take a local repo only with this
+export BENCHBAR_ALLOW_LOCAL_REPOS=1
 
 USER_DIR="$HOME/.config/benchbar/profiles"
 TEAM_REPO="$TMP_DIR/team-config"

@@ -36,7 +36,7 @@ command -v brew >/dev/null 2>&1 || { printf '[FAIL] brew is not installed; canno
 
 file="$(fl_config_file release-profiles.tsv)"
 bad=0; seen=" "
-while IFS=$'\t' read -r profile _label _fb _eb py _pybin node _nmaj db _rest; do
+while IFS=$'\037' read -r profile _label _fb _eb py _pybin node _nmaj db _rest; do
   [[ -n "$profile" && "$profile" != "profile" ]] || continue
   for f in "$py" "$node" "$db"; do
     case "$seen" in *" $f "*) continue ;; esac
@@ -55,6 +55,6 @@ while IFS=$'\t' read -r profile _label _fb _eb py _pybin node _nmaj db _rest; do
       printf '[OK] %s (profile %s)\n' "$f" "$profile"
     fi
   done
-done <"$file"
+done < <(tr '\t' '\037' <"$file")
 [[ "$bad" == "0" ]] || { printf '\n[FAIL] a profile names a formula Homebrew is about to disable; fix config/release-profiles.tsv before releasing\n' >&2; exit 1; }
 printf '\n[OK] every profile formula is more than %s days from a Homebrew disable date\n' "$HORIZON"

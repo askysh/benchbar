@@ -73,7 +73,7 @@ assert_eq "$TIP branch None acme_shared" "$(printf '%s' "$OUT" | jget - 'd["comm
 plan acme_pin --commit "$C1" --site macdev
 assert_eq "0" "$CODE" "$ERR"
 assert_eq "$C1 pin True []" "$(printf '%s' "$OUT" | jget - 'd["commit"] + " " + d["commit_source"] + " " + str(d["can_apply"]) + " " + str(d["required_apps"])')"
-assert_eq "Clone acme_pin,Build,Install on macdev,Restart" "$(steps_of)"
+assert_eq "Clone acme_pin,Build,Back up macdev,Install on macdev,Restart" "$(steps_of)"
 assert_eq "False" "$(printf '%s' "$OUT" | jget - '"apps" in d')" "(a single target keeps today's shape)"
 # --commit=SHA and an option before the target mean the same
 plan --commit="$C1" acme_pin --site macdev
@@ -134,7 +134,7 @@ assert_calls_contain '^bench get-app --skip-assets --branch main '
 assert_calls_not_contain '^bench build'
 assert_calls_not_contain 'install-app acme_nr'
 assert_contains "$ERR" "the clone does not reach the pinned commit (planned ${N1:0:12}, cloned $(remote_head acme_nr | cut -c1-12)); get-app cloned it and installed its Python requirements, but nothing was built or installed on a site."
-assert_eq "failed skipped skipped skipped" "$(printf '%s' "$OUT" | jget - '" ".join(s["status"] for s in d["steps"])')"
+assert_eq "failed skipped skipped skipped skipped" "$(printf '%s' "$OUT" | jget - '" ".join(s["status"] for s in d["steps"])')"
 assert_eq "failed" "$(printf '%s' "$OUT" | jget - 'd["apps"][0]["clone"]')"
 assert_eq "skipped skipped" "$(printf '%s' "$OUT" | jget - 'd["apps"][0]["build"] + " " + d["apps"][0]["installs"][0]["status"]')"
 if grep -q '^acme_nr ' "$BENCH/sites/macdev/installed_apps"; then fail "acme_nr was installed"; fi
@@ -151,7 +151,7 @@ plan acme_b1 acme_b2 --site macdev
 assert_eq "0" "$CODE" "$ERR"
 assert_eq "$snap" "$(snapshot "$BENCH" "$FL_STATE_DIR")" "(the plan writes nothing)"
 assert_calls_not_contain '^bench (get-app|build|--site macdev install-app)'
-assert_eq "Clone acme_shared2,Clone acme_b1,Clone acme_b2,Build,Install acme_b1 on macdev,Install acme_b2 on macdev,Restart" "$(steps_of)"
+assert_eq "Clone acme_shared2,Clone acme_b1,Clone acme_b2,Build,Back up macdev,Install acme_b1 on macdev,Install acme_b2 on macdev,Restart" "$(steps_of)"
 assert_eq "['acme_shared2', 'acme_b1', 'acme_b2']" "$(printf '%s' "$OUT" | jget - 'd["order"]')"
 assert_eq "bench build --apps acme_shared2,acme_b1,acme_b2" "$(printf '%s' "$OUT" | jget - '[s["command"] for s in d["steps"] if s["kind"]=="build"][0]')"
 assert_eq "acme_b1 acme_b2" "$(printf '%s' "$OUT" | jget - '" ".join(a["app"] for a in d["apps"])')"
@@ -216,13 +216,13 @@ add_policy acme_i1 main
 add_policy acme_i2 main
 plan acme_i1 --install-on macdev acme_i2 --install-on macdev,site2
 assert_eq "0" "$CODE" "$ERR"
-assert_eq "Clone acme_i1,Clone acme_i2,Build,Install acme_i1 on macdev,Install acme_i2 on macdev,Install acme_i2 on site2,Restart" "$(steps_of)" "(site by site)"
+assert_eq "Clone acme_i1,Clone acme_i2,Build,Back up macdev,Install acme_i1 on macdev,Install acme_i2 on macdev,Back up site2,Install acme_i2 on site2,Restart" "$(steps_of)" "(site by site)"
 assert_eq "['macdev'] ['macdev', 'site2']" "$(printf '%s' "$OUT" | jget - 'str(d["apps"][0]["install_on"]) + " " + str(d["apps"][1]["install_on"])')"
 assert_eq "macdev site2" "$(printf '%s' "$OUT" | jget - '" ".join(s["name"] for s in d["sites"])')"
 TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 # --site applies to the apps without --install-on
 plan acme_i1 --install-on site2 acme_i2 --site macdev
-assert_eq "Clone acme_i1,Clone acme_i2,Build,Install acme_i1 on site2,Install acme_i2 on macdev,Restart" "$(steps_of)" "(site2 from the first target's own list, macdev from --site)"
+assert_eq "Clone acme_i1,Clone acme_i2,Build,Back up site2,Install acme_i1 on site2,Back up macdev,Install acme_i2 on macdev,Restart" "$(steps_of)" "(site2 from the first target's own list, macdev from --site)"
 plan acme_i1 --install-on nosite acme_i2
 assert_eq "1" "$CODE"; assert_contains "$ERR" "nosite"
 # --commit and --install-on belong to the target before them
@@ -244,7 +244,7 @@ run_fm doctor --json --bench-dir "$BENCH"
 assert_contains "$(printf '%s' "$OUT" | jget - '" ".join(c["message"] for c in d["checks"] if c["id"]=="app_add_pending")')" "app add of acme_i2 did not finish"
 # one app finishes on its own: the record of acme_i1 plans its install and nothing of acme_i2's
 plan acme_i1 --site macdev
-assert_eq "Install on macdev" "$(steps_of)"
+assert_eq "Back up macdev,Install on macdev" "$(steps_of)"
 TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 reset_calls
 apply acme_i1 --site macdev
@@ -255,7 +255,7 @@ assert_eq "" "$(pending_file acme_i1)"
 assert_file "$(pending_file acme_i2)" "(the other app still has its record)"
 # and acme_i2 does too, from the batch plan
 plan acme_i2 --install-on macdev,site2
-assert_eq "Install on macdev,Install on site2" "$(steps_of)"
+assert_eq "Back up macdev,Install on macdev,Back up site2,Install on site2" "$(steps_of)"
 TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 apply acme_i2 --install-on macdev,site2
 assert_eq "0" "$CODE" "$ERR"
@@ -268,7 +268,7 @@ add_policy acme_low main
 add_policy acme_high main
 plan acme_high acme_low --site macdev
 assert_eq "0" "$CODE" "$ERR"
-assert_eq "Clone acme_low,Clone acme_high,Build,Install acme_low on macdev,Install acme_high on macdev,Restart" "$(steps_of)"
+assert_eq "Clone acme_low,Clone acme_high,Build,Back up macdev,Install acme_low on macdev,Install acme_high on macdev,Restart" "$(steps_of)"
 assert_eq "[]" "$(printf '%s' "$OUT" | jget - 'd["missing_required"]')" "(a target is not a missing required app)"
 TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 # acme_low failing to install on the site: acme_high is not tried there
@@ -291,7 +291,7 @@ reset_calls
 MOCK_BENCH_GET_APP_EARLY_EXIT=1 apply acme_c1 acme_c2 --site macdev
 assert_eq "1" "$CODE" "$ERR"
 assert_calls_not_contain '^bench (build|--site macdev install-app)'
-assert_eq "failed skipped skipped skipped skipped skipped" "$(printf '%s' "$OUT" | jget - '" ".join(s["status"] for s in d["steps"])')"
+assert_eq "failed skipped skipped skipped skipped skipped skipped" "$(printf '%s' "$OUT" | jget - '" ".join(s["status"] for s in d["steps"])')"
 assert_eq "" "$(pending_file acme_c1)$(pending_file acme_c2)" "(nothing was cloned, so nothing to resume)"
 
 # ---------------------------------------------------------------- finishing an add of an app that is in no profile
@@ -309,7 +309,7 @@ assert_eq "build" "$(jget "$(pending_file acme_url1)" 'd["failed_step"]')"
 assert_eq "$(url_of acme_url1)" "$(jget "$(pending_file acme_url1)" 'd["url"]')" "(the record keeps the URL)"
 plan acme_url1 --site macdev
 assert_eq "0" "$CODE" "$ERR"
-assert_eq "Build,Install on macdev,Restart" "$(steps_of)" "(the steps left of an app that is in no profile)"
+assert_eq "Build,Back up macdev,Install on macdev,Restart" "$(steps_of)" "(the steps left of an app that is in no profile)"
 TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 reset_calls
 apply acme_url1 --site macdev

@@ -339,9 +339,9 @@ assert_eq "file://${REMOTES}/acme_top.git" "$(printf '%s' "$OUT" | jget - 'd["re
 assert_eq "[{'name': 'plansite', 'installed': False}]" "$(printf '%s' "$OUT" | jget - 'd["sites"]')"
 assert_eq "acme_mid:acme_top:apps_tsv:version-15 acme_leaf:acme_mid:apps_tsv:main" "$(printf '%s' "$OUT" | jget - '" ".join("%s:%s:%s:%s" % (r["name"], r["required_by"], r["source"], r["branch"]) for r in d["required_apps"])')"
 assert_eq "['acme_mid', 'acme_leaf']" "$(printf '%s' "$OUT" | jget - 'd["missing_required"]')"
-assert_eq "Clone acme_leaf,Clone acme_mid,Clone acme_top,Build,Install on plansite,Restart" "$(printf '%s' "$OUT" | jget - '",".join(s["name"] for s in d["steps"])')"
+assert_eq "Clone acme_leaf,Clone acme_mid,Clone acme_top,Build,Back up plansite,Install on plansite,Restart" "$(printf '%s' "$OUT" | jget - '",".join(s["name"] for s in d["steps"])')"
 assert_eq "bench build --apps acme_leaf,acme_mid,acme_top" "$(printf '%s' "$OUT" | jget - 'd["steps"][3]["command"]')"
-assert_contains "$(printf '%s' "$OUT" | jget - 'd["steps"][4]["note"]')" "like a migrate"
+assert_contains "$(printf '%s' "$OUT" | jget - 'd["steps"][5]["note"]')" "like a migrate"
 assert_eq "64" "$(printf '%s' "$OUT" | jget - 'len(d["token"])')"
 TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 assert_eq "$(git -C "$REMOTES/acme_top.git" rev-parse main)" "$(printf '%s' "$OUT" | jget - 'd["commit"]')"
@@ -382,7 +382,7 @@ assert_calls_contain '^bench build --apps acme_leaf,acme_mid,acme_top$'
 assert_calls_contain '^bench --site plansite install-app acme_top$'
 assert_calls_not_contain 'get-app.*(--overwrite|--resolve-deps)'
 assert_eq "frappe acme_leaf acme_mid acme_top" "$(tr '\n' ' ' <"$PB/sites/apps.txt" | sed 's/ $//')"
-assert_eq "True done,done,done,done,done,skipped" "$(printf '%s' "$OUT" | jget - 'str(d["ok"]) + " " + ",".join(s["status"] for s in d["steps"])')"
+assert_eq "True done,done,done,done,done,done,skipped" "$(printf '%s' "$OUT" | jget - 'str(d["ok"]) + " " + ",".join(s["status"] for s in d["steps"])')"
 assert_eq "$TOKEN" "$(printf '%s' "$OUT" | jget - 'd["token"]')"
 # the plan of a present app is empty
 run_json app add "file://${REMOTES}/acme_top.git" --site plansite --dry-run --json --bench-dir "$PB"

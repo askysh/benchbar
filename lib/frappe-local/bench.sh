@@ -300,7 +300,8 @@ fl_bench_init_if_needed() {
   fi
   fl_info "Running bench init for frappe ref ${frappe_ref}"
   if [[ "$timeout_seconds" -gt 0 ]]; then fl_info "bench init timeout: $((timeout_seconds / 60)) minutes (BENCH_INIT_TIMEOUT_SECONDS changes it)"; else fl_info "bench init has no time limit"; fi
-  fl_run_with_timeout "$timeout_seconds" "bench init" bench init "$bench_dir" --frappe-branch "$frappe_ref" --python "$python_bin" --no-backups --verbose ${init_extra[@]+"${init_extra[@]}"} || init_code=$?
+  fl_git_ext_off
+  fl_run_with_timeout "$timeout_seconds" "bench init" env "${FL_GIT_EXT_OFF[@]}" bench init "$bench_dir" --frappe-branch "$frappe_ref" --python "$python_bin" --no-backups --verbose ${init_extra[@]+"${init_extra[@]}"} || init_code=$?
   if [[ "$init_code" == "124" ]]; then
     fl_die "bench init did not finish within $(fl_fmt_secs "$timeout_seconds")." \
       "Run benchbar install again: the half built bench is moved aside and init starts over. On a slow network or disk give it more time: BENCH_INIT_TIMEOUT_SECONDS=5400 benchbar install"
@@ -398,10 +399,12 @@ fl_get_app_if_needed() {
   else
     fl_info "Getting ${app} at ${branch}"
     if [[ -n "$repo" ]]; then
-      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" bench get-app --branch "$branch" ${skip_flag[@]+"${skip_flag[@]}"} "$repo" \
+      fl_git_ext_off
+      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" env "${FL_GIT_EXT_OFF[@]}" bench get-app --branch "$branch" ${skip_flag[@]+"${skip_flag[@]}"} "$repo" \
         || fl_die "bench get-app failed for ${app}." "Manual command: cd ${bench_dir} && bench get-app --branch ${branch}${skip_flag[*]:+ ${skip_flag[*]}} ${repo}"
     else
-      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" bench get-app --branch "$branch" ${skip_flag[@]+"${skip_flag[@]}"} "$app" \
+      fl_git_ext_off
+      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" env "${FL_GIT_EXT_OFF[@]}" bench get-app --branch "$branch" ${skip_flag[@]+"${skip_flag[@]}"} "$app" \
         || fl_die "bench get-app failed for ${app}." "Manual command: cd ${bench_dir} && bench get-app --branch ${branch}${skip_flag[*]:+ ${skip_flag[*]}} ${app}"
     fi
     fl_changed app "$app" "cloned at ${branch}"
