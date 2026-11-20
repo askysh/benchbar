@@ -410,8 +410,8 @@ struct SnapshotTests {
         try render(CreateProfileSheet(benches: store.benches) { _, _ in } cancel: {}, "profile-create")
     }
 
-    /// Restore and the unfinished operations (0.9 parity part 1): the plans are the CLI's own output.
-    @Test func restoreAndPendingSheets() async throws {
+    /// Restore, pull and the unfinished operations (0.9 parity part 1): the plans are the CLI's own output.
+    @Test func restorePullAndPendingSheets() async throws {
         let store = try await windowStore()
         base.cli.answer("site backups", json: try Fixture.string("site-backups"))
         let workbench = Workbench(store: store)
@@ -436,6 +436,16 @@ struct SnapshotTests {
                    "site-restore-plan-errors")
         try render(SiteRestoreSheet(workbench: workbench, bench: bench, site: "acme.localhost", start: restoreStart("site-restore-plan", stale: true)) {},
                    "site-restore-plan-stale")
+
+        func pullStart(_ name: String) throws -> PullSheet.Start {
+            let plan = try #require(PullStream.plan(in: try Fixture.lines(name)))
+            return .init(target: plan.source, name: plan.site, flow: .init(stage: .reviewing(plan)))
+        }
+        try render(PullSheet(workbench: workbench, bench: bench) {}, "pull-sheet")
+        try render(PullSheet(workbench: workbench, bench: bench, start: .init(target: "prod:erp.example.com", name: "erp.example.com.local", keepSecrets: true)) {},
+                   "pull-sheet-keep-secrets")
+        try render(PullSheet(workbench: workbench, bench: bench, start: try pullStart("pull-plan")) {}, "pull-plan")
+        try render(PullSheet(workbench: workbench, bench: bench, start: try pullStart("pull-plan-keep-secrets")) {}, "pull-plan-keep-secrets")
 
         let status = try BenchJSON.decode(BenchStatus.self, from: Fixture.data("status-pending"))
         var operations = status.pendingOperations ?? []
