@@ -104,6 +104,10 @@ shapes() {
     "cli/profile-list.json|profile list --json" \
     "cli/profile-list-linux.json|profile list --json" \
     "cli/scan-list.json|list --json" \
+    "cli/status-notices.json|status --json --bench-dir $BENCH" \
+    "cli/status-not-ready.json|status --json --bench-dir $BENCH" \
+    "cli/status-ready.json|status --json --bench-dir $BENCH" \
+    "cli/status-ready-stale.json|status --json --bench-dir $BENCH" \
     "cli/status-pending-update.json|status --json --bench-dir $BENCH" \
     "cli/status-pending-add.json|status --json --bench-dir $BENCH"
 }
