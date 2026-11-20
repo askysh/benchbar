@@ -3,6 +3,8 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "${0%/*}/_mocklib.sh"
 mock_log "$@"
+# $MOCK_STATE/ditto_fail_new: the copy to BenchBar.app.new fails (a full disk)
+if [[ -f "${MOCK_STATE:-/nonexistent}/ditto_fail_new" && "${*: -1}" == *.app.new ]]; then echo "ditto: No space left on device" >&2; exit 1; fi
 case "${1:-}" in
   -x) shift; [[ "${1:-}" == "-k" ]] && shift; mkdir -p "$2"; unzip -q -o "$1" -d "$2" ;;
   -c) shift; [[ "${1:-}" == "-k" ]] && shift; [[ "${1:-}" == "--keepParent" ]] && shift; (cd "$(dirname "$1")" && zip -q -r "$2" "$(basename "$1")") ;;

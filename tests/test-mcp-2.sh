@@ -101,9 +101,9 @@ sys.path.insert(0, os.path.dirname(sys.argv[0]))
 from mcpclient import Client, text
 
 fake, mode, tok = sys.argv[1], sys.argv[2], sys.argv[3]
-c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "FAKE_MODE": mode})
+c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "FAKE_MODE": mode, "BENCHBAR_MCP_ALLOW_BENCH": "/x/acme"})
 tools = c.tools()
-assert len(tools) == 42, [t["name"] for t in tools]
+assert len(tools) == 51, [t["name"] for t in tools]
 LABEL = "Data from the bench ("
 tokens = {}                                                    # the token each plan tool returned: its apply tool takes that one
 for t in tools:
@@ -623,6 +623,7 @@ cases = [
     ("benchbar_doctor_prerequisites", {"bench": "/b"}, "doctor --prerequisites --json --bench-dir /b"),
     ("benchbar_self_update_check", {}, "self-update --check --json"),
     ("benchbar_app_focus_list", {"bench": "/b"}, "app focus --list --json --bench-dir /b"),
+    ("benchbar_stats", {"bench": "/b"}, "stats --json --bench-dir /b"),
 ]
 for tool, args, argv in cases:
     r = c.call(tool, args)
@@ -656,8 +657,8 @@ for args in ({"paths": "/b"}, {"paths": [1]}):
 assert open(log).read() == before, "a refused call ran the CLI"
 # the safety decisions are a person's: nothing for them exists, whatever it is called
 names = [t["name"] for t in c.tools()]
-for gone in ("benchbar_repair", "benchbar_install", "benchbar_labs_on", "benchbar_labs_off", "benchbar_labs_status", "benchbar_ports_apply",
-             "benchbar_ports_setup", "benchbar_ports_mode", "benchbar_share", "benchbar_share_on", "benchbar_lan_guard", "benchbar_self_update",
+for gone in ("benchbar_repair", "benchbar_install", "benchbar_labs_on", "benchbar_labs_off", "benchbar_labs_status",
+             "benchbar_ports_setup", "benchbar_register", "benchbar_site_hosts", "benchbar_console", "benchbar_db", "benchbar_share", "benchbar_share_on", "benchbar_lan_guard", "benchbar_self_update",
              "benchbar_site_default", "benchbar_app_focus", "benchbar_app_unfocus"):
     assert gone not in names, gone
     r = c.call(gone, {})

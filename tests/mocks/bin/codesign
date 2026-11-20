@@ -1,0 +1,10 @@
+#!/bin/bash
+# codesign mock: "--verify ... APP" exits 1 when $MOCK_STATE/codesign_fail exists
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+if [[ -f "${MOCK_STATE:-/nonexistent}/codesign_fail" ]]; then
+  echo "${*: -1}: a sealed resource is missing or invalid" >&2
+  exit 1
+fi
+exit 0

@@ -244,7 +244,7 @@ benchbar site restore copy.localhost --from 20260902_090000 --from-site acme.loc
 ## site drop
 
 ```
-benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run] [--json]
+benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run|--apply TOKEN --yes] [--json]
 ```
 
 Removes a site for good. Its database and database user are dropped,
@@ -277,7 +277,8 @@ output says which command removes it by hand.
 |---|---|
 | `--confirm-site NAME` | The site name again; nothing is dropped without it |
 | `--new-default OTHER` | For the default site: the site that becomes the default |
-| `--dry-run` | Print the plan, change nothing (with `--json`: the steps) |
+| `--dry-run` | Print the plan, change nothing (with `--json`: the steps and a `token`) |
+| `--apply TOKEN` | Run the plan of a dry run, with `--yes`; refused, before anything changes, when the sites, the default site, the hosts line or the site's database name (`database` in the plan) changed since the plan |
 | `--json` | The result as JSON: the backup, the archived folder, the hosts line ([schema](../../json-schema.md#site-backups)) |
 
 Exit codes: 0 the site is dropped; 1 a refusal or a failed step; 2 the
@@ -286,6 +287,8 @@ MariaDB root password is unknown (pass `MARIADB_ROOT_PASSWORD`).
 ```bash
 benchbar site drop bbtest.localhost --confirm-site bbtest.localhost --dry-run
 benchbar site drop bbtest.localhost --confirm-site bbtest.localhost
+benchbar site drop bbtest.localhost --confirm-site bbtest.localhost --dry-run --json   # the plan and its token
+benchbar site drop bbtest.localhost --confirm-site bbtest.localhost --apply TOKEN --yes
 ```
 
 To bring a dropped site back, restore its backup from
@@ -314,7 +317,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar site backup NAME [--with-files] [--json]` | no | no | no | yes | document |
 | `benchbar site backups NAME [--json]` | no | no | no | no | document |
 | `benchbar site restore NAME --from STAMP\|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
-| `benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run] [--json]` | no | yes | no | yes | document |
+| `benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run\|--apply TOKEN --yes] [--json]` | no | yes | no | yes | document |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.
@@ -343,7 +346,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site restore` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
 | `site drop` | `--confirm-site` | `NAME` | Repeat the site name exactly. |
 | `site drop` | `--new-default` | `OTHER` | Required when NAME is the default site. |
-| `site drop` | `--dry-run` |  | Print the plan, change nothing. |
+| `site drop` | `--dry-run` |  | Print the plan, change nothing. With --json the plan carries a token. |
+| `site drop` | `--apply` | `TOKEN` | Run the plan of a dry run; refused when the sites, the default or the hosts line changed since (needs --yes). |
 
 | Command | Environment variable | What it does |
 |---|---|---|

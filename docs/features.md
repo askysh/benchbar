@@ -146,7 +146,7 @@ Windows (`benchbar.exe mcp`) since 0.8.0. The tools below are the ones in
 | `benchbar_site_backup` | Backs up one site. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
 | Service plan and apply | `benchbar_service_install_plan` and `benchbar_service_install`, for a bench that has no service. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
 | App install and update | `benchbar_app_install_plan` then `benchbar_app_install`, and `benchbar_app_update_plan` then `benchbar_app_update`, each with the plan's token. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
-| More read tools | `benchbar_site_backups`, `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`, `benchbar_labs_list`, `benchbar_where`, `benchbar_doctor_prerequisites`, `benchbar_self_update_check` and `benchbar_app_focus_list`. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
+| More read tools | `benchbar_site_backups`, `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`, `benchbar_labs_list`, `benchbar_where`, `benchbar_doctor_prerequisites`, `benchbar_self_update_check`, `benchbar_app_focus_list` and `benchbar_stats` (CPU and memory of the running bench). | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
 
 A person approves each plan before the agent applies it. Rooms, Labs,
 sharing, the LAN guard, `self-update` and the repairs of `repair` are not MCP tools. A change that needs a person

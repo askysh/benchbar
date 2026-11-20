@@ -15,7 +15,7 @@ progress notifications), `benchbar_doctor`,
 `benchbar_logs_tail` (`file`: `bench`, `worker`, `worker_error` or
 `previous`), `benchbar_site_list`, `benchbar_site_backups` (the stamps a
 restore takes), `benchbar_site_snapshots` (the snapshots a rollback takes), `benchbar_app_list`, `benchbar_app_focus_list`,
-`benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`,
+`benchbar_stats` (CPU and memory of the running bench), `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`,
 `benchbar_doctor_prerequisites`, `benchbar_labs_list`, `benchbar_where`,
 `benchbar_self_update_check`, `benchbar_op_status` (a long run by `op_id`, which
 every apply tool returns; `benchbar_app_add`, `benchbar_site_restore`,
@@ -78,9 +78,14 @@ the same JSON and never prompts (`BENCHBAR_NONINTERACTIVE=1`), and
 `benchbar mcp --print-agents-md` prints a snippet for a project's own
 AGENTS.md or CLAUDE.md. Repairs and bench installs are deliberately not
 tools: run them in a terminal, with the user, as described here. So are turning a lab on (`labs on`),
-applying ports (`ports apply`, `ports setup`, `ports mode`), sharing, the LAN
-guard and `self-update`: tell the user the command, do not look for a way
-around the missing tool.
+registering a bench (`register`), the `/etc/hosts` line (`site hosts`), a
+console or SQL shell (`console`, `db`), sharing, the LAN guard and
+`self-update`: tell the user the command, do not look for a way around the
+missing tool. Ports (`benchbar_ports_plan`, then `benchbar_ports_apply` with
+its token), a site drop (`benchbar_site_drop_plan`, then `benchbar_site_drop`),
+the scheduler (`schedule` on the service tools), `benchbar_autostart`,
+`benchbar_doctor_ack`, `benchbar_scan` and `benchbar_report` are tools; the
+ones that change something go through a plan and its token.
 
 ## Start with the facts
 
