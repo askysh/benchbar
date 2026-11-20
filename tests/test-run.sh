@@ -58,4 +58,32 @@ code=$?
 set -e
 [[ "$code" == "7" ]] || { printf 'Expected exit 7 to pass through, got %s\n' "$code"; exit 1; }
 
+# a pool job (profile check) that gets a second TERM while it stops its group still
+# finishes: the group is gone when it ends (benchbar sends a job TERM twice, and a
+# terminal's INT comes on top). The command ignores TERM, so only the job's KILL ends it.
+printf '#!/usr/bin/env bash\ntrap "" TERM\nsleep 30\n' >"$TMP_DIR/deaf"
+chmod +x "$TMP_DIR/deaf"
+(
+  trap fl_bg_job_stop TERM INT HUP
+  FL_KILL_GRACE=1
+  fl_run_bg_group "$TMP_DIR/deaf.out" "$TMP_DIR/deaf"
+  printf '%s\n' "$FL_RUN_PID" >"$TMP_DIR/deaf.pid"
+  while :; do sleep 0.05; done
+) 2>/dev/null &
+job="$!"
+for _ in $(seq 1 50); do [[ -s "$TMP_DIR/deaf.pid" ]] && break; sleep 0.1; done
+deaf="$(cat "$TMP_DIR/deaf.pid")"
+sleep 0.5
+kill -TERM "$job"
+sleep 0.4
+kill -TERM "$job" 2>/dev/null || true
+for _ in $(seq 1 60); do kill -0 "$job" 2>/dev/null || break; sleep 0.1; done
+set +e; wait "$job" 2>/dev/null; code=$?; set -e
+if kill -0 -- "-${deaf}" 2>/dev/null; then
+  kill -KILL -- "-${deaf}" 2>/dev/null || true
+  printf 'The command of a pool job outlived the second TERM to the job\n'
+  exit 1
+fi
+[[ "$code" == "143" ]] || { printf 'Expected the pool job to end with 143, got %s\n' "$code"; exit 1; }
+
 printf 'test-run: ok\n'

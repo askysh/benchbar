@@ -86,10 +86,13 @@ FL_BG_DIR=""
 
 # fl_bg_job_stop: the TERM trap of a background job's subshell: its running
 # command's group goes down with it (the job table knows a command that
-# FL_RUN_PGID was not set for yet)
+# FL_RUN_PGID was not set for yet). Later TERM, INT and HUP are ignored while
+# it works: benchbar sends a job TERM twice (fl_on_signal, then
+# fl_bg_stop_all) and a terminal's INT comes on top, and a second signal under
+# the default action ended the job before its git group was stopped.
 fl_bg_job_stop() {
   local job
-  trap - TERM INT HUP
+  trap '' TERM INT HUP
   for job in $(jobs -p 2>/dev/null); do
     kill -TERM -- "-${job}" 2>/dev/null || kill -TERM "$job" 2>/dev/null || true
   done
