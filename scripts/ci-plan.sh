@@ -53,7 +53,7 @@ INPUT_LEGS="${INPUT_LEGS:-}"
 # share on Linux, and the Linux layer's WSL and sudo tests on macOS
 SKIP_LINUX="test-share test-share-run test-share-admin test-share-preflight test-lan-guard"
 SKIP_BASH32="test-install-linux test-doctor-linux test-systemd test-platform-linux test-share test-share-run test-share-admin test-share-preflight test-lan-guard"
-SKIP_MACOS="test-install-linux test-doctor-linux test-systemd test-platform-linux test-wsl-preflight test-windows-commands test-sudo-env"
+SKIP_MACOS="test-install-linux test-doctor-linux test-systemd test-platform-linux test-wsl-preflight test-install-failures test-windows-commands test-sudo-env"
 # table seconds one shard takes (about 150 s of wall time on its runner) and the most shards
 TARGET_LINUX=600 MAX_LINUX=8
 TARGET_BASH32=600 MAX_BASH32=8

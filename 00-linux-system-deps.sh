@@ -181,6 +181,12 @@ fl_install_script() {
 }
 
 fl_section "SYSTEM"
+# before anything else, so that no package is installed on a system the install does not support
+blocker_line="$(fl_linux_distro_blocker)"
+if [[ -n "$blocker_line" ]]; then
+  IFS='|' read -r FL_ERROR_ID blocker_msg blocker_fix <<<"$blocker_line"
+  fl_die "$blocker_msg" "$blocker_fix"
+fi
 fl_preflight_basics "$OFFLINE" "$FL_MIN_DISK_GB" "$HOME"
 if [[ "$FL_IS_WSL" == "1" ]]; then
   fl_ok "$(fl_linux_os_summary) detected, running in WSL (${FL_ARCH})"
@@ -318,7 +324,7 @@ if [[ -n "${BENCHBAR_PDF_STEP:-}" && "$(fl_wkhtmltopdf_state)" != "patched" ]]; 
   case "$WKHTML_STATE" in
     dry-run) WKHTML_STATE=ok; fl_info "dry-run: the wkhtmltopdf plan is above (benchbar install showed it)" ;;
     skipped) fl_warn "wkhtmltopdf was skipped above (benchbar install asked already): PDFs will not work until it is installed" ;;
-    *) WKHTML_STATE=failed; fl_fail "the wkhtmltopdf install failed above (see benchbar install's output)"; add_pending "WKHTMLTOPDF_FAILED" ;;
+    *) WKHTML_STATE=failed; fl_warn "the wkhtmltopdf install failed above (see benchbar install's output); the bench works, PDF printing does not"; fl_fix "${FL_SELF} repair"; add_pending "WKHTMLTOPDF_FAILED" ;;
   esac
 elif fl_wkhtmltopdf_ensure; then WKHTML_STATE=ok; else
   case "$?" in 2) WKHTML_STATE=skipped ;; *) WKHTML_STATE=failed; add_pending "WKHTMLTOPDF_FAILED" ;; esac

@@ -159,7 +159,7 @@ for s in second third; do mkdir -p "$BENCH/sites/$s"; printf '{}\n' >"$BENCH/sit
 reset_calls
 run_fm site hosts --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-assert_calls_contain "^sudo env L=127.0.0.1 second E=# <<< benchbar <<< awk "
+assert_calls_contain "^sudo env L=127.0.0.1 second E=# <<< benchbar <<< /usr/bin/awk "
 assert_calls_contain "^sudo tee ${FL_HOSTS_FILE}.benchbar.new\$"
 assert_calls_contain "^sudo chmod 644 ${FL_HOSTS_FILE}.benchbar.new\$"
 assert_calls_contain "^sudo mv ${FL_HOSTS_FILE}.benchbar.new ${FL_HOSTS_FILE}\$"

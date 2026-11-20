@@ -596,6 +596,16 @@ fl_cmd_restart() {
   fi
 }
 
+# the agent's cell of status: "loaded: no" is said only when systemd answered
+# (a user manager that cannot be asked, FL_UMGR_DOWN from fl_agent_read, is unknown)
+fl_status_agent_word() {
+  if [[ "$ST_LOADED" != "1" ]] && fl_user_manager_down; then
+    printf '(unknown (no user bus))'
+    return 0
+  fi
+  printf '(loaded: %s%s)' "$([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)" "${ST_AGENT_STATE:+, ${ST_AGENT_STATE}}"
+}
+
 fl_cmd_status() {
   local json="${1:-0}"
   fl_require_bench
@@ -610,13 +620,17 @@ fl_cmd_status() {
     "bench|${FL_BENCH_DIR}" \
     "site|$(fl_site_url)" \
     "state|${ST_STATE}${ST_PID:+, pid ${ST_PID}}${ST_REASON:+ (${ST_REASON})}${ST_EXIT:+, last exit code ${ST_EXIT}}" \
-    "agent|$(fl_agent_label) (loaded: $([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)${ST_AGENT_STATE:+, ${ST_AGENT_STATE}})" \
+    "agent|$(fl_agent_label) $(fl_status_agent_word)" \
     "stop flag|${ST_FLAG:-none (auto-restart armed)}" \
     "processes|$([[ "$ST_PROCS" == "1" ]] && printf yes || printf no)" \
     "web ping|${ST_PING}" \
     "ready|$([[ "$RD_READY" == true ]] && printf yes || printf 'no, waiting on %s' "${RD_WAITING// /, }")" \
     "ports|web ${FL_WEB_PORT}, socketio ${FL_SOCKETIO_PORT}, redis ${FL_REDIS_QUEUE_PORT}/${FL_REDIS_CACHE_PORT}" \
     "log|$(fl_bench_log_path)"
+  if [[ "$ST_LOADED" != "1" ]] && fl_user_manager_down; then
+    fl_warn "$(fl_user_manager_msg)"
+    fl_fix "$(fl_user_manager_fix)"
+  fi
   if [[ "$ST_PING" == "200" ]]; then
     fl_ok "site responds"
   elif [[ "$ST_PROCS" == "1" ]]; then

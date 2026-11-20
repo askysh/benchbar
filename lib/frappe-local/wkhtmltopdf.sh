@@ -21,6 +21,10 @@
 # installed, 1 when it is not there and the user skipped it (PDFs will not
 # work; the bench itself is fine).
 
+# the folder the package is downloaded to and the file the package installs:
+# what sudo reads and what the check trusts are never taken from the
+# environment, but by the tests (FL_TESTING=1, which tests/lib/harness.sh sets)
+if [[ "${FL_TESTING:-0}" != "1" ]]; then FL_WKHTML_DOWNLOAD_DIR=""; FL_WKHTML_PKG_BIN=""; fi
 FL_WKHTML_DOWNLOAD_DIR="${FL_WKHTML_DOWNLOAD_DIR:-${FL_STATE_DIR}/downloads}"
 # where the official package puts its binary
 FL_WKHTML_PKG_BIN="${FL_WKHTML_PKG_BIN:-/usr/local/bin/wkhtmltopdf}"
@@ -187,19 +191,19 @@ fl_wkhtmltopdf_install() {
     fl_info "dry-run: sudo rm -rf <that folder>"
     return 0
   fi
-  root_dir="$(sudo mktemp -d "$FL_WKHTML_ROOT_TMP_TEMPLATE" 2>/dev/null || true)"
+  root_dir="$(sudo "$(fl_root_tool mktemp)" -d "$FL_WKHTML_ROOT_TMP_TEMPLATE" 2>/dev/null || true)"
   case "$root_dir" in
     /tmp/benchbar-wkhtmltopdf.*) ;;
     *) fl_fail "could not create a root owned folder for the package (sudo mktemp -d ${FL_WKHTML_ROOT_TMP_TEMPLATE})"; return 1 ;;
   esac
   root_pkg="${root_dir}/${FL_WKHTML_FILE}"
   fl_log "run: sudo install -m 0644 -o root ${FL_WKHTML_PKG} ${root_pkg}"
-  if ! sudo install -m 0644 -o root "$FL_WKHTML_PKG" "$root_pkg"; then
+  if ! sudo "$(fl_root_tool install)" -m 0644 -o root "$FL_WKHTML_PKG" "$root_pkg"; then
     fl_fail "could not copy ${FL_WKHTML_FILE} into ${root_dir}"
     code=1
   else
     # the hash of the copy root will install, taken by root
-    sum="$(sudo shasum -a 256 "$root_pkg" 2>/dev/null | awk '{print $1}')"
+    sum="$(sudo "$(fl_root_tool shasum)" -a 256 "$root_pkg" 2>/dev/null | awk '{print $1}')"
     if [[ "$sum" != "$FL_WKHTML_SHA256" ]]; then
       fl_fail "checksum mismatch on the root owned copy of ${FL_WKHTML_FILE}: got ${sum:-nothing}, pinned ${FL_WKHTML_SHA256}"
       fl_note "nothing was installed; the download in ${FL_WKHTML_DOWNLOAD_DIR} is discarded"
@@ -207,11 +211,11 @@ fl_wkhtmltopdf_install() {
       code=1
     else
       fl_ok "root owned copy verified (sha256 ok)"
-      fl_run_long "installer -pkg ${FL_WKHTML_FILE}" sudo installer -pkg "$root_pkg" -target / || code=1
+      fl_run_long "installer -pkg ${FL_WKHTML_FILE}" sudo "$(fl_root_tool installer)" -pkg "$root_pkg" -target / || code=1
     fi
   fi
   fl_log "run: sudo rm -rf ${root_dir}"
-  sudo rm -rf "$root_dir" 2>/dev/null || fl_warn "could not remove ${root_dir}; run: sudo rm -rf ${root_dir}"
+  sudo "$(fl_root_tool rm)" -rf "$root_dir" 2>/dev/null || fl_warn "could not remove ${root_dir}; run: sudo rm -rf ${root_dir}"
   [[ "$code" == "0" ]] || return 1
   hash -r 2>/dev/null || true
   case "$(fl_wkhtmltopdf_state)" in

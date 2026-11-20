@@ -180,9 +180,11 @@ app or adopt a bench you have.
 
 ## Linux
 
-From 0.8 the same CLI runs on Linux: Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them), Windows through WSL
-first. `install` takes the v15-lts and v16-lts profiles and team profiles (a team profile follows its base). There is no menu bar app on
-Linux; on Windows a tray app shows the benches of the distro: see [Windows](windows.md).
+From 0.8 the same CLI runs on Linux: Ubuntu 24.04 (the only system it is tested on and supports), Windows through WSL
+first. `install` takes the v15-lts and v16-lts profiles and team profiles (a team profile follows its base). On another system, for
+example Ubuntu 22.04 (MariaDB 10.6) or Debian, `doctor` warns about it and `install` stops before sudo and before it installs any
+package; with `--allow-unsupported-distro` you can try anyway, at your own risk. There is no menu bar app on Linux; on Windows a tray
+app shows the benches of the distro: see [Windows](windows.md).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
@@ -204,11 +206,20 @@ once up front and not at all on a second run. Each bench runs as its own
 bench back after a reboot. The default site is `linuxdev.localhost`, and
 benchbar never edits `/etc/hosts` there. The `bench*` helpers go to
 `~/.bashrc`. `benchbar doctor --prerequisites` on Linux checks, without a bench and
-without sudo: the distro (Ubuntu 24.04 is tested, others warn), the CPU
+without sudo: the distro (Ubuntu 24.04 is tested: `--prerequisites` warns about another system, and `install` stops before it changes anything unless you pass `--allow-unsupported-distro`), the CPU
 (x86_64 is needed for the PDF package), that you are not root, sudo (your
-user is in the sudo group), apt, systemd, linger, memory, free disk, the
+user is in the sudo group), apt, systemd, linger, the user bus (`systemctl --user` answers), memory, free disk, the
 bench folder, the default ports and the MariaDB root password state. Each
 check that is not ok names its fix.
+
+Run `install` from a shell that has a user session. Under `sudo -iu USER`,
+`su -` or cron there is no login session, so `systemctl --user` cannot find
+its bus. `install` turns on lingering (`loginctl enable-linger`), which starts
+the user manager, and points `XDG_RUNTIME_DIR` at `/run/user/UID`. When the
+manager still cannot be reached it stops before it changes anything and says
+what to run: `sudo loginctl enable-linger USER`, then run it again from a
+login shell or with `XDG_RUNTIME_DIR=/run/user/$(id -u)`. `benchbar status`
+says `unknown (no user bus)` in that case, not `loaded: no`.
 
 `install` first checks that ports 3306 (MariaDB) and 6379 (the system
 Redis) are free, or held by this distro's own services. In WSL 2 every

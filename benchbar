@@ -232,6 +232,8 @@ FL_MAKE_DEFAULT=0
 OPT_REPAIR_BENCH=0
 # install, adopt: --allow-windows-fs lets a bench live on the Windows file system under WSL
 FL_ALLOW_WINDOWS_FS=0
+# install (Linux): --allow-unsupported-distro tries a system other than Ubuntu 24.04
+FL_ALLOW_UNSUPPORTED_DISTRO=0
 FL_PORT_PLAN_APPROVED=0
 # --offline, OFFLINE=1 or BENCHBAR_OFFLINE=1: install skips its remote
 # checks (the phase scripts get --offline), doctor --fetch fetches nothing
@@ -448,6 +450,9 @@ Options
                       one that holds a site; --dry-run shows the move)
   --allow-windows-fs  install, adopt (WSL): accept a bench on the Windows file system
                       (/mnt/c, drvfs, 9p), which is slow and breaks file watching
+  --allow-unsupported-distro
+                      install (Linux): try a system other than Ubuntu 24.04, which is the one
+                      the install is tested on and supports (at your own risk)
   --with-schedule     service: add the scheduler to Procfile.lean (per bench, kept by repair)
   --without-schedule  service: remove it again (the default)
   --port-offset N     install, adopt, service: use port block N (web 8000+N, socketio 9000+N,
@@ -522,6 +527,7 @@ while [[ "$#" -gt 0 ]]; do
     --make-default) FL_MAKE_DEFAULT=1; shift ;;
     --repair-bench) OPT_REPAIR_BENCH=1; shift ;;
     --allow-windows-fs) FL_ALLOW_WINDOWS_FS=1; shift ;;
+    --allow-unsupported-distro) FL_ALLOW_UNSUPPORTED_DISTRO=1; export BENCHBAR_ALLOW_UNSUPPORTED_DISTRO=1; shift ;;
     --with-schedule) FL_SCHEDULER=on; shift ;;
     --without-schedule) FL_SCHEDULER=off; shift ;;
     --port-offset) fl_opt_value "$1" "$#" "${2-}"; OPT_PORT_OFFSET="$2"; shift 2 ;;
@@ -807,6 +813,17 @@ fl_next_steps_box() {
     "benchwatch                  while editing JS or CSS"
 }
 
+# after an install that did not finish its service step: the fix first, and
+# benchup only once it is done (a bench with no loaded service cannot start)
+fl_install_fix_box() {
+  local bd=""
+  [[ "$FL_BENCH_DIR" == "$(fl_state_get BENCH_DIR 2>/dev/null || true)" ]] || bd=" --bench-dir ${FL_BENCH_DIR}"
+  fl_box "Next steps" \
+    "benchbar repair${bd}    fix what failed above" \
+    "benchbar doctor${bd}    what is left, if repair says it is done" \
+    "then: benchup, and $(fl_open_cmd) $(fl_site_url)"
+}
+
 # One sudo prompt for the whole install: ask up front when a step ahead will
 # need it (the wkhtmltopdf package, the /etc/hosts line). The two privileged
 # steps run right after (fl_install_privileged_steps) and the credential is
@@ -1073,6 +1090,14 @@ cmd_install() {
   # credential or the BENCHBAR_SUDO=env password is still there: phase 00 drops
   # it. A refusal is a warning with the fix, not a failure.
   fl_linger_ensure sudo
+  # the user manager lingering starts: without it the service step at the end
+  # cannot work (sudo -iu, su - and cron have no login session), so the run
+  # stops here with the reason and the fix instead of after steps 1 and 2
+  if [[ "$FL_DRY_RUN" != "1" ]] && ! fl_user_bus_wait; then
+    FL_ERROR_ID="user_bus_unreachable"
+    FL_ERROR_FIX="$(fl_user_manager_fix)"
+    fl_die "$(fl_user_manager_msg). No package or bench was changed." "$FL_ERROR_FIX"
+  fi
   # from here on nothing runs as root: brew, pip, npm, yarn and bench get-app
   # must not find a cached sudo credential. On Linux the apt and MariaDB
   # steps are phase 00 itself: it drops the credential when they are done
@@ -1186,11 +1211,14 @@ cmd_install() {
     fl_step_end "done"
   else
     fl_steps_pop
-    fl_step_end warning "see above"
+    # an action that failed is a failure (the [FAIL] line above says which);
+    # "warning" is for a run whose actions worked and whose verify pass still has
+    # something to look at
+    if [[ "$FL_ENGINE_ACTION_FAILED" == "1" ]]; then fl_step_end failed; else fl_step_end warning "see above"; fi
     code=1
   fi
   fl_steps_summary
-  fl_next_steps_box
+  if [[ "$code" == "0" ]]; then fl_next_steps_box; else fl_install_fix_box; fi
   return "$code"
 }
 
