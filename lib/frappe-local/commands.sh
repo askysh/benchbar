@@ -76,6 +76,8 @@ cmd~status~benchbar status [--json] [--ping] [--deep]~State, pid, stop reason, s
 env~status~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 flag~status~--ping~~Ask every site, not only the default one.
 flag~status~--deep~~Also ask the ready parts that start programs: workers (pgrep, lsof) and stale (find: a Python file under apps/ changed after the bench started). Without it ready.workers and ready.stale are null.
+cmd~stats~benchbar stats [--json]~CPU, memory and process count of the running bench's own processes (the set down stops, with their children), and the speed figure the Mac app derives from the CPU. resources is null while the bench is stopped. Read only.~no~no~no~no~document
+env~stats~FL_STATS_WINDOW~Linux only: seconds between the two CPU samples (default 0.5).
 cmd~list~benchbar list [--json]~Every bench benchbar knows about. Never pings a site.~no~no~no~no~document
 env~list~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~scan~benchbar scan PATH [--json]~Find benches recursively in a folder (read only).~no~no~no~no~document

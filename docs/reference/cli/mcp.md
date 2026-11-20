@@ -193,6 +193,7 @@ claude mcp add benchbar -- benchbar mcp
 | `benchbar_doctor_prerequisites` | read | What this machine needs before a bench can be installed (tools, Homebrew or apt packages, MariaDB, free disk), each check with its level and fix, no bench needed. | `bench` |
 | `benchbar_self_update_check` | read | This benchbar and the BenchBar app against the latest release, and the command that would update them (available is null when GitHub could not be asked). | none |
 | `benchbar_app_focus_list` | read | Every app of one bench with whether it is a focus app (the ones being worked on), why, and how far behind its remote it is, from the last git fetch. | `bench` |
+| `benchbar_stats` | read | CPU, memory and process count of one running bench's own processes (the set benchbar_down stops, with their children), sampled now: resources.cpu_percent (percent of one core, so 250 is two and a half cores), memory_bytes (RSS), processes, sampled_at, and the speed the Mac app's runner uses (speed.raw = clamp(1 + cpu_percent / 10, 1, 12)). | `bench` |
 
 An argument marked `*` is required. `bench` (the bench's path, from `benchbar_list`) is optional on every tool that has it: without it the tool uses the default bench.
 <!-- /generated:mcp-tools -->

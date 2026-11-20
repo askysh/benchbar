@@ -873,3 +873,87 @@ fl_hosts_remove_name() { FL_HOSTS_REMOVED=0; FL_HOSTS_MANUAL=""; return 0; }
 # apt, systemd, WSL and network preflight (the install plan's blockers and warnings)
 # shellcheck source=lib/frappe-local/preflight-linux.sh
 . "${SCRIPT_DIR}/lib/frappe-local/preflight-linux.sh"
+
+# ------------------------------------------------------------- process table (stats)
+
+# fl_proc_stat_v VAR PID: "PPID TICKS" from /proc/PID/stat (utime + stime, in
+# clock ticks of 1/100 s); nothing when the process is gone. The command name
+# sits in parentheses and may hold spaces, so the line is cut after the last ")".
+fl_proc_stat_v() {
+  local _l _r _pp _ut _st
+  _l=""
+  { IFS= read -r _l <"${FL_PROC_DIR}/$2/stat"; } 2>/dev/null || true
+  _r="${_l##*) }"
+  if [[ -z "$_l" || "$_r" == "$_l" ]]; then printf -v "$1" '%s' ""; return 0; fi
+  # state ppid pgrp session tty tpgid flags minflt cminflt majflt cmajflt utime stime
+  read -r _ _pp _ _ _ _ _ _ _ _ _ _ut _st _ <<<"$_r" || true
+  if [[ "$_pp" =~ ^[0-9]+$ && "$_ut" =~ ^[0-9]+$ && "$_st" =~ ^[0-9]+$ ]]; then
+    printf -v "$1" '%s' "${_pp} $((_ut + _st))"
+  else
+    printf -v "$1" '%s' ""
+  fi
+}
+
+# fl_proc_table_v VAR: every process as "PID PPID" lines, read from /proc in
+# bash (no process started).
+fl_proc_table_v() {
+  local f pid st out=""
+  for f in "${FL_PROC_DIR}"/[0-9]*; do
+    pid="${f##*/}"
+    [[ "$pid" =~ ^[0-9]+$ ]] || continue
+    fl_proc_stat_v st "$pid"
+    [[ -n "$st" ]] || continue
+    out="${out}${pid} ${st%% *}"$'\n'
+  done
+  printf -v "$1" '%s' "$out"
+}
+
+# fl_proc_uptime_cs_v VAR: the system's uptime in centiseconds, from /proc/uptime
+fl_proc_uptime_cs_v() {
+  local up="" frac
+  { IFS=' ' read -r up _ <"${FL_PROC_DIR}/uptime"; } 2>/dev/null || true
+  frac="${up#*.}"
+  [[ "$up" == *.* && "${up%%.*}" =~ ^[0-9]+$ && "$frac" =~ ^[0-9]+$ ]] || { printf -v "$1" '%s' ""; return 0; }
+  frac="${frac}00"
+  printf -v "$1" '%s' "$((10#${up%%.*} * 100 + 10#${frac:0:2}))"
+}
+
+# fl_proc_measure_v VAR PID...: "PID CPU_TENTHS RSS_KB" per pid alive at both
+# samples. /proc has no percentage, so CPU comes from two samples of the
+# pids' CPU ticks FL_STATS_WINDOW seconds apart (default 0.5; the one process
+# of this read is that sleep), over the uptime that passed, in tenths of a
+# percent of one core. RSS is VmRSS of /proc/PID/status in KiB.
+fl_proc_measure_v() {
+  local var="$1" window="${FL_STATS_WINDOW:-0.5}" pid st t0 t1 up0 up1 dcs line rss out="" t
+  local before_pids=() before_ticks=() i
+  shift
+  fl_proc_uptime_cs_v up0
+  for pid in "$@"; do
+    fl_proc_stat_v st "$pid"
+    [[ -n "$st" ]] || continue
+    before_pids+=("$pid"); before_ticks+=("${st#* }")
+  done
+  sleep "$window"
+  fl_proc_uptime_cs_v up1
+  dcs=0
+  [[ "$up0" =~ ^[0-9]+$ && "$up1" =~ ^[0-9]+$ ]] && dcs=$((up1 - up0))
+  FL_PROC_CPU_SOURCE="proc_delta"; FL_PROC_WINDOW_MS=""
+  [[ "$dcs" -le 0 ]] || FL_PROC_WINDOW_MS=$((dcs * 10))
+  for ((i = 0; i < ${#before_pids[@]}; i++)); do
+    pid="${before_pids[$i]}"
+    fl_proc_stat_v st "$pid"
+    [[ -n "$st" ]] || continue
+    t0="${before_ticks[$i]}"; t1="${st#* }"
+    rss=""
+    {
+      while IFS= read -r line; do
+        if [[ "$line" == VmRSS:* ]]; then rss="${line#VmRSS:}"; rss="${rss//[!0-9]/}"; break; fi
+      done <"${FL_PROC_DIR}/${pid}/status"
+    } 2>/dev/null || true
+    [[ "$rss" =~ ^[0-9]+$ ]] || continue
+    t=0
+    if [[ "$dcs" -gt 0 && "$t1" -ge "$t0" ]]; then t=$(((t1 - t0) * 1000 / dcs)); fi
+    out="${out}${pid} ${t} ${rss}"$'\n'
+  done
+  printf -v "$var" '%s' "$out"
+}

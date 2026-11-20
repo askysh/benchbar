@@ -128,6 +128,8 @@ FL_OP_ID=""; FL_OP_OWNER=""; FL_OP_JSON=""; FL_OP_COMMAND=""; FL_OP_STARTED=""; 
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/repair.sh"
 # shellcheck source=lib/frappe-local/service.sh
 . "${SCRIPT_DIR}/lib/frappe-local/service.sh"
+# shellcheck source=lib/frappe-local/stats.sh
+. "${SCRIPT_DIR}/lib/frappe-local/stats.sh"
 # shellcheck source=lib/frappe-local/report.sh
 . "${SCRIPT_DIR}/lib/frappe-local/report.sh"
 # shellcheck source=lib/frappe-local/docs.sh
@@ -295,6 +297,8 @@ Daily
   restart             Restart it, for example after changing Python code.
   status              State, pid, stop reason, site ping, Redis (benchstatus). --json adds
                       redis and sites[].served (does the running bench serve the site).
+  stats               CPU and memory of the running bench's own processes, and the figure the
+                      app's runner speed comes from (--json; resources is null when stopped).
   wait                Block until the bench is ready (site answers, socketio, Redis, a worker, code
                       not changed since the start); --for PART for one part, --timeout SECS, --json.
   list                Every bench benchbar knows about.
@@ -1706,6 +1710,7 @@ case "$COMMAND" in
   doctor) cmd_doctor || exit 1 ;;
   repair) cmd_repair || exit $? ;;
   status) cmd_status ;;
+  stats) FL_CONTEXT_LIGHT=1; fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_stats ;;
   list) FL_CONTEXT_LIGHT=1; fl_cmd_list "$OPT_JSON" ;;
   ports)
     [[ "${ARGS[0]:-}" == check ]] && FL_CONTEXT_LIGHT=1

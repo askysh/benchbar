@@ -393,3 +393,36 @@ export CPPFLAGS="-I${FL_BREW_PREFIX}/opt/openssl@3/include -I${FL_BREW_PREFIX}/o
 export PKG_CONFIG_PATH="${FL_BREW_PREFIX}/opt/openssl@3/lib/pkgconfig:${FL_BREW_PREFIX}/opt/libffi/lib/pkgconfig:${FL_BREW_PREFIX}/opt/zlib/lib/pkgconfig:${FL_BREW_PREFIX}/opt/mariadb-connector-c/lib/pkgconfig"
 EOF
 }
+
+# ------------------------------------------------------------- process table (stats)
+
+# fl_proc_table_v VAR: every process as "PID PPID" lines, for the bench's
+# process tree. One ps call; its CPU and memory columns stay in FL_PS_SNAP for
+# fl_proc_measure_v, so the whole read is one process.
+FL_PS_SNAP=""
+fl_proc_table_v() {
+  local pid ppid out=""
+  FL_PS_SNAP="$(ps -axo pid=,ppid=,%cpu=,rss= 2>/dev/null || true)"
+  while read -r pid ppid _; do
+    [[ "$pid" =~ ^[0-9]+$ && "$ppid" =~ ^[0-9]+$ ]] || continue
+    out="${out}${pid} ${ppid}"$'\n'
+  done <<<"$FL_PS_SNAP"
+  printf -v "$1" '%s' "$out"
+}
+
+# fl_proc_measure_v VAR PID...: "PID CPU_TENTHS RSS_KB" per live pid. CPU is
+# ps's own %cpu (the system's decaying average, no second sample), in tenths
+# of a percent of one core; RSS is ps's, in KiB.
+fl_proc_measure_v() {
+  local var="$1" want=" ${*:2} " pid cpu rss int frac out=""
+  FL_PROC_CPU_SOURCE="ps"; FL_PROC_WINDOW_MS=""
+  while read -r pid _ cpu rss; do
+    [[ "$want" == *" ${pid} "* && "$rss" =~ ^[0-9]+$ ]] || continue
+    cpu="${cpu//,/.}"; int="${cpu%%.*}"; frac="0"
+    [[ "$cpu" != *.* ]] || frac="${cpu#*.}"
+    [[ "$int" =~ ^[0-9]+$ && "$frac" =~ ^[0-9]*$ ]] || continue
+    frac="${frac}0"
+    out="${out}${pid} $((10#${int} * 10 + 10#${frac:0:1})) ${rss}"$'\n'
+  done <<<"$FL_PS_SNAP"
+  printf -v "$var" '%s' "$out"
+}
