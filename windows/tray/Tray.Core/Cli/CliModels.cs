@@ -104,12 +104,20 @@ public static class CliJson
                 return new CliEvent.Step(new CliStep(id, JsonRead.Str(o, "name") ?? id, InstallJson.ParseStatus(JsonRead.Str(o, "status")),
                     JsonRead.Str(o, "message"), JsonRead.Str(o, "command"), JsonRead.Int(o, "secs")));
             case "progress":
-                return new CliEvent.Progress(JsonRead.Str(o, "step") ?? "", JsonRead.Str(o, "label") ?? "", JsonRead.Int(o, "elapsed") ?? 0);
+                return new CliEvent.Progress(JsonRead.Str(o, "step") ?? "", JsonRead.Str(o, "label") ?? DownloadLabel(o), JsonRead.Int(o, "elapsed") ?? 0);
             case "done":
                 return ParseDone(o) is { } d ? new CliEvent.Done(d) : new CliEvent.Other(o);
             default:
                 return new CliEvent.Other(o);
         }
+    }
+
+    /// <summary>The <c>progress</c> line of <c>pull</c> has <c>file</c>, <c>bytes</c> and <c>total</c> and no label: "Downloaded 7.0 MB of 12.0 MB".</summary>
+    private static string DownloadLabel(JsonObject o)
+    {
+        if (o["bytes"] is not JsonValue b || !b.TryGetValue<long>(out var bytes)) return "";
+        var total = o["total"] is JsonValue t && t.TryGetValue<long>(out var all) && all > 0 ? $" of {ByteSize.Format(all)}" : "";
+        return $"Downloaded {ByteSize.Format(bytes)}{total}";
     }
 
     /// <summary>
