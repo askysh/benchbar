@@ -1,0 +1,1 @@
+  [OK] autostart is on (bench returns after login if it was running)

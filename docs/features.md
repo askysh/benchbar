@@ -86,6 +86,7 @@ JSON. See [The menu bar app](app.md).
 | On your network | Finds the rooms of colleagues on your Wi-Fi and joins them. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Join a room](app.md#join-a-room-on-your-network) |
 | Settings > Labs | Lists the experiments, with a switch, a warning and the version of each. | 0.8.2 | macOS | [The menu bar app](app.md#the-benchbar-window) |
 | Restore a backup | Restores one of a site's backups into the site or into a copy, from the plan the CLI shows, by its token. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Pull a site | Copies a production site over SSH, or a downloaded backup, into a new site. The copy is neutralised unless you choose to keep the secrets. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | Unfinished changes | Lists an app update or add that stopped part way, with Resume and Drop the Record. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 
 ## BenchBar for Windows
@@ -104,6 +105,9 @@ BenchBar for Windows is a beta. The benches run in WSL 2. See
 | Window: Profiles, Find Benches | Team Profiles and Find Benches in the sidebar. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Open as | **Allow Open as...** per site, then **Open as...** and Find User open the site in your browser signed in as any enabled user. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Quick Switch | The tray menu opens a panel that opens a site as Administrator or a pinned user, by digit, arrows or typing. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
+| Window: services only, autostart | **Start Services Only** (the bench's Redis, for a restore or a migrate) and **Stop Services**, and **Start again after Ubuntu restarts** (`autostart`), in the Overview. Offered when the CLI lists them. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
+| Window: service, lockfile | **Install Service...** and the scheduler box use the plan of `service`; **Write Lockfile...** and **Apply Lockfile...** show the dry run first. **Watch Assets** and **Run in Foreground** open a terminal. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
+| Window: acknowledge, prerequisites | **Acknowledge** on a Health warning (`doctor --ack`), and the prerequisites of `doctor --prerequisites` on the New Bench page. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Labs | Lists the experiments with a switch, a warning, the version and, for one that is not on Windows yet, why. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | URL scheme | `benchbar://` links start, stop and open a bench from a launcher or a script. **Settings > Ask before a link acts** is off by default. | 0.9.0 | Windows | [benchbar:// links](windows.md#benchbar-links), [URL scheme](reference/url-scheme.md) |
 | Report a bug | The tray writes the diagnostics zip. | 0.8.1 | Windows | [Report a bug](windows.md#report-a-bug) |
@@ -129,9 +133,10 @@ Windows (`benchbar.exe mcp`) since 0.8.0. The tools below are the ones in
 | Site plan and apply | `benchbar_site_add_plan` and `benchbar_site_add`, `benchbar_site_restore_plan` and `benchbar_site_restore`. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
 | `benchbar_site_backup` | Backs up one site. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
 | Service plan and apply | `benchbar_service_install_plan` and `benchbar_service_install`, for a bench that has no service. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
+| More read tools | `benchbar_site_backups`, `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`, `benchbar_labs_list`, `benchbar_where`, `benchbar_doctor_prerequisites`, `benchbar_self_update_check` and `benchbar_app_focus_list`. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
 
-A person approves each plan before the agent applies it. Rooms, Labs and
-the repairs of `repair` are not MCP tools. A change that needs a person
+A person approves each plan before the agent applies it. Rooms, Labs,
+sharing, the LAN guard, `self-update` and the repairs of `repair` are not MCP tools. A change that needs a person
 stays with the person.
 
 ## Guides still to write
