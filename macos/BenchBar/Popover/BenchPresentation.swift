@@ -37,7 +37,13 @@ nonisolated struct BenchControls: Equatable, Sendable {
 
 /// Words for the popover.
 nonisolated enum BenchText {
-    static func headline(_ state: BenchState, reason: StopReason?, exitCode: Int?) -> String {
+    /// `ready` (0.9 CLIs) says more than "running": a bench whose code changed needs a restart,
+    /// and one whose site answers but whose realtime server or Redis does not is not ready yet.
+    static func headline(_ state: BenchState, reason: StopReason?, exitCode: Int?, ready: ReadyInfo? = nil) -> String {
+        if state == .running, let ready {
+            if ready.stale == true { return "Needs restart (code changed)" }
+            return ready.ready ? "Ready" : "Running, not ready"
+        }
         switch state {
         case .stopped:
             return reason == .broken ? "Stopped: needs repair" : "Stopped"
@@ -77,9 +83,14 @@ nonisolated enum BenchText {
 }
 
 extension DoctorReport {
-    /// Checks worth reading first: fail, then warn, then anything unknown.
+    /// Checks worth reading first: fail, then warn, then anything unknown. A warning the person
+    /// acknowledged is not among them: the Health tab lists it apart, with Undo.
     nonisolated var needsAttention: [DoctorCheck] {
-        checks.filter { $0.level != .ok }.sorted { Self.rank($0.level) < Self.rank($1.level) }
+        checks.filter { $0.level != .ok && !$0.acked }.sorted { Self.rank($0.level) < Self.rank($1.level) }
+    }
+
+    nonisolated var acknowledged: [DoctorCheck] {
+        checks.filter { $0.level == .warn && $0.acked }
     }
 
     nonisolated var passing: [DoctorCheck] {

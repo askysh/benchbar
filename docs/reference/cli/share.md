@@ -5,12 +5,44 @@ description: "benchbar share setup, start, code, invite, lock, people, remove, a
 
 **share is an experiment: run `benchbar labs on lan-rooms` first.** While the lab is off, `share` and `lan-guard` are hidden from `--help` and `commands --json` (listed under `gated`) and exit 2 with that hint. `benchbar labs off lan-rooms` stops a running share and, if lan-guard is installed, warns with `run: benchbar lan-guard remove` (it never uses sudo itself).
 
-Sharing opens a **room** on this Mac's network. People on the same Wi-Fi
+Sharing opens a **room** on this computer's network. People on the same Wi-Fi
 join it with a 6 digit **room code**, take a **seat** (one of the Frappe
 users you chose) and use a hardened **copy** of one of your dev sites in
-their own browser. macOS only. Every command takes the
+their own browser. It runs on macOS and, since 0.9.0, on Linux (see [Sharing on Linux](#sharing-on-linux));
+the Mac app is macOS only. Every command takes the
 [options for every command](install.md#options-for-every-command).
 The documents are in the [JSON schema](../../json-schema.md#sharing).
+
+## Sharing on Linux
+
+The same commands, with the macOS parts swapped:
+
+| What | macOS | Linux |
+| --- | --- | --- |
+| The LAN guard | a pf anchor and a launch daemon | an nftables table and a systemd unit ([lan-guard install on Linux](#lan-guard-install-on-linux)) |
+| The sharing job | a launchd job | a `systemd --user` unit, `benchbar-share-gateway.service`, written into `$XDG_RUNTIME_DIR/systemd/user` and deleted when the share ends; it is never enabled, so a logout or a reboot ends it, and it is not in `~/.config/systemd/user` where the bench's unit is |
+| Listing on the network | Bonjour (`dns-sd`) | `avahi-publish` when it is installed (`sudo apt install avahi-utils`); without it the room is not listed, `share start` says so, and people join with the address and the code |
+| Keeping the computer awake | `caffeinate` | nothing yet: a laptop that suspends ends the room's reachability until it wakes |
+| Naming the owner of the web port | `lsof` | `ss` |
+| The firewall for node | `lan-guard allow-node` | none; with ufw on, `sudo ufw allow 8443/tcp` for the room's port |
+| The room's label | the Mac's ComputerName | the host name |
+
+`share start` needs a user session with a systemd user manager (the folder `$XDG_RUNTIME_DIR` exists):
+over SSH without a login session, or in a WSL distro without systemd, it stops and says so. In WSL the
+default NAT network is not the office Wi-Fi: its address belongs to the Windows PC, so nobody on the Wi-Fi
+can reach a room there. A room is not available on WSL NAT: `share preflight`, `share start` and
+`share invite` read `wslinfo --networking-mode` (a WSL without `wslinfo` counts as NAT) and refuse, naming
+the fix. With mirrored networking (`networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`,
+then `wsl.exe --shutdown` in Windows) the room has the PC's own Wi-Fi address, and `share preflight` and
+`share start` warn that Windows still blocks inbound connections to WSL until the Hyper-V firewall allows
+the room's port. Run this once in a PowerShell opened as administrator:
+
+```powershell
+New-NetFirewallHyperVRule -Name BenchBarRoom -DisplayName "BenchBar room" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8443
+```
+
+See [Windows](../../windows.md#rooms-on-windows) and Microsoft's
+[mirrored mode networking](https://learn.microsoft.com/windows/wsl/networking#mirrored-mode-networking).
 
 ## The safety model
 
@@ -83,7 +115,7 @@ benchbar share preflight [--static|--critical] [--quiet] [--json]
 
 The checks, each with a status, a message and a `fix_action`. `--static`:
 what is checked before anything starts (the copy, its seats, node, the
-firewall). `--critical`: what a running share repeats (the pf block probed
+firewall; on WSL, the networking mode: `wsl_networking` fails on NAT and warns on mirrored). `--critical`: what a running share repeats (the pf block probed
 from the LAN address, the share web process, the bench's Redis).
 
 Exit codes: 0 when every check passes; 1 when one fails.
@@ -100,7 +132,10 @@ benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]
 
 Starts the room until the deadline (`--for 30m`, `4h`; 5 minutes to 12
 hours; 4 hours by default). The bench must be running. Refused like
-`share setup`. A second start says "unchanged".
+`share setup`. A second start says "unchanged". On WSL with NAT networking it
+is refused before anything is written, even with `--dry-run`; with mirrored
+networking it warns what the Hyper-V firewall needs (see
+[Sharing on Linux](#sharing-on-linux)).
 
 A start takes about 15 seconds on a 29-app copy: the checks run before
 and after the gateway starts (about 2 seconds each), and the copy's web
@@ -139,7 +174,7 @@ benchbar share invite [--install-url URL] [--json]
 ```
 
 Prints a ready-to-paste invite for your team channel. Its link carries
-the room's name, this Mac's key fingerprint, the code's salt, the code
+the room's name, this computer's key fingerprint, the code's salt, the code
 itself, this Mac's LAN address and gateway port, and the deadline, so
 a guest's BenchBar opens the join sheet with everything filled in. The
 guest still clicks **Join**. Before the code is sent, the guest's app checks
@@ -382,6 +417,39 @@ a block that still lets a bench port through.
 benchbar lan-guard install --dry-run
 ```
 
+### lan-guard install on Linux
+
+The same command, with nftables in place of pf and systemd in place of
+launchd. It writes the rules file `/etc/benchbar/lan-guard.nft` (one table,
+`inet benchbar`, with one input chain at priority -10 and a policy of
+accept) and the unit `/etc/systemd/system/benchbar-lan-guard.service`, then
+enables the unit and starts it again. The unit loads the table at every boot
+and deletes it when it stops. Only the bench ports are touched, from the
+same list and for the same reason as on macOS: TCP to them is refused with a
+reset unless it comes from loopback, and this machine's own LAN address
+counts as not loopback, which is how `status` proves the rule works.
+
+It needs `nft` (`sudo apt install nftables`) and systemd as the init (in WSL,
+`systemd=true` in `/etc/wsl.conf`); without them it stops before it asks for
+sudo and changes nothing. The root step names the system tools by absolute
+path and carries both files as literals, as on macOS. `BENCHBAR_SUDO=gui` is
+the Mac's dialog and does nothing on Linux. From the Windows tray the
+password comes in `BENCHBAR_SUDO=env`.
+
+**ufw and firewalld.** The guard does not change them. A host that runs ufw
+refuses incoming ports it was not told to allow, and the guard adds to that:
+both can refuse, neither accepts for the other. A room's port (8443) then
+needs a rule of your own, `sudo ufw allow 8443/tcp`; `install` and `status`
+say so when ufw is active. A service that flushes the whole ruleset
+(`nftables.service` reloading `/etc/nftables.conf`, which starts with `flush
+ruleset`) takes the table away: `status` then shows `active: false` and
+`install` loads it again. A published Docker port is forwarded, not
+delivered to this machine, and is outside what the input chain sees.
+
+`lan-guard allow-node` is macOS only: it changes the macOS application
+firewall, and Linux has no such list. On Linux it says so and changes
+nothing.
+
 ## lan-guard status
 
 ```
@@ -389,8 +457,9 @@ benchbar lan-guard status [--json]
 ```
 
 `installed`, `missing` or `outdated`, and `active`: whether the bench ports
-are refused on this Mac's LAN address (null with no LAN address). Reads
-only; never refused.
+are refused on this machine's LAN address (null with no LAN address, or when
+the probe could not run: it needs the bench's Node). `anchor` is the pf
+anchor on macOS and `inet benchbar` on Linux. Reads only; never refused.
 
 ```bash
 benchbar lan-guard status --json
@@ -404,7 +473,9 @@ benchbar lan-guard remove [--yes] [--json]
 
 Unloads and deletes the anchor and its daemon, with sudo once. Asks first.
 Without them the bench ports answer the LAN and `share start` refuses to
-run.
+run. On Linux it stops and disables the unit, deletes the table `inet
+benchbar` (no other table, chain or rule), and removes the unit, the rules
+file and their folder.
 
 It also gives back the pf token that install recorded (`pfctl -X TOKEN`), so
 pf is turned off again when the guard was the only thing that turned it on.
@@ -506,6 +577,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `share remove` | `--new-code` |  | Also draw a new room code, for when the person is not known: a fresh Mac could join again with the old one. The new code also lets the removed Mac back, if they get it. |
 | `share remove` | `--yes` |  | Do not ask first. |
 | `share remove` | `--json` |  | JSON lines: done, with removed, new_code and the wipe. |
+| `share revoke` | `--new-code` |  | As share remove --new-code. |
+| `share revoke` | `--yes` |  | Do not ask first. |
 | `share revoke` | `--json` |  | As share remove --json. |
 | `share assign` | `--json` |  | JSON lines: done, with the device and its new seat. |
 | `share log` | `--device` | `ID` | Only this Mac (an id of share people). |

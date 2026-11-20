@@ -193,8 +193,14 @@ fl_sites_json() { local j; fl_sites_json_v j "${1:-ping}" 1; printf '%s' "$j"; }
 
 # fl_site_name_ok NAME: lowercase letters, digits, '-' and '.', starting
 # with a letter or digit; what a hosts line and a runner can carry
-fl_site_name_ok() { [[ "$1" =~ ^[a-z0-9][a-z0-9.-]*$ ]]; }
+# assets and apps.txt are bench's own entries in sites/, not sites
+fl_site_name_ok() {
+  [[ "$1" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || return 1
+  case "$1" in assets|apps.txt) return 1 ;; esac
+  return 0
+}
 fl_site_valid_name() {
+  case "$1" in assets|apps.txt) fl_die "Invalid site name: '$1'." "${1} is a name bench keeps in sites/ for itself; pick another." ;; esac
   fl_site_name_ok "$1" || fl_die "Invalid site name: '$1'." "Use lowercase letters, digits, '-' and '.' only."
 }
 
@@ -332,7 +338,8 @@ fl_site_add_plan() {
     "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_bool "$exists")" "$(fl__site_apps_json "$apps")" \
     "$(fl_json_str "$default")" "$(fl_json_bool "$([[ "$hosts" == "0" ]] && printf 1 || printf 0)")" "$steps" "$touches" "$(fl_json_bool "$([[ -n "$steps" ]] && printf 1 || printf 0)")")"
   state="$(printf 'sites\n%s\napps.txt\n%s\ndefault\n%s\n' "$(fl_sites_list)" "$(fl_apps_txt 2>/dev/null)" "$default")"
-  SA_TOKEN="$(printf '%s\n%s\n' "$body" "$state" | shasum -a 256 | awk '{print $1}')"
+  SA_TOKEN_DATA="$(printf '%s\n%s\n' "$body" "$state")"
+  fl_plan_token_v SA_TOKEN "$SA_TOKEN_DATA"
   SA_JSON="$(printf '{"schema_version":%d,"cli_version":"%s","dry_run":true,%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$body" "$SA_TOKEN")"
 }
 
@@ -379,8 +386,13 @@ fl_cmd_site_add() {
       fl_doc_emit 0 "$SA_JSON" plan
       return 0
     fi
-    [[ "$token" == "$SA_TOKEN" ]] || fl_die "The site add plan changed since it was shown (the sites, apps.txt or the default site). Nothing was changed." \
-      "Review a fresh plan: benchbar site add ${name} --dry-run --json, then pass its token."
+    code=0; fl_plan_token_check "$SA_TOKEN_DATA" "$token" || code=$?
+    case "$code" in
+      0) code=0 ;;
+      2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: benchbar site add ${name} --dry-run --json, then pass its token." ;;
+      *) fl_die "The site add plan changed since it was shown (the sites, apps.txt or the default site). Nothing was changed." \
+        "Review a fresh plan: benchbar site add ${name} --dry-run --json, then pass its token." ;;
+    esac
   fi
   # the Administrator password of a new site is the first thing asked for:
   # a run that cannot ask says so before it checks anything else
@@ -450,12 +462,12 @@ fl_cmd_site() {
     list|"") fl_cmd_site_list "$OPT_JSON" ;;
     add) fl_cmd_site_add "$@" ;;
     default) fl_cmd_site_default "${1:-}" ;;
-    hosts) fl_cmd_site_hosts ;;
+    hosts) if [[ "${1:-}" == "--prune" ]]; then fl_cmd_site_hosts_prune; else fl_cmd_site_hosts; fi ;;
     backup) fl_cmd_site_backup "$@" ;;
     backups) fl_cmd_site_backups "$@" ;;
     restore) fl_cmd_site_restore "$@" ;;
     drop) fl_cmd_site_drop "$@" ;;
     open-as) fl_cmd_site_open_as "$@" ;;
-    *) fl_die "Unknown site command: ${sub}" "Use: benchbar site list | add NAME | default NAME | hosts | backup NAME | backups NAME | restore NAME | drop NAME | open-as on|off|status [NAME]" ;;
+    *) fl_die "Unknown site command: ${sub}" "Use: benchbar site list | add NAME | default NAME | hosts [--prune] | backup NAME | backups NAME | restore NAME | drop NAME | open-as on|off|status [NAME]" ;;
   esac
 }

@@ -30,8 +30,10 @@ exploitable:
   password that reaches a log, the command line or a child process,
   counts.
 - **sudo.** Anything that runs `sudo` for more than its platform's list,
-  or lets input reach those commands. On macOS the list is the `/etc/hosts`
-  line, the wkhtmltopdf package, the LAN guard (`lan-guard install` and
+  or lets input reach those commands. The list is the same in
+  [AGENTS.md](AGENTS.md). On macOS it is the `/etc/hosts`
+  line, the wkhtmltopdf package (with Rosetta 2 when the package needs
+  it), the LAN guard (`lan-guard install` and
   `remove`: the pf anchor and its launch daemon) and the firewall allow
   for node (`lan-guard allow-node`). On Linux it is apt (the packages and
   the wkhtmltopdf `.deb`), the MariaDB admin step (`sudo mariadb`, its
@@ -42,6 +44,43 @@ exploitable:
   password is read once at start and removed from the environment. Report
   anything that puts it in the command line, a log, a report zip or a
   child process.
+- **Sharing (the `lan-rooms` Lab).** A room opens a hardened copy of a
+  site to people on your Wi-Fi. These parts can break and count: the
+  gateway on port 8443 and its allow list, the room code and the join
+  protocol (ten wrong codes lock a room), a guest seeing more than their
+  seat's user can open, the pinned certificate and the guest identity
+  (`BenchBar Share Identity` in the Keychain), the control socket (mode
+  0600), the checks that end a share when a protection fails, the LAN
+  guard (`lan-guard`: the pf anchor and its launch daemon) and the refusal
+  of a request with another `Host` (`bad_host`, DNS rebinding). Also in
+  scope: a way to reach the site, another bench or any bench port from the
+  network without a room, the room code in a file, a log or JSON other than
+  `share code` and `share invite`, and a share that stays on after a
+  check failed. What a room shows its guests on purpose, and the limits it
+  states in [How sharing keeps your bench safe](docs/concepts/sharing-safety.md),
+  are not bugs.
+- **Labs.** A Lab that is off must stay off: its commands refuse to run, and
+  `BENCHBAR_LABS` cannot turn on a Lab the platform does not list.
+- **Open as.** A sign in as another user on a site where the person has not
+  turned Open as on, turning it on without a person (`site open-as on` is
+  refused under `--for-agent` and `benchbar mcp`), or a login link
+  (`open --as --print-url`) that reaches a log or an agent.
+- **The MCP tools that change things.** `benchbar mcp` offers `benchbar_up`,
+  `benchbar_down`, `benchbar_restart`, `benchbar_site_backup` and the
+  appliers `benchbar_app_add`, `benchbar_site_add`, `benchbar_site_restore`
+  and `benchbar_service_install`. Each applier needs the token of its plan.
+  Report a way to apply without the plan, a token that outlives a change
+  of the bench, an argument that becomes a different command or option, or
+  any path from a tool to `repair`, `install`, `sudo`, `lan-guard`,
+  `listen all`, `labs on`, the MariaDB root password or a login link, all of
+  which agents never get. Text from a bench (a log line, a git message) must
+  come back labeled as data. The token proves only that the bench did not
+  change since the plan. Your client's approval of the applier is the gate
+  for a person, and this policy does not promise more.
+- **A bench open to the network.** The web server and socketio of a bench
+  must listen on 127.0.0.1 unless the person ran `benchbar listen all`.
+  A bench that listens on a network address with `listen` at its default
+  is a bug, on macOS, Linux and WSL alike.
 - **A site or a database.** Anything that drops, overwrites or exposes a
   site, a database or a backup without the confirmation the command
   promises (`pull`, `repair`, `adopt`, `app update`, `site add`).
@@ -80,7 +119,14 @@ not that the code is good. A `gh` that is not signed in leaves only the
 checksum. On Linux `install.sh` downloads no file: git fetches the CLI
 over https.
 
-## The Keychain item
+## The Keychain items
+
+BenchBar for macOS keeps two kinds of item. One is the MariaDB root
+password, described below. The other is the guest identity of this Mac,
+`BenchBar Share Identity`: a P-256 key that cannot be exported and a
+self-signed certificate, made when you first join a room. Every host knows
+this Mac by that key. Linux and Windows have no Keychain: the password
+file is described above.
 
 `benchbar` keeps the MariaDB root password in your login Keychain as the
 generic password `benchbar-mariadb` (account `root`). The item trusts one
@@ -104,14 +150,18 @@ around it.
 
 Not a vulnerability: a bench's own Frappe or ERPNext code (report those
 to [Frappe](https://github.com/frappe/frappe/security)), and a dev bench
-reachable on your local network because you set it to listen there
-(`benchbar listen all`). Since 0.9.0 the web server and socketio of a bench
-listen on 127.0.0.1 by default. Before 0.9.0 the generated Procfile started
-them on every interface (Frappe's own default), which is fixed: a bench
-that still listens on a network address with `listen` at its default is a
-bug, and `benchbar doctor` warns about it.
+reachable on your local network because you chose it (`benchbar listen
+all`, which asks first and which agents cannot run). This does not cover a
+room: a room is a feature that shares on purpose, and a bypass of it
+counts (see Sharing above). Since 0.9.0 the web server and socketio of a
+bench listen on 127.0.0.1 by default. Before 0.9.0 the generated Procfile
+started them on every interface (Frappe's own default). That is fixed, and
+`benchbar doctor` warns about a bench that still listens on a network
+address with `listen` at its default.
 
 ## Supported versions
 
-Only the latest release gets security fixes. Update with the installer
-or from the app before you report.
+Only the latest release gets security fixes. It is the release that
+Homebrew, the one line installer, the app's update and `benchbar
+self-update` give you. There is no other channel. Update before you
+report, and say which version you tested.

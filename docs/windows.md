@@ -829,6 +829,17 @@ every distro, so stop your benches first).
   setup check says so. Install it next to the other one with
   `wsl --install -d Ubuntu-24.04` and choose it with
   `benchbar.exe adopt-distro`.
+- **"Do not run benchbar as root or with sudo."** The distro's default user
+  is `root`, so every command runs as root and `benchbar` refuses (exit 64,
+  `error_id` `root_refused`; with `--json` the refusal is JSON). This happens
+  when the distro was imported from a tarball or set up without a user. Create
+  a normal user and make it the default. In PowerShell:
+  `wsl -d Ubuntu-24.04 -u root -- adduser --gecos "" YOURNAME`, then
+  `wsl -d Ubuntu-24.04 -u root -- usermod -aG sudo YOURNAME`, then
+  `wsl -d Ubuntu-24.04 -u root -- sh -c "printf '[user]\ndefault=YOURNAME\n' >> /etc/wsl.conf"`,
+  then `wsl --terminate Ubuntu-24.04`. Install BenchBar again for that user
+  (`benchbar.exe setup run` or the install line from inside the distro), as
+  the files `root` made are not the new user's.
 - **A `benchbar://` link does nothing.** The tray has to be installed
   (or have started once) so that it registered the scheme, and the link
   must be one of the routes. Open the [URL scheme](reference/url-scheme.md)
@@ -884,6 +895,30 @@ every distro, so stop your benches first).
   Mac app and has no `benchbar` command, so it is not on Windows yet. A
   `benchbar://share/...` link shows a note that says so. Hosting a room is
   the **Sharing** tab above.
+
+## Rooms on Windows
+
+A room is the host side of **Share with people on the same Wi-Fi**. The bench runs in WSL, so the room's
+address is the one WSL has, and that depends on WSL's networking mode:
+
+- **NAT (the default).** WSL has a private address that only this PC can reach. Nobody on the Wi-Fi can join
+  a room there, and the checks run inside WSL, so they would pass without telling you. A room is not available on
+  WSL NAT: `share preflight`, `share start` and `share invite` refuse and say so.
+- **Mirrored.** WSL shares the PC's own Wi-Fi address. Put `networkingMode=mirrored` under `[wsl2]` in
+  `%UserProfile%\.wslconfig` (Windows 11 22H2 or later; BenchBar never edits that file), then run
+  `wsl.exe --shutdown`. Windows still drops inbound connections to WSL until its Hyper-V firewall allows the
+  room's port. Run this once in a PowerShell opened as administrator:
+
+  ```powershell
+  New-NetFirewallHyperVRule -Name BenchBarRoom -DisplayName "BenchBar room" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8443
+  ```
+
+  `share preflight` and `share start` show this line as a warning, and `share start` goes on. The other way,
+  `Set-NetFirewallHyperVVMSetting -Name '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -DefaultInboundAction Allow`,
+  opens every port of WSL, so the rule above is the narrower one. Microsoft documents both under
+  [mirrored mode networking](https://learn.microsoft.com/windows/wsl/networking#mirrored-mode-networking).
+
+BenchBar reads the mode with `wslinfo --networking-mode`; a WSL that has no `wslinfo` counts as NAT.
 
 ## Labs
 

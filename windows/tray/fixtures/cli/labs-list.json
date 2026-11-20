@@ -1,4 +1,4 @@
-{"schema_version":1,"labs":[
+{"schema_version":1,"cli_version":"0.8.3","labs":[
  {"name":"lan-rooms","title":"Share with people on the same Wi-Fi","description":"Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose.","warning":"Asks for your password once to install a firewall rule, and opens port 8443 on this Mac while a share is on. A share stays up until you stop it.","since":"0.8.2","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false},
  {"name":"quick-switch","title":"Quick Switch panel","description":"A panel on a global keyboard shortcut to open a site as any pinned user.","warning":"Holds a system wide keyboard shortcut while the app runs.","since":"0.8.2","enabled":false,"commands":[],"platforms":["macos"],"available":false},
  {"name":"example-linux","title":"An experiment that runs on Linux","description":"A recorded entry for a lab that lists linux, so it is available in WSL.","warning":"It can change or disappear.","since":"0.9.0","enabled":true,"commands":["example"],"platforms":["macos","linux"],"available":true}]}

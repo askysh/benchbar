@@ -83,10 +83,18 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | Command | Terminal | `sudo` | Network | Changes things | JSON |
 |---|---|---|---|---|---|
 | `benchbar lock write\|check\|apply ...` | no | no | no | no | none |
-| `benchbar lock write [--lock PATH] [--no-commits] [--allow-dirty]` | yes | no | no | yes | none |
+| `benchbar lock write [--lock PATH] [--no-commits] [--allow-dirty]` | yes | no | no | yes | stream |
 | `benchbar lock check [--json]` | no | no | no | no | document |
-| `benchbar lock apply` | yes | no | yes | yes | none |
+| `benchbar lock apply` | yes | no | yes | yes | stream |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.
+
+| Command | Flag | Value | What it does |
+|---|---|---|---|
+| `lock write` | `--lock` | `PATH` | Write this lockfile, and remember it for this bench. |
+| `lock write` | `--no-commits` |  | Leave the commit hashes out (branches only). |
+| `lock write` | `--allow-dirty` |  | Write it although an app has local changes. |
+| `lock check` | `--lock` | `PATH` | Compare with this lockfile, and remember it for this bench. |
+| `lock apply` | `--lock` | `PATH` | Apply this lockfile, and remember it for this bench. |
 <!-- /generated:cli-commands -->

@@ -8,11 +8,16 @@
 mock_root_paths() {
   local mocks="${BASH_SOURCE[0]%/*}" anchor="${FL_LANGUARD_ANCHOR:-/etc/pf.anchors/com.benchbar.lan}"
   local daemon="${FL_LANGUARD_DAEMON:-/Library/LaunchDaemons/com.benchbar.pf.plist}"
+  # the Linux guard's two root files (lan-guard-linux.sh); its systemctl is mapped like the other tools
+  local rules="${FL_LANGUARD_RULES:-/etc/benchbar/lan-guard.nft}" unitf="${FL_LANGUARD_UNIT:-/etc/systemd/system/benchbar-lan-guard.service}"
   printf '%s' "$1" | sed \
     -e "s#^\(pfctl=.*\)/sbin/pfctl#\1${mocks}/bin/pfctl#" \
     -e "s#^\(launchctl=.*\)/bin/launchctl#\1${mocks}/bin/launchctl#" \
     -e "s#^\(chown=.*\)/usr/sbin/chown#\1${mocks}/root/chown#" \
     -e "s#^\(fw=.*\)/usr/libexec/ApplicationFirewall/socketfilterfw#\1${mocks}/bin/socketfilterfw#" \
     -e "s#^\(anchor=.*\)/etc/pf.anchors/com.benchbar.lan#\1${anchor}#" \
-    -e "s#^\(daemon=.*\)/Library/LaunchDaemons/com.benchbar.pf.plist#\1${daemon}#"
+    -e "s#^\(daemon=.*\)/Library/LaunchDaemons/com.benchbar.pf.plist#\1${daemon}#" \
+    -e "s#^\(systemctl=.*\)/usr/bin/systemctl#\1${mocks}/bin/systemctl#" \
+    -e "s#^\(rules=.*\)/etc/benchbar/lan-guard.nft#\1${rules}#" \
+    -e "s#^\(unitf=.*\)/etc/systemd/system/benchbar-lan-guard.service#\1${unitf}#"
 }

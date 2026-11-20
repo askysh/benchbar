@@ -21,9 +21,16 @@ final class Workbench {
     private(set) var lockChecks: [String: LockCheck] = [:]
     private(set) var lockErrors: [String: String] = [:]
     private(set) var checkingLock: Set<String> = []
+    /// What `commands --json` says this CLI has, read once per session (a failed read is kept).
+    private(set) var commandState = CommandCatalogState.unread
+    /// `autostart` per bench path: nil until read, and for a bench or a CLI without the command.
+    private(set) var autostartOn: [String: Bool] = [:]
+    /// Why the last acknowledge, services only or autostart call failed, per bench path, for the page it came from.
+    private(set) var parityError: [String: String] = [:]
     /// The last change's outcome, for the banner at the top of the pane.
     var result: ChangeResult?
     @ObservationIgnored private let appCalls = OnDemandCalls()
+    @ObservationIgnored private let autostartCalls = OnDemandCalls()
     /// The live read of site lists that were never read, once per stamp.
     @ObservationIgnored private let unknownSiteCalls = OnDemandCalls()
 
@@ -77,13 +84,12 @@ final class Workbench {
         }
     }
 
-    /// The reviewed plan of an app add, read only. Nothing is changed and no
+    /// The reviewed plan of an app add (one app or several), read only. Nothing is changed and no
     /// change slot is taken; the person looks at it before `addApp`.
-    func addAppPlan(_ source: String, branch: String, site: String?, on bench: BenchModel) async -> Result<AppAddPlan, ChangeError> {
+    func addAppPlan(_ entries: [AppAddEntry], on bench: BenchModel) async -> Result<AppAddPlan, ChangeError> {
         guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
         do {
-            return .success(try await client.addAppPlan(source.trimmingCharacters(in: .whitespaces),
-                                                         branch: branch.trimmingCharacters(in: .whitespaces), site: site, bench: bench.path))
+            return .success(try await client.addAppPlan(entries, bench: bench.path))
         } catch {
             return .failure(ChangeError(message: error.localizedDescription))
         }
@@ -92,10 +98,9 @@ final class Workbench {
     /// Runs the plan the person saw, by its token. Returns the CLI's message
     /// when it failed (a stale token among them), nil when it worked.
     @discardableResult
-    func addApp(_ source: String, branch: String, site: String?, token: String, on bench: BenchModel) async -> String? {
-        let name = source.trimmingCharacters(in: .whitespaces)
-        let error = await change("Add \(AppSource.displayName(name))", on: bench) { client throws(CLIError) in
-            try await client.addApp(name, branch: branch.trimmingCharacters(in: .whitespaces), site: site, token: token, bench: bench.path)
+    func addApp(_ entries: [AppAddEntry], token: String, on bench: BenchModel) async -> String? {
+        let error = await change("Add \(AppAddBatch.title(entries.map(\.displayName)))", on: bench) { client throws(CLIError) in
+            try await client.addApp(entries, token: token, bench: bench.path)
         }
         await loadApps(bench, liveSites: true)
         return error
@@ -341,6 +346,74 @@ final class Workbench {
     func discardPending(_ operation: PendingOperation, on bench: BenchModel) async {
         await change("Drop the unfinished \(operation.isUpdate ? "update" : "add") of \(operation.app)", on: bench) { client throws(CLIError) in
             try await client.discardPending(operation.app, bench: bench.path)
+        }
+    }
+
+    // MARK: commands, services, autostart, acknowledgements
+
+    /// The CLI's command list, asked once: a button of a newer command shows only when it is listed.
+    func loadCommands() async {
+        guard commandState == .unread, let client = store.cliClient else { return }
+        do {
+            commandState = .known(try await client.commands())
+        } catch {
+            commandState = .failed(error.localizedDescription)
+        }
+    }
+
+    /// `autostart` of this bench, read when the Overview shows it and again after a change to the bench.
+    func showAutostart(_ bench: BenchModel) async {
+        guard commandState.catalog?.has("autostart") == true, !bench.needsService, store.pageMayAsk(about: bench),
+              let client = store.cliClient else { return }
+        await autostartCalls.ask(bench.path, force: false, stamp: { store.stamp(for: bench) }) {
+            self.autostartOn[bench.path] = (try? await client.autostart(bench: bench.path)) ?? nil
+        }
+    }
+
+    /// The switch, on a click: `autostart on` or `off` writes one line of the bench's state and its agent file.
+    func setAutostart(_ on: Bool, on bench: BenchModel) async {
+        parityError[bench.path] = nil
+        let error = await change(on ? "Start \(bench.name) after login" : "Do not start \(bench.name) after login", on: bench) { client throws(CLIError) in
+            try await client.setAutostart(on, bench: bench.path)
+        }
+        if error == nil { autostartOn[bench.path] = on } else { autostartOn[bench.path] = nil }
+    }
+
+    /// Start Services Only (`up --services-only`) or Stop Services (`down`) on a stopped bench: no plan, the click is the decision.
+    func setServices(_ start: Bool, on bench: BenchModel) async {
+        await change(start ? "Start the services of \(bench.name)" : "Stop the services of \(bench.name)", on: bench) { client throws(CLIError) in
+            if start { try await client.startServicesOnly(bench: bench.path) } else { try await client.stopServices(bench: bench.path) }
+        }
+    }
+
+    /// Acknowledge (or Undo) one warning of this bench's doctor report, then ask doctor again. A click only.
+    func acknowledge(_ check: DoctorCheck, on: Bool, bench: BenchModel) async {
+        parityError[bench.path] = nil
+        guard let client = store.cliClient else { return }
+        do {
+            try await client.acknowledge(check.id, on: on, bench: bench.path)
+        } catch {
+            parityError[bench.path] = error.localizedDescription
+            return
+        }
+        await store.runDoctor(on: bench)
+    }
+
+    /// The plan of installing or refreshing the background service, read only.
+    func servicePlan(on bench: BenchModel) async -> Result<ServiceInstallPlan, ChangeError> {
+        guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
+        do {
+            return .success(try await client.servicePlan(bench: bench.path))
+        } catch {
+            return .failure(ChangeError(message: error.localizedDescription))
+        }
+    }
+
+    /// Runs the service plan the person saw, by its token. The CLI's message when it failed (a stale token among them), nil when it worked.
+    @discardableResult
+    func installService(token: String, refresh: Bool, on bench: BenchModel) async -> String? {
+        await change(refresh ? "Refresh the service of \(bench.name)" : "Install the service of \(bench.name)", on: bench) { client throws(CLIError) in
+            try await client.installService(token: token, bench: bench.path)
         }
     }
 

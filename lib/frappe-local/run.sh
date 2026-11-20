@@ -48,31 +48,34 @@ fl_run_group_stop() {
   kill "-$1" -- "-${FL_RUN_PGID}" 2>/dev/null || kill "-$1" "$FL_RUN_PGID" 2>/dev/null || true
 }
 
-# fl_run_group_alive: a process of the running command's group is still there
+# fl_run_group_alive PGID: a process of the group is still running (a zombie
+# the shell has not reaped yet is not: kill -0 would count it)
 fl_run_group_alive() {
-  kill -0 -- "-${FL_RUN_PGID}" 2>/dev/null || kill -0 "$FL_RUN_PGID" 2>/dev/null
+  ps -A -o pgid= -o stat= 2>/dev/null | awk -v g="$1" '$1 == g && $2 !~ /^Z/ { f = 1 } END { exit !f }'
 }
 
 # fl_run_group_kill: TERM to the group, then up to FL_KILL_GRACE seconds
-# (default 1, tenths of a second as 0.3) for it to go, polled every 50 ms so a
-# group that ends at once is not waited for; what is left gets KILL. Then the
-# group is forgotten. The wait is bounded by the clock as well as by the count:
-# a loaded machine stretches each 50 ms poll, never the grace.
+# (default 10, tenths allowed as 0.3) for it to go, polled every tenth of a
+# second and not a moment longer than the group needs; what is left gets KILL;
+# then the group is forgotten. A Ctrl-C during brew, yarn or bench init gets
+# the time those tools need to clean up behind them (a half written keg or
+# node_modules is a repair for the next run). The wait is bounded by the clock
+# as well as by the count: a loaded machine stretches each poll, never the grace.
 fl_run_group_kill() {
   [[ -n "$FL_RUN_PGID" ]] || return 0
-  local grace="${FL_KILL_GRACE:-1}" whole fraction="" ms steps t0="$SECONDS"
-  whole="${grace%%.*}"
-  [[ "$grace" != *.* ]] || fraction="${grace#*.}"
-  fraction="${fraction}00"
-  ms=$((10#${whole:-0} * 1000 + 10#${fraction:0:2} * 10))
-  steps=$((ms / 50))
+  local grace="${FL_KILL_GRACE:-10}" whole frac ticks waited=0 t0="$SECONDS"
   fl_run_group_stop TERM
-  while [[ "$steps" -gt 0 ]] && fl_run_group_alive; do
-    sleep 0.05
-    steps=$((steps - 1))
-    [[ $((SECONDS - t0)) -le $((ms / 1000 + 1)) ]] || break
+  whole="${grace%%.*}"; frac=0
+  case "$grace" in *.*) frac="${grace#*.}"; frac="${frac:0:1}" ;; esac
+  [[ "$whole" =~ ^[0-9]+$ ]] || whole=0
+  [[ "$frac" =~ ^[0-9]$ ]] || frac=0
+  ticks=$((10#$whole * 10 + frac))
+  while [[ "$waited" -lt "$ticks" ]] && fl_run_group_alive "$FL_RUN_PGID"; do
+    sleep 0.1
+    waited=$((waited + 1))
+    [[ $((SECONDS - t0)) -le $((10#$whole + 1)) ]] || break
   done
-  if fl_run_group_alive; then fl_run_group_stop KILL; fi
+  if fl_run_group_alive "$FL_RUN_PGID"; then fl_run_group_stop KILL; fi
   wait "$FL_RUN_PGID" || true
   FL_RUN_PGID=""
 } 2>/dev/null # the shell reports a command a signal ended ("Terminated: 15") on its own stderr
@@ -86,10 +89,13 @@ FL_BG_DIR=""
 
 # fl_bg_job_stop: the TERM trap of a background job's subshell: its running
 # command's group goes down with it (the job table knows a command that
-# FL_RUN_PGID was not set for yet)
+# FL_RUN_PGID was not set for yet). Later TERM, INT and HUP are ignored while
+# it works: benchbar sends a job TERM twice (fl_on_signal, then
+# fl_bg_stop_all) and a terminal's INT comes on top, and a second signal under
+# the default action ended the job before its git group was stopped.
 fl_bg_job_stop() {
   local job
-  trap - TERM INT HUP
+  trap '' TERM INT HUP
   for job in $(jobs -p 2>/dev/null); do
     kill -TERM -- "-${job}" 2>/dev/null || kill -TERM "$job" 2>/dev/null || true
   done
@@ -106,6 +112,33 @@ fl_bg_stop_all() {
   FL_BG_PIDS=()
   [[ -z "$FL_BG_DIR" ]] || rm -rf "$FL_BG_DIR"
   FL_BG_DIR=""
+}
+
+# fl_tmp_new_v VAR PREFIX: a temp file for this run, removed by the exit trap
+# (fl_tmp_cleanup) however the run ends, a signal included
+FL_TMP_FILES=()
+fl_tmp_new_v() {
+  local __f
+  __f="$(mktemp "${TMPDIR:-/tmp}/${2}.XXXXXX")" || return 1
+  FL_TMP_FILES+=("$__f")
+  printf -v "$1" '%s' "$__f"
+}
+
+# fl_tmp_done FILE: removes a temp file the run made and forgets it
+fl_tmp_done() {
+  local f="$1" i
+  rm -f "$f"
+  [[ "${#FL_TMP_FILES[@]}" -gt 0 ]] || return 0
+  for i in "${!FL_TMP_FILES[@]}"; do
+    [[ "${FL_TMP_FILES[$i]}" != "$f" ]] || unset "FL_TMP_FILES[$i]"
+  done
+  return 0
+}
+
+fl_tmp_cleanup() {
+  local f
+  for f in ${FL_TMP_FILES[@]+"${FL_TMP_FILES[@]}"}; do rm -f "$f"; done
+  FL_TMP_FILES=()
 }
 
 # fl_on_signal NAME: benchbar (or a phase script) got TERM, INT or HUP. The
@@ -207,7 +240,7 @@ fl_run_long() {
     fl_info "dry-run: ${FL_LAST_COMMAND}"
     return 0
   fi
-  log="$(mktemp "${TMPDIR:-/tmp}/benchbar-cmd.XXXXXX")"
+  fl_tmp_new_v log benchbar-cmd
   fl_log "run: $* (log follows)"
   start="$SECONDS"
   last_progress="$SECONDS"
@@ -223,7 +256,7 @@ fl_run_long() {
       fl_fail "${label} stopped while waiting for input."
       fl_info "Run the command manually if it needs an interactive answer: ${FL_LAST_COMMAND}"
       fl_log_file_append "$log"
-      rm -f "$log"
+      fl_tmp_done "$log"
       return 125
     fi
     # a progress line for the JSON stream every FL_PROGRESS_SECS (10)
@@ -246,7 +279,7 @@ fl_run_long() {
   else
     fl_ok "${label} ($(fl_fmt_secs $((SECONDS - start))))"
   fi
-  rm -f "$log"
+  fl_tmp_done "$log"
   return "$code"
 }
 
@@ -266,7 +299,7 @@ fl_run_with_timeout() {
     return $?
   fi
 
-  log="$(mktemp "${TMPDIR:-/tmp}/frappe-local-command.XXXXXX")"
+  fl_tmp_new_v log frappe-local-command
   fl_log "run: $* (timeout ${timeout_seconds}s)"
   fl_run_bg_group "$log" "$@"
   pid="$FL_RUN_PID"
@@ -283,7 +316,7 @@ fl_run_with_timeout() {
       fl_fail "${label} stopped while waiting for input."
       fl_info "Run the command manually if it needs an interactive answer: ${FL_LAST_COMMAND}"
       fl_log_file_append "$log"
-      rm -f "$log"
+      fl_tmp_done "$log"
       return 125
     fi
 
@@ -297,7 +330,7 @@ fl_run_with_timeout() {
         fl_tail_indented "$log" || true
       fi
       fl_log_file_append "$log"
-      rm -f "$log"
+      fl_tmp_done "$log"
       return 124
     fi
     if [[ "$FL_JSONL" == "1" && $((SECONDS - last_progress)) -ge "${FL_PROGRESS_SECS:-10}" ]]; then
@@ -319,7 +352,7 @@ fl_run_with_timeout() {
   elif [[ "$code" -eq 0 ]]; then
     fl_ok "${label} ($(fl_fmt_secs $((SECONDS - start))))"
   fi
-  rm -f "$log"
+  fl_tmp_done "$log"
   return "$code"
 }
 
@@ -387,9 +420,25 @@ FL_GR_ERR=""     # its first line of stderr (without warnings), "timed out after
 FL_GR_OUT=""     # its stdout
 FL_GR_DEFAULT="" # fl_git_remote_default: the branch HEAD points at
 
+# fl_git_ssh_command [DIR]: the ssh command for git over ssh: the user's own
+# (GIT_SSH_COMMAND, else core.sshCommand as git sees it in DIR) or plain ssh,
+# then our options. ssh takes the first value of an option, so a BatchMode or
+# ConnectTimeout the user set stays; a key, a config file or a proxy they set
+# is kept (setting GIT_SSH_COMMAND replaces core.sshCommand for git).
+fl_git_ssh_command() {
+  local base="${GIT_SSH_COMMAND:-}"
+  [[ -n "$base" ]] || base="$(git ${1:+-C "$1"} config --get core.sshCommand 2>/dev/null || true)"
+  printf '%s -o BatchMode=yes -o ConnectTimeout=%s' "${base:-ssh}" "$FL_GIT_CONNECT_SECS"
+}
+
 # git with your own keys and tokens, never a question
 fl_git_net() {
-  env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=${FL_GIT_CONNECT_SECS}" git "$@"
+  local dir="" a=("$@")
+  while [[ "${a[0]:-}" == "-C" || "${a[0]:-}" == "-c" ]]; do
+    [[ "${a[0]}" == "-C" ]] && dir="${a[1]:-}"
+    a=("${a[@]:2}")
+  done
+  env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_SSH_COMMAND="$(fl_git_ssh_command "$dir")" git "$@"
 }
 
 # fl_git_remote_run SECS GIT_ARGS...: fl_git_net with a deadline; sets
@@ -413,11 +462,34 @@ fl_git_remote_run() {
   return 0
 }
 
+# fl_git_in DIR GIT_ARGS...: git in a clone that talks to its remote (fetch),
+# with the clone deadline (FL_GIT_CLONE_TIMEOUT, 120 s) and the helpers' error
+# in FL_GR_ERR; returns FL_GR_CODE (124 after a timeout)
+fl_git_in() {
+  local dir="$1"
+  shift
+  fl_git_remote_run "${FL_GIT_CLONE_TIMEOUT:-120}" -C "$dir" "$@"
+  return "$FL_GR_CODE"
+}
+
 # fl_git_remote_ref REPO REF [SECS]: is REF a branch or tag of REPO?
 # Returns FL_GR_CODE: 0 found, 2 not there, 124 timeout, else git's own code.
 fl_git_remote_ref() {
-  fl_git_remote_run "${3:-${FL_GIT_TIMEOUT:-30}}" ls-remote --exit-code --heads --tags -- "$1" "$2"
+  fl_git_remote_run "${3:-${FL_GIT_TIMEOUT:-30}}" ls-remote --exit-code --heads --tags -- "$1" "refs/heads/$2" "refs/tags/$2"
   return "$FL_GR_CODE"
+}
+
+# fl_git_remote_tip REPO REF [SECS]: the commit of branch or tag REF of REPO in
+# FL_GR_TIP (nothing when it is not there); returns FL_GR_CODE. A tag gives
+# the commit it points at (the peeled line), not the tag object.
+FL_GR_TIP=""
+fl_git_remote_tip() {
+  FL_GR_TIP=""
+  fl_git_remote_run "${3:-${FL_GIT_TIMEOUT:-30}}" ls-remote --exit-code --heads --tags -- "$1" "refs/heads/$2" "refs/tags/$2" "refs/tags/$2^{}"
+  [[ "$FL_GR_CODE" == "0" ]] || return "$FL_GR_CODE"
+  FL_GR_TIP="$(printf '%s\n' "$FL_GR_OUT" | awk -v h="refs/heads/$2" -v t="refs/tags/$2" -v p="refs/tags/$2^{}" \
+    '$2 == h {a = $1} $2 == t {b = $1} $2 == p {c = $1} END {print (a != "" ? a : (c != "" ? c : b))}')"
+  return 0
 }
 
 # fl_git_remote_default REPO [SECS]: the branch HEAD points at, in FL_GR_DEFAULT
@@ -453,17 +525,48 @@ fl_retry() {
   done
 }
 
+# fl_on_error [COMMAND]: the ERR trap. benchbar sets it with errtrace (set -E), as
+# trap 'fl_on_error "$BASH_COMMAND"' ERR, so it fires for a command that fails inside a
+# function too, and names it with the file and the function it ran in. The phase
+# scripts set it without arguments, as before (the top level only).
 fl_on_error() {
-  local code="$?"
+  local code="$?" cmd="${1-}" first word where file
   [[ "$code" -eq 0 ]] && return 0
+  # errtrace hands the trap to every command substitution and subshell: a failure in
+  # one is the caller's to report (`x="$(grep a b)" || true` is not an error), and an
+  # exit trap that is already running keeps set -e's own behaviour
+  [[ "${FL_EXITING:-0}" != "1" ]] || return 0
+  [[ -z "$cmd" || "$BASH_SUBSHELL" -eq 0 ]] || return 0
+  # a section that turned errexit off (`set +e; ( ... ); rc=$?; set -e`) collects its
+  # failures and decides for itself. The ERR trap fires there all the same (bash 4 and
+  # later even for the subshell's own exit status), so errexit being off is the mark of
+  # a handled failure. Commands in an `if`, `||` or `&&` context never reach the trap.
+  [[ -z "$cmd" || "$-" == *e* ]] || return 0
   # exit code 2 means "the MariaDB root password is unknown" and only an
   # explicit fl_die ... 2 may produce it; a command that happened to exit 2
   # (grep, awk, a usage error) is an ordinary failure
   [[ "$code" -eq 2 ]] && code=1
   fl_spinner_stop
+  # a function that returned non zero on purpose (its own message came first), or a
+  # wrapper that runs "$@": the last fl_run command is the best name there is
+  first="${cmd%% *}"
+  word=0
+  case "$first" in "") ;; '"$'*|'$'*) ;; *) declare -F "$first" >/dev/null 2>&1 || word=1 ;; esac
+  # a run with --json prints JSON on stdout and nothing else
+  if [[ "${OPT_JSON:-0}" == "1" ]]; then exec 1>&2; fi
+  if [[ "$word" == "1" ]]; then
+    # where: the file and function of the failing line (bash 3.2 gives the line of
+    # the function's first line inside one, so "near")
+    file="${BASH_SOURCE[1]-}"
+    file="${file#"${SCRIPT_DIR:-/}"/}"
+    where="${file}${FUNCNAME[1]:+ in ${FUNCNAME[1]}}${BASH_LINENO[0]:+ near line ${BASH_LINENO[0]}}"
+    fl_redact_url_v cmd "$cmd"
+    FL_DIE_MESSAGE="${FL_DIE_MESSAGE:-Command failed (exit ${code}): ${cmd}${where:+ (${where})}}"
+    fl_fail "Command failed (exit ${code}): ${cmd}${where:+ (${where})}"
+    if [[ -n "${FL_LOG_FILE:-}" ]]; then fl_note "full log: ${FL_LOG_FILE}"; fi
   # nothing to name: the command already said why it ended (a verify pass
   # with warnings), so a "[FAIL] Last command failed" line would only mislead
-  if [[ -n "${FL_LAST_COMMAND:-}" ]]; then
+  elif [[ -n "${FL_LAST_COMMAND:-}" ]]; then
     fl_fail "Last command failed with exit code ${code}: ${FL_LAST_COMMAND}"
     if [[ -n "${FL_LOG_FILE:-}" ]]; then fl_note "full log: ${FL_LOG_FILE}"; fi
   fi
