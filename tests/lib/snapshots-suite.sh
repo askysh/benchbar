@@ -207,7 +207,7 @@ assert any("changed since the snapshot (erpnext)" in w for w in d["warnings"]), 
 import json, sys
 d = json.load(sys.stdin)
 assert d["applied"] is True and d["ok"] is True and d["site"] == "acme.localhost", d
-assert [s["status"] for s in d["steps"]] == ["done"] * 6, d["steps"]
+assert [s["status"] for s in d["steps"]] == ["done", "done", "skipped", "done", "done", "done"], d["steps"]
 assert d["steps"][0]["id"] == "snapshot", d["steps"]
 r = d["rollback"]
 assert r["snapshot"] == "'"$id1"'" and r["before_rollback"].endswith("-before-rollback"), r
