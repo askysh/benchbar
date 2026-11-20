@@ -200,7 +200,8 @@ run_fm wait --for nonsense --bench-dir "$BENCH"
 assert_eq "1" "$CODE"; assert_contains "$OUT" "unknown part nonsense"
 run_fm wait --timeout soon --bench-dir "$BENCH"
 assert_eq "1" "$CODE"; assert_contains "$OUT" "whole seconds"
+# an unknown flag is a usage error since 0.9.0 (exit 64, before the command runs)
 run_fm wait --frobnicate --bench-dir "$BENCH"
-assert_eq "1" "$CODE"; assert_contains "$OUT" "Unknown argument for wait"
+assert_eq "64" "$CODE"; assert_contains "$OUT" "Unknown option for wait: --frobnicate"
 
 printf 'test-ready: ok\n'
