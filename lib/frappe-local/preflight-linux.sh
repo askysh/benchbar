@@ -323,6 +323,7 @@ fl_install_env_blockers() {
   if ! fl_linux_systemd_booted; then
     printf 'systemd_not_running|systemd is not running, and MariaDB, Redis and the bench service are systemd services here.|%s\n' "$(fl_linux_systemd_fix)"
   fi
+  fl_linux_distro_blocker
   fl_bench_windows_fs_blocker "$FL_BENCH_DIR"
   while IFS='|' read -r id name url blocker; do
     [[ -n "$id" && "$blocker" == "1" ]] || continue
@@ -335,6 +336,11 @@ fl_install_env_blockers() {
 # too little free space on the Windows drive (WSL)
 fl_install_env_warnings() {
   local id name url blocker mem_kb mb kb gb
+  # no user manager to ask yet: install turns lingering on (which starts it) and
+  # stops, before anything is installed, when it still cannot be asked
+  if ! fl_user_manager_reachable; then
+    printf 'user_bus_unreachable|%s. Install turns on lingering with sudo, which starts it; it stops before it changes anything when the manager still cannot be reached.|%s\n' "$(fl_user_manager_msg)" "$(fl_user_manager_fix)"
+  fi
   while IFS='|' read -r id name url blocker; do
     [[ -n "$id" && "$blocker" == "0" ]] || continue
     printf '%s|%s (%s) did not answer within 10 seconds; the install downloads from it and may fail later.|%s\n' "$id" "$name" "$url" "$(fl_net_fix)"

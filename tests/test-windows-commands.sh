@@ -86,8 +86,11 @@ ok service --yes --plain --bench-dir "$BENCH"
 ok site list --json --bench-dir "$BENCH"
 assert_eq "$SITE True True" "$(J '" ".join(str(x) for x in (d["default_site"], d["sites"][0]["default"], d["sites"][0]["hosts_entry"]))')" "(a *.localhost site resolves without a hosts line)"
 ok labs list --json
-assert_eq "['macos'] False" "$(J 'd["labs"][0]["platforms"], d["labs"][0]["available"]')"
-lx labs on lan-rooms --yes --json
+# lan-rooms lists Linux, so it is available in WSL (whether a room can be reached is share's check, not the lab's);
+# quick-switch is the Mac's, and not available here
+assert_eq "['macos', 'linux'] True" "$(J '[l for l in d["labs"] if l["name"] == "lan-rooms"][0]["platforms"], [l for l in d["labs"] if l["name"] == "lan-rooms"][0]["available"]')"
+assert_eq "['macos'] False" "$(J '[l for l in d["labs"] if l["name"] == "quick-switch"][0]["platforms"], [l for l in d["labs"] if l["name"] == "quick-switch"][0]["available"]')"
+lx labs on quick-switch --yes --json
 assert_eq "1" "$CODE" "$(all)"
 
 # add: the plan, then the apply, which needs the Administrator password named

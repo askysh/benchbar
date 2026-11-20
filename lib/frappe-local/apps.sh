@@ -1009,6 +1009,7 @@ fl_cmd_app_install() {
   if fl_app_install_on_sites "$app" "$OPT_SITE"; then fl_step_end "done"; else fl_step_end failed; fl_bench_redis_down; fl_steps_summary; return 1; fi
   fl_bench_redis_down
   fl_app_verify "$app" "" "$OPT_SITE" || { fl_steps_summary; return 1; }
+  fl_changed app "$app" "installed on ${OPT_SITE}"
   fl_steps_summary
 }
 

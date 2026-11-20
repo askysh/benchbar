@@ -28,6 +28,37 @@ func TestExitTwoNamesAVersionSkew(t *testing.T) {
 	}
 }
 
+func TestExit64NamesAVersionSkew(t *testing.T) {
+	old := version
+	version = "0.9.0"
+	t.Cleanup(func() { version = old })
+	e := newEnv(t)
+	e.script(
+		map[string]any{"match": "--version", "stdout": "benchbar 0.8.3\n"},
+		map[string]any{"match": "--exec", "exit": 64, "stderr": "Unknown option\n"},
+	)
+	if code := e.run("up", "--frobnicate"); code != 64 {
+		t.Fatalf("exit %d", code)
+	}
+	if !strings.Contains(e.stderr(), "benchbar 0.8.3 in Ubuntu-24.04 is older than benchbar.exe 0.9.0. fix: benchbar.exe setup run cli_install --distro Ubuntu-24.04") {
+		t.Errorf("stderr %q", e.stderr())
+	}
+}
+
+func TestExit64WithMatchingReleasesAddsNothing(t *testing.T) {
+	old := version
+	version = "0.9.0"
+	t.Cleanup(func() { version = old })
+	e := newEnv(t)
+	e.script(
+		map[string]any{"match": "--version", "stdout": "benchbar 0.9.0\n"},
+		map[string]any{"match": "--exec", "exit": 64},
+	)
+	if code := e.run("up"); code != 64 || e.stderr() != "" {
+		t.Errorf("exit %d stderr %q", code, e.stderr())
+	}
+}
+
 func TestExitTwoWithMatchingReleasesAddsNothing(t *testing.T) {
 	old := version
 	version = "0.9.0"

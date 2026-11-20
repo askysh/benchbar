@@ -13,7 +13,7 @@ explains the safety model behind it. For the steps, see the
 - **Only the copy is shared, never the site.** `share setup` restores a
   backup of the site into `share.localhost` and hardens it. Your site,
   its database and its files are not reachable from the network.
-- **The bench's ports stay on this Mac.** The LAN guard (a pf anchor, see
+- **The bench's ports stay on this computer.** The LAN guard (a pf anchor on macOS, an nftables table on Linux, see
   [lan-guard](../reference/cli/share.md#lan-guard-install)) refuses web 8000-8099, socket.io 9000-9099, Redis 11000-11099
   and 13000-13099 and MariaDB 3306 to anything but this Mac. Guests reach
   only the gateway on port 8443 (TLS, both sides with a certificate). A
