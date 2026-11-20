@@ -33,6 +33,7 @@ macOS version. A row that says "macOS" does not work on Linux.
 | Doctor and repair | `doctor` reads the state and names the fix. `repair` applies only the flagged fixes, with a backup first. | 0.2.0 | macOS; Linux 0.8.0 | [Doctor and repair](guides/doctor-and-repair.md) |
 | Shell helpers | `benchup`, `benchdown`, `benchrestart`, `benchwatch`, `benchlogs` and `benchstatus`. | 0.2.0 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md#daily-use) |
 | `up`, `down`, `restart`, `status` | Start, stop, restart and read the state of a bench. | 0.2.0 | macOS; Linux 0.8.0 | [running](reference/cli/running.md) |
+| `wait` and `ready` | `status --json` has a `ready` object: agent, processes, site ping, socketio, Redis, a worker, and whether Python code changed since the bench started. `benchbar wait` and the MCP tool `benchbar_wait` block until it is ready and say what is missing. | 0.9.0 | macOS, Linux | [Readiness](json-schema.md#readiness), [running](reference/cli/running.md) |
 | `list` | Every bench benchbar knows, without pinging a site. | 0.3.0 | macOS; Linux 0.8.0 | [list](reference/cli/other.md#list) |
 | `logs`, `fg`, `watch` | Tail the bench log, run the bench in the foreground, rebuild assets. | 0.2.0 | macOS; Linux 0.8.0 | [running](reference/cli/running.md#logs) |
 | `autostart`, `uninstall-service` | Let a bench come back after login or not, and remove its service. | 0.2.0 | macOS; Linux 0.8.0 | [autostart](reference/cli/other.md#autostart), [uninstall-service](reference/cli/other.md#uninstall-service) |
@@ -54,6 +55,7 @@ macOS version. A row that says "macOS" does not work on Linux.
 | Open as a user | `open --as USER` signs in to a development site as another user, with no password. Off until you turn it on for a site. | 0.8.1 | macOS, Linux | [open](reference/cli/other.md#open), [site open-as](reference/cli/site.md#site-open-as) |
 | Rooms on your Wi-Fi (`share`, `lan-guard`) | Lets colleagues on the same Wi-Fi use a hardened copy of a site behind a room code. **Lab** `lan-rooms`. | 0.8.2 | macOS | [share and lan-guard](reference/cli/share.md), [How sharing keeps your bench safe](concepts/sharing-safety.md) |
 | Labs | `benchbar labs` lists, turns on and turns off experiments. | 0.8.2 | macOS, Linux | [labs](reference/cli/labs.md) |
+| Notices after an update | Every default an update changes shows a notice once, with its switch back. `benchbar notices` lists and dismisses them, and the Mac app shows a banner. | 0.9.0 | macOS, Linux | [notices](reference/cli/other.md#notices), [What's new](whats-new.md) |
 
 On Linux, only the v15-lts bench is supported, and the site is
 `linuxdev.localhost`. See [Install](install.md#linux).

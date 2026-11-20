@@ -44,6 +44,16 @@ fl_facts_begin() {
 # not printed.
 fl_facts_end() {
   fl_par_stop
+  # a load of the apps' facts (apps.sh) that a signal cut short: its collectors, then its folder
+  if [[ -n "${FL_AF_DIR:-}" ]]; then
+    {
+      local __p
+      for __p in ${FL_AF_PIDS[@]+"${FL_AF_PIDS[@]}"}; do kill -TERM "$__p" 2>/dev/null || true; done
+      for __p in ${FL_AF_PIDS[@]+"${FL_AF_PIDS[@]}"}; do wait "$__p" 2>/dev/null || true; done
+    } 2>/dev/null
+    rm -rf "$FL_AF_DIR"
+    FL_AF_DIR=""; FL_AF_PIDS=()
+  fi
   if [[ -n "$FL_FACTS_WAKE" ]]; then exec 9<&- 2>/dev/null || true; FL_FACTS_WAKE=""; fi
   # a job stopped a moment ago can still have a write in flight, so a removal that
   # leaves the folder ("directory not empty") is tried again, for up to a second
@@ -148,8 +158,23 @@ fl_par_add() { FL_PAR_PIDS+=("$1"); }
 # no setsid; a job started under job control gets one), so one kill of the
 # group reaches the job's children too (brew's ruby, tr, git). The group stays
 # after set +m. A job started inside a job is left in the job's group.
-fl_par_group_on() { [[ -n "$FL_IN_JOB" ]] || set -m; }
-fl_par_group_off() { [[ -n "$FL_IN_JOB" ]] || set +m; }
+#
+# The two also bracket the moment a job is forked but its pid is not kept yet:
+# a stop signal that lands there would find no job to stop, and the job would
+# write into the folder fl_facts_end is deleting (a folder left behind, a
+# child left running). fl_on_signal (run.sh) leaves such a signal in
+# FL_SIG_DEFERRED; fl_par_group_off sends it again once the pid is kept.
+FL_PAR_STARTING=""
+FL_SIG_DEFERRED=""
+fl_par_group_on() { FL_PAR_STARTING=1; [[ -n "$FL_IN_JOB" ]] || set -m; }
+fl_par_group_off() {
+  local sig="$FL_SIG_DEFERRED"
+  [[ -n "$FL_IN_JOB" ]] || set +m
+  FL_PAR_STARTING=""
+  FL_SIG_DEFERRED=""
+  if [[ -n "$sig" ]]; then kill -s "$sig" "$$" 2>/dev/null || true; fi
+  return 0
+}
 
 # fl_par_stop: TERM to the group of every job of this run (and of the warming
 # of the apps' git), KILL to what is left after a second, and a wait for all

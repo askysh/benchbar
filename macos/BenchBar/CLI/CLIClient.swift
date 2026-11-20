@@ -99,8 +99,11 @@ nonisolated struct CLIClient: Sendable {
         return try BenchJSON.decode(BenchList.self, from: Data(output.stdout.utf8))
     }
 
-    func status(bench: String) async throws(CLIError) -> BenchStatus {
-        let output = try await run(["status", "--json", "--bench-dir", bench], timeout: Timeout.query, acceptExitCodes: [0], qos: .utility)
+    /// `deep` also asks the ready parts that start programs (a worker, and whether Python code
+    /// changed since the bench started): only for a bench that runs.
+    func status(bench: String, deep: Bool = false) async throws(CLIError) -> BenchStatus {
+        let output = try await run(["status", "--json"] + (deep ? ["--deep"] : []) + ["--bench-dir", bench],
+                                   timeout: Timeout.query, acceptExitCodes: [0], qos: .utility)
         return try BenchJSON.decode(BenchStatus.self, from: Data(output.stdout.utf8))
     }
 

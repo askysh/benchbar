@@ -69,6 +69,7 @@ export default defineConfig({
           items: [
             { label: 'Introduction', slug: 'index' },
             { label: 'Features', slug: 'features' },
+            { label: "What's new", slug: 'whats-new' },
             { label: 'Install', slug: 'install' },
             { label: 'Quick start', slug: 'quick-start' },
           ],
