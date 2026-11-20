@@ -8,6 +8,17 @@ body:
         Thanks for reporting. Please search the open issues first.
         A security problem goes through a private report instead: see SECURITY.md.
         On Windows, use the Windows form or Report a Bug in the tray.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Where you ran into it. The Windows form is for Report a Bug in the tray; pick Windows beta here only when you have no tray.
+      options:
+        - macOS
+        - Linux
+        - Windows beta
+    validations:
+      required: true
   - type: input
     id: macos
     attributes:

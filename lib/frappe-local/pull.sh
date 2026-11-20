@@ -170,7 +170,7 @@ print("benchbar-probe %d %d" % (ok, bad))'
 # fl_pull_emit EVENT [,"field":value...]: one JSON line on the saved stdout (fd 3)
 fl_pull_emit() {
   [[ "${OPT_JSON:-0}" == "1" && "$FL_PULL_EMIT" == "1" ]] || return 0
-  printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$1" "${2:-}" >&3
+  printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s%s}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$1" "${FL_OP_JSON:-}" "${2:-}" >&3
 }
 
 # the done fields pull adds to its own (exit, site, warnings): changed, next_actions, state_after

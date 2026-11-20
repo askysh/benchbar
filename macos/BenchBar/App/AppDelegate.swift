@@ -378,7 +378,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openDocsAction() { NSWorkspace.shared.open(BenchBarLinks.docs) }
-    @objc private func openReleaseNotesAction() { NSWorkspace.shared.open(BenchBarLinks.changelog) }
+    @objc private func openWhatsNewAction() { NSWorkspace.shared.open(BenchBarLinks.whatsNew) }
 
     @objc private func showShortcutsAction() {
         popover.close()
@@ -566,7 +566,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         help.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showShortcutsAction), keyEquivalent: "").target = self
         help.addItem(withTitle: "Show Walkthrough", action: #selector(showWalkthroughAction), keyEquivalent: "").target = self
         help.addItem(.separator())
-        help.addItem(withTitle: "Release Notes", action: #selector(openReleaseNotesAction), keyEquivalent: "").target = self
+        help.addItem(withTitle: "What's New", action: #selector(openWhatsNewAction), keyEquivalent: "").target = self
         help.addItem(withTitle: "Report a Bug…", action: #selector(reportBugAction), keyEquivalent: "").target = self
         main.addItem(submenu(help, title: "Help"))
         NSApp.helpMenu = help
