@@ -461,6 +461,11 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
       SHIM_VERSION: ${{ needs.version.outputs.shim_version }}
+      # The installer keeps the internet mark unless the build provenance verified, and
+      # starting a marked program makes Windows ask "Open File - Security Warning" and wait
+      # for a click that nobody gives on the runner. This variable skips that question for
+      # the programs these steps start; the marks themselves are still checked by the steps.
+      SEE_MASK_NOZONECHECKS: '1'
     steps:
       - uses: actions/checkout@v7
 
