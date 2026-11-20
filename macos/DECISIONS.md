@@ -630,3 +630,4 @@ Asked for after the phases, to stop naming drift before the first release.
 ## Update notices (0.9.0, issue 188)
 
 - The window shows `status --json` `notices[]` as one banner at a time (`DefaultsNoticeBanner`, a `PaneBanner` under the update banner) with Learn More and a Dismiss that runs `benchbar notices --dismiss ID`. The list belongs to the store and comes from any bench's status, since the notices are global. A CLI without `notices[]` leaves the list as it was, and a failed dismissal brings the banner back with the next status. The Windows tray part is a separate change.
+- The popover, the window and the sidebar word a running bench from `ready` of `status --json` (0.9): "Ready", "Needs restart (code changed)" when `stale` is true, "Running, not ready" otherwise. A CLI without `ready` keeps "Running". The app asks `status --deep` only for a bench it last saw starting or running, so a stopped bench costs no `pgrep`, `lsof` or `find`.

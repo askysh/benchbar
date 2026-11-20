@@ -56,6 +56,9 @@ LOG_FILES = {"bench": [], "worker": ["--worker"], "worker_error": ["--worker-err
 # tool name -> the lab (`benchbar labs`) that must be on for the tool to exist; none yet
 LAB_OF = {}
 
+# the longest benchbar_wait: one tool call holds a client's request open
+WAIT_MAX_SECS = 120
+
 # name -> (description, extra input properties, argv builder, read only, exit codes that still carry JSON)
 TOOLS = {
     "benchbar_list": (
@@ -68,11 +71,34 @@ TOOLS = {
     "benchbar_status": (
         "Live state of one bench: stopped, starting, running, crashed, paused or not_adopted (a bench folder benchbar "
         "does not manage yet), with pid, uptime start, ports, the bench command its service runs (bench_bin), sites and "
-        "the ping of every site (only while the bench runs).",
+        "the ping of every site (only while the bench runs). ready says whether the bench can serve: ready (true or "
+        "false), the parts it is made of (agent, processes, web, socketio, redis, workers, stale), waiting_on (the parts "
+        "that are false) and fix. stale true means a Python file under apps/ changed after the bench started: "
+        "benchbar_restart it. benchbar_wait blocks until ready is true.",
         {"bench": BENCH},
-        lambda a: ["status", "--json", "--ping"] + bench_args(a),
+        lambda a: ["status", "--json", "--ping", "--deep"] + bench_args(a),
         True,
         (0,),
+    ),
+    "benchbar_wait": (
+        "Wait until a bench is ready (the ready object of benchbar_status: the service loaded, the site answers its "
+        "ping, socketio and Redis accept connections, a worker runs, no Python file changed since the bench started), "
+        "or until one part is (for). Read only: it starts nothing; after benchbar_up or benchbar_restart it is the way to "
+        "know the bench serves. Returns satisfied (true when ready), timed_out, waited_s, waiting_on (what is not ready) "
+        "and the ready object, with next_actions that name the fix. A bench that cannot become ready by itself "
+        "(paused after crashes, not managed) returns at once. timeout is in seconds (default 60, at most %d); a call "
+        "that times out can be repeated. Progress notifications arrive while it waits, when the client asks for them." % WAIT_MAX_SECS,
+        {
+            "bench": BENCH,
+            "timeout": {"type": "integer", "minimum": 0, "maximum": WAIT_MAX_SECS,
+                        "description": "Seconds to wait (default 60). 0 checks once."},
+            "for": {"type": "string", "enum": ["agent", "processes", "web", "socketio", "redis", "workers", "stale"],
+                    "description": "Wait for this part only; the default is every part."},
+        },
+        lambda a: ["wait", "--json", "--timeout", str(60 if a.get("timeout") is None else a["timeout"])]
+        + (["--for", a["for"]] if a.get("for") else []) + bench_args(a),
+        True,
+        (0, 1),
     ),
     "benchbar_doctor": (
         "Read only health report of one bench: every check with its level and the exact fix command.",
@@ -565,6 +591,7 @@ DEFAULT_LABEL = "bench output"
 UNTRUSTED = {
     "benchbar_list": "bench folders and names",
     "benchbar_status": "bench state, site and app names",
+    "benchbar_wait": "bench state, site and app names",
     "benchbar_doctor": "doctor checks, with log, git and app output",
     "benchbar_site_list": "site and database names",
     "benchbar_app_list": "app repos, branches and versions",
@@ -603,6 +630,7 @@ TIMEOUTS = {
     "benchbar_service_install_plan": 300, "benchbar_service_install": 900,
     "benchbar_ports_plan": 300,
     "benchbar_up": 600,
+    "benchbar_wait": WAIT_MAX_SECS + 30,
 }
 # after SIGTERM to the group, how long the CLI gets to run its EXIT trap
 # (the setup Redis goes, the lock is released) before SIGKILL
@@ -1460,13 +1488,18 @@ def tool_call(params, call=None):
     extra_env, extra_result = ENV[name](arguments) if name in ENV else ({}, {})
     on_line = None
     notify = getattr(call, "notify", None) if call is not None else None
-    if notify is not None and not read_only and "--json" in argv:
+    if notify is not None and (not read_only or name == "benchbar_wait") and "--json" in argv:
         # the client asked for progress: the stream, one notification per step or progress line
         argv = [x if x != "--json" else "--jsonl" for x in argv]
         on_line = progress_relay(call)
     try:
         if read_only:
-            code, out, err = run_cli(argv, timeout=timeout, call=call)
+            code, out, err = run_cli(argv, timeout=timeout, call=call, on_line=on_line)
+            if on_line is not None:
+                # a stream (progress while it waits): the done line is the whole document
+                done = stream_done(out)
+                if done is not None:
+                    out = json.dumps(done)
         else:
             # one action at a time: two app adds on one bench would only trip the CLI's lock
             with action_slot(call):
@@ -1503,7 +1536,7 @@ def tool_call(params, call=None):
     if name == "benchbar_up" and code != 0 and "background service" in (out + err) and "not installed" in (out + err):
         return service_missing_result(None)
     # actions print text; the fresh status follows, so the agent sees the outcome
-    key, after = AFTER.get(name, ("status", lambda a: ["status", "--json", "--ping"] + bench_args(a)))
+    key, after = AFTER.get(name, ("status", lambda a: ["status", "--json", "--ping", "--deep"] + bench_args(a)))
     summary = {"exit_code": code, "output": scrub((out + err).strip())}
     if out.strip().startswith("{"):
         try:  # an action run with --json: its result, and the text from stderr
@@ -1625,7 +1658,7 @@ class RpcError(Exception):
 
 INSTRUCTIONS = (
     "Local Frappe benches managed by benchbar. Read tools, safe any time: benchbar_list, benchbar_status, "
-    "benchbar_doctor, benchbar_doctor_prerequisites, benchbar_logs_tail, benchbar_site_list, benchbar_site_backups "
+    "benchbar_wait (until the bench is ready), benchbar_doctor, benchbar_doctor_prerequisites, benchbar_logs_tail, benchbar_site_list, benchbar_site_backups "
     "(the stamps benchbar_site_restore_plan takes), benchbar_app_list, benchbar_app_focus_list, benchbar_ports_check, "
     "benchbar_ports_plan, benchbar_lock_check, benchbar_labs_list, benchbar_where, benchbar_self_update_check, "
     "benchbar_profile_list, benchbar_profile_check, and the plans benchbar_app_add_plan, benchbar_site_add_plan, benchbar_site_restore_plan, "
@@ -1669,6 +1702,9 @@ in a terminal, before raw `bench` commands.
   `benchbar_self_update_check` only read. Repairs, bench installs, turning a
   lab on, applying ports, sharing, the LAN guard and `self-update` are for a
   person in a terminal: there is no tool for them.
+- After a start or a restart, `benchbar_wait` blocks until the bench is ready;
+  `ready.stale` in `benchbar_status` means Python code changed since the bench
+  started, so `benchbar_restart` it before testing.
 """
 
 

@@ -474,7 +474,7 @@ final class BenchStore {
     private func askStatus(_ client: CLIClient, _ bench: BenchModel) async throws(CLIError) -> BenchStatus {
         asking.insert(bench.path)
         defer { asking.remove(bench.path) }
-        return try await client.status(bench: bench.path)
+        return try await client.status(bench: bench.path, deep: bench.state == .running || bench.state == .starting)
     }
 
     /// The CLI did not answer (a timeout on a cold start, say). The files

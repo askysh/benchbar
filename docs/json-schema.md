@@ -259,6 +259,7 @@ listener: it is polled at rest (0.6.1).
 | `listen` | string | added in 0.9: `"local"` (the web server and socketio listen on 127.0.0.1) or `"all"` (every interface, `benchbar listen all`) |
 | `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
 | `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null), `url` (an add's repo URL, so `app add NAME` can finish an app that was never cloned or that no profile lists; null for an update and for a record an older version wrote) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
+| `ready` | object | added in 0.9: whether the bench can serve, and the parts that say so; see [Readiness](#readiness) |
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
 `loaded` (`"yes"` or `"no"`), `stop_flag` (`"manual"`, `"crash"`,
@@ -272,6 +273,82 @@ service or when no such file is there. It is read from the agent file in
 bash, so `status` still starts no process for it. With `--ping`, every
 site is asked only while the bench's processes run; a stopped bench is
 never pinged and never started.
+
+## Readiness
+
+`status --json` has a `ready` object, and `benchbar wait` blocks until it
+says yes. It is one definition: `up` and `restart` wait for its `web` part,
+`wait` for all of them, and `state_after` of every command that changes a
+bench carries it. Use it instead of probing ports and processes yourself.
+
+```json
+"ready": {
+  "ready": false,
+  "deep": true,
+  "agent": true, "processes": true, "web": true, "socketio": true, "redis": true,
+  "workers": true, "stale": true,
+  "stale_file": "apps/erpnext/erpnext/hooks.py",
+  "waiting_on": ["stale"],
+  "fix": "benchbar restart --bench-dir /Users/you/frappe-bench"
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `ready` | bool | true when no part is `false` and `stale` is not `true` |
+| `deep` | bool | the deep parts (`workers`, `stale`) were asked: `status --json --deep`, `wait`, `up`, `restart` and the MCP tools. `false` means `workers` and `stale` are `null` because nobody asked |
+| `agent` | bool | the service is loaded in launchd or systemd |
+| `processes` | bool | the bench's processes run (`processes_running`) |
+| `web` | bool | the default site's ping answered with a 2xx or 3xx (`web_ping_code`) |
+| `socketio` | bool | the realtime port accepts a connection (asked only while processes run) |
+| `redis` | bool | the queue and the cache Redis accept a connection (`redis`) |
+| `workers` | bool or null | a background worker of this bench runs. `null` unless asked (see below) |
+| `stale` | bool or null | a `*.py` file under `apps/` (not in `node_modules`, `.git` or `__pycache__`) changed after the bench started, so the running code is old and the bench needs `benchbar restart`. Any `*.py` counts, tests and docs too, so a false positive is possible (it errs towards a restart). `null` when not asked (`deep` is `false`), when the bench's processes do not run, or when the start time is not known (no `started_at`, so no `state.json`) |
+| `stale_file` | string or null | the first such file, relative to the bench |
+| `waiting_on` | array | the names of the parts that are not ready, in the order above |
+| `fix` | string or null | the command that moves the first missing part; `null` when ready |
+
+The start time is `started_at` of `logs/.benchbar/state.json`: when the
+runner of the current run started, a second or two before the web server
+loaded its code. Without `--deep`, `status` starts no program for `ready`:
+`agent`, `processes` and `web` come from what status reads anyway, and
+`socketio` and `redis` from bash itself (`/dev/tcp`). `workers` and `stale`
+need `pgrep`, `lsof` and `find`, so they are `null` in a plain `status`
+and are asked by `status --json --deep`, `benchbar wait`, and the MCP tool
+`benchbar_status`. A `null` part never makes `ready` false: a reader that needs
+`stale` to be known checks `deep` and that `stale` is not `null`.
+Not ready is not an error: `status` exits 0.
+
+### `benchbar wait --json`
+
+```
+benchbar wait [--ready] [--for PART] [--timeout SECS] [--json]
+```
+
+Polls once a second until the bench is ready, or until `PART` is
+(`agent`, `processes`, `web`, `socketio`, `redis`, `workers` or `stale`),
+and starts nothing. `--timeout` is whole seconds, 0 to 3600, default 60;
+0 checks once. Exit 0 when ready, 1 when not: after the timeout, or at once
+for a bench that cannot become ready by itself (`state` `paused`, or
+`not_adopted`). A stopped bench is waited for, because another command may be
+starting it. `--for stale` is refused (exit 1, with the reason) when `stale` is
+`null`, that is for a bench that does not run or has no `started_at`: a `null`
+part counts as holding, so the wait would end at once and say nothing. Exit 2
+is never used (it stays the MariaDB password).
+
+| Field | Type | Notes |
+|---|---|---|
+| `for` | string | `ready`, or the part waited for |
+| `satisfied` | bool | the wait ended because it was ready |
+| `timed_out` | bool | it gave up after `timeout_s` |
+| `waited_s`, `timeout_s` | number | seconds waited, and the limit |
+| `waiting_on` | array | what was still not ready; `[]` when satisfied |
+| `ready` | object | the object above, as of the last look, with the deep parts |
+
+The `done` fields follow (`exit`, `changed`, `warnings`, `next_actions`
+with the fix, `state_after`). With `--jsonl` there is one `progress` line a
+second while it waits. The MCP tool `benchbar_wait` is the same call,
+capped at 120 seconds, with progress notifications.
 
 ## Sites
 

@@ -164,6 +164,7 @@ claude mcp add benchbar -- benchbar mcp
 |---|---|---|---|
 | `benchbar_list` | read | Every Frappe bench benchbar knows on this machine: path, default site, sites, ports, whether its service is installed. | none |
 | `benchbar_status` | read | Live state of one bench: stopped, starting, running, crashed, paused or not_adopted (a bench folder benchbar does not manage yet), with pid, uptime start, ports, the bench command its service runs (bench_bin), sites and the ping of every site (only while the bench runs). | `bench` |
+| `benchbar_wait` | read | Wait until a bench is ready (the ready object of benchbar_status: the service loaded, the site answers its ping, socketio and Redis accept connections, a worker runs, no Python file changed since the bench started), or until one part is (for). | `bench`, `timeout`, `for` |
 | `benchbar_doctor` | read | Read only health report of one bench: every check with its level and the exact fix command. | `bench` |
 | `benchbar_logs_tail` | read | The last lines of one log file of a bench. | `bench`, `lines`, `file`, `process`, `since`, `since_restart` |
 | `benchbar_site_list` | read | The sites of one bench, which one is the default, whether /etc/hosts has it, its ping code, its database name and the MariaDB port (never the password). | `bench` |

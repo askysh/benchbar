@@ -22,6 +22,7 @@ the argument `mcp`.
 |---|---|---|---|
 | `benchbar_list` | read | Every Frappe bench benchbar knows on this machine: path, default site, sites, ports, whether its service is installed. | none |
 | `benchbar_status` | read | Live state of one bench: stopped, starting, running, crashed, paused or not_adopted (a bench folder benchbar does not manage yet), with pid, uptime start, ports, the bench command its service runs (bench_bin), sites and the ping of every site (only while the bench runs). | `bench` |
+| `benchbar_wait` | read | Wait until a bench is ready (the ready object of benchbar_status: the service loaded, the site answers its ping, socketio and Redis accept connections, a worker runs, no Python file changed since the bench started), or until one part is (for). | `bench`, `timeout`, `for` |
 | `benchbar_doctor` | read | Read only health report of one bench: every check with its level and the exact fix command. | `bench` |
 | `benchbar_logs_tail` | read | The last lines of one log file of a bench. | `bench`, `lines`, `file`, `process`, `since`, `since_restart` |
 | `benchbar_site_list` | read | The sites of one bench, which one is the default, whether /etc/hosts has it, its ping code, its database name and the MariaDB port (never the password). | `bench` |
@@ -138,6 +139,21 @@ bench benchbar does not know. A folder that only looks like a bench
 under `~` or `~/dev` is listed with `adopted: false` and is refused:
 register it first in a terminal with `benchbar register PATH`, or name it
 in your client's setup for that server (`benchbar mcp --allow-bench PATH`).
+
+## Waiting for a bench
+
+After `benchbar_up` or `benchbar_restart`, and after you change Python code,
+call `benchbar_wait`. It blocks (up to `timeout` seconds, at most 120, 60 by
+default) until the bench is ready: the service is loaded, the site answers
+its ping, socketio and Redis accept connections, a worker runs and no Python
+file under `apps/` changed since the bench started. It returns `satisfied`,
+`waiting_on` (what is not ready) and the `ready` object, with a `next_actions`
+entry that names the fix. A bench that cannot become ready by itself (paused
+after crashes, not managed by benchbar) returns at once. `benchbar_status`
+carries the same `ready` object without waiting: `ready.stale: true` means
+the running code is old, so `benchbar_restart` first. In a terminal the same
+is `benchbar wait --json`, exit 0 when ready and 1 when not; the fields are in
+[the JSON reference](../json-schema.md#readiness).
 
 ## What was run
 
