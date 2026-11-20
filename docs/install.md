@@ -185,9 +185,14 @@ first. `install` takes the v15-lts and v16-lts profiles and team profiles (a tea
 Linux; on Windows a tray app shows the benches of the distro: see [Windows](windows.md).
 
 ```bash
-git clone https://github.com/askysh/benchbar.git && cd benchbar
-./benchbar install
+curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+benchbar install          # in a new terminal
 ```
+
+The first line is the [installer on Linux](#the-installer-on-linux). To
+work on benchbar itself, clone the repository and run `./benchbar install`
+from the clone. If `install` stops, see
+[First run problems](first-run-problems.md).
 
 `install` runs `00-linux-system-deps.sh`: MariaDB and Redis from apt,
 Python from uv, Node from fnm, the pinned wkhtmltopdf `.deb`, and

@@ -11,7 +11,7 @@ You review a BenchBar change. You do not edit files. Use Bash only for read only
 ## What you check, in order
 1. AGENTS.md rules: no `rm -rf` inside a bench, no dropped databases, no edits to `sites/`, no
    `bench update` unless asked, no hand written LaunchAgents, systemd units or Procfile, no
-   killing by pattern, sudo only for `/etc/hosts` and the wkhtmltopdf package (and apt on Linux),
+   killing by pattern, sudo only for `/etc/hosts`, the wkhtmltopdf package and the LAN guard (and on Linux apt, MariaDB and the nftables LAN guard),
    the MariaDB root password never printed or logged.
 2. docs/DECISIONS.md: the change does not contradict a recorded decision without saying so, and
    every non obvious new choice has its one line there. User facing changes have a fragment

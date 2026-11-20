@@ -172,4 +172,24 @@ FL_TESTING=1 "$runner" >/dev/null 2>&1 || true
 ! grep -q "^2147483001 " "$MOCK_PROCS" || fail "the runner ignored BENCHBAR_KILL_CMD under FL_TESTING=1"
 : >"$MOCK_PROCS"
 
+# ---- fl_process_running NAME: a process of that name, not an editor or a tail that mentions it
+: >"$MOCK_PROCS"
+add_proc 4301 "vim /opt/homebrew/etc/my.cnf.d/mariadbd.cnf"
+add_proc 4302 "tail -f /opt/homebrew/var/mysql/mariadbd.log"
+assert_eq "no" "$(lib_run 'fl_process_running mariadbd && echo yes || echo no')" "(an editor and a tail are no MariaDB)"
+add_proc 4303 "/opt/homebrew/opt/mariadb@10.11/bin/mariadbd --datadir=/opt/homebrew/var/mysql"
+assert_eq "yes" "$(lib_run 'fl_process_running mariadbd && echo yes || echo no')" "(the server itself is)"
+assert_eq "yes" "$(lib_run 'fl_process_running "mariadbd --datadir" && echo yes || echo no')" "(a pattern with more than a name still matches the command line)"
+: >"$MOCK_PROCS"
+
+# ---- fl_port_listening sees a listener of another user (root): lsof as a normal
+# user does not list it, netstat does
+: >"$MOCK_LISTEN"; rm -f "$MOCK_STATE/netstat_listen"
+assert_eq "no" "$(lib_run 'fl_port_listening 8000 && echo yes || echo no')" "(nothing listens)"
+printf '8000 *\n' >"$MOCK_STATE/netstat_listen"
+assert_eq "yes" "$(lib_run 'fl_port_listening 8000 && echo yes || echo no')" "(a root owned listener on 8000 counts)"
+assert_eq "no" "$(lib_run 'fl_port_listening 80 && echo yes || echo no')" "(80 is not 8000)"
+assert_eq "no" "$(lib_run 'fl_port_listening 18000 && echo yes || echo no')" "(18000 is not 8000)"
+rm -f "$MOCK_STATE/netstat_listen"
+
 printf 'test-process-match: ok\n'

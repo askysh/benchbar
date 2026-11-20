@@ -104,8 +104,10 @@ fl__apt_package() {
   esac
 }
 
+# A bare name is the name of the process (see platform.sh); anything else a
+# pattern for the whole command line.
 fl_process_running() {
-  pgrep -f "$1" >/dev/null 2>&1
+  if [[ "$1" =~ ^[A-Za-z0-9._@-]+$ ]]; then pgrep -x "$1" >/dev/null 2>&1; else pgrep -f "$1" >/dev/null 2>&1; fi
 }
 
 fl_brew_service_running() {

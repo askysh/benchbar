@@ -65,6 +65,31 @@ fl_platform_init() {
   FL_ARCH="$(uname -m)"
 }
 
+# fl_refuse_root: benchbar never runs as root. A `sudo benchbar repair` (a common answer to
+# "permission denied") keeps the user's HOME on macOS, so it would create root owned state
+# files, logs, backups and bench locks that every later normal run then fails on. benchbar
+# asks for sudo itself, for the steps that need it (/etc/hosts, wkhtmltopdf, the LAN guard).
+# No override but the tests': FL_EFFECTIVE_UID counts only under FL_TESTING=1.
+fl_refuse_root() {
+  local effective_uid="$EUID" hint="Run benchbar as your normal user: it asks for sudo itself, only for the steps that need it."
+  [[ "${FL_TESTING:-}" == "1" ]] && effective_uid="${FL_EFFECTIVE_UID:-$EUID}"
+  [[ "$effective_uid" == "0" ]] || return 0
+  if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]]; then
+    hint="${hint} If a run with sudo left root owned files behind, give them back: sudo chown -R ${SUDO_USER} ${FL_STATE_DIR:-~/.local/state/benchbar} (and the logs folder of the bench)."
+  fi
+  # A client that asked for JSON gets the refusal as JSON (error_id root_refused, exit 64 like
+  # every refusal of the command line, which the Mac app, the tray and the shim already read
+  # as a plain failure). Without the commands table loaded (the installer) it is the text.
+  if declare -F fl_refuse_json >/dev/null; then
+    local key=""
+    if [[ -n "${COMMAND:-}" ]] && declare -F fl_cmd_key_for >/dev/null; then
+      key="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}" 2>/dev/null)" || key=""
+    fi
+    fl_refuse_json root_refused "Do not run benchbar as root or with sudo." "$hint" "$key"
+  fi
+  fl_die "Do not run benchbar as root or with sudo." "$hint"
+}
+
 fl_preflight_not_root() {
   local effective_uid="$EUID"
   [[ "${FL_TESTING:-}" == "1" ]] && effective_uid="${FL_EFFECTIVE_UID:-$EUID}"
@@ -238,8 +263,11 @@ fl_brew_formula_available() {
   brew list --formula --versions "$formula" >/dev/null 2>&1 || brew info "$formula" >/dev/null 2>&1
 }
 
+# A bare name (mariadbd, redis-server) is the name of the process, so an
+# editor or a tail with that word in its arguments does not count; anything
+# else is a pattern for the whole command line.
 fl_process_running() {
-  pgrep -qf "$1" 2>/dev/null
+  if [[ "$1" =~ ^[A-Za-z0-9._@-]+$ ]]; then pgrep -qx "$1" 2>/dev/null; else pgrep -qf "$1" 2>/dev/null; fi
 }
 
 fl_brew_service_running() {
@@ -249,9 +277,13 @@ fl_brew_service_running() {
   fl_has_line "$states" started
 }
 
+# lsof run by a normal user does not list a socket another user owns, so a
+# root owned listener on a bench port would look free; netstat lists every
+# listening socket (without the owner) and settles it.
 fl_port_listening() {
   local port="$1"
-  lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+  lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && return 0
+  netstat -an -p tcp 2>/dev/null | awk -v p="$port" '$NF == "LISTEN" { n = split($4, a, /[.:]/); if (a[n] == p) f = 1 } END { exit !f }'
 }
 
 # The working folder of whatever listens on PORT (the bench's own Redis runs

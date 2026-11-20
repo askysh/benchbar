@@ -148,6 +148,21 @@ assert run["web_ping_code"] == 200, run
 assert run["started_at"].endswith("Z"), run
 assert rows[0]["pid"] == run["pid"], rows
 PYCHECK
+# a site that redirects is up too (2xx or 3xx, as the CLI's web check): running, with the code it gave
+: >"$hist"; reset_transitions
+export MOCK_CURL_CODE=302
+MOCK_HONCHO_SLEEP=3 assert_status 1 "$runner"
+assert_eq "starting running crashed" "$(transitions)"
+python3 - "$BENCHBAR_STATE_LOG" <<'PYCHECK' || fail "a 302 ping must mark running and be recorded"
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+assert [r["web_ping_code"] for r in rows if r["state"] == "running"] == [302], rows
+PYCHECK
+# a 404 is not
+: >"$hist"; reset_transitions
+export MOCK_CURL_CODE=404
+MOCK_HONCHO_SLEEP=3 assert_status 1 "$runner"
+assert_eq "starting crashed" "$(transitions)"
 export MOCK_CURL_CODE=000
 
 # 9. benchdown while running: SIGTERM reaches honcho, the runner records a manual stop and exits 0
