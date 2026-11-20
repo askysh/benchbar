@@ -105,14 +105,28 @@ fl_team__app_add() {
 
 # fl_team_profile_read FILE: parses FILE into the FL_TEAM_* globals (not
 # the profile itself). Returns 1 with FL_TEAM_ERROR set.
+# fl_team_profile_own FILE: FILE is the person's own (made by hand or by profile
+# create in their profiles folder, with no source), so its repos may be local or
+# plain http. Anything that came from someone else (an import, a subscription, a
+# folder of BENCHBAR_PROFILE_PATH) is strict. FL_TEAM_READ_OWN=1 says it for a
+# file benchbar just wrote for this person.
+fl_team_profile_own() {
+  local file="$1" d
+  [[ "${FL_TEAM_READ_OWN:-0}" != "1" ]] || return 0
+  d="$(cd "$(dirname "$file")" 2>/dev/null && pwd)" || return 1
+  [[ "$d" == "$(fl_team_profile_user_dir)" ]] || return 1
+  ! grep -q '^[[:space:]]*source[[:space:]]*=' "$file" 2>/dev/null
+}
+
 fl_team_profile_read() {
-  local file="$1" out err sec idx key val cur=0 name="" repo="" branch="" commit="" access="" requires="" v2="" r
+  local file="$1" out err mode=strict sec idx key val cur=0 name="" repo="" branch="" commit="" access="" requires="" v2="" r
   FL_TEAM_BASE=""; FL_TEAM_BUNDLE=""; FL_TEAM_SITE=""; FL_TEAM_SCHEDULER=""; FL_TEAM_DESCRIPTION=""; FL_TEAM_FRAPPE_BRANCH=""
   FL_TEAM_FRAPPE_COMMIT=""; FL_TEAM_ERPNEXT_COMMIT=""
   FL_TEAM_SCHEMA=""; FL_TEAM_SOURCE=""; FL_TEAM_EXPORTED_FROM=""
   FL_TEAM_APPS=(); FL_TEAM_APP_ACCESS=(); FL_TEAM_APP_REQUIRES=(); FL_TEAM_ERROR=""
   err="$(mktemp "${TMPDIR:-/tmp}/benchbar-toml.XXXXXX")"
-  if ! out="$(fl_toml_parse "$file" "$FL_TEAM_KEYS" "" "apps" "$FL_TEAM_REQUIRED" 2>"$err")"; then
+  ! fl_team_profile_own "$file" || mode=own
+  if ! out="$(FL_TOML_REPOS="$mode" fl_toml_parse "$file" "$FL_TEAM_KEYS" "" "apps" "$FL_TEAM_REQUIRED" 2>"$err")"; then
     FL_TEAM_ERROR="$(head -n1 "$err")"; rm -f "$err"
     return 1
   fi
@@ -442,7 +456,7 @@ fl_cmd_profile_create() {
   while IFS= read -r line; do fl_warn "$line"; done <"$err"
   rm -f "$err"
   # what is written must read back
-  fl_team_profile_read "$tmp" || { rm -f "$tmp"; fl_die "The profile would not parse: ${FL_TEAM_ERROR}"; }
+  FL_TEAM_READ_OWN=1 fl_team_profile_read "$tmp" || { rm -f "$tmp"; fl_die "The profile would not parse: ${FL_TEAM_ERROR}"; }
   fl_info "read ${FL_BENCH_DIR} (read only): base ${FL_TEAM_BASE}, ${#FL_TEAM_APPS[@]} app(s)"
   fl_write_reviewed "$file" "$tmp" "team profile ${name}" || code=1
   rm -f "$tmp"
@@ -956,6 +970,7 @@ fl_profile_export_plan() {
     req="${FL_TEAM_APP_REQUIRES[$i]:-}"
     if [[ -z "$req" && -n "$bench" && -d "${bench}/apps/${n}" ]]; then req="$(fl_app_required_apps "$n" | tr '\n' ' ')"; req="${req% }"; fi
     xr="$(fl_profile_export_url "$r")"
+    fl_repo_shareable "$xr" || EX_WARN+=("${n}: ${xr} is a local path or a plain http or git URL; teammates cannot clone this repo")
     [[ "$xr" != "$r" ]] && EX_WARN+=("${n}: ${r} is written as ${xr}")
     # ask git with the URL as it is on this Mac (an SSH alias carries the key
     # for that account), write the portable one
@@ -1136,7 +1151,7 @@ fl_cmd_profile_export() {
   out="$(fl_abs_path "${out:-${PWD}/${name}.toml}")"
   tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-profile.XXXXXX")"
   fl_profile_export_render "$name" >"$tmp"
-  fl_team_profile_read "$tmp" || { rm -f "$tmp"; fl_die "The exported profile would not parse: ${FL_TEAM_ERROR}"; }
+  FL_TEAM_READ_OWN=1 fl_team_profile_read "$tmp" || { rm -f "$tmp"; fl_die "The exported profile would not parse: ${FL_TEAM_ERROR}"; }
   fl_profile_export_print
   fl_write_reviewed "$out" "$tmp" "the exported profile ${name}" || code=1
   rm -f "$tmp"

@@ -318,8 +318,9 @@ fl_check_updates() {
     return 0
   fi
 
-  frappe_heads="$(git ls-remote --heads https://github.com/frappe/frappe 'version-*' 2>/dev/null | awk -F/ '{print $NF}' | sort -u | tr '\n' ' ')"
-  erpnext_heads="$(git ls-remote --heads https://github.com/frappe/erpnext 'version-*' 2>/dev/null | awk -F/ '{print $NF}' | sort -u | tr '\n' ' ')"
+  fl_git_ext_off
+  frappe_heads="$(env "${FL_GIT_EXT_OFF[@]}" git ls-remote --heads https://github.com/frappe/frappe 'version-*' 2>/dev/null | awk -F/ '{print $NF}' | sort -u | tr '\n' ' ')"
+  erpnext_heads="$(env "${FL_GIT_EXT_OFF[@]}" git ls-remote --heads https://github.com/frappe/erpnext 'version-*' 2>/dev/null | awk -F/ '{print $NF}' | sort -u | tr '\n' ' ')"
   {
     printf 'Known local profiles:\n'
     fl_list_profiles

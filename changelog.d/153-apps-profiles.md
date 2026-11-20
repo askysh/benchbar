@@ -5,7 +5,7 @@
 - `profile import`, `profile subscribe`, `profile update`, `install --profile` and `lock apply` print `install will run code from these repos` with the host and owner of each repo, and a second line for the owners that nothing in the bench uses yet. An update that adds or changes a `repo` line says so. `profile import --plan --json` has `runs_code_from` and `new_owners` (#153).
 - `lock apply` marks each repo that is not in the bench yet (`NEW REPO`) in its plan (#153).
 - A password in an `ssh://` (or any non https) remote is left out of `profile create` and `lock write`, with a warning (#153).
-- A profile or lock `repo` must be `https://`, `ssh://` or `user@host:path`; `ext::`, `http://`, `git://` and local paths are refused, and every benchbar git call turns the `ext::` transport off (#153).
+- A profile or lock from someone else (`profile import`, a subscription, a lock inside an app repo) must name `https://`, `ssh://` or `user@host:path` repos; your own profile and lock also take local paths, `file://`, `http://` and `git://`, and `profile create` and `lock write` warn that teammates cannot clone those. A `transport::address` repo such as `ext::` is refused everywhere, and benchbar's git and `bench get-app` calls turn the `ext::` transport off (#153).
 - A profile or lock with a UTF-8 byte order mark now reads. An empty `repo` or `branch`, and a `|` in one, is refused with a message (#153).
 - A `commit` in a lock must be 12 to 40 hex characters, not a 7 character prefix (#153).
 - A dry run no longer leaves a `benchbar-siteapps.*` file in the temp folder, and a site name with a dot no longer matches another site in the app cache (#153).

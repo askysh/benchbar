@@ -46,8 +46,6 @@ export FL_LOCAL_PROBES=0
 # every FL_* and BENCHBAR_* test seam below is read only when this is 1;
 # a production run ignores them (docs/DECISIONS.md)
 export FL_TESTING=1
-# the tests keep their app remotes in file:// folders; a profile or lock may name one only when this is 1
-export BENCHBAR_ALLOW_LOCAL_REPOS=1
 export FL_KILL_CMD=mockkill
 export BENCHBAR_KILL_CMD=mockkill
 export FL_APP_DIRS="$HOME/Applications"

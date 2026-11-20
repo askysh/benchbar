@@ -488,11 +488,28 @@ fl__app_remote_raw() {
 
 fl_app_remote_url() { fl_url_strip_userinfo "$(fl__app_remote_raw "$1")"; }
 
-# fl_app_remote_url_warn APP: a line on stderr when the remote of APP carries a
-# password or token, for the commands that write a URL into a file to share
+# fl_repo_shareable URL: 0 when a teammate can clone URL (https, ssh, user@host:path);
+# 1 for a local path, file://, http:// or git:// (no encryption, often a LAN host)
+fl_repo_shareable() {
+  case "$1" in
+    https://*|ssh://*) return 0 ;;
+    http://*|git://*|file://*|/*|./*|../*|~*) return 1 ;;
+  esac
+  return 0
+}
+
+# fl_app_remote_url_warn APP: lines on stderr for the commands that write a URL into a
+# file: a password or token in the remote (left out), a remote teammates cannot clone
 fl_app_remote_url_warn() {
-  fl_url_has_secret "$(fl__app_remote_raw "$1")" || return 0
-  printf 'apps/%s: the git remote has a password or token in its URL; it was left out of the file\n' "$1" >&2
+  local raw
+  raw="$(fl__app_remote_raw "$1")"
+  if fl_url_has_secret "$raw"; then
+    printf 'apps/%s: the git remote has a password or token in its URL; it was left out of the file\n' "$1" >&2
+  fi
+  if ! fl_repo_shareable "$(fl_url_strip_userinfo "$raw")"; then
+    printf 'apps/%s: the git remote is a local path or a plain http or git URL; teammates cannot clone this repo\n' "$1" >&2
+  fi
+  return 0
 }
 
 # The version bench recorded in sites/apps.json for APP.
@@ -624,7 +641,7 @@ fl_site_apps_refresh() {
     else
       errors="${errors}${errors:+, }${s}"
       # keep what was known
-      [[ -f "$file" ]] && awk -v s="$s" '$1 == s' "$file" >>"$tmp" 2>/dev/null || true
+      if [[ -f "$file" ]]; then awk -v s="$s" '$1 == s' "$file" >>"$tmp" 2>/dev/null || true; fi
     fi
   done
   # sites not asked this time keep their line

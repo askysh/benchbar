@@ -16,22 +16,28 @@
 # separated. KEYS lists "section.key=type" (type s, b, i or a), REQUIRED
 # lists "section.key". Exit 1 with the message on stderr.
 #
-# A repo is https://, ssh:// or scp style (user@host:path); anything else
-# (ext::, a path, file://, git://, http://) is refused, because the value
-# goes to git and bench get-app. A local path or file:// is accepted only
-# when BENCHBAR_ALLOW_LOCAL_REPOS=1 (the tests). repo and branch are never
-# empty and never hold "|" (the app lists are joined with it). A UTF-8 byte
-# order mark at the start of the file is skipped.
+# A repo that is a git transport helper (ext::sh -c ..., fd::3) is refused in
+# every file: the value goes to git and bench get-app. The rest depends on
+# who wrote the file (FL_TOML_REPOS, set by the caller):
+#   strict (the default): a file from someone else (an import, a subscription,
+#     a lock inside an app repo) names https://, ssh:// or user@host:path; a
+#     local path or file:// passes only with BENCHBAR_ALLOW_LOCAL_REPOS=1.
+#   own: a file the person made themselves also takes a local path, file://,
+#     http:// and git://; benchbar warns where it writes one that teammates
+#     cannot clone.
+# repo and branch are never empty and never hold "|" (the app lists are joined
+# with it). A UTF-8 byte order mark at the start of the file is skipped.
 
 fl_toml_parse() {
   local file="$1" keys="$2" tables="$3" arrays="$4" required="$5"
   [[ -f "$file" ]] || { printf '%s: no such file\n' "$file" >&2; return 1; }
-  LC_ALL=C awk -v fname="$(basename "$file")" -v local_ok="${BENCHBAR_ALLOW_LOCAL_REPOS:-0}" -v keys="$keys" -v tables="$tables" -v arrays="$arrays" -v required="$required" '
+  LC_ALL=C awk -v fname="$(basename "$file")" -v local_ok="${BENCHBAR_ALLOW_LOCAL_REPOS:-0}" -v own="$([[ "${FL_TOML_REPOS:-strict}" == "own" ]] && printf 1 || printf 0)" -v keys="$keys" -v tables="$tables" -v arrays="$arrays" -v required="$required" '
     function fail(msg, ln) { printf "%s:%d: not supported: %s\n", fname, (ln ? ln : NR), msg > "/dev/stderr"; bad = 1; exit 1 }
     function repo_ok(v) {
       if (v ~ /^https:\/\/[^ \t]+$/ || v ~ /^ssh:\/\/[^ \t]+$/) return 1
       if (v ~ /^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:[^: \t][^ \t]*$/) return 1
-      if (local_ok == "1" && (v ~ /^file:\/\/[^ \t]+$/ || v ~ /^\//)) return 1
+      if ((local_ok == "1" || own == "1") && (v ~ /^file:\/\/[^ \t]+$/ || v ~ /^\//)) return 1
+      if (own == "1" && (v ~ /^http:\/\/[^ \t]+$/ || v ~ /^git:\/\/[^ \t]+$/ || v ~ /^\.\.?\/[^ \t]+$/ || v ~ /^~\/[^ \t]+$/)) return 1
       return 0
     }
     function header_close(   k, n, r) {
@@ -89,6 +95,7 @@ fl_toml_parse() {
       if (t != ktype[sec "." key]) fail(key " must be " (ktype[sec "." key] == "s" ? "a string" : ktype[sec "." key] == "b" ? "true or false" : ktype[sec "." key] == "i" ? "an integer" : "an array of strings"))
       if ((key == "repo" || key == "branch") && val == "") fail(key " must not be empty")
       if ((key == "repo" || key == "branch") && index(val, "|")) fail(key " must not contain \"|\"")
+      if (key == "repo" && index(val, "::")) fail("repo \"" val "\": a git transport helper (transport::address) is never accepted")
       if (key == "repo" && !repo_ok(val)) fail("repo \"" val "\": use https://, ssh:// or user@host:path")
       if (key == "repo" && val ~ /^[a-zA-Z+]+:\/\/[^\/]*@/ && val !~ /^ssh:\/\//) fail("a user name or token in a repo URL (the file gets committed)")
       # a value git would read as an option (--upload-pack=...) runs commands: never accepted

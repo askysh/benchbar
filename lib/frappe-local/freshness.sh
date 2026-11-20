@@ -303,9 +303,10 @@ fl_freshness_fetch() {
       ts="$(fl_app_git "$app" log -1 --format=%ct HEAD 2>/dev/null || true)"
       [[ "$ts" =~ ^[0-9]+$ ]] && args+=("--shallow-since=@$((ts - 1))")
     fi
+    fl_git_ext_off
     (
       code=0
-      fl_run_capture_timeout "$FL_FRESHNESS_FETCH_TIMEOUT" /dev/null "${codes}/err/${app}" fl__in_dir "$FL_BENCH_DIR" env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10' \
+      fl_run_capture_timeout "$FL_FRESHNESS_FETCH_TIMEOUT" /dev/null "${codes}/err/${app}" fl__in_dir "$FL_BENCH_DIR" env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10' "${FL_GIT_EXT_OFF[@]}" \
         git -C "$dir" fetch --quiet --no-tags ${args[@]+"${args[@]}"} "$remote" "+refs/heads/${branch}:refs/remotes/${remote}/${branch}" || code=$?
       printf '%s' "$code" >"${codes}/${app}"
     ) &

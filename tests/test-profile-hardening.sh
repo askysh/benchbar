@@ -34,25 +34,42 @@ profile_toml 'repo = "https://example.com/a|b.git"' >"$USER_DIR/pipe.toml"
 run_fm profile show pipe
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" 'repo must not contain "|"'
 
-# ---- repo schemes: https, ssh and user@host:path; nothing that runs a program (APP-14)
-for good in "https://example.com/acme/x.git" "ssh://git@example.com/acme/x.git" "git@example.com:acme/x.git"; do
+# ---- repo schemes (APP-14). The person's own profile takes any real address, local or plain http included;
+# a transport helper that runs a program is never accepted
+for good in "https://example.com/acme/x.git" "ssh://git@example.com/acme/x.git" "git@example.com:acme/x.git" \
+  "http://git.lan/acme/x.git" "git://git.lan/acme/x.git" "file://${REMOTES}/acme_crm.git" "/Users/me/dev/x" "../x"; do
   profile_toml "repo = \"${good}\"" >"$USER_DIR/scheme.toml"
   run_fm profile show scheme
   assert_eq "0" "$CODE" "(${good}) $OUT"
 done
-for bad in "ext::sh -c id" "http://example.com/acme/x.git" "git://example.com/acme/x.git" "fd::3" "../acme_crm" "example.com/acme/x.git"; do
+for bad in "ext::sh -c id" "fd::3"; do
   profile_toml "repo = \"${bad}\"" >"$USER_DIR/scheme.toml"
   run_fm profile show scheme
   assert_eq "1" "$CODE" "(${bad}) $OUT"
-  assert_contains "$OUT" "use https://, ssh:// or user@host:path"
+  assert_contains "$OUT" "a git transport helper (transport::address) is never accepted"
 done
-# a path or file:// only where the tests allow it (the other tests use file:// remotes)
-profile_toml "repo = \"file://${REMOTES}/acme_crm.git\"" >"$USER_DIR/scheme.toml"
-BENCHBAR_ALLOW_LOCAL_REPOS=0 run_fm profile show scheme
-assert_eq "1" "$CODE" "$OUT"
+profile_toml 'repo = "example.com/acme/x.git"' >"$USER_DIR/scheme.toml"
 run_fm profile show scheme
-assert_eq "0" "$CODE" "$OUT"
-rm -f "$USER_DIR"/{bom,crlf,emptyrepo,emptybranch,pipe,scheme}.toml
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "use https://, ssh:// or user@host:path"
+# a file from someone else (import, a subscription, a profile folder, a file with a source) takes https, ssh and
+# user@host:path only; a local path or http is refused until BENCHBAR_ALLOW_LOCAL_REPOS=1
+for foreign in "file://${REMOTES}/acme_crm.git" "/Users/me/dev/x" "http://git.lan/acme/x.git" "git://git.lan/acme/x.git"; do
+  profile_toml "repo = \"${foreign}\"" >"$TMP_DIR/foreign.toml"
+  BENCHBAR_OFFLINE=1 run_fm profile import "$TMP_DIR/foreign.toml" --as foreign --plan
+  assert_eq "1" "$CODE" "(${foreign}) $OUT"
+  assert_contains "$OUT" "use https://, ssh:// or user@host:path"
+  assert_no_file "$USER_DIR/foreign.toml"
+done
+profile_toml "repo = \"file://${REMOTES}/acme_crm.git\"" >"$TMP_DIR/foreign.toml"
+BENCHBAR_ALLOW_LOCAL_REPOS=1 BENCHBAR_OFFLINE=1 run_fm profile import "$TMP_DIR/foreign.toml" --as foreign --plan
+assert_eq "0" "$CODE" "(the person can allow it) $OUT"
+mkdir -p "$TMP_DIR/pp"; cp "$TMP_DIR/foreign.toml" "$TMP_DIR/pp/fromfolder.toml"
+BENCHBAR_PROFILE_PATH="$TMP_DIR/pp" run_fm profile show fromfolder
+assert_eq "1" "$CODE" "(a BENCHBAR_PROFILE_PATH folder is a team's clone) $OUT"
+{ printf 'schema = 2\nsource = "https://example.com/x.toml"\n'; profile_toml 'repo = "/Users/me/dev/x"'; } >"$USER_DIR/imported.toml"
+run_fm profile show imported
+assert_eq "1" "$CODE" "(a file with a source came from someone else) $OUT"
+rm -f "$USER_DIR"/{bom,crlf,emptyrepo,emptybranch,pipe,scheme,imported}.toml
 # a transport helper typed on the command line is refused too, before any bench or network
 make_fake_bench "$HOME/fb" macdev
 run_fm app add "ext::sh -c id@x:y" --dry-run --json --bench-dir "$HOME/fb"
@@ -62,7 +79,8 @@ write_acme_profile
 reset_calls; rm -f "$MOCK_STATE/git-config-env"
 run_fm profile check acme
 assert_calls_contain '^git ls-remote '
-grep -q 'protocol.ext.allow' "$MOCK_STATE/git-config-env" && grep -q '=never' "$MOCK_STATE/git-config-env" || fail "git ran without protocol.ext.allow=never"
+grep -q 'protocol.ext.allow' "$MOCK_STATE/git-config-env" || fail "git ran without protocol.ext.allow"
+grep -q '=never' "$MOCK_STATE/git-config-env" || fail "git ran without protocol.ext.allow=never"
 
 # ---- a repo that hangs ends at the deadline and leaves no process behind (APP-24)
 SHIM="$TMP_DIR/shim"; mkdir -p "$SHIM"
@@ -135,6 +153,17 @@ assert_contains "$OUT" "password or token"
 git -C "$BENCH/apps/acme_crm" remote set-url upstream "git://user:pw@git.example.com/acme/acme_crm.git"
 run_fm profile create acme-git --from-bench "$BENCH" --dir "$TEAM_REPO" --yes
 assert_not_contains "$(cat "$TEAM_REPO/acme-git.toml" 2>/dev/null)" "pw@"
+# a remote that is a local path or plain http is written, with a warning, and the profile reads back and is shown
+for remote in "$REMOTES/acme_crm.git" "http://git.lan/acme/acme_crm.git"; do
+  git -C "$BENCH/apps/acme_crm" remote set-url upstream "$remote"
+  run_fm profile create acme-local --from-bench "$BENCH" --yes
+  assert_eq "0" "$CODE" "(${remote}) $OUT"
+  assert_contains "$OUT" "apps/acme_crm: the git remote is a local path or a plain http or git URL; teammates cannot clone this repo"
+  grep -q "^repo = \"${remote}\"$" "$USER_DIR/acme-local.toml" || fail "the profile keeps ${remote}"
+  run_fm profile show acme-local
+  assert_eq "0" "$CODE" "(it reads back) $OUT"
+  rm -f "$USER_DIR/acme-local.toml"
+done
 git -C "$BENCH/apps/acme_crm" remote set-url upstream "file://${REMOTES}/acme_crm.git"
 
 # ---- a dry run leaves no temp file behind (APP-20)
@@ -147,7 +176,8 @@ for f in release-profiles app-bundles wkhtmltopdf; do
   awk -F '\t' -v f="$f" 'NR > 1 { for (i = 1; i <= NF; i++) if ($i == "") { printf "%s.tsv line %d column %d is empty\n", f, NR, i; bad = 1 } } END { exit bad }' "$ROOT/config/${f}.tsv" || fail "an empty cell in config/${f}.tsv"
 done
 awk -F '\t' 'NR == 1 { n = NF } NR > 1 && NF != n { printf "apps.tsv line %d has %d cells, not %d\n", NR, NF, n; bad = 1 } END { exit bad }' "$ROOT/config/apps.tsv" || fail "apps.tsv rows differ in width"
-grep -q '^\*\.tsv text eol=lf$' "$ROOT/.gitattributes" && grep -q '^\*\.toml text eol=lf$' "$ROOT/.gitattributes" || fail ".gitattributes pins tsv and toml to LF"
+grep -q '^\*\.tsv text eol=lf$' "$ROOT/.gitattributes" || fail ".gitattributes pins tsv to LF"
+grep -q '^\*\.toml text eol=lf$' "$ROOT/.gitattributes" || fail ".gitattributes pins toml to LF"
 # a bundle with an empty label still reads its apps (read would fold two tabs into one)
 printf 'bundle\tlabel\tapps\tnotes\nbare\t\terpnext\tsome notes\n' >"$TMP_DIR/bundles.tsv"
 (
@@ -156,6 +186,7 @@ printf 'bundle\tlabel\tapps\tnotes\nbare\t\terpnext\tsome notes\n' >"$TMP_DIR/bu
   # shellcheck disable=SC1091
   . "$ROOT/lib/frappe-local/ui.sh"; . "$ROOT/lib/frappe-local/version-policy.sh"; . "$ROOT/lib/frappe-local/profiles.sh"
   fl_bundles_json_v out
+  # shellcheck disable=SC2154  # set by fl_bundles_json_v
   [[ "$out" == *'"name":"bare","label":null,"apps":["erpnext"],"description":"some notes"'* ]] || { printf 'bundle json: %s\n' "$out" >&2; exit 1; }
 ) || fail "an empty notes cell broke the bundle reader"
 

@@ -43,13 +43,15 @@ LK_SITE_NAME=(); LK_SITE_DEFAULT=(); LK_SITE_APPS=()
 
 # fl_lock_load FILE: the LK_* globals; 1 with FL_LOCK_ERROR set
 fl_lock_load() {
-  local file="$1" out err sec idx key val
+  local file="$1" out err sec idx key val mode=own
   LK_PROFILE=""; LK_FRAPPE_BENCH=""; LK_BUNDLE=""
   LK_APP_NAME=(); LK_APP_REPO=(); LK_APP_BRANCH=(); LK_APP_COMMIT=()
   LK_SITE_NAME=(); LK_SITE_DEFAULT=(); LK_SITE_APPS=()
   FL_LOCK_ERROR=""
   err="$(mktemp "${TMPDIR:-/tmp}/benchbar-toml.XXXXXX")"
-  if ! out="$(fl_toml_parse "$file" "$FL_LOCK_KEYS" "bench" "app site" "$FL_LOCK_REQUIRED" 2>"$err")"; then
+  # a lock inside an app repo of the bench changes with that app: it is someone else's file
+  case "$file" in "${FL_BENCH_DIR:-/nonexistent}"/apps/*) mode=strict ;; esac
+  if ! out="$(FL_TOML_REPOS="$mode" fl_toml_parse "$file" "$FL_LOCK_KEYS" "bench" "app site" "$FL_LOCK_REQUIRED" 2>"$err")"; then
     FL_LOCK_ERROR="$(head -n1 "$err")"; rm -f "$err"
     return 1
   fi

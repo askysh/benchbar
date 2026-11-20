@@ -77,7 +77,7 @@ escapes, no inline tables.
 | `source` | no, schema 2 | Where `profile import` fetched the file (an https URL or a path); `profile update` fetches it again |
 | `exported_from` | no, schema 2 | Written by `profile export`, for example `"benchbar 0.6.0, 2026-09-29"` |
 | `[[apps]]` `name` | yes, per app | The app's folder name |
-| `[[apps]]` `repo` | yes, per app | Its git URL: `https://`, `ssh://` or `user@host:path`, never empty and without `\|`. `ext::`, `http://`, `git://` and local paths are refused, because the value goes to `git` and `bench get-app`. A URL with a user name or token is refused |
+| `[[apps]]` `repo` | yes, per app | Its git URL, never empty and without `\|`. A file from someone else (an imported or subscribed profile, a lock inside an app repo) takes `https://`, `ssh://` or `user@host:path`; your own profile and lock also take a local path, `file://`, `http://` and `git://` (`profile create` and `lock write` warn that teammates cannot clone those). `ext::` and other `transport::address` forms are never accepted. A URL with a user name or token is refused |
 | `[[apps]]` `branch` | yes, per app | The branch to clone (never empty, no `\|`) |
 | `[[apps]]` `commit` | no | A commit to pin; a clone that does not reach it stops `install` before anything is built |
 | `[[apps]]` `access` | no, schema 2 | `public`, `private`, `personal` or `unknown`: who can read the repo, as `profile export` found it |
@@ -103,7 +103,7 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 | `MARIADB_ROOT_PASSWORD` | `install`, `site add`, `pull` | The MariaDB root password. A fresh MariaDB gets a generated one when unset; an existing one is read from the Keychain |
 | `ADMIN_PASSWORD` | `install`, `site add`, `pull` | The Administrator password of a new site; for `pull`, a new Administrator password for the copy |
 | `BENCHBAR_PROFILE_PATH` | `--profile`, `profile` | Colon separated folders with team profiles, for example a clone of your team's config repo |
-| `BENCHBAR_ALLOW_LOCAL_REPOS` | `profile`, `lock` | `1` lets a profile or lock name a `file://` URL or an absolute path as a `repo`. Off by default: only `https://`, `ssh://` and `user@host:path` are read. The tests set it |
+| `BENCHBAR_ALLOW_LOCAL_REPOS` | `profile`, `lock` | `1` lets a file from someone else (an import, a subscription, a lock inside an app repo) name a `file://` URL or an absolute path as a `repo`. Off by default |
 | `BENCHBAR_OFFLINE` | `install`, `profile`, doctor | `BENCHBAR_OFFLINE=1`: no network for team profiles, and no remote branch checks in `install`; reachability is `null` and doctor does not fetch subscriptions |
 | `BENCHBAR_LOCK` | `lock`, doctor | The lockfile path, when `--lock` is not given |
 | `BENCH_DIR` | every command | The bench to act on when `--bench-dir` is not given; checked before the remembered bench |
