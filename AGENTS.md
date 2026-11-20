@@ -33,9 +33,19 @@ the apply tool with the same arguments and the token (the CLI form is
   plan (`apps`), with `commit` to pin one and `install_on` per app.
 - `benchbar_site_add_plan` / `benchbar_site_add`: a throwaway or test
   site. Use it instead of `bench new-site`; the default site never moves.
+- `benchbar_app_install_plan` / `benchbar_app_install`: an app that is
+  already in the bench, on one site. `benchbar_app_update_plan` /
+  `benchbar_app_update`: fast forward one app; every site that has it is
+  backed up first and the backup cannot be skipped. Both plan again at apply
+  and refuse a plan that changed (new commits, a changed site): plan again.
 - `benchbar_site_backup`, then `benchbar_site_restore_plan` /
   `benchbar_site_restore` (`new: true` for a copy of a site for QA,
   `no_migrate` to stop before migrate).
+- `benchbar_run_plan` / `benchbar_run`: `migrate`, `clear-cache`,
+  `clear-website-cache`, `build` and `run-tests` (`migrate` backs the site
+  up first). `benchbar_run_read` runs `doctor`, `list-apps` and `version`
+  at once. Use them instead of raw `bench` commands; anything else, such as
+  `bench update`, `console` or `execute`, is refused.
 - `benchbar_service_install_plan` / `benchbar_service_install`: the
   service of a bench that has none (`benchbar_up` says `service:
   "missing"` then). `benchbar_up` with `services_only` starts Redis alone.
@@ -103,8 +113,12 @@ reads. It also sets `BENCHBAR_NONINTERACTIVE=1`, `NO_COLOR=1` and
 Every command that changes things ends with one `done` line (or adds
 the same fields to its one document): `exit`, `changed[]`, `warnings[]`,
 `next_actions[]` and `state_after`. Read `exit` and `next_actions` first.
-With `--json` stdout holds JSON and nothing else. A refusal goes to
-stderr.
+Under `--for-agent` and `--jsonl` the last line of stdout of every
+command with a JSON mode has `exit` (the process exit code) and, when it
+is not 0, `error`: a read prints its document with `exit`, and a read that
+fails, a refusal or an unknown command print that envelope instead of
+nothing. There is no `ok` field. With plain `--json` stdout holds JSON
+and nothing else, and a refusal of a read goes to stderr.
 
 Every command that changes things has an `op_id`: in every line of its
 stream (`plan`, `step`, `progress`, `done`) and in the one document of a
@@ -126,6 +140,24 @@ machine, newest first: its `op_id`, the command line (secrets as `***`),
 site, times, `exit`, `changed[]` and log. Read it before you change a
 bench someone else worked on. Run your own commands with `--for-agent` so
 the entry says `agent` (`BENCHBAR_CALLER` is a label, not a proof).
+
+To run a bench command (`migrate`, `clear-cache`, `clear-website-cache`,
+`build`, `run-tests`, and the reads `doctor`, `list-apps`, `version`) use
+`benchbar run` and not raw `bench`: it runs in the right bench and site
+with the bench's environment, under a deadline, and ends with the done
+fields plus `command_exit` and `output_tail`. A command that changes
+things follows the plan rule (`--dry-run --json`, then `--apply TOKEN
+--yes`); a read runs at once. A command that is not on the list exits 64
+and names the list: do not look for another way to run it. `run-tests`,
+`migrate` and `build` run code from the bench's apps (their tests,
+patches and build scripts): the list limits which command runs, not what
+that code does.
+
+```bash
+benchbar run --site NAME --dry-run --json -- migrate
+benchbar run --site NAME --apply TOKEN --yes --json -- migrate
+benchbar run --site NAME --json -- list-apps
+```
 
 With `BENCHBAR_NONINTERACTIVE=1` a command that needs an input it cannot
 ask for stops before it takes the lock, and names all missing inputs in
@@ -225,6 +257,25 @@ The run makes the plan again after its checks; a newer backup on the
 server or another set of apps is another plan, and it stops with "The
 plan changed since it was shown; nothing was changed" (exit 1). Without
 `--apply` the old behaviour stays: a person in a terminal is asked.
+
+## Retiring a bench
+
+```bash
+./benchbar bench forget PATH --dry-run --json      # plan and token; then --apply TOKEN --yes
+./benchbar bench remove PATH --dry-run --json      # the plan only: applying is a person's job
+./benchbar bench gc --dry-run --json               # the scratch benches that expired, same
+./benchbar db orphans --json                       # read only
+./benchbar site hosts --prune --dry-run            # stale hosts lines (sudo, a person)
+```
+
+`bench forget` moves the bench's service files aside and unregisters it; the
+folder, sites and databases stay. Show its plan to the user, and apply it only
+after their OK, with the token. `bench remove` and `bench gc --apply` drop
+databases and move a bench folder, so they refuse `--for-agent`, `mcp`,
+`BENCHBAR_NONINTERACTIVE` and a run without a terminal: read the plan, show it,
+and give the user the command. Benchbar never deletes a bench folder (it
+renames it into `.benchbar-trash`) and never drops an orphan database: do not
+finish the job by hand either (no deleting the folder, no `DROP DATABASE`).
 `benchbar up --services-only` starts only the bench's Redis.
 
 ## Port setup and conflicts
@@ -265,7 +316,7 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   site's `private/backups` are never pruned, and neither is a state backup
   folder that holds `kept-sets` files (older backups that a cut short run
   did not put back; `benchbar repair` puts them back).
-- Never run `bench update` unless the user asked for it by name.
+- Never run `bench update` unless the user asked for it by name. `benchbar run` does not run it, and neither `console`, `execute` nor a shell.
 - Two hooks in `.claude/` check every Bash call: `guard-rm.sh` blocks a
   recursive delete (`rm -r`, `find -delete`, `git clean`, `git reset --hard`,
   `rsync --delete`) outside the repo, the temp folder and `~/.benchbar/logs`,
@@ -366,6 +417,9 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 
 ## Contributing a change
 
+- A squash merge title is a plain imperative sentence ending in `(#PR)`.
+  No AI trailers in a commit or a pull request: no `Co-Authored-By` of a
+  tool, no "Generated with" line. The reviewer checks it.
 - Run `bash tests/affected.sh` for the tests your change touches. CI runs
   the full suite; run it yourself only when the selector says everything.
 - A change a user can see updates its guide or app page, `docs/features.md`

@@ -1,0 +1,24 @@
+#!/bin/bash
+# timeout mock (the runner's notify-send is called as "timeout 5 notify-send ..."): logs the call and runs
+# the command, ended after DURATION seconds with status 124 like the real one. MOCK_TIMEOUT_SECS replaces
+# the duration, so a test of a hanging command does not wait the real five seconds. Plain bash, because
+# macOS has no timeout.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+dur="${MOCK_TIMEOUT_SECS:-${1:-1}}"
+shift
+"$@" &
+pid=$!
+( sleep "$dur"; kill "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+killer=$!
+code=0
+wait "$pid" || code=$?
+if kill -0 "$killer" 2>/dev/null; then
+  kill "$killer" 2>/dev/null
+  wait "$killer" 2>/dev/null
+else
+  # the killer ran: a command it ended is a timeout
+  [[ "$code" -lt 128 ]] || code=124
+fi
+exit "$code"

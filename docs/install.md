@@ -68,7 +68,10 @@ In more detail, in this order, and it says so before each step:
 1. It checks macOS (the app needs 14 or later; on an older macOS only the
    CLI is installed) and Apple Silicon (it warns on Intel), the Xcode
    Command Line Tools (it offers `xcode-select --install` and waits) and
-   Homebrew (it offers the official installer).
+   Homebrew (it offers the official installer: Homebrew publishes no
+   pinned version of it, so it is always the current one from
+   `raw.githubusercontent.com/Homebrew/install/HEAD`, and benchbar does
+   not check it. Run it yourself first if you want to read it).
 2. It clones the CLI into `~/.local/share/benchbar`, or pulls when the
    clone exists, links `benchbar` and `frappe-mac` into `~/.local/bin`,
    and adds that folder to `PATH` in `~/.zshrc` inside a
@@ -119,7 +122,7 @@ Pass flags after `bash -s --`, for example
 | `--dry-run` | Print the plan and every command, change nothing |
 | `--no-app` | The CLI only |
 | `--app-only` | The app only |
-| `--version vX.Y.Z` | Install that release of the app instead of the latest. On Linux: check out that release of the CLI. A release candidate (`v0.9.0-rc.1`) is installed only when you name it: the latest never is one |
+| `--version vX.Y.Z` | Install that release of the app instead of the latest. On Linux, with `--no-app` and for a release candidate: also check out that release of the CLI (a detached checkout; a run without `--version` goes back to `main`). A release candidate (`v0.9.0-rc.1`) is installed only when you name it: the latest never is one, and Homebrew and `benchbar self-update` cannot install one |
 | `--uninstall` | Remove the app, the links and the PATH block; see [Uninstall](#uninstall) |
 
 ## The app from the DMG
@@ -177,9 +180,11 @@ app or adopt a bench you have.
 
 ## Linux
 
-From 0.8 the same CLI runs on Linux: Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them), Windows through WSL
-first. `install` takes the v15-lts and v16-lts profiles and team profiles (a team profile follows its base). There is no menu bar app on
-Linux; on Windows a tray app shows the benches of the distro: see [Windows](windows.md).
+From 0.8 the same CLI runs on Linux: Ubuntu 24.04 (the only system it is tested on and supports), Windows through WSL
+first. `install` takes the v15-lts and v16-lts profiles and team profiles (a team profile follows its base). On another system, for
+example Ubuntu 22.04 (MariaDB 10.6) or Debian, `doctor` warns about it and `install` stops before sudo and before it installs any
+package; with `--allow-unsupported-distro` you can try anyway, at your own risk. There is no menu bar app on Linux; on Windows a tray
+app shows the benches of the distro: see [Windows](windows.md).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
@@ -193,17 +198,28 @@ from the clone. If `install` stops, see
 
 `install` runs `00-linux-system-deps.sh`: MariaDB and Redis from apt,
 Python from uv, Node from fnm, the pinned wkhtmltopdf `.deb`, and
-`libnss-myhostname` so `*.localhost` names resolve. It asks for `sudo`
+`libnss-myhostname` so `*.localhost` names resolve. The uv and fnm
+installers are pinned to a version and checked against a sha256 before
+they run, so a changed file at their web address is refused, not run. It asks for `sudo`
 once up front and not at all on a second run. Each bench runs as its own
 `systemd --user` unit, and `loginctl enable-linger` brings a running
 bench back after a reboot. The default site is `linuxdev.localhost`, and
 benchbar never edits `/etc/hosts` there. The `bench*` helpers go to
 `~/.bashrc`. `benchbar doctor --prerequisites` on Linux checks, without a bench and
-without sudo: the distro (Ubuntu 24.04 is tested, others warn), the CPU
+without sudo: the distro (Ubuntu 24.04 is tested: `--prerequisites` warns about another system, and `install` stops before it changes anything unless you pass `--allow-unsupported-distro`), the CPU
 (x86_64 is needed for the PDF package), that you are not root, sudo (your
-user is in the sudo group), apt, systemd, linger, memory, free disk, the
+user is in the sudo group), apt, systemd, linger, the user bus (`systemctl --user` answers), memory, free disk, the
 bench folder, the default ports and the MariaDB root password state. Each
 check that is not ok names its fix.
+
+Run `install` from a shell that has a user session. Under `sudo -iu USER`,
+`su -` or cron there is no login session, so `systemctl --user` cannot find
+its bus. `install` turns on lingering (`loginctl enable-linger`), which starts
+the user manager, and points `XDG_RUNTIME_DIR` at `/run/user/UID`. When the
+manager still cannot be reached it stops before it changes anything and says
+what to run: `sudo loginctl enable-linger USER`, then run it again from a
+login shell or with `XDG_RUNTIME_DIR=/run/user/$(id -u)`. `benchbar status`
+says `unknown (no user bus)` in that case, not `loaded: no`.
 
 `install` first checks that ports 3306 (MariaDB) and 6379 (the system
 Redis) are free, or held by this distro's own services. In WSL 2 every
@@ -427,7 +443,7 @@ and you remove it yourself when you want it gone:
 - On Linux, the apt packages `install` added (MariaDB, Redis and the rest), and uv and fnm with the Python and Node they fetched, under `~/.local`. On macOS the Homebrew packages stay.
 - The app's login item, when you turned on "Open BenchBar at login": turn it off in the app's Settings first, or remove it in System Settings, General, Login Items. Deleting the app leaves a dead entry there.
 - On Linux, linger for your user (`sudo loginctl disable-linger USER`), and the `~/.bashrc` helper block when you did not use `uninstall-service`.
-- The LAN guard of a room on macOS: `benchbar lan-guard remove` takes out the pf anchor and its launch daemon.
+- The LAN guard of a room: `benchbar lan-guard remove` takes out the pf anchor and its launch daemon (macOS), or the nftables table, its systemd unit and its rules file (Linux).
 
 ### Homebrew
 

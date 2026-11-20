@@ -55,9 +55,15 @@ fl_load_profile() {
 # mariadb@10.11 a v15 bench set up). FL_MARIADB_FORMULA_PINNED (a bench's
 # stored MARIADB_FORMULA) wins over detection.
 
-# "formula version" of the server listening on 3306, from its binary path
-# (.../opt/<formula>/bin/mariadbd or .../Cellar/<formula>/<ver>/bin/mariadbd).
+# "formula version" of the server listening on 3306. On Linux that is the
+# server's own version (an apt or a vendor mariadbd, doctor-linux.sh), on a Mac
+# it comes from the Homebrew path of the binary.
 fl_mariadb_running_formula() {
+  if fl_is_linux; then fl_mariadb_running_formula_linux; else fl_mariadb_running_formula_brew; fi
+}
+
+# from the binary path (.../opt/<formula>/bin/mariadbd or .../Cellar/<formula>/<ver>/bin/mariadbd).
+fl_mariadb_running_formula_brew() {
   local pid bin formula ver
   pid="$(lsof -ti tcp:3306 -sTCP:LISTEN 2>/dev/null | awk 'NR==1' || true)"
   [[ -n "$pid" ]] || return 0

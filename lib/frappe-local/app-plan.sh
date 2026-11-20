@@ -668,7 +668,8 @@ fl_app_add_plan() {
   # the bench state the plan was made against: a changed apps.txt, apps/
   # folder or site list makes the token stale
   state="$(printf 'apps.txt\n%s\napps\n%s\nsites\n%s\n' "$(fl_apps_txt)" "$(fl__apps_dirs)" "$(fl_sites_list)")"
-  AP_TOKEN="$(printf '%s\n%s\n' "$body" "$state" | shasum -a 256 | awk '{print $1}')"
+  AP_TOKEN_DATA="$(printf '%s\n%s\n' "$body" "$state")"
+  fl_plan_token_v AP_TOKEN "$AP_TOKEN_DATA"
   AP_JSON="$(printf '{"schema_version":%d,"cli_version":"%s",%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$body" "$AP_TOKEN")"
 }
 
@@ -777,7 +778,7 @@ fl_cmd_app_add() {
 # ---------------------------------------------------------------- the command
 
 fl_cmd_app_add_planned() {
-  local json="$OPT_JSON" code=0 target usage="Use: benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on SITES] [NAME|URL ...] [--site S | --all-sites] --dry-run --json, then --apply TOKEN --yes"
+  local json="$OPT_JSON" code=0 ap_code=0 target usage="Use: benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on SITES] [NAME|URL ...] [--site S | --all-sites] --dry-run --json, then --apply TOKEN --yes"
   # JSON on fd 3, every line of text on stderr
   if [[ "$json" == "1" ]]; then fl_json_doc_begin; elif [[ "${FL_JSONL:-0}" != "1" ]]; then exec 3>&1; fi
   fl__ap_parse "$usage" "$@"
@@ -800,8 +801,13 @@ fl_cmd_app_add_planned() {
   fi
 
   fl_header "benchbar app add --apply" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "${AP_INSTALL[*]:-no site}"
-  [[ "$AP_TOKEN_IN" == "$AP_TOKEN" ]] || fl_die "The app add plan changed since it was shown (apps.txt, apps/, the sites or the remote). Nothing was changed." \
-    "Review a fresh plan: benchbar app add ${target} ... --dry-run --json, then pass its token."
+  ap_code=0; fl_plan_token_check "$AP_TOKEN_DATA" "$AP_TOKEN_IN" || ap_code=$?
+  case "$ap_code" in
+    0) ;;
+    2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: benchbar app add ${target} ... --dry-run --json, then pass its token." ;;
+    *) fl_die "The app add plan changed since it was shown (apps.txt, apps/, the sites or the remote). Nothing was changed." \
+      "Review a fresh plan: benchbar app add ${target} ... --dry-run --json, then pass its token." ;;
+  esac
   fl__ap_print_plan
   [[ "$AP_CAN_APPLY" == "1" ]] || fl_die "The plan cannot be applied (see above). Nothing was changed."
   if [[ "${#AP_STEPS[@]}" == "0" ]]; then

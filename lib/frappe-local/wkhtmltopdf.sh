@@ -9,10 +9,22 @@
 # Intel only binary (checked: the Mach-O is x86_64), so on Apple Silicon
 # it needs Rosetta 2. Installing the package itself needs sudo once.
 #
+# There is no Apple Silicon build to offer instead: github.com/wkhtmltopdf/
+# packaging has published one macOS package ever (0.12.6-2, June 2020, the
+# Intel one pinned here; its releases since 2022 are Linux only), the project
+# is archived, and Homebrew's wkhtmltopdf is the unpatched build that crashes
+# on Frappe templates. The way out is Chromium (Frappe v16, `chromium_path`),
+# which benchbar already checks; a person who does not want Rosetta 2 can
+# skip this package and lose PDFs from wkhtmltopdf only.
+#
 # fl_wkhtmltopdf_ensure returns 0 when the patched build is present or was
 # installed, 1 when it is not there and the user skipped it (PDFs will not
 # work; the bench itself is fine).
 
+# the folder the package is downloaded to and the file the package installs:
+# what sudo reads and what the check trusts are never taken from the
+# environment, but by the tests (FL_TESTING=1, which tests/lib/harness.sh sets)
+if [[ "${FL_TESTING:-0}" != "1" ]]; then FL_WKHTML_DOWNLOAD_DIR=""; FL_WKHTML_PKG_BIN=""; fi
 FL_WKHTML_DOWNLOAD_DIR="${FL_WKHTML_DOWNLOAD_DIR:-${FL_STATE_DIR}/downloads}"
 # where the official package puts its binary
 FL_WKHTML_PKG_BIN="${FL_WKHTML_PKG_BIN:-/usr/local/bin/wkhtmltopdf}"
@@ -84,6 +96,17 @@ fl_wkhtmltopdf_state() {
   if fl__wk_text_patched "$raw"; then printf 'patched'; elif [[ -n "$raw" ]]; then printf 'unpatched'; else printf 'missing'; fi
 }
 
+# fl_wkhtmltopdf_arch_note: before anything is installed on Apple Silicon,
+# says what the package is and what it needs (printed once per run).
+FL_WKHTML_ARCH_NOTED=0
+fl_wkhtmltopdf_arch_note() {
+  [[ "$FL_WKHTML_ARCH_NOTED" == "0" ]] || return 0
+  FL_WKHTML_ARCH_NOTED=1
+  fl_is_linux && return 0
+  [[ "${FL_ARCH:-$(uname -m)}" == "arm64" ]] || return 0
+  fl_note "wkhtmltopdf has no Apple Silicon build: the official patched package is Intel only and runs under Rosetta 2. No newer macOS package exists (the project is archived), and Homebrew's build is not patched. Frappe v16 can print PDFs with Chromium instead."
+}
+
 fl_rosetta_installed() {
   [[ "${FL_ARCH:-$(uname -m)}" == "arm64" ]] || return 0
   arch -x86_64 /usr/bin/true >/dev/null 2>&1
@@ -127,14 +150,14 @@ fl_wkhtmltopdf_download() {
     return 0
   fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-    fl_info "dry-run: curl -fL -o ${dest} ${FL_WKHTML_URL}"
+    fl_info "dry-run: curl -fL --proto =https --tlsv1.2 -o ${dest} ${FL_WKHTML_URL}"
     fl_info "dry-run: verify sha256 ${FL_WKHTML_SHA256}"
     return 0
   fi
   mkdir -p "$FL_WKHTML_DOWNLOAD_DIR"
   rm -f "$dest"
   # the stream's progress lines read the size of the file being written
-  FL_PROGRESS_FILE="${dest}.part" fl_run_long "download wkhtmltopdf ${FL_WKHTML_VERSION} (about 50 MB)" curl -fL --retry 3 -o "${dest}.part" "$FL_WKHTML_URL" || return 1
+  FL_PROGRESS_FILE="${dest}.part" fl_run_long "download wkhtmltopdf ${FL_WKHTML_VERSION} (about 50 MB)" curl -fL --proto '=https' --tlsv1.2 --retry 3 -o "${dest}.part" "$FL_WKHTML_URL" || return 1
   sum="$(fl_sha256_of "${dest}.part")"
   if [[ "$sum" != "$FL_WKHTML_SHA256" ]]; then
     rm -f "${dest}.part"
@@ -168,19 +191,19 @@ fl_wkhtmltopdf_install() {
     fl_info "dry-run: sudo rm -rf <that folder>"
     return 0
   fi
-  root_dir="$(sudo mktemp -d "$FL_WKHTML_ROOT_TMP_TEMPLATE" 2>/dev/null || true)"
+  root_dir="$(sudo "$(fl_root_tool mktemp)" -d "$FL_WKHTML_ROOT_TMP_TEMPLATE" 2>/dev/null || true)"
   case "$root_dir" in
     /tmp/benchbar-wkhtmltopdf.*) ;;
     *) fl_fail "could not create a root owned folder for the package (sudo mktemp -d ${FL_WKHTML_ROOT_TMP_TEMPLATE})"; return 1 ;;
   esac
   root_pkg="${root_dir}/${FL_WKHTML_FILE}"
   fl_log "run: sudo install -m 0644 -o root ${FL_WKHTML_PKG} ${root_pkg}"
-  if ! sudo install -m 0644 -o root "$FL_WKHTML_PKG" "$root_pkg"; then
+  if ! sudo "$(fl_root_tool install)" -m 0644 -o root "$FL_WKHTML_PKG" "$root_pkg"; then
     fl_fail "could not copy ${FL_WKHTML_FILE} into ${root_dir}"
     code=1
   else
     # the hash of the copy root will install, taken by root
-    sum="$(sudo shasum -a 256 "$root_pkg" 2>/dev/null | awk '{print $1}')"
+    sum="$(sudo "$(fl_root_tool shasum)" -a 256 "$root_pkg" 2>/dev/null | awk '{print $1}')"
     if [[ "$sum" != "$FL_WKHTML_SHA256" ]]; then
       fl_fail "checksum mismatch on the root owned copy of ${FL_WKHTML_FILE}: got ${sum:-nothing}, pinned ${FL_WKHTML_SHA256}"
       fl_note "nothing was installed; the download in ${FL_WKHTML_DOWNLOAD_DIR} is discarded"
@@ -188,11 +211,11 @@ fl_wkhtmltopdf_install() {
       code=1
     else
       fl_ok "root owned copy verified (sha256 ok)"
-      fl_run_long "installer -pkg ${FL_WKHTML_FILE}" sudo installer -pkg "$root_pkg" -target / || code=1
+      fl_run_long "installer -pkg ${FL_WKHTML_FILE}" sudo "$(fl_root_tool installer)" -pkg "$root_pkg" -target / || code=1
     fi
   fi
   fl_log "run: sudo rm -rf ${root_dir}"
-  sudo rm -rf "$root_dir" 2>/dev/null || fl_warn "could not remove ${root_dir}; run: sudo rm -rf ${root_dir}"
+  sudo "$(fl_root_tool rm)" -rf "$root_dir" 2>/dev/null || fl_warn "could not remove ${root_dir}; run: sudo rm -rf ${root_dir}"
   [[ "$code" == "0" ]] || return 1
   hash -r 2>/dev/null || true
   case "$(fl_wkhtmltopdf_state)" in
@@ -312,6 +335,7 @@ fl_wkhtmltopdf_ensure() {
     fl_warn "wkhtmltopdf is not installed (Frappe needs it for PDF printing)"
   fi
   fl_wkhtmltopdf_pin || return 1
+  fl_wkhtmltopdf_arch_note
   if fl_is_linux && [[ -z "$(fl_wkhtmltopdf_deb_arch)" ]]; then
     fl_warn "PDF printing is not set up on ${FL_ARCH:-$(uname -m)}: the official wkhtmltopdf package is built for x86_64 and arm64 only. Everything else works."
     fl_fix "print PDFs from a machine that has the package, or install a patched wkhtmltopdf by hand"

@@ -178,7 +178,11 @@ without an entry counts as 10 seconds, so a new test needs no entry to run.
   commit and pull request text: a colon, a comma or a new sentence does
   the work.
 - **Commits** have an imperative subject ("Add", "Fix", "Read") and a
-  body that says why.
+  body that says why. The squash merge title is a plain imperative
+  sentence that ends in the pull request number, for example `Fix the
+  port check for a stopped bench (#123)`. No tool trailers in a commit or
+  a pull request: no `Co-Authored-By` for a tool and no "Generated with"
+  line. The reviewer checks the title before merging.
 
 The pull request template asks for all of this as checkboxes. A docs only
 fix (a typo, a wrong sentence) may go to `main` instead of `next-release`

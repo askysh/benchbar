@@ -33,7 +33,9 @@ fl_cmd_console() {
 }
 
 fl_cmd_db() {
-  [[ "$#" == 0 ]] || fl_die "Unknown argument for db: $1" "Use: benchbar db [--site NAME]"
+  # db orphans: the databases no site refers to (lifecycle.sh); read only, needs the root password
+  if [[ "${1:-}" == "orphans" ]]; then shift; [[ "$#" == 0 ]] || fl_die "Unknown argument for db orphans: $1" "Use: benchbar db orphans [--json]"; fl_cmd_db_orphans; return; fi
+  [[ "$#" == 0 ]] || fl_die "Unknown argument for db: $1" "Use: benchbar db [--site NAME] | benchbar db orphans [--json]"
   fl_console_prepare db
   fl_info "bench --site ${FL_SITE} mariadb   (the site's own database user; exit with \\q)"
   exec bench --site "$FL_SITE" mariadb

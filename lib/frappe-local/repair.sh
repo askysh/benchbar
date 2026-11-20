@@ -5,7 +5,7 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry share_resume kept_backups rotate_logs redis_stop"
+FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate dead_agents port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry share_resume kept_backups rotate_logs redis_stop"
 # actions whose check may stay a warning after a run without failing it:
 # the user may decline them (or sudo) on purpose
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
@@ -41,6 +41,7 @@ fl_action_label() {
     mariadb_utf8) printf 'write the utf8mb4 MariaDB drop-in%s%s' "$(fl_is_linux && printf ' (sudo)')" "$(fl_mariadb_restart_note)" ;;
     wkhtmltopdf_install) printf 'install the patched wkhtmltopdf package (sudo)' ;;
     legacy_migrate) printf 'migrate legacy launchd agents' ;;
+    dead_agents) printf 'boot out and move aside the agents whose runner is gone' ;;
     port_block) printf 'move the bench to port block %s (bench set-config, bench setup redis)' "${FL_PORT_TARGET:-?}" ;;
     write_procfile) printf 'write Procfile.lean' ;;
     write_runner) printf 'write the runner script' ;;
@@ -257,6 +258,25 @@ act_legacy_migrate() {
   return 0
 }
 
+# Boots out and moves aside every loaded benchbar agent whose runner script
+# is gone and whose folder is no bench any more (any bench's agent, as the
+# check lists them). A bench that is still there gets its runner written
+# again by write_runner, or by repair run from its own folder; an agent
+# that runs a script benchbar did not write is never in the list.
+act_dead_agents() {
+  local list plist label dir failed=0
+  list="$(fl_dead_agents_list)"
+  [[ -n "$list" ]] || { FL_STEP_RESULT="unchanged"; return 0; }
+  while IFS='|' read -r plist label dir; do
+    [[ -n "$plist" ]] || continue
+    if [[ -n "$dir" ]] && fl_is_bench_dir "$dir"; then continue; fi
+    fl_info "${label}: ${dir:-no folder} is no bench, its runner is gone"
+    fl_agent_retire "$plist" "$label" || failed=1
+  done <<<"$list"
+  [[ "$failed" == "0" ]] || { fl_fail "a dead agent could not be removed; run benchbar repair again once launchd has let go of it"; return 1; }
+  return 0
+}
+
 # Runs before write_procfile and the runner: fl_ports_apply re-renders them
 # with the new ports.
 act_port_block() {
@@ -433,26 +453,26 @@ fl_hosts_rewrite() {
   shift 2
   # awk's count on both sides: wc -l would miss a last line without a newline
   before="$(awk 'END { print NR }' "$FL_HOSTS_FILE")"
-  if ! sudo env "$@" awk "$prog" "$FL_HOSTS_FILE" | sudo tee "$new" >/dev/null; then
-    sudo rm -f "$new" 2>/dev/null || true
+  if ! sudo "$(fl_root_tool env)" "$@" "$(fl_root_tool awk)" "$prog" "$FL_HOSTS_FILE" | sudo "$(fl_root_tool tee)" "$new" >/dev/null; then
+    sudo "$(fl_root_tool rm)" -f "$new" 2>/dev/null || true
     fl_fail "could not write ${new}; ${FL_HOSTS_FILE} is not written"
     return 1
   fi
-  bad="$(sudo awk 'NF == 0 { next } /^[[:space:]]*#/ { next } $1 ~ /^[0-9A-Fa-f.:]+(%[A-Za-z0-9_.-]+)?\r?$/ { next } { print; exit }' "$new" 2>/dev/null || true)"
-  after="$(sudo awk 'END { print NR }' "$new" 2>/dev/null || printf 'unknown')"
+  bad="$(sudo "$(fl_root_tool awk)" 'NF == 0 { next } /^[[:space:]]*#/ { next } $1 ~ /^[0-9A-Fa-f.:]+(%[A-Za-z0-9_.-]+)?\r?$/ { next } { print; exit }' "$new" 2>/dev/null || true)"
+  after="$(sudo "$(fl_root_tool awk)" 'END { print NR }' "$new" 2>/dev/null || printf 'unknown')"
   if [[ -n "$bad" ]]; then
-    sudo rm -f "$new" 2>/dev/null || true
+    sudo "$(fl_root_tool rm)" -f "$new" 2>/dev/null || true
     fl_fail "${FL_HOSTS_FILE} is not written: the result holds a line that is not 'address names': ${bad}"
     fl_note "fix that line in ${FL_HOSTS_FILE} by hand, then run the command again"
     return 1
   fi
   if [[ "$after" != "$((before + delta))" ]]; then
-    sudo rm -f "$new" 2>/dev/null || true
+    sudo "$(fl_root_tool rm)" -f "$new" 2>/dev/null || true
     fl_fail "${FL_HOSTS_FILE} is not written: expected ${before} + (${delta}) lines, the result has ${after}"
     return 1
   fi
-  sudo chmod 644 "$new" || { sudo rm -f "$new" 2>/dev/null || true; fl_fail "sudo chmod failed; ${FL_HOSTS_FILE} is not written"; return 1; }
-  sudo mv "$new" "$FL_HOSTS_FILE" || { sudo rm -f "$new" 2>/dev/null || true; fl_fail "sudo mv failed; ${FL_HOSTS_FILE} is not written"; return 1; }
+  sudo "$(fl_root_tool chmod)" 644 "$new" || { sudo "$(fl_root_tool rm)" -f "$new" 2>/dev/null || true; fl_fail "sudo chmod failed; ${FL_HOSTS_FILE} is not written"; return 1; }
+  sudo "$(fl_root_tool mv)" "$new" "$FL_HOSTS_FILE" || { sudo "$(fl_root_tool rm)" -f "$new" 2>/dev/null || true; fl_fail "sudo mv failed; ${FL_HOSTS_FILE} is not written"; return 1; }
 }
 
 # BENCHBAR_SUDO=gui: the root side of the /etc/hosts lines as one script
@@ -564,7 +584,7 @@ act_hosts_entry() {
     # shellcheck disable=SC2016  # an awk program
     fl_hosts_rewrite 1 '$0 == ENVIRON["E"] { print ENVIRON["L"] } { print }' "L=${line}" "E=${FL_HOSTS_END}" || return 1
   else
-    printf '\n%s\n%s\n%s\n' "$FL_HOSTS_START" "$line" "$FL_HOSTS_END" | sudo tee -a "$FL_HOSTS_FILE" >/dev/null || { fl_fail "sudo tee failed"; return 1; }
+    printf '\n%s\n%s\n%s\n' "$FL_HOSTS_START" "$line" "$FL_HOSTS_END" | sudo "$(fl_root_tool tee)" -a "$FL_HOSTS_FILE" >/dev/null || { fl_fail "sudo tee failed"; return 1; }
   fi
   fl_hosts_has_site || { fl_fail "${FL_HOSTS_FILE} still has no entry for ${FL_SITE}"; return 1; }
   fl_ok "added '${line}' to ${FL_HOSTS_FILE} (backup: ${FL_LAST_BACKUP:-none})"
@@ -702,8 +722,13 @@ fl_event_step() {
 
 # fl_repair_engine TITLE [GROUP...]: check, plan, confirm, apply, verify.
 # Returns 0 when everything is healthy afterwards, 1 when something failed.
+# FL_ENGINE_ACTION_FAILED: 1 when an action of the last fl_repair_engine run
+# ended failed, 0 when it did not (a run that only has checks left to look at
+# after its verify pass returns 1 as well); install labels its step with it
+FL_ENGINE_ACTION_FAILED=0
 fl_repair_engine() {
   shift
+  FL_ENGINE_ACTION_FAILED=0
   local actions action i n=0 last_sudo rows=() unchanged remaining status labels step_from optional_left="" ids plan_from plan_to
   fl_doctor_run "$@"
   actions=""
@@ -810,6 +835,9 @@ fl_repair_engine() {
       fl_step_end failed
       fl_event_step "$action" failed "$(fl_log_step_message "${step_from:-0}")"
       status=1
+      # an optional action (wkhtmltopdf, the hosts line) that fails is a warning
+      # for the step, not a failed step: the bench and the service are fine
+      case " $FL_OPTIONAL_ACTIONS " in *" $action "*) ;; *) FL_ENGINE_ACTION_FAILED=1 ;; esac
       case "$action" in
         # a legacy agent that is still loaded must not get a second agent for
         # the same bench next to it (two runners, two honchos)

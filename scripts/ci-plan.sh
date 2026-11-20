@@ -53,7 +53,7 @@ INPUT_LEGS="${INPUT_LEGS:-}"
 # share on Linux, and the Linux layer's WSL and sudo tests on macOS
 SKIP_LINUX="test-share test-share-run test-share-admin test-share-preflight test-lan-guard"
 SKIP_BASH32="test-install-linux test-doctor-linux test-systemd test-platform-linux test-share test-share-run test-share-admin test-share-preflight test-lan-guard"
-SKIP_MACOS="test-install-linux test-doctor-linux test-systemd test-platform-linux test-wsl-preflight test-windows-commands test-sudo-env"
+SKIP_MACOS="test-install-linux test-doctor-linux test-systemd test-platform-linux test-wsl-preflight test-install-failures test-windows-commands test-sudo-env"
 # table seconds one shard takes (about 150 s of wall time on its runner) and the most shards
 TARGET_LINUX=600 MAX_LINUX=8
 TARGET_BASH32=600 MAX_BASH32=8
@@ -62,7 +62,7 @@ TARGET_MACOS=900 MAX_MACOS=4
 # the paths a pull request needs macOS for: BSD tools, launchd, the Keychain,
 # pf and the installers. Everything else is the same bash on Linux.
 macos_paths='^(lib/frappe-local/(platform|launchd|lan-guard|mariadb|sudo|wkhtmltopdf|share[a-z-]*)\.sh|lib/frappe-local/share/.*|00-mac-system-deps\.sh|install\.sh|packaging/.*|templates/(launchagent|share)\.plist\.tmpl|tests/test-(platform|lan-guard|share[a-z-]*|hygiene|service|templates|shellrc|install-sh|homebrew|packaging)\.sh)$'
-app_paths='^(macos/.*|examples/.*|scripts/(macos-[a-z-]+|release-local|app-[a-z-]+|ci-annotate)\.sh|scripts/app-[a-z-]+\.py)$'
+app_paths='^(macos/.*|examples/.*|scripts/(macos-[a-z-]+|release-local|app-[a-z-]+|ci-annotate|ci-install-tool)\.sh|scripts/app-[a-z-]+\.py)$'
 shim_paths='^(windows/shim/.*|lib/frappe-local/commands\.sh)$'
 ci_paths='^(\.github/workflows/ci\.yml|scripts/ci-plan\.sh)$'
 docs_paths='^(docs/.*|site/.*|.*\.md|LICENSE)$'

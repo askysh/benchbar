@@ -24,6 +24,40 @@
 # does those steps first and drops; a phase script that needs sudo on its
 # own asks itself and drops after.
 
+# fl_root_tool NAME: the absolute path of a tool that runs under sudo on macOS.
+# macOS's sudo looks a bare name up in the PATH of the user, which holds folders
+# the user (and any program that runs as the user) can write: a planted
+# ~/.local/bin/shasum would run as root. Every command a sudo here runs is
+# named by path, as the GUI path's root scripts do. The tests' sudo mock maps
+# these paths to its mocks and records whether a tool was named by path.
+fl_root_tool() {
+  case "$1" in
+    installer|softwareupdate) printf '/usr/sbin/%s' "$1" ;;
+    rm|mv|chmod) printf '/bin/%s' "$1" ;;
+    *) printf '/usr/bin/%s' "$1" ;;
+  esac
+}
+
+# The sudo program itself, on macOS, is found by its path too. A bare "sudo"
+# would be looked up in the PATH of the user, and a planted ~/.local/bin/sudo
+# would read the password prompt. So "sudo" is a function here that runs
+# /usr/bin/sudo, and no call site changes. Only a test (FL_TESTING=1, which
+# tests/lib/harness.sh sets) can name another program in FL_SUDO_BIN, the
+# sudo mock. Linux keeps the PATH lookup: Ubuntu's sudo has a secure_path, and
+# the BENCHBAR_SUDO=env wrapper below sets its own FL_SUDO_BIN.
+fl__sudo_is_macos() {
+  case "${FL_PLATFORM:-}" in
+    linux) return 1 ;;
+    macos) return 0 ;;
+  esac
+  [[ "${OSTYPE:-}" != linux* ]]
+}
+if fl__sudo_is_macos; then
+  if [[ "${FL_TESTING:-0}" == "1" ]]; then FL_SUDO_BIN="${FL_SUDO_BIN:-/usr/bin/sudo}"; else FL_SUDO_BIN=/usr/bin/sudo; fi
+  # shellcheck disable=SC2329  # the callers run it as "sudo"
+  sudo() { "${FL_SUDO_BIN}" "$@"; }
+fi
+
 # BENCHBAR_SUDO=gui (the BenchBar app sets it): the root steps run
 # through osascript's administrator dialog instead of sudo, see fl_root_run.
 # BENCHBAR_SUDO=env (Linux, the Windows tray sets it) with the password in

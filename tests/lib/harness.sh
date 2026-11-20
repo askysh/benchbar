@@ -46,6 +46,8 @@ export FL_LOCAL_PROBES=0
 # every FL_* and BENCHBAR_* test seam below is read only when this is 1;
 # a production run ignores them (docs/DECISIONS.md)
 export FL_TESTING=1
+# the sudo function (lib/frappe-local/sudo.sh) runs this program: the mock
+export FL_SUDO_BIN="$ROOT/tests/mocks/bin/sudo"
 export FL_KILL_CMD=mockkill
 export BENCHBAR_KILL_CMD=mockkill
 export FL_APP_DIRS="$HOME/Applications"
@@ -70,6 +72,11 @@ export BENCHBAR_APP_PID=4200 FL_PERSON_SELF_PID=4201
 mkdir -p "$HOME/Library/LaunchAgents" "$MOCK_STATE/agents" "$FL_STATE_DIR" "$MOCK_BREW_PREFIX/etc/my.cnf.d" \
   "$MOCK_BREW_PREFIX/opt/python@3.11/bin" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin" "$HOME/.local/bin"
 : >"$MOCK_LOG"; : >"$MOCK_PROCS"; : >"$MOCK_LISTEN"; : >"$MOCK_BREW_SERVICES"
+# the plan token key: a real install makes it at its first plan; made here so a
+# test that checks "a dry run writes nothing" is not the first plan
+(umask 077; printf '%s\n' 5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed >"$FL_STATE_DIR/plan-key")
+# a fixed plan clock, so two plans of one test never straddle a token window
+export FL_PLAN_NOW=1795000000
 # 50 GB free on every volume (the df mock): the installer's 10 GB check must
 # not depend on the runner's disk, which is sometimes below it. A test of
 # the check writes its own value.
@@ -142,7 +149,7 @@ use_all_mocks() { PATH="$SAVED_PATH"; }
 # use_linux: the CLI sees Ubuntu on x86_64 under WSL. Call it right after
 # sourcing this file, before any CLI run (or set BENCHBAR_TEST_PLATFORM=linux
 # before sourcing). Sets FL_PLATFORM, MOCK_UNAME, FL_PROC_VERSION (mentions
-# microsoft), FL_PROC_DIR (add_proc's third argument is /proc/PID/cwd),
+# microsoft), FL_WSLINFO (the wslinfo mock), FL_PROC_DIR (add_proc's third argument is /proc/PID/cwd),
 # FL_OS_RELEASE, XDG_CONFIG_HOME with the systemd user unit folder, SHELL and
 # FL_RC_FILE (bash), a fake uv Python and fnm Node (the mocks copied to where
 # fl_python_bin and fl_node_bin look) and the apt package set dpkg-query reads.
@@ -153,6 +160,8 @@ use_linux() {
   mkdir -p "$FL_PROC_DIR"
   printf 'Linux version 6.6.0-microsoft-standard-WSL2 (root@build) (gcc) #1 SMP\n' >"$FL_PROC_VERSION"
   printf 'NAME="Ubuntu"\nID=ubuntu\nID_LIKE=debian\nVERSION_ID="24.04"\n' >"$FL_OS_RELEASE"
+  # wslinfo: the mock's networking mode (MOCK_WSL_NETMODE, mirrored unless a test says nat), never this machine's
+  export FL_WSLINFO="$ROOT/tests/mocks/bin/wslinfo"
   export XDG_CONFIG_HOME="$HOME/.config"
   unset XDG_STATE_HOME XDG_DATA_HOME UV_PYTHON_INSTALL_DIR FNM_DIR 2>/dev/null || true
   mkdir -p "$XDG_CONFIG_HOME/systemd/user"
