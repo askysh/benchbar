@@ -103,6 +103,7 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 | `MARIADB_ROOT_PASSWORD` | `install`, `site add`, `pull` | The MariaDB root password. A fresh MariaDB gets a generated one when unset; an existing one is read from the Keychain |
 | `ADMIN_PASSWORD` | `install`, `site add`, `pull` | The Administrator password of a new site; for `pull`, a new Administrator password for the copy |
 | `BENCHBAR_PROFILE_PATH` | `--profile`, `profile` | Colon separated folders with team profiles, for example a clone of your team's config repo |
+| `BENCHBAR_ALLOW_LOCAL_REPOS` | `profile`, `lock` | `1` lets a profile or lock name a `file://` URL or an absolute path as a `repo`. Off by default: only `https://`, `ssh://` and `user@host:path` are read. The tests set it |
 | `BENCHBAR_OFFLINE` | `install`, `profile`, doctor | `BENCHBAR_OFFLINE=1`: no network for team profiles, and no remote branch checks in `install`; reachability is `null` and doctor does not fetch subscriptions |
 | `BENCHBAR_LOCK` | `lock`, doctor | The lockfile path, when `--lock` is not given |
 | `BENCH_DIR` | every command | The bench to act on when `--bench-dir` is not given; checked before the remembered bench |
