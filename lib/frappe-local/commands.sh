@@ -23,12 +23,14 @@
 # are polled and start no process, and `cat` is one.
 read -r -d '' FL_CMD_TABLE <<'TABLE' || true
 cmd~install~benchbar install [--profile NAME] [--bundle NAME] [--dry-run] [--yes] [--json]~Phase 00 (system dependencies), 01 (bench and site) and the background service, idempotent.~yes~yes~yes~yes~stream
+flag~install~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~install~--profile~NAME~Release profile (default v15-lts) or a team profile.
 flag~install~--bundle~NAME~App bundle: minimal, common or extended.
 flag~install~--port-offset~N~Use port block N (web 8000+N).
 flag~install~--make-default~~Make this the default bench even when another one is.
 flag~install~--repair-bench~~Move a bench folder that is incomplete aside and start over (never one that holds a site). With --dry-run it shows the move.
 flag~install~--allow-windows-fs~~WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p). It is refused by default: slow, no file watching, broken permissions.
+flag~install~--allow-unsupported-distro~~Linux only: try a system other than Ubuntu 24.04, the one the install is tested on and supports. Without it the install stops before it installs any package.
 flag~install~--offline~~Skip the remote branch checks.
 flag~install~--frappe-commit~SHA~Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile).
 flag~install~--erpnext-commit~SHA~Pin the erpnext clone to this commit.
@@ -66,21 +68,27 @@ flag~doctor~--unack~CHECK~Undo --ack.
 flag~doctor~--prerequisites~~What this machine needs before an install, no bench needed.
 flag~doctor~--fetch~~git fetch the branches of the apps your focus apps need first.
 cmd~repair~benchbar repair [--dry-run] [--yes] [--json]~Apply only the fixes doctor flagged, in dependency order.~yes~yes~yes~yes~stream
+flag~repair~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~repair~--dry-run~~Print the plan, change nothing.
 flag~repair~--yes~~Do not ask.
 env~repair~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~repair~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
-cmd~status~benchbar status [--json] [--ping]~State, pid, stop reason, site ping.~no~no~no~no~document
+cmd~status~benchbar status [--json] [--ping] [--deep]~State, pid, stop reason, site ping, and with --json the ready object (is the bench ready to serve).~no~no~no~no~document
 env~status~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 flag~status~--ping~~Ask every site, not only the default one.
+flag~status~--deep~~Also ask the ready parts that start programs: workers (pgrep, lsof) and stale (find: a Python file under apps/ changed after the bench started). Without it ready.workers and ready.stale are null.
 cmd~list~benchbar list [--json]~Every bench benchbar knows about. Never pings a site.~no~no~no~no~document
 env~list~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~scan~benchbar scan PATH [--json]~Find benches recursively in a folder (read only).~no~no~no~no~document
-cmd~register~benchbar register PATH...~Remember selected benches without changing their services.~no~no~no~yes~none
+cmd~register~benchbar register PATH...~Remember selected benches without changing their services.~no~no~no~yes~document
 cmd~up~benchbar up [--services-only] [--json]~Start the bench in the background.~yes~no~no~yes~stream
 flag~up~--services-only~~Start only the bench's Redis (for a restore or a migrate); down stops it.
 cmd~down~benchbar down [--json]~Stop the bench and keep it stopped across reboots.~no~no~no~yes~stream
 cmd~restart~benchbar restart [--json]~Restart the bench, for example after changing Python code.~yes~no~no~yes~stream
+cmd~wait~benchbar wait [--ready] [--for PART] [--timeout SECS] [--json]~Block until the bench is ready (agent loaded, processes, site ping 2xx or 3xx, socketio, Redis, a worker, no Python file changed since the start), or until one part is. Exit 0 ready, 1 not ready in time, with what is missing and the fix. Reads only, starts nothing.~no~no~no~no~document
+flag~wait~--ready~~Wait for every part (the default).
+flag~wait~--for~PART~Wait for one part only: agent, processes, web, socketio, redis, workers or stale.
+flag~wait~--timeout~SECS~Give up after SECS seconds, 0 to 3600 (default 60). 0 checks once.
 cmd~logs~benchbar logs [-nN] [--worker|--worker-error|--previous] [--process NAME] [--since TIMESTAMP] [--since-restart] [--no-follow] [--json]~Tail logs/bench.log.~no~no~no~no~document
 flag~logs~--worker~~Read logs/worker.log.
 flag~logs~--worker-error~~Read logs/worker.error.log.
@@ -89,11 +97,12 @@ flag~logs~--process~NAME~web, socketio, schedule or worker.
 flag~logs~--since~TIMESTAMP~Only lines at or after it (--json; ISO 8601, or HH:MM:SS today).
 flag~logs~--since-restart~~Only lines after the bench's last start (--json).
 flag~logs~--no-follow~~Print and exit.
+flag~logs~-n~N~The last N lines (default 50); -nN, or a bare number, also works.
 cmd~fg~benchbar fg~Stop the service and run honcho in the foreground.~yes~no~no~yes~none
 cmd~watch~benchbar watch~Run bench watch for asset rebuilds.~no~no~no~no~none
-cmd~autostart~benchbar autostart [on|off]~Whether the bench may come back after login.~no~no~no~yes~none
-cmd~listen~benchbar listen [local|all] [--dry-run] [--yes]~Where the bench's web server and socketio listen: local is 127.0.0.1 only (the default), all is every interface. Stored per bench, applied to Procfile.lean; restart the bench to use it. all is a person's decision and is refused without a terminal.~yes~no~no~yes~none
-cmd~uninstall-service~benchbar uninstall-service [--all] [--yes] [--dry-run]~Remove the agent, runner, Procfile.lean and shell helpers.~yes~no~no~yes~none
+cmd~autostart~benchbar autostart [on|off]~Whether the bench may come back after login.~no~no~no~yes~stream
+cmd~listen~benchbar listen [local|all] [--dry-run] [--yes]~Where the bench's web server and socketio listen: local is 127.0.0.1 only (the default), all is every interface. Stored per bench, applied to Procfile.lean; restart the bench to use it. all is a person's decision and is refused without a terminal.~yes~no~no~yes~stream
+cmd~uninstall-service~benchbar uninstall-service [--all] [--yes] [--dry-run]~Remove the agent, runner, Procfile.lean and shell helpers.~yes~no~no~yes~stream
 flag~uninstall-service~--all~~Every bench with a benchbar agent, after one question.
 flag~uninstall-service~--yes~~Do not ask; required without a terminal.
 cmd~path~benchbar path~Print the bench directory.~no~no~no~no~none
@@ -116,6 +125,7 @@ flag~users~--search~TEXT~Only users whose id or full name contains TEXT.
 flag~users~--limit~N~At most N users (1 to 500, default 50).
 flag~users~--json~~One JSON document.
 cmd~pull~benchbar pull HOST:SITE [--as NAME] [--from-dir DIR] [--replace] [--dry-run|--apply TOKEN --yes] [--json]~Copy a production site over SSH into a new local site.~yes~no~yes~yes~stream
+flag~pull~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~pull~--as~NAME~Local site name (default SITE.local).
 flag~pull~--from-dir~DIR~A backup set downloaded by hand, no SSH.
 flag~pull~--remote-bench~DIR~The bench folder on the server.
@@ -134,7 +144,9 @@ flag~pull~--apply~TOKEN~Run exactly that plan (with --yes); refused when the pla
 env~pull~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~report~benchbar report [--print] [--json]~Redacted diagnostics zip on the Desktop for bug reports.~no~no~no~no~document
 flag~report~--print~~Print to the terminal instead of writing the zip.
+flag~report~--out~DIR~Write the zip into this folder (default: the Desktop).
 cmd~docs~benchbar docs [TOPIC] [--print]~Open the documentation, or one topic's page.~no~no~no~no~none
+flag~docs~--print~~Print the page's address instead of opening it.
 cmd~self-update~benchbar self-update [--check] [--dry-run] [--json]~Update the benchbar CLI and the BenchBar app.~yes~no~yes~yes~document
 flag~self-update~--check~~This version against the latest.
 cmd~where~benchbar where [--json]~How this CLI was installed, its state folder and the app.~no~no~no~no~document
@@ -144,21 +156,30 @@ flag~mcp~--print-agents-md~~Print a snippet for a project's AGENTS.md or CLAUDE.
 flag~mcp~--calls~[N]~Print the last N (default 50) lines of the audit log of MCP calls (mcp-calls.jsonl in the state folder) and exit.
 flag~mcp~--allow-bench~PATH~Let the changing tools act on this bench folder although benchbar does not know it (repeatable; the environment variable BENCHBAR_MCP_ALLOW_BENCH holds a : separated list). A person's choice, never a tool argument.
 env~mcp~BENCHBAR_MCP_APPLY_DELAY~Seconds a plan must have been returned before its apply is accepted (default 5; 0 turns the wait off).
+cmd~op~benchbar op status|list|wait ...~The long runs: every run that changes things has an op_id (in its plan, step, progress and done lines) and a record that benchbar remembers (the newest 100).~no~no~no~no~none
+cmd~op status~benchbar op status [OP_ID] [--json]~One operation (its command, bench, site, state, last step, last progress, exit, log), or the ten newest. A run that died without a done line is interrupted. --json adds the run's done line as result once it ended.~no~no~no~no~document
+cmd~op list~benchbar op list [--running] [--limit N] [--json]~The operations, newest first.~no~no~no~no~document
+flag~op list~--running~~Only the ones that run now.
+flag~op list~--limit~N~At most N (1 to 100, default 20).
+cmd~op wait~benchbar op wait OP_ID [--timeout SECS] [--json]~Wait until the operation is not running, then print it. Exit 0 when it ended with exit 0, else 1 (failed, interrupted or still running at the timeout: --json says which).~no~no~no~no~document
+flag~op wait~--timeout~SECS~Give up after SECS seconds (the operation goes on); default: wait for it.
 cmd~help~benchbar help~The global help text.~no~no~no~no~none
 cmd~commands~benchbar commands --json~This table: every command, flag and environment variable.~no~no~no~no~document
+env~commands~BENCHBAR_LENIENT_FLAGS~Applies to every command: 1 turns the error for an unknown option (exit 64) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real.
 env~commands~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~ports~benchbar ports plan|setup|apply|check|mode ...~Port allocation for several benches.~no~no~no~no~none
 cmd~ports plan~benchbar ports plan [--json] -- PATH ...~Read only preview of the allocation and its approval token.~no~no~no~no~document
-cmd~ports setup~benchbar ports setup [--dry-run] -- PATH ...~Preview, confirm once, then apply.~yes~yes~no~yes~none
+cmd~ports setup~benchbar ports setup [--dry-run] -- PATH ...~Preview, confirm once, then apply.~yes~yes~no~yes~stream
 cmd~ports apply~benchbar ports apply TOKEN --yes [--json] -- PATH ...~Apply a reviewed plan; refuses a stale token.~no~yes~no~yes~stream
 flag~ports apply~--yes~~Required: the plan was reviewed.
 env~ports apply~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~ports apply~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
 cmd~ports check~benchbar ports check [--json]~Port conflicts of the bench.~no~no~no~no~document
-cmd~ports mode~benchbar ports mode automatic|fixed~Keep automatic or fixed ports for the bench.~no~no~no~yes~none
+cmd~ports mode~benchbar ports mode automatic|fixed~Keep automatic or fixed ports for the bench.~no~no~no~yes~stream
 cmd~site~benchbar site list|add|default|hosts|backup|backups|restore|drop|open-as ...~The sites of a bench.~no~no~no~no~none
 cmd~site list~benchbar site list [--json]~The bench's sites; the default one is what benchup waits for.~no~no~no~no~document
 cmd~site add~benchbar site add NAME [--bundle NAME|--apps "a b"] [--dry-run|--apply TOKEN] [--yes] [--json]~bench new-site, the hosts line and apps from apps/. The default site stays.~yes~yes~no~yes~stream
+flag~site add~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site add~--bundle~NAME~App bundle to install.
 flag~site add~--apps~"a b"~Apps of apps/ to install.
 flag~site add~--dry-run~~Print the plan and its token, change nothing.
@@ -223,6 +244,8 @@ flag~share remove~--new-code~~Also draw a new room code, for when the person is 
 flag~share remove~--yes~~Do not ask first.
 flag~share remove~--json~~JSON lines: done, with removed, new_code and the wipe.
 cmd~share revoke~benchbar share revoke ID [--new-code] [--yes] [--json]~Another name for share remove.~yes~no~no~yes~stream
+flag~share revoke~--new-code~~As share remove --new-code.
+flag~share revoke~--yes~~Do not ask first.
 flag~share revoke~--json~~As share remove --json.
 cmd~share assign~benchbar share assign ID SEAT_ID [--json]~Move a person in the room to another free seat; the old seat's sessions end first.~no~no~no~yes~stream
 flag~share assign~--json~~JSON lines: done, with the device and its new seat.
@@ -237,24 +260,26 @@ flag~share open-as~--json~~One document without the link (never the session).
 cmd~share teardown~benchbar share teardown [--yes] [--json]~Stop sharing, drop the copy (backed up first), and delete the share folder with the host identity and the room; the Time Machine exclusions go too. Asks first (--yes); only a person runs it.~yes~no~no~yes~stream
 flag~share teardown~--yes~~Do not ask first.
 flag~share teardown~--json~~JSON lines: steps, done with copy_dropped, archived_path and state_removed.
-cmd~lan-guard~benchbar lan-guard install|status|remove|allow-node ...~The LAN guard: a pf anchor (com.apple/250.benchbar) that refuses the bench ports (8000:8099 9000:9099 11000:11099 13000:13099 3306) to anything but this Mac, and the firewall allow for the share gateway's node.~yes~yes~no~yes~stream
-cmd~lan-guard install~benchbar lan-guard install [--dry-run] [--yes] [--json]~Write the pf anchor and the launch daemon that loads it at boot, with sudo once, then probe the block from the LAN address. Unchanged, with no sudo, when the guard already matches. A person's decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal unless BENCHBAR_SUDO=gui.~yes~yes~no~yes~stream
+cmd~lan-guard~benchbar lan-guard install|status|remove|allow-node ...~The LAN guard: on macOS a pf anchor (com.apple/250.benchbar), on Linux an nftables table (inet benchbar), that refuses the bench ports (8000:8099 9000:9099 11000:11099 13000:13099 3306) to anything but this machine, and on macOS the firewall allow for the share gateway's node.~yes~yes~no~yes~stream
+cmd~lan-guard install~benchbar lan-guard install [--dry-run] [--yes] [--json]~Write the pf anchor and the launch daemon (macOS), or the nftables rules file and the systemd unit (Linux), that load it at boot, with sudo once, then probe the block from the LAN address. Unchanged, with no sudo, when the guard already matches. A person's decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal (macOS: unless BENCHBAR_SUDO=gui).~yes~yes~no~yes~stream
 flag~lan-guard install~--dry-run~~Print what would be written and run, with no sudo.
 flag~lan-guard install~--yes~~Do not ask first (sudo still asks for the password).
 flag~lan-guard install~--json~~JSON lines: done, with state, active, ports, anchor and lan_ip.
-cmd~lan-guard status~benchbar lan-guard status [--json]~Whether the guard is installed, missing or outdated, and whether the bench ports are refused on this Mac's LAN address (a probe with its own listener). Reads only; never refused.~no~no~no~no~document
+cmd~lan-guard status~benchbar lan-guard status [--json]~Whether the guard is installed, missing or outdated, and whether the bench ports are refused on this machine's LAN address (a probe with its own listener). Reads only; never refused.~no~no~no~no~document
 flag~lan-guard status~--json~~One document: state, active (null with no LAN address), ports, anchor, lan_ip.
-cmd~lan-guard remove~benchbar lan-guard remove [--yes] [--json]~Unload and delete the pf anchor and its daemon, with sudo once. Sharing refuses to start without them. Asks first.~yes~yes~no~yes~stream
+cmd~lan-guard remove~benchbar lan-guard remove [--yes] [--json]~Unload and delete the pf anchor and its daemon (macOS), or the nftables table, its systemd unit and its rules file (Linux, nothing else in nftables), with sudo once. Sharing refuses to start without them. Asks first.~yes~yes~no~yes~stream
 flag~lan-guard remove~--yes~~Do not ask first.
 flag~lan-guard remove~--json~~JSON lines: done, with the guard's state.
-cmd~lan-guard allow-node~benchbar lan-guard allow-node [--yes] [--json]~Add the realpath of the node the share gateway runs on to the macOS firewall's allowed apps, with sudo once. Unchanged when the firewall is off or already allows it; needed again after a Homebrew upgrade of node.~yes~yes~no~yes~stream
+cmd~lan-guard allow-node~benchbar lan-guard allow-node [--yes] [--json]~Add the realpath of the node the share gateway runs on to the macOS firewall's allowed apps, with sudo once. Unchanged when the firewall is off or already allows it; needed again after a Homebrew upgrade of node. macOS only: refused on Linux.~yes~yes~no~yes~stream
 flag~lan-guard allow-node~--yes~~Do not ask first.
 flag~lan-guard allow-node~--json~~JSON lines: done, with node (the realpath).
-cmd~site hosts~benchbar site hosts~Add a 127.0.0.1 line for every site to /etc/hosts.~yes~yes~no~yes~none
+cmd~site hosts~benchbar site hosts~Add a 127.0.0.1 line for every site to /etc/hosts.~yes~yes~no~yes~stream
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
+flag~site backup~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site backup~--with-files~~Include the uploads.
 cmd~site backups~benchbar site backups NAME [--json]~The site's backups, newest first.~no~no~no~no~document
 cmd~site restore~benchbar site restore NAME --from STAMP|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes~Restore a local backup set into a site (a new one with --new), after a backup of the target; a reviewed plan.~no~yes~no~yes~document
+flag~site restore~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site restore~--from~STAMP|PATH~The backup set: its stamp in the target's (or --from-site's) backup folder, or the database file's path.
 flag~site restore~--from-site~S~Read the stamp from this site's backups.
 flag~site restore~--new~~Create the site (bench new-site) first.
@@ -271,7 +296,9 @@ flag~site drop~--dry-run~~Print the plan, change nothing.
 env~site drop~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~app~benchbar app list|add|install|update|focus|unfocus ...~The apps of a bench.~no~no~no~no~none
 cmd~app list~benchbar app list [--json] [--no-sites]~Every app: branch, commit, local changes, the sites that have it.~no~no~no~no~document
+flag~app list~--no-sites~~Leave out the sites that have each app (faster).
 cmd~app add~benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME|URL ...] [--site S|--all-sites] --dry-run --json, then --apply TOKEN --yes~bench get-app from config/apps.tsv or any git URL, as a reviewed plan.~no~no~yes~yes~document
+flag~app add~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~app add~--branch~B~Branch or tag.
 flag~app add~--name~N~The app's package name.
 flag~app add~--commit~SHA~Pin the app to this commit (7 to 40 hex characters).
@@ -280,29 +307,48 @@ flag~app add~--site~S~Install it on this site.
 flag~app add~--all-sites~~Install it on every site.
 flag~app add~--dry-run~~Print the plan and its token.
 flag~app add~--apply~TOKEN~Run exactly that plan (with --yes).
-cmd~app install~benchbar app install NAME --site S~Install an app of the bench on a site.~no~no~no~yes~none
+cmd~app install~benchbar app install NAME --site S~Install an app of the bench on a site.~no~no~no~yes~stream
 cmd~app update~benchbar app update NAME [--skip-backup] [--dry-run] [--json]~Fast forward one app with a changelog first, back up its sites, migrate, build.~yes~no~yes~yes~stream
+flag~app update~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~app update~--skip-backup~~Migrate without a backup first.
 flag~app update~--dry-run~~Print the plan as one JSON document with --json.
 flag~app update~--discard-pending~~Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs.
 cmd~app focus~benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]~Focus apps: the ones you work on.~no~no~no~no~document
-cmd~app unfocus~benchbar app unfocus NAME~Pin NAME as not a focus app.~no~no~no~yes~none
+flag~app focus~--list~~List the focus apps (the default without a name).
+flag~app focus~--auto~~With NAME: let benchbar decide again (undo a pin).
+flag~app focus~--fetch~~git fetch the branches of the focus apps first.
+cmd~app unfocus~benchbar app unfocus NAME~Pin NAME as not a focus app.~no~no~no~yes~document
 cmd~lock~benchbar lock write|check|apply ...~The team lockfile benchbar.toml.~no~no~no~no~none
-cmd~lock write~benchbar lock write [--lock PATH] [--no-commits] [--allow-dirty]~Write benchbar.toml from this bench.~yes~no~no~yes~none
+cmd~lock write~benchbar lock write [--lock PATH] [--no-commits] [--allow-dirty]~Write benchbar.toml from this bench.~yes~no~no~yes~stream
+flag~lock write~--lock~PATH~Write this lockfile, and remember it for this bench.
+flag~lock write~--no-commits~~Leave the commit hashes out (branches only).
+flag~lock write~--allow-dirty~~Write it although an app has local changes.
 cmd~lock check~benchbar lock check [--json]~Compare the bench with benchbar.toml. Exit 1 on any difference.~no~no~no~no~document
-cmd~lock apply~benchbar lock apply~Clone missing apps, switch branches, fast forward to pinned commits.~yes~no~yes~yes~none
+flag~lock check~--lock~PATH~Compare with this lockfile, and remember it for this bench.
+cmd~lock apply~benchbar lock apply~Clone missing apps, switch branches, fast forward to pinned commits.~yes~no~yes~yes~stream
+flag~lock apply~--lock~PATH~Apply this lockfile, and remember it for this bench.
 cmd~profile~benchbar profile list|show|create|export|import|subscribe|update|remove|check ...~Team profiles.~no~no~no~no~none
 cmd~profile list~benchbar profile list [--json]~Built in and team profiles.~no~no~no~no~document
 cmd~profile show~benchbar profile show NAME~What a profile installs.~no~no~no~no~none
-cmd~profile create~benchbar profile create NAME --from-bench PATH [--dir DIR]~Write a team profile from a bench.~no~no~no~yes~none
+cmd~profile create~benchbar profile create NAME --from-bench PATH [--dir DIR]~Write a team profile from a bench.~no~no~no~yes~stream
+flag~profile create~--from-bench~PATH~The bench to read the apps from.
+flag~profile create~--dir~DIR~Write the profile into this folder (default ~/.config/benchbar/profiles).
 cmd~profile export~benchbar profile export NAME [--out FILE] [--plan] [--json]~A copy to share.~no~no~yes~yes~document
 flag~profile export~--out~FILE~Where to write (default ./NAME.toml).
 flag~profile export~--branch~APP=BR~Export APP on BR instead of its default branch; repeatable.
 flag~profile export~--drop~APP~Leave APP out of the copy; repeatable. Refused when a kept app requires it.
 flag~profile export~--plan~~Print the review only, write nothing.
+flag~profile export~--expect~DIGEST~Refuse unless the profile's digest is this (the one the plan showed).
 cmd~profile import~benchbar profile import FILE|URL [--as NAME] [--plan] [--json]~Add a profile someone sent.~yes~no~yes~yes~document
+flag~profile import~--as~NAME~Save it under this name.
+flag~profile import~--plan~~Print the review only, write nothing.
+flag~profile import~--expect~DIGEST~Refuse unless the profile's digest is this (the one the plan showed).
 cmd~profile subscribe~benchbar profile subscribe GIT_URL [--plan|--yes] [--json]~Clone a team's config repo.~yes~no~yes~yes~document
+flag~profile subscribe~--plan~~Print the review only, clone nothing.
 cmd~profile update~benchbar profile update NAME|--all [--plan] [--json]~Fetch an import or subscription again.~yes~no~yes~yes~document
+flag~profile update~--all~~Every import and subscription.
+flag~profile update~--plan~~Print the review only, change nothing.
+flag~profile update~--expect~DIGEST~Refuse unless the fetched profile's digest is this (the one the plan showed).
 cmd~profile remove~benchbar profile remove NAME [--yes] [--json]~Move an import or subscription aside.~yes~no~no~yes~document
 cmd~profile check~benchbar profile check NAME [--json]~Can git read every repo with your credentials?~no~no~yes~no~document
 cmd~labs~benchbar labs [list|on NAME|off NAME|status NAME] [--yes] [--json]~Experiments: off until a person turns one on.~no~no~no~no~document
@@ -317,6 +363,10 @@ cmd~labs off~benchbar labs off NAME [--json]~Turn an experiment off and undo wha
 flag~labs off~--json~~JSON lines, ending in a done line.
 cmd~labs status~benchbar labs status NAME [--json]~Whether an experiment is on. Exit 0 on, 1 off.~no~no~no~no~document
 flag~labs status~--json~~One JSON document.
+cmd~notices~benchbar notices [--json] [--dismiss ID|--all]~The notices an update left: a default that changed, how to switch back and where it is explained. Each shows once in the terminal after the update and stays in status --json until dismissed.~no~no~no~no~document
+flag~notices~--json~~One JSON document: notices[] with id, title, text, switch_back, doc and since.
+flag~notices~--dismiss~ID~Hide one notice (also in the BenchBar app). An id that is already hidden is unchanged.
+flag~notices~--all~~Hide every notice.
 TABLE
 
 fl_cmd_table() { printf '%s\n' "$FL_CMD_TABLE"; }
@@ -445,4 +495,143 @@ fl_commands_json() {
   done <<<"$(fl_cmd_global_flags)"
   fl_lab_enabled_json_v labs_on
   printf '{"schema_version":%d,"cli_version":"%s","labs":%s,"gated":[%s],"global_flags":[%s],"commands":[%s]}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$labs_on" "$gated" "$gflags" "$out"
+}
+
+# fl_cmd_flag_check KEY ARG...: whether every option among ARG... (up to a
+# bare --) is one of the flags the table lists for KEY. An option of a flag
+# that takes a value skips the next word; --flag=VALUE and a short flag with
+# its value glued on (-n20) are the same flag. Returns 1 with FL_BAD_FLAGS
+# set to the unknown options, space separated. The options the main loop of
+# the entrypoint takes (--bench-dir, --json ...) never reach it.
+FL_BAD_FLAGS=""
+fl_cmd_flag_check() {
+  local key="$1" line rest name val tok skip=0 hit s
+  local longs=" " valued=" " shorts=" "
+  shift
+  FL_BAD_FLAGS=""
+  # most runs have no option among their arguments: no table read for those
+  hit=0
+  for tok in "$@"; do
+    [[ "$tok" != -- ]] || break
+    case "$tok" in -?*) hit=1; break ;; esac
+  done
+  [[ "$hit" == 1 ]] || return 0
+  while IFS= read -r line; do
+    case "$line" in
+      "flag~${key}~"*)
+        rest="${line#flag~"${key}"~}"; name="${rest%%~*}"; rest="${rest#*~}"; val="${rest%%~*}"
+        case "$name" in
+          --*) longs="${longs}${name} " ;;
+          *) shorts="${shorts}${name} " ;;
+        esac
+        [[ -z "$val" ]] || valued="${valued}${name} " ;;
+    esac
+  done <<<"$FL_CMD_TABLE"
+  for tok in "$@"; do
+    [[ "$tok" != -- ]] || break
+    if [[ "$skip" == 1 ]]; then skip=0; continue; fi
+    case "$tok" in
+      -|-h|--help) continue ;;
+      --*) name="${tok%%=*}"
+           case "$longs" in
+             *" ${name} "*) [[ "$tok" == *=* ]] || case "$valued" in *" ${name} "*) skip=1 ;; esac ;;
+             *) FL_BAD_FLAGS="${FL_BAD_FLAGS:+${FL_BAD_FLAGS} }${tok%%=*}" ;;
+           esac ;;
+      -?*) hit=0
+           for s in $shorts; do
+             case "$tok" in
+               "$s") hit=1; case "$valued" in *" ${s} "*) skip=1 ;; esac ;;
+               "$s"*) case "$valued" in *" ${s} "*) hit=1 ;; esac ;;
+             esac
+             [[ "$hit" == 0 ]] || break
+           done
+           [[ "$hit" == 1 ]] || FL_BAD_FLAGS="${FL_BAD_FLAGS:+${FL_BAD_FLAGS} }${tok}" ;;
+    esac
+  done
+  [[ -z "$FL_BAD_FLAGS" ]]
+}
+
+# fl_usage_refuse ERROR_ID MESSAGE FIX [KEY]: a command line that cannot be read is a usage
+# error: exit 64 (EX_USAGE), never 2 (the MariaDB root password is unknown: the Windows tray
+# shows its password prompt for a 2 without a done line) and never 1 (the app's calls that
+# accept [0,1] would parse an empty output). It runs before the stream, the log and the lock,
+# so the JSON answer is built here, in the shape every other refusal has: a command that
+# changes things (or --jsonl) ends in one `done` line, a command that reads in one document
+# (schema_version, cli_version, exit, error_id, error, fix). Which one comes from the table
+# entry of KEY; the options are read from the original command line because the main loop may
+# not have reached them yet.
+FL_USAGE_EXIT=64
+# fl_cmd_usage_v VAR KEY: the usage line of the table entry KEY (empty when there is none)
+fl_cmd_usage_v() {
+  local __line __u=""
+  while IFS= read -r __line; do
+    case "$__line" in "cmd~${2}~"*) __u="${__line#cmd~"${2}"~}"; __u="${__u%%~*}"; break ;; esac
+  done <<<"$FL_CMD_TABLE"
+  printf -v "$1" '%s' "$__u"
+}
+fl_usage_refuse() { fl_refuse_json "$1" "$2" "$3" "${4:-}"; }
+# fl_refuse_json ERROR_ID MESSAGE FIX [KEY]: the refusal in the shape --json, --jsonl and
+# --for-agent want (above), always exit 64. A refusal of the whole run (benchbar as root)
+# uses it too: a client that asked for JSON gets JSON, never a text line it cannot parse.
+fl_refuse_json() {
+  local id="$1" msg="$2" fix="$3" key="${4:-}" a want_json=0 want_jsonl=0 want_agent=0 kind="" mut="" f
+  [[ "${OPT_JSON:-0}" != 1 ]] || want_json=1
+  [[ "${OPT_JSONL:-0}" != 1 ]] || want_jsonl=1
+  [[ "${OPT_FOR_AGENT:-0}" != 1 ]] || want_agent=1
+  for a in ${FL_ORIG_ARGS[@]+"${FL_ORIG_ARGS[@]}"}; do
+    case "$a" in
+      --) break ;;
+      --json) want_json=1 ;;
+      --jsonl) want_json=1; want_jsonl=1 ;;
+      --for-agent) want_agent=1 ;;
+    esac
+  done
+  if [[ -n "$key" ]]; then
+    fl_cmd_attr_v kind "$key" json
+    fl_cmd_attr_v mut "$key" mutating
+  fi
+  # a command with no JSON of its own prints text, as it always did
+  if [[ "$kind" == "none" ]]; then want_json=0; want_agent=0; fi
+  if [[ "$want_agent" == 1 ]]; then
+    want_json=1
+    [[ "$mut" != "yes" ]] || want_jsonl=1
+  fi
+  if [[ "$want_json" == 1 ]]; then
+    FL_ERROR_ID="$id"; FL_ERROR_FIX="$fix"
+    FL_DONE_NO_BENCH=1; FL_DONE_NO_STATE=1
+    fl_redact_url_v msg "$msg"
+    printf '[FAIL] %s\n%s\n' "$msg" "$fix" >&2
+    fl_done_fields_v f "$FL_USAGE_EXIT"
+    if [[ "$want_jsonl" == 1 || "$kind" == "stream" ]]; then
+      printf '{"schema_version":%d,"cli_version":"%s","event":"done",%s,"bench":null,"fix":%s,"log":"","error":%s}\n' \
+        "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$f" "$(fl_json_str "$fix")" "$(fl_json_str "$msg")"
+    else
+      printf '{"schema_version":%d,"cli_version":"%s",%s,"fix":%s,"error":%s}\n' \
+        "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$f" "$(fl_json_str "$fix")" "$(fl_json_str "$msg")"
+    fi
+    exit "$FL_USAGE_EXIT"
+  fi
+  fl_die "$msg" "$fix" "$FL_USAGE_EXIT"
+}
+
+# fl_args_validate: the dispatcher's check of the options after the command
+# (ARGS, or the part before a bare --; FL_ARGS_FLAGS_N is its length).
+# An unknown option is a usage error, exit 64 (error_id unknown_flag), naming the option and the command's
+# usage line. BENCHBAR_LENIENT_FLAGS=1 turns the error into a warning on
+# stderr, the way every release before 0.9.0 behaved.
+fl_args_validate() {
+  local key usage bad n="${FL_ARGS_FLAGS_N:--1}"
+  [[ "${#ARGS[@]}" -gt 0 ]] || return 0
+  key="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")" || return 0
+  if [[ "$n" -lt 0 || "$n" -gt "${#ARGS[@]}" ]]; then n="${#ARGS[@]}"; fi
+  fl_cmd_flag_check "$key" "${ARGS[@]:0:$n}" && return 0
+  fl_cmd_usage_v usage "$key"
+  if [[ "${BENCHBAR_LENIENT_FLAGS:-0}" == "1" ]]; then
+    for bad in $FL_BAD_FLAGS; do
+      printf 'Ignoring unknown option for %s: %s (BENCHBAR_LENIENT_FLAGS=1; without it this is an error)\n' "$key" "$bad" >&2
+    done
+    return 0
+  fi
+  # the first one, as the other commands name it
+  fl_usage_refuse unknown_flag "Unknown option for ${key}: ${FL_BAD_FLAGS%% *}" "Usage: ${usage}. Every flag: benchbar ${key} --help. A script that relied on unknown options being ignored: BENCHBAR_LENIENT_FLAGS=1 turns this error into a warning." "$key"
 }

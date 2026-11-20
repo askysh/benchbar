@@ -103,9 +103,11 @@ fl_cmd_register() {
     mkdir -p "$FL_STATE_DIR"
     tmp="$(mktemp "${FL_STATE_DIR}/registered.XXXXXX")"
     { fl_registered_benches; printf '%s\n' "${paths[@]}"; } | awk 'NF && !seen[$0]++' >"$tmp"
-    if [[ -f "$file" ]] && cmp -s "$tmp" "$file"; then rm -f "$tmp"; else mv "$tmp" "$file"; fi
+    if [[ -f "$file" ]] && cmp -s "$tmp" "$file"; then rm -f "$tmp"; else mv "$tmp" "$file"; fl_changed state "registered benches" "${#paths[@]} path(s) remembered"; fi
   fi
-  if [[ "$OPT_JSON" == "1" ]]; then fl_cmd_list 1
+  # (a stream ends with its done line, which names what was remembered: no list document in between)
+  if [[ "$OPT_JSON" == "1" && "${FL_JSONL:-0}" != "1" ]]; then fl_cmd_list 1
+  elif [[ "$OPT_JSON" == "1" ]]; then :
   elif [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would remember ${#paths[@]} selected path(s); no services are changed."
   else fl_info "Remembered ${#paths[@]} selected path(s); service setup: benchbar adopt PATH."
   fi

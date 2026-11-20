@@ -120,6 +120,8 @@ fl_lab_platform_v() {
 # linux also runs in WSL)
 fl_lab_available() {
   local p plat x
+  # tests only: the lab's own platform list is not what a test of one platform's code is about
+  [[ "${FL_TESTING:-}" == "1" && "${FL_LABS_ANY_PLATFORM:-}" == "1" ]] && return 0
   fl_lab_attr_v p "$1" platforms
   fl_lab_platform_v plat
   for x in ${p//,/ }; do
@@ -211,7 +213,7 @@ fl_labs_json() {
     out="${out}${sep}{\"name\":$(fl_json_str "$n"),\"title\":$(fl_json_str "$t"),\"description\":$(fl_json_str "$d"),\"warning\":$(fl_json_str "$w"),\"since\":$(fl_json_str "$s"),\"enabled\":${en},\"commands\":[${cmds}],\"platforms\":[${plats}],\"available\":${av}}"
     sep=","
   done <<<"$FL_LAB_TABLE"
-  printf '{"schema_version":%d,"labs":[%s]}\n' "${FL_SCHEMA_VERSION:-1}" "$out"
+  printf '{"schema_version":%d,"cli_version":"%s","labs":[%s]}\n' "${FL_SCHEMA_VERSION:-1}" "$FL_VERSION" "$out"
 }
 
 # fl_lab_enabled_json_v VAR: ["a","b"] of the enabled labs
@@ -261,7 +263,7 @@ fl_cmd_labs() {
   fi
   if [[ "$action" == status ]]; then
     if [[ "${OPT_JSON:-0}" == "1" ]]; then
-      printf '{"schema_version":%d,"name":%s,"enabled":%s}\n' "${FL_SCHEMA_VERSION:-1}" "$(fl_json_str "$name")" "$on_now"
+      printf '{"schema_version":%d,"cli_version":"%s","name":%s,"enabled":%s}\n' "${FL_SCHEMA_VERSION:-1}" "$FL_VERSION" "$(fl_json_str "$name")" "$on_now"
     else
       fl_ok "${name}: $([[ "$on_now" == true ]] && printf on || printf off)"
     fi

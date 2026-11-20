@@ -370,8 +370,13 @@ fl_cmd_site_backups() {
 }
 
 # fl_backup_field JSON KEY: one scalar of fl_backup_set_json's flat object.
+# A string value is read up to its closing quote (a path may hold a comma);
+# a number, true, false or null up to the next comma or brace.
 fl_backup_field() {
-  printf '%s' "$1" | sed -n "s/.*\"$2\":\"\{0,1\}\([^\",}]*\)\"\{0,1\}[,}].*/\1/p"
+  local v
+  v="$(printf '%s' "$1" | sed -n -E "s/.*\"$2\":\"([^\"]*)\".*/\1/p")"
+  if [[ -z "$v" ]]; then v="$(printf '%s' "$1" | sed -n -E "s/.*\"$2\":([^,}\"]*)[,}].*/\1/p")"; fi
+  printf '%s' "$v"
 }
 
 # fl_site_backup_take NAME [WITH_FILES]: bench --site NAME backup, kept older

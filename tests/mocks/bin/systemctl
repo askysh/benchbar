@@ -109,8 +109,10 @@ case "$cmd" in
       [[ -f "$f" ]] || continue
       new_unit "$(basename "$f")"; put "$(basename "$f")" LoadState loaded
     done
+    # a user unit whose file is gone is no longer found; the system units (where their files live is not
+    # modelled) keep what they were given
     for f in "$sdir"/*.service; do
-      [[ -f "$f" ]] || continue
+      [[ -f "$f" && "$scope" == user ]] || continue
       [[ -f "$udir/$(basename "$f")" ]] || put "$(basename "$f")" LoadState not-found
     done
     exit 0 ;;

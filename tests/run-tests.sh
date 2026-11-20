@@ -12,6 +12,9 @@
 #   ONLY_TESTS="test-a test-b" ...      only those, sharded like the full list (CI: affected tests)
 #   LIST_ONLY=1 SHARD=2/4 ...           print the chosen tests, run nothing
 #   SECS_ONLY=1 ...                     print the weight (table seconds) of the chosen tests, run nothing
+#   NO_SKIP="test-a test-b" ...         those tests fail when they skip themselves ("NAME: ok (SKIPPED ...)")
+#   RERUN_FAILED=1 ...                  a failed test runs once more, and FLAKY says it passed then (on by default when CI is set)
+#   STRICT_FLAKY=1 ...                  a test that was FLAKY (failed, then passed on the rerun) fails the run at its end
 #   SHELLCHECK_FILES="a.sh b.sh" ...    the lint checks only those files; SC_JOBS=4 runs 4 shellcheck at once
 #
 # PARALLEL defaults to the number of CPUs. Every test builds its own HOME
@@ -37,8 +40,8 @@ test-profiles test-profiles-2 test-profiles-3 test-service test-homebrew test-mu
 test-cli test-open-as test-freshness test-hygiene test-mcp test-mcp-2 test-site-backups test-app-cli test-process test-process-match test-doctor-linux test-install-sh test-install-sh-linux
 test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
 test-runner test-redact test-docs-command test-status-cost test-command-cost test-bench-flow test-run test-platform-linux test-self-update
-test-site-restore test-site-restore-2 test-bench-run test-bench-run-mcp test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
-test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin test-lan-guard test-labs test-labs-share test-wsl-preflight test-ci-plan test-fresh-install test-tray-fixtures test-backup-safety test-changelog test-lean-load test-linux-parity test-facts test-guards test-release-workflows test-neutralise test-listen test-macos-appcast test-apps-speed test-version-sources test-person-guard"
+test-site-restore test-site-restore-2 test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
+test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-suite-hygiene test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin test-lan-guard test-labs test-labs-share test-wsl-preflight test-ci-plan test-fresh-install test-tray-fixtures test-backup-safety test-changelog test-lean-load test-linux-parity test-facts test-guards test-release-workflows test-neutralise test-listen test-macos-appcast test-apps-speed test-version-sources test-person-guard test-unknown-flags test-core-reliability test-notices test-lan-guard-linux test-ready test-ops test-plan-token test-supply-chain test-install-failures test-release-ci-gate test-release-promote test-envelope test-bench-run test-bench-run-mcp"
 
 ALL_TESTS_WORDS=" $(printf '%s' "$ALL_TESTS" | tr '\n' ' ') "
 for f in "$ROOT"/tests/test-*.sh; do
@@ -70,11 +73,11 @@ test-profiles=45 test-process=43 test-adopt=42 test-profile-v16=38 test-run-lock
 test-command-cost=35 test-redact=35 test-repair-json=34 test-share-gateway=33 test-bench-flow=20 test-docs-command=20
 test-labs=20 test-prerequisites-linux=20 test-labs-share=19 test-runner=19 test-status-cost=14 test-run=13
 test-install-sh-linux=10 test-discovery=5 test-self-update=5 test-affected=4 test-shellrc=4 test-templates=4
-test-packaging=2 test-macos-appcast=2 test-docs=1 test-platform=0 test-release-notes=0 test-changelog=0 test-ui=0 test-version-policy=0 test-ci-plan=25 test-apps-speed=20 test-version-sources=1"
+test-packaging=2 test-macos-appcast=2 test-docs=1 test-platform=0 test-release-notes=0 test-changelog=0 test-ui=0 test-version-policy=0 test-ci-plan=25 test-apps-speed=20 test-version-sources=1 test-suite-hygiene=6 test-release-ci-gate=1 test-release-promote=1 test-envelope=100"
 
 TEST_SECS_LINUX="test-doctor=184 test-apps=176 test-pull=175 test-sudo-env=172 test-windows-commands=165 test-install-json-2=164
 test-site-restore=159 test-repair=157 test-site-restore-2=153 test-app-batch=148 test-lock=148 test-mcp=145
-test-phases=139 test-port-management=138 test-wsl-preflight=137 test-install-linux=136 test-install-json=135 test-app-recovery-2=130
+test-phases=139 test-port-management=138 test-wsl-preflight=137 test-install-failures=60 test-install-linux=136 test-install-json=135 test-app-recovery-2=130
 test-app-recovery-3=122 test-agent-contracts-3=119 test-doctor-hardening=118 test-services-served=115 test-app-recovery=114 test-homebrew=106
 test-agent-contracts-2=103 test-agent-contracts=99 test-service=99 test-profiles-2=97 test-sites=96 test-input-hygiene=94
 test-freshness=92 test-multi-bench=89 test-ports=89 test-app-cli=84 test-pipelines=84 test-doctor-linux=74
@@ -84,7 +87,7 @@ test-profiles=33 test-report=32 test-repair-json=29 test-run-lock=27 test-state-
 test-redact=22 test-command-cost=20 test-docs-command=18 test-bench-flow=17 test-runner=17 test-share-gateway=17
 test-labs-share=14 test-prerequisites-linux=12 test-run=12 test-status-cost=10 test-install-sh-linux=7 test-self-update=7
 test-discovery=4 test-templates=4 test-affected=3 test-platform-linux=3 test-docs=2 test-shellrc=2
-test-packaging=1 test-macos-appcast=1 test-release-notes=1 test-changelog=0 test-platform=0 test-ui=0 test-version-policy=0 test-ci-plan=25 test-apps-speed=20 test-version-sources=1"
+test-packaging=1 test-macos-appcast=1 test-release-notes=1 test-changelog=0 test-platform=0 test-ui=0 test-version-policy=0 test-ci-plan=25 test-apps-speed=20 test-version-sources=1 test-suite-hygiene=6 test-release-ci-gate=1 test-release-promote=1 test-envelope=80"
 # TEST_PLATFORM=mac or linux picks the table (default: this machine)
 case "${TEST_PLATFORM:-$(uname -s)}" in
   mac|Darwin) TEST_SECS="$TEST_SECS_MAC" ;;
@@ -248,6 +251,26 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+# run_one_test NAME LOG: one run of a test file, its output in LOG; 0 only when it passed in full.
+# Two checks beyond the exit code, because bash 3.2 (the macOS /bin/bash and the container legs) exits 0
+# after a "set -u" abort inside a function when an EXIT trap is set, so a test that stopped halfway
+# counts as a pass: the log may not hold an "unbound variable" error (stderr is in it), and a share or
+# lan-guard test must print its own "NAME: ok" line (a skip says why after the ok, in parentheses:
+# "NAME: ok (SKIPPED ...)").
+run_one_test() {
+  local name="$1" log="$2" c=0
+  if run_test_with_deadline "$ROOT/tests/$name.sh" >"$log" 2>&1; then c=0; else c=$?; fi
+  if [[ "$c" == 0 && ( "$name" == test-share* || "$name" == test-lan-guard ) ]] && ! grep -qE "^${name}: ok( \(.*\))?\$" "$log"; then
+    printf 'FAIL: %s exited 0 without its "%s: ok" line\n' "$name" "$name" >>"$log"
+    c=1
+  fi
+  if [[ "$c" == 0 ]] && grep -qE ': [A-Za-z_][A-Za-z_0-9]*: unbound variable' "$log"; then
+    printf 'FAIL: %s printed an "unbound variable" error: a set -u abort the shell did not turn into an exit code\n' "$name" >>"$log"
+    c=1
+  fi
+  return "$c"
+}
+
 # start_job INDEX: runs job INDEX in the background, output to $OUT_DIR/INDEX.log,
 # exit code to $OUT_DIR/INDEX.rc, seconds to $OUT_DIR/INDEX.secs
 start_job() {
@@ -257,13 +280,20 @@ start_job() {
     if [[ "$name" == "shellcheck" ]]; then
       if run_shellcheck >"$OUT_DIR/$idx.log" 2>&1; then c=0; else c=$?; fi
     else
-      if run_test_with_deadline "$ROOT/tests/$name.sh" >"$OUT_DIR/$idx.log" 2>&1; then c=0; else c=$?; fi
-      # a share or lan-guard test passes only with its own "NAME: ok" line as well: under bash 3.2 a set -u
-      # abort inside a function exits 0 when an EXIT trap is set, so the code alone can count a test that
-      # stopped halfway (a skip says why after the ok, in parentheses: "NAME: ok (SKIPPED ...)")
-      if [[ "$c" == 0 && ( "$name" == test-share* || "$name" == test-lan-guard ) ]] && ! grep -qE "^${name}: ok( \(.*\))?\$" "$OUT_DIR/$idx.log"; then
-        printf 'FAIL: %s exited 0 without its "%s: ok" line\n' "$name" "$name" >>"$OUT_DIR/$idx.log"
-        c=1
+      if run_one_test "$name" "$OUT_DIR/$idx.log"; then c=0; else c=$?; fi
+      # a failed test runs once more on CI (RERUN_FAILED=1 anywhere else): one that then passes is a
+      # flake, and the log says so with the first failure, so it is fixed and not hidden
+      if [[ "$c" != 0 && "$c" != 124 && "${RERUN_FAILED:-${CI:+1}}" == 1 ]]; then
+        mv "$OUT_DIR/$idx.log" "$OUT_DIR/$idx.first"
+        if run_one_test "$name" "$OUT_DIR/$idx.log"; then c=0; else c=$?; fi
+        if [[ "$c" == 0 ]]; then
+          { printf 'FLAKY: %s failed once and passed on the rerun. The first failure:\n' "$name"; sed 's/^/  | /' "$OUT_DIR/$idx.first"; } >>"$OUT_DIR/$idx.log"
+          # the line the run's summary and the GitHub annotation show (the main loop reads it)
+          { sed -n '/^FAIL/{p;q;}' "$OUT_DIR/$idx.first"; sed -n 1p "$OUT_DIR/$idx.first"; } 2>/dev/null | sed -n 1p >"$OUT_DIR/$idx.flaky"
+          [[ -s "$OUT_DIR/$idx.flaky" ]] || printf 'no output\n' >"$OUT_DIR/$idx.flaky"
+        else
+          { printf 'FAILED TWICE: %s. The first failure:\n' "$name"; sed 's/^/  | /' "$OUT_DIR/$idx.first"; } >>"$OUT_DIR/$idx.log"
+        fi
       fi
     fi
     printf '%s\n' "$((SECONDS - started))" >"$OUT_DIR/$idx.secs"
@@ -276,7 +306,7 @@ start_job() {
 TOTAL="${#JOBS[@]}"
 printf 'running %s jobs, %s at a time (shard %s)\n' "$TOTAL" "$PARALLEL" "$SHARD"
 started_all="$SECONDS"
-next_start=0; next_print=0; running=0; FAILED=()
+next_start=0; next_print=0; running=0; FAILED=(); SKIPPED_TESTS=(); FLAKY_TESTS=()
 while [[ "$next_print" -lt "$TOTAL" ]]; do
   while [[ "$running" -lt "$PARALLEL" && "$next_start" -lt "$TOTAL" ]]; do
     start_job "$next_start"
@@ -295,6 +325,28 @@ while [[ "$next_print" -lt "$TOTAL" ]]; do
   while [[ "$next_print" -lt "$TOTAL" && -f "$OUT_DIR/$next_print.rc" && -z "${PIDS[next_print]:-}" ]]; do
     name="${JOBS[$next_print]}"; rc="$(cat "$OUT_DIR/$next_print.rc")"; secs="$(cat "$OUT_DIR/$next_print.secs")"
     cat "$OUT_DIR/$next_print.log"
+    # a test that skipped itself says so after its ok ("NAME: ok (SKIPPED: why)"): counted and listed at the
+    # end, and a failure for a test in NO_SKIP (the legs that are meant to have what it needs, node for the gateway)
+    if [[ "$rc" == "0" && "$name" != shellcheck ]] && grep -qE "^${name}: ok \(SKIPPED" "$OUT_DIR/$next_print.log"; then
+      SKIPPED_TESTS+=("$name")
+      case " ${NO_SKIP:-} " in
+        *" $name "*) printf 'FAIL: %s skipped itself, and this run lists it in NO_SKIP (it must run here)\n' "$name"; rc=1 ;;
+      esac
+    fi
+    if [[ -f "$OUT_DIR/$next_print.flaky" ]]; then
+      flaky_line="$(cat "$OUT_DIR/$next_print.flaky")"
+      FLAKY_TESTS+=("$name")
+      # a flake must not hide in a log block nobody opens: an annotation on the run, a row in the job summary
+      if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+        flaky_msg="${flaky_line//'%'/%25}"; flaky_msg="${flaky_msg//$'\r'/%0D}"
+        printf '::warning title=FLAKY::%s first failure: %s\n' "$name" "$flaky_msg"
+        if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+          [[ -s "$GITHUB_STEP_SUMMARY" ]] && grep -q '^### Flaky tests' "$GITHUB_STEP_SUMMARY" 2>/dev/null || printf '### Flaky tests\n\n| test | first failure |\n| --- | --- |\n' >>"$GITHUB_STEP_SUMMARY"
+          # shellcheck disable=SC2016  # the backticks are Markdown, not a command substitution
+          printf '| %s | `%s` |\n' "$name" "${flaky_line//|/\\|}" >>"$GITHUB_STEP_SUMMARY"
+        fi
+      fi
+    fi
     if [[ "$rc" == "0" ]]; then
       printf -- '--- ok: %s (%ss)\n' "$name" "$secs"
     else
@@ -307,7 +359,15 @@ while [[ "$next_print" -lt "$TOTAL" ]]; do
 done
 
 printf '\n%s jobs in %ss, %s failed\n' "$TOTAL" "$((SECONDS - started_all))" "${#FAILED[@]}"
+[[ "${#SKIPPED_TESTS[@]}" -eq 0 ]] || printf 'skipped: %s (%s)\n' "${#SKIPPED_TESTS[@]}" "${SKIPPED_TESTS[*]}"
+[[ "${#FLAKY_TESTS[@]}" -eq 0 ]] || printf 'flaky: %s (%s)\n' "${#FLAKY_TESTS[@]}" "${FLAKY_TESTS[*]}"
 if [[ "${#FAILED[@]}" -gt 0 ]]; then
   printf 'FAILED: %s\n' "${FAILED[*]}" >&2
+  exit 1
+fi
+# STRICT_FLAKY=1 (CI, on a push to next-release and the nightly): the rerun still runs, so every other test
+# still reports, but a flake is a failure of the run: "green N times in a row" cannot include one
+if [[ "${STRICT_FLAKY:-}" == 1 && "${#FLAKY_TESTS[@]}" -gt 0 ]]; then
+  printf 'FAILED: flaky tests (STRICT_FLAKY=1): %s\n' "${FLAKY_TESTS[*]}" >&2
   exit 1
 fi
