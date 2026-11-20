@@ -57,8 +57,8 @@ the argument `mcp`.
 | `benchbar_ports_apply` | acts | Apply a plan from benchbar_ports_plan: set up the service files and, where benches share a port, give each its own block (bench set-config -g, then the service files). | `paths`*, `token`* |
 | `benchbar_scan` | read | Find the Frappe benches under a folder (a read only walk, as deep as benchbar looks): path, default site, sites, ports, whether benchbar manages each (adopted). | `path`* |
 | `benchbar_report` | read | The diagnostics benchbar attaches to a bug report, as text and redacted (secrets masked, site configs reduced to key names): versions, doctor and status JSON, the agent, Procfile.lean, state.json and log tails. | `bench` |
-| `benchbar_site_drop_plan` | plan (read only) | Plan dropping a site, read only: the backup with files taken first, the database and user dropped, the folder archived, the new default site and the hosts line, with a token for benchbar_site_drop. | `site`*, `new_default`, `bench` |
-| `benchbar_site_drop` | acts | Apply a plan from benchbar_site_drop_plan: back the site up with its files, drop its database with benchbar's own MariaDB credentials, move its folder to archived/sites. | `site`*, `new_default`, `bench`, `token`* |
+| `benchbar_site_drop_plan` | plan (read only) | Plan dropping a site, read only: the backup with files taken first, the database and user dropped (database), the folder archived and the hosts line, with a token for benchbar_site_drop. | `site`*, `bench` |
+| `benchbar_site_drop` | acts | Apply a plan from benchbar_site_drop_plan: back the site up with its files, drop its database with benchbar's own MariaDB credentials, move its folder to archived/sites. | `site`*, `bench`, `token`* |
 
 An argument marked `*` is required. `bench` (the bench's path, from `benchbar_list`) is optional on every tool that has it: without it the tool uses the default bench.
 <!-- /generated:mcp-tools -->
