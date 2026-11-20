@@ -109,7 +109,8 @@ set +e; OUT="$(BENCHBAR_NONINTERACTIVE=0 "$FM" lease list --json 2>/dev/null)"; 
 assert_eq "0" "$(printf '%s' "$OUT" | jget - 'len([l for l in d["leases"] if l["id"]])')" "(a person who is not the holder sees no id)"
 assert_eq "3" "$(printf '%s' "$OUT" | jget - 'len(d["leases"])')" "(but sees every lease: holder, scope, expiry)"
 set +e; OUT="$(BENCHBAR_NONINTERACTIVE=0 BENCHBAR_CALLER=agent-a "$FM" lease list --json 2>/dev/null)"; set -e
-assert_eq "1" "$(printf '%s' "$OUT" | jget - 'len([l for l in d["leases"] if l["id"]])')" "(a person naming the holder sees that holder's ids)"
+assert_eq "2" "$(printf '%s' "$OUT" | jget - 'len([l for l in d["leases"] if l["id"]])')" "(a person naming the holder sees that holder's ids: agent-a has two leases)"
+assert_eq "True" "$(printf '%s' "$OUT" | jget - 'all(l["id"] for l in d["leases"] if l["holder"] == "agent-a")')"
 asj agent-b lease list --bench "$OTHER" --json
 assert_eq "1" "$(printf '%s' "$OUT" | jget - 'len(d["leases"])')"
 as agent-b lease list --bench-dir "$BENCH"
@@ -157,10 +158,11 @@ assert_contains "$OUT" "The site two.localhost of $BENCH is leased by agent-a"
 as agent-c site restore two.localhost --from 20260101_000000 --yes
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "is leased by agent-a"
+ops_before="$(find "$FL_STATE_DIR/ops" -type f 2>/dev/null | grep -c . || true)"
 as agent-c site restore two.localhost --from 20260101_000000 --yes --background
 assert_eq "1" "$CODE" "(a background run is refused at once, not in a detached run: $OUT)"
 assert_contains "$OUT" "is leased by agent-a"
-assert_eq "0" "$(find "$FL_STATE_DIR/ops" -type f 2>/dev/null | grep -c . || true)" "(and no operation was started)"
+assert_eq "$ops_before" "$(find "$FL_STATE_DIR/ops" -type f 2>/dev/null | grep -c . || true)" "(and no operation was started)"
 as agent-c pull prod:two --as two.localhost --yes
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "is leased by agent-a"
@@ -348,8 +350,8 @@ as agent-a lease take --bench "$TMP_DIR/not-a-bench"
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "is not a Frappe bench"
 as agent-a lease take --bench "$BENCH" --wat
-assert_eq "1" "$CODE" "$OUT"
-assert_contains "$OUT" "Unknown argument for lease take: --wat"
+assert_eq "64" "$CODE" "(an option the catalogue does not list stops at the parser: $OUT)"
+assert_contains "$OUT" "Unknown option for lease take: --wat"
 as agent-a lease frobnicate
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "Unknown lease command: frobnicate"

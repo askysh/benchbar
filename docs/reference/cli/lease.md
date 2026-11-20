@@ -148,5 +148,5 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 
 | Command | Environment variable | What it does |
 |---|---|---|
-| `lease take` | `BENCHBAR_CALLER` | The holder's name (1 to 40 letters, digits or . _ @ : + -). benchbar mcp sets it per client; without it an agent run is "agent" and a terminal run is the login name. |
+| `lease take` | `BENCHBAR_CALLER` | The holder's name (1 to 40 letters, digits or . _ @ : + -). benchbar mcp sets it per client; without it a terminal run is the login name, and an agent run (BENCHBAR_NONINTERACTIVE, --for-agent) cannot take a lease. |
 <!-- /generated:cli-commands -->
