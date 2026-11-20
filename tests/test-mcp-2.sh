@@ -103,7 +103,7 @@ from mcpclient import Client, text
 fake, mode, tok = sys.argv[1], sys.argv[2], sys.argv[3]
 c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "FAKE_MODE": mode, "BENCHBAR_MCP_ALLOW_BENCH": "/x/acme"})
 tools = c.tools()
-assert len(tools) == 39, [t["name"] for t in tools]
+assert len(tools) == 47, [t["name"] for t in tools]
 LABEL = "Data from the bench ("
 tokens = {}                                                    # the token each plan tool returned: its apply tool takes that one
 for t in tools:
