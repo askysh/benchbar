@@ -45,8 +45,9 @@ Raycast extensions and the like can rely on it too.
 - `null` means "not known" or "does not apply". Numbers are JSON numbers.
 - JSON goes to stdout on one line. Errors and warnings go to stderr as
   text. Exit codes: 0 success, 1 failure (for `doctor`: at least one
-  check is `fail`; the JSON is still printed). A missing bench exits 1
-  with a message on stderr and nothing on stdout.
+  check is `fail`; the JSON is still printed), 2 the MariaDB root password
+  is unknown, 64 a command line the CLI cannot read (see "Usage errors"
+  below). A missing bench exits 1 with a message on stderr and nothing on stdout.
 - `status --json`, `list --json` and `doctor --json` are read only. They
   never start, stop or write anything, so they are safe to poll. The one
   exception is the one time move of the state folder on the first run
@@ -67,7 +68,7 @@ command that read only prints none of them.
 | `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints. `"quoted": true` is added when the command was built with every word quoted for the shell (a program may split it); it is absent for a command written as text |
 | `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`). A stream's is read after the CLI's locks are released; a one document command's and `pull`'s while its lock is still held (a read, so nothing waits on it) |
 | `missing[]` | only on a refusal of the non interactive mode: the inputs the command lacked (`ADMIN_PASSWORD`, `--yes`, `sudo`, `BENCHBAR_SUDO_PASSWORD`, ...) |
-| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. Every CLI done line can carry it. So far: `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change). `password_has_newline` (a password in `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` or `BENCHBAR_SUDO_PASSWORD` holds a line break; it travels on one line; refused before any change, only the variable's name is printed). `systemd_not_running` (Linux, `install` only: PID 1 is not systemd, and MariaDB, Redis and the bench service are systemd services; on WSL the fix names `[boot] systemd=true` in `/etc/wsl.conf`), `bench_on_windows_fs` (WSL, `install` and `adopt`: the bench folder is on the Windows file system, `/mnt/<drive>` or a drvfs or 9p mount; slow, no file watching, broken permissions; `--allow-windows-fs` accepts it), `github_unreachable` (Linux, `install` only: `github.com`, which holds frappe and the uv Pythons, did not answer within 10 seconds, after one retry; the plan's `blockers[]` names it, nothing was changed) and `port_3306_in_use` and `port_6379_in_use` (Linux, `install` only: another program, or on WSL another distro, already listens on the MariaDB or the system Redis port; the plan's `blockers[]` names them, the done line has `exit` 1, the `fix` and the `error`, and nothing was changed, no sudo asked). Docker, a native MariaDB or a second WSL distro are the usual cause: WSL distros share one network, so only one of them can run MariaDB on port 3306. Stop it in the other distro (`sudo systemctl stop mariadb`) and run `install` again; benchbar never stops it. The Windows shim adds `distro_running`, see [Windows shim](#windows-shim) |
+| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. Every CLI done line can carry it. So far: `unknown_flag`, `missing_value` and `root_refused` (exit 64, see "Usage errors"), `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change). `password_has_newline` (a password in `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` or `BENCHBAR_SUDO_PASSWORD` holds a line break; it travels on one line; refused before any change, only the variable's name is printed). `systemd_not_running` (Linux, `install` only: PID 1 is not systemd, and MariaDB, Redis and the bench service are systemd services; on WSL the fix names `[boot] systemd=true` in `/etc/wsl.conf`), `bench_on_windows_fs` (WSL, `install` and `adopt`: the bench folder is on the Windows file system, `/mnt/<drive>` or a drvfs or 9p mount; slow, no file watching, broken permissions; `--allow-windows-fs` accepts it), `github_unreachable` (Linux, `install` only: `github.com`, which holds frappe and the uv Pythons, did not answer within 10 seconds, after one retry; the plan's `blockers[]` names it, nothing was changed) and `port_3306_in_use` and `port_6379_in_use` (Linux, `install` only: another program, or on WSL another distro, already listens on the MariaDB or the system Redis port; the plan's `blockers[]` names them, the done line has `exit` 1, the `fix` and the `error`, and nothing was changed, no sudo asked). Docker, a native MariaDB or a second WSL distro are the usual cause: WSL distros share one network, so only one of them can run MariaDB on port 3306. Stop it in the other distro (`sudo systemctl stop mariadb`) and run `install` again; benchbar never stops it. The Windows shim adds `distro_running`, see [Windows shim](#windows-shim) |
 
 Which shape a command prints:
 
@@ -96,6 +97,25 @@ Which shape a command prints:
   log and stderr, a refusal included.
 - `repair --json` keeps `exit_code` in its `done` and adds `exit` with the
   same value. `install`, `adopt` and `pull` add the fields to their `done`.
+- Usage errors: an option the command does not take (`error_id`
+  `unknown_flag`), or a flag that needs a value and has none (`missing_value`:
+  `--bench-dir`, `--site`, `--profile`, `--bundle`, `--port-offset`, `--ack`,
+  `--unack`) exits **64**, the
+  `EX_USAGE` of `sysexits.h`, before the stream, the log, the lock or any
+  change. Exit 2 keeps one meaning, "the MariaDB root password is unknown"
+  (a program that sees 2 asks for that password), and 1 keeps "failure", so a
+  caller that accepts only 0 and 1 reads a usage error as the failure it is.
+  With `--json`, `--jsonl` or `--for-agent` stdout holds the answer on one line
+  and stderr the text: for a command that changes things (or with `--jsonl`) a
+  `done` event with `exit` 64, `error_id`, `error` (the option, named), `fix`
+  (the command's usage line) and the shared done fields; for a command that
+  reads one document with `schema_version`, `cli_version`, `exit`, `error_id`,
+  `error` and `fix`. `BENCHBAR_LENIENT_FLAGS=1` turns an unknown option into a
+  warning on stderr; it does not cover a missing value.
+  The refusal to run as root (`error_id` `root_refused`, a distro whose default
+  user is `root` gets it) has the same shape and the same exit 64, for the same
+  reasons: a client that asked for JSON must get JSON, and 1 or 2 would be read
+  as another failure.
 - `BENCHBAR_NONINTERACTIVE=1` (set by `benchbar mcp` for every CLI it
   starts): nothing is ever asked. A command that needs an input it does
   not have (`ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` when benchbar has none
@@ -1115,6 +1135,17 @@ can ask. Added after 0.8.1: `status --json` and `commands --json` have `labs`
 (the enabled names); `commands --json` also has `gated` (`[{"name","lab"}]`
 for a command left out because its lab is off) and a command of an enabled lab
 has `lab`.
+
+## Notices (0.9.0)
+
+`status --json` has `notices`: the defaults an update changed, until they are
+dismissed. `[]` when there are none, and a fresh install has none. Each entry:
+`id` (`listen-local`, `unknown-flags`, `pull-neutralise`), `title`, `text`,
+`switch_back` (the command or variable that goes back), `doc` (a full URL of
+the page that explains it) and `since` (the version of the change).
+`benchbar notices --json` prints `{"schema_version":1,"cli_version":"...","notices":[...]}`;
+`--dismiss ID` or `--all` hides entries and prints what is left. A client shows
+a notice once and dismisses it through that command.
 
 ## Site backups
 

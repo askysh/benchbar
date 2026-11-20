@@ -85,6 +85,7 @@ lib_family() {
     ui|state|run|lock|process|install-kind|toml) echo "$LIB_CORE test-ui test-redact test-input-hygiene test-state-migrate test-process test-runner" ;;
     profiles|teamlock|version-policy) echo "test-profiles test-profile-v16 test-version-policy test-doctor-linux test-self-update" ;;
     labs) echo "test-labs test-labs-share test-docs" ;;
+    notices) echo "test-notices test-docs test-json test-lean-load test-status-cost test-tray-fixtures" ;;
     open-as) echo "test-open-as" ;;
     consoles) echo "test-cli" ;;
     report) echo "test-report test-redact" ;;
