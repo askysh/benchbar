@@ -146,8 +146,9 @@ assert_contains "$OUT" "Unknown notice: nonsense"
 assert_contains "$OUT" "listen-local, unknown-flags, pull-neutralise"
 run_fm notices --dismiss
 assert_eq 1 "$CODE" "$OUT"
+# an unknown flag is a usage error since 0.9.0 (exit 64)
 run_fm notices --bogus
-assert_eq 1 "$CODE" "$OUT"
+assert_eq 64 "$CODE" "$OUT"
 run_fm notices
 assert_eq 0 "$CODE" "$OUT"
 assert_contains "$OUT" "unknown-flags: An option a command does not take is now an error"
