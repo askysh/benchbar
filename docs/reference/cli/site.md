@@ -268,7 +268,7 @@ output says which command removes it by hand.
 | `--confirm-site NAME` | The site name again; nothing is dropped without it |
 | `--new-default OTHER` | For the default site: the site that becomes the default |
 | `--dry-run` | Print the plan, change nothing (with `--json`: the steps and a `token`) |
-| `--apply TOKEN` | Run the plan of a dry run, with `--yes`; refused, before anything changes, when the sites, the default site or the hosts line changed since the plan |
+| `--apply TOKEN` | Run the plan of a dry run, with `--yes`; refused, before anything changes, when the sites, the default site, the hosts line or the site's database name (`database` in the plan) changed since the plan |
 | `--json` | The result as JSON: the backup, the archived folder, the hosts line ([schema](../../json-schema.md#site-backups)) |
 
 Exit codes: 0 the site is dropped; 1 a refusal or a failed step; 2 the

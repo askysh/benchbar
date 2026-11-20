@@ -219,13 +219,14 @@ make_fake_bench "$SB" keep.localhost
 printf 'port 11000\n' >"$SB/config/redis_queue.conf"; printf 'port 13000\n' >"$SB/config/redis_cache.conf"
 sed_inplace 's/8000/8010/; s/9000/9010/; s/11000/11010/; s/13000/13010/' "$SB/sites/common_site_config.json"
 for s in doomed.localhost other.localhost; do
-  mkdir -p "$SB/sites/$s/private"; printf '{}\n' >"$SB/sites/$s/site_config.json"
+  mkdir -p "$SB/sites/$s/private"; printf '{\n "db_name": "_%s"\n}\n' "${s%%.*}" >"$SB/sites/$s/site_config.json"
 done
 printf '127.0.0.1 keep.localhost\n\n# >>> benchbar >>>\n127.0.0.1 doomed.localhost\n127.0.0.1 other.localhost\n# <<< benchbar <<<\n' >>"$FL_HOSTS_FILE"
 run_fm service --yes --bench-dir "$SB"
 assert_eq "0" "$CODE" "$OUT"
 printf 'rootpw' >"$MOCK_STATE/mariadb_root_pw"
 # the CLI side of --apply
+site_drop_plan_json() { "$FM" site drop doomed.localhost --confirm-site doomed.localhost --dry-run --json --bench-dir "$SB" 2>/dev/null; }
 run_fm site drop doomed.localhost --confirm-site doomed.localhost --dry-run --json --bench-dir "$SB"
 assert_eq "0" "$CODE" "$OUT"
 CLI_TOK="$(printf '%s' "$OUT" | jget - 'd["token"]')"
@@ -238,6 +239,18 @@ run_fm site drop doomed.localhost --confirm-site doomed.localhost --apply "$(pri
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "plan changed"
 assert_file "$SB/sites/doomed.localhost" "(a stale token drops nothing)"
 assert_calls_not_contain 'drop-site'
+# the plan names the database that would be dropped, and the token covers it
+assert_eq "_doomed" "$(printf '%s' "$(site_drop_plan_json)" | jget - 'd["database"]')"
+cp "$SB/sites/doomed.localhost/site_config.json" "$TMP_DIR/doomed-config.json"
+printf '{\n "db_name": "_other"\n}\n' >"$SB/sites/doomed.localhost/site_config.json"
+assert_eq "_other" "$(printf '%s' "$(site_drop_plan_json)" | jget - 'd["database"]')"
+assert_eq "False" "$(printf '%s' "$(site_drop_plan_json)" | jget - 'd["token"] == "'"$CLI_TOK"'"')" "(a changed db_name is another plan)"
+run_fm site drop doomed.localhost --confirm-site doomed.localhost --apply "$CLI_TOK" --yes --bench-dir "$SB"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "plan changed"
+assert_file "$SB/sites/doomed.localhost" "(a token made for another database drops nothing)"
+assert_calls_not_contain 'drop-site'
+cp "$TMP_DIR/doomed-config.json" "$SB/sites/doomed.localhost/site_config.json"
+assert_eq "True" "$(printf '%s' "$(site_drop_plan_json)" | jget - 'd["token"] == "'"$CLI_TOK"'"')" "(the plan is the same again)"
 
 # the tools
 R="$(tc benchbar_site_drop_plan '{"site":"doomed.localhost","bench":"'"$SB"'"}')"
@@ -250,6 +263,18 @@ assert_file "$SB/sites/doomed.localhost"
 R="$(tc benchbar_site_drop_plan '{"site":"keep.localhost","bench":"'"$SB"'"}')"
 assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 assert_contains "$R" "is the default site"
+assert_contains "$R" "--new-default" "(the person gets the command)"
+R="$(tc benchbar_site_drop '{"site":"keep.localhost","bench":"'"$SB"'","token":"'"$CLI_TOK"'"}')"
+assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
+assert_contains "$R" "is the default site" "(the apply refuses the default site too)"
+assert_contains "$R" "Dropping the default site is a person's choice"
+[[ -d "$SB/sites/keep.localhost" ]] || fail "the default site was dropped"
+# no tool moves the default: there is no new_default argument
+R="$(tc benchbar_site_drop_plan '{"site":"doomed.localhost","new_default":"other.localhost","bench":"'"$SB"'"}')"
+assert_eq "-32602" "$(printf '%s' "$R" | jget - 'd["error"]["code"]')" "$R"
+R="$(tc benchbar_site_drop '{"site":"keep.localhost","new_default":"other.localhost","token":"'"$CLI_TOK"'","bench":"'"$SB"'"}')"
+assert_eq "-32602" "$(printf '%s' "$R" | jget - 'd["error"]["code"]')" "$R"
+assert_eq "keep.localhost" "$(cat "$SB/sites/currentsite.txt")" "(the default stays)"
 # the apply: stale first (a site appeared since the plan). benchbar takes MARIADB_ROOT_PASSWORD out of the
 # environment before the server starts: its own store (the Keychain mock) is the only source over MCP
 KEYCHAIN="$MOCK_STATE/keychain/benchbar-mariadb--root"

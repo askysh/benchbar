@@ -108,7 +108,9 @@ says `service: "missing"`; `schedule: true` or `false` turns the scheduler on
 or off, in the plan and again in the apply), `benchbar_ports_plan` then
 `benchbar_ports_apply` (it touches only benches benchbar already knows), and
 `benchbar_site_drop_plan` then `benchbar_site_drop` (a backup with files
-first, then the database goes and the folder moves to `archived/sites`).
+first, then the database goes and the folder moves to `archived/sites`; never
+the default site, moving the default is your choice: the agent gives you the
+command with `--new-default`).
 Show the plan, wait for your OK, then apply with the same arguments and the
 token. Every token comes from the CLI's own `--dry-run --json`; the server
 never makes one.
@@ -137,7 +139,7 @@ decisions only:
 | `site drop` | `benchbar_site_drop_plan`, `benchbar_site_drop` |
 | `fg` | covered by `benchbar_up`, `benchbar_wait` and `benchbar_logs_tail`: a running bench and its output |
 | `console`, `db` | safety: a shell in a site runs any code or query with the site's access, which no plan can describe; read with `benchbar_site_list`, `benchbar_site_backups`, `benchbar_app_list` |
-| `watch` | no tool yet: `bench watch` never ends, and no tool rebuilds assets |
+| `watch` | interactive by decision: a watcher that never ends is not a tool call, so `benchbar watch` is a terminal command for you; one asset rebuild is the `build` command of the run tool (#257) |
 | `repair`, `install`, `labs on`, `share`, `lan-guard`, `listen all`, `mariadb-password`, `self-update` | safety: a person's decisions, in a terminal |
 
 ## Adding an app

@@ -1281,6 +1281,7 @@ dry run.
   "schema_version": 1, "cli_version": "0.5.8",
   "bench": "/Users/you/frappe-bench", "site": "bbtest.localhost",
   "dry_run": true, "is_default": false, "new_default": null,
+  "database": "_bbtest",
   "token": "9f2c...64 hex characters",
   "steps": [
     {"title": "Back up bbtest.localhost with files, drop its database and user, move the folder to archived/sites", "command": "bench drop-site bbtest.localhost", "needs_password": false},
@@ -1290,7 +1291,8 @@ dry run.
 ```
 
 Since 0.9 the plan has a `token`, a SHA-256 of the plan and of the site list,
-the default site and the hosts line. `benchbar site drop NAME --confirm-site
+the default site, the hosts line and the database name (`database`, from the site's own
+`site_config.json`: it is the database that gets dropped). `benchbar site drop NAME --confirm-site
 NAME --apply TOKEN --yes [--json]` runs that plan and refuses, before anything
 changes, a token that no longer matches (exit 1). The MCP tools
 `benchbar_site_drop_plan` and `benchbar_site_drop` pass it on as it is.

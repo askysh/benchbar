@@ -612,24 +612,38 @@ TOOLS["benchbar_report"] = (
     (0,),
 )
 SITE_DROP = {
-    "site": {"type": "string", "description": "The site to drop (its database and user are dropped; the site folder moves to archived/sites)."},
-    "new_default": {"type": "string", "description": "Which site becomes the default, required when the site is the default one."},
+    "site": {"type": "string", "description": "The site to drop (its database and user are dropped; the site folder moves to archived/sites). Not the default site."},
     "bench": BENCH,
 }
 
 
 def site_drop_args(a):
+    # never --new-default: the default site never moves through a tool
     site = required(a, "site")
-    argv = ["site", "drop", site, "--confirm-site", site]
-    if a.get("new_default"):
-        argv += ["--new-default", a["new_default"]]
-    return argv + bench_args(a)
+    return ["site", "drop", site, "--confirm-site", site] + bench_args(a)
+
+
+def site_drop_default_refusal(arguments, call):
+    """benchbar_site_drop_plan and benchbar_site_drop: an error result when the site is the bench's default site (moving
+    the default is a person's choice), else None. The CLI refuses it too, since no tool passes --new-default; this says why."""
+    site = arguments.get("site")
+    try:
+        code, out, _err = run_cli(["site", "list", "--json"] + bench_args(arguments), timeout=60, call=call)
+        default = json.loads(out).get("default_site") if code == 0 else None
+    except (subprocess.TimeoutExpired, OSError, ValueError, AttributeError):
+        return None
+    if default and default == site:
+        return text_result("%s is the default site of this bench. Dropping the default site is a person's choice: it has to name "
+                           "the site that takes its place. Nothing was changed. Give the person this command to run in a terminal: "
+                           "benchbar site drop %s --confirm-site %s --new-default OTHER_SITE (OTHER_SITE: another site of the bench)"
+                           % (site, shlex.quote(site), shlex.quote(site)), is_error=True)
+    return None
 
 
 TOOLS["benchbar_site_drop_plan"] = (
-    "Plan dropping a site, read only: the backup with files taken first, the database and user dropped, the folder "
-    "archived, the new default site and the hosts line, with a token for benchbar_site_drop. Show this plan to the person "
-    "first. Take a backup you want to keep yourself with benchbar_site_backup; the drop makes its own.",
+    "Plan dropping a site, read only: the backup with files taken first, the database and user dropped (database), the "
+    "folder archived and the hosts line, with a token for benchbar_site_drop. The default site is refused: moving the "
+    "default is a person's choice. Show this plan to the person first. Take a backup you want to keep yourself with benchbar_site_backup; the drop makes its own.",
     SITE_DROP,
     lambda a: site_drop_args(a) + ["--dry-run", "--json"],
     True,
@@ -1648,6 +1662,10 @@ def tool_call(params, call=None):
     timeout = tool_timeout(name)
     if not read_only:
         refused = unknown_bench_error(arguments)
+        if refused is not None:
+            return refused
+    if name in ("benchbar_site_drop_plan", "benchbar_site_drop"):
+        refused = site_drop_default_refusal(arguments, call)
         if refused is not None:
             return refused
     if name in PLAN_OF:

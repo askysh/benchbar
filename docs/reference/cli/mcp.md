@@ -212,7 +212,8 @@ paths (`paths`) and only previews: it returns the CLI's token, and
 only benches benchbar already knows: it registers each bench it sets up, so a
 path benchbar does not know is refused. `benchbar_site_drop_plan` and
 `benchbar_site_drop` work the same way (the token is the CLI's own
-`site drop --dry-run --json`). `benchbar_service_install_plan` and
+`site drop --dry-run --json`); both refuse the default site and have no
+`new_default`, because the default site never moves through a tool. `benchbar_service_install_plan` and
 `benchbar_service_install` take `schedule` (true or false) to turn the
 scheduler on or off; the apply passes the same value as the plan.
 `benchbar_report` returns `report --print` (redacted text in `output`), and
