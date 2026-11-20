@@ -99,10 +99,29 @@ The same two steps cover the other changes: `benchbar_site_add_plan` then
 `benchbar_site_add` (a throwaway or test site; the default site never
 moves), `benchbar_site_backup` then `benchbar_site_restore_plan` and
 `benchbar_site_restore` (`new: true` makes a copy of a site for QA,
-`no_migrate` stops before migrate), and `benchbar_service_install_plan`
+`no_migrate` stops before migrate), `benchbar_site_snapshot` then, to go back,
+`benchbar_site_rollback_plan` and `benchbar_site_rollback` (see below), and `benchbar_service_install_plan`
 then `benchbar_service_install` for a bench that has no service (`benchbar_up`
 says `service: "missing"`). Show the plan, wait for your OK, then apply
 with the same arguments and the token.
+
+## Save a site before a risky change
+
+`benchbar_site_snapshot` saves one site (database, public and private
+files, `site_config`, and the apps of the bench with their commits) in the
+site's `snapshots` folder, which frappe's backup pruning never touches. It
+changes nothing in the site, so it takes no plan: call it before a migrate,
+an app update or a data fix, with a `label` that says why.
+`benchbar_site_snapshots` lists them, with `apps_match` (false when an app
+moved since). To go back, `benchbar_site_rollback_plan` then
+`benchbar_site_rollback`: the rollback first snapshots the current state as
+`before rollback` (the result's `rollback.before_rollback` names it, so the
+rollback can be undone with a rollback to it), restores the snapshot's
+database and files, and runs migrate only when the apps differ. The tools
+refuse the default site (the plan comes back with `can_apply: false`):
+that rollback is the person's, in a terminal. Removing a snapshot is the
+person's too; there is no tool for it, and `benchbar site snapshot drop` is
+refused for an agent.
 
 ## Installing and updating an app
 
@@ -201,8 +220,8 @@ the newest ten. A run whose process died without a `done` line is
 `interrupted`: its log says how far it got. Poll every few seconds, not
 faster; the tool only reads.
 
-`benchbar_app_add` and `benchbar_site_restore` also take `background:
-true`. The call then returns at once with the `op_id` (state `starting`)
+`benchbar_app_add`, `benchbar_site_restore`, `benchbar_site_snapshot` and
+`benchbar_site_rollback` also take `background: true`. The call then returns at once with the `op_id` (state `starting`)
 and the run goes on without the call: follow it with `benchbar_op_status`
 until its state is `done` or `failed`; `result` then holds the `done`
 line, with `changed`, `warnings` and `next_actions`. Use it when the
@@ -212,7 +231,7 @@ tool that blocks for minutes is what `background` replaces.
 
 In a terminal the same handles are `benchbar op status|list|wait` and
 `--background` on `install`, `repair`, `pull`, `app add`, `app update`,
-`site add`, `site backup` and `site restore` (it needs `--yes`: nothing
+`site add`, `site backup`, `site restore`, `site snapshot` and `site rollback` (it needs `--yes`: nothing
 can be asked of a run nobody watches). See [op](../reference/cli/other.md#op).
 
 The MCP protocol of 2025-11-25 has a tasks primitive for exactly this

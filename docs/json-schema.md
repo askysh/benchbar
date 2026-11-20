@@ -29,6 +29,8 @@ Raycast extensions and the like can rely on it too.
 | `benchbar where --json` | how this CLI was installed, the path it records for itself, its state folder and the app (0.7), see [where](#benchbar-where---json) |
 | `benchbar site backup NAME --json` | the backup just taken (0.5.8), see [site backups](#site-backups) |
 | `benchbar site backups NAME --json` | every backup of a site (0.5.8) |
+| `benchbar site snapshot NAME --json`, `site snapshots NAME --json` | one snapshot, the snapshots of a site (0.9.0), see [site snapshots](#site-snapshots) |
+| `benchbar site rollback NAME --to SNAPSHOT --dry-run --json` | the plan and result of a rollback: [site restore](#benchbar-site-restore-json) with a `rollback` block (0.9.0) |
 | `benchbar up\|down\|restart\|service\|site add\|site default --json` | JSON lines ending in one `done` (0.8), see [the done fields](#the-done-fields-08) |
 | `benchbar site drop NAME --json` | the plan (with `--dry-run`) or the result of dropping a site (0.5.8) |
 | `benchbar op status [OP_ID]\|list\|wait OP_ID --json` | the long runs: one record or the recent ones (0.9), see [operation handles](#operation-handles-09) |
@@ -1354,6 +1356,50 @@ And the result, without `--dry-run`:
 | `new_default` | the site that became the default, or `null` |
 | `hosts_removed` | the `/etc/hosts` line was removed |
 | `manual_step` | the command that removes the hosts line by hand when benchbar could not (no terminal for `sudo`, a line outside benchbar's block), else `null` |
+
+### Site snapshots
+
+Added in 0.9.0. A snapshot is a backup with files kept in
+`sites/NAME/snapshots/<id>/` with a `manifest.json`. One snapshot, as
+`site snapshot` and `site snapshots` print it:
+
+| Field | Meaning |
+|---|---|
+| `id` | the folder name: the time stamp of the backup, then the label as a slug (`20261120_160102-before-upgrade`) |
+| `site`, `label`, `time` | the site, the label given (empty when none), the time of the backup (UTC) |
+| `stamp`, `path` | the backup's time stamp, the folder |
+| `size_bytes`, `db_size_bytes` | all parts together, the database dump alone |
+| `with_files`, `complete` | the public or private files are in it; every part is there and not empty |
+| `rollback_of` | for a `before rollback` snapshot: the snapshot that rollback went to, else empty |
+| `before_rollback` | `true` for the `before rollback` snapshot of the last rollback of this site |
+| `apps` | `[{"name", "commit", "branch"}]` of the bench's git apps when it was taken |
+| `apps_match` | `true` when the bench's apps are the same now, `false` when one was added, removed or moved to another commit, `null` when the manifest lists none |
+| `changed_apps` | the app names that differ now |
+
+`benchbar site snapshot NAME --json`: `{"schema_version", "cli_version",
+"bench", "site", "dry_run", "snapshot": snapshot, "keep", "over_limit":
+[id, ...]}`; `snapshot` is `null` in a dry run.
+
+`benchbar site snapshots NAME --json`: `{"schema_version", "cli_version",
+"bench", "site", "folder", "keep", "snapshots": [snapshot, ...],
+"over_limit": [id, ...], "last_rollback_snapshot"}`, newest first.
+`over_limit` is what retention would remove, never the undo point of the
+last rollback. Nothing is removed by either command.
+
+`benchbar site rollback NAME --to SNAPSHOT --dry-run --json` is the plan of
+[site restore](#benchbar-site-restore-json) (the same fields and token), with
+the first step `snapshot` in place of `local_backup`, `migrate` only when the
+apps differ, and one more key:
+
+| Field | Meaning |
+|---|---|
+| `rollback` | `{"snapshot", "label", "time", "snapshot_first": "before rollback", "apps_match", "changed_apps", "default_site"}`. `can_apply` is `false` with an error when the site is the bench's default site and the caller is an agent |
+
+The result of `--apply TOKEN --yes --json` is the restore result with
+`rollback: {"snapshot", "before_rollback", "undo"}`: `before_rollback` is the
+snapshot of the state before the rollback and `undo` the command that goes
+back to it. `benchbar site snapshot drop` prints `{"dropped": [id, ...],
+"freed_bytes"}` (a plan with `would_drop`); it is for a person at a terminal.
 
 ### `benchbar site restore --json`
 

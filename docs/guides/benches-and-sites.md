@@ -155,6 +155,49 @@ itself when the bench is stopped and stops it again; for your own
 `benchbar down` stops it. See
 [site restore](../reference/cli/site.md#site-restore).
 
+## Snapshots: save a site, put it back
+
+A snapshot is for "save this site before I try something, and put it back
+in one step". `site snapshot` takes a backup with files (the database,
+the public and private files, `site_config.json`) and moves it out of
+`sites/NAME/private/backups`, which frappe prunes, into
+`sites/NAME/snapshots/<time>-<label>/`, next to a `manifest.json` with the
+time, the label, the size and the apps of the bench with their commits.
+Nothing in the site changes, and nothing removes a snapshot by itself.
+
+```bash
+benchbar site snapshot v16two --label "before the erpnext update"
+benchbar site snapshots v16two              # newest first: label, size, and whether the bench's apps still match
+benchbar site rollback v16two --to latest --dry-run --json
+benchbar site rollback v16two --to latest --apply TOKEN --yes
+```
+
+`site rollback` is `site restore` with a snapshot as its source: the same
+plan, token and run. It first takes a snapshot of the current state
+labelled `before rollback`, so a rollback can itself be undone
+(`site rollback NAME --to latest` right after it goes back), then restores
+the snapshot's database and files into the same site, runs `bench migrate`
+only when the snapshot's app commits differ from the bench's (the plan says
+so; `--no-migrate` stops before it), and ends with the same check as a
+restore. A rollback across an app change is allowed and warned: the
+snapshot's data goes into the bench's current code. `--to` takes the name
+from `site snapshots`, its time stamp, or `latest`.
+
+The default site is a person's to roll back: an agent (`--for-agent`,
+`benchbar mcp`, `BENCHBAR_NONINTERACTIVE=1`) gets a plan that cannot be
+applied, and in a terminal the question names it as the default site.
+Another site is never touched.
+
+Retention keeps the newest 10 snapshots (`SNAPSHOT_KEEP` in the bench's
+state file, or `--keep N`), but only reports it: `site snapshots` lists the
+ones beyond the limit, and a person removes them with
+`benchbar site snapshot drop SITE --prune` or one by name with
+`benchbar site snapshot drop SITE SNAPSHOT`. Both ask first, are refused
+for an agent, and never remove the `before rollback` snapshot of the last
+rollback with `--prune`. A snapshot holds the whole database and the files,
+so it is as big as a backup with files. See
+[site snapshot](../reference/cli/site.md#site-snapshot).
+
 `site drop` removes a site for good: its database and database user are
 dropped, and only the backup it takes first can bring them back. Before
 you drop one, check that it is the site you mean (`benchbar site list`)
@@ -246,6 +289,7 @@ one `KEY=value` per line, then `benchbar repair` writes the agent again:
 |---|---|---|
 | `SERVICE_NICE` | `0` to `19` | `Nice` (launchd) and `Nice=` (systemd): the bench yields to other programs |
 | `SERVICE_BACKGROUND` | `on` | launchd `ProcessType` Background: low CPU and disk priority (Mac only) |
+| `SNAPSHOT_KEEP` | `1` to `9999` | how many snapshots of a site `site snapshots` and `site snapshot drop --prune` keep (default 10); no service change |
 | `SERVICE_MEMORY_HIGH` | `4G`, `512M`, `50%` | systemd `MemoryHigh=`: the unit is slowed and its memory reclaimed above it, never killed (Linux only). `0` and `0%` are refused: use `infinity` for no limit |
 
 A value that is not valid is ignored and the default stays. A runaway
