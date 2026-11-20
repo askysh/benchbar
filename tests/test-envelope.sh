@@ -57,7 +57,7 @@ BENCHBAR_SUDO=gui run_fm site open-as on macdev --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 
 # commands with no JSON mode: a terminal program, a text only helper, or a group that prints its usage
-NO_JSON=" fg watch console db docs mcp help mariadb-password path site app lock profile share lan-guard ports profile-show "
+NO_JSON=" fg watch console db docs mcp help mariadb-password path site app lock profile share lan-guard ports profile-show op "
 
 # key|args that succeed|args that fail ("-" for none)|exit of the success row (default 0)
 # $B is the bench, $NOBENCH a folder that is no bench; @TOKEN@ is the token of `ports plan` for the bench.
@@ -67,6 +67,11 @@ NO_JSON=" fg watch console db docs mcp help mariadb-password path site app lock 
 # (2 for labs on), and with nothing shared (a person has to start it) the commands of a room refuse with exit 1.
 ROWS="
 install|install --dry-run|install
+notices|notices|notices --dismiss
+wait|wait --timeout 0|wait --timeout soon|1
+op list|op list|op list --limit 0
+op status|op status|op status ../../etc/passwd
+op wait|op wait op-20261119-101500-4242 --timeout 1|op wait ../../etc/passwd|1
 adopt|adopt $BENCH --dry-run|adopt $NOBENCH --dry-run
 service|service --dry-run|service --bench-dir $NOBENCH
 doctor|doctor|doctor --bench-dir $NOBENCH
