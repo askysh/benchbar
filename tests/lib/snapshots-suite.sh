@@ -78,6 +78,15 @@ suite() {
   assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "has no snapshots yet"
   assert_calls_not_contain '^(bench|python benchbar|redis-server)'
 
+  # ---- free space: a snapshot that cannot fit is refused before bench writes anything
+  printf '%s' 1 >"$MOCK_STATE/df_avail_kb"
+  reset_calls
+  run_fm site snapshot acme.localhost --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "not enough free space for a snapshot of acme.localhost"
+  assert_calls_not_contain '^(bench|redis-server)'
+  assert_eq "0" "$(snap_count)" "(nothing was written)"
+  printf '%s' 52428800 >"$MOCK_STATE/df_avail_kb"
+
   # ---- snapshot: bench's backup with files, moved out of private/backups, with its manifest
   reset_calls
   run_json site snapshot acme.localhost --label "Before upgrade" --json --bench-dir "$BENCH"
@@ -144,6 +153,19 @@ assert [a["name"] for a in s["apps"]] == ["frappe", "erpnext"] and s["apps_match
   run_fm site snapshots acme.localhost --bench-dir "$BENCH"
   assert_contains "$OUT" "changed: erpnext"
 
+  # ---- the listing says how much the snapshots hold and how much is free
+  run_json site snapshots acme.localhost --json --bench-dir "$BENCH"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["total_bytes"] > 0 and d["free_bytes"] == 52428800 * 1024')"
+  run_fm site snapshots acme.localhost --bench-dir "$BENCH"
+  assert_contains "$OUT" "the snapshots hold"; assert_contains "$OUT" "are free on this volume"
+  # --to latest skips a newer folder that is no snapshot (a cut short one: no manifest, no dump)
+  mkdir -p "$SNAPS/20260930_000000-half"; printf 'x' >"$SNAPS/20260930_000000-half/20260930_000000-acme_localhost-files.tar"
+  run_json site rollback acme.localhost --to latest --dry-run --json --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT$ERR"
+  assert_eq "$id2" "$(printf '%s' "$OUT" | jget - 'd["rollback"]["snapshot"]')" "(the half folder is skipped)"
+  assert_contains "$ERR" "skipped incomplete snapshot(s): 20260930_000000-half"
+  rm -f "$SNAPS/20260930_000000-half/20260930_000000-acme_localhost-files.tar"; rmdir "$SNAPS/20260930_000000-half"
+
   # ---- the rollback plan across an app change: read only, with a token, migrate and a warning
   reset_calls
   run_json site rollback acme.localhost --to "$id1" --dry-run --json --bench-dir "$BENCH"
@@ -175,6 +197,12 @@ assert any("changed since the snapshot (erpnext)" in w for w in d["warnings"]), 
   assert_contains "$OUT" "Snapshot acme.localhost first (label: before rollback)"
   assert_contains "$OUT" "changed since the snapshot (erpnext)"
   assert_contains "$OUT" "after the restore, because the apps changed"
+  # a rollback writes one more snapshot first: without the room the plan cannot be applied
+  printf '%s' 1 >"$MOCK_STATE/df_avail_kb"
+  run_json site rollback acme.localhost --to "$id1" --dry-run --json --bench-dir "$BENCH"
+  assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')"
+  assert_contains "$OUT" "not enough free space for a snapshot of acme.localhost"
+  printf '%s' 52428800 >"$MOCK_STATE/df_avail_kb"
   # --no-migrate is its own plan, and still warns
   run_json site rollback acme.localhost --to "$id1" --no-migrate --dry-run --json --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT$ERR"
@@ -302,6 +330,13 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Cancelled. Nothing was removed"
   assert_file "$SNAPS/$id1/manifest.json"
 
+  # ---- site drop says its snapshots go into the archive with the site
+  run_json site drop acme.localhost --confirm-site acme.localhost --dry-run --json --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT$ERR"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["snapshots"]["count"] >= 2 and d["snapshots"]["size_bytes"] > 0')"
+  assert_contains "$OUT" "snapshot(s)"
+  assert_contains "$OUT" "move into the archive with it"
+
   # ---- retention: the newest N stay, the rest are named, nothing goes on its own
   n="$(snap_count)"
   run_json site snapshots acme.localhost --keep 2 --json --bench-dir "$BENCH"
@@ -325,8 +360,17 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   assert_file "$SNAPS/$before/manifest.json" "(the undo point stays)"
   run_json site snapshot drop acme.localhost --prune --keep 2 --yes --json --bench-dir "$BENCH"
   assert_eq "0" "$(printf '%s' "$OUT" | jget - 'len(d["dropped"])')" "(a second prune changes nothing)"
-  # one by name, and the last rollback's pointer goes with it
+  # one by name: the undo point of the last rollback is refused, unless a person says so
   run_fm site snapshot drop acme.localhost "$before" --yes --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "is the undo point of the last rollback"; assert_contains "$OUT" "--force-undo-point"
+  assert_file "$SNAPS/$before/manifest.json"; assert_file "$SNAPS/.last-rollback"
+  run_fm --for-agent site snapshot drop acme.localhost "$before" --force-undo-point --yes --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "a person at a terminal"
+  assert_file "$SNAPS/$before/manifest.json"
+  run_fm site snapshot drop acme.localhost --prune --force-undo-point --yes --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "--force-undo-point goes with one named snapshot"
+  # and its pointer goes with it
+  run_fm site snapshot drop acme.localhost "$before" --force-undo-point --yes --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"
   assert_no_file "$SNAPS/$before"
   assert_no_file "$SNAPS/.last-rollback"

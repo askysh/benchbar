@@ -32,6 +32,7 @@ FL_SNAP_JSON="null"
 FL_SNAP_ERR=""
 FL_SNAP_HINT=""
 FL_SNAP_CHANGED=""
+FL_SNAP_SKIPPED=""
 
 # fl_snap_dir SITE: the folder that holds the snapshots of SITE
 fl_snap_dir() { printf '%s/sites/%s/snapshots' "$FL_BENCH_DIR" "$1"; }
@@ -84,8 +85,17 @@ fl_snap_resolve() {
   fi
   dir="$(fl_snap_dir "$site")"
   if [[ "$ref" == "latest" ]]; then
-    hit="$(fl_snap_ids "$site" | awk 'NR==1')"
-    [[ -n "$hit" ]] || { FL_SNAP_ERR="${site} has no snapshots yet."; FL_SNAP_HINT="benchbar site snapshot ${site} --label TEXT takes one"; return 1; }
+    FL_SNAP_SKIPPED=""
+    while IFS= read -r id; do
+      [[ -n "$id" ]] || continue
+      if fl_snap_is_complete "$site" "$id"; then hit="$id"; break; fi
+      FL_SNAP_SKIPPED="${FL_SNAP_SKIPPED}${FL_SNAP_SKIPPED:+ }${id}"
+    done < <(fl_snap_ids "$site")
+    if [[ -z "$hit" ]]; then
+      FL_SNAP_ERR="${site} has no complete snapshot$([[ -n "$FL_SNAP_SKIPPED" ]] && printf ' (skipped incomplete: %s)' "$FL_SNAP_SKIPPED")."
+      FL_SNAP_HINT="benchbar site snapshot ${site} --label TEXT takes one"
+      return 1
+    fi
     FL_SNAP_ID="$hit"; return 0
   fi
   if [[ -d "${dir}/${ref}" && ! -L "${dir}/${ref}" ]]; then FL_SNAP_ID="$ref"; return 0; fi
@@ -215,6 +225,82 @@ fl_snap_over_limit() {
   done < <(fl_snap_ids "$1")
 }
 
+# fl_snap_summary BENCH SITE: FL_SNAP_COUNT and FL_SNAP_BYTES, the snapshots of SITE in BENCH and the
+# bytes they hold (for the plans of site drop and bench remove: bench drop-site moves them with the site)
+FL_SNAP_COUNT=0
+FL_SNAP_BYTES=0
+fl_snap_summary() {
+  local d f b
+  FL_SNAP_COUNT=0; FL_SNAP_BYTES=0
+  for d in "$1/sites/$2/snapshots"/[0-9]*_[0-9]*; do
+    [[ -d "$d" && ! -L "$d" ]] || continue
+    FL_SNAP_COUNT=$((FL_SNAP_COUNT + 1))
+    for f in "$d"/*; do
+      [[ -f "$f" ]] || continue
+      b="$(wc -c <"$f" | tr -d '[:space:]')"
+      FL_SNAP_BYTES=$((FL_SNAP_BYTES + ${b:-0}))
+    done
+  done
+}
+
+# fl_snap_phrase BENCH SITE: "; its 2 snapshot(s) (4.0 MB) move into the archive with it", or nothing
+fl_snap_phrase() {
+  fl_snap_summary "$1" "$2"
+  [[ "$FL_SNAP_COUNT" -gt 0 ]] || return 0
+  printf '; its %s snapshot(s) (%s) move into the archive with it' "$FL_SNAP_COUNT" "$(fl_fmt_bytes "$FL_SNAP_BYTES")"
+}
+
+# fl_snap_is_complete SITE ID: the folder has its manifest and a database dump that is not empty
+fl_snap_is_complete() {
+  local d f
+  d="$(fl_snap_dir "$1")/$2"
+  [[ -f "${d}/manifest.json" ]] || return 1
+  for f in "$d"/*-database.sql.gz; do
+    [[ -s "$f" ]] && return 0
+  done
+  return 1
+}
+
+# fl_snap_free_bytes SITE: the free bytes on the volume of the site's folder, empty when df does not say
+fl_snap_free_bytes() {
+  local kb
+  kb="$(df -k "${FL_BENCH_DIR}/sites/$1" 2>/dev/null | awk 'NR == 2 { print $4 }')"
+  [[ "$kb" =~ ^[0-9]+$ ]] && printf '%s' "$((kb * 1024))"
+  return 0
+}
+
+# fl_snap_need_bytes SITE: what one more snapshot writes before anything is moved: the public and private
+# files (a tar of about their size), the database dump (as big as the largest one the site has: a snapshot,
+# or a backup), and 5 percent, at least 1 MB. bench backup writes a whole set first, whatever it moves later.
+fl_snap_need_bytes() {
+  local site="$1" files=0 dump=0 f b kb sub
+  for sub in public/files private/files; do
+    [[ -d "${FL_BENCH_DIR}/sites/${site}/${sub}" ]] || continue
+    kb="$(du -sk "${FL_BENCH_DIR}/sites/${site}/${sub}" 2>/dev/null | awk '{ print $1 }')"
+    [[ "$kb" =~ ^[0-9]+$ ]] && files=$((files + kb * 1024))
+  done
+  for f in "$(fl_snap_dir "$site")"/*/*-database.sql.gz "$(fl_site_backup_dir "$site")"/*-database.sql.gz; do
+    [[ -f "$f" ]] || continue
+    b="$(wc -c <"$f" | tr -d '[:space:]')"
+    [[ "${b:-0}" -le "$dump" ]] || dump="$b"
+  done
+  b=$((files + dump))
+  b=$((b + b / 20))
+  [[ "$b" -ge 1048576 ]] || b=1048576
+  printf '%s' "$b"
+}
+
+# fl_snap_space_check SITE: 0 when a snapshot fits (or df does not say), else 1 with FL_SNAP_ERR and FL_SNAP_HINT
+fl_snap_space_check() {
+  local site="$1" need free
+  need="$(fl_snap_need_bytes "$site")"
+  free="$(fl_snap_free_bytes "$site")"
+  [[ -n "$free" && "$free" -lt "$need" ]] || return 0
+  FL_SNAP_ERR="not enough free space for a snapshot of ${site}: about $(fl_fmt_bytes "$need") are written first (its files and a database dump), and $(fl_fmt_bytes "$free") are free on the volume of ${FL_BENCH_DIR}/sites/${site}."
+  FL_SNAP_HINT="Free some space, or remove old snapshots (a person: benchbar site snapshot drop ${site} --prune). Nothing was written."
+  return 1
+}
+
 # ------------------------------------------------- taking one
 
 # fl_snap_take SITE LABEL [ROLLBACK_OF]: bench backup --with-files, then its files moved into the
@@ -224,13 +310,15 @@ fl_snap_over_limit() {
 fl_snap_take() {
   local site="$1" label="$2" rto="${3:-}" bdir sdir id stamp set slug root n=1 f name k moved=() mtime dbfile db_bytes total
   FL_SNAP_ID=""; FL_SNAP_JSON="null"; FL_SNAP_ERR=""; FL_SNAP_HINT=""
+  # bench backup writes a whole set before anything moves: it must fit first
+  fl_snap_space_check "$site" || return 1
   if ! fl_site_backup_take "$site" 1; then
     FL_SNAP_ERR="$FL_BACKUP_TAKEN_ERR"; FL_SNAP_HINT="$FL_BACKUP_TAKEN_HINT"
     return 1
   fi
   stamp="$FL_BACKUP_TAKEN_STAMP"; set="$FL_BACKUP_TAKEN_SET"
   bdir="$(fl_site_backup_dir "$site")"
-  for k in database files private_files; do
+  for k in database files private_files config; do
     case "$(fl_backup_field "$set" "$k")" in
       ""|null) FL_SNAP_ERR="the backup ${stamp} of ${site} has no ${k} part, so it is not a snapshot."; FL_SNAP_HINT="Look in ${bdir}"; return 1 ;;
     esac
@@ -240,7 +328,7 @@ fl_snap_take() {
     FL_SNAP_HINT="It stays in ${bdir}; take the snapshot with the encryption of backups off"
     return 1
   fi
-  if ! fl_backup_set_check "$bdir" "$(basename "$(fl_backup_field "$set" database)")" "$(basename "$(fl_backup_field "$set" files)")" "$(basename "$(fl_backup_field "$set" private_files)")"; then
+  if ! fl_backup_set_check "$bdir" "$(basename "$(fl_backup_field "$set" database)")" "$(basename "$(fl_backup_field "$set" files)")" "$(basename "$(fl_backup_field "$set" private_files)")" "$(basename "$(fl_backup_field "$set" config)")"; then
     FL_SNAP_ERR="${FL_BACKUP_PROBLEM}; no snapshot was made."; FL_SNAP_HINT="Look in ${bdir}"
     return 1
   fi
@@ -268,7 +356,19 @@ fl_snap_take() {
   db_bytes="$(wc -c <"${sdir}/$(basename "$dbfile")" | tr -d '[:space:]')"
   total="$(fl_backup_field "$set" size_bytes)"
   mtime="$(fl_backup_field "$set" time)"
-  fl_snap_manifest_write "${sdir}/manifest.json" "$id" "$site" "$label" "$stamp" "$mtime" "${db_bytes:-0}" "${total:-0}" "$rto"
+  if ! fl_snap_manifest_write "${sdir}/manifest.json.tmp" "$id" "$site" "$label" "$stamp" "$mtime" "${db_bytes:-0}" "${total:-0}" "$rto" \
+    || ! mv "${sdir}/manifest.json.tmp" "${sdir}/manifest.json"; then
+    # no manifest, no snapshot: the set goes back where bench wrote it (a plain backup) and the folder is
+    # taken away empty, never recursively; whatever cannot go back stays where it is and is named
+    rm -f "${sdir}/manifest.json.tmp"
+    for name in ${moved[@]+"${moved[@]}"}; do mv "${sdir}/${name}" "${bdir}/${name}" 2>/dev/null || true; done
+    if ! rmdir "$sdir" 2>/dev/null; then
+      mv "$sdir" "${root}/.incomplete-${id}" 2>/dev/null || true
+    fi
+    FL_SNAP_ERR="could not write the manifest of ${id}; no snapshot was made, and the backup ${stamp} is back in ${bdir}."
+    FL_SNAP_HINT="Look at the permissions and the free space of ${root}"
+    return 1
+  fi
   FL_SNAP_ID="$id"
   FL_SNAP_JSON="$(fl_snap_json "$site" "$id")"
 }
@@ -302,6 +402,8 @@ fl_snap_plan_hook() {
       fl_srestore_err "${SR_TARGET} is the default site of this bench: rolling it back is a person's decision, not an agent's. Ask the person to run it in a terminal: benchbar site rollback ${SR_TARGET} --to ${SR_SNAP_ID}"
     fi
   fi
+  # the snapshot of the current state is written before anything is replaced: it must fit
+  if ! fl_snap_space_check "$SR_TARGET"; then fl_srestore_err "${FL_SNAP_ERR} ${FL_SNAP_HINT}"; fi
   fl_snap_apps_diff "$m" || rc=$?
   case "$rc" in
     0)
@@ -376,7 +478,7 @@ fl_cmd_site_snapshot() {
 
 # site snapshots SITE [--keep N]: newest first. Read only.
 fl_cmd_site_snapshots() {
-  local name="" json="$OPT_JSON" dir id sep="" rows=() set keep over last apps now aname acommit n=0 rc
+  local name="" json="$OPT_JSON" dir id sep="" rows=() set keep over last apps now aname acommit n=0 rc total free
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --keep) FL_SNAP_KEEP_OPT="${2:-}"; shift 2 || shift ;;
@@ -394,6 +496,9 @@ fl_cmd_site_snapshots() {
   fl_snap_keep_v keep
   over="$(fl_snap_over_limit "$name" "$keep")"
   last="$(fl_snap_last_rollback "$name")"
+  fl_snap_summary "$FL_BENCH_DIR" "$name"
+  total="$FL_SNAP_BYTES"
+  free="$(fl_snap_free_bytes "$name")"
   if [[ "$json" == "1" ]]; then
     {
     printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"folder":%s,"keep":%s,"snapshots":[' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" \
@@ -403,7 +508,7 @@ fl_cmd_site_snapshots() {
       printf '%s%s' "$sep" "$(fl_snap_json "$name" "$id")"; sep=","
     done < <(fl_snap_ids "$name")
     # shellcheck disable=SC2086  # one name per line
-    printf '],"over_limit":%s,"last_rollback_snapshot":%s}\n' "$(fl_json_str_array $over)" "$(fl_json_str "$last")"
+    printf '],"over_limit":%s,"last_rollback_snapshot":%s,"total_bytes":%s,"free_bytes":%s}\n' "$(fl_json_str_array $over)" "$(fl_json_str "$last")" "$total" "${free:-null}"
     } >&3
     return 0
   fi
@@ -428,6 +533,7 @@ fl_cmd_site_snapshots() {
   if [[ "$n" == "0" ]]; then fl_info "no snapshots of ${name} yet; take one with: benchbar site snapshot ${name} --label TEXT"; return 0; fi
   fl_table "${rows[@]}"
   fl_note "folder: ${dir}"
+  fl_note "the snapshots hold $(fl_fmt_bytes "$total")${free:+; $(fl_fmt_bytes "$free") are free on this volume}"
   if [[ -n "$over" ]]; then
     fl_note "retention keeps the newest ${keep}; beyond it: $(printf '%s' "$over" | tr '\n' ' ')"
     fl_note "nothing is removed on its own; a person removes them with: benchbar site snapshot drop ${name} --prune"
@@ -456,6 +562,7 @@ fl_cmd_site_rollback() {
   [[ -n "$to" ]] || fl_die "--to SNAPSHOT names the snapshot to go back to (benchbar site snapshots ${name} lists them; latest is the newest)."
   fl_site_require "$name"
   fl_snap_resolve "$name" "$to" || fl_die "$FL_SNAP_ERR" "$FL_SNAP_HINT"
+  [[ -z "$FL_SNAP_SKIPPED" ]] || fl_warn "--to latest skipped incomplete snapshot(s): ${FL_SNAP_SKIPPED}"
   SR_ROLLBACK=1
   SR_SNAP_ID="$FL_SNAP_ID"
   SR_SNAP_DIR="$(fl_snap_dir "$name")/${FL_SNAP_ID}"
@@ -478,13 +585,14 @@ fl_snap_remove() {
 
 # site snapshot drop SITE SNAPSHOT | --prune [--keep N] [--yes] [--dry-run]
 fl_cmd_site_snapshot_drop() {
-  local name="" ref="" prune=0 json="$OPT_JSON" ids=() id keep freed=0 set b dropped=() want
+  local name="" ref="" prune=0 json="$OPT_JSON" ids=() id keep freed=0 set b dropped=() want force=0
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --prune) prune=1; shift ;;
+      --force-undo-point) force=1; shift ;;
       --keep) FL_SNAP_KEEP_OPT="${2:-}"; shift 2 || shift ;;
       --keep=*) FL_SNAP_KEEP_OPT="${1#*=}"; shift ;;
-      -*) fl_die "Unknown option for site snapshot drop: $1" "Use: benchbar site snapshot drop SITE SNAPSHOT|--prune [--keep N] [--yes] [--dry-run]" ;;
+      -*) fl_die "Unknown option for site snapshot drop: $1" "Use: benchbar site snapshot drop SITE SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run]" ;;
       *) if [[ -z "$name" ]]; then name="$1"; elif [[ -z "$ref" ]]; then ref="$1"; fi; shift ;;
     esac
   done
@@ -499,11 +607,17 @@ fl_cmd_site_snapshot_drop() {
   fi
   if [[ "$prune" == "1" ]]; then
     [[ -z "$ref" ]] || fl_die "--prune takes no snapshot name: it removes the ones beyond the newest N." "Use: benchbar site snapshot drop ${name} --prune [--keep N]"
+    [[ "$force" != "1" ]] || fl_die "--force-undo-point goes with one named snapshot; --prune never removes the undo point of the last rollback." "Use: benchbar site snapshot drop ${name} SNAPSHOT --force-undo-point"
     fl_snap_keep_v keep
     while IFS= read -r id; do [[ -n "$id" ]] && ids+=("$id"); done < <(fl_snap_over_limit "$name" "$keep")
   else
     [[ -n "$ref" ]] || fl_die "Name the snapshot to remove, or use --prune." "benchbar site snapshots ${name} lists them"
     fl_snap_resolve "$name" "$ref" || fl_die "$FL_SNAP_ERR" "$FL_SNAP_HINT"
+    # the "before rollback" snapshot of the last rollback is what undoes it: a person says so to remove it
+    if [[ "$FL_SNAP_ID" == "$(fl_snap_last_rollback "$name")" && "$force" != "1" ]]; then
+      fl_die "${FL_SNAP_ID} is the undo point of the last rollback of ${name}: removing it leaves that rollback with no way back." \
+        "If you are sure: benchbar site snapshot drop ${name} ${FL_SNAP_ID} --force-undo-point"
+    fi
     ids+=("$FL_SNAP_ID")
   fi
   for id in ${ids[@]+"${ids[@]}"}; do
