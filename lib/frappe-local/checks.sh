@@ -16,7 +16,9 @@ FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 # doctor --quick leaves these out: they start brew, python, node, bench, git
 # or ask the site, which takes seconds each; the JSON names them (skipped_checks)
 FL_QUICK_SKIP="brew formula_dates python_leaves pdf_engine app_copies env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio dependency_behind apps_behind ping"
-FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
+# the file sudo writes: never taken from the environment, but by the tests
+# (FL_TESTING=1, which tests/lib/harness.sh sets)
+if [[ "${FL_TESTING:-0}" == "1" ]]; then FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"; else FL_HOSTS_FILE=/etc/hosts; fi
 
 # port_block only exists while a plan moves this bench's ports
 # (FL_PORT_TARGET, set by fl_ports_plan); doctor never shows it.
@@ -884,9 +886,15 @@ chk_legacy_agents() {
 }
 
 # Any bench's agent, not only this one's: a loaded agent whose runner is
-# gone restarts every 20 seconds, exits 127 and writes to its bench.log.
+# gone restarts every 20 seconds, exits 127 and writes to its bench.log (a
+# failure, not a hint: it goes on for as long as the person is logged in).
+# Only runners benchbar writes count, so a person's own script never does.
+# The fix depends on the folder: a folder that is no bench any more loses
+# its agent (the dead_agents action, which repair runs from any bench), this
+# bench's runner is written again by the runner check, another bench that
+# is still there is repaired from its own folder.
 chk_dead_agents() {
-  local list n=0 desc="" fixes="" plist label dir
+  local list n=0 desc="" fixes="" plist label dir act=""
   list="$(fl_dead_agents_list)"
   if [[ -z "$list" ]]; then
     chk__set ok "every loaded benchbar agent has its runner"
@@ -896,9 +904,15 @@ chk_dead_agents() {
     [[ -n "$plist" ]] || continue
     n=$((n + 1))
     desc="${desc}${desc:+; }${label} (${dir:-no folder})"
-    fixes="${fixes}${fixes:+ ; }${FL_SELF} uninstall-service --bench-dir $(fl_sq "$dir")"
+    if [[ -n "$dir" ]] && fl_is_bench_dir "$dir"; then
+      if fl_same_path "$dir" "$FL_BENCH_DIR"; then fixes="${fixes}${fixes:+ ; }${FL_SELF} repair"
+      else fixes="${fixes}${fixes:+ ; }${FL_SELF} repair --bench-dir $(fl_sq "$dir")"; fi
+    else
+      act="dead_agents"
+      fixes="${fixes}${fixes:+ ; }${FL_SELF} uninstall-service --bench-dir $(fl_sq "$dir")"
+    fi
   done <<<"$list"
-  chk__set warn "${n} loaded agent(s) whose runner script is missing, restarted every 20 s: ${desc}" "$fixes"
+  chk__set fail "${n} loaded agent(s) whose runner script is missing, restarted every 20 s: ${desc}" "$fixes" "$act"
 }
 
 fl_mariadb_dropin_path() {

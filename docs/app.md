@@ -188,12 +188,17 @@ in its footer, and Cancel on the first page goes back to where you were.
 Every bench has a page:
 
 - **Overview**: start, stop and restart (one group of buttons), **Open
-  Site**, the site and ports, and the scheduler switch. **Open in VS
+  Site**, the site and ports, and the background jobs: the scheduler
+  switch, **Start after login** (`benchbar autostart`) and **Install
+  Service…** or **Refresh Service…** (`benchbar service`). **Open in VS
   Code** (or Cursor, chosen in Settings, General) opens the bench folder.
   The ⋯ menu beside Open Site has **Open Console** and **Open Database**
   (Terminal with `benchbar console` and `benchbar db` for the default
-  site), Show in Finder and Copy Path. The ⋯ menu of each site on the
-  Sites tab has both for that site. **Port Settings & Setup…** sits in
+  site), Show in Finder and Copy Path. On a stopped bench the same menu
+  has **Start Services Only** (`benchbar up --services-only`: the bench's
+  Redis and nothing else, for a restore or a migrate) and **Stop
+  Services** (`benchbar down`); no plan, your click is the decision. The
+  ⋯ menu of each site on the Sites tab has both for that site. **Port Settings & Setup…** sits in
   the header of the Site and ports section. While the bench runs, two small charts show its CPU
   and memory for the last ten minutes (hover for the value at a moment);
   the popover shows the current values under the bench name. They count
@@ -218,12 +223,32 @@ Every bench has a page:
   you to type its name, never sits on Return, and has the CLI back the
   site up with its files first; the backup is listed on the Sites tab
   afterwards. A copy leaves the original alone. Encrypted and partial
-  backups are not offered. The sheet asks for no password: the MariaDB
-  password stays with `benchbar`, and when it does not have it (the plan
-  says `MARIADB_ROOT_PASSWORD` is needed) the sheet tells you to run the
-  command in Terminal.
-- **Apps**: add an app from the registry or any GitHub URL, and update it
-  after reading the changelog. Each app's ⋯ menu installs it on a site
+  backups are not offered. **Pull…** in the header of the Sites section
+  copies a production site over SSH (`HOST:SITE`, a Host of your
+  `~/.ssh/config`), or a backup you downloaded, into a new site. It shows
+  the plan (`benchbar pull --dry-run --json`) first, and Pull runs exactly
+  that plan by its token (`--apply TOKEN --yes`). The copy is
+  neutralised, as the command does since 0.9: integrations off and stored
+  passwords cleared; the Administrator login is kept. **Keep production's
+  passwords and integrations** is off unless you turn it on, and the plan
+  says so in orange when it is. When the plan changed after you saw it (a
+  newer backup on the server, another set of apps), the CLI refuses the
+  run before it changes anything and the sheet says so, with **Review
+  Again**.
+  Neither sheet asks for a password: the MariaDB password stays with
+  `benchbar`. When it does not have it, the restore plan lists the
+  password as an error and cannot be run. For a pull, the dry run itself
+  stops (exit 2, no plan) and the sheet shows the CLI's message, "The
+  MariaDB root password is needed for the restore", in place of a plan.
+  Either way, run the command in Terminal with `MARIADB_ROOT_PASSWORD`
+  set; the app never asks for it.
+- **Apps**: add apps from the registry or any git URL, and update an app
+  after reading the changelog. **Add App…** takes one app or several in one
+  plan: each has its own branch, an optional commit to pin it to (7 to 40
+  hex characters) and the site it is installed on, and **Add Another App**
+  adds a row (up to eight). Review shows one plan with one token
+  (`benchbar app add A B --dry-run --json`); an app another one needs is
+  cloned once, and **Add N Apps** runs exactly that plan. Each app's ⋯ menu installs it on a site
   that lacks it and sets its focus (Auto, Focus, Ignore). The ⋯ menu
   beside **Add App…** has **Refresh Site Lists** and **Check Remotes**.
   An update or an add that stopped part way (a failed migrate, build or
@@ -235,7 +260,10 @@ Every bench has a page:
   steps run and the app stays where it is.
   Right click a bench in the sidebar for its actions.
 - **Health**: doctor's checks, and Repair with its plan shown before
-  anything changes and each step as it runs.
+  anything changes and each step as it runs. **Acknowledge** on a warning
+  (`benchbar doctor --ack`) silences it for this bench until its message
+  changes; it then sits under **acknowledged**, with **Undo**
+  (`--unack`). A failure has no such button, the CLI refuses it.
 - **Sharing**: opens a room for this bench's site on your Wi-Fi. It shows
   only while the `lan-rooms` Lab is on. See
   [Share on your network](#share-on-your-network).
@@ -244,6 +272,16 @@ Every sheet works the same way: the plan or the form first, then your
 confirmation, the run with its progress at the bottom, and the outcome on
 top. Return confirms and Esc cancels; a sheet cannot be closed while its
 change runs. Drop Site is never on Return: it needs the site name typed.
+
+**Install Service…** and **Refresh Service…** show the plan of `benchbar
+service --dry-run --json` (the files it writes, and which step needs your
+password) and run exactly that plan by its token. A step that needs the
+Mac's password asks in macOS's own dialog; BenchBar never sees it, and a
+cancelled dialog skips that step. The window offers a button of a newer
+command only when `benchbar commands --json` lists it, so an older
+`benchbar` never gets a button that would fail. **Start after login** is
+read from the text `benchbar autostart` prints, because the command has no
+JSON.
 
 ![The BenchBar window: a bench's overview with Start, Stop, Restart, Open as and Open Site, its resources, site and ports](images/window-overview.png)
 
@@ -401,6 +439,14 @@ instead.
 
 The close button on the banner hides it until the next version; the
 menu item stays. See [Updating](install.md#updating).
+
+After an update that changes a default (0.9.0 changes three: the bench
+listens on this computer only, an unknown option is an error, and `pull`
+neutralises the copy), the BenchBar window also shows a banner for each
+one, one at a time: what changed, the command that switches it back and
+**Learn More**, which opens [What's new](whats-new.md). **Dismiss** runs
+`benchbar notices --dismiss ID`, so the notice is gone in the terminal list
+too. A fresh install shows none.
 
 ## The command line tool inside the app
 

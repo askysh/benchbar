@@ -128,6 +128,36 @@ assert_calls_contain 'api.github.com/repos/askysh/benchbar/releases/latest'
 assert_calls_not_contain 'releases/tags/|releases\?'
 assert_eq "0.3.0" "$(installed_app_version)"
 
+# ---- the CLI only install (--no-app) pins a candidate on a Mac too (Homebrew
+# cannot install one, and benchbar self-update has no --version): a fresh clone
+# of that tag, a checkout of it in an existing clone, and a run without
+# --version goes back to main. Its own HOME, so the checkout above is not touched.
+# (an app update to a final release leaves the CLI on main: Update Now passes --version)
+reset_calls
+run_install --yes --version 0.3.0
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_not_contain ' checkout '
+assert_calls_not_contain ' fetch '
+PIN_HOME="$TMP_DIR/pinhome"
+mkdir -p "$PIN_HOME"
+reset_calls
+HOME="$PIN_HOME" run_install --yes --no-app --version 0.9.0-rc.1
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "CLI v0.9.0-rc.1 cloned into ${PIN_HOME}/.local/share/benchbar"
+assert_calls_contain '^git clone --quiet --branch v0\.9\.0-rc\.1 '
+assert_calls_not_contain 'releases/'
+printf 'abc1234\n' >"$PIN_HOME/.local/share/benchbar/.git/HEAD"
+reset_calls
+HOME="$PIN_HOME" run_install --yes --no-app --version v0.9.0-rc.1
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain "^git -C ${PIN_HOME}/.local/share/benchbar fetch --quiet --tags$"
+assert_calls_contain "^git -C ${PIN_HOME}/.local/share/benchbar checkout --quiet v0\\.9\\.0-rc\\.1$"
+assert_calls_not_contain ' pull '
+reset_calls
+HOME="$PIN_HOME" run_install --yes --no-app
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain "^git -C ${PIN_HOME}/.local/share/benchbar checkout --quiet main$"
+
 # ---- a tampered zip is refused and the installed app is left alone
 make_release 0.5.0
 printf 'evil\n' >>"$MOCK_STATE/release.zip"
@@ -269,7 +299,12 @@ assert_calls_contain '^osascript .*to quit'
 cs="$(grep -n -m1 '^codesign ' "$MOCK_LOG" | cut -d: -f1)"; qt="$(grep -n -m1 '^osascript .*to quit' "$MOCK_LOG" | cut -d: -f1)"
 [[ -n "$cs" && -n "$qt" && "$cs" -lt "$qt" ]] || fail "codesign (line ${cs:-none}) must run before the running app is quit (line ${qt:-none})"
 
-# the copy beside the app fails: the old app is as it was, and no half copy stays
+# the copy beside the app fails: the old app is as it was, and no half copy stays.
+# The run above installed 0.9.0, and the same version is "unchanged", so put 0.8.0 back first.
+make_release 0.8.0
+run_install --yes --app-only --version v0.8.0
+assert_eq "0.8.0" "$(installed_app_version)" "$OUT"
+make_release 0.9.0
 touch "$MOCK_STATE/ditto_fail_new"
 run_install --yes --app-only
 assert_eq "1" "$CODE" "$OUT"

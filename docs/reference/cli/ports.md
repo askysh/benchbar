@@ -148,10 +148,10 @@ These tables come from the code (`benchbar commands --json`); the sections above
 |---|---|---|---|---|---|
 | `benchbar ports plan\|setup\|apply\|check\|mode ...` | no | no | no | no | none |
 | `benchbar ports plan [--json] -- PATH ...` | no | no | no | no | document |
-| `benchbar ports setup [--dry-run] -- PATH ...` | yes | yes | no | yes | none |
+| `benchbar ports setup [--dry-run] -- PATH ...` | yes | yes | no | yes | stream |
 | `benchbar ports apply TOKEN --yes [--json] -- PATH ...` | no | yes | no | yes | stream |
 | `benchbar ports check [--json]` | no | no | no | no | document |
-| `benchbar ports mode automatic\|fixed` | no | no | no | yes | none |
+| `benchbar ports mode automatic\|fixed` | no | no | no | yes | stream |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.

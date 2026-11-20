@@ -133,7 +133,7 @@ assert_eq "1" "$CODE" "$ERR"
 assert_calls_contain '^bench get-app --skip-assets --branch main '
 assert_calls_not_contain '^bench build'
 assert_calls_not_contain 'install-app acme_nr'
-assert_contains "$ERR" "the clone does not reach the pinned commit (planned ${N1:0:12}, cloned $(remote_head acme_nr | cut -c1-12)); nothing was built or installed."
+assert_contains "$ERR" "the clone does not reach the pinned commit (planned ${N1:0:12}, cloned $(remote_head acme_nr | cut -c1-12)); get-app cloned it and installed its Python requirements, but nothing was built or installed on a site."
 assert_eq "failed skipped skipped skipped" "$(printf '%s' "$OUT" | jget - '" ".join(s["status"] for s in d["steps"])')"
 assert_eq "failed" "$(printf '%s' "$OUT" | jget - 'd["apps"][0]["clone"]')"
 assert_eq "skipped skipped" "$(printf '%s' "$OUT" | jget - 'd["apps"][0]["build"] + " " + d["apps"][0]["installs"][0]["status"]')"
@@ -155,6 +155,14 @@ assert_eq "Clone acme_shared2,Clone acme_b1,Clone acme_b2,Build,Install acme_b1 
 assert_eq "['acme_shared2', 'acme_b1', 'acme_b2']" "$(printf '%s' "$OUT" | jget - 'd["order"]')"
 assert_eq "bench build --apps acme_shared2,acme_b1,acme_b2" "$(printf '%s' "$OUT" | jget - '[s["command"] for s in d["steps"] if s["kind"]=="build"][0]')"
 assert_eq "acme_b1 acme_b2" "$(printf '%s' "$OUT" | jget - '" ".join(a["app"] for a in d["apps"])')"
+# the Mac app's fixture of a plan with several apps holds only keys this plan has
+printf '%s' "$OUT" | python3 -c '
+import json, sys
+live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
+assert set(fixture) <= set(live), set(fixture) - set(live)
+assert set(fixture["apps"][0]) <= set(live["apps"][0]), set(fixture["apps"][0]) - set(live["apps"][0])
+assert set(fixture["steps"][0]) <= set(live["steps"][0]), set(fixture["steps"][0]) - set(live["steps"][0])
+' "$ROOT/macos/BenchBarTests/Fixtures/app-add-plan-many.json" || fail "app add --dry-run --json (several apps) and the app fixture app-add-plan-many.json disagree"
 assert_eq "acme_b1:main:branch:False:['acme_shared2']" "$(printf '%s' "$OUT" | jget - '":".join(str(x) for x in [d["apps"][0]["app"], d["apps"][0]["branch"], d["apps"][0]["commit_source"], d["apps"][0]["present"], d["apps"][0]["required_apps"]])')"
 assert_eq "$(remote_head acme_b2)" "$(printf '%s' "$OUT" | jget - 'd["apps"][1]["commit"]')"
 assert_eq "['acme_shared2']" "$(printf '%s' "$OUT" | jget - '[r["name"] for r in d["required_apps"]]')" "(the shared app is in the graph once)"

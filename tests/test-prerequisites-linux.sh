@@ -34,11 +34,11 @@ mkdir -p "$MOCK_STATE/http"
 snap="$(snapshot "$HOME" "$FL_STATE_DIR")"
 pre --bench-dir "$HOME/not-created-yet"
 assert_eq "0" "$CODE" "$OUT"
-assert_eq "linux_distro architecture regular_user sudo apt systemd linger memory inotify_watches disk_free bench_folder mariadb_password default_ports" \
+assert_eq "linux_distro architecture regular_user sudo apt systemd linger user_bus memory inotify_watches disk_free bench_folder mariadb_password default_ports" \
   "$(pq '" ".join(x["id"] for x in d["prerequisites"])')"
 assert_eq "True" "$(pq 'all(set(x) >= {"id","label","level","message","fix_command"} for x in d["prerequisites"])')"
-assert_eq "ok ok ok ok ok ok ok ok ok ok ok ok ok" "$(pq '" ".join(x["level"] for x in d["prerequisites"])')" "$OUT"
-assert_eq '{"ok": 13, "warn": 0, "fail": 0}' "$(pq 'json.dumps(d["summary"])')"
+assert_eq "ok ok ok ok ok ok ok ok ok ok ok ok ok ok" "$(pq '" ".join(x["level"] for x in d["prerequisites"])')" "$OUT"
+assert_eq '{"ok": 14, "warn": 0, "fail": 0}' "$(pq 'json.dumps(d["summary"])')"
 assert_eq "True" "$(pq 'all(x["level"] == "ok" or bool(x["fix_command"]) for x in d["prerequisites"])')"
 assert_eq "Ubuntu 24.04" "$(pq 'c["linux_distro"]["message"]')"
 assert_eq "7933 True 50 0" "$(pq '" ".join(str(v) for v in (c["memory"]["total_mb"], c["systemd"]["enabled"], c["disk_free"]["free_gb"], c["default_ports"]["port_offset"]))')"
@@ -50,7 +50,7 @@ assert_calls_not_contain '^(apt-get|systemctl .*(start|restart|enable))'
 set +e; OUT="$(cd "$PRE" && "$FM" doctor --prerequisites 2>&1)"; CODE=$?; set -e
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "systemd: systemd runs as PID 1"
-assert_contains "$OUT" "13 ok, 0 warn, 0 fail"
+assert_contains "$OUT" "14 ok, 0 warn, 0 fail"
 
 # distribution, architecture, user
 printf 'NAME="Ubuntu"\nID=ubuntu\nVERSION_ID="22.04"\n' >"$FL_OS_RELEASE"
@@ -101,6 +101,12 @@ mkdir -p "$FL_SYSTEMD_RUN_DIR"
 printf 'no' >"$MOCK_STATE/linger/tester"
 pre; assert_eq "warn 0 False" "$(lv linger) $CODE $(pq 'c["linger"]["enabled"]')"; assert_contains "$(pq 'c["linger"]["fix_command"]')" "loginctl enable-linger tester"
 printf 'yes' >"$MOCK_STATE/linger/tester"
+
+# user bus (issue 115): systemctl --user cannot be asked
+touch "$MOCK_STATE/user_manager_down"
+pre; assert_eq "warn 0" "$(lv user_bus) $CODE"; assert_contains "$(pq 'c["user_bus"]["fix_command"]')" "loginctl enable-linger tester"
+rm "$MOCK_STATE/user_manager_down"
+pre; assert_eq "ok" "$(lv user_bus)"
 
 # memory
 printf 'MemTotal:        3000000 kB\n' >"$FL_MEMINFO"

@@ -1,0 +1,26 @@
+# Once a week, every repo and branch that config/apps.tsv names must still
+# exist upstream (a renamed or deleted branch breaks `benchbar app add NAME`
+# for everyone). Read only: git ls-remote. A pull request that edits the
+# table checks it too.
+name: App branches
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  pull_request:
+    branches: [next-release, main]
+    paths:
+      - config/apps.tsv
+      - scripts/check-apps-branches.sh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apps-tsv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: bash scripts/check-apps-branches.sh

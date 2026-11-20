@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-#@version 2
+#@version 3
+#@default NICE 0
+#@default PROCESS_TYPE Standard
+#@default NOFILE 10240
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <!-- __HEADER__ -->
@@ -29,6 +32,12 @@
     <key>SuccessfulExit</key><false/>
   </dict>
   <key>ThrottleInterval</key><integer>20</integer>
+  <key>Nice</key><integer>__NICE__</integer>
+  <key>ProcessType</key><string>__PROCESS_TYPE__</string>
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key><integer>__NOFILE__</integer>
+  </dict>
   <key>StandardOutPath</key><string>__LOG__</string>
   <key>StandardErrorPath</key><string>__LOG__</string>
 </dict>

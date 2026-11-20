@@ -173,17 +173,17 @@ OUT="$(BENCHBAR="$FM" BENCHBAR_LABS="lan-rooms" python3 -I "$TMP_DIR/mcp-lab.py"
 assert_contains "$OUT" "True"
 echo "test-labs: ok"
 
-# ---- platforms: lan-rooms and quick-switch are macOS only for now
+# ---- platforms: lan-rooms lists macOS and Linux, quick-switch is macOS only for now
 fm_out labs list --json
-assert_eq "[['macos'], ['macos']] [True, True]" "$(printf '%s' "$OUT" | jget - '[l["platforms"] for l in d["labs"]], [l["available"] for l in d["labs"]]')"
+assert_eq "[['macos', 'linux'], ['macos']] [True, True]" "$(printf '%s' "$OUT" | jget - '[l["platforms"] for l in d["labs"]], [l["available"] for l in d["labs"]]')"
 use_linux
 printf 'Linux version 6.8.0-generic (buildd@lcy02) #1 SMP\n' >"$FL_PROC_VERSION"
 run_fm labs on quick-switch --yes
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "quick-switch is not available on linux yet"
-fm_out labs on lan-rooms --yes --json
+fm_out labs on quick-switch --yes --json
 assert_eq "1" "$CODE"
 fm_out labs list --json
-assert_eq "[False, False]" "$(printf '%s' "$OUT" | jget - '[l["available"] for l in d["labs"]]')"
+assert_eq "[True, False]" "$(printf '%s' "$OUT" | jget - '[l["available"] for l in d["labs"]]')"
 run_fm labs
 assert_contains "$OUT" "(not on this platform)"
 assert_not_contains "$(cat "$FL_STATE_FILE" 2>/dev/null)" "LABS=quick-switch"
@@ -192,28 +192,44 @@ printf 'Linux version 6.6.0-microsoft-standard-WSL2 (root@build) (gcc) #1 SMP\n'
 run_fm labs on quick-switch --yes
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "quick-switch is not available on windows yet"
 
+# ---- labs off drops a saved entry this platform never turns on (a state copied from a Mac)
+printf 'LABS=lan-rooms quick-switch\n' >>"$FL_STATE_FILE"
+unset BENCHBAR_LABS
+fm_out labs status quick-switch --json
+assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["enabled"]')" "(the saved entry is not on here)"
+run_fm labs off quick-switch
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "was never on here"
+assert_eq "LABS=lan-rooms" "$(grep '^LABS=' "$FL_STATE_FILE" | tail -n 1)" "(only the stale entry went)"
+run_fm labs off quick-switch
+assert_contains "$OUT" "unchanged: quick-switch is already off"
+run_fm labs off lan-rooms
+assert_eq "LABS=" "$(grep '^LABS=' "$FL_STATE_FILE" | tail -n 1 | tr -d "'")" "(a lab this platform lists is turned off as before)"
+
 # ---- one availability check for every path: BENCHBAR_LABS names a lab that
 # the platform does not list, so the lab stays off (it used to pass the gate
-# and run the pf and launchctl code on Linux)
+# and run the pf and launchctl code on Linux, before lan-rooms listed Linux)
 printf 'Linux version 6.8.0-generic (buildd@lcy02) #1 SMP\n' >"$FL_PROC_VERSION"
 export BENCHBAR_LABS=lan-rooms,quick-switch
 fm_out labs list --json
-assert_eq "[False, False]" "$(printf '%s' "$OUT" | jget - '[l["enabled"] for l in d["labs"]]')" "(the override does not turn on a lab this platform lacks)"
+assert_eq "[True, False]" "$(printf '%s' "$OUT" | jget - '[l["enabled"] for l in d["labs"]]')" "(the override does not turn on a lab this platform lacks)"
+fm_out status --json --bench-dir "$BENCH"
+assert_eq "['lan-rooms']" "$(printf '%s' "$OUT" | jget - 'd["labs"]')"
+export BENCHBAR_LABS=quick-switch
 fm_out status --json --bench-dir "$BENCH"
 assert_eq "[]" "$(printf '%s' "$OUT" | jget - 'd["labs"]')"
 reset_calls
-fm_out commands --json
-assert_eq "[] 2" "$(printf '%s' "$OUT" | jget - 'd["labs"], len(d["gated"])' | tr -d "(),'")" "(share and lan-guard stay gated)"
+# on Linux the lan-rooms lab is off by default and gates share and lan-guard like anywhere else
+unset BENCHBAR_LABS
 for c in share lan-guard; do
   run_fm "$c" --bench-dir "$BENCH"
   assert_eq "2" "$CODE" "$OUT"
   assert_contains "$OUT" "benchbar $c is an experiment"
-  assert_contains "$OUT" "not available on linux"
-  assert_not_contains "$OUT" "Turn it on: benchbar labs on" "(that command would refuse here)"
+  assert_contains "$OUT" "Turn it on: benchbar labs on lan-rooms"
 done
 assert_calls_not_contain '^(pfctl|launchctl|sudo)'
 # the same override on the platform that lists the lab still turns it on
 export FL_PLATFORM=macos
+export BENCHBAR_LABS=lan-rooms,quick-switch
 fm_out labs list --json
 assert_eq "[True, True]" "$(printf '%s' "$OUT" | jget - '[l["enabled"] for l in d["labs"]]')"
 unset BENCHBAR_LABS

@@ -127,6 +127,11 @@ FL_AF_TXT=""       # sites/apps.txt as of the load
 FL_AF_PINS=""      # the focus pins as of the load
 FL_AF_NOW=""       # the time of the load
 FL_AF_JOBS="${FL_AF_JOBS:-8}"
+# the folder and the collectors of a load in progress: fl_facts_end (the exit
+# trap's) stops them and removes the folder when a signal ends the run during
+# the load, so a stop leaves nothing behind
+FL_AF_DIR=""
+FL_AF_PIDS=()
 FL_AF_LIGHT=0      # 1: only branch, commit and local changes (the table of app list)
 
 # fl__af_collect APP: the record of APP on stdout (see fl_app_facts_load)
@@ -220,11 +225,13 @@ fl__af_collect() {
 fl_app_facts_load() {
   local apps=() app dir i=0 pids=() p now_keep rec
   if [[ "$#" -gt 0 ]]; then apps=("$@"); else while IFS= read -r app; do [[ -n "$app" ]] && apps+=("$app"); done < <(fl_apps_all); fi
-  dir="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-facts.XXXXXX")"
+  # inside the run's own folder when there is one (its end removes this too)
+  dir="$(mktemp -d "${FL_FACTS_DIR:-${TMPDIR:-/tmp}}/benchbar-facts.XXXXXX")"
+  FL_AF_DIR="$dir"; FL_AF_PIDS=()
   FL_AF_NOW="$(fl_now)"
   for app in ${apps[@]+"${apps[@]}"}; do
     fl__af_collect "$app" >"${dir}/${i}" 2>/dev/null &
-    pids+=("$!")
+    pids+=("$!"); FL_AF_PIDS+=("$!")
     if [[ "${#pids[@]}" -ge "$FL_AF_JOBS" ]]; then wait "${pids[0]}" 2>/dev/null || true; pids=("${pids[@]:1}"); fi
     i=$((i + 1))
   done
@@ -243,6 +250,7 @@ fl_app_facts_load() {
     i=$((i + 1))
   done
   rm -rf "$dir"
+  FL_AF_DIR=""; FL_AF_PIDS=()
   FL_AF_TXT="$(fl_apps_txt || true)"
   FL_AF_PINS="$(fl_bstate_get APP_FOCUS)"
   FL_AF_ON=1; FL_AF_BEHIND=1
@@ -787,9 +795,6 @@ fl_app_name_from_url() {
   printf '%s' "$n" | tr '[:upper:]-' '[:lower:]_'
 }
 
-# git that never prompts: a missing key or token fails at once
-fl_git_batch() { fl_git_net "$@"; }
-
 fl_url_is_ssh() {
   case "$1" in
     ssh://*) return 0 ;;
@@ -1004,6 +1009,7 @@ fl_cmd_app_install() {
   if fl_app_install_on_sites "$app" "$OPT_SITE"; then fl_step_end "done"; else fl_step_end failed; fl_bench_redis_down; fl_steps_summary; return 1; fi
   fl_bench_redis_down
   fl_app_verify "$app" "" "$OPT_SITE" || { fl_steps_summary; return 1; }
+  fl_changed app "$app" "installed on ${OPT_SITE}"
   fl_steps_summary
 }
 
@@ -1200,21 +1206,26 @@ fl_pending_json_v() {
 # fl_app_fetch APP REMOTE BRANCH: FETCH_HEAD is the remote branch. A
 # shallow clone fetches back to its own HEAD's date, so old..new exists.
 fl_app_fetch() {
-  local app="$1" remote="$2" branch="$3" args=() ts err code=0
+  local app="$1" remote="$2" branch="$3" args=() ts heads code=0
   if fl_app_shallow "$app"; then
     ts="$(fl_app_git "$app" log -1 --format=%ct HEAD 2>/dev/null || true)"
     [[ "$ts" =~ ^[0-9]+$ ]] && args+=("--shallow-since=@$((ts - 1))")
   fi
-  err="$(mktemp "${TMPDIR:-/tmp}/benchbar-fetch.XXXXXX")"
-  fl_git_batch -C "$(fl_app_path "$app")" fetch --quiet ${args[@]+"${args[@]}"} "$remote" "$branch" >/dev/null 2>"$err" || code=$?
-  fl_log_file_append "$err"
+  fl_git_in "$(fl_app_path "$app")" fetch --quiet ${args[@]+"${args[@]}"} "$remote" "$branch" || code=$?
   if [[ "$code" != "0" ]]; then
-    fl_fail "git fetch ${remote} ${branch} failed in apps/${app}: $(grep -v '^[[:space:]]*$' "$err" | awk 'NR==1')"
-    rm -f "$err"
-    fl_repo_access_hint "$(fl_app_remote_url "$app")"
+    fl_fail "git fetch ${remote} ${branch} failed in apps/${app}: ${FL_GR_ERR}"
+    case "${FL_GR_ERR}" in
+      *"couldn't find remote ref"*)
+        # the branch is gone upstream (deleted or renamed): not a key problem
+        heads="$(fl_git_remote_heads "$(fl_app_remote_url "$app")" | tr '\n' ' ')"
+        fl_fail "${remote} no longer has the branch ${branch}: upstream deleted or renamed it"
+        fl_note "remote branches: ${heads:-none}"
+        fl_fix "git -C $(printf '%q' "$(fl_app_path "$app")") fetch ${remote} NEW_BRANCH && git -C $(printf '%q' "$(fl_app_path "$app")") checkout -B NEW_BRANCH ${remote}/NEW_BRANCH   (then benchbar app update ${app})" ;;
+      "timed out"*) fl_fix "check the network, then: benchbar app update ${app}" ;;
+      *) fl_repo_access_hint "$(fl_app_remote_url "$app")" ;;
+    esac
     return 1
   fi
-  rm -f "$err"
 }
 
 # fl__au_command KIND TARGET APP TO: the command a step runs, for the plan

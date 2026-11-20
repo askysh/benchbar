@@ -113,14 +113,16 @@ def cli_block(cat, words):
 
 
 def mcp_block(tools):
+    names = set(t["name"] for t in tools)
     out = [NOTE, "", "| Tool | Kind | What it does | Arguments |", "|---|---|---|---|"]
     for t in tools:
         schema = t["inputSchema"]
         required = set(schema.get("required", []))
         args = ", ".join(code(k) + ("*" if k in required else "") for k in schema["properties"]) or "none"
         a = t["annotations"]
-        if t["name"].endswith("_plan"):
-            kind = "plan (read only)"
+        if t["name"].endswith("_plan") and t["name"][:-5] in names:
+            # a plan that runs git fetch writes .git/FETCH_HEAD: it is annotated as not read only
+            kind = "plan (read only)" if a["readOnlyHint"] else "plan (git fetch)"
         elif a["readOnlyHint"]:
             kind = "read"
         else:
@@ -206,6 +208,16 @@ def main(argv):
             for t in tools:
                 if "`%s`" % t["name"] not in text:
                     problems.append("%s does not name the MCP tool %s" % (rel, t["name"]))
+        # docs to code: a page that names a tool the server does not have (a tool that was renamed or never built).
+        # Every page under docs/ and AGENTS.md; a heading anchor such as #...-and-benchbar_sudogui is not a tool name
+        known = set(t["name"] for t in tools)
+        pages = sorted(glob.glob(os.path.join(ROOT, "docs", "**", "*.md"), recursive=True)) + [os.path.join(ROOT, "AGENTS.md")]
+        for page in pages:
+            rel = os.path.relpath(page, ROOT).replace(os.sep, "/")
+            with open(page, encoding="utf-8") as fh:
+                for name in sorted(set(re.findall(r"(?<![\w#-])benchbar_[a-z][a-z_]*", fh.read()))):
+                    if name not in known:
+                        problems.append("%s names %s, which is not an MCP tool of the server" % (rel, name))
         for p in problems:
             sys.stderr.write(p + "\n")
         if problems:

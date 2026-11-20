@@ -254,4 +254,45 @@ code=$?
 set -e
 assert_eq "0" "$code" "$OUT"
 
+# ---- the signed release does not run the suite again: CI's verdict on the tagged
+# tree is checked (scripts/release-ci-gate.sh), and the Swift tests are left out
+PREP="$(cat "$ROOT/.github/actions/release-prepare/action.yml")"
+assert_contains "$SIGNED_JOB" 'ci_gate: "true"'
+assert_contains "$SIGNED_JOB" 'BENCHBAR_SKIP_TESTS: "1"'
+assert_contains "$PREP" 'scripts/release-ci-gate.sh "$GITHUB_SHA"'
+assert_contains "$PREP" "if: inputs.ci_gate != 'true'"
+assert_contains "$(cat "$RELEASE")" "checks: read"
+ADHOC_PREP="$(awk '/build-adhoc:/{f=1} f' "$RELEASE")"
+assert_not_contains "$ADHOC_PREP" "ci_gate"
+gate_step="$(grep -n -m 1 'CI passed for this commit' <<<"$PREP" | cut -d: -f1)"
+tests_step="$(grep -n -m 1 'run-tests.sh' <<<"$PREP" | cut -d: -f1)"
+[[ -n "$gate_step" && -n "$tests_step" && "$gate_step" -lt "$tests_step" ]] || fail "the CI gate must come first in release-prepare"
+assert_contains "$(cat "$SCRIPT")" 'BENCHBAR_SKIP_TESTS'
+
+# ---- scripts/release-promote.sh is the release: a plain push of a fast forward after the
+# checks, with no merge and no force (tests/test-release-promote.sh runs its refusals)
+PROMOTE="$(grep -v '^[[:space:]]*#' "$ROOT/scripts/release-promote.sh")"
+assert_contains "$PROMOTE" 'git merge-base --is-ancestor "$OLD" "$SHA"'
+# the sync of docs only commits: a merge made without a checkout, pushed as a fast forward of next-release
+assert_contains "$PROMOTE" '"$HERE/docs-only.sh" --commit "$c"'
+assert_contains "$PROMOTE" 'git merge-tree --write-tree'
+assert_contains "$PROMOTE" 'git push "$REMOTE" "${MERGE}:refs/heads/next-release"'
+assert_contains "$PROMOTE" '"$HERE/check-version.sh" --kind "$VERSION")" == final'
+assert_contains "$PROMOTE" '--folded "$VERSION"'
+assert_contains "$PROMOTE" '"$HERE/release-ci-gate.sh" "$SHA"'
+assert_contains "$PROMOTE" 'git push "$REMOTE" "${TARGET}:refs/heads/main"'
+assert_not_contains "$PROMOTE" "--force"
+assert_not_contains "$PROMOTE" "push -f"
+assert_not_contains "$PROMOTE" "+refs/heads/main:refs/heads/main"
+if grep -Eq 'git merge( |$)' <<<"$PROMOTE"; then fail "release-promote.sh merges"; fi
+# every check comes before the push of main
+push_line="$(grep -n 'git push "\$REMOTE" "\${TARGET}' <<<"$PROMOTE" | cut -d: -f1)"
+for chk in 'merge-base --is-ancestor' '--kind "$VERSION"' 'ls-remote --exit-code --tags' 'release-ci-gate.sh'; do
+  line="$(grep -n -F -m 1 -- "$chk" <<<"$PROMOTE" | cut -d: -f1)"
+  [[ -n "$line" && -n "$push_line" && "$line" -lt "$push_line" ]] || fail "release-promote.sh: '$chk' must come before the push"
+done
+# the release job leans on the gate, the gate on the docs rule
+assert_contains "$(cat "$ROOT/.github/actions/release-prepare/action.yml")" 'scripts/release-ci-gate.sh "$GITHUB_SHA"'
+assert_contains "$(cat "$ROOT/scripts/release-ci-gate.sh")" 'docs-only.sh" --commit'
+
 printf 'test-release-workflows: ok\n'
