@@ -329,15 +329,16 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   run_fm site snapshot drop acme.localhost nosuch --yes --bench-dir "$BENCH"
   assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "no snapshot 'nosuch' of acme.localhost"
   # the bench's state key SNAPSHOT_KEEP is the default limit
-  benv="$(ls "$FL_STATE_DIR"/benches/*.env 2>/dev/null | head -n 1)"
-  if [[ -n "$benv" ]]; then
-    printf 'SNAPSHOT_KEEP=1
+  run_fm service --yes --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT"
+  benv="$(ls "$FL_STATE_DIR"/benches/*.env 2>/dev/null | head -n 1 || true)"
+  [[ -n "$benv" ]] || fail "the bench has a state file"
+  printf 'SNAPSHOT_KEEP=1
 ' >>"$benv"
-    run_json site snapshots acme.localhost --json --bench-dir "$BENCH"
-    assert_eq "1" "$(printf '%s' "$OUT" | jget - 'd["keep"]')"
-    printf 'SNAPSHOT_KEEP=bogus
+  run_json site snapshots acme.localhost --json --bench-dir "$BENCH"
+  assert_eq "1" "$(printf '%s' "$OUT" | jget - 'd["keep"]')"
+  printf 'SNAPSHOT_KEEP=bogus
 ' >>"$benv"
-    run_json site snapshots acme.localhost --json --bench-dir "$BENCH"
-    assert_eq "10" "$(printf '%s' "$OUT" | jget - 'd["keep"]')" "(a bad value falls back to 10)"
-  fi
+  run_json site snapshots acme.localhost --json --bench-dir "$BENCH"
+  assert_eq "10" "$(printf '%s' "$OUT" | jget - 'd["keep"]')" "(a bad value falls back to 10)"
 }
