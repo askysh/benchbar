@@ -646,6 +646,32 @@ gh release create v0.3.0 dist/* --title "BenchBar 0.3.0" --draft
   `sparkle.yml` or of the feed format shows on the pull request, not when
   a release is cut.
 
+## What is pinned, and how to move it
+
+A release builds the same way a week later. Nothing it uses follows
+"latest":
+
+| What | Where it is pinned | How it moves |
+|---|---|---|
+| GitHub Actions | a commit sha and a version comment on every `uses:` | Dependabot, weekly, a week after the release |
+| Swift packages (Sparkle, swift-subprocess) | `macos/Package.resolved`, copied into the generated project by `scripts/macos-packages.sh`; builds run with `-disableAutomaticPackageResolution` | Dependabot reads `macos/Package.swift` and updates both files; change the same range in `project.yml` or `sparkle.yml` if the range moves (`tests/test-supply-chain.sh` fails when they differ) |
+| XcodeGen, shellcheck, actionlint, zizmor | version and sha256 in `scripts/ci-install-tool.sh` | by hand: change the version, the URL and the sum together |
+| Xcode | `xcode-version: '26.6'` in `ci.yml`, `snapshots.yml` and the `release-prepare` action | by hand, together with the snapshot references |
+| Go (the shim) | `go` in `windows/shim/go.mod`; govulncheck in `ci.yml` fails the job on a known vulnerability | by hand, for a supported release; `x/sys` through Dependabot |
+| NuGet and the .NET SDK (the tray) | `Directory.Packages.props`, `global.json` | Dependabot |
+| `bash:3.2.57` image of the CI tests | its digest in `ci.yml` | by hand |
+| uv and fnm installers of the Linux install | version, URL and sha256 at the top of `00-linux-system-deps.sh` | by hand |
+
+Two things stay outside, and why. `actions/setup-go`, `setup-dotnet` and
+`setup-bun` download their toolchain by version and offer no way to give
+them a checksum, so those three are trusted as far as the action is.
+`apk add` in the bash 3.2 container and `brew install` in the Homebrew
+workflows follow their distribution on purpose: the first one tests the
+suite on current Alpine tools, the second tests Homebrew itself. The
+workflows are checked by actionlint and zizmor in the `workflows` job of
+`ci.yml`; what they accept is in `.github/actionlint.yaml` and
+`.github/zizmor.yml`, each with its reason.
+
 ## Checking a build
 
 ```bash
