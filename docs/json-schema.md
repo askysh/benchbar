@@ -349,6 +349,7 @@ no log, no site ping.
 ```json
 {
   "schema_version": 1,
+  "cli_version": "0.9.0",
   "bench_dir": "/Users/me/frappe-bench",
   "running": true,
   "resources": {

@@ -70,8 +70,8 @@ fl_cmd_stats() {
   fl_require_bench
   fl_stats_resources_v res
   if [[ "${OPT_JSON:-0}" == "1" ]]; then
-    printf '{"schema_version":%d,"bench_dir":%s,"running":%s,"resources":%s}\n' \
-      "$FL_SCHEMA_VERSION" "$(fl_json_str "$FL_BENCH_DIR")" "$([[ "$res" == "null" ]] && printf false || printf true)" "$res"
+    printf '{"schema_version":%d,"cli_version":%s,"bench_dir":%s,"running":%s,"resources":%s}\n' \
+      "$FL_SCHEMA_VERSION" "$(fl_json_str "$FL_VERSION")" "$(fl_json_str "$FL_BENCH_DIR")" "$([[ "$res" == "null" ]] && printf false || printf true)" "$res"
     return 0
   fi
   if [[ "$res" == "null" ]]; then
