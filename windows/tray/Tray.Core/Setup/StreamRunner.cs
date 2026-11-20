@@ -48,6 +48,7 @@ public sealed class SystemStreamRunner : IStreamRunner
             StandardErrorEncoding = Encoding.UTF8,
         };
         foreach (var a in args) info.ArgumentList.Add(a);
+        TrayCaller.Apply(info);
         if (environment is not null)
         {
             foreach (var (name, value) in environment) info.Environment[name] = value;

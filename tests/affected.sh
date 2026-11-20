@@ -70,7 +70,7 @@ done
 # test of its own name needs no entry; every other file needs one
 # (tests/test-affected.sh checks that, with --lib-coverage). LIB_CORE is the
 # set of end to end tests for code every command runs.
-LIB_CORE="test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-run-lock test-status-cost test-tray-fixtures"
+LIB_CORE="test-json-strings test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-run-lock test-status-cost test-tray-fixtures"
 lib_family() {
   case "$1" in
     checks|doctor) echo "test-doctor test-doctor-hardening test-doctor-linux test-repair test-repair-json test-json" ;;

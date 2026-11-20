@@ -213,7 +213,7 @@ fl_bench_adopted() {
 # fl_status_print_json [PINGS]: PINGS "ping" asks every site (status --ping);
 # without it only web_ping_code, the default site's, is known.
 fl_status_print_json() {
-  local mode="${1:-none}" j_auto j_notices j_listen j_labs j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending j_ready sched=0
+  local mode="${1:-none}" j_auto j_notices j_listen j_labs j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending j_ready j_leases sched=0
   # a folder benchbar does not know has no site of its own to name: never the
   # default bench's, never one it guessed
   [[ "$ST_STATE" != "not_adopted" ]] || FL_SITE=""
@@ -246,7 +246,42 @@ fl_status_print_json() {
   # app update or app add runs that stopped half way, with the steps left
   fl_lab_enabled_json_v j_labs
   fl_notices_json_v j_notices
-  printf ',"pending_operations":%s,"ready":%s,"labs":%s,"notices":%s}\n' "$j_pending" "$j_ready" "$j_labs" "$j_notices"
+  fl_leases_json_v j_leases "$FL_BENCH_DIR"
+  printf ',"pending_operations":%s,"ready":%s,"labs":%s,"notices":%s,"leases":%s}\n' "$j_pending" "$j_ready" "$j_labs" "$j_notices" "$j_leases"
+}
+
+# ---------------------------------------------------------------- leases (the read side)
+#
+# lease.sh owns the leases; status shows the active ones of its bench, so this
+# small reader lives in the lean load. <state folder>/leases.tsv has one lease
+# per line, fields separated by a tab, none empty ("-" for no site, no note):
+#   id kind bench site holder since since_epoch expires expires_epoch minutes note
+# Without leases (no file, or an empty one) it reads nothing and starts no
+# program; with them it asks the clock once.
+
+# fl_lease_now_v VAR: seconds since the epoch (FL_NOW fixes it, only under FL_TESTING=1)
+fl_lease_now_v() {
+  if [[ "${FL_TESTING:-}" == "1" && "${FL_NOW:-}" =~ ^[0-9]+$ ]]; then printf -v "$1" '%s' "$FL_NOW"
+  else printf -v "$1" '%s' "$(date +%s)"; fi
+}
+
+# fl_leases_json_v VAR BENCH: the active leases on BENCH (the bench, or one of
+# its sites) as a JSON array, without their ids: an id is what lets a run
+# change a leased bench, so only `lease take` and a person's `lease list` show it
+fl_leases_json_v() {
+  local __f="${FL_STATE_DIR}/leases.tsv" __now="" __out="" __sep="" id kind b site holder since se exp ee mins note jsite jh jn js je
+  if [[ ! -s "$__f" ]]; then printf -v "$1" '[]'; return 0; fi
+  fl_lease_now_v __now
+  while IFS=$'\t' read -r id kind b site holder since se exp ee mins note || [[ -n "$id" ]]; do
+    [[ "$kind" == "bench" || "$kind" == "site" ]] || continue
+    [[ "$ee" =~ ^[0-9]+$ && "$ee" -gt "$__now" && "$b" == "$2" ]] || continue
+    [[ "$site" != "-" ]] || site=""
+    [[ "$note" != "-" ]] || note=""
+    fl_json_str_v jsite "$site"; fl_json_str_v jh "$holder"; fl_json_str_v jn "$note"; fl_json_str_v js "$since"; fl_json_str_v je "$exp"
+    __out="${__out}${__sep}{\"scope\":\"${kind}\",\"site\":${jsite},\"holder\":${jh},\"note\":${jn},\"since\":${js},\"expires_at\":${je}}"
+    __sep=","
+  done <"$__f"
+  printf -v "$1" '[%s]' "$__out"
 }
 
 # fl_redis_json_v VAR: {"queue":{"port","running"},"cache":{...}}. running is whether
@@ -521,7 +556,7 @@ fl_list_entry_json() {
 
 # fl_cmd_list JSON: the default bench is the one commands use without --bench-dir.
 fl_cmd_list() {
-  local json="${1:-0}" default="" d sep="" rows=() benches=() is_default
+  local json="${1:-0}" default="" d sep="" rows=() benches=() is_default cell_name cell_site cell_dir
   fl_bench_detect "${OPT_BENCH_DIR:-}"
   fl_is_bench_dir "$FL_BENCH_DIR" && default="$FL_BENCH_DIR"
   while IFS= read -r d; do
@@ -549,7 +584,8 @@ fl_cmd_list() {
   for d in "${benches[@]}"; do
     fl_bench_load "$d"
     is_default=""; [[ "$d" == "$default" ]] && is_default=" (default)"
-    rows+=("${FL_BENCH_NAME}${is_default}|${FL_SITE}|${FL_WEB_PORT}|${FL_BENCH_DIR}")
+    fl_cell_v cell_name "${FL_BENCH_NAME}${is_default}"; fl_cell_v cell_site "$FL_SITE"; fl_cell_v cell_dir "$FL_BENCH_DIR"
+    rows+=("${cell_name}|${cell_site}|${FL_WEB_PORT}|${cell_dir}")
   done
   fl_table "${rows[@]}"
 }

@@ -99,6 +99,16 @@ internal sealed class AboutWindow : ToolWindow
         line.Children.Add(copy);
         line.Children.Add(box);
         mcp.Children.Add(line);
+        mcp.Children.Add(Ui.Text("For another client, add this stdio server to its settings:", 13, margin: new Thickness(0, 10, 0, 8)));
+        var jsonLine = new DockPanel();
+        var copyJson = Ui.Button("Copy", () => _actions.CopyText(WizardModel.McpJson), "Copy the JSON entry for the benchbar mcp server", minWidth: 64);
+        copyJson.Margin = new Thickness(8, 0, 0, 0);
+        DockPanel.SetDock(copyJson, Dock.Right);
+        var jsonBox = new TextBox { Text = WizardModel.McpJson, IsReadOnly = true, FontFamily = new System.Windows.Media.FontFamily("Cascadia Mono, Consolas"), FontSize = 12, Padding = new Thickness(8, 6, 8, 6) };
+        Ui.Name(jsonBox, "MCP JSON");
+        jsonLine.Children.Add(copyJson);
+        jsonLine.Children.Add(jsonBox);
+        mcp.Children.Add(jsonLine);
         panel.Children.Add(Section("For coding agents", Ui.CardOf(mcp)));
 
         panel.Children.Add(Ui.Text("BenchBar is free software under the MIT License.", 12, opacity: 0.7, margin: new Thickness(0, 8, 0, 2)));

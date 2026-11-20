@@ -61,6 +61,9 @@ public sealed class CommandSupport(ICliClient cli)
     private readonly object _gate = new();
     private Task<CommandCatalogue?>? _load;
 
+    /// <summary>The catalogue once it was read, else null. Asks nothing: a page that must not start a call of its own reads this.</summary>
+    public CommandCatalogue? Current { get; private set; }
+
     /// <summary>The catalogue, or null when the CLI could not be asked (no distro, an older CLI without <c>commands</c>).</summary>
     public Task<CommandCatalogue?> GetAsync()
     {
@@ -75,6 +78,7 @@ public sealed class CommandSupport(ICliClient cli)
         {
             lock (_gate) _load = null;
         }
+        else Current = result.Value;
         return result.Value;
     }
 }

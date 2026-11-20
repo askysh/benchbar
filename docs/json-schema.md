@@ -36,6 +36,8 @@ Raycast extensions and the like can rely on it too.
 | `benchbar site drop NAME --json` | the plan (with `--dry-run`) or the result of dropping a site (0.5.8) |
 | `benchbar op status [OP_ID]\|list\|wait OP_ID --json` | the long runs: one record or the recent ones (0.9), see [operation handles](#operation-handles-09) |
 | `<state folder>/ops/<op_id>.json` | the record a run keeps of itself, rewritten at each step (0.9) |
+| `benchbar history [--bench PATH] [--since TIME] [--limit N] --json` | the runs that changed things on this machine, newest first (0.9), see [action history](#action-history-09) |
+| `<state folder>/history.jsonl` | one line per finished run, 1 MB and three older files (0.9) |
 
 ## Rules for readers
 
@@ -48,8 +50,26 @@ Raycast extensions and the like can rely on it too.
 - Timestamps are ISO 8601 in UTC with a `Z` suffix, for example
   `2026-09-23T10:00:00Z`.
 - `null` means "not known" or "does not apply". Numbers are JSON numbers.
-- JSON goes to stdout on one line. Errors and warnings go to stderr as
-  text. Exit codes: 0 success, 1 failure (for `doctor`: at least one
+- Strings and numbers the CLI writes follow these rules (the shell helpers
+  `fl_json_str`, `fl_json_text` and `fl_json_num`, tested by `tests/test-json-strings.sh`):
+  - A string is valid UTF-8, always. A byte that is not part of a valid
+    character (a stray byte in a log line, a character cut in half) is written
+    as U+FFFD. The CLI cuts a long message at a character boundary, so the
+    cut never makes one. Quote and backslash are escaped; newline, tab and
+    carriage return are `\n`, `\t` and `\r`; any other control character is
+    `\u00XX`; a terminal color code (ESC `[` ... final byte) is dropped whole.
+  - An empty value is `null` for a field documented as `string or null` (the
+    usual case: `site`, `stop_reason`, `message`, `command`). A field that
+    can be an empty string on purpose is documented as a plain `string`, and
+    the CLI writes `""` for it (`fl_json_text`). A reader treats `""` and
+    `null` alike for "no value" and must not rely on either for a field the
+    document does not name.
+  - A number is a JSON integer, `-?(0|[1-9][0-9]*)`. A value that is not one
+    (`1-2`, `--`, `007`, `1.5`, empty) is written as `null`, never as the
+    text.
+- A document is one line on stdout. A stream (`--jsonl`, or `--json` of a
+  command that changes things) is many lines, one JSON object each, ending
+  in the `done` line. Errors and warnings go to stderr as text. Exit codes: 0 success, 1 failure (for `doctor`: at least one
   check is `fail`; the JSON is still printed), 2 the MariaDB root password
   is unknown, 64 a command line the CLI cannot read (see "Usage errors"
   below). A missing bench exits 1 with a message on stderr and nothing on stdout.
@@ -70,7 +90,7 @@ command that only reads has `exit` and, on a failure, `error` (see
 |---|---|
 | `op_id` | (0.9) the run's handle, also on every `plan`, `step` and `progress` line; absent when the run ended before it started (a refusal) and in a dry run. See [operation handles](#operation-handles-09) |
 | `exit` | the exit code; the process exits with the same number, so a pipe cannot hide a failure |
-| `changed[]` | what the run changed: `{"kind": "bench"\|"site"\|"app"\|"service"\|"ports"\|"hosts"\|"backup"\|"process"\|"state", "name", "detail"}`. Only what the run really changed: empty on a second run, and in a dry run. `install` reports the bench, the site and the apps its phase scripts create |
+| `changed[]` | what the run changed: `{"kind": "bench"\|"site"\|"app"\|"service"\|"ports"\|"hosts"\|"backup"\|"process"\|"state", "name", "detail"}`. Only what the run really changed: empty on a second run, and in a dry run. A step that failed after it began to change something is listed with a `detail` that starts with `partial:` (a clone that was not built, an `install-app` or `migrate` that failed). `install` reports the bench, the site and the apps its phase scripts create |
 | `warnings[]` | the run's `[WARN]` lines, as text |
 | `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints. `"quoted": true` is added when the command was built with every word quoted for the shell (a program may split it); it is absent for a command written as text |
 | `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`). A stream's is read after the CLI's locks are released; a one document command's and `pull`'s while its lock is still held (a read, so nothing waits on it) |
@@ -326,6 +346,7 @@ listener: it is polled at rest (0.6.1).
 | `listen` | string | added in 0.9: `"local"` (the web server and socketio listen on 127.0.0.1) or `"all"` (every interface, `benchbar listen all`) |
 | `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
 | `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null), `url` (an add's repo URL, so `app add NAME` can finish an app that was never cloned or that no profile lists; null for an update and for a record an older version wrote) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
+| `leases` | array | added in 0.9: the active [leases](reference/cli/lease.md) on this bench, its own and those of its sites, `[]` when none. Each: `scope` (`bench` or `site`), `site` (null for a bench lease), `holder`, `note` (null without one), `since` and `expires_at` (ISO 8601 UTC). Never the lease's id. One small file read in the state folder, none without leases, so status starts no new program for it |
 | `ready` | object | added in 0.9: whether the bench can serve, and the parts that say so; see [Readiness](#readiness) |
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
@@ -503,6 +524,22 @@ default` and `site drop` in their result. `site add` never moves it (it
 puts it back if `bench new-site` did); only `site default` does.
 `site add`, `site default` and `site drop` end with the [done fields](#the-done-fields-08),
 `site add` and `site default` with `site`, `default_site` and `created`.
+
+## `benchbar users --json`
+
+`benchbar users [--site S] [--search TEXT] [--limit N] --json`: the enabled
+users of a site, for `open --as` (needs `site open-as on` and a running
+bench). One document:
+
+```json
+{"schema_version":1,"cli_version":"…","site":"mysite.localhost","users":[
+  {"name":"priya@example.com","full_name":"Priya","user_type":"System User",
+   "roles":["Sales User"],"role_count":1,"last_login":"2026-11-02 09:30:00.123456"}],"truncated":false}
+```
+
+`roles` holds the user's five rarest roles, `role_count` all of them
+(without `All`, `Guest` and `Desk User`). `last_login` is Frappe's text, or
+null. `truncated` is true when more users match than `--limit` (1 to 500, default 50).
 
 ## `benchbar site add NAME --dry-run --json`
 
@@ -1178,14 +1215,18 @@ app's branch, so it writes exactly what the sheet showed.
  "exists":true,"diff":"@@ -3 +3 @@\n-description = \"Acme\"\n+description = \"Acme ERP\"","base":"v15-lts",
  "apps":[{"name":"acme_ecr","repo":"git@github.com:acme/acme_ecr.git","branch":"develop","access":"private","requires":["acme_base"]}],
  "check":{"repos":[{"app":"acme_ecr","repo":"git@github.com:acme/acme_ecr.git","reachable":false,"reason":"Permission denied (publickey)."}]},
- "skipped_apps":["acme_ecr"],"digest":"c2a1f0...64 hex characters"}
+ "skipped_apps":["acme_ecr"],"runs_code_from":["github.com/acme"],"new_owners":["github.com/acme"],
+ "digest":"c2a1f0...64 hex characters"}
 ```
 
 `exists` is whether `~/.config/benchbar/profiles/NAME.toml` is there;
 `diff` is the unified diff against it (`null` when there is none or they
 are equal). `apps[].access` is `null` when the file does not say.
 `skipped_apps` are the apps `install --profile` would leave out: the
-unreachable ones and every app that requires one. `digest` is the SHA-256
+unreachable ones and every app that requires one. `runs_code_from` is the
+host and owner of each repo the profile names (installing it runs their
+code: `pip install`, a build, the apps' hooks), and `new_owners` the ones
+no app of the bench and no line of `config/apps.tsv` uses yet. `digest` is the SHA-256
 of the file the import would write. With `--yes --json` it writes and
 prints `{"name","path","source"}`; with `--expect DIGEST` as well, it
 refuses (exit 1, nothing written) when the source changed since that plan.
@@ -1328,6 +1369,29 @@ can ask. Added after 0.8.1: `status --json` and `commands --json` have `labs`
 (the enabled names); `commands --json` also has `gated` (`[{"name","lab"}]`
 for a command left out because its lab is off) and a command of an enabled lab
 has `lab`.
+
+## `benchbar lease --json`
+
+`lease list --json` is one document, with no done fields:
+
+```json
+{"schema_version":1,"cli_version":"0.9.0","leases":[{"id":null,"scope":"site","bench":"/Users/you/frappe-bench","site":"qa1.localhost","holder":"claude-qa","note":"running the QA suite","since":"2026-11-19T15:00:00Z","expires_at":"2026-11-19T15:20:00Z","minutes":20,"yours":false}],"max_minutes":480}
+```
+
+`scope` is `bench` or `site` (`site` is null for a bench lease). `id` is
+`l-` and 12 hex digits for a lease the caller holds (`yours` is true), else
+null. `minutes` is the length the lease was
+taken or renewed for. Only active leases are listed.
+
+`lease take` and `lease renew` stream like `site open-as`: the `done` line
+carries `lease` (the object above, with its `id`) and the
+[done fields](#the-done-fields-08). `lease release` has `released` (false when
+the lease was already gone) and `lease` (the id). A refusal has `exit` 1 and
+`error_id` `lease_held` (the place is leased: `error` names the holder and the
+end), `lease_unknown` (renew of a lease that is gone), `lease_caller_required`
+(`lease take` from an agent run with no `BENCHBAR_CALLER`) or
+`lease_break_refused` (`--break-lease` without a person, exit 2). The same `error_id`s end any
+changing command that a lease stops.
 
 ## Notices (0.9.0)
 
@@ -1651,6 +1715,39 @@ out (then with `"timed_out": true`).
 of an `app add` or `app update` that stopped part way, kept until it is
 finished or discarded. An op record says what a run is doing, or did.
 
+## Action history (0.9)
+
+What ran on this machine, and who started it. A run that changes things
+(one that has an `op_id`, see above) appends one line to
+`history.jsonl` in benchbar's state folder when it ends (mode 0600; for
+Homebrew and the one line installer `~/.local/state/benchbar/history.jsonl`).
+At 1 MB the file moves to `history.jsonl.old.1` (`.old.2` and `.old.3`
+shift up, the oldest goes), like the MCP audit log `mcp-calls.jsonl`, so
+the history reaches back further than the newest 100 operation records.
+A dry run, a read and a refusal before the log have no line, and a run that
+was killed (SIGKILL, a power cut) wrote none: `op list` shows it as
+`interrupted`. A reader skips a line that is not a whole object.
+
+`benchbar history --json` prints `{"schema_version", "cli_version",
+"history": [entry, ...]}`, newest first (`--bench PATH`, `--since TIME`,
+`--limit N`, 1 to 1000, default 20; see the
+[reference](reference/cli/other.md#history)). An entry:
+
+| Field | Type | Notes |
+|---|---|---|
+| `op_id` | string | the run's handle: `benchbar op status OP_ID` while its record is still kept |
+| `command` | string or null | the command's key in `benchbar commands --json` (`site add`) |
+| `argv` | array of strings | the command line without `benchbar`, as typed. The value after a flag named like a password, secret, token, key, credential, auth, cookie or session (and after `--apply`), the credentials of a URL, and a secret looking `KEY=VALUE` or `?query=value` are `***`; a word is cut at 200 characters (`... [cut]`) and the list at 40 words (a last word `...`). For `--background` the launcher's extra `--jsonl` is not there |
+| `caller` | string | who started the run: `terminal`, `app`, `tray`, `mcp`, `agent` or `script`. From `BENCHBAR_CALLER` when it is one of these (the Mac app, the tray and `benchbar mcp` set it), else `agent` for `--for-agent`, `terminal` when stdin is a terminal, `script`. A label the caller sets, not a proof. A new value may be added later: treat an unknown one as unknown |
+| `mcp` | object or null | for `caller` `mcp`: `tool` (`benchbar_app_add`) and `client` (what the MCP client called itself, with its version), each a string or null. The same run is in `mcp-calls.jsonl` under its `op_id` |
+| `bench`, `site` | string or null | as in the op record |
+| `started_at`, `ended_at` | string | ISO 8601 UTC |
+| `exit` | number | the exit code |
+| `changed` | array | what the run changed, as in `changed[]` of the done line but only `kind` and `name` (the detail is in the done line and the log); at most 20 |
+| `changed_more` | number | how many more entries `changed[]` had |
+| `cli_version` | string | the version that ran |
+| `log` | string or null | the run's log file. Its first line says what ran and who started it: `run: benchbar site backup x (caller: app, op: op-...)` |
+
 ## `logs/.benchbar/state.json`
 
 Written on every transition, always by writing a temp file in the same
@@ -1778,6 +1875,34 @@ none holds a session id.
 `install_network_protection`, `allow_node_firewall`,
 `open_local_network_settings`, `rerun_setup`, `restart_sharing`, …).
 
+### `benchbar share users --json`
+
+`benchbar share users [--site S] --json`: who can take a seat in a shared
+copy, and what each would lose there.
+
+```json
+{"schema_version":1,"cli_version":"…","site":"mysite.localhost","users":[
+  {"name":"priya@example.com","full_name":"Priya","enabled":true,"user_type":"System User",
+   "roles":["Sales User"],"code_capable_roles":[],"will_demote":false,"selectable":true}],"truncated":false}
+```
+
+`code_capable_roles` are the roles that can run code or change settings: the
+copy takes them from the user (`will_demote`; never for `Administrator`).
+`selectable` is true for an enabled System User that is not `Administrator`.
+`truncated` is true past the first 500 users.
+
+### `share start`, `share extend`, `share stop`
+
+Streams that end in a done line carrying the fields shown (with `--dry-run`,
+`share start` prints one document with the plan).
+
+| Command | Fields |
+|---|---|
+| `share start` | `bench`, `share_site`, `state` (`on`), `label`, `port`, `started_epoch`, `deadline_epoch`, `started`, `deadline` (ISO 8601, UTC) |
+| `share start --dry-run` | `bench`, `share_site`, `dry_run`, `label`, `for_s`, `deadline`, `steps` (ids of what a start does) |
+| `share extend` | `bench`, `deadline_epoch`, `deadline`, `capped` (the 12 hour limit from the start was reached), `seconds_left` |
+| `share stop` | `bench`, `share_site`, `state` (`off`) |
+
 ### The room documents
 
 They share `bench`, `share_site` and `wipe`. `wipe` is null when nothing was
@@ -1788,8 +1913,8 @@ owed, else `{"retried":bool,"wiped":N|null,"wipe_failed":M|null}`.
 | `share code` | `code` (`"NNNNNN"`, a placeholder here), `new`, `budget_left` |
 | `share invite` | `url` (`benchbar://share/join?v=1&r=…&h=…&s=…&c=…&a=…&x=…`, holds the code), `text` (the message, lines apart by `\n`), `expires_at` (ISO 8601, UTC), `room` |
 | `share lock`, `share unlock` (done) | `locked`, `lock_reason` |
-| `share people` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` |
-| `share remove` (done) | `device`, `name`, `removed`, `new_code` (a bool, never the code) |
+| `share people`, `share devices` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` (`devices` is another name for `people`) |
+| `share remove`, `share revoke` (done) | `device`, `name`, `removed`, `new_code` (a bool, never the code) |
 | `share assign` (done) | `device`, `name`, `seat_id`, `seat_full_name` |
 | `share log` | `entries`: `[{ts, device, user, method, path, status}]`, `truncated` |
 | `share open-as` | `user`, `page`, `opened`: never the link or the session id, even with `--print-url` |
@@ -1805,8 +1930,11 @@ owed, else `{"retried":bool,"wiped":N|null,"wipe_failed":M|null}`.
 - `state`: `installed`, `missing` or `outdated` (the anchor's rules differ, or the daemon does not load it).
 - `active`: whether pf refuses the bench ports, by the probe alone (the files are `state`): true when no bench port answered from `lan_ip` and the control port did, false when a bench port answered, null with no LAN address or when the probe could not run.
 
-`lan-guard install` and `remove` end in a done line with the same fields;
-`allow-node`'s carries `node`, the realpath it allowed.
+`lan-guard install` and `remove` end in a done line with the same fields (after
+`remove`, `state` is `missing`; a `remove` with nothing installed changes nothing
+and prints the same document). `lan-guard allow-node` ends in a done line with
+`node`, the realpath of the node it allowed (or found allowed already, or the
+firewall is off: nothing changes then, the line is the same), and no `state`.
 
 ## Port management
 
@@ -1825,8 +1953,10 @@ shows that preview and asks before applying, without manual token copying.
 detected site/profile and reject `--site` or `--profile` overrides.
 
 `ports apply TOKEN --yes -- PATH ...` recomputes the selection under the CLI lock;
-a changed token or any blocked entry fails before adoption. It emits human
-progress, including completed paths and any failing path, and exits nonzero on
+a changed token or any blocked entry fails before adoption. With `--json` it
+streams (`plan`, `step`, `progress`, `done`, as `adopt` does; `state_after` is
+null because it touches several benches); without it, it prints human
+progress. Both name the completed paths and any failing path, and it exits nonzero on
 failure. Earlier completed entries remain configured. A new preview is required
 before retrying. With `BENCHBAR_SUDO=gui` it asks for the `/etc/hosts`
 lines of all benches in one macOS password dialog, as `adopt` does for one

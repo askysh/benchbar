@@ -253,7 +253,7 @@ and `what`; it holds no paths or user names and stays under 4000 characters.
 
 When set in the shim's environment, `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD`,
 `BENCHBAR_SUDO`, `BENCHBAR_SUDO_PASSWORD`, `BENCHBAR_NONINTERACTIVE`,
-`BENCHBAR_LABS`, `BENCH_INIT_TIMEOUT_SECONDS`, `BENCHBAR_PROFILE_PATH` and the
+`BENCHBAR_LABS`, `BENCHBAR_CALLER` (the tray sets `tray`; `benchbar history` shows it), `BENCH_INIT_TIMEOUT_SECONDS`, `BENCHBAR_PROFILE_PATH` and the
 MCP settings `BENCHBAR_MCP_TIMEOUT`, `BENCHBAR_MCP_MAX_BYTES`,
 `BENCHBAR_MCP_KILL_GRACE` and `BENCHBAR_MCP_EOF_GRACE` are
 passed into WSL for that one run through `WSLENV` (appended to the child's

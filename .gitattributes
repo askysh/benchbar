@@ -8,3 +8,5 @@
 /benchbar text eol=lf
 /install.sh text eol=lf
 /templates/** text eol=lf
+*.tsv text eol=lf
+*.toml text eol=lf

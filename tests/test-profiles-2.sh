@@ -2,6 +2,8 @@
 # Team profiles, part 2 of 3: sharing (export, import, check, subscribe, update, remove) and doctor's view of a bench that follows a team profile.
 # shellcheck source=tests/lib/profiles-fixtures.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/profiles-fixtures.sh"
+# these tests import, subscribe and read a profile folder whose repos are file:// folders: files from others take a local repo only with this
+export BENCHBAR_ALLOW_LOCAL_REPOS=1
 
 write_acme_profile
 install_acme

@@ -156,6 +156,7 @@ fl_op_begin() {
   key="${FL_JSON_KEY:-}"
   if [[ -z "$key" ]] && declare -F fl_cmd_key_for >/dev/null; then key="$(fl_cmd_key_for "${COMMAND:-}" "${ARGS[0]:-}" 2>/dev/null || true)"; fi
   FL_OP_COMMAND="${key:-${COMMAND:-}}"
+  fl_caller_resolve
   fl_op_context
   fl_op_pid_start_v FL_OP_PID_START "$$"
   # a detached run says "starting" until it holds the lock: its launcher waits for that (fl_op_background)
@@ -207,6 +208,9 @@ fl_op_end() {
     [[ "$code" == "0" ]] || FL_OP_STEP_STATUS="failed"
   fi
   FL_OP_PROG_LABEL=""
+  # the line of the history (history.sh) before the record is finished: a reader that sees the run end finds
+  # it. A failing write never changes the run's exit.
+  fl_hist_record "$code" || true
   fl_op_write "$state" "$code"
   FL_OP_ENDED=1
 }
@@ -492,6 +496,8 @@ fl_op_background() {
     "Run the command in front, or cache the sudo credential first so that sudo -n works."
   for a in "$@"; do [[ "$a" == "--background" ]] || args+=("$a"); done
   args+=(--jsonl)
+  # the detached run says who started it: the launcher's answer, not its own (it has no terminal)
+  fl_caller_resolve
   fl_op_new_id_v id || fl_die "Could not make the operations folder $(fl_ops_dir)." "Check that the state folder ${FL_STATE_DIR} is writable."
   dir="$(fl_ops_dir)"; out="${dir}/${id}.jsonl"; err="${dir}/${id}.err"
   # the launcher writes the first record ("starting"); the detached run takes it over

@@ -504,6 +504,40 @@ warnings and failures of `doctor --prerequisites` for the folder are listed
 with the fix to copy; they stop nothing, the plan on the Review page still
 decides.
 
+When an update changes a default (0.9.0 does: the bench listens on this
+computer only, an option a command does not take is an error, `pull`
+neutralises the copy), the CLI lists it in `status --json` as `notices[]`
+and the window shows one banner for each above the tabs: what changed, the
+command that switches it back, a link to the page that explains it, and
+**Dismiss**, which runs `benchbar notices --dismiss ID`. Nothing dismisses a
+notice but your click. Under the state line of a running bench the Overview
+says **Ready**, **Needs restart (code changed)** or **Running, not ready**
+from the `ready` object of `status --json`, with what the bench waits on
+(the realtime server, Redis, the site, a worker), the Python file that
+changed, and the CLI's own fix line with **Copy**. A CLI older than 0.9 sends
+neither member, and the window shows neither.
+
+**Pull...** on the Sites tab copies a production site into a new site of the
+bench (`benchbar pull`). Give `HOST:SITE`, where HOST is a Host of
+`~/.ssh/config` inside Ubuntu and its key must work without a prompt, or tick
+the box for a backup folder inside Ubuntu, and a name for the new site (the
+name follows the server until you type over it; a name that is already a
+site is refused, Pull never overwrites one). **Review Plan...** runs
+`pull --dry-run --json` and shows the backup (name, size, age), whether the
+site is created, the apps that differ from production, what the copy loses
+and the steps; **Pull** then runs `pull --apply TOKEN --yes` with the token
+from that plan, so a newer backup on the server or a changed app list
+stops the run with nothing changed and asks for a fresh plan. A restore is
+not stopped part way: **Stop Waiting** closes the sheet and the run goes on.
+The copy is neutralised by default (integrations off, stored passwords
+cleared except the Administrator's). **Keep production's passwords and
+integrations** is off until you tick it, and ticking it says that the copy
+can still reach the outside and that its scheduler and workers should stay
+off. The button is offered when the CLI lists `pull` with `--apply`; the
+tray does not add a hosts line, so a name that does not end in `.localhost`
+shows a note. **Watch Assets in Terminal** and **Run in Foreground in
+Terminal** (above) are the tray's `watch` and `fg`; **Logs** follows the log.
+
 **Quick Switch...** in the tray menu opens a small panel over any window:
 Administrator, your pinned users and, when you type two letters or more,
 the site's other users. Up, Down and Enter choose, **0** to **9** open a row
@@ -558,7 +592,9 @@ opens, **Ask before a link acts** (see [benchbar:// links](#benchbar-links)), th
 (VS Code, Cursor or VS Code Insiders), the command line tool's path, and
 the tray's appearance and runner. About: the versions of the tray,
 `benchbar.exe` and the CLI inside the distro, Check for Updates, Report a
-Bug and the MCP line.
+Bug and the MCP line (`claude mcp add benchbar -- benchbar.exe mcp`, and the
+same server as a JSON entry for Cursor, Claude Desktop and other clients),
+each with **Copy**.
 
 When a bench crashes, is paused by the crash guard or meets a port
 conflict, the tray shows one Windows notification with the bench and

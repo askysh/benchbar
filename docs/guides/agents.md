@@ -30,13 +30,14 @@ the argument `mcp`.
 | `benchbar_profile_list` | read | Built in and team profiles (user, imported, subscribed, BENCHBAR_PROFILE_PATH): source, subscription and how far behind it is, what shadows what, and parse errors. | none |
 | `benchbar_profile_check` | read | Whether git can read every repo of a team profile with the user's own credentials (reachable true, false, or null when offline), and which apps install --profile would leave out. | `name`* |
 | `benchbar_up` | acts | Start a bench in the background (as a service) and wait for its default site to answer. | `bench`, `services_only` |
-| `benchbar_down` | acts | Stop a bench and keep it stopped, also across reboots. | `bench` |
-| `benchbar_restart` | acts | Restart every process of a bench, for example after changing Python code. | `bench` |
+| `benchbar_down` | acts | Stop a bench and keep it stopped, also across reboots. | `bench`, `lease` |
+| `benchbar_restart` | acts | Restart every process of a bench, for example after changing Python code. | `bench`, `lease` |
 | `benchbar_op_status` | read | The long runs: one operation by op_id (what an apply tool or a background run returned), or without op_id the ten newest. | `op_id` |
+| `benchbar_history` | read | What ran on this machine, newest first: every run that changed things, with its op_id, the command line (secrets are ***), who started it (caller: terminal, app, tray, mcp, agent or script; for mcp the tool and the client), the bench, the site, started_at, ended_at, exit, what it changed and its log. | `bench`, `since`, `limit` |
 | `benchbar_app_add_plan` | plan (read only) | Plan adding a Frappe app to a bench from a git URL or a known app name, read only: the resolved repo and branch, whether the repo is readable, the sites, the required apps (from hooks.py) and whether each resolves, the steps, and a token for benchbar_app_add. | `url_or_name`, `branch`, `name`, `commit`, `install_on`, `apps`, `site`, `all_sites`, `bench` |
-| `benchbar_app_add` | acts | Apply a plan from benchbar_app_add_plan: clone the app and its planned required apps, build, install on the planned sites. | `url_or_name`, `branch`, `name`, `commit`, `install_on`, `apps`, `site`, `all_sites`, `bench`, `token`*, `background` |
+| `benchbar_app_add` | acts | Apply a plan from benchbar_app_add_plan: clone the app and its planned required apps, build, install on the planned sites. | `url_or_name`, `branch`, `name`, `commit`, `install_on`, `apps`, `site`, `all_sites`, `bench`, `lease`, `token`*, `background` |
 | `benchbar_site_add_plan` | plan (read only) | Plan a new site on a bench, read only: the steps (bench new-site, install the given apps, the hosts line), what they touch, the default site (which never moves) and a token for benchbar_site_add. | `site`*, `apps`, `bench` |
-| `benchbar_site_add` | acts | Apply a plan from benchbar_site_add_plan: create the site with benchbar's own MariaDB credentials, install the apps, add the hosts line. | `site`*, `apps`, `bench`, `token`*, `admin_password` |
+| `benchbar_site_add` | acts | Apply a plan from benchbar_site_add_plan: create the site with benchbar's own MariaDB credentials, install the apps, add the hosts line. | `site`*, `apps`, `bench`, `token`*, `lease`, `admin_password` |
 | `benchbar_site_backup` | acts | Back up one site (bench --site S backup, into the site's private/backups): the database, and with with_files the uploads. | `site`*, `with_files`, `bench` |
 | `benchbar_site_restore_plan` | plan (read only) | Plan restoring a backup set into a site, read only: the steps, what they touch (database, files, site_config), the backup of the target taken first, whether migrate runs, and a token for benchbar_site_restore. | `site`*, `from`*, `from_site`, `new`, `no_migrate`, `with_files`, `bench` |
 | `benchbar_site_restore` | acts | Apply a plan from benchbar_site_restore_plan: back up the target with its files, restore the set (from a copy, so the backup cannot prune it), carry the encryption key over, migrate unless no_migrate, verify. | `site`*, `from`*, `from_site`, `new`, `no_migrate`, `with_files`, `bench`, `token`*, `background` |
@@ -44,10 +45,11 @@ the argument `mcp`.
 | `benchbar_site_snapshots` | read | The snapshots of one site, newest first: id, label, time, size, the apps with their commits, whether the bench's apps still match them (apps_match false: a rollback goes across an app change, with a warning and a migrate), and which snapshots are beyond the retention limit. | `site`*, `bench` |
 | `benchbar_site_rollback_plan` | plan (read only) | Plan putting a snapshot back into a site, read only: the steps, what they touch, the snapshot of the current state taken first (label before rollback, so the rollback can be undone), whether the bench's apps match the snapshot's (a rollback across an app change is allowed and warned), whether migrate runs (only when the apps differ), and a token for benchbar_site_rollback. | `site`*, `to`*, `no_migrate`, `bench` |
 | `benchbar_site_rollback` | acts | Apply a plan from benchbar_site_rollback_plan: snapshot the current state (label before rollback), restore the snapshot's database and files into the same site, migrate only when its apps differ from the bench's, verify. | `site`*, `to`*, `no_migrate`, `bench`, `token`*, `background` |
+| `benchbar_site_restore` | acts | Apply a plan from benchbar_site_restore_plan: back up the target with its files, restore the set (from a copy, so the backup cannot prune it), carry the encryption key over, migrate unless no_migrate, verify. | `site`*, `from`*, `from_site`, `new`, `no_migrate`, `with_files`, `bench`, `token`*, `lease`, `background` |
 | `benchbar_service_install_plan` | plan (read only) | Plan the background service of a bench that has none (or an outdated one), read only: Procfile.lean, the runner, the agent (launchd on macOS, systemd --user on Linux), the helpers and the hosts line, with a token for benchbar_service_install. | `bench`, `schedule` |
-| `benchbar_service_install` | acts | Apply a plan from benchbar_service_install_plan: write the service files and load the agent. | `token`*, `bench`, `schedule` |
+| `benchbar_service_install` | acts | Apply a plan from benchbar_service_install_plan: write the service files and load the agent. | `token`*, `bench`, `schedule`, `lease` |
 | `benchbar_run_plan` | plan (read only) | Plan one bench command of the allow list (migrate, clear-cache, clear-website-cache, build, run-tests, doctor, list-apps, version), read only: the exact bench command line, what it touches, whether a backup is taken first (migrate always), the deadline, warnings, and a token for benchbar_run. | `command`*, `site`, `timeout`, `app`, `module`, `doctype`, `test`, `case`, `failfast`, `skip_failing`, `skip_search_index`, `format`, `bench` |
-| `benchbar_run` | acts | Apply a plan from benchbar_run_plan: back the site up first when the plan says so, then run the bench command in the bench folder with the bench's own environment, under the plan's deadline. | `command`*, `site`, `timeout`, `app`, `module`, `doctype`, `test`, `case`, `failfast`, `skip_failing`, `skip_search_index`, `format`, `bench`, `token`* |
+| `benchbar_run` | acts | Apply a plan from benchbar_run_plan: back the site up first when the plan says so, then run the bench command in the bench folder with the bench's own environment, under the plan's deadline. | `command`*, `site`, `timeout`, `app`, `module`, `doctype`, `test`, `case`, `failfast`, `skip_failing`, `skip_search_index`, `format`, `bench`, `token`*, `lease` |
 | `benchbar_run_read` | read | Run a bench command that only reads, at once and without a plan: doctor (workers and queued jobs of a site; needs the bench's Redis), list-apps (the apps installed on a site) or version (the apps of the bench). | `command`*, `site`, `timeout`, `app`, `module`, `doctype`, `test`, `case`, `failfast`, `skip_failing`, `skip_search_index`, `format`, `bench` |
 | `benchbar_site_backups` | read | The backup sets of one site, newest first: stamp, time, size, whether files are in it and whether it is complete (and the folder they are in). | `site`*, `bench` |
 | `benchbar_ports_check` | read | Whether the ports of one bench conflict with a running bench or another listener, its port mode (automatic or fixed) and whether it already runs. | `bench` |
@@ -58,19 +60,23 @@ the argument `mcp`.
 | `benchbar_doctor_prerequisites` | read | What this machine needs before a bench can be installed (tools, Homebrew or apt packages, MariaDB, free disk), each check with its level and fix, no bench needed. | `bench` |
 | `benchbar_self_update_check` | read | This benchbar and the BenchBar app against the latest release, and the command that would update them (available is null when GitHub could not be asked). | none |
 | `benchbar_app_focus_list` | read | Every app of one bench with whether it is a focus app (the ones being worked on), why, and how far behind its remote it is, from the last git fetch. | `bench` |
+| `benchbar_lease_take` | acts | Take a lease on a bench (bench, the whole bench with every site) or on one site (site, of bench or of the default bench) for a while (minutes, default 30, at most 480), for work that spans many commands: tests on a site, a migration you watch. | `bench`, `site`, `minutes`, `note` |
+| `benchbar_lease_renew` | acts | Push the end of a lease you hold to minutes from now (default: its first length). | `lease`*, `minutes` |
+| `benchbar_lease_release` | acts | Let go of a lease. | `lease`* |
+| `benchbar_lease_list` | read | The active leases, of every bench or of one: scope (bench or site), bench, site, holder, note, since, expires_at, and yours (true for the leases this server holds; only those carry their id). | `bench` |
 | `benchbar_doctor_ack` | acts | Silence one doctor WARN of a bench (check: its check id, from benchbar_doctor) until its message changes, or with unack: true show it again. | `check`*, `unack`, `bench` |
 | `benchbar_autostart` | acts | Whether a bench may come back after a login or a reboot (autostart): on lets the service start it again if it was running, off keeps it down until benchbar_up. | `mode`*, `bench` |
 | `benchbar_ports_mode` | acts | Keep the ports of a bench automatic (benchbar may move it to a free block after an approved plan) or fixed (pin what it has now). | `mode`*, `bench` |
-| `benchbar_ports_apply` | acts | Apply a plan from benchbar_ports_plan: set up the service files and, where benches share a port, give each its own block (bench set-config -g, then the service files). | `paths`*, `token`* |
+| `benchbar_ports_apply` | acts | Apply a plan from benchbar_ports_plan: set up the service files and, where benches share a port, give each its own block (bench set-config -g, then the service files). | `paths`*, `token`*, `lease` |
 | `benchbar_scan` | read | Find the Frappe benches under a folder (a read only walk, as deep as benchbar looks): path, default site, sites, ports, whether benchbar manages each (adopted). | `path`* |
 | `benchbar_report` | read | The diagnostics benchbar attaches to a bug report, as text and redacted (secrets masked, site configs reduced to key names): versions, doctor and status JSON, the agent, Procfile.lean, state.json and log tails. | `bench` |
 | `benchbar_stats` | read | CPU, memory and process count of one running bench's own processes (the set benchbar_down stops, with their children), sampled now: resources.cpu_percent (percent of one core, so 250 is two and a half cores), memory_bytes (RSS), processes, sampled_at, and the speed the Mac app's runner uses (speed.raw = clamp(1 + cpu_percent / 10, 1, 12)). | `bench` |
 | `benchbar_site_drop_plan` | plan (read only) | Plan dropping a site, read only: the backup with files taken first, the database and user dropped (database), the folder archived and the hosts line, with a token for benchbar_site_drop. | `site`*, `bench` |
-| `benchbar_site_drop` | acts | Apply a plan from benchbar_site_drop_plan: back the site up with its files, drop its database with benchbar's own MariaDB credentials, move its folder to archived/sites. | `site`*, `bench`, `token`* |
+| `benchbar_site_drop` | acts | Apply a plan from benchbar_site_drop_plan: back the site up with its files, drop its database with benchbar's own MariaDB credentials, move its folder to archived/sites. | `site`*, `bench`, `token`*, `lease` |
 | `benchbar_app_install_plan` | plan (read only) | Plan installing an app that is already in a bench on one site (bench --site S install-app), read only: the step, and a token for benchbar_app_install. | `name`*, `site`*, `bench` |
-| `benchbar_app_install` | acts | Apply a plan from benchbar_app_install_plan: install the app on the site. | `name`*, `site`*, `bench`, `token`* |
+| `benchbar_app_install` | acts | Apply a plan from benchbar_app_install_plan: install the app on the site. | `name`*, `site`*, `bench`, `token`*, `lease` |
 | `benchbar_app_update_plan` | plan (git fetch) | Plan fast forwarding one app to its remote branch; it runs git fetch on the app (which writes the app's .git/FETCH_HEAD and remote refs and nothing else): the commits it takes (the changelog), the sites that have the app (each is backed up first, then migrated), every step, and a token for benchbar_app_update. | `name`*, `bench` |
-| `benchbar_app_update` | acts | Apply a plan from benchbar_app_update_plan: back up the sites that have the app, fast forward it, requirements, migrate, build, restart a running bench. | `name`*, `bench`, `token`* |
+| `benchbar_app_update` | acts | Apply a plan from benchbar_app_update_plan: back up the sites that have the app, fast forward it, requirements, migrate, build, restart a running bench. | `name`*, `bench`, `token`*, `lease` |
 
 An argument marked `*` is required. `bench` (the bench's path, from `benchbar_list`) is optional on every tool that has it: without it the tool uses the default bench.
 <!-- /generated:mcp-tools -->
@@ -107,6 +113,42 @@ git output, `hooks.py`, profile files and the output of an action, comes
 back with a first line that labels it as data from the bench, not
 instructions, with terminal colors removed and a 200 kB cap; the
 [mcp reference](../reference/cli/mcp.md) has the details.
+
+## Leases
+
+The run lock holds for one command. An agent that runs tests on a site for
+twenty minutes, or a person who watches a migration, needs something that
+holds for many. That is a [lease](../reference/cli/lease.md): a bench or a
+site held for a while, so another agent or the app does not restart, migrate,
+drop or restore it meanwhile.
+
+Leases are coordination between cooperating callers, not access control: an
+agent with a shell runs as the same user and can do what you can, so a lease
+stops accidents and does not keep out a caller that ignores it.
+
+An agent should take a lease before long work, keep it with
+`benchbar_lease_renew` while it works and let go with `benchbar_lease_release`:
+
+1. `benchbar_lease_take` with `site` (one site, of `bench` or the default
+   bench) or `bench` (the whole bench), `minutes` (30 by default, at most 480)
+   and a `note` that says why. It returns the lease id and its end. Keep the
+   id: `benchbar_lease_list` shows it only to its holder, and a clash names
+   the holder and the end, never the id. The server names the holder
+   `mcp:CLIENT:PID`; in a terminal, set `BENCHBAR_CALLER` to a name of your own,
+   without it an agent run cannot take a lease.
+2. Pass it as `lease` to your own `benchbar_restart`, `benchbar_down` and the
+   apply tools (`benchbar_app_add`, `benchbar_site_add`, `benchbar_site_restore`,
+   `benchbar_service_install`).
+3. `benchbar_lease_release` when done. A lease that nobody releases ends by
+   itself.
+
+A change that another holder's lease stops is refused, with who holds it and
+until when. That is an answer, not an error to work around: wait, or ask the
+person. Only a person at a terminal can pass `--break-lease`, and no tool does.
+Reading is never refused, and `benchbar_lease_list` shows who holds what.
+In a terminal the same is `benchbar lease take`, `--lease ID` and
+`BENCHBAR_CALLER=a-name-for-this-agent`. `benchbar status --json` lists the
+active leases of a bench. The Mac app and the Windows tray do not show them yet.
 
 ## Changes with a plan
 
@@ -289,6 +331,25 @@ The MCP protocol of 2025-11-25 has a tasks primitive for exactly this
 speaks 2025-06-18 and clients are only starting on tasks, so for now the
 `op_id` is the handle; a task id will be the same string when tasks come.
 
+## What ran before you
+
+`benchbar_history` (in a terminal: `benchbar history --json`) lists every
+run on this machine that changed things, newest first, whoever started
+it: a person at a terminal, the Mac app, the tray, another agent, a
+script. Each entry has the `op_id`, the command line (secrets are `***`),
+`caller` (`terminal`, `app`, `tray`, `mcp`, `agent` or `script`; for `mcp`
+the tool and the client too), the bench and site, `started_at`,
+`ended_at`, `exit`, `changed[]` and the run's `log`. Read it before you
+change a bench another session worked on: it says what was done, by whom
+and whether it worked. `bench`, `since` (`90m`, `7d`, a date) and `limit`
+narrow it. It reaches back further than `benchbar_op_status` (which keeps
+the newest 100 runs, with their steps): about 1 MB of history, three
+older files, and a run that was killed is only in `op list`.
+
+`caller` is a label the caller sets (`BENCHBAR_CALLER`; `benchbar mcp`
+sets `mcp`, `--for-agent` sets `agent`), not a proof. An agent that runs
+`benchbar` in a terminal should pass `--for-agent` so its runs say so.
+
 ## Waiting for a bench
 
 After `benchbar_up` or `benchbar_restart`, and after you change Python code,
@@ -313,7 +374,9 @@ tool, its arguments (anything named like a password, secret, token or
 key is `***`, and so are the credentials of a URL) and how it ended. A
 call that was rejected for its arguments logs only their names.
 `benchbar mcp --calls 20` prints the last 20. After an agent session it
-answers "what did it run, and in what order".
+answers "what did it run, and in what order". A call that started a run
+also logs its `op_id`, and `benchbar history` has that run's command line,
+exit and changes next to the tool and the client.
 
 Fix commands in a doctor report come twice: the text, for you, and
 `fix_argv` (with `fix_cwd`), an array a program can run without a shell.
