@@ -68,7 +68,10 @@ In more detail, in this order, and it says so before each step:
 1. It checks macOS (the app needs 14 or later; on an older macOS only the
    CLI is installed) and Apple Silicon (it warns on Intel), the Xcode
    Command Line Tools (it offers `xcode-select --install` and waits) and
-   Homebrew (it offers the official installer).
+   Homebrew (it offers the official installer: Homebrew publishes no
+   pinned version of it, so it is always the current one from
+   `raw.githubusercontent.com/Homebrew/install/HEAD`, and benchbar does
+   not check it. Run it yourself first if you want to read it).
 2. It clones the CLI into `~/.local/share/benchbar`, or pulls when the
    clone exists, links `benchbar` and `frappe-mac` into `~/.local/bin`,
    and adds that folder to `PATH` in `~/.zshrc` inside a
@@ -184,13 +187,20 @@ package; with `--allow-unsupported-distro` you can try anyway, at your own risk.
 app shows the benches of the distro: see [Windows](windows.md).
 
 ```bash
-git clone https://github.com/askysh/benchbar.git && cd benchbar
-./benchbar install
+curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+benchbar install          # in a new terminal
 ```
+
+The first line is the [installer on Linux](#the-installer-on-linux). To
+work on benchbar itself, clone the repository and run `./benchbar install`
+from the clone. If `install` stops, see
+[First run problems](first-run-problems.md).
 
 `install` runs `00-linux-system-deps.sh`: MariaDB and Redis from apt,
 Python from uv, Node from fnm, the pinned wkhtmltopdf `.deb`, and
-`libnss-myhostname` so `*.localhost` names resolve. It asks for `sudo`
+`libnss-myhostname` so `*.localhost` names resolve. The uv and fnm
+installers are pinned to a version and checked against a sha256 before
+they run, so a changed file at their web address is refused, not run. It asks for `sudo`
 once up front and not at all on a second run. Each bench runs as its own
 `systemd --user` unit, and `loginctl enable-linger` brings a running
 bench back after a reboot. The default site is `linuxdev.localhost`, and

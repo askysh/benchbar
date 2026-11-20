@@ -80,7 +80,7 @@ struct BenchApps: View {
             UpdateAppSheet(workbench: workbench, bench: bench, app: operation.app) { resumingUpdate = nil }
         }
         .sheet(item: $resumingAdd) { operation in
-            AddAppSheet(workbench: workbench, bench: bench, sites: siteNames, start: .init(source: operation.app)) { resumingAdd = nil }
+            AddAppSheet(workbench: workbench, bench: bench, sites: siteNames, start: .init(entries: [AppAddEntry(source: operation.app)])) { resumingAdd = nil }
         }
         .alert("Drop the record of \(discarding?.app ?? "")?", isPresented: Binding(get: { discarding != nil }, set: { if !$0 { discarding = nil } })) {
             Button("Drop the Record", role: .destructive) {
@@ -146,16 +146,13 @@ struct Tag: View {
     }
 }
 
-/// Fill in the app, Review reads the CLI's plan (`app add --dry-run --json`),
-/// Add App runs it by its token. A token the CLI refuses (the bench changed
-/// since) shows here, with Review Again; any other failure closes the sheet
-/// and the change banner has it.
+/// Fill in one app or several, Review reads the CLI's plan (`app add --dry-run --json`: one plan, one token),
+/// Add App runs it by its token. A token the CLI refuses (the bench changed since) shows here, with Review
+/// Again; any other failure closes the sheet and the change banner has it.
 struct AddAppSheet: View {
-    /// What the sheet starts with: empty for a person, filled for a render.
+    /// What the sheet starts with: one empty app for a person, filled for a render.
     struct Start {
-        var source = ""
-        var branch = ""
-        var site = ""
+        var entries = [AppAddEntry()]
         var flow = PlanReviewFlow<AppAddPlan>()
     }
 
@@ -163,9 +160,7 @@ struct AddAppSheet: View {
     let bench: BenchModel
     let sites: [String]
     let close: () -> Void
-    @State private var source: String
-    @State private var branch: String
-    @State private var site: String
+    @State private var entries: [AppAddEntry]
     @State private var flow: PlanReviewFlow<AppAddPlan>
 
     init(workbench: Workbench, bench: BenchModel, sites: [String], start: Start = Start(), close: @escaping () -> Void) {
@@ -173,31 +168,31 @@ struct AddAppSheet: View {
         self.bench = bench
         self.sites = sites
         self.close = close
-        _source = State(initialValue: start.source)
-        _branch = State(initialValue: start.branch)
-        _site = State(initialValue: start.site)
+        _entries = State(initialValue: start.entries)
         _flow = State(initialValue: start.flow)
     }
 
-    private var siteArgument: String? { site.isEmpty ? nil : site }
-    private var name: String { AppSource.displayName(source) }
+    private var several: Bool { entries.count > 1 }
+    private var names: [String] { flow.plan?.appNames ?? entries.filter { !$0.isEmpty }.map(\.displayName) }
+    private var title: String { AppAddBatch.title(names) }
+    private var problem: String? { AppAddBatch.problem(entries) }
 
     private var phase: SheetPhase {
         switch flow.stage {
         case .form:
-            if let error = flow.readError { .failed(error, title: "No plan for \(name)") } else { .ready }
-        case .reading: .loading("Reading the repository and the bench…")
+            if let error = flow.readError { .failed(error, title: "No plan for \(title)") } else { .ready }
+        case .reading: .loading(several ? "Reading the repositories and the bench…" : "Reading the repository and the bench…")
         case .reviewing: .ready
-        case .applying: .running("Adding \(name)…")
+        case .applying: .running("Adding \(title)…")
         case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown")
         }
     }
 
     var body: some View {
-        SheetScaffold("Add an App to \(bench.name)",
+        SheetScaffold(several || flow.plan?.isBatch == true ? "Add Apps to \(bench.name)" : "Add an App to \(bench.name)",
                       explanation: flow.plan == nil
-                          ? "Clones an app from the app registry or a git repository and installs it. You see the plan first."
-                          : "Nothing has run yet. These are the steps; Add App runs exactly this plan.",
+                          ? "Clones apps from the app registry or git repositories and installs them. You see the plan first."
+                          : "Nothing has run yet. These are the steps; \(runTitle) runs exactly this plan.",
                       phase: phase, width: flow.plan == nil ? .regular : .wide) {
             if let plan = flow.plan {
                 AppAddPlanView(plan: plan)
@@ -214,10 +209,10 @@ struct AddAppSheet: View {
                 CancelButton(action: close)
                 Button("Review") { review() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(source.trimmingCharacters(in: .whitespaces).isEmpty || flow.stage == .reading)
+                    .disabled(problem != nil || flow.stage == .reading)
             case .reviewing(let plan):
                 CancelButton(action: close)
-                Button("Add App") { apply() }
+                Button(runTitle) { apply() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!plan.canRun)
             case .applying:
@@ -229,34 +224,53 @@ struct AddAppSheet: View {
         }
     }
 
+    private var runTitle: String { flow.plan?.isBatch == true ? "Add \(flow.plan?.apps?.count ?? 0) Apps" : "Add App" }
     private var isStale: Bool { if case .stale = flow.stage { true } else { false } }
 
     @ViewBuilder private var form: some View {
-        Form {
-            // verbatim: a string literal Text reads markdown and turns the URL into a link
-            TextField("App or repository", text: $source, prompt: Text(verbatim: "erpnext or https://github.com/org/app"))
-            TextField("Branch", text: $branch, prompt: Text(AppSource.isURL(source) ? "the repository's default" : "the profile's branch"))
-            Picker("Install on", selection: $site) {
-                Text("No site yet").tag("")
-                ForEach(sites, id: \.self) { Text($0).tag($0) }
+        ForEach($entries) { $entry in
+            VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
+                if several {
+                    HStack {
+                        Text("App \((entries.firstIndex { $0.id == entry.id } ?? 0) + 1)").font(.callout.weight(.medium))
+                        Spacer()
+                        Button("Remove") { entries.removeAll { $0.id == entry.id } }.buttonStyle(.link).controlSize(.small)
+                    }
+                }
+                Form {
+                    // verbatim: a string literal Text reads markdown and turns the URL into a link
+                    TextField("App or repository", text: $entry.source, prompt: Text(verbatim: "erpnext or https://github.com/org/app"))
+                    TextField("Branch", text: $entry.branch, prompt: Text(AppSource.isURL(entry.source) ? "the repository's default" : "the profile's branch"))
+                    TextField("Commit", text: $entry.commit, prompt: Text("optional: pin to a commit, 7 to 40 hex characters"))
+                    Picker("Install on", selection: $entry.site) {
+                        Text("No site yet").tag("")
+                        ForEach(sites, id: \.self) { Text($0).tag($0) }
+                    }
+                }
+                .formStyle(.columns)
             }
         }
-        .formStyle(.columns)
-        SheetNote(AppSource.isURL(source)
+        Button { entries.append(AppAddEntry()) } label: { Label("Add Another App", systemImage: "plus") }
+            .disabled(entries.count >= AppAddBatch.maxApps)
+            .help("Several apps are one plan with one token; an app another one needs is cloned once")
+        if let problem, entries.contains(where: { !$0.isEmpty }) { SheetNote(problem, tint: .orange) }
+        SheetNote(entries.contains { AppSource.isURL($0.source) }
                   ? "Private repositories work when your SSH key (or a git credential helper) can read them; BenchBar checks access first, so a missing key fails in seconds."
                   : "A name from the app registry gets the branch that matches this bench's profile.")
-        SheetNote("Review reads the repository and shows the steps. Adding runs bench get-app, installs the app's requirements and builds its assets, which can take several minutes; the bench keeps running.")
+        SheetNote("Review reads the repositories and shows the steps. Adding runs bench get-app, installs each app's requirements and builds the assets, which can take several minutes; the bench keeps running.")
     }
 
     private func review() {
         guard flow.review() else { return }
-        Task { flow.read(await workbench.addAppPlan(source, branch: branch, site: siteArgument, on: bench)) }
+        let entries = entries.filter { !$0.isEmpty }
+        Task { flow.read(await workbench.addAppPlan(entries, on: bench)) }
     }
 
     private func apply() {
         guard let plan = flow.apply() else { return }
+        let entries = entries.filter { !$0.isEmpty }
         Task {
-            let error = await workbench.addApp(source, branch: branch, site: siteArgument, token: plan.token, on: bench)
+            let error = await workbench.addApp(entries, token: plan.token, on: bench)
             // a stale token is answered here, with Review Again, not in the banner
             if flow.finish(error: error) { close() } else { workbench.result = nil }
         }

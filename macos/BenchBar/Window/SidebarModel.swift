@@ -77,7 +77,8 @@ extension SidebarModel {
         self.init(benches.map { bench in
             Input(path: bench.path, name: bench.name, state: bench.state, isBusy: bench.isBusy,
                   sites: bench.siteRows.map { Site(name: $0.name, isDefault: $0.isDefault) }, guidance: bench.guidance,
-                  statusText: BenchText.headline(bench.state, reason: bench.machine.stopReason, exitCode: bench.status?.lastExitCode))
+                  statusText: BenchText.headline(bench.state, reason: bench.machine.stopReason, exitCode: bench.status?.lastExitCode,
+                                                 ready: bench.status?.ready))
         }, showsNetwork: showsNetwork)
     }
 }

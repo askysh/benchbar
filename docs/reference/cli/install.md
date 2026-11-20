@@ -184,6 +184,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
+| `install` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `install` | `--profile` | `NAME` | Release profile (default v15-lts) or a team profile. |
 | `install` | `--bundle` | `NAME` | App bundle: minimal, common or extended. |
 | `install` | `--port-offset` | `N` | Use port block N (web 8000+N). |

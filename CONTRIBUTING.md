@@ -51,13 +51,17 @@ Pushes to `next-release` and `main` and the nightly run the whole suite on
 macOS, Linux and bash 3.2, install a real bench on Ubuntu under
 `systemd --user` (a pull request gets that run only with the label
 `test-linux`), build the app and build and test the Windows shim and
-tray. Details: [docs/testing.md](docs/testing.md#what-ci-runs).
+tray. The rules are in the next section.
 
 - **Many checks show "skipped".** A job with nothing to do for your
   change is skipped as a whole, and a skipped job passes. A docs only
   change starts no macOS job and no CLI shard beyond the docs tests.
 - **`CI result` is the one required check on `next-release`.** It passes
   when every job that ran passed.
+- **Rerun a few tests.** To run some tests on one platform without a full run,
+  start the CI workflow by hand (Actions, CI, Run workflow) with `tests`
+  (for example `test-run-lock test-lock`) and `legs` (`linux`, `bash32`,
+  `macos`, `shellcheck`, `app`, `shim`, `real`).
 - **Docs build** runs on a pull request that changes `docs/`, `site/`,
   the root `ROADMAP.md` or `CONTRIBUTING.md`, or the code the generated
   reference tables come from. To run it yourself: `bash tests/run-tests.sh
@@ -67,6 +71,53 @@ tray. Details: [docs/testing.md](docs/testing.md#what-ci-runs).
 - **A pull request from someone who is not a collaborator waits for a
   maintainer** to click "Approve and run": the repository requires it for
   every outside contributor. Nothing is wrong; CI starts after the click.
+
+### Choosing and timing the tests
+
+```bash
+tests/affected.sh                    # only the tests your change touches (from origin/main; --base REF, --all)
+tests/run-tests.sh                   # every test, as many at a time as you have CPUs
+PARALLEL=1 tests/run-tests.sh        # one after another
+tests/run-tests.sh test-doctor       # only the named tests
+SHARD=2/4 tests/run-tests.sh         # the second of four shards, as CI runs them
+ONLY_TESTS="test-a test-b" SHARD=1/2 tests/run-tests.sh   # a list, sharded like the full suite
+LIST_ONLY=1 SHARD=2/4 tests/run-tests.sh   # which tests that shard holds, without running them
+```
+
+`tests/affected.sh` maps the changed files to tests: a file in
+`lib/frappe-local/` picks its own test files, the tests of its family
+(the doctor library picks the doctor and repair tests, and so on: the
+`lib_family` list in the script), every test that names a function it
+changed, `test-cli` and `test-agent-contracts`; the LAN share's
+JavaScript, the app fixtures in `macos/BenchBarTests/Fixtures/`, `scripts/`
+and `docs/` have entries too. A change to the harness, the mocks,
+`run-tests.sh`, `affected.sh` itself, `benchbar`, `templates/`, `config/`
+or the phase scripts runs everything. `affected.sh --lib-coverage` lists
+lib files that no test covers; `test-affected` fails on one, so add a
+`lib_family` entry with a new lib file. Run the whole suite before you hand
+work back.
+
+Each test's output is printed whole when it finishes, in list order, and
+a failing test does not stop the others: the run lists every failure at
+the end and exits 1. `TEST_TIMEOUT` (default 600 seconds) kills a hung
+test and prints its process tree. A new `tests/test-*.sh` must be added
+to the list in `tests/run-tests.sh`, or the run fails; give it a time in
+`TEST_SECS` there too, since shards are filled heaviest first from those
+times (a test without one counts as 10 seconds).
+
+The app and its Swift tests build with `scripts/macos-build.sh --test`.
+
+Issues and pull requests are welcome. For a bug, attach the zip from
+`benchbar report`; it contains no secrets, paths or names. Shell code
+targets macOS `/bin/bash` 3.2 with no dependencies beyond the ones the
+installer needs, passes shellcheck, and every command stays idempotent:
+a second run changes nothing and says so.
+
+The shards are sized from the seconds per test in `tests/run-tests.sh`
+(`TEST_SECS_MAC` and `TEST_SECS_LINUX`). After many tests changed, take the
+log of a green full run (a push to `next-release`) and run
+`scripts/ci-timings.sh RUN_ID`; it prints both tables to paste in. A test
+without an entry counts as 10 seconds, so a new test needs no entry to run.
 
 ## How the code is written
 
@@ -127,7 +178,11 @@ tray. Details: [docs/testing.md](docs/testing.md#what-ci-runs).
   commit and pull request text: a colon, a comma or a new sentence does
   the work.
 - **Commits** have an imperative subject ("Add", "Fix", "Read") and a
-  body that says why.
+  body that says why. The squash merge title is a plain imperative
+  sentence that ends in the pull request number, for example `Fix the
+  port check for a stopped bench (#123)`. No tool trailers in a commit or
+  a pull request: no `Co-Authored-By` for a tool and no "Generated with"
+  line. The reviewer checks the title before merging.
 
 The pull request template asks for all of this as checkboxes. A docs only
 fix (a typo, a wrong sentence) may go to `main` instead of `next-release`

@@ -53,6 +53,7 @@ jobs:
   check:
     name: Which path
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       mode: ${{ steps.mode.outputs.mode }}
       version: ${{ steps.version.outputs.version }}
@@ -108,7 +109,7 @@ jobs:
     steps:
       # The token stays out of .git/config: the tests and the build run
       # code that is not ours, and the draft step passes it to gh itself.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -226,7 +227,7 @@ jobs:
     env:
       VERSION: ${{ needs.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false

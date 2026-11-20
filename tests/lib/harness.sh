@@ -37,6 +37,8 @@ export FL_HOSTS_FILE="$TMP_DIR/hosts"
 export FL_WKHTML_PKG_BIN="$TMP_DIR/usr-local-bin/wkhtmltopdf"
 export FL_RC_FILE="$HOME/.zshrc"
 export FL_UP_WAIT_SECS=2
+# a run that meets a live lock refuses at once (a production run waits a few seconds first)
+export FL_LOCK_WAIT_SECS=0
 # the status and doctor probes (Redis ports, a site's Host) talk to 127.0.0.1
 # in bash: off, so no test ever meets a real service of this machine; the
 # tests of the probes set FL_LOCAL_PROBES=1 and bring their own listeners
@@ -70,6 +72,11 @@ export BENCHBAR_APP_PID=4200 FL_PERSON_SELF_PID=4201
 mkdir -p "$HOME/Library/LaunchAgents" "$MOCK_STATE/agents" "$FL_STATE_DIR" "$MOCK_BREW_PREFIX/etc/my.cnf.d" \
   "$MOCK_BREW_PREFIX/opt/python@3.11/bin" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin" "$HOME/.local/bin"
 : >"$MOCK_LOG"; : >"$MOCK_PROCS"; : >"$MOCK_LISTEN"; : >"$MOCK_BREW_SERVICES"
+# the plan token key: a real install makes it at its first plan; made here so a
+# test that checks "a dry run writes nothing" is not the first plan
+(umask 077; printf '%s\n' 5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed >"$FL_STATE_DIR/plan-key")
+# a fixed plan clock, so two plans of one test never straddle a token window
+export FL_PLAN_NOW=1795000000
 # 50 GB free on every volume (the df mock): the installer's 10 GB check must
 # not depend on the runner's disk, which is sometimes below it. A test of
 # the check writes its own value.

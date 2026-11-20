@@ -1,0 +1,24 @@
+---
+// Starlight's footer plus a link that opens the "Docs problem" issue form with
+// this page's address filled in (the form field id is "page").
+import Default from '@astrojs/starlight/components/Footer.astro';
+
+const page = encodeURIComponent(Astro.url.href);
+const href = `https://github.com/askysh/benchbar/issues/new?template=docs_problem.yml&page=${page}`;
+---
+
+<Default {...Astro.props}><slot /></Default>
+<p class="report-problem"><a href={href}>Report a problem with this page</a></p>
+
+<style>
+  .report-problem {
+    margin-top: 1rem;
+    font-size: var(--sl-text-sm);
+  }
+  .report-problem a {
+    color: var(--sl-color-gray-3);
+  }
+  .report-problem a:hover {
+    color: var(--sl-color-white);
+  }
+</style>

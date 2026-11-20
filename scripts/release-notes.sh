@@ -60,6 +60,7 @@ printf 'Already using BenchBar? In the app, click **Update Now** in the update b
 printf '```bash\ncurl -fsSL %s | bash -s -- --yes\n```\n\n' "$INSTALLER"
 printf 'It updates the benchbar CLI in `~/.local/share/benchbar` and the app in `~/Applications`, quits a running BenchBar first and never touches a bench. From 0.6 on, `benchbar self-update` runs the same. If your benchbar is a git checkout of your own, `git pull` there and add `--app-only`.\n\n'
 printf 'Installed with Homebrew? Run `brew upgrade`, or click **Update Now** in the app: from 0.7.1 the app carries its command line tool, and Homebrew'"'"'s benchbar hands off to it, so either way updates both. The tap gets a release a few minutes after it is published.\n\n'
+printf 'What this release means for you, and what to do after the update: [What'"'"'s new](https://benchbar.akashmishra.com/whats-new/).\n\n'
 printf '## Changes\n'
 printf '%s\n' "$section"
 printf '\n---\n\n'

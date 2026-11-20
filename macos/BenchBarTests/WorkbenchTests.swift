@@ -75,10 +75,10 @@ struct WorkbenchTests {
         let bench = try #require(store.benches.first { $0.path == v16 })
         let workbench = Workbench(store: store)
         let token = String(repeating: "ab", count: 32)
-        let error = await workbench.addApp(" https://github.com/acme/acme_erp ", branch: "develop", site: "v16two", token: token, on: bench)
+        let error = await workbench.addApp([AppAddEntry(source: " https://github.com/acme/acme_erp ", branch: "develop", site: "v16two")], token: token, on: bench)
         #expect(error == nil)
-        #expect(base.cli.calls.contains(["app", "add", "https://github.com/acme/acme_erp", "--apply", token, "--yes", "--plain", "--bench-dir", v16,
-                                         "--branch", "develop", "--site", "v16two"]))
+        #expect(base.cli.calls.contains(["app", "add", "https://github.com/acme/acme_erp", "--branch", "develop", "--install-on", "v16two",
+                                         "--apply", token, "--yes", "--plain", "--bench-dir", v16]))
         #expect(!base.cli.calls.contains { $0.starts(with: ["app", "add"]) && !$0.contains("--apply") }, "nothing runs without a token")
         #expect(workbench.result == .init(title: "Add acme_erp", error: nil, scope: v16), "the banner shows on this bench only")
         #expect(bench.activity == nil, "the slot is free again")
@@ -113,7 +113,7 @@ struct WorkbenchTests {
         base.cli.answer("app", .init(exitCode: 1, stdout: "[FAIL] cannot read git@github.com:acme/private.git (no SSH key)", stderr: ""))
         let bench = try #require(store.benches.first { $0.path == v16 })
         let workbench = Workbench(store: store)
-        await workbench.addApp("git@github.com:acme/private.git", branch: "", site: nil, token: "t", on: bench)
+        await workbench.addApp([AppAddEntry(source: "git@github.com:acme/private.git")], token: "t", on: bench)
         #expect(workbench.result?.error?.contains("no SSH key") == true)
         #expect(!base.cli.calls.contains { $0.contains("--branch") }, "an empty branch is left to the CLI")
     }
@@ -336,7 +336,7 @@ struct OnDemandTests {
         let (store, workbench, bench) = try await store()
         store.setWindow(WindowSight(isOpen: true, isVisible: true))
         await workbench.showApps(bench)
-        await workbench.addApp("hrms", branch: "", site: nil, token: "t", on: bench)
+        await workbench.addApp([AppAddEntry(source: "hrms")], token: "t", on: bench)
         await workbench.showApps(bench)
         let lists = base.cli.calls.filter { $0.starts(with: ["app", "list"]) }
         #expect(lists.count == 2)

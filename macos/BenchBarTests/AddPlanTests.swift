@@ -97,21 +97,21 @@ struct AddPlanTests {
         base.cli.answer("app add", json: try Fixture.string("app-add-plan"))
         let bench = try #require(store.benches.first { $0.path == v16 })
         let workbench = Workbench(store: store)
-        guard case .success(let plan) = await workbench.addAppPlan(" acme_leaf ", branch: " develop ", site: "v16two", on: bench) else {
+        let entries = [AppAddEntry(source: " acme_leaf ", branch: " develop ", site: "v16two")]
+        guard case .success(let plan) = await workbench.addAppPlan(entries, on: bench) else {
             Issue.record("no plan"); return
         }
-        #expect(base.cli.calls.contains(["app", "add", "acme_leaf", "--dry-run", "--json", "--bench-dir", v16, "--branch", "develop", "--site", "v16two"]))
+        #expect(base.cli.calls.contains(["app", "add", "acme_leaf", "--branch", "develop", "--install-on", "v16two", "--dry-run", "--json", "--bench-dir", v16]))
         #expect(bench.activity == nil && workbench.result == nil, "reading a plan takes no change slot and leaves no banner")
-        await workbench.addApp("acme_leaf", branch: "develop", site: "v16two", token: plan.token, on: bench)
-        #expect(base.cli.calls.contains(["app", "add", "acme_leaf", "--apply", plan.token, "--yes", "--plain", "--bench-dir", v16,
-                                         "--branch", "develop", "--site", "v16two"]))
+        await workbench.addApp(entries, token: plan.token, on: bench)
+        #expect(base.cli.calls.contains(["app", "add", "acme_leaf", "--branch", "develop", "--install-on", "v16two", "--apply", plan.token, "--yes", "--plain", "--bench-dir", v16]))
     }
 
     @Test func aRefusedDryRunIsTheCLIsMessage() async throws {
         let (store, _) = try await store()
         base.cli.answer("app add", .init(exitCode: 1, stdout: "", stderr: "[FAIL] Unknown app 'nosuch'"))
         let bench = try #require(store.benches.first { $0.path == v16 })
-        let result = await Workbench(store: store).addAppPlan("nosuch", branch: "", site: nil, on: bench)
+        let result = await Workbench(store: store).addAppPlan([AppAddEntry(source: "nosuch")], on: bench)
         #expect(result == .failure(.init(message: "Unknown app 'nosuch'")))
     }
 
@@ -120,7 +120,7 @@ struct AddPlanTests {
         let stale = "[FAIL] The app add plan changed since it was shown (apps.txt, apps/, the sites or the remote). Nothing was changed."
         base.cli.answer("app add", .init(exitCode: 1, stdout: stale, stderr: ""))
         let bench = try #require(store.benches.first { $0.path == v16 })
-        let error = await Workbench(store: store).addApp("acme_leaf", branch: "", site: nil, token: "old", on: bench)
+        let error = await Workbench(store: store).addApp([AppAddEntry(source: "acme_leaf")], token: "old", on: bench)
         #expect(error.map(StalePlan.isStale) == true)
     }
 

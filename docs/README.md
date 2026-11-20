@@ -61,3 +61,14 @@ flag no command has.
 - A new doctor check needs a `### <check_id>` heading in
   `guides/doctor-and-repair.md`: the app links doctor lines there, and
   `tests/test-docs.sh` checks it.
+
+## Images
+
+`docs/images/manifest.tsv` lists every image, the page that uses it, what
+makes it and its status. A new image needs a row, and `tests/test-docs.sh`
+fails without one. The Mac screens come from `DocsSnapshotTests` in
+`macos/BenchBarTests`. These tests open real windows, so they run on a Mac
+you are not using, with the `on-screen` marker in the snapshot folder, and
+never in CI. After a release that changed a screen, run them, copy the
+new images in, and update the dates in the manifest. `og-image.png` and
+`social-preview.png` come from `swift scripts/social-preview.swift`.

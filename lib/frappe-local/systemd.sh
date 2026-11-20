@@ -463,6 +463,7 @@ fl_dead_agents_list() {
     [[ -n "$f" ]] || continue
     runner="$(fl_plist_runner "$f")"
     [[ -n "$runner" && ! -f "$runner" ]] || continue
+    fl_runner_is_ours "$runner" || continue
     label="${f##*/}"; label="${label%.service}"
     fl_unit_show "$label.service"
     case "$U_ACTIVE" in active|activating|reloading) ;; *) continue ;; esac
@@ -490,7 +491,11 @@ fl_render_agent() {
   fl_unit_escape_v runner "$(fl_runner_path)"
   fl_unit_escape_v log "$(fl_bench_log_path)"
   fl_unit_escape_v path "$(fl_launchd_path_value)"
+  fl_service_limits
   FL_R_PLIST="$(fl_template_render systemd-user.service \
+    "NICE=${FL_SVC_NICE}" \
+    "MEMORY_HIGH=${FL_SVC_MEMORY_HIGH}" \
+    "NOFILE=${FL_SVC_NOFILE}" \
     "LABEL=$(fl_agent_label)" \
     "BENCH_NAME=${FL_BENCH_NAME}" \
     "RUNNER=${runner}" \

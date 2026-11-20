@@ -12,7 +12,8 @@ read tools, `up`, `down` and `restart`, and the changes that have a plan
 (an app, a site, a restore, the background service): a `*_plan` tool
 first, then the apply tool with the plan's token. The full list is under
 [Tools](#tools). Nothing that repairs, installs a bench or needs `sudo`
-is offered. Each tool runs `benchbar ... --json` with stdin closed and
+is offered, and neither is anything that turns a lab on, applies ports,
+shares a site or updates benchbar ([What is not a tool](#what-is-not-a-tool)). Each tool runs `benchbar ... --json` with stdin closed and
 `BENCHBAR_NONINTERACTIVE=1`, so a command that needs an answer it cannot
 ask for stops and names the missing input, and never hangs. An action
 returns the CLI's `done` line as `result` (`changed`, `warnings`,
@@ -163,6 +164,7 @@ claude mcp add benchbar -- benchbar mcp
 |---|---|---|---|
 | `benchbar_list` | read | Every Frappe bench benchbar knows on this machine: path, default site, sites, ports, whether its service is installed. | none |
 | `benchbar_status` | read | Live state of one bench: stopped, starting, running, crashed, paused or not_adopted (a bench folder benchbar does not manage yet), with pid, uptime start, ports, the bench command its service runs (bench_bin), sites and the ping of every site (only while the bench runs). | `bench` |
+| `benchbar_wait` | read | Wait until a bench is ready (the ready object of benchbar_status: the service loaded, the site answers its ping, socketio and Redis accept connections, a worker runs, no Python file changed since the bench started), or until one part is (for). | `bench`, `timeout`, `for` |
 | `benchbar_doctor` | read | Read only health report of one bench: every check with its level and the exact fix command. | `bench` |
 | `benchbar_logs_tail` | read | The last lines of one log file of a bench. | `bench`, `lines`, `file`, `process`, `since`, `since_restart` |
 | `benchbar_site_list` | read | The sites of one bench, which one is the default, whether /etc/hosts has it, its ping code, its database name and the MariaDB port (never the password). | `bench` |
@@ -172,20 +174,48 @@ claude mcp add benchbar -- benchbar mcp
 | `benchbar_up` | acts | Start a bench in the background (as a service) and wait for its default site to answer. | `bench`, `services_only` |
 | `benchbar_down` | acts | Stop a bench and keep it stopped, also across reboots. | `bench` |
 | `benchbar_restart` | acts | Restart every process of a bench, for example after changing Python code. | `bench` |
+| `benchbar_op_status` | read | The long runs: one operation by op_id (what an apply tool or a background run returned), or without op_id the ten newest. | `op_id` |
 | `benchbar_app_add_plan` | plan (read only) | Plan adding a Frappe app to a bench from a git URL or a known app name, read only: the resolved repo and branch, whether the repo is readable, the sites, the required apps (from hooks.py) and whether each resolves, the steps, and a token for benchbar_app_add. | `url_or_name`, `branch`, `name`, `commit`, `install_on`, `apps`, `site`, `all_sites`, `bench` |
-| `benchbar_app_add` | acts | Apply a plan from benchbar_app_add_plan: clone the app and its planned required apps, build, install on the planned sites. | `url_or_name`, `branch`, `name`, `commit`, `install_on`, `apps`, `site`, `all_sites`, `bench`, `token`* |
+| `benchbar_app_add` | acts | Apply a plan from benchbar_app_add_plan: clone the app and its planned required apps, build, install on the planned sites. | `url_or_name`, `branch`, `name`, `commit`, `install_on`, `apps`, `site`, `all_sites`, `bench`, `token`*, `background` |
 | `benchbar_site_add_plan` | plan (read only) | Plan a new site on a bench, read only: the steps (bench new-site, install the given apps, the hosts line), what they touch, the default site (which never moves) and a token for benchbar_site_add. | `site`*, `apps`, `bench` |
 | `benchbar_site_add` | acts | Apply a plan from benchbar_site_add_plan: create the site with benchbar's own MariaDB credentials, install the apps, add the hosts line. | `site`*, `apps`, `bench`, `token`*, `admin_password` |
 | `benchbar_site_backup` | acts | Back up one site (bench --site S backup, into the site's private/backups): the database, and with with_files the uploads. | `site`*, `with_files`, `bench` |
 | `benchbar_site_restore_plan` | plan (read only) | Plan restoring a backup set into a site, read only: the steps, what they touch (database, files, site_config), the backup of the target taken first, whether migrate runs, and a token for benchbar_site_restore. | `site`*, `from`*, `from_site`, `new`, `no_migrate`, `with_files`, `bench` |
-| `benchbar_site_restore` | acts | Apply a plan from benchbar_site_restore_plan: back up the target with its files, restore the set (from a copy, so the backup cannot prune it), carry the encryption key over, migrate unless no_migrate, verify. | `site`*, `from`*, `from_site`, `new`, `no_migrate`, `with_files`, `bench`, `token`* |
+| `benchbar_site_restore` | acts | Apply a plan from benchbar_site_restore_plan: back up the target with its files, restore the set (from a copy, so the backup cannot prune it), carry the encryption key over, migrate unless no_migrate, verify. | `site`*, `from`*, `from_site`, `new`, `no_migrate`, `with_files`, `bench`, `token`*, `background` |
 | `benchbar_service_install_plan` | plan (read only) | Plan the background service of a bench that has none (or an outdated one), read only: Procfile.lean, the runner, the agent (launchd on macOS, systemd --user on Linux), the helpers and the hosts line, with a token for benchbar_service_install. | `bench` |
 | `benchbar_service_install` | acts | Apply a plan from benchbar_service_install_plan: write the service files and load the agent. | `token`*, `bench` |
+| `benchbar_site_backups` | read | The backup sets of one site, newest first: stamp, time, size, whether files are in it and whether it is complete (and the folder they are in). | `site`*, `bench` |
+| `benchbar_ports_check` | read | Whether the ports of one bench conflict with a running bench or another listener, its port mode (automatic or fixed) and whether it already runs. | `bench` |
+| `benchbar_ports_plan` | read | Preview the port blocks and service files for one or more benches that would share this machine, read only: the allocation, what adopting each would write and whether it can be applied. | `paths`* |
+| `benchbar_lock_check` | read | Compare one bench with its team lockfile (benchbar.toml): every app's repo, branch and commit and the sites, with the differences and the fix for each. | `bench` |
+| `benchbar_labs_list` | read | The experiments (labs) and whether each is on. | none |
+| `benchbar_where` | read | How this benchbar was installed (homebrew, managed, checkout, app, other), the path it records for itself, its state folder, the BenchBar app and its version. | none |
+| `benchbar_doctor_prerequisites` | read | What this machine needs before a bench can be installed (tools, Homebrew or apt packages, MariaDB, free disk), each check with its level and fix, no bench needed. | `bench` |
+| `benchbar_self_update_check` | read | This benchbar and the BenchBar app against the latest release, and the command that would update them (available is null when GitHub could not be asked). | none |
+| `benchbar_app_focus_list` | read | Every app of one bench with whether it is a focus app (the ones being worked on), why, and how far behind its remote it is, from the last git fetch. | `bench` |
 
 An argument marked `*` is required. `bench` (the bench's path, from `benchbar_list`) is optional on every tool that has it: without it the tool uses the default bench.
 <!-- /generated:mcp-tools -->
 
+`benchbar_site_backups` lists the backup sets of a site; its `stamp` is the
+`from` of `benchbar_site_restore_plan`. `benchbar_ports_plan` takes the bench
+paths (`paths`) and only previews: it returns a token that no tool applies.
+`benchbar_self_update_check` asks GitHub for the latest release and takes
+the CLI's run lock for a moment, so it can answer that another run is busy.
+
 `benchbar_logs_tail` reads one file: `file` is `bench` (the default), `worker`, `worker_error` or `previous` (the log of the run before the last restart). `since` returns only the lines after a time, and `since_restart` only the lines since the bench last started; each line has its time in `ts`.
+
+## What is not a tool
+
+Some things are a person's decision and have no tool, whatever the client
+asks for: `repair` and bench installs, turning a lab on or off
+(`labs on` refuses an agent too), applying a port plan (`ports apply`,
+`ports setup`, `ports mode`), sharing a site, the LAN guard, `self-update`,
+changing the default site (`site default`) and pinning a focus app
+(`app focus NAME`). An agent reads the state with the read tools
+(`benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_labs_list`,
+`benchbar_self_update_check`, `benchbar_site_list`, `benchbar_app_focus_list`)
+and tells the person the command to run in a terminal.
 
 ## Flags, needs and environment
 

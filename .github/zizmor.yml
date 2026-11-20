@@ -1,0 +1,55 @@
+# zizmor's settings (ci.yml, job "workflows"). The job fails on any finding
+# that is not listed here. Every entry is a finding the repository accepts,
+# with the reason in the lines above it. An entry that no longer matches
+# anything is harmless; remove it when its file changes.
+#
+# The three release workflows are not edited for these findings in the pull
+# request that added zizmor, because issue 132 reworks those files at the same
+# time (the release permissions, the credentials of the checkouts). Their
+# entries below are the list that change has to remove.
+rules:
+  artipacked:
+    ignore:
+      # auto-tag.yml pushes the release tag with git, which needs the
+      # checkout's credentials (the Tag step). Nothing uploads the workspace.
+      - auto-tag.yml
+      # No job of release-windows.yml pushes with git (gh and the attestation
+      # use their own tokens) and no upload-artifact path holds the workspace
+      # (dist/*, the shim and tray output folders), so the persisted token
+      # cannot leave the job. persist-credentials: false belongs here once
+      # issue 132's edits to this file are in.
+      - release-windows.yml
+  cache-poisoning:
+    ignore:
+      # The Go module cache of the Windows package job (setup-go). The cache
+      # holds the one x/sys module, which go.sum verifies at every build, and
+      # a release run restores only what an earlier run of the same tag or of
+      # the default branch wrote. Turning the cache off (cache: false) is the
+      # same one line edit as the artipacked one above.
+      - release-windows.yml
+      # The DerivedData cache of the "app" job. It is read by CI runs only:
+      # the signed release (release.yml) builds from a clean checkout and
+      # restores no cache. A cache written by a pull request is visible to
+      # that pull request alone; the one a push to next-release or main
+      # writes holds only merged code. The unsigned bundle this job uploads is
+      # a CI artifact for trying a build, never a release.
+      - ci.yml
+  excessive-permissions:
+    ignore:
+      # release.yml grants contents: write to the whole workflow. Issue 132
+      # moves it to the build jobs that create the draft release.
+      - release.yml
+  self-repository:
+    ignore:
+      # `uses: ./.github/actions/...` is the way GitHub documents a composite
+      # action of the same repository, and every runner version accepts it.
+      # The shorter `$/...` is not used, so a release run does not depend on
+      # it.
+      - release.yml
+  template-injection:
+    ignore:
+      # release-windows.yml: the smoke step passes `steps.unpack.outputs.dir`,
+      # a folder under RUNNER_TEMP that the same job made, to a PowerShell
+      # script. No input of the run reaches it (informational, not
+      # exploitable).
+      - release-windows.yml
