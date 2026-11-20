@@ -127,6 +127,11 @@ FL_AF_TXT=""       # sites/apps.txt as of the load
 FL_AF_PINS=""      # the focus pins as of the load
 FL_AF_NOW=""       # the time of the load
 FL_AF_JOBS="${FL_AF_JOBS:-8}"
+# the folder and the collectors of a load in progress: fl_facts_end (the exit
+# trap's) stops them and removes the folder when a signal ends the run during
+# the load, so a stop leaves nothing behind
+FL_AF_DIR=""
+FL_AF_PIDS=()
 FL_AF_LIGHT=0      # 1: only branch, commit and local changes (the table of app list)
 
 # fl__af_collect APP: the record of APP on stdout (see fl_app_facts_load)
@@ -220,11 +225,13 @@ fl__af_collect() {
 fl_app_facts_load() {
   local apps=() app dir i=0 pids=() p now_keep rec
   if [[ "$#" -gt 0 ]]; then apps=("$@"); else while IFS= read -r app; do [[ -n "$app" ]] && apps+=("$app"); done < <(fl_apps_all); fi
-  dir="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-facts.XXXXXX")"
+  # inside the run's own folder when there is one (its end removes this too)
+  dir="$(mktemp -d "${FL_FACTS_DIR:-${TMPDIR:-/tmp}}/benchbar-facts.XXXXXX")"
+  FL_AF_DIR="$dir"; FL_AF_PIDS=()
   FL_AF_NOW="$(fl_now)"
   for app in ${apps[@]+"${apps[@]}"}; do
     fl__af_collect "$app" >"${dir}/${i}" 2>/dev/null &
-    pids+=("$!")
+    pids+=("$!"); FL_AF_PIDS+=("$!")
     if [[ "${#pids[@]}" -ge "$FL_AF_JOBS" ]]; then wait "${pids[0]}" 2>/dev/null || true; pids=("${pids[@]:1}"); fi
     i=$((i + 1))
   done
@@ -243,6 +250,7 @@ fl_app_facts_load() {
     i=$((i + 1))
   done
   rm -rf "$dir"
+  FL_AF_DIR=""; FL_AF_PIDS=()
   FL_AF_TXT="$(fl_apps_txt || true)"
   FL_AF_PINS="$(fl_bstate_get APP_FOCUS)"
   FL_AF_ON=1; FL_AF_BEHIND=1
@@ -1004,6 +1012,7 @@ fl_cmd_app_install() {
   if fl_app_install_on_sites "$app" "$OPT_SITE"; then fl_step_end "done"; else fl_step_end failed; fl_bench_redis_down; fl_steps_summary; return 1; fi
   fl_bench_redis_down
   fl_app_verify "$app" "" "$OPT_SITE" || { fl_steps_summary; return 1; }
+  fl_changed app "$app" "installed on ${OPT_SITE}"
   fl_steps_summary
 }
 

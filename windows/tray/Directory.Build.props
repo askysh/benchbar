@@ -11,6 +11,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- NuGetAudit warns about a package with a known vulnerability (NU1901 low to NU1904 critical). A new advisory must show in the build, but must not stop a release with no code change: Dependabot proposes the update. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Deterministic>true</Deterministic>
     <!-- Not invariant: the Fluent ScrollViewer template asks for a specific culture and fails with "Cannot find non-neutral culture related to 'en-us'" (see DECISIONS.md). -->

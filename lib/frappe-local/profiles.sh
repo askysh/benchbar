@@ -414,6 +414,7 @@ fl_write_reviewed() {
   mkdir -p "$(dirname "$file")" 2>/dev/null || { fl_fail "could not create $(dirname "$file")"; return 1; }
   cp "$new" "$file" 2>/dev/null || { fl_fail "could not write ${file}; it is as it was"; return 1; }
   fl_ok "wrote ${file}${FL_LAST_BACKUP:+ (backup: ${FL_LAST_BACKUP})}"
+  fl_changed state "$file" "written"
 }
 
 fl_cmd_profile_create() {
@@ -852,6 +853,8 @@ fl_profile_check_print() {
 # fl_profile_json_begin: with --json, the human lines go to stderr and the
 # JSON document to fd 3 (stdout); without, fd 3 is stdout too
 fl_profile_json_begin() {
+  # (under --jsonl and --for-agent the stream has set fd 3 up already)
+  [[ "${FL_JSONL:-0}" != "1" ]] || return 0
   if [[ "${OPT_JSON:-0}" == "1" ]]; then exec 3>&1 1>&2; else exec 3>&1; fi
 }
 

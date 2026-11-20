@@ -204,7 +204,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar profile list\|show\|create\|export\|import\|subscribe\|update\|remove\|check ...` | no | no | no | no | none |
 | `benchbar profile list [--json]` | no | no | no | no | document |
 | `benchbar profile show NAME` | no | no | no | no | none |
-| `benchbar profile create NAME --from-bench PATH [--dir DIR]` | no | no | no | yes | none |
+| `benchbar profile create NAME --from-bench PATH [--dir DIR]` | no | no | no | yes | stream |
 | `benchbar profile export NAME [--out FILE] [--plan] [--json]` | no | no | yes | yes | document |
 | `benchbar profile import FILE\|URL [--as NAME] [--plan] [--json]` | yes | no | yes | yes | document |
 | `benchbar profile subscribe GIT_URL [--plan\|--yes] [--json]` | yes | no | yes | yes | document |
@@ -217,8 +217,18 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
+| `profile create` | `--from-bench` | `PATH` | The bench to read the apps from. |
+| `profile create` | `--dir` | `DIR` | Write the profile into this folder (default ~/.config/benchbar/profiles). |
 | `profile export` | `--out` | `FILE` | Where to write (default ./NAME.toml). |
 | `profile export` | `--branch` | `APP=BR` | Export APP on BR instead of its default branch; repeatable. |
 | `profile export` | `--drop` | `APP` | Leave APP out of the copy; repeatable. Refused when a kept app requires it. |
 | `profile export` | `--plan` |  | Print the review only, write nothing. |
+| `profile export` | `--expect` | `DIGEST` | Refuse unless the profile's digest is this (the one the plan showed). |
+| `profile import` | `--as` | `NAME` | Save it under this name. |
+| `profile import` | `--plan` |  | Print the review only, write nothing. |
+| `profile import` | `--expect` | `DIGEST` | Refuse unless the profile's digest is this (the one the plan showed). |
+| `profile subscribe` | `--plan` |  | Print the review only, clone nothing. |
+| `profile update` | `--all` |  | Every import and subscription. |
+| `profile update` | `--plan` |  | Print the review only, change nothing. |
+| `profile update` | `--expect` | `DIGEST` | Refuse unless the fetched profile's digest is this (the one the plan showed). |
 <!-- /generated:cli-commands -->

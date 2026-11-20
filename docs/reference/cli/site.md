@@ -40,7 +40,7 @@ site's Administrator password, or reads `ADMIN_PASSWORD`.
 |---|---|
 | `--bundle NAME` | Install the apps of a bundle (`minimal`, `common`, `extended`) |
 | `--apps "a b"` | Install these apps, which must be in `apps/` already |
-| `--dry-run` | Print the plan, change nothing |
+| `--dry-run` | Print the plan and its token, change nothing in the bench (the first plan creates the plan key, once) |
 | `-y`, `--yes` | Do not ask; `ADMIN_PASSWORD` must be set |
 | `--json` | JSON lines ending in a `done` with the site and the default site ([the done fields](../../json-schema.md#the-done-fields-08)) |
 
@@ -300,7 +300,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar site add NAME [--bundle NAME\|--apps "a b"] [--dry-run\|--apply TOKEN] [--yes] [--json]` | yes | yes | no | yes | stream |
 | `benchbar site default NAME [--json]` | no | no | no | yes | stream |
 | `benchbar site open-as on\|off\|status [NAME] [--json]` | yes | no | no | yes | stream |
-| `benchbar site hosts` | yes | yes | no | yes | none |
+| `benchbar site hosts` | yes | yes | no | yes | stream |
 | `benchbar site backup NAME [--with-files] [--json]` | no | no | no | yes | document |
 | `benchbar site backups NAME [--json]` | no | no | no | no | document |
 | `benchbar site restore NAME --from STAMP\|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
@@ -311,6 +311,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
+| `site add` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `site add` | `--bundle` | `NAME` | App bundle to install. |
 | `site add` | `--apps` | `"a b"` | Apps of apps/ to install. |
 | `site add` | `--dry-run` |  | Print the plan and its token, change nothing. |
@@ -318,7 +319,9 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site add` | `--yes` |  | Do not ask. |
 | `site open-as` | `--yes` |  | Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1). |
 | `site open-as` | `--json` |  | JSON lines for on and off, one document for status. |
+| `site backup` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `site backup` | `--with-files` |  | Include the uploads. |
+| `site restore` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `site restore` | `--from` | `STAMP\|PATH` | The backup set: its stamp in the target's (or --from-site's) backup folder, or the database file's path. |
 | `site restore` | `--from-site` | `S` | Read the stamp from this site's backups. |
 | `site restore` | `--new` |  | Create the site (bench new-site) first. |

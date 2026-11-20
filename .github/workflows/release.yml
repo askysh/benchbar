@@ -43,6 +43,7 @@ on:
 
 permissions:
   contents: write
+  checks: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -53,6 +54,7 @@ jobs:
   check:
     name: Which path
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       mode: ${{ steps.mode.outputs.mode }}
       version: ${{ steps.version.outputs.version }}
@@ -108,7 +110,7 @@ jobs:
     steps:
       # The token stays out of .git/config: the tests and the build run
       # code that is not ours, and the draft step passes it to gh itself.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -159,6 +161,7 @@ jobs:
         with:
           version: ${{ env.VERSION }}
           prerelease: ${{ needs.check.outputs.prerelease }}
+          ci_gate: "true"
 
       # The certificate, the notary key and the Sparkle key exist only from
       # here to the cleanup step below. The certificate is imported in this
@@ -177,6 +180,8 @@ jobs:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
           SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          # the Swift tests ran in CI on this tree (the gate above checked it)
+          BENCHBAR_SKIP_TESTS: "1"
         run: |
           umask 077
           # the one folder the script writes the notary and Sparkle key files
@@ -226,7 +231,7 @@ jobs:
     env:
       VERSION: ${{ needs.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false

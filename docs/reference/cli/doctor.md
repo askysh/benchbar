@@ -97,6 +97,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `doctor` | `--unack` | `CHECK` | Undo --ack. |
 | `doctor` | `--prerequisites` |  | What this machine needs before an install, no bench needed. |
 | `doctor` | `--fetch` |  | git fetch the branches of the apps your focus apps need first. |
+| `repair` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `repair` | `--dry-run` |  | Print the plan, change nothing. |
 | `repair` | `--yes` |  | Do not ask. |
 
