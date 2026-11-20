@@ -135,8 +135,24 @@ fl_user_manager_fix() {
   if fl_is_wsl; then
     printf 'sudo loginctl enable-linger %s, or restart the distro from Windows: wsl.exe --terminate %s' "$user" "${WSL_DISTRO_NAME:-DISTRO}"
   else
-    printf 'sudo loginctl enable-linger %s, then log in again' "$user"
+    printf 'sudo loginctl enable-linger %s, then run this again from a login shell, or with XDG_RUNTIME_DIR=/run/user/%s (sudo -iu, su - and cron have no login session)' "$user" "$(id -u 2>/dev/null || printf 'UID')"
   fi
+}
+
+# fl_user_bus_wait: true once the user manager answers. Lingering starts it
+# without a login, a moment after loginctl returns, so the environment is
+# pointed at /run/user/UID again (it may not have existed when the CLI
+# started) and asked for up to FL_USER_BUS_WAIT_SECS (0: once).
+FL_USER_BUS_WAIT_SECS="${FL_USER_BUS_WAIT_SECS:-10}"
+fl_user_bus_wait() {
+  local i=0 limit=$((FL_USER_BUS_WAIT_SECS * 2))
+  while :; do
+    fl_linux_user_bus_env
+    fl_user_manager_reachable && return 0
+    [[ "$i" -lt "$limit" ]] || return 1
+    sleep 0.5
+    i=$((i + 1))
+  done
 }
 
 # fl_unit_show UNIT: sets U_LOAD, U_ACTIVE, U_PID and U_EXIT from one
@@ -447,6 +463,7 @@ fl_dead_agents_list() {
     [[ -n "$f" ]] || continue
     runner="$(fl_plist_runner "$f")"
     [[ -n "$runner" && ! -f "$runner" ]] || continue
+    fl_runner_is_ours "$runner" || continue
     label="${f##*/}"; label="${label%.service}"
     fl_unit_show "$label.service"
     case "$U_ACTIVE" in active|activating|reloading) ;; *) continue ;; esac
@@ -474,7 +491,11 @@ fl_render_agent() {
   fl_unit_escape_v runner "$(fl_runner_path)"
   fl_unit_escape_v log "$(fl_bench_log_path)"
   fl_unit_escape_v path "$(fl_launchd_path_value)"
+  fl_service_limits
   FL_R_PLIST="$(fl_template_render systemd-user.service \
+    "NICE=${FL_SVC_NICE}" \
+    "MEMORY_HIGH=${FL_SVC_MEMORY_HIGH}" \
+    "NOFILE=${FL_SVC_NOFILE}" \
     "LABEL=$(fl_agent_label)" \
     "BENCH_NAME=${FL_BENCH_NAME}" \
     "RUNNER=${runner}" \

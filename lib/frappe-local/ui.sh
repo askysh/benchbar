@@ -110,6 +110,8 @@ fl_log_init() {
   # the phase scripts are child processes: they log to the same file and
   # back up into the same folder
   export FL_LOG_FILE FL_BACKUP_STAMP
+  # a run that makes a log changes things: it is an operation with a handle (ops.sh)
+  fl_op_begin
   fl_state_prune "$dir"
 }
 
@@ -128,12 +130,14 @@ fl_log_init() {
 #                       puts it back, and doctor warns until then)
 #   update checks       update-check.<date>.txt             newest 14
 #   temp files          state.env.XXXXXX of a killed writer older than a day
-# The limits can be changed with FL_KEEP_RUN_LOGS, FL_KEEP_STATE_BACKUPS and
-# FL_KEEP_UPDATE_CHECKS (a number; the tests use small ones). Nothing in a
+#   operation records   ops/op-<date>-<time>-<pid>.json (and .jsonl, .err)   newest 100, and
+#                       every one of a run that still runs (ops.sh)
+# The limits can be changed with FL_KEEP_RUN_LOGS, FL_KEEP_STATE_BACKUPS,
+# FL_KEEP_UPDATE_CHECKS and FL_KEEP_OPS (a number; the tests use small ones). Nothing in a
 # bench or in a site's backup folder is ever pruned here.
 # shellcheck disable=SC2010  # names this tool made, matched by a strict pattern
 fl_state_prune() {
-  local logdir="$1" keep_logs keep_bk keep_uc n f d name logs=0 baks=0 checks=0 temps=0 root
+  local logdir="$1" keep_logs keep_bk keep_uc n f d name logs=0 baks=0 checks=0 temps=0 root ops=0
   [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
   keep_logs="${FL_KEEP_RUN_LOGS:-100}"; [[ "$keep_logs" =~ ^[0-9]+$ && "$keep_logs" -ge 1 ]] || keep_logs=100
   keep_bk="${FL_KEEP_STATE_BACKUPS:-50}"; [[ "$keep_bk" =~ ^[0-9]+$ && "$keep_bk" -ge 1 ]] || keep_bk=50
@@ -176,9 +180,11 @@ fl_state_prune() {
     [[ -n "$f" && -f "$f" && ! -L "$f" ]] || continue
     rm -f "$f" 2>/dev/null && temps=$((temps + 1))
   done < <(find "$FL_STATE_DIR" -maxdepth 3 -type f -name 'state.env.??????' -mmin +1440 2>/dev/null || true)
-  [[ $((logs + baks + checks + temps)) -gt 0 ]] || return 0
-  fl_log "pruned: ${logs} run logs, ${baks} state backup folders, ${checks} update checks, ${temps} temp files"
-  fl_changed pruned "state folder" "removed beyond the limits: ${logs} run logs (keeps ${keep_logs}), ${baks} backup folders (keeps ${keep_bk}), ${checks} update checks (keeps ${keep_uc}), ${temps} old temp files"
+  # the records of operations (ops.sh): the newest FL_KEEP_OPS stay, and every one of a run that still runs
+  ops="$(fl_op_prune)"
+  [[ $((logs + baks + checks + temps + ops)) -gt 0 ]] || return 0
+  fl_log "pruned: ${logs} run logs, ${baks} state backup folders, ${checks} update checks, ${temps} temp files, ${ops} operation records"
+  fl_changed pruned "state folder" "removed beyond the limits: ${logs} run logs (keeps ${keep_logs}), ${baks} backup folders (keeps ${keep_bk}), ${checks} update checks (keeps ${keep_uc}), ${temps} old temp files, ${ops} operation records (keeps the newest ${FL_KEEP_OPS:-100})"
   return 0
 }
 
@@ -361,7 +367,7 @@ fl_jsonl() {
   [[ "$FL_JSONL" == "1" ]] || return 0
   # a dry run streams the plan and done only (FL_JSONL_QUIET)
   [[ "${FL_JSONL_QUIET:-0}" != "1" || "$1" == "done" ]] || return 0
-  { printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_JSONL_VERSION:-${FL_VERSION:-0}}" "$1" "${2:-}" >&3; } 2>/dev/null || true
+  { printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s%s}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_JSONL_VERSION:-${FL_VERSION:-0}}" "$1" "${FL_OP_JSON:-}" "${2:-}" >&3; } 2>/dev/null || true
 }
 
 # fl_log_lines_v VAR: how many lines the run log has now (0 without one)
@@ -565,8 +571,74 @@ fl_doc_emit() {
     return 0
   fi
   if [[ "$kind" == "plan" ]]; then printf '%s\n' "$doc" >&3; return 0; fi
+  # a failing result says why (the envelope: error whenever exit is not 0)
+  if [[ "$code" != "0" && "$doc" != *'"error":'* ]]; then
+    doc="${doc%\}},\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-${FL_LAST_PROBLEM:-the command exited with ${code}}}")}"
+  fi
   fl_done_fields_v f "$code"
-  printf '%s,%s}\n' "${doc%\}}" "$f" >&3
+  FL_DOC_ENVELOPED=1
+  printf '%s%s,%s}\n' "${doc%\}}" "${FL_OP_JSON:-}" "$f" >&3
+}
+
+# ---------------------------------------------------------------- the envelope of a read
+
+# Under --jsonl and --for-agent every command with a JSON mode ends with a
+# line that has `exit` (docs/json-schema.md, "The result envelope"). A
+# command that changes things sends a done line. A command that only reads
+# prints one document, and fl_read_env_begin keeps that document back, so
+# that fl_read_env_finish can add `exit` to it, or, when the run failed
+# before it printed one, print a document that says why. fd 8 is the real
+# stdout; stray text on stdout (the ERR trap's line) goes to stderr.
+FL_READ_ENV=0
+FL_READ_BUF=""
+FL_DOC_ENVELOPED=0
+
+fl_read_env_begin() {
+  [[ -d "$FL_STATE_DIR" ]] || mkdir -p "$FL_STATE_DIR" 2>/dev/null || true
+  # the state folder first; when it is not writable the temp folder holds the
+  # document (fl_read_env_finish removes the file on every exit)
+  FL_READ_BUF="${FL_STATE_DIR}/.read-doc.$$"
+  if ! : >"$FL_READ_BUF" 2>/dev/null; then
+    FL_READ_BUF="${TMPDIR:-/tmp}/.benchbar-read-doc.$$"
+    # no place to keep the document back: the read prints as it did before the envelope
+    : >"$FL_READ_BUF" 2>/dev/null || { FL_READ_BUF=""; return 0; }
+  fi
+  FL_READ_ENV=1
+  exec 8>&1 1>"$FL_READ_BUF"
+}
+
+# fl_read_env_finish CODE: the last line of a read
+fl_read_env_finish() {
+  [[ "$FL_READ_ENV" == "1" ]] || return 0
+  FL_READ_ENV=0
+  local code="$1" line="" doc="" other="" err="" tail=""
+  exec 1>&8 8>&-
+  if [[ -f "$FL_READ_BUF" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ "$line" == '{"schema_version":'*'}' ]]; then doc="$line"; else other="${other}${line}"$'\n'; fi
+    done <"$FL_READ_BUF"
+    rm -f "$FL_READ_BUF"
+  fi
+  [[ -z "$other" ]] || printf '%s' "$other" >&2
+  if [[ "$code" != "0" ]]; then
+    err="${FL_DIE_MESSAGE:-${FL_LAST_PROBLEM:-the command exited with ${code}}}"
+  fi
+  if [[ -n "$doc" ]]; then
+    # a document that has its envelope (the share family) is printed as it is
+    if [[ "$FL_DOC_ENVELOPED" != "1" ]]; then
+      tail=",\"exit\":${code}"
+      # a failing read that printed its findings (doctor, lock check) has no error of its own
+      [[ "$code" == "0" || "$doc" == *'"error":'* ]] || tail="${tail},\"error\":$(fl_json_str "${err:0:500}")"
+      doc="${doc%\}}${tail}}"
+    fi
+    printf '%s\n' "$doc"
+  else
+    # nothing was printed: the run failed (or had nothing to say) before its document
+    tail="\"exit\":${code}"
+    [[ "$code" == "0" ]] || tail="${tail},\"error\":$(fl_json_str "${err:0:500}")"
+    printf '{"schema_version":%d,"cli_version":"%s",%s,"warnings":[%s],"next_actions":[%s]}\n' \
+      "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$tail" "$FL_DONE_WARNINGS" "$FL_DONE_NEXT"
+  fi
 }
 
 # fl_doc_rest DOC: the fields after schema_version and cli_version, without braces
@@ -583,6 +655,8 @@ fl_jsonl_progress() {
   if [[ -n "${FL_PROGRESS_FILE:-}" && -f "$FL_PROGRESS_FILE" ]]; then
     bytes="$(stat -c %s "$FL_PROGRESS_FILE" 2>/dev/null || stat -f %z "$FL_PROGRESS_FILE" 2>/dev/null || true)"
   fi
+  # the last progress line is in the operation's record too (benchbar op status)
+  fl_op_note_progress "$1" "$2" "$bytes"
   fl_jsonl progress ",\"step\":$(fl_json_str "$FL_JSONL_CUR"),\"label\":$(fl_json_str "$1"),\"elapsed\":$2,\"bytes\":$(fl_json_num "$bytes"),\"total\":null"
 }
 
@@ -623,6 +697,8 @@ fl_jsonl_section_exit() {
 
 fl_section() {
   fl_spinner_pause
+  # a phase script's heading is a step of the operation too
+  [[ -z "$FL_OP_ID" ]] || fl_op_note_step "$(printf '%s' "$1" | tr '[:upper:] ' '[:lower:]_')" "$1" running
   fl_jsonl_section_begin "$1"
   printf '\n%s%s %s%s\n' "$FL_BOLD$FL_BLUE" "==========" "$1 ==========" "$FL_RESET"
   fl_log "== $1 =="
@@ -918,7 +994,10 @@ fl_step_glyph() {
 # step INDEX, when it has an id. The message of a failed, skipped or warning
 # step is the CLI's own [FAIL] or [WARN] line, so terminal and stream agree.
 fl_step_json() {
-  [[ "$FL_JSONL" == "1" && -n "${FL_STEP_IDS[$2]:-}" ]] || return 0
+  [[ -n "${FL_STEP_IDS[$2]:-}" ]] || return 0
+  # the step is in the operation's record, whether or not a stream is open
+  fl_op_note_step "${FL_STEP_IDS[$2]}" "${FL_STEP_LABELS[$2]}" "$1"
+  [[ "$FL_JSONL" == "1" ]] || return 0
   local n="" msg="" cmd="${5:-}"
   [[ "$FL_STEP_NUMBERED" != "1" ]] || n=$(($2 + 1))
   case "$1" in
@@ -1220,3 +1299,7 @@ fl_ask_secret() {
 # loaded here because every lib file and phase script that may ask for it has ui.sh
 # shellcheck source=lib/frappe-local/facts.sh
 . "${BASH_SOURCE[0]%/*}/facts.sh"
+
+# the operation handles (op_id, ops/<op_id>.json, benchbar op ...): here for the same reason
+# shellcheck source=lib/frappe-local/ops.sh
+. "${BASH_SOURCE[0]%/*}/ops.sh"

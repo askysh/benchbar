@@ -224,4 +224,16 @@ assert_eq "0" "$CODE" "$OUT"
 assert_eq "${AR}1" "$(printf '%s' "$OUT" | jget - 'd["archived_path"]')"
 assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["hosts_removed"] is False and d["manual_step"] is None')" "(no line left to remove)"
 
+# ---- fl_backup_field reads a path with a comma (bench allows one) whole
+# shellcheck disable=SC2016  # the subshell expands its own variables
+got="$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/site-backups.sh"; fl_backup_field "$2" path' _ "$ROOT" \
+  '{"stamp":"20260101_000000","time":"t","path":"/b,c/d, e/20260101_000000-x-database.sql.gz","database":null,"size_bytes":42,"complete":true}')"
+assert_eq "/b,c/d, e/20260101_000000-x-database.sql.gz" "$got" "(a comma in the path stays in the field)"
+# shellcheck disable=SC2016
+for pair in 'size_bytes=42' 'complete=true' 'database=null' 'stamp=20260101_000000'; do
+  got="$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/site-backups.sh"; fl_backup_field "$2" "$3"' _ "$ROOT" \
+    '{"stamp":"20260101_000000","time":"t","path":"/b,c/d","database":null,"size_bytes":42,"complete":true}' "${pair%%=*}")"
+  assert_eq "${pair#*=}" "$got" "(the field ${pair%%=*} still reads)"
+done
+
 printf 'test-site-backups: ok\n'

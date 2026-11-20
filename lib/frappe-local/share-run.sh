@@ -82,8 +82,35 @@ fl_share_phase_v() {
 }
 # the runner's own PID (not the test process table of FL_KILL_CMD)
 fl_share_runner_alive() { [[ -n "$1" ]] && kill -0 "$1" 2>/dev/null; }
+# the job: a launchd job on macOS; on Linux a systemd --user unit in the runtime folder (share-linux.sh
+# redefines these, and the three that follow, with the same names)
 fl_share_job_target() { printf '%s/%s' "$(fl_launchd_domain)" "$FL_SHARE_JOB_LABEL"; }
 fl_share_job_loaded() { launchctl print "$(fl_share_job_target)" >/dev/null 2>&1; }
+# the name of the thing that keeps the job, and the command that takes it out by hand
+fl_share_job_manager() { printf 'launchd'; }
+fl_share_job_bootout_hint() { printf 'launchctl bootout %s' "$(fl_share_job_target)"; }
+# fl_share_job_stop: the job is taken out (a run that is not loaded is nothing to do); non zero when it is still listed
+fl_share_job_stop() { fl_agent_bootout "$(fl_share_job_target)"; }
+# fl_share_job_start FILE: loads the job from FILE and starts it; non zero (and a message) when it did not
+fl_share_job_start() {
+  if ! fl_agent_bootstrap "$1" "$FL_SHARE_JOB_LABEL"; then
+    fl_fail "launchd did not load ${FL_SHARE_JOB_LABEL}"
+    return 1
+  fi
+  rm -f "$1"
+  fl_launchd_kickstart "$(fl_share_job_target)" || { fl_fail "launchd did not start ${FL_SHARE_JOB_LABEL}"; return 1; }
+}
+# the tools the runner is given by absolute path: a path that does not exist is an empty one on Linux
+fl_share_dns_sd_bin() { printf '%s' "${FL_SHARE_DNS_SD:-/usr/bin/dns-sd}"; }
+fl_share_caffeinate_bin() { printf '%s' "${FL_SHARE_CAFFEINATE:-/usr/bin/caffeinate}"; }
+fl_share_lsof_bin() { printf '%s' "${FL_SHARE_LSOF:-/usr/sbin/lsof}"; }
+# fl_share_start_note: said once while share start writes the job (Linux: no advertiser)
+fl_share_start_note() { :; }
+# fl_share_job_text SHARE_DIR: the job's own file (the plist) on stdout
+fl_share_job_text() {
+  fl_template_render share.plist "LABEL=${FL_SHARE_JOB_LABEL}" "APP_BUNDLE_ID=${FL_APP_BUNDLE_ID}" "RUNNER=${1}/share-run.sh" \
+    "SHARE_DIR=${1}" "PATH=$(fl_launchd_path_value)" "LOG=${1}/share.log"
+}
 
 # fl_share_dur_v VAR TEXT FLAG: the seconds of "30m" or "4h", from 5 minutes to 12 hours
 fl_share_dur_v() {
@@ -175,7 +202,7 @@ fl_share_wipe_all() {
 # fl_share_teardown: ends a share in whatever state it is: tells the gateway, boots the job out, removes
 # what the runner leaves, empties the room and ends every session of the copy. SH_TORN=1 when there
 # was anything to end (a second stop finds nothing, wipes nothing and says unchanged).
-# SH_BOOTOUT_FAILED=1 when launchd still lists the job afterwards: the caller must not report it stopped.
+# SH_BOOTOUT_FAILED=1 when launchd (systemd on Linux) still lists the job afterwards: the caller must not report it stopped.
 SH_TORN=0; SH_BOOTOUT_FAILED=0
 fl_share_teardown() {
   local dir sock reply f had=0
@@ -185,7 +212,7 @@ fl_share_teardown() {
   for f in "$sock" "$dir/job.plist" "$dir/share-run.sh" "$dir/gateway.json" "$dir/ended" "$dir/phase"; do [[ ! -e "$f" ]] || had=1; done
   [[ "$had" == 1 ]] || return 0
   if [[ -S "$sock" ]] && fl_share_control_v reply '{"op":"stop"}'; then fl_info "the gateway is stopping"; fi
-  if fl_share_job_loaded && ! fl_agent_bootout "$(fl_share_job_target)"; then SH_BOOTOUT_FAILED=1; fi
+  if fl_share_job_loaded && ! fl_share_job_stop; then SH_BOOTOUT_FAILED=1; fi
   rm -f "$sock" "$dir/job.plist" "$dir/share-run.sh" "$dir/gateway.json" "$dir/degraded" "$dir/ended" "$dir/phase"
   fl_share_devices_empty
   fl_share_wipe_all || true
@@ -211,10 +238,13 @@ fl_share_seats_lines_v() {
   printf -v "$1" '%s' "$__out"
 }
 
+# the name of this computer as its owner set it: macOS's ComputerName (share-linux.sh: the hostname)
+fl_share_computer_name() { scutil --get ComputerName 2>/dev/null || true; }
+
 # fl_share_host_label_v VAR: this Mac's name as people see it, cleaned like a room label
 fl_share_host_label_v() {
   local __n
-  __n="$(scutil --get ComputerName 2>/dev/null || true)"
+  __n="$(fl_share_computer_name)"
   fl_share_clean_label_v __n "$__n"
   printf -v "$1" '%s' "${__n:-This Mac}"
 }
@@ -260,12 +290,11 @@ fl_share_render_job() {
   fl_share_cfg_str_v web_port web_port; fl_share_cfg_str_v site site
   runner="$(fl_template_render share-run.sh "SHARE_DIR=${dir}" "SOCK=$(fl_share_sock)" "BENCH=${FL_BENCH_DIR}" "SHARE_SITE=${FL_SHARE_SITE}" \
     "WEB_PORT=${web_port}" "GATEWAY_PORT=${FL_SHARE_GATEWAY_PORT}" "PYTHON=${FL_BENCH_DIR}/env/bin/python" "LIB=${FL_SELF_DIR}/lib/frappe-local" \
-    "NODE=${SP_NODE_REAL}" "BENCHBAR=$2" "DNS_SD=${FL_SHARE_DNS_SD:-/usr/bin/dns-sd}" "CAFFEINATE=${FL_SHARE_CAFFEINATE:-/usr/bin/caffeinate}" \
-    "LSOF=${FL_SHARE_LSOF:-/usr/sbin/lsof}" "CURL=${FL_CURL:-/usr/bin/curl}" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" \
+    "NODE=${SP_NODE_REAL}" "BENCHBAR=$2" "DNS_SD=$(fl_share_dns_sd_bin)" "CAFFEINATE=$(fl_share_caffeinate_bin)" \
+    "LSOF=$(fl_share_lsof_bin)" "CURL=${FL_CURL:-/usr/bin/curl}" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" \
     "SOCK_SECS=${FL_SHARE_SOCK_SECS}" "WARM_SECS=${FL_SHARE_WARM_SECS}" \
     "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "SITE_LABEL=${site}" "ROOM_LABEL=$1")" || return 1
-  plist="$(fl_template_render share.plist "LABEL=${FL_SHARE_JOB_LABEL}" "APP_BUNDLE_ID=${FL_APP_BUNDLE_ID}" "RUNNER=${dir}/share-run.sh" \
-    "SHARE_DIR=${dir}" "PATH=$(fl_launchd_path_value)" "LOG=${dir}/share.log")" || return 1
+  plist="$(fl_share_job_text "$dir")" || return 1
   if ! fl_share_write_private "${dir}/share-run.sh" 700 "$runner" || ! fl_share_write_private "${dir}/job.plist" 600 "$plist"; then
     fl_fail "could not write the share job into ${dir}"
     return 1
@@ -315,19 +344,16 @@ fl_share_start_step_gateway_config() {
 }
 
 fl_share_start_step_job() {
-  local dir target
-  dir="$(fl_share_dir)"; target="$(fl_share_job_target)"
+  local dir
+  dir="$(fl_share_dir)"
+  fl_share_start_note
   fl_share_render_job "$(printf '%s' "$SH_START_ROOM_JSON" | fl_share_json_unquote)" "$SH_START_BENCHBAR" || return 1
   if fl_share_stop_requested; then fl_fail "benchbar share stop was run while sharing was starting"; return 1; fi
   # the log is this share's: the last one is kept as share.log.1
   if [[ -f "${dir}/share.log" ]]; then mv -f "${dir}/share.log" "${dir}/share.log.1" || true; fi
-  if ! fl_agent_bootstrap "${dir}/job.plist" "$FL_SHARE_JOB_LABEL"; then
-    rm -f "${dir}/job.plist"
-    fl_fail "launchd did not load ${FL_SHARE_JOB_LABEL}"
-    return 1
-  fi
+  # the job file keeps the name job.plist on both platforms: the runner deletes it when it ends
+  fl_share_job_start "${dir}/job.plist" || { rm -f "${dir}/job.plist"; return 1; }
   rm -f "${dir}/job.plist"
-  fl_launchd_kickstart "$target" || { fl_fail "launchd did not start ${FL_SHARE_JOB_LABEL}"; return 1; }
 }
 
 # fl_share_phase_secs PHASE: how long the runner may stay in PHASE, from the limits it was rendered with
@@ -356,7 +382,7 @@ fl_share_start_step_wait_listening() {
     if [[ -n "$pid" ]] && ! fl_share_runner_alive "$pid"; then fl_fail "the sharing job ended while ${ph} (its log: $(fl_share_dir)/share.log)"; return 1; fi
     [[ "${ph:-none}" == "$last" ]] || { last="${ph:-none}"; since="$SECONDS"; }
     if [[ $((SECONDS - since)) -gt "$(fl_share_phase_secs "${ph:-}")" ]]; then
-      fl_fail "the sharing job got no further than ${ph:-being started by launchd} (its log: $(fl_share_dir)/share.log)"; return 1
+      fl_fail "the sharing job got no further than ${ph:-being started by $(fl_share_job_manager)} (its log: $(fl_share_dir)/share.log)"; return 1
     fi
     sleep 0.25
   done
@@ -402,10 +428,10 @@ fl_cmd_share_start() {
     "Run it in a terminal: benchbar share start"
   [[ -t 0 ]] || fl_person_env_ok BENCHBAR_SUDO gui || fl_die "Sharing needs a person at a terminal, and this run has none.${FL_PERSON_WHY:+ $FL_PERSON_WHY}" \
     "Run it in a terminal: benchbar share start"
-  ! fl_is_linux || fl_die "Sharing on the network needs macOS." "Run it on a Mac."
   fl_share_dur_v secs "$dur" --for
   fl_require_bench
   fl_share_require_setup
+  fl_share_wsl_gate warn
   fl_share_resume_leftover
   rm -f "$(fl_share_dir)/stop_requested"
   fl_sp_nc_open 127.0.0.1 "$FL_REDIS_CACHE_PORT" || fl_die "The bench is not running: its Redis does not answer on ${FL_REDIS_CACHE_PORT}." "Start it (benchbar up), then run this again."
@@ -497,8 +523,8 @@ fl_cmd_share_stop() {
   fl_share_write_private "$(fl_share_dir)/stop_requested" 600 "" || fl_warn "could not leave the stop marker for a start on its way"
   fl_share_teardown
   if [[ "$SH_BOOTOUT_FAILED" == 1 ]]; then
-    fl_die "launchd still lists ${FL_SHARE_JOB_LABEL} after the bootout, so the share may still run." \
-      "Run: launchctl bootout $(fl_share_job_target)"
+    fl_die "$(fl_share_job_manager) still lists ${FL_SHARE_JOB_LABEL} after the bootout, so the share may still run." \
+      "Run: $(fl_share_job_bootout_hint)"
   fi
   if [[ "$SH_TORN" == 1 ]]; then
     fl_changed process share "stopped"
@@ -581,7 +607,7 @@ fl_share_preflight_json_v() {
 fl_cmd_share_status() {
   local want_pre=0 a dir sock now state=off loaded=0 reply="" started="" deadline="" ended="" degraded="null" error="null"
   local site web_port label users seats copy lan_guard pre="null" started_json=null deadline_json=null left=0 can=0
-  local total=0 online=0 locked=null lock_reason=null budget=null people=0 trouble=false wipe=0 v files runner_pid runner_phase phase_json=null web_up_json=null interrupted
+  local total=0 online=0 locked=null lock_reason=null budget=null people=0 trouble=false wipe=0 v runner_pid runner_phase phase_json=null web_up_json=null interrupted
   for a in "$@"; do
     case "$a" in
       --preflight) want_pre=1 ;;
@@ -638,10 +664,7 @@ fl_cmd_share_status() {
   fl_share_copy_json_v copy
   interrupted=false
   ! fl_share_setup_interrupted || interrupted=true
-  fl_sp_pf_files_problem_v files
-  if [[ -z "$files" ]]; then lan_guard=installed
-  elif [[ ! -r "${FL_LANGUARD_ANCHOR:-$FL_SHARE_PF_ANCHOR_FILE}" || ! -r "${FL_LANGUARD_DAEMON:-$FL_SHARE_PF_DAEMON_FILE}" ]]; then lan_guard=missing
-  else lan_guard=outdated; fi
+  fl_lg_state_v lan_guard
   fl_sp_lan_v
   [[ "$want_pre" == 0 ]] || fl_share_preflight_json_v pre
 

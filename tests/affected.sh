@@ -36,6 +36,8 @@
 #   any shell file          shellcheck
 #   tests/share/            test-share-gateway
 #   the release workflows, .github/actions/, scripts/macos-release.sh   test-release-workflows
+#   any workflow, .github/actions/, dependabot.yml, the pinned build tools and
+#   Swift packages, the shim's go.mod   test-supply-chain
 #   macos/, windows/, examples/, site/, .github/, .claude/, install.ps1,
 #   scripts/app-*.py and *.md   nothing here: the app, tray, shim and Windows installer
 #                           jobs, the workflows themselves and the docs site cover them
@@ -72,24 +74,27 @@ LIB_CORE="test-doctor test-install-json test-phases test-repair test-service tes
 lib_family() {
   case "$1" in
     checks|doctor) echo "test-doctor test-doctor-hardening test-doctor-linux test-repair test-repair-json test-json" ;;
-    doctor-linux|preflight-linux) echo "test-doctor-linux test-doctor test-repair test-wsl-preflight test-install-linux test-prerequisites-linux" ;;
+    doctor-linux|preflight-linux) echo "test-doctor-linux test-doctor test-repair test-wsl-preflight test-install-linux test-install-failures test-prerequisites-linux" ;;
     repair) echo "test-repair test-repair-json test-doctor test-doctor-hardening test-install-json" ;;
     docs) echo "test-docs test-docs-command" ;;
     commands) echo "test-docs test-docs-command test-labs test-json" ;;
     apps|app-plan) echo "test-apps test-app-cli test-app-batch test-app-recovery test-pull" ;;
     bench|benchinfo|benchstate|discovery|freshness) echo "test-bench-flow test-status-cost test-discovery test-multi-bench test-adopt test-json test-freshness test-ports test-port-management test-install-json" ;;
-    sites|site-backups|site-restore|pull) echo "test-sites test-site-backups test-site-restore test-pull test-install-json" ;;
+    bench-run) echo "test-bench-run test-bench-run-mcp test-site-backups test-docs test-agent-contracts" ;;
+    sites|site-backups|site-restore|pull) echo "test-sites test-bench-run test-site-backups test-site-restore test-pull test-install-json" ;;
     ports|port-management) echo "test-ports test-port-management test-multi-bench test-adopt" ;;
-    service|launchd|systemd|templates|shellrc|mariadb|wkhtmltopdf|platform|platform-linux) echo "test-platform test-platform-linux test-systemd test-service test-templates test-shellrc test-wsl-preflight test-install-linux test-install-json test-phases test-sudo-env test-windows-commands test-hygiene test-homebrew" ;;
+    service|launchd|systemd|templates|shellrc|mariadb|wkhtmltopdf|platform|platform-linux) echo "test-platform test-platform-linux test-systemd test-service test-templates test-shellrc test-wsl-preflight test-install-linux test-install-failures test-install-json test-phases test-sudo-env test-windows-commands test-hygiene test-homebrew" ;;
     sudo|sudo-env) echo "test-sudo-env test-platform-linux test-install-json test-hygiene test-port-management" ;;
     ui|state|run|lock|process|install-kind|toml) echo "$LIB_CORE test-ui test-redact test-input-hygiene test-state-migrate test-process test-runner" ;;
     profiles|teamlock|version-policy) echo "test-profiles test-profile-v16 test-version-policy test-doctor-linux test-self-update" ;;
     labs) echo "test-labs test-labs-share test-docs" ;;
+    notices) echo "test-notices test-docs test-json test-lean-load test-status-cost test-tray-fixtures" ;;
     open-as) echo "test-open-as" ;;
     consoles) echo "test-cli" ;;
     report) echo "test-report test-redact" ;;
     selfupdate) echo "test-self-update test-install-sh" ;;
-    share|share-admin|share-preflight|share-run|share-site|lan-guard) echo "test-share test-share-admin test-share-preflight test-share-run test-share-gateway test-lan-guard test-labs-share" ;;
+    share|share-admin|share-preflight|share-run|share-site|lan-guard) echo "test-share test-share-admin test-share-preflight test-share-run test-share-gateway test-lan-guard test-lan-guard-linux test-share-linux test-labs-share" ;;
+    lan-guard-linux|share-linux) echo "test-lan-guard-linux test-share-linux test-labs-share" ;;
     *) return 1 ;;
   esac
 }
@@ -98,13 +103,15 @@ lib_family() {
 script_tests() {
   case "$1" in
     release-notes) echo "test-release-notes" ;;
-    docs-only) echo "test-release-workflows" ;;
+    release-ci-gate|release-promote) echo "test-release-ci-gate test-release-promote test-release-workflows" ;;
+    docs-only) echo "test-release-ci-gate test-release-workflows" ;;
     check-version|bump-version) echo "test-version-sources test-release-notes test-release-workflows" ;;
     changelog-fold) echo "test-changelog test-release-notes" ;;
     app-embed-cli|cli-tarball|homebrew-render) echo "test-packaging test-homebrew" ;;
     macos-appcast) echo "test-macos-appcast" ;;
     check-profile-formulae) echo "test-doctor-hardening test-homebrew" ;;
     ci-plan|ci-timings) echo "test-ci-plan" ;;
+    ci-install-tool|macos-packages|macos-build) echo "test-supply-chain" ;;
   esac
 }
 
@@ -178,8 +185,9 @@ while IFS= read -r f; do
     .claude/guard-*.sh | .claude/settings.json) pick test-guards; shell=1 ;;
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;
-    scripts/macos-release.sh) pick test-release-workflows; shell=1 ;;
-    .github/workflows/release.yml | .github/workflows/release-windows.yml | .github/workflows/homebrew-tap.yml | .github/workflows/auto-tag.yml | .github/actions/*) pick_family "test-release-workflows test-version-sources" ;;
+    scripts/macos-release.sh) pick test-release-workflows; pick test-supply-chain; shell=1 ;;
+    .github/workflows/release.yml | .github/workflows/release-windows.yml | .github/workflows/homebrew-tap.yml | .github/workflows/auto-tag.yml | .github/actions/*) pick_family "test-release-workflows test-version-sources"; pick test-supply-chain ;;
+    .github/workflows/* | .github/dependabot.yml | .github/zizmor.yml | .github/actionlint.yaml | macos/Package.swift | macos/Package.resolved | macos/project.yml | macos/sparkle.yml | windows/shim/go.mod) pick test-supply-chain ;;
     macos/BenchBarTests/Fixtures/*) pick_family "test-json test-install-json test-lock" ;;
     windows/tray/fixtures/* | tests/record-tray-fixtures.sh) pick test-tray-fixtures; shell=1 ;;
     scripts/*.sh)

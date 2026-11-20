@@ -20,6 +20,20 @@ Every run is check, plan, apply, verify: the checks read the server and
 the bench, the plan shows the backup, its size and the apps, and the
 restore asks first. `--dry-run` stops after the plan.
 
+For an agent or an app the plan has a token: `benchbar pull ... --dry-run
+--json` prints it on the `plan` line, and `benchbar pull ... --apply TOKEN
+--yes --json` (the same arguments) runs that plan without a question. The
+token is a hash of the plan: the backup's name, the apps and their status,
+the steps, the site, the bench, the host and whether the copy is
+neutralised, and of the flags that change the run (`--no-files`,
+`--keep-scheduler`, the content of the `--before-migrate` script). It
+leaves out the backup's size and age, which move with the clock. The run
+makes the plan again after its checks; when it is not the same, it stops
+with "The plan changed since it was shown; nothing was changed" (exit 1)
+and changes nothing. `--new-backup` still needs the site name typed or
+`--confirm-site`, with a token too. Without `--apply`, a person at a
+terminal is asked as before.
+
 | Flag | What it does |
 |---|---|
 | `--as NAME` | Local site name (default: `SITE.local`) |
@@ -35,7 +49,8 @@ restore asks first. `--dry-run` stops after the plan.
 | `--keep-scheduler` | Leave the scheduler as production has it |
 | `--keep-secrets` | Do not neutralise the copy: integrations, webhooks and stored passwords stay as production had them (the 0.8 behaviour). The copy still has email muted and the scheduler paused |
 | `--keep-staging` | Keep the downloaded backup in `<bench>/.benchbar/pulls/` after a successful run |
-| `--dry-run` | Print the plan, change nothing |
+| `--dry-run` | Print the plan and its token, change nothing |
+| `--apply TOKEN` | Run exactly the plan whose token `--dry-run --json` printed (with `--yes`); refused when the plan changed since, for example a newer backup on the server |
 | `-y`, `--yes` | Do not ask |
 | `--json` | JSON lines while it runs ([schema](../../json-schema.md#benchbar-pull---json)) |
 
@@ -97,9 +112,11 @@ When the bench lacks an app production has, pull stops and prints the
 `bench get-app` command. Encrypted backups are decrypted locally with
 `gpg` (`brew install gnupg`).
 
-Exit codes: 0 the copy is ready; 1 a check or step failed, or you
-declined; 2 the MariaDB root password is unknown (pass
-`MARIADB_ROOT_PASSWORD`).
+Exit codes: 0 the copy is ready; 1 a check or step failed, you declined,
+or the plan changed since its token was made; 2 the MariaDB root password
+is unknown (pass `MARIADB_ROOT_PASSWORD`). With `--json` and no terminal
+that holds for the dry run too: it stops with exit 2 and no plan line
+instead of listing the password as a need.
 
 ```bash
 benchbar pull prod:erp.example.com --as erpcopy --dry-run
@@ -114,13 +131,14 @@ These tables come from the code (`benchbar commands --json`); the sections above
 
 | Command | Terminal | `sudo` | Network | Changes things | JSON |
 |---|---|---|---|---|---|
-| `benchbar pull HOST:SITE [--as NAME] [--from-dir DIR] [--replace] [--json]` | yes | no | yes | yes | stream |
+| `benchbar pull HOST:SITE [--as NAME] [--from-dir DIR] [--replace] [--dry-run\|--apply TOKEN --yes] [--json]` | yes | no | yes | yes | stream |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
+| `pull` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `pull` | `--as` | `NAME` | Local site name (default SITE.local). |
 | `pull` | `--from-dir` | `DIR` | A backup set downloaded by hand, no SSH. |
 | `pull` | `--remote-bench` | `DIR` | The bench folder on the server. |
@@ -134,6 +152,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `pull` | `--before-migrate` | `SCRIPT` | An executable run after the restore, before migrate, in the bench folder, with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME; a failing script stops the run. |
 | `pull` | `--keep-scheduler` |  | Leave the scheduler as production has it. |
 | `pull` | `--keep-staging` |  | Keep the downloaded backup in the bench's .benchbar/pulls/ after a successful run. |
+| `pull` | `--dry-run` |  | Print the plan and its token, change nothing. |
+| `pull` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); refused when the plan changed since the token was made. |
 
 | Command | Environment variable | What it does |
 |---|---|---|

@@ -65,6 +65,7 @@ phase scripts: no other program started by the install sees them.
 | `--dry-run` | Print the plan of every phase, change nothing |
 | `--frappe-commit SHA`, `--erpnext-commit SHA` | Pin frappe or erpnext to a commit (7 to 40 hex characters; a team profile can say `frappe_commit` and `erpnext_commit`). The flag wins over the profile. A pinned clone is fetched without its first build, the commit is checked out, and one build follows. A commit the clone does not reach stops the install before anything is built or created |
 | `--offline` | Skip the remote branch checks of both phase scripts (also `OFFLINE=1` or `BENCHBAR_OFFLINE=1`) |
+| `--allow-unsupported-distro` | Linux only: try a system other than Ubuntu 24.04, the one the install is tested on and supports. Without it the install stops before it installs any package (also `BENCHBAR_ALLOW_UNSUPPORTED_DISTRO=1`, for `00-linux-system-deps.sh`) |
 | `--allow-windows-fs` | WSL only: accept a bench on the Windows file system (`/mnt/c`, drvfs, 9p). Refused by default: it is very slow, file watching does not work and permissions break |
 | `-y`, `--yes` | Accept every default and confirmation, including the `sudo` line for `/etc/hosts`; the passwords must be in the environment |
 | `--json` | JSON lines for the BenchBar app and agents: `plan`, `step`, `progress` and a closing `done` ([schema](../../json-schema.md#benchbar-install---json)). Needs `--yes` or `--dry-run`, takes every value from a flag or the environment and never asks |
@@ -183,6 +184,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
+| `install` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `install` | `--profile` | `NAME` | Release profile (default v15-lts) or a team profile. |
 | `install` | `--bundle` | `NAME` | App bundle: minimal, common or extended. |
 | `install` | `--port-offset` | `N` | Use port block N (web 8000+N). |
@@ -191,6 +193,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `install` | `--allow-windows-fs` |  | WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p). It is refused by default: slow, no file watching, broken permissions. |
 | `install` | `--scratch` |  | Mark the new bench scratch: it expires after --ttl days and benchbar bench gc then removes it (never the default bench). Not with --make-default. |
 | `install` | `--ttl` | `DAYS` | With --scratch: days until the bench expires, 1 to 90 (default 7). |
+| `install` | `--allow-unsupported-distro` |  | Linux only: try a system other than Ubuntu 24.04, the one the install is tested on and supports. Without it the install stops before it installs any package. |
 | `install` | `--offline` |  | Skip the remote branch checks. |
 | `install` | `--frappe-commit` | `SHA` | Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile). |
 | `install` | `--erpnext-commit` | `SHA` | Pin the erpnext clone to this commit. |

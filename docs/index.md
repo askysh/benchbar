@@ -1,10 +1,10 @@
 ---
 title: "BenchBar"
-description: "Local Frappe and ERPNext development benches on macOS: a CLI that installs, runs and repairs them in the background, and a menu bar app."
+description: "Local Frappe and ERPNext development benches on macOS, Linux and Windows (WSL): a CLI that installs, runs and repairs them in the background, a menu bar app and a Windows tray."
 template: splash
 hero:
-  title: "Frappe benches on your Mac, in the background"
-  tagline: "One command installs a bench, launchd keeps it running, doctor and repair keep it healthy, and a menu bar app shows it all at a glance."
+  title: "Frappe benches on your computer, in the background"
+  tagline: "One command installs a bench. launchd or systemd keeps it running, doctor and repair keep it healthy, and a menu bar app or a Windows tray shows it all at a glance."
   image:
     file: ./images/app-icon.png
     alt: "The BenchBar app icon"
@@ -21,16 +21,18 @@ hero:
       variant: minimal
 ---
 
-Local Frappe and ERPNext development benches on macOS. The `benchbar`
-command line tool installs a bench, runs it in the background under
-launchd and keeps it healthy. The BenchBar menu bar app shows each bench
-as a small runner with start, stop and a health check one click away, and
-a window for each bench's sites, apps and health.
+Local Frappe and ERPNext development benches on macOS, Linux and Windows
+(through WSL). The `benchbar` command line tool installs a bench, runs it
+in the background under launchd (macOS) or systemd (Linux and WSL) and
+keeps it healthy. On a Mac, the BenchBar menu bar app shows each bench as
+a small runner with start, stop and a health check one click away, and a
+window for each bench's sites, apps and health. On Windows, a tray app
+does the same.
 
 ![The BenchBar popover: a running bench with Start, Stop, Restart, its sites and a health summary](images/popover-light.png)
 
 New here? [Install](install.md) BenchBar, then follow the
-[Quick start](quick-start.md). You have a bench already? The quick start
+[Quick start](quick-start.md). Updating? See [What's new](whats-new.md). You have a bench already? The quick start
 covers that too: `benchbar adopt` registers it without touching its apps,
 sites or databases.
 
@@ -99,7 +101,7 @@ are the main ones.
   work and the app is skipped; an Intel Mac has not been checked on real
   hardware yet (see [supported platforms](install.md#supported-platforms)). On Linux, Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them); on Windows, WSL 2 with such a
   distro.
-- Homebrew and the Xcode Command Line Tools. The installer offers both.
+- On a Mac, Homebrew and the Xcode Command Line Tools. The installer offers both.
 - About 5 GB of free disk under your home folder, and internet access.
 
 No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
@@ -107,7 +109,9 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 ## Safety
 
 - Every command is check, plan, apply, verify. `--dry-run` prints the
-  full plan and changes nothing. A second run says `unchanged`.
+  full plan and changes nothing, with one exception: the first plan that
+  makes an approval token also creates the plan key (a small file only you
+  can read, in benchbar's state folder). A second run says `unchanged`.
 - Generated files carry a version and content hash header. They are
   rewritten only when their template or inputs changed, and the previous
   copy goes to `backups/<date>-<time>-<pid>/` in benchbar's state folder first
@@ -132,6 +136,8 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
   two [LAN guard](reference/cli/share.md#lan-guard-install) steps of a
   room (the firewall rule and letting `node` through it). On Linux: apt,
   the MariaDB admin step and starting a stopped `mariadb` or `redis-server`.
+  On Windows, only `wsl.exe --install` is elevated, through the UAC prompt.
+  The full list is in [AGENTS.md](../AGENTS.md) and [SECURITY.md](../SECURITY.md).
 - The MariaDB root password lives in the Keychain and reaches the client
   through `MYSQL_PWD`, never on a command line.
 - Full logs of every mutating run: `logs/<date>-<time>-<pid>.log` in the same
@@ -139,6 +145,7 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 
 ## Documentation
 
+- [What's new](whats-new.md): what changed in each release, and what to do when you update.
 - [Features](features.md): every feature by platform, with the version it came in.
 - [Install](install.md): Homebrew, the one line installer, the DMG,
   building from source, moving to Homebrew, and uninstalling.
@@ -149,6 +156,7 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 - [CLI reference](reference/cli/install.md): every command, flag and exit
   code, and [Configuration](reference/configuration.md): profiles,
   bundles, passwords and environment variables.
+- [First run problems](first-run-problems.md): when the first install stops.
 - [Troubleshooting](troubleshooting.md): common stumbles, the cleanup tool
   case, what recovers on its own, migrating from frappe-mac 0.2, what
   benchbar writes, wiping a bench.
@@ -156,11 +164,14 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 - [Runners](runners.md): custom runners for the menu bar.
 - [Concepts](concepts/port-blocks.md): [port blocks](concepts/port-blocks.md) and
   [how sharing keeps your bench safe](concepts/sharing-safety.md).
-- For contributors: [Testing](testing.md), [Releasing](releasing.md) and
-  [Decisions](DECISIONS.md), the ten minute guide for testers, how releases
-  are built and every non obvious choice.
+- For testers: [Test a build](testing.md), the ten minute guide.
+- For contributors: [Contributing](../CONTRIBUTING.md) (the tests and the pull
+  request rules), [Releasing](releasing.md) (how releases are built) and
+  [Decisions](DECISIONS.md) (every non obvious choice).
 - [AGENTS.md](../AGENTS.md): guidance for AI coding agents working on a
   bench.
+- [Privacy of this site](privacy.md): what the docs site counts, and what the
+  programs send.
 - [CHANGELOG.md](../CHANGELOG.md) and the [Roadmap](../ROADMAP.md).
 
 ## License
