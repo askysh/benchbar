@@ -237,12 +237,18 @@ nonisolated struct BenchStatus: Codable, Sendable, Equatable {
     var scheduler: Bool?
     /// An `app update` or `app add` that stopped part way (CLI 0.8); nil from an older CLI.
     var pendingOperations: [PendingOperation]?
+    /// Whether the bench's own Redis answers (CLI 0.8); nil from an older CLI.
+    var redis: RedisServices?
+    /// Added in 0.9: whether the bench can serve, and the parts that say so.
+    var ready: ReadyInfo?
+    /// Added in 0.9.0: the defaults an update changed, until dismissed. nil from an older CLI.
+    var notices: [BenchNotice]?
     // state.json only
     var updatedAt: Date?
     var source: String?
 
     enum CodingKeys: String, CodingKey {
-        case bench, name, site, label, state, pid, ports, log, source, sites, scheduler
+        case bench, name, site, label, state, pid, ports, log, source, sites, scheduler, redis, ready, notices
         case schemaVersion = "schema_version"
         case cliVersion = "cli_version"
         case stopReason = "stop_reason"
@@ -256,6 +262,72 @@ nonisolated struct BenchStatus: Codable, Sendable, Equatable {
         case agentState = "agent_state"
         case processesRunning = "processes_running"
         case updatedAt = "updated_at"
+    }
+}
+
+/// `status --json` `redis`: the bench's two Redis servers, and whether something answers on each port.
+nonisolated struct RedisServices: Codable, Sendable, Equatable {
+    nonisolated struct Server: Codable, Sendable, Equatable {
+        var port: Int
+        var running: Bool
+
+        enum CodingKeys: String, CodingKey { case port, running }
+
+        init(port: Int, running: Bool) {
+            self.port = port
+            self.running = running
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(port: c.lenient(.port, 0), running: c.lenient(.running, false))
+        }
+    }
+
+    var queue: Server
+    var cache: Server
+
+    var anyRunning: Bool { queue.running || cache.running }
+    var allRunning: Bool { queue.running && cache.running }
+
+    enum CodingKeys: String, CodingKey { case queue, cache }
+
+    /// A tolerant read: a field this build cannot read is a server that does not answer, not a status that fails.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        queue = c.lenient(.queue, Server(port: 0, running: false))
+        cache = c.lenient(.cache, Server(port: 0, running: false))
+    }
+
+    init(queue: Server, cache: Server) {
+        self.queue = queue
+        self.cache = cache
+    }
+}
+
+/// `ready` of `status --json` (the readiness contract, docs/json-schema.md). `workers` and
+/// `stale` are nil unless the status was asked with `--deep`; a nil part never makes the
+/// bench not ready. Every field is optional: a CLI older than 0.9 sends no `ready` at all.
+nonisolated struct ReadyInfo: Codable, Sendable, Equatable {
+    var ready: Bool
+    /// true when the deep parts (`workers`, `stale`) were asked
+    var deep: Bool?
+    var agent: Bool?
+    var processes: Bool?
+    var web: Bool?
+    var socketio: Bool?
+    var redis: Bool?
+    var workers: Bool?
+    /// A Python file under apps/ changed after the bench started: the code that runs is old.
+    var stale: Bool?
+    var staleFile: String?
+    var waitingOn: [String]?
+    var fix: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ready, deep, agent, processes, web, socketio, redis, workers, stale, fix
+        case staleFile = "stale_file"
+        case waitingOn = "waiting_on"
     }
 }
 
@@ -276,11 +348,16 @@ nonisolated struct DoctorCheck: Codable, Sendable, Equatable, Identifiable {
     var message: String
     var fixCommand: String?
     var action: String?
+    /// The person silenced this warning (`doctor --ack`, CLI 0.8). It stays a warning in the CLI's counts.
+    var acked: Bool = false
 
     enum CodingKeys: String, CodingKey {
-        case id, group, label, level, message, action
+        case id, group, label, level, message, action, acked
         case fixCommand = "fix_command"
     }
+
+    /// A warning can be acknowledged; a failure cannot (the CLI refuses it).
+    var canAcknowledge: Bool { level == .warn && !acked }
 }
 
 nonisolated extension DoctorCheck {
@@ -290,7 +367,7 @@ nonisolated extension DoctorCheck {
         let id = try c.decode(String.self, forKey: .id)
         self.init(id: id, group: c.lenient(.group, nil), label: c.lenient(.label, id),
                   level: c.lenient(.level, .unknown), message: c.lenient(.message, ""),
-                  fixCommand: c.lenient(.fixCommand, nil), action: c.lenient(.action, nil))
+                  fixCommand: c.lenient(.fixCommand, nil), action: c.lenient(.action, nil), acked: c.lenient(.acked, false))
     }
 }
 
@@ -365,7 +442,10 @@ nonisolated struct DoctorReport: Codable, Sendable, Equatable {
         profile = c.lenient(.profile, nil)
         profileSource = c.lenient(.profileSource, nil)
         checks = list.items
-        summary = c.lenient(.summary, DoctorSummary(counting: list.items))
+        // the CLI still counts an acknowledged warning as a warning; the app lists it apart
+        var counts = c.lenient(.summary, DoctorSummary(counting: list.items))
+        counts.warn = max(0, counts.warn - list.items.filter { $0.level == .warn && $0.acked }.count)
+        summary = counts
         skipped = list.skipped
     }
 }

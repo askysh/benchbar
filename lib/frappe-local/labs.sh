@@ -120,6 +120,8 @@ fl_lab_platform_v() {
 # linux also runs in WSL)
 fl_lab_available() {
   local p plat x
+  # tests only: the lab's own platform list is not what a test of one platform's code is about
+  [[ "${FL_TESTING:-}" == "1" && "${FL_LABS_ANY_PLATFORM:-}" == "1" ]] && return 0
   fl_lab_attr_v p "$1" platforms
   fl_lab_platform_v plat
   for x in ${p//,/ }; do

@@ -195,6 +195,13 @@ assert_no_file "$HOME/two-bench"
 cp "$STREAM" "$TMP_DIR/stream-exit2.jsonl"
 printf 'rootpw' >"$MOCK_STATE/mariadb_root_pw"; printf 'rootpw\n' >"$MOCK_STATE/keychain/benchbar-mariadb--root"
 
+# ---- a usage error: done 64 with its error_id, before any step (the app's install-stream-exit64 fixture)
+stream install --json --yes --bogus-option
+assert_eq "64" "$CODE"
+assert_eq "64 unknown_flag" "$(sx '" ".join(str(e[-1][k]) for k in ("exit","error_id"))')"
+assert_eq "done" "$(sx 'e[-1]["event"]')"
+cp "$STREAM" "$TMP_DIR/stream-exit64.jsonl"
+
 # ---- quoting: paths with spaces, single and double quotes reach root intact, one dialog per step
 fresh_pdf; osa_reset
 ODD_HOSTS="$TMP_DIR/ho sts \"x\" it's/hosts"
@@ -314,7 +321,7 @@ same_stream_keys() {
   missing="$(stream_keys_missing "$want" "$got")"
   [[ -z "$missing" ]] || fail "the live stream lacks keys of $pattern:"$'\n'"${missing}"$'\n'"fixture: ${want}"$'\n'"live:    ${got}"
 }
-same_stream_keys 'install-stream-*.jsonl' "$TMP_DIR/stream-success.jsonl" "$TMP_DIR/stream-cancelled.jsonl" "$TMP_DIR/stream-failed.jsonl" "$TMP_DIR/stream-exit2.jsonl" "$TMP_DIR/stream-progress.jsonl"
+same_stream_keys 'install-stream-*.jsonl' "$TMP_DIR/stream-success.jsonl" "$TMP_DIR/stream-cancelled.jsonl" "$TMP_DIR/stream-failed.jsonl" "$TMP_DIR/stream-exit2.jsonl" "$TMP_DIR/stream-exit64.jsonl" "$TMP_DIR/stream-progress.jsonl"
 if [[ -e "$FIX/doctor-prerequisites.json" ]]; then
   python3 -I - "$FIX/doctor-prerequisites.json" "$TMP_DIR/prereq.json" <<'PY' || fail "doctor --prerequisites --json and the app fixture disagree"
 import json, sys

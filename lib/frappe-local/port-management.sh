@@ -171,7 +171,9 @@ fl_pm_build() {
   evidence="$(while IFS= read -r d; do printf '%s\n' "$d"; cksum "$d/sites/common_site_config.json" "$(fl_bench_state_file_for "$d")" 2>/dev/null || true; done < <({ fl_known_benches; printf '%s\n' "${PM_PATHS[@]}"; } | LC_ALL=C sort -u))"
   agent_files=()
   while IFS= read -r d; do agent_files+=("$d"); done < <(fl_agent_files)
-  PM_TOKEN="$( { printf '%s\n%s' "$rows" "$evidence"; cksum "$FL_STATE_FILE" ${agent_files[@]+"${agent_files[@]}"} 2>/dev/null || true; } | shasum -a 256 | awk '{print $1}')"
+  PM_TOKEN_DATA="$( { printf '%s\n%s' "$rows" "$evidence"; cksum "$FL_STATE_FILE" ${agent_files[@]+"${agent_files[@]}"} 2>/dev/null || true; } )"
+  fl_plan_token_v PM_TOKEN "$PM_TOKEN_DATA"
+  # shellcheck disable=SC2153  # PM_TOKEN is set by fl_plan_token_v above
   PM_JSON="{\"schema_version\":1,\"cli_version\":\"${FL_VERSION}\",\"token\":\"$PM_TOKEN\",\"entries\":[$rows],\"can_apply\":$(fl_json_bool "$PM_CAN_APPLY") }"
 }
 fl_pm_check() {
@@ -240,7 +242,11 @@ fl_cmd_ports() {
       local jl="${FL_JSONL:-0}"; FL_JSONL=0
       fl_pm_build "$@" || { FL_JSONL="$jl"; return 1; }
       FL_JSONL="$jl"
-      [[ "$token" == "$PM_TOKEN" ]] || { fl_fail 'The port plan changed. Review a fresh preview before applying.'; return 1; }
+      fl_plan_token_check "$PM_TOKEN_DATA" "$token" || {
+        if [[ "$?" == 2 ]]; then fl_fail "$(fl_plan_token_expired_text) Review a fresh preview before applying."
+        else fl_fail 'The port plan changed. Review a fresh preview before applying.'; fi
+        return 1
+      }
       [[ "$PM_CAN_APPLY" == 1 ]] || { fl_fail 'The port plan contains blocked benches. Nothing was changed.'; return 1; }
       # Resolve every selected bench's profile/tools before the first write.
       # Adopt deliberately cannot install missing honcho into an existing env.

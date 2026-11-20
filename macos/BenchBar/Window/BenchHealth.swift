@@ -3,6 +3,7 @@ import SwiftUI
 /// Doctor for one bench, and Repair when doctor found something repair can fix.
 struct BenchHealth: View {
     let store: BenchStore
+    let workbench: Workbench
     let bench: BenchModel
     @Bindable var router: WindowRouter
     @State private var repair: RepairRun?
@@ -27,9 +28,15 @@ struct BenchHealth: View {
                             .foregroundStyle(.secondary)
                     }
                     if report.needsAttention.isEmpty {
-                        Label("Every check passes.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        Label(report.acknowledged.isEmpty ? "Every check passes." : "Nothing needs attention.", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
                     }
-                    ForEach(report.needsAttention, id: \.rowKey) { CheckRow(check: $0) }
+                    ForEach(report.needsAttention, id: \.rowKey) { check in row(check) }
+                    if !report.acknowledged.isEmpty {
+                        DisclosureGroup("\(report.acknowledged.count) acknowledged") {
+                            ForEach(report.acknowledged, id: \.rowKey) { check in row(check) }
+                        }
+                    }
                     DisclosureGroup("\(report.passing.count) passing") {
                         ForEach(report.passing, id: \.rowKey) { CheckRow(check: $0) }
                     }
@@ -39,6 +46,9 @@ struct BenchHealth: View {
                     Text("Doctor has not run yet.").foregroundStyle(.secondary)
                 }
                 if let error = bench.doctorError {
+                    Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+                }
+                if let error = workbench.parityError[bench.path] {
                     Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
                 }
             } header: {
@@ -62,7 +72,7 @@ struct BenchHealth: View {
                         .help(repairable ? "Shows the plan first; nothing changes until you confirm" : "Nothing repair can fix")
                 }
             } footer: {
-                Text("Doctor is read only. Repair shows its plan, and runs only after you confirm, with a backup before each change.")
+                Text("Doctor is read only. Repair shows its plan, and runs only after you confirm, with a backup before each change. Acknowledge silences one warning for this bench until its message changes; failures cannot be acknowledged.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -71,11 +81,19 @@ struct BenchHealth: View {
         // action on the bench or in the next session, not on every visit
         .task(id: store.stamp(for: bench)) {
             if router.repairRequested { router.repairRequested = false; startRepair() }
+            await workbench.loadCommands()
             await store.showDoctor(on: bench)
         }
         .sheet(item: $repair) { run in
             RepairSheet(run: run) { repair = nil }
         }
+    }
+
+    /// Acknowledge and Undo only when this CLI's doctor has the flag (`commands --json`), and never for a failure.
+    private func row(_ check: DoctorCheck) -> CheckRow {
+        let offered = workbench.commandState.catalog?.hasFlag("doctor", "--ack") == true
+        return CheckRow(check: check, acknowledge: offered ? { on in Task { await workbench.acknowledge(check, on: on, bench: bench) } } : nil,
+                        busy: store.busyBench != nil || bench.isRunningDoctor)
     }
 
     private func startRepair() {

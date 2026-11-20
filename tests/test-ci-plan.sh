@@ -56,6 +56,9 @@ plan EVENT=pull_request FILES="windows/tray/App.xaml.cs"
 assert_eq "false" "$(val shim)"; assert_eq "[]" "$(val linux_shards)"
 assert_eq "false" "$(val shim_win)"; assert_eq "false" "$(val shim_arm)"; assert_eq "false" "$(val wsl)"
 # the CLI's env records: the shim must forward or exclude every name they document
+# ---- the tool pins (xcodegen among them): the app job checks the new sum
+plan EVENT=pull_request FILES="scripts/ci-install-tool.sh"
+assert_eq "true" "$(val app)"
 plan EVENT=pull_request FILES="lib/frappe-local/commands.sh"
 assert_eq "true" "$(val shim)"; assert_eq "true" "$(val wsl)"
 assert_eq "true" "$(val shim_win)"; assert_eq "true" "$(val shim_arm)"

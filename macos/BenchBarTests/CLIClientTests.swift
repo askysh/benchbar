@@ -27,6 +27,15 @@ struct CLIClientTests {
         #expect(call.environment["NO_COLOR"] == "1")
     }
 
+    @Test func deepStatusAsksTheCodeAndWorkerParts() async throws {
+        let json = try Fixture.string("status-stale")
+        let runner = FakeRunner { _ in .ok(json) }
+        let status = try await client(runner).status(bench: "/Users/you/frappe-bench", deep: true)
+        #expect(status.ready?.stale == true)
+        let call = try #require(runner.calls.first)
+        #expect(call.arguments == ["status", "--json", "--deep", "--bench-dir", "/Users/you/frappe-bench"])
+    }
+
     @Test func listUsesJSON() async throws {
         let json = try Fixture.string("list")
         let runner = FakeRunner { _ in .ok(json) }
