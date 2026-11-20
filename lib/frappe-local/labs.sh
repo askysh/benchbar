@@ -14,7 +14,7 @@
 # from macos, linux, windows (Windows is Linux inside WSL).
 
 read -r -d '' FL_LAB_TABLE <<'TABLE' || true
-lab~lan-rooms~Share with people on the same Wi-Fi~Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose.~Asks for your password once to install a firewall rule, and opens port 8443 on this Mac while a share is on. A share stays up until you stop it.~0.8.2~share,lan-guard~macos
+lab~lan-rooms~Share with people on the same Wi-Fi~Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose.~Asks for your password once to install a firewall rule, and opens port 8443 on this computer while a share is on. A share stays up until you stop it.~0.8.2~share,lan-guard~macos,linux
 lab~quick-switch~Quick Switch panel~A panel on a global keyboard shortcut to open a site as any pinned user.~Holds a system wide keyboard shortcut while the app runs.~0.8.2~~macos
 TABLE
 
@@ -70,6 +70,14 @@ fl_lab_on() {
   fl_lab_available "$1" || return 1
   fl_lab_list_v list
   for n in $list; do [[ "$n" == "$1" ]] && return 0; done
+  return 1
+}
+
+# fl_lab_saved NAME: the saved list (the state file, never the override) names the lab, whether or not this
+# platform lists it. A state copied from a Mac keeps such an entry, and `labs off` is how it goes.
+fl_lab_saved() {
+  local n
+  for n in $(fl_state_get LABS 2>/dev/null || true); do [[ "$n" == "$1" ]] && return 0; done
   return 1
 }
 
@@ -296,8 +304,13 @@ fl_cmd_labs() {
       fl_next_action "benchbar labs off ${name}" "Turn it off again"
     fi
   else
-    if [[ "$on_now" != true ]]; then fl_ok "unchanged: ${name} is already off"
+    # an entry in the saved list that this platform never turns on (the lab is not listed for it): off drops it
+    if [[ "$on_now" != true ]] && { fl_lab_available "$name" || ! fl_lab_saved "$name"; }; then fl_ok "unchanged: ${name} is already off"
     elif [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would turn off ${name}"
+    elif [[ "$on_now" != true ]]; then
+      fl_lab_set "$name" 0
+      fl_changed lab "$name" "saved entry removed (this platform does not list it)"
+      fl_ok "${name} was never on here; its saved entry is removed"
     else
       fl_lab_cleanup "$name"
       fl_lab_set "$name" 0

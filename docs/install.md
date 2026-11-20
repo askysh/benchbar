@@ -443,7 +443,7 @@ and you remove it yourself when you want it gone:
 - On Linux, the apt packages `install` added (MariaDB, Redis and the rest), and uv and fnm with the Python and Node they fetched, under `~/.local`. On macOS the Homebrew packages stay.
 - The app's login item, when you turned on "Open BenchBar at login": turn it off in the app's Settings first, or remove it in System Settings, General, Login Items. Deleting the app leaves a dead entry there.
 - On Linux, linger for your user (`sudo loginctl disable-linger USER`), and the `~/.bashrc` helper block when you did not use `uninstall-service`.
-- The LAN guard of a room on macOS: `benchbar lan-guard remove` takes out the pf anchor and its launch daemon.
+- The LAN guard of a room: `benchbar lan-guard remove` takes out the pf anchor and its launch daemon (macOS), or the nftables table, its systemd unit and its rules file (Linux).
 
 ### Homebrew
 

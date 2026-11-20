@@ -306,6 +306,7 @@ fl_cmd_share_invite() {
   fl_site_json_begin
   FL_DONE_NO_STATE=1
   fl_require_bench
+  fl_share_wsl_gate
   fl_share_control_v SH_STATUS '{"op":"status"}' || fl_die "Sharing is not on: start sharing first, then make the invite." "benchbar share start"
   fl_share_reply_v web_up "$SH_STATUS" web_up
   [[ "$web_up" == true ]] || fl_die "The shared site is not up yet, so an invite would not work: start sharing first, and wait for it." "benchbar share status shows when it is up."
@@ -319,7 +320,7 @@ fl_cmd_share_invite() {
   fl__share_json_unquote_v label "$raw"
   [[ -n "$label" ]] || fl_die "The room has no name." "Stop sharing and start it again."
   fl_sp_lan_v
-  [[ -n "$SP_LAN_IP" ]] || fl_die "This Mac has no IPv4 address on a network, so nobody could reach the room." "Join the office Wi-Fi, then run benchbar share invite again."
+  [[ -n "$SP_LAN_IP" ]] || fl_die "This computer has no IPv4 address on a network, so nobody could reach the room." "Join the office Wi-Fi, then run benchbar share invite again."
   fl_share_fingerprint_v fp "$(fl_share_dir)/host.crt" || fl_die "The host certificate could not be read." "Run benchbar share setup."
   fp="${fp#sha256:}"
 
@@ -623,8 +624,8 @@ fl_cmd_share_teardown() {
     if [[ "$had_state" == 1 ]]; then
       fl_share_write_private "${dir}/stop_requested" 600 "" || fl_warn "could not leave the stop marker for a start on its way"
       fl_share_teardown
-      [[ "$SH_BOOTOUT_FAILED" == 0 ]] || fl_die "launchd still lists ${FL_SHARE_JOB_LABEL} after the bootout, so the share may still run; nothing else was torn down." \
-        "Run: launchctl bootout $(fl_share_job_target), then benchbar share teardown again"
+      [[ "$SH_BOOTOUT_FAILED" == 0 ]] || fl_die "$(fl_share_job_manager) still lists ${FL_SHARE_JOB_LABEL} after the bootout, so the share may still run; nothing else was torn down." \
+        "Run: $(fl_share_job_bootout_hint), then benchbar share teardown again"
       [[ "$SH_TORN" == 0 ]] || fl_changed process share "stopped"
     fi
     if [[ "$had_copy" == 1 ]]; then
