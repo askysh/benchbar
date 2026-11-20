@@ -326,6 +326,7 @@ listener: it is polled at rest (0.6.1).
 | `listen` | string | added in 0.9: `"local"` (the web server and socketio listen on 127.0.0.1) or `"all"` (every interface, `benchbar listen all`) |
 | `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
 | `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null), `url` (an add's repo URL, so `app add NAME` can finish an app that was never cloned or that no profile lists; null for an update and for a record an older version wrote) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
+| `leases` | array | added in 0.9: the active [leases](reference/cli/lease.md) on this bench, its own and those of its sites, `[]` when none. Each: `scope` (`bench` or `site`), `site` (null for a bench lease), `holder`, `note` (null without one), `since` and `expires_at` (ISO 8601 UTC). Never the lease's id. One small file read in the state folder, none without leases, so status starts no new program for it |
 | `ready` | object | added in 0.9: whether the bench can serve, and the parts that say so; see [Readiness](#readiness) |
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
@@ -1332,6 +1333,29 @@ can ask. Added after 0.8.1: `status --json` and `commands --json` have `labs`
 (the enabled names); `commands --json` also has `gated` (`[{"name","lab"}]`
 for a command left out because its lab is off) and a command of an enabled lab
 has `lab`.
+
+## `benchbar lease --json`
+
+`lease list --json` is one document, with no done fields:
+
+```json
+{"schema_version":1,"cli_version":"0.9.0","leases":[{"id":null,"scope":"site","bench":"/Users/you/frappe-bench","site":"qa1.localhost","holder":"claude-qa","note":"running the QA suite","since":"2026-11-19T15:00:00Z","expires_at":"2026-11-19T15:20:00Z","minutes":20,"yours":false}],"max_minutes":480}
+```
+
+`scope` is `bench` or `site` (`site` is null for a bench lease). `id` is
+`l-` and 12 hex digits for a lease the caller holds (`yours` is true), else
+null. `minutes` is the length the lease was
+taken or renewed for. Only active leases are listed.
+
+`lease take` and `lease renew` stream like `site open-as`: the `done` line
+carries `lease` (the object above, with its `id`) and the
+[done fields](#the-done-fields-08). `lease release` has `released` (false when
+the lease was already gone) and `lease` (the id). A refusal has `exit` 1 and
+`error_id` `lease_held` (the place is leased: `error` names the holder and the
+end), `lease_unknown` (renew of a lease that is gone), `lease_caller_required`
+(`lease take` from an agent run with no `BENCHBAR_CALLER`) or
+`lease_break_refused` (`--break-lease` without a person, exit 2). The same `error_id`s end any
+changing command that a lease stops.
 
 ## Notices (0.9.0)
 

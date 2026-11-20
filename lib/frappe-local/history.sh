@@ -42,16 +42,23 @@ fl_hist_secret_name_p() {
   return "$rc"
 }
 
-# fl_caller_resolve: who started this run, into FL_CALLER and BENCHBAR_CALLER (exported, so the phase
-# scripts and a detached run say the same). The value of BENCHBAR_CALLER is taken only when it is one of
-# FL_CALLERS (a longer text is never copied anywhere); without one, --for-agent says agent, a terminal
-# on stdin says terminal, anything else is a script.
+# fl_caller_resolve: who started this run, into FL_CALLER and BENCHBAR_CALLER_KIND (exported, so the phase
+# scripts and a detached run say the same). BENCHBAR_CALLER itself is never changed: a lease names its
+# holder by it (lease.sh), so it may be a longer name of the agent's own. The kind is the value of
+# BENCHBAR_CALLER when it is one of FL_CALLERS, or its part before the first ":" when that is (the MCP
+# server's holder mcp:CLIENT:PID is mcp), else BENCHBAR_CALLER_KIND when a parent run set one of the list;
+# a longer text is never copied anywhere. Without one, --for-agent says agent, a terminal on stdin says
+# terminal, anything else is a script.
 fl_caller_resolve() {
-  local c="${BENCHBAR_CALLER:-}"
+  local c="${BENCHBAR_CALLER:-}" k="${BENCHBAR_CALLER_KIND:-}" w ok=""
   [[ -z "${FL_CALLER:-}" ]] || return 0
   # exact equality with one word of the list: a text that only contains an allowed word ("app tray") is no caller
-  local w ok=""
-  for w in $FL_CALLERS; do [[ "$c" != "$w" ]] || ok="$w"; done
+  for w in $FL_CALLERS; do
+    if [[ "$c" == "$w" || "${c%%:*}" == "$w" && "$c" == *:* ]]; then ok="$w"; fi
+  done
+  if [[ -z "$ok" ]]; then
+    for w in $FL_CALLERS; do [[ "$k" != "$w" ]] || ok="$w"; done
+  fi
   c="$ok"
   if [[ -z "$c" ]]; then
     if [[ "${OPT_FOR_AGENT:-0}" == "1" ]]; then c=agent
@@ -59,8 +66,8 @@ fl_caller_resolve() {
     else c=script; fi
   fi
   FL_CALLER="$c"
-  BENCHBAR_CALLER="$c"
-  export BENCHBAR_CALLER
+  BENCHBAR_CALLER_KIND="$c"
+  export BENCHBAR_CALLER_KIND
 }
 
 # fl_hist_word_v VAR WORD PREV_SECRET: one word of the command line as the history keeps it. The credentials
