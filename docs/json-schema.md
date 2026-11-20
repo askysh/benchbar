@@ -31,7 +31,7 @@ Raycast extensions and the like can rely on it too.
 | `benchbar site backup NAME --json` | the backup just taken (0.5.8), see [site backups](#site-backups) |
 | `benchbar site backups NAME --json` | every backup of a site (0.5.8) |
 | `benchbar site snapshot NAME --json`, `site snapshots NAME --json` | one snapshot, the snapshots of a site (0.9.0), see [site snapshots](#site-snapshots) |
-| `benchbar site rollback NAME --to SNAPSHOT --dry-run --json` | the plan and result of a rollback: [site restore](#benchbar-site-restore-json) with a `rollback` block (0.9.0) |
+| `benchbar site rollback NAME --to SNAPSHOT --dry-run --json` | the plan and result of a rollback: [site restore](#benchbar-site-restore---json) with a `rollback` block (0.9.0) |
 | `benchbar up\|down\|restart\|service\|site add\|site default --json` | JSON lines ending in one `done` (0.8), see [the done fields](#the-done-fields-08) |
 | `benchbar site drop NAME --json` | the plan (with `--dry-run`) or the result of dropping a site (0.5.8) |
 | `benchbar op status [OP_ID]\|list\|wait OP_ID --json` | the long runs: one record or the recent ones (0.9), see [operation handles](#operation-handles-09) |
@@ -1449,7 +1449,7 @@ Added in 0.9.0. A snapshot is a backup with files kept in
 last rollback. Nothing is removed by either command.
 
 `benchbar site rollback NAME --to SNAPSHOT --dry-run --json` is the plan of
-[site restore](#benchbar-site-restore-json) (the same fields and token), with
+[site restore](#benchbar-site-restore---json) (the same fields and token), with
 the first step `snapshot` in place of `local_backup`, `migrate` only when the
 apps differ, and one more key:
 

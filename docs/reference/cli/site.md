@@ -241,6 +241,89 @@ benchbar site restore acme.localhost --from 20260902_090000 --with-files --apply
 benchbar site restore copy.localhost --from 20260902_090000 --from-site acme.localhost --new --yes
 ```
 
+## site snapshot
+
+```
+benchbar site snapshot NAME [--label TEXT] [--json] [--dry-run]
+benchbar site snapshot drop NAME SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run]
+```
+
+Saves the state of a site before a risky change: `bench --site NAME backup
+--with-files` (the database, the public and private files and the site
+config), moved at once out of `sites/NAME/private/backups`, which frappe
+prunes, into `sites/NAME/snapshots/<time>[-label]/`, next to a
+`manifest.json` with the time, the label, the sizes and the apps of the
+bench with their commits. Nothing in the site changes, and nothing removes
+a snapshot by itself. Before it runs, the free space of the volume is
+checked against the site's files plus its largest database dump, and the
+command stops when the set would not fit. An encrypted backup is refused
+(a restore takes plain sets only). The folder is readable by its owner only.
+
+`site snapshot drop` removes a snapshot, or with `--prune` the ones beyond
+the newest 10 (`SNAPSHOT_KEEP` in the bench's state file, or `--keep N`). It
+is a person's choice: it asks first and is refused for an agent
+(`--for-agent`, `benchbar mcp`, `BENCHBAR_NONINTERACTIVE=1`), though
+`--dry-run` shows what would go. It removes the files one by one and then the
+folder, and keeps the `before rollback` snapshot of the last rollback: `--prune`
+never takes it, and dropping it by name needs `--force-undo-point`.
+
+| Flag | What it does |
+|---|---|
+| `--label TEXT` | What the snapshot is for (up to 120 characters, no quotes or backslashes); it is part of the folder name |
+| `--json` | Print the snapshot as JSON ([schema](../../json-schema.md#site-snapshots)) |
+| `--dry-run` | Print what would happen, change nothing |
+
+Exit codes: 0; 1 when the site does not exist, the backup failed or did not
+fit, or an agent asked for `drop`.
+
+```bash
+benchbar site snapshot acme.localhost --label "before the erpnext update"
+benchbar site snapshot drop acme.localhost --prune --dry-run
+```
+
+## site snapshots
+
+```
+benchbar site snapshots NAME [--keep N] [--json]
+```
+
+The snapshots of the site, newest first: the label, the size, the apps with
+their commits when it was taken, and whether the bench's apps are still those
+(`changed: erpnext` when one moved, was added or removed). It also says what
+all the snapshots hold, how much is free on the volume and which snapshots are
+beyond the newest N. Read only.
+
+```bash
+benchbar site snapshots acme.localhost --json
+```
+
+## site rollback
+
+```
+benchbar site rollback NAME --to SNAPSHOT|latest [--no-migrate]
+  --dry-run --json | --apply TOKEN --yes [--json]
+```
+
+Puts a snapshot back into the site. It is [site restore](#site-restore) with
+a snapshot as its source: the same plan, token and checks. The first step
+takes a snapshot of the current state, labelled `before rollback` (the result
+names it, and `--to latest` right after the rollback goes back); then the
+snapshot's database and files are restored into the same site. `bench
+migrate` runs only when the bench's apps differ from the snapshot's, which
+the plan says (a rollback across an app change is allowed and warned);
+`--no-migrate` stops before it. `--to` takes the name from `site snapshots`,
+its time stamp, or `latest`, which skips a cut short folder.
+
+The default site is a person's to roll back: an agent gets a plan that cannot
+be applied. The plan also cannot be applied when the extra snapshot would not
+fit in the free space. The MariaDB root password is needed, as for `site
+restore`.
+
+```bash
+benchbar site rollback acme.localhost --to latest --dry-run --json
+benchbar site rollback acme.localhost --to latest --apply TOKEN --yes
+```
+
 ## site drop
 
 ```
