@@ -92,6 +92,10 @@ JSON. See [The menu bar app](app.md).
 | Restore a backup | Restores one of a site's backups into the site or into a copy, from the plan the CLI shows, by its token. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | Pull a site | Copies a production site over SSH, or a downloaded backup, into a new site. The copy is neutralised unless you choose to keep the secrets. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | Unfinished changes | Lists an app update or add that stopped part way, with Resume and Drop the Record. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Several apps in one add | **Add App…** takes up to eight apps in one plan with one token, each with its own branch, commit pin and site. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Acknowledge a warning | **Acknowledge** and **Undo** on a Health warning (`doctor --ack`, `--unack`); not for a failure. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Services only, autostart | **Start Services Only** and **Stop Services** for a stopped bench, and **Start after login** (`autostart`) in the Overview. Offered when the CLI lists them. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Install or refresh the service | **Install Service…** or **Refresh Service…** shows the plan of `service` and runs it by its token. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 
 ## BenchBar for Windows
 

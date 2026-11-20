@@ -388,13 +388,30 @@ struct CompactCheckRow: View {
 
 struct CheckRow: View {
     let check: DoctorCheck
+    /// Acknowledge (true) or Undo (false) for a warning, on a click; nil where the row has no such button.
+    var acknowledge: ((Bool) -> Void)?
+    var busy = false
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(systemName: icon).foregroundStyle(color).font(.caption)
                 .accessibilityLabel(check.level == .ok ? "Passing" : (check.level == .fail ? "Failure" : "Warning"))
             VStack(alignment: .leading, spacing: 2) {
-                Text(check.label).font(.caption.weight(.medium))
+                HStack {
+                    Text(check.label).font(.caption.weight(.medium))
+                    Spacer()
+                    if let acknowledge {
+                        if check.acked {
+                            Button("Undo") { acknowledge(false) }.controlSize(.small).disabled(busy)
+                                .help("Show this warning again")
+                                .accessibilityLabel("Undo the acknowledgement of \(check.label)")
+                        } else if check.canAcknowledge {
+                            Button("Acknowledge") { acknowledge(true) }.controlSize(.small).disabled(busy)
+                                .help("Silence this warning for this bench until its message changes. Doctor still checks it.")
+                                .accessibilityLabel("Acknowledge \(check.label)")
+                        }
+                    }
+                }
                 if check.level != .ok {
                     Text(check.message).font(.caption).foregroundStyle(.secondary)
                     if let fix = check.fixCommand, !fix.isEmpty {
