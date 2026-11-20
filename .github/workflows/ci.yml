@@ -522,7 +522,7 @@ jobs:
   # The shim against a real WSL distro on a GitHub hosted Windows runner:
   # Ubuntu 24.04 is installed with Vampire/setup-wsl and the CLI of this
   # checkout is put on the distro's PATH the way the installer does
-  # (~/.local/bin/benchbar). No job depends on a personal machine, so a pull
+  # (~/.local/bin/benchbar) for a normal default user, as a real user has. No job depends on a personal machine, so a pull
   # request from this repo runs in the same fenced VM as any other job. Read
   # only inside the distro: status, exit codes through the hop, quoting, mcp
   # over stdio and wslconfig without --apply.
@@ -560,6 +560,21 @@ jobs:
         with:
           distribution: Ubuntu-24.04
           use-cache: 'true'
+
+      # The hosted runner's distro runs every command as root, and benchbar
+      # refuses root (CORE-9), as it does for a real user whose distro has no
+      # user. Real users run it as a normal user: create one, make it the
+      # distro's default (/etc/wsl.conf, read when the distro starts again) and
+      # stop the distro so that the next wsl.exe call starts it as that user.
+      - name: Make a normal user the default user of the distro
+        run: |
+          wsl.exe -d $env:BENCHBAR_TEST_DISTRO -u root --exec /bin/sh -c 'set -eu; useradd -m -s /bin/bash benchuser; printf "[user]\ndefault=benchuser\n" >> /etc/wsl.conf; cat /etc/wsl.conf'
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          wsl.exe --terminate $env:BENCHBAR_TEST_DISTRO
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $who = (wsl.exe -d $env:BENCHBAR_TEST_DISTRO --exec /bin/sh -c 'id -un').Trim()
+          Write-Host "default user: $who"
+          if ($who -ne 'benchuser') { Write-Error "the distro still starts as '$who'"; exit 1 }
 
       - name: Put the CLI of this checkout in the distro
         run: |

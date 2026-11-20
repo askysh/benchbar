@@ -10,7 +10,8 @@
 # Runs on macOS /bin/bash 3.2. No dependencies beyond the ones the installer
 # already needs.
 
-set -euo pipefail
+# errtrace (-E): the ERR trap below fires inside functions too, so a failing command names itself
+set -Eeuo pipefail
 
 # BENCHBAR_SUDO_PASSWORD must not stay in the initial environment of this
 # process: Linux keeps that copy in /proc/PID/environ for the whole run, and
@@ -227,6 +228,8 @@ FL_SCHEDULER=""
 FL_SKIP_PLAN_CONFIRM=0
 COMMAND=""
 ARGS=()
+# how many of ARGS come before a bare -- (-1: no --): what the unknown option check reads
+FL_ARGS_FLAGS_N=-1
 
 usage() {
   cat <<USAGE | fl_lab_usage_filter
@@ -444,6 +447,7 @@ Environment:
   BENCHBAR_SUDO=gui   root steps (wkhtmltopdf, /etc/hosts) ask in a macOS password dialog, not sudo
   BENCHBAR_SUDO=env   Linux: sudo steps use the password in BENCHBAR_SUDO_PASSWORD, no terminal needed
   BENCH_INIT_TIMEOUT_SECONDS   install: how long bench init may run (default 2700, 0 for no limit)
+  BENCHBAR_LENIENT_FLAGS=1     an unknown option is a warning, not an error (exit 64), as before 0.9.0
 
 Shell helpers (written to your shell rc by install or repair):
   benchup benchdown benchrestart benchstatus benchlogs benchfg benchwatch benchdoctor benchcd
@@ -462,15 +466,31 @@ fl_print_version() {
   return 0
 }
 
+# fl_opt_value FLAG ARGC VALUE: a flag that takes a value has one, and the value is not the next
+# option (benchbar where --bench-dir --json took --json for the folder). Exit 64, error_id
+# missing_value, like any usage error (fl_usage_refuse; BENCHBAR_LENIENT_FLAGS does not cover it).
+# Callers are plain statements of the main loop, and fl_usage_refuse ends in exit: it never relies
+# on set -e, which bash switches off inside a function that an `if` or `||` calls.
+fl_opt_value() {
+  local key="" usage=""
+  [[ "$2" -ge 2 && "$3" != -* ]] && return 0
+  if [[ -n "$COMMAND" ]]; then key="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")" || key=""; fi
+  [[ -z "$key" ]] || fl_cmd_usage_v usage "$key"
+  fl_usage_refuse missing_value "$1 needs a value." "${usage:+Usage: ${usage}. }Example: benchbar ${key:-COMMAND} $1 VALUE (or $1=VALUE). Every flag: benchbar ${key:-COMMAND} --help" "$key"
+}
+
+# the command line as it came: a usage error (fl_usage_refuse) reads --json and --for-agent from
+# it, because the loop below may not have reached them yet
+FL_ORIG_ARGS=("$@")
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
-    --bench-dir) OPT_BENCH_DIR="${2:-}"; shift 2 ;;
+    --bench-dir) fl_opt_value "$1" "$#" "${2-}"; OPT_BENCH_DIR="$2"; shift 2 ;;
     --bench-dir=*) OPT_BENCH_DIR="${1#*=}"; shift ;;
-    --site) OPT_SITE="${2:-}"; shift 2 ;;
+    --site) fl_opt_value "$1" "$#" "${2-}"; OPT_SITE="$2"; shift 2 ;;
     --site=*) OPT_SITE="${1#*=}"; shift ;;
-    --profile) OPT_PROFILE="${2:-}"; shift 2 ;;
+    --profile) fl_opt_value "$1" "$#" "${2-}"; OPT_PROFILE="$2"; shift 2 ;;
     --profile=*) OPT_PROFILE="${1#*=}"; shift ;;
-    --bundle) OPT_BUNDLE="${2:-}"; shift 2 ;;
+    --bundle) fl_opt_value "$1" "$#" "${2-}"; OPT_BUNDLE="$2"; shift 2 ;;
     --bundle=*) OPT_BUNDLE="${1#*=}"; shift ;;
     --dry-run) FL_DRY_RUN=1; shift ;;
     --offline) OFFLINE=1; shift ;;
@@ -479,15 +499,15 @@ while [[ "$#" -gt 0 ]]; do
     --allow-windows-fs) FL_ALLOW_WINDOWS_FS=1; shift ;;
     --with-schedule) FL_SCHEDULER=on; shift ;;
     --without-schedule) FL_SCHEDULER=off; shift ;;
-    --port-offset) OPT_PORT_OFFSET="${2:-}"; shift 2 ;;
+    --port-offset) fl_opt_value "$1" "$#" "${2-}"; OPT_PORT_OFFSET="$2"; shift 2 ;;
     --port-offset=*) OPT_PORT_OFFSET="${1#*=}"; shift ;;
     -y|--yes) FL_ASSUME_YES=1; shift ;;
     --json) OPT_JSON=1; shift ;;
     --jsonl) OPT_JSON=1; OPT_JSONL=1; shift ;;
     --for-agent) OPT_FOR_AGENT=1; shift ;;
-    --ack) OPT_ACK="${2:-}"; shift 2 ;;
+    --ack) fl_opt_value "$1" "$#" "${2-}"; OPT_ACK="$2"; shift 2 ;;
     --ack=*) OPT_ACK="${1#*=}"; shift ;;
-    --unack) OPT_UNACK="${2:-}"; shift 2 ;;
+    --unack) fl_opt_value "$1" "$#" "${2-}"; OPT_UNACK="$2"; shift 2 ;;
     --unack=*) OPT_UNACK="${1#*=}"; shift ;;
     --quick) OPT_QUICK=1; shift ;;
     --fix-hints) OPT_FIX_HINTS=1; shift ;;
@@ -503,15 +523,18 @@ while [[ "$#" -gt 0 ]]; do
     # benchbar docs --help lists the topics; a command's --help is its entry in
     # commands.sh (after the loop: the subcommand may come later), else this one
     -h|--help) if [[ "$COMMAND" == "docs" || "$COMMAND" == "self-update" ]]; then ARGS+=("$1"); shift; else FL_WANT_HELP=1; shift; fi ;;
-    --) shift; ARGS+=("$@"); break ;;
+    --) shift; FL_ARGS_FLAGS_N="${#ARGS[@]}"; ARGS+=("$@"); break ;;
     -*)
-      if [[ -n "$COMMAND" ]]; then ARGS+=("$1"); shift; else fl_die "Unknown option: $1" "Run: benchbar --help"; fi ;;
+      if [[ -n "$COMMAND" ]]; then ARGS+=("$1"); shift; else fl_usage_refuse unknown_flag "Unknown option: $1" "Run: benchbar --help"; fi ;;
     *)
       if [[ -z "$COMMAND" ]]; then COMMAND="$1"; else ARGS+=("$1"); fi
       shift ;;
   esac
 done
 export FL_DRY_RUN
+# the options after the command are the command's own: each is in its entry of commands.sh,
+# else the run stops (exit 64) before anything is taken, started or written
+[[ "$FL_WANT_HELP" == "1" || -z "$COMMAND" ]] || fl_args_validate
 # the passwords stay shell variables of this process: the phase scripts get
 # them on their own command line below, no other child (brew, pip, npm,
 # yarn, bench get-app) sees them
@@ -525,6 +548,12 @@ if [[ "$FL_WANT_HELP" == "1" ]]; then
 fi
 
 [[ -n "$COMMAND" ]] || { usage; exit 0; }
+# root owns files the user then cannot write (the state folder, logs, the bench lock): benchbar asks for sudo
+# itself, for the few steps that need it. `doctor --prerequisites` only reads and reports, and its
+# regular_user check is how a person learns that they ran it as root, so it is not refused.
+if [[ "$COMMAND" != "help" ]] && ! [[ "$COMMAND" == "doctor" && "${OPT_PREREQ:-0}" == "1" ]]; then
+  fl_refuse_root
+fi
 
 # fl_json_mode_resolve: what --json, --jsonl and --for-agent mean for this
 # command, from its entry in commands.sh. Sets FL_JSON_KEY (its table key) and
@@ -590,6 +619,8 @@ fl_mode_name() {
 
 fl_cleanup() {
   local code=$?
+  # the ERR trap keeps out of the exit trap: set -e alone ends a cleanup that fails
+  FL_EXITING=1
   fl_spinner_stop
   # pull closes its SSH connection and ends its JSON stream with "done"
   fl_pull_on_exit "$code"
@@ -605,6 +636,8 @@ fl_cleanup() {
   fl_lock_release
   # a doctor run that was cut short leaves its folder of kept answers (facts.sh)
   fl_facts_end
+  # the temp logs of a long command, when a signal ended the run
+  fl_tmp_cleanup
   # install --json and adopt --json: always the last line, after the lock is free
   fl_jsonl_on_exit "$code"
   # repair --json: its done line, when the run ended before it could send one
@@ -612,7 +645,7 @@ fl_cleanup() {
   [[ -z "${FL_CHANGED_FILE:-}" || "${FL_CHANGED_OWNER:-}" != "$$" ]] || rm -f "$FL_CHANGED_FILE"
 }
 trap fl_cleanup EXIT
-trap fl_on_error ERR
+trap 'fl_on_error "$BASH_COMMAND"' ERR
 # TERM, INT and HUP reach the running command's whole process group and the
 # phase script in the foreground, then the EXIT trap releases the lock
 fl_signal_traps_install
@@ -1535,6 +1568,16 @@ else
   # a missing input)
   fl_lab_gate "${FL_JSON_KEY:-$COMMAND}"
   fl_noninteractive_preflight
+fi
+
+# a command that changes things on a bench it picked on its own says which (and an agent must name one)
+if [[ -z "$OPT_BENCH_DIR" ]]; then
+  case "$COMMAND" in
+    install|adopt|register|scan|self-update|labs|profile|ports|lan-guard|docs|report|help|commands|mcp|where|mariadb-password) ;;
+    *)
+      fl_cmd_attr_v FL_GUESS_MUT "$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}" || true)" mutating
+      if [[ "$FL_GUESS_MUT" == "yes" && " ${ARGS[*]:-} " != *" --all "* ]]; then fl_bench_guess_gate; fi ;;
+  esac
 fi
 
 case "$COMMAND" in

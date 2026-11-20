@@ -101,6 +101,7 @@ var forwardedEnv = []string{
 	"BENCHBAR_MCP_APPLY_DELAY",
 	"BENCHBAR_MCP_ALLOW_BENCH",
 	"BENCHBAR_LOAD_ALL",
+	"BENCHBAR_LENIENT_FLAGS",
 }
 
 // noForwardEnv are CLI variables that are not passed on, with why.
@@ -210,7 +211,8 @@ func forward(sys *System, t target, args []string) int {
 	if raw != nil {
 		errorf(sys, "%s", wslFailureLine(*raw))
 	}
-	if code == 2 {
+	// 2: an older CLI's answer to an unknown flag; 64: a newer one's (EX_USAGE)
+	if code == 2 || code == exitUsage {
 		skewHint(sys, t)
 	}
 	if code == 127 && !cliExists(sys, t) {
@@ -257,10 +259,14 @@ func shimCwd(sys *System, distro string) string {
 	return wd
 }
 
-// skewHint explains an exit code 2 when the CLI in the distro is not the
-// release of this benchbar.exe: an older CLI answers an unknown flag with 2
-// and a message that says nothing about the version. It is one extra call,
-// made only after a 2, and says nothing when the releases match.
+// exitUsage is the CLI's exit code for a command line it cannot read (an unknown
+// option, a flag without its value): EX_USAGE. 2 stays "the MariaDB root password is unknown".
+const exitUsage = 64
+
+// skewHint explains an exit code 2 or 64 when the CLI in the distro is not the
+// release of this benchbar.exe: an older CLI answers an unknown flag with 2, a
+// newer one with 64, and the message says nothing about the version. It is one
+// extra call, made only after one of them, and says nothing when the releases match.
 func skewHint(sys *System, t target) {
 	if c, ok := cliVersionCheck(sys, t); ok && c.Status == "warn" {
 		fmt.Fprintf(sys.Stderr, "benchbar.exe: %s. fix: %s\n", c.Message, c.Fix)
