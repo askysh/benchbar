@@ -81,7 +81,7 @@ run_unit() {
 
 for loc in C en_US.UTF-8 C.UTF-8; do
   # a UTF-8 locale this host lacks falls back to C: the C pass is the one that matters
-  if [[ "$loc" != C ]] && ! LC_ALL="$loc" bash -c 'exit 0' 2>/dev/null; then continue; fi
+  if [[ "$loc" != C ]] && ! locale -a 2>/dev/null | tr 'A-Z' 'a-z' | sed 's/utf8/utf-8/' | grep -qx "$(printf '%s' "$loc" | tr 'A-Z' 'a-z')"; then continue; fi
   ( export LC_ALL="$loc" LANG="$loc"; run_unit ) || fail "unit checks under $loc"
 done
 
