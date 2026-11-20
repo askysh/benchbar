@@ -33,6 +33,7 @@ the argument `mcp`.
 | `benchbar_down` | acts | Stop a bench and keep it stopped, also across reboots. | `bench` |
 | `benchbar_restart` | acts | Restart every process of a bench, for example after changing Python code. | `bench` |
 | `benchbar_op_status` | read | The long runs: one operation by op_id (what an apply tool or a background run returned), or without op_id the ten newest. | `op_id` |
+| `benchbar_history` | read | What ran on this machine, newest first: every run that changed things, with its op_id, the command line (secrets are ***), who started it (caller: terminal, app, tray, mcp, agent or script; for mcp the tool and the client), the bench, the site, started_at, ended_at, exit, what it changed and its log. | `bench`, `since`, `limit` |
 | `benchbar_app_add_plan` | plan (read only) | Plan adding a Frappe app to a bench from a git URL or a known app name, read only: the resolved repo and branch, whether the repo is readable, the sites, the required apps (from hooks.py) and whether each resolves, the steps, and a token for benchbar_app_add. | `url_or_name`, `branch`, `name`, `commit`, `install_on`, `apps`, `site`, `all_sites`, `bench` |
 | `benchbar_app_add` | acts | Apply a plan from benchbar_app_add_plan: clone the app and its planned required apps, build, install on the planned sites. | `url_or_name`, `branch`, `name`, `commit`, `install_on`, `apps`, `site`, `all_sites`, `bench`, `token`*, `background` |
 | `benchbar_site_add_plan` | plan (read only) | Plan a new site on a bench, read only: the steps (bench new-site, install the given apps, the hosts line), what they touch, the default site (which never moves) and a token for benchbar_site_add. | `site`*, `apps`, `bench` |
@@ -266,6 +267,25 @@ The MCP protocol of 2025-11-25 has a tasks primitive for exactly this
 speaks 2025-06-18 and clients are only starting on tasks, so for now the
 `op_id` is the handle; a task id will be the same string when tasks come.
 
+## What ran before you
+
+`benchbar_history` (in a terminal: `benchbar history --json`) lists every
+run on this machine that changed things, newest first, whoever started
+it: a person at a terminal, the Mac app, the tray, another agent, a
+script. Each entry has the `op_id`, the command line (secrets are `***`),
+`caller` (`terminal`, `app`, `tray`, `mcp`, `agent` or `script`; for `mcp`
+the tool and the client too), the bench and site, `started_at`,
+`ended_at`, `exit`, `changed[]` and the run's `log`. Read it before you
+change a bench another session worked on: it says what was done, by whom
+and whether it worked. `bench`, `since` (`90m`, `7d`, a date) and `limit`
+narrow it. It reaches back further than `benchbar_op_status` (which keeps
+the newest 100 runs, with their steps): about 1 MB of history, three
+older files, and a run that was killed is only in `op list`.
+
+`caller` is a label the caller sets (`BENCHBAR_CALLER`; `benchbar mcp`
+sets `mcp`, `--for-agent` sets `agent`), not a proof. An agent that runs
+`benchbar` in a terminal should pass `--for-agent` so its runs say so.
+
 ## Waiting for a bench
 
 After `benchbar_up` or `benchbar_restart`, and after you change Python code,
@@ -290,7 +310,9 @@ tool, its arguments (anything named like a password, secret, token or
 key is `***`, and so are the credentials of a URL) and how it ended. A
 call that was rejected for its arguments logs only their names.
 `benchbar mcp --calls 20` prints the last 20. After an agent session it
-answers "what did it run, and in what order".
+answers "what did it run, and in what order". A call that started a run
+also logs its `op_id`, and `benchbar history` has that run's command line,
+exit and changes next to the tool and the client.
 
 Fix commands in a doctor report come twice: the text, for you, and
 `fix_argv` (with `fix_cwd`), an array a program can run without a shell.

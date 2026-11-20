@@ -79,7 +79,7 @@ SCRIPT_DIR="$(fl_resolve_self)"
 # holds that the output is the same). BENCHBAR_LOAD_ALL=1 loads everything.
 FL_LEAN=0
 if [[ "${BENCHBAR_LOAD_ALL:-0}" != "1" ]]; then
-  case "${1:-}" in path|commands|where|list|status|op|--version|--help|-h) FL_LEAN=1 ;; esac
+  case "${1:-}" in path|commands|where|list|status|op|history|--version|--help|-h) FL_LEAN=1 ;; esac
   # --profile checks the name against the profiles (version-policy.sh, profiles.sh)
   for _a in "$@"; do case "$_a" in --profile|--profile=*) FL_LEAN=0 ;; esac; done
   unset _a
@@ -367,6 +367,10 @@ Daily
                       lines too); status shows one (or the ten newest) with its step and last
                       progress, list shows the recent ones, wait OP_ID [--timeout SECS] waits for
                       one to end. A run that died without a done line is interrupted.
+  history             What ran on this machine, newest first: the command line (secrets as ***), who
+                      started it (a terminal, the app, the tray, an agent through MCP, a script), the
+                      bench, the times, the exit and what it changed. --bench PATH, --since 7d,
+                      --limit N, --json.
   docs [TOPIC]        Open the documentation, or one topic's page (benchbar docs --help lists
                       them: install, doctor, apps, mcp, json ...); --print prints the URL.
 
@@ -491,6 +495,8 @@ Options
 Environment:
   BENCHBAR_SUDO=gui   root steps (wkhtmltopdf, /etc/hosts) ask in a macOS password dialog, not sudo
   BENCHBAR_SUDO=env   Linux: sudo steps use the password in BENCHBAR_SUDO_PASSWORD, no terminal needed
+  BENCHBAR_CALLER     Who started the run, for benchbar history: terminal, app, tray, mcp, agent or
+                      script (set by the app, the tray and benchbar mcp; --for-agent says agent)
   BENCH_INIT_TIMEOUT_SECONDS   install: how long bench init may run (default 2700, 0 for no limit)
   BENCHBAR_LENIENT_FLAGS=1     an unknown option is a warning, not an error (exit 64), as before 0.9.0
 
@@ -1879,6 +1885,7 @@ case "$COMMAND" in
   mcp) cmd_mcp ;;
   # a run that is not done is exit 1 without the ERR trap's line, like doctor
   op) fl_cmd_op ${ARGS[@]+"${ARGS[@]}"} || exit 1 ;;
+  history) fl_cmd_history ${ARGS[@]+"${ARGS[@]}"} ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;
 esac

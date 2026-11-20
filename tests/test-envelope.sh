@@ -161,6 +161,7 @@ bench gc|bench gc --dry-run|bench gc --apply bogus --yes
 bench scratch|bench scratch $B2 --ttl 3 --yes|bench scratch $NOBENCH --yes
 db orphans|db orphans|db orphans --bogus
 stats|stats|stats --bench-dir $NOBENCH
+history|history|history --limit bogus
 "
 
 BENCHBAR_LABS="" run_fm commands --json
