@@ -114,6 +114,7 @@ export default defineConfig({
                 { label: 'ports', slug: 'reference/cli/ports' },
                 { label: 'scan and register', slug: 'reference/cli/scan' },
                 { label: 'site', slug: 'reference/cli/site' },
+                { label: 'bench', slug: 'reference/cli/bench' },
                 { label: 'app', slug: 'reference/cli/app' },
                 { label: 'profile', slug: 'reference/cli/profile' },
                 { label: 'lock', slug: 'reference/cli/lock' },

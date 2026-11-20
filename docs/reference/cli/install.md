@@ -191,6 +191,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `install` | `--make-default` |  | Make this the default bench even when another one is. |
 | `install` | `--repair-bench` |  | Move a bench folder that is incomplete aside and start over (never one that holds a site). With --dry-run it shows the move. |
 | `install` | `--allow-windows-fs` |  | WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p). It is refused by default: slow, no file watching, broken permissions. |
+| `install` | `--scratch` |  | Mark the new bench scratch: it expires after --ttl days and benchbar bench gc then removes it (never the default bench). Not with --make-default. |
+| `install` | `--ttl` | `DAYS` | With --scratch: days until the bench expires, 1 to 90 (default 7). |
 | `install` | `--allow-unsupported-distro` |  | Linux only: try a system other than Ubuntu 24.04, the one the install is tested on and supports. Without it the install stops before it installs any package. |
 | `install` | `--offline` |  | Skip the remote branch checks. |
 | `install` | `--frappe-commit` | `SHA` | Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile). |

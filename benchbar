@@ -180,6 +180,8 @@ FL_OP_ID=""; FL_OP_OWNER=""; FL_OP_JSON=""; FL_OP_COMMAND=""; FL_OP_STARTED=""; 
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/pull.sh"
 # shellcheck source=lib/frappe-local/site-restore.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/site-restore.sh"
+# shellcheck source=lib/frappe-local/lifecycle.sh
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/lifecycle.sh"
 # shellcheck source=lib/frappe-local/bench-run.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/bench-run.sh"
 # shellcheck source=lib/frappe-local/selfupdate.sh
@@ -228,6 +230,9 @@ FL_FETCH=0
 # install --frappe-commit SHA --erpnext-commit SHA: pin the clones
 OPT_FRAPPE_COMMIT=""
 OPT_ERPNEXT_COMMIT=""
+# install --scratch [--ttl DAYS]: the bench expires; bench scratch PATH --ttl DAYS (lifecycle.sh)
+OPT_SCRATCH=0
+OPT_TTL=""
 # confirmations come from flags only: a value left in the environment must
 # never answer a question (--yes, --make-default, an approved port plan)
 FL_ASSUME_YES=0
@@ -448,6 +453,8 @@ Options
   --profile NAME      Release profile for install/repair (default: v15-lts), or a team
                       profile (~/.config/benchbar/profiles/NAME.toml, BENCHBAR_PROFILE_PATH)
   --bundle NAME       App bundle for install (minimal, common, extended)
+  --scratch, --ttl DAYS
+                      install: the bench expires after DAYS (default 7); benchbar bench gc removes it
   --make-default      install, adopt, service: make this the default bench even when
                       another one is already the default
   --repair-bench      install: move a bench folder that is incomplete aside and start over (never
@@ -555,6 +562,9 @@ while [[ "$#" -gt 0 ]]; do
     --frappe-commit=*) OPT_FRAPPE_COMMIT="${1#*=}"; shift ;;
     --erpnext-commit) [[ -n "${2:-}" && "${2:-}" != -* ]] || fl_die "--erpnext-commit needs a commit hash." "Example: benchbar install --erpnext-commit 0123abc"; OPT_ERPNEXT_COMMIT="$2"; shift 2 ;;
     --erpnext-commit=*) OPT_ERPNEXT_COMMIT="${1#*=}"; shift ;;
+    --scratch) OPT_SCRATCH=1; shift ;;
+    --ttl) OPT_TTL="${2:-}"; shift 2 || shift ;;
+    --ttl=*) OPT_TTL="${1#*=}"; shift ;;
     --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
     --version) fl_print_version; exit 0 ;;
     # benchbar docs --help lists the topics; a command's --help is its entry in
@@ -631,7 +641,7 @@ fl_json_mode_resolve() {
     up|down|restart|service|"site default"|"ports apply") FL_JSON_MODE=stream ;;
     # a dry run of these is their plan, one document with its token
     "app update"|"site add") if [[ "$FL_DRY_RUN" == "1" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
-    "site backup"|"site drop"|"site restore"|"app add"|"run") FL_JSON_MODE=doc ;;
+    "site backup"|"site drop"|"site restore"|"app add"|"run"|"bench forget"|"bench remove"|"bench scratch"|"bench gc"|"db orphans") FL_JSON_MODE=doc ;;
     # on and off stream like site default; status only reads
     "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
     "share setup"|"share start"|"share stop"|"share extend"|"share lock"|"share unlock"|"share remove"|"share revoke"|"share assign"|"share teardown") FL_JSON_MODE=stream ;;
@@ -648,7 +658,7 @@ fl_json_mode_resolve() {
 # status, list and the other readers are polled: they skip the table unless
 # --for-agent asks for it
 case "$COMMAND" in
-  install|adopt|repair|pull|up|down|restart|wait|service|site|app|ports|share|lan-guard|labs|register|autostart|listen|uninstall-service|profile|lock|self-update|run) fl_json_mode_resolve ;;
+  install|adopt|repair|pull|up|down|restart|wait|service|site|app|ports|share|lan-guard|labs|register|autostart|listen|uninstall-service|profile|lock|self-update|run|bench|db) fl_json_mode_resolve ;;
   *) if [[ "$OPT_FOR_AGENT" == "1" || "$OPT_JSONL" == "1" ]]; then fl_json_mode_resolve; fi ;;
 esac
 # --jsonl and --for-agent: a command that only reads ends with one document that has `exit`
@@ -1062,6 +1072,14 @@ cmd_install() {
   local profile_name
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_plain_bench
+  # --scratch and --ttl are checked before any prompt or step
+  SCRATCH_DAYS=""
+  if [[ "$OPT_SCRATCH" == "1" ]]; then
+    [[ "$FL_MAKE_DEFAULT" != "1" ]] || fl_die "--scratch and --make-default do not go together: a scratch bench expires, the default bench never does." "Leave one of them out."
+    fl_lc_ttl_days_v SCRATCH_DAYS "$OPT_TTL"
+  elif [[ -n "$OPT_TTL" ]]; then
+    fl_die "--ttl goes with --scratch." "Example: benchbar install --scratch --ttl 3"
+  fi
   # a password with a line break would be cut off on its pipe: refused before any work
   fl_secrets_single_line ADMIN_PASSWORD MARIADB_ROOT_PASSWORD
   # a malformed pin is refused before any prompt or step
@@ -1202,6 +1220,11 @@ cmd_install() {
     return "$code"
   fi
   fl_remember_bench || fl_info "the default bench stays $(fl_state_get BENCH_DIR) (--make-default changes it)"
+  # install --scratch: this bench expires (benchbar bench gc removes it, never when it is the default bench)
+  if [[ "$OPT_SCRATCH" == "1" && "$FL_DRY_RUN" != "1" ]]; then
+    fl_lc_scratch_mark "$FL_BENCH_DIR" "$SCRATCH_DAYS" install
+    fl_ok "scratch bench: expires in ${SCRATCH_DAYS} day(s); benchbar bench scratch ${FL_BENCH_DIR} --clear keeps it"
+  fi
   if [[ -n "$FL_SCHEDULER" ]]; then fl_bstate_set SCHEDULER "$FL_SCHEDULER"; fi
 
   fl_step_begin 2
@@ -1619,6 +1642,10 @@ fl_noninteractive_preflight() {
       # password-less sign in is turned on by a person: refused before the lock, whatever else is given
       [[ "${ARGS[1]:-}" != "on" ]] || fl_need "a person at a terminal" "turning on Open as is a person's decision; run benchbar site open-as on NAME in a terminal"
       ;;
+    "bench remove"|"bench gc")
+      # deleting a bench's databases and moving its folder is a person's decision: its plan (--dry-run) is open to agents
+      fl_need "a person at a terminal" "removing a bench is a person's decision; read the plan with --dry-run --json, then run benchbar bench ${ARGS[0]} in a terminal" ;;
+    "db orphans") fl_need_mariadb_password ;;
     "share setup")
       # the copy holds real data and others sign in to it: a person's decision, refused before the lock
       fl_need "a person at a terminal" "sharing a site is a person's decision; run benchbar share setup in a terminal"
@@ -1728,6 +1755,10 @@ case "$COMMAND" in
     esac ;;
   lan-guard)
     case "${ARGS[0]:-}" in install|remove|allow-node) fl_log_init "${FL_STATE_DIR}/logs" ;; esac ;;
+  # forget, remove, scratch and gc change the list of benches and the state folder (a plan too: it reads under the lock)
+  bench)
+    fl_log_init "${FL_STATE_DIR}/logs"
+    fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
   # run: the allow list decides (refused here with exit 64, before the lock); a run that executes has a
   # log of its own, and one that changes things takes the lock; a plan and a read take none
   run)
@@ -1816,6 +1847,16 @@ case "$COMMAND" in
   share) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_share ${ARGS[@]+"${ARGS[@]}"} ;;
   lan-guard) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_lan_guard ${ARGS[@]+"${ARGS[@]}"} ;;
   db) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_db ${ARGS[@]+"${ARGS[@]}"} ;;
+  bench)
+    # forget and remove name the bench by PATH, the others work on every known bench (gc) or on PATH (scratch)
+    case "${ARGS[0]:-}" in
+      forget|remove|scratch)
+        # PATH may come after --apply TOKEN: the same parse as the command's own finds it
+        fl_lc_parse "${ARGS[@]:1}"
+        if [[ -n "$LC_PATH" ]]; then OPT_BENCH_DIR="$LC_PATH"; fi
+        fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE" ;;
+    esac
+    fl_cmd_bench ${ARGS[@]+"${ARGS[@]}"} ;;
   site) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_site ${ARGS[@]+"${ARGS[@]}"} ;;
   app) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_app ${ARGS[@]+"${ARGS[@]}"} ;;
   profile) fl_cmd_profile ${ARGS[@]+"${ARGS[@]}"} ;;

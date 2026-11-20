@@ -462,12 +462,12 @@ fl_cmd_site() {
     list|"") fl_cmd_site_list "$OPT_JSON" ;;
     add) fl_cmd_site_add "$@" ;;
     default) fl_cmd_site_default "${1:-}" ;;
-    hosts) fl_cmd_site_hosts ;;
+    hosts) if [[ "${1:-}" == "--prune" ]]; then fl_cmd_site_hosts_prune; else fl_cmd_site_hosts; fi ;;
     backup) fl_cmd_site_backup "$@" ;;
     backups) fl_cmd_site_backups "$@" ;;
     restore) fl_cmd_site_restore "$@" ;;
     drop) fl_cmd_site_drop "$@" ;;
     open-as) fl_cmd_site_open_as "$@" ;;
-    *) fl_die "Unknown site command: ${sub}" "Use: benchbar site list | add NAME | default NAME | hosts | backup NAME | backups NAME | restore NAME | drop NAME | open-as on|off|status [NAME]" ;;
+    *) fl_die "Unknown site command: ${sub}" "Use: benchbar site list | add NAME | default NAME | hosts [--prune] | backup NAME | backups NAME | restore NAME | drop NAME | open-as on|off|status [NAME]" ;;
   esac
 }

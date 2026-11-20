@@ -314,6 +314,16 @@ benchbar doctor --for-agent  # one JSON document
 - `benchbar logs --json --since TIME` and `--since-restart` return the
   new lines only, each with its time in `ts`.
 
+## Retiring a bench
+
+`benchbar bench forget PATH` is a plan with a token like the ones above: read
+`--dry-run --json`, show it, apply it after the OK. `bench remove` and
+`bench gc --apply` drop databases and move a bench folder, so they are a
+person's decision: they refuse `--for-agent`, `mcp`, `BENCHBAR_NONINTERACTIVE`
+and a run without a terminal, and an agent reads their plan (`--dry-run
+--json`) and hands the command to the user. `db orphans` and
+`site hosts --prune --dry-run` only read. They are not MCP tools yet.
+
 ## Repairs and installs
 
 Repairs and bench installs are deliberately not tools. An agent runs them in a

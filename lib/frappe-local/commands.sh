@@ -30,6 +30,8 @@ flag~install~--port-offset~N~Use port block N (web 8000+N).
 flag~install~--make-default~~Make this the default bench even when another one is.
 flag~install~--repair-bench~~Move a bench folder that is incomplete aside and start over (never one that holds a site). With --dry-run it shows the move.
 flag~install~--allow-windows-fs~~WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p). It is refused by default: slow, no file watching, broken permissions.
+flag~install~--scratch~~Mark the new bench scratch: it expires after --ttl days and benchbar bench gc then removes it (never the default bench). Not with --make-default.
+flag~install~--ttl~DAYS~With --scratch: days until the bench expires, 1 to 90 (default 7).
 flag~install~--allow-unsupported-distro~~Linux only: try a system other than Ubuntu 24.04, the one the install is tested on and supports. Without it the install stops before it installs any package.
 flag~install~--offline~~Skip the remote branch checks.
 flag~install~--frappe-commit~SHA~Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile).
@@ -108,6 +110,10 @@ flag~uninstall-service~--yes~~Do not ask; required without a terminal.
 cmd~path~benchbar path~Print the bench directory.~no~no~no~no~none
 env~path~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~console~benchbar console [--site S]~bench --site SITE console: a Python shell with frappe.~yes~no~no~no~none
+cmd~db~benchbar db [--site S] | benchbar db orphans [--json]~bench --site SITE mariadb: the site's database.~yes~no~no~no~none
+cmd~db orphans~benchbar db orphans [--json]~Databases of frappe's shape (an underscore and 16 hex digits) that no site of any bench benchbar knows (or was told to forget, while its folder is there) refers to. A listed database may belong to a bench or program benchbar does not know. Read only: benchbar never drops them. Needs the MariaDB root password.~no~no~no~no~document
+flag~db orphans~--json~~One document: checked and orphans, each with the archived site folder that names it, if any.
+env~db orphans~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~run~benchbar run [--site S] [--timeout SECS] [--dry-run --json | --apply TOKEN --yes] -- COMMAND [FLAGS]~Run one command of the allow list (migrate, clear-cache, clear-website-cache, build, run-tests, doctor, list-apps, version) with bench's own environment, in the right bench and site, under a deadline. A command that changes things: --dry-run --json prints the plan and its token, --apply TOKEN --yes runs exactly that plan; migrate backs the site up first. Anything else is refused with exit 64 and the list.~yes~no~no~yes~document
 flag~run~--timeout~SECS~Stop the bench command after this many seconds (1 to 7200; each command has a default, 60 to 1800). The backup before migrate is not counted.
 flag~run~--dry-run~~Print the plan and its token, run nothing.
@@ -273,7 +279,8 @@ flag~lan-guard remove~--json~~JSON lines: done, with the guard's state.
 cmd~lan-guard allow-node~benchbar lan-guard allow-node [--yes] [--json]~Add the realpath of the node the share gateway runs on to the macOS firewall's allowed apps, with sudo once. Unchanged when the firewall is off or already allows it; needed again after a Homebrew upgrade of node. macOS only: refused on Linux.~yes~yes~no~yes~stream
 flag~lan-guard allow-node~--yes~~Do not ask first.
 flag~lan-guard allow-node~--json~~JSON lines: done, with node (the realpath).
-cmd~site hosts~benchbar site hosts~Add a 127.0.0.1 line for every site to /etc/hosts. On Linux it edits nothing: a *.localhost name already resolves, and any other name gets the sudo line to run yourself.~yes~yes~no~yes~stream
+cmd~site hosts~benchbar site hosts [--prune] [--dry-run]~Add a 127.0.0.1 line for every site to /etc/hosts. On Linux it edits nothing: a *.localhost name already resolves, and any other name gets the sudo line to run yourself. --prune removes instead the lines in benchbar's block whose site no bench benchbar knows has (one backup, one sudo; without a terminal it prints the command).~yes~yes~no~yes~stream
+flag~site hosts~--prune~~Remove the stale lines of benchbar's block instead of adding the missing ones (sites of a forgotten bench whose folder is still there count as sites). The printed fallback command keeps a .bak copy. macOS only.
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
 flag~site backup~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site backup~--with-files~~Include the uploads.
@@ -327,6 +334,23 @@ cmd~lock check~benchbar lock check [--json]~Compare the bench with benchbar.toml
 flag~lock check~--lock~PATH~Compare with this lockfile, and remember it for this bench.
 cmd~lock apply~benchbar lock apply~Clone missing apps, switch branches, fast forward to pinned commits.~yes~no~yes~yes~stream
 flag~lock apply~--lock~PATH~Apply this lockfile, and remember it for this bench.
+cmd~bench~benchbar bench forget|remove|scratch|gc ...~The end of a bench's life: forget it, remove it, mark it scratch, collect the scratch benches that expired.~no~no~no~no~none
+cmd~bench forget~benchbar bench forget PATH --dry-run --json, then --apply TOKEN --yes~Unregister a bench: its service files are backed up and moved aside, its settings are set aside, the default bench is cleared when it was this one. The folder, sites, apps, databases and hosts lines stay (only the service files benchbar made in it go, each backed up first). An agent may run it with the plan and token.~yes~no~no~yes~document
+flag~bench forget~--dry-run~~Print the plan and its token, change nothing.
+flag~bench forget~--apply~TOKEN~Run exactly that plan (with --yes).
+cmd~bench remove~benchbar bench remove PATH --dry-run --json, then --confirm-bench NAME --apply TOKEN --yes~Forget a bench, back up each site and drop its database (bench drop-site), then move the folder to <parent>/.benchbar-trash/ (never deleted). A person's decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal. Its plan (--dry-run) is open to agents. Never the default bench.~yes~no~no~yes~document
+flag~bench remove~--dry-run~~Print the plan and its token, change nothing.
+flag~bench remove~--apply~TOKEN~Run exactly that plan (with --yes).
+flag~bench remove~--confirm-bench~NAME~Repeat the bench folder's name exactly.
+env~bench remove~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
+cmd~bench scratch~benchbar bench scratch PATH [--ttl DAYS] [--clear] [--json]~Mark an existing bench scratch (asks; --yes in a mode that cannot ask): it expires after DAYS (default 7, 1 to 90), or --clear keeps it. bench gc only collects benches benchbar knows (benchbar register PATH). install --scratch marks a new one.~no~no~no~yes~document
+flag~bench scratch~--ttl~DAYS~Days until the bench expires.
+flag~bench scratch~--yes~~Required to mark (it asks otherwise): marking is what lets bench gc remove the bench and its databases, and gc shows who marked it and when.
+flag~bench scratch~--clear~~Not scratch any more.
+cmd~bench gc~benchbar bench gc --dry-run --json, then --apply TOKEN --yes~List the scratch benches that expired (never the default bench) and remove each as bench remove does. Applying is a person's decision (refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal); the plan is open to agents.~yes~no~no~yes~document
+flag~bench gc~--dry-run~~Print the plan (expired, pending, skipped) and its token, change nothing.
+flag~bench gc~--apply~TOKEN~Run exactly that plan (with --yes).
+env~bench gc~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~profile~benchbar profile list|show|create|export|import|subscribe|update|remove|check ...~Team profiles.~no~no~no~no~none
 cmd~profile list~benchbar profile list [--json]~Built in and team profiles.~no~no~no~no~document
 cmd~profile show~benchbar profile show NAME~What a profile installs.~no~no~no~no~none
