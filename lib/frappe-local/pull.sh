@@ -230,7 +230,10 @@ fl_pull_on_exit() {
   fi
   if [[ "$FL_PULL_DONE_SENT" == "0" ]]; then
     FL_PULL_DONE_SENT=1
-    fl_pull_emit "done" ",\"exit\":${code},\"site\":$(fl_json_str "$FL_PULL_AS"),\"warnings\":[${FL_PULL_WARNINGS}]$(fl_pull_done_extra)"
+    local perr=""
+    # a failed run says why (the envelope: error whenever exit is not 0)
+    [[ "$code" == "0" ]] || perr=",\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-${FL_LAST_PROBLEM:-the pull failed; see the log}}")"
+    fl_pull_emit "done" ",\"exit\":${code},\"site\":$(fl_json_str "$FL_PULL_AS"),\"warnings\":[${FL_PULL_WARNINGS}]${perr}$(fl_pull_done_extra)"
   fi
 }
 

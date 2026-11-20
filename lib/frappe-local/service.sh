@@ -856,18 +856,21 @@ fl_cmd_watch() {
 }
 
 fl_cmd_autostart() {
-  local mode="${1:-}"
+  local mode="${1:-}" was
   case "$mode" in
     on|off) fl_require_plain_bench ;;
     "") fl_require_service; if fl_autostart_enabled; then fl_ok "autostart is on (bench returns after login if it was running)"; else fl_ok "autostart is off"; fi; return 0 ;;
     *) fl_die "Usage: benchbar autostart on|off" ;;
   esac
   fl_require_service
+  was=off
+  fl_autostart_enabled && was=on
   fl_bench_state_migrate "$FL_BENCH_DIR"
   fl_bstate_set AUTOSTART "$mode"
   fl_render_all
   act_write_plist || return 1
   [[ "$mode" == "on" ]] && fl_linger_ensure
+  [[ "$was" == "$mode" ]] || fl_changed service "$FL_BENCH_NAME" "autostart ${mode}"
   fl_ok "autostart ${mode}"
 }
 
@@ -878,7 +881,7 @@ fl_cmd_autostart() {
 # lands in Procfile.lean (and the two files it starts) the way the scheduler
 # choice does. A running bench takes it at its next restart.
 fl_cmd_listen() {
-  local mode="${1:-}" running=0
+  local mode="${1:-}" running=0 was=local
   case "$mode" in
     local|all) fl_require_plain_bench ;;
     "")
@@ -892,6 +895,7 @@ fl_cmd_listen() {
     *) fl_die "Usage: benchbar listen [local|all]" ;;
   esac
   fl_require_service
+  fl_listen_is_all && was=all
   if [[ "$mode" == "all" ]] && ! fl_listen_is_all; then
     # opening the dev server to the network is a person's decision, like the LAN guard and Open as
     fl_noninteractive && fl_die "benchbar listen all puts the dev web server and its debugger on the network, a person's decision, so nothing run without a terminal can do it." "Run it in a terminal: benchbar listen all"
@@ -908,6 +912,7 @@ fl_cmd_listen() {
   fl_bench_is_running && running=1
   fl_render_all
   act_write_procfile || return 1
+  [[ "$was" == "$mode" ]] || fl_changed service "$FL_BENCH_NAME" "listen ${mode}"
   fl_ok "listen ${mode}"
   if [[ "$running" == "1" && "${FL_DRY_RUN:-0}" != "1" ]]; then
     fl_warn "the running bench still listens as before; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"
@@ -963,7 +968,7 @@ fl_agent_retire() {
 # fl_cmd_uninstall_service [confirmed]: "confirmed" when --all asked once
 # for every bench already
 fl_cmd_uninstall_service() {
-  local plist rc dest
+  local plist rc dest had=0 keep f
   if ! fl_is_bench_dir "$FL_BENCH_DIR"; then
     fl_uninstall_orphan_agents "${1:-}"
     return $?
@@ -974,7 +979,16 @@ fl_cmd_uninstall_service() {
   fl_info "This removes the launchd agent, runner, Procfile.lean and the shell helper block."
   fl_info "The bench, its sites, apps and databases are not touched."
   [[ "${1:-}" == confirmed ]] || fl_confirm "Uninstall the background service for ${FL_BENCH_NAME}?" || { fl_warn "Cancelled."; return 1; }
+  # a second run has nothing to stop or remove: changed[] stays empty then
+  fl_bench_is_running && had=1
+  fl_agent_loaded && had=1
+  for f in "$plist" "$(fl_runner_path)" "$(fl_runner_path_legacy)" "$(fl_procfile_path)" "$(fl_listen_py_path)" "$(fl_listen_js_path)"; do
+    [[ ! -f "$f" ]] || had=1
+  done
+  case "$(fl_rc_block_state "$rc")" in present|legacy) had=1 ;; esac
+  keep="$FL_DONE_CHANGED"
   fl_cmd_down || true
+  [[ "$had" == "1" ]] || FL_DONE_CHANGED="$keep"
   # a job launchd keeps must keep its plist too, or it would go on
   # restarting with nothing left on disk to remove it by (the orphan path
   # does the same)
@@ -1003,6 +1017,7 @@ fl_cmd_uninstall_service() {
   [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_procfile_path)" ]] || { rm -f "$(fl_procfile_path)"; fl_ok "removed Procfile.lean (backup: ${FL_LAST_BACKUP})"; }
   fl_uninstall_listen_files || return 1
   fl_uninstall_helper_block "$rc"
+  [[ "$had" == "0" ]] || fl_changed service "$FL_BENCH_NAME" "uninstalled"
   fl_ok "service uninstalled; start the bench by hand with: cd ${FL_BENCH_DIR} && bench start"
 }
 

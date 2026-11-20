@@ -60,7 +60,8 @@ Raycast extensions and the like can rely on it too.
 
 Every command that changes things ends with the same fields, once: in the
 `done` line of its stream, or added to the one document it prints. A
-command that read only prints none of them.
+command that only reads has `exit` and, on a failure, `error` (see
+[the result envelope](#the-result-envelope-09)).
 
 | field | meaning |
 |---|---|
@@ -132,6 +133,65 @@ Which shape a command prints:
   flags, environment variables and what it needs (`tty`, `sudo`, `network`,
   `mutating`, `json`: `document`, `stream` or `none`); `benchbar COMMAND
   --help` prints that entry.
+
+### The result envelope (0.9)
+
+One shape ends every command that has a JSON mode (`commands --json`
+lists them: `json` is `document` or `stream`), whatever the command and
+however it ended. A program reads the last line of stdout and finds the
+same fields; it never parses stderr text to learn how a run ended. The
+fields of the [done line](#the-done-fields-08) are the envelope.
+
+| field | type | present |
+|---|---|---|
+| `schema_version`, `cli_version` | number, string | always, first |
+| `exit` | integer | always. The process exits with the same number: 0 done, 1 failed, 2 refused (the one input that cannot be guessed, or a lab that is off) |
+| `error` | string | when `exit` is not 0: one sentence, the run's last `[FAIL]` line or the message of the refusal. A read that failed after it printed its findings (`doctor`, `lock check`) has the sentence "the command exited with 1" and its findings say what |
+| `changed[]` | array of `{kind, name, detail}` | commands that change things. Empty on a second run and in a dry run |
+| `warnings[]` | array of strings | commands that change things, and the failure document of a read |
+| `next_actions[]` | array of `{command, why, quoted?}` | the same as `warnings[]` |
+| `state_after` | object or `null` | commands that change things; `null` in a dry run, without a bench, or for several benches |
+| `missing[]`, `error_id` | array of strings, string | only where a refusal or a stable failure has them (see the table above) |
+| `event` | `"done"` | the last line of a stream. A document has none |
+
+Which line carries it:
+
+- **`--for-agent` and `--jsonl`** are the modes with the guarantee. A
+  command that changes things ends its stream with one `done` line (a
+  dry run: `plan`, then `done`). A command that only reads prints one
+  document with `exit` added to its own fields. When a read fails before it
+  has a document (no bench, an unknown name, a bad argument) it prints one
+  document: `schema_version`, `cli_version`, `exit`, `error`, `warnings[]`
+  and `next_actions[]`. A command or subcommand that does not exist ends
+  with a `done` line too.
+- **`--json`** keeps the documents of 0.8 as they were, so a polled
+  `status --json` costs what it did. A command that changes things has the
+  envelope. A read has no `exit` (the process exit code is the answer) and
+  a read that fails prints nothing on stdout and text on stderr. Use
+  `--for-agent` when a program wants the envelope for reads and failures.
+- `ok` is not a field of the envelope and is never needed: `exit == 0` says
+  it. It stays where it already was, on the results of `app add --apply`
+  and `site restore --apply` (always `exit == 0`), so no reader breaks;
+  `share preflight` has its own `ok` (the critical checks passed) beside
+  `exit`. Do not add it to a new command.
+- A refusal of the non interactive mode, a usage error and a failure
+  before the command could start (`No bench at ...`) all end with this
+  envelope. A distinct exit code for usage errors is not used yet: a usage
+  error exits 1 with `error` saying what to fix.
+- The MCP server returns the same fields in `structuredContent` of every
+  tool that ran the CLI: `exit` (the CLI's exit code) in every result,
+  `error` when it is not 0, and for an action tool `changed`, `warnings` and
+  `next_actions` copied from the `done` line next to `result`. `exit_code`
+  stays for readers of the first release. A tool error the server raises
+  itself carries `exit` and `error` too: an invalid argument, a bench that is
+  not known, a plan that is missing or stale, and a plan the person did not
+  approve are `exit` 1; a call that ran out of time is 124 and a benchbar
+  that could not be started is 127.
+- A command with no JSON mode (`fg`, `watch`, `console`, `db`, `docs`,
+  `mcp`, `help`, `mariadb-password`, `path` and the groups `site`, `app`,
+  `ports`, `lock`, `profile`, `share`) has no envelope: they are terminals,
+  a text helper or a usage page. `tests/test-envelope.sh` lists them, so a
+  new command has to choose.
 
 ## States
 

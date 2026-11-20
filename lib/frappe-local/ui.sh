@@ -571,8 +571,74 @@ fl_doc_emit() {
     return 0
   fi
   if [[ "$kind" == "plan" ]]; then printf '%s\n' "$doc" >&3; return 0; fi
+  # a failing result says why (the envelope: error whenever exit is not 0)
+  if [[ "$code" != "0" && "$doc" != *'"error":'* ]]; then
+    doc="${doc%\}},\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-${FL_LAST_PROBLEM:-the command exited with ${code}}}")}"
+  fi
   fl_done_fields_v f "$code"
+  FL_DOC_ENVELOPED=1
   printf '%s%s,%s}\n' "${doc%\}}" "${FL_OP_JSON:-}" "$f" >&3
+}
+
+# ---------------------------------------------------------------- the envelope of a read
+
+# Under --jsonl and --for-agent every command with a JSON mode ends with a
+# line that has `exit` (docs/json-schema.md, "The result envelope"). A
+# command that changes things sends a done line. A command that only reads
+# prints one document, and fl_read_env_begin keeps that document back, so
+# that fl_read_env_finish can add `exit` to it, or, when the run failed
+# before it printed one, print a document that says why. fd 8 is the real
+# stdout; stray text on stdout (the ERR trap's line) goes to stderr.
+FL_READ_ENV=0
+FL_READ_BUF=""
+FL_DOC_ENVELOPED=0
+
+fl_read_env_begin() {
+  [[ -d "$FL_STATE_DIR" ]] || mkdir -p "$FL_STATE_DIR" 2>/dev/null || true
+  # the state folder first; when it is not writable the temp folder holds the
+  # document (fl_read_env_finish removes the file on every exit)
+  FL_READ_BUF="${FL_STATE_DIR}/.read-doc.$$"
+  if ! : >"$FL_READ_BUF" 2>/dev/null; then
+    FL_READ_BUF="${TMPDIR:-/tmp}/.benchbar-read-doc.$$"
+    # no place to keep the document back: the read prints as it did before the envelope
+    : >"$FL_READ_BUF" 2>/dev/null || { FL_READ_BUF=""; return 0; }
+  fi
+  FL_READ_ENV=1
+  exec 8>&1 1>"$FL_READ_BUF"
+}
+
+# fl_read_env_finish CODE: the last line of a read
+fl_read_env_finish() {
+  [[ "$FL_READ_ENV" == "1" ]] || return 0
+  FL_READ_ENV=0
+  local code="$1" line="" doc="" other="" err="" tail=""
+  exec 1>&8 8>&-
+  if [[ -f "$FL_READ_BUF" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ "$line" == '{"schema_version":'*'}' ]]; then doc="$line"; else other="${other}${line}"$'\n'; fi
+    done <"$FL_READ_BUF"
+    rm -f "$FL_READ_BUF"
+  fi
+  [[ -z "$other" ]] || printf '%s' "$other" >&2
+  if [[ "$code" != "0" ]]; then
+    err="${FL_DIE_MESSAGE:-${FL_LAST_PROBLEM:-the command exited with ${code}}}"
+  fi
+  if [[ -n "$doc" ]]; then
+    # a document that has its envelope (the share family) is printed as it is
+    if [[ "$FL_DOC_ENVELOPED" != "1" ]]; then
+      tail=",\"exit\":${code}"
+      # a failing read that printed its findings (doctor, lock check) has no error of its own
+      [[ "$code" == "0" || "$doc" == *'"error":'* ]] || tail="${tail},\"error\":$(fl_json_str "${err:0:500}")"
+      doc="${doc%\}}${tail}}"
+    fi
+    printf '%s\n' "$doc"
+  else
+    # nothing was printed: the run failed (or had nothing to say) before its document
+    tail="\"exit\":${code}"
+    [[ "$code" == "0" ]] || tail="${tail},\"error\":$(fl_json_str "${err:0:500}")"
+    printf '{"schema_version":%d,"cli_version":"%s",%s,"warnings":[%s],"next_actions":[%s]}\n' \
+      "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$tail" "$FL_DONE_WARNINGS" "$FL_DONE_NEXT"
+  fi
 }
 
 # fl_doc_rest DOC: the fields after schema_version and cli_version, without braces

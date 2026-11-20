@@ -174,7 +174,7 @@ fl_pm_build() {
   PM_TOKEN_DATA="$( { printf '%s\n%s' "$rows" "$evidence"; cksum "$FL_STATE_FILE" ${agent_files[@]+"${agent_files[@]}"} 2>/dev/null || true; } )"
   fl_plan_token_v PM_TOKEN "$PM_TOKEN_DATA"
   # shellcheck disable=SC2153  # PM_TOKEN is set by fl_plan_token_v above
-  PM_JSON="{\"schema_version\":1,\"token\":\"$PM_TOKEN\",\"entries\":[$rows],\"can_apply\":$(fl_json_bool "$PM_CAN_APPLY") }"
+  PM_JSON="{\"schema_version\":1,\"cli_version\":\"${FL_VERSION}\",\"token\":\"$PM_TOKEN\",\"entries\":[$rows],\"can_apply\":$(fl_json_bool "$PM_CAN_APPLY") }"
 }
 fl_pm_check() {
   PM_TAKEN=""; PM_SOFT=""; fl_pm_known_reservations
@@ -200,7 +200,7 @@ fl_pm_hosts_batch() {
 fl_pm_jstep() { if declare -F fl_jsonl_step >/dev/null; then fl_jsonl_step "$@"; fi; }
 fl_pm_changed() { if declare -F fl_changed >/dev/null; then fl_changed "$@"; fi; }
 fl_cmd_ports() {
-  local sub="${1:-}" token mode i d current offset running
+  local sub="${1:-}" token mode i d current offset running old
   [[ "$#" == 0 ]] || shift
   case "$sub" in
     plan|setup|apply)
@@ -227,13 +227,14 @@ fl_cmd_ports() {
     check)
       fl_bench_load "${OPT_BENCH_DIR:-}"; fl_require_bench; fl_pm_check
       running=0; fl_pm_running && running=1
-      printf '{"schema_version":1,"conflicts":%s,"mode":%s,"already_running":%s}\n' "$(fl_pm_strings_json "$PM_CONFLICTS")" "$(fl_json_str "$(fl_pm_mode "$FL_BENCH_DIR")")" "$(fl_json_bool "$running")" ;;
+      printf '{"schema_version":1,"cli_version":"%s","conflicts":%s,"mode":%s,"already_running":%s}\n' "$FL_VERSION" "$(fl_pm_strings_json "$PM_CONFLICTS")" "$(fl_json_str "$(fl_pm_mode "$FL_BENCH_DIR")")" "$(fl_json_bool "$running")" ;;
     mode)
       mode="${1:-}"; [[ "$mode" == automatic || "$mode" == fixed ]] || { fl_fail 'Mode must be automatic or fixed.'; return 1; }
       fl_bench_load "${OPT_BENCH_DIR:-}"; fl_require_bench
+      old="$(fl_pm_mode "$FL_BENCH_DIR")|$(fl_bstate_get PORT_RESERVATION 2>/dev/null || true)"
       fl_bstate_set PORT_MODE "$mode"; fl_bstate_set PORT_RESERVATION "$(fl_pm_current)"
       if [[ "${FL_DRY_RUN:-0}" == 1 ]]; then fl_info "dry-run: would set port mode to $mode. Nothing was changed."
-      else fl_ok "Port mode: $mode. Existing ports are unchanged."; fi ;;
+      else [[ "$old" == "${mode}|$(fl_pm_current)" ]] || fl_changed ports "$FL_BENCH_DIR" "port mode ${mode}"; fl_ok "Port mode: $mode. Existing ports are unchanged."; fi ;;
     apply)
       token="${1:-}"; [[ "$#" == 0 ]] || shift
       [[ "${FL_ASSUME_YES:-0}" == 1 ]] || { fl_fail 'Review ports plan, then pass its token with --yes.'; return 1; }

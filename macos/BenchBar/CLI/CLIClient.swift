@@ -384,7 +384,9 @@ nonisolated struct CLIClient: Sendable {
         if extraEnvironment["BENCHBAR_NONINTERACTIVE"] == "0" { env.merge(Self.appCaller) { _, new in new } }
         let output = try await runner.run(executable: executable, arguments: arguments, environment: env, timeout: timeout, qos: qos)
         guard acceptExitCodes.contains(output.exitCode) else {
-            throw .failed(command: arguments.first ?? "", exitCode: output.exitCode, message: Self.summarize(output))
+            // the CLI's own sentence (the envelope's error) when it sent one, else the last lines of its text
+            let message = output.envelope.error.flatMap { $0.isEmpty ? nil : CLIText.plain($0) } ?? Self.summarize(output)
+            throw .failed(command: arguments.first ?? "", exitCode: output.exitCode, message: message)
         }
         return output
     }
