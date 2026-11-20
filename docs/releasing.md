@@ -125,35 +125,43 @@ On `next-release`, then into `main`:
    [release candidate](#release-candidates) first. Wait until the push run
    of CI on the new `next-release` head is green: that run is the one the
    release is built on. Merge nothing else until the tag exists.
-6. Fast forward `main` to that commit. You need to be a repository admin who
-   can bypass the `main` ruleset:
+6. Fast forward `main` to that commit with `scripts/release-promote.sh`. You
+   need gh signed in, and to be a repository admin who can bypass the `main`
+   ruleset. Run it with `--dry-run` first: it prints the plan and pushes
+   nothing. It checks, and stops at the first failure:
+   - `main` is an ancestor of `next-release`. If it is not and only docs
+     commits are missing from `next-release`, it offers the sync described
+     below; otherwise it refuses. It never forces;
+   - `benchbar` at that commit has a final version (not a candidate), every
+     place agrees and no fragment is left (`scripts/check-version.sh --folded`
+     on that commit's files);
+   - the tag `vX.Y.Z` does not exist yet;
+   - "CI result" is green on the commit, and on the nearest commit that
+     changed code (`scripts/release-ci-gate.sh`: a push that changed only
+     docs runs no tests, so its green says nothing about the code).
 
-   ```bash
-   git fetch origin
-   git merge-base --is-ancestor origin/main origin/next-release   # must succeed
-   git push origin origin/next-release:refs/heads/main
-   ```
+   Then it asks, and pushes with `git push origin <sha>:refs/heads/main`
+   (`--yes` skips the question).
 
-   Check first that the "CI result" of that commit is green, that
-   `main` is an ancestor of it and that `scripts/check-version.sh --folded`
-   passes on it. Never force the push.
-
-   If `main` is not an ancestor, look at what only `main` has
-   (`git log --oneline origin/next-release..origin/main`). When every commit
-   changes only docs (`scripts/docs-only.sh --commit <sha>` for each), bring
-   them into `next-release` with one merge commit and push it (a fast
-   forward of `next-release`; the admin bypasses its ruleset), then wait for
-   the "CI result" of the merge before step 6 again:
-
-   ```bash
-   git checkout --detach origin/next-release
-   git merge --no-ff origin/main -m "Merge main into next-release (docs fixes)"
-   git push origin HEAD:refs/heads/next-release
-   ```
-
-   On a conflict, stop (`git merge --abort`) and bring the change over by
-   pull request. If any commit of `main` changes code, do not merge: ask the
-   maintainer how to put `main` right.
+   **When `main` is ahead (docs fixes).** A docs only pull request may
+   target `main` (see [The docs site](#the-docs-site)), so `main` can have
+   commits that `next-release` has not, and then it is not an ancestor. The
+   script lists them. When every one changes only docs
+   (`scripts/docs-only.sh`), it offers a sync: it makes one real merge
+   commit of `origin/main` into `origin/next-release` (it builds the merge
+   in memory, so your working tree and branches stay as they are), shows it
+   and, after a yes (or with `--yes`), pushes it with
+   `git push origin <merge>:refs/heads/next-release`: a fast forward of
+   `next-release`, which the admin may push past the ruleset. A conflict
+   stops it with nothing pushed: bring the docs change over by pull request.
+   The merge is a commit CI has not run yet, so the script then stops at the
+   gate ("CI result" is not green on the merge yet); wait for CI on
+   `next-release`, run the script again, and it is a plain fast forward. The
+   merge changes only docs, so the gate walks back to the last code commit
+   and needs a green result there too. `--dry-run` shows the sync and
+   pushes nothing. When any commit that only `main` has changes code, the
+   script refuses and names it. It never forces, never rewrites history and
+   never merges the other way (`next-release` into `main`).
 7. `auto-tag.yml` runs `scripts/check-version.sh` (every place says the same
    version, CHANGELOG.md has its section, no fragment is left), refuses a
    release candidate version on `main`, tags `vX.Y.Z` on that commit and
@@ -161,11 +169,13 @@ On `next-release`, then into `main`:
    `main` that keeps the version and changes only docs tags nothing (a
    notice); one that changes code **fails** ("release PR merged without a
    version bump?"). A tag pushed by hand still starts both release workflows.
-   If `main` has a commit that `next-release` has not, the push is not a
-   fast forward and git refuses it: do not force it. Docs fixes are brought
-   over by the merge of step 6; a code commit on `main` was pushed by
-   mistake, and it is a decision about history (not a script) how to put
-   `main` right.
+   If `main` has a commit that `next-release` has not (a docs fix that was
+   merged to `main`), the script offers the sync below; for a commit that
+   changes code it refuses, and git would refuse the push as well: do not
+   force it. The commit was pushed to `main` by mistake or came from a fix
+   made there; bring its change to `next-release` by pull request, and ask
+   the maintainer how to put `main` right (it is a decision about history,
+   not a script).
 8. Wait for the release workflows, open the draft on the Releases page,
    check the files, publish.
 9. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
@@ -281,6 +291,39 @@ build, signed and notarized the same way, published as a GitHub
 **pre-release**. It exists so one live QA pass can run on the real files
 before the release. Nobody gets it by updating.
 
+**When it is required.** In the history up to 0.8.3, 13 of 17 gaps between
+releases are under 48 hours, and the large 0.8.0 was followed by 0.8.1, 0.8.2
+and 0.8.3 after 44, 133 and 270 hours: users got versions that needed a
+live QA pass afterwards. A candidate is that pass, before they get the
+release. Cut one when the release has any of these (a rule of thumb, change
+it when it does not fit); a release with none may go straight to the release
+pull request:
+
+- [ ] a new feature area, or a command or Mac app screen that changes how
+      people start, stop or install (the 0.8.0 wizard, 0.8.2 rooms);
+- [ ] a change to an installer (`install.sh`, `install.ps1`), to the signing
+      or update path, to a runner or service template, or to the Windows
+      shim or tray;
+- [ ] more than about 20 merged pull requests since the last release, or one
+      of more than 1000 changed lines.
+
+Before the release pull request, with the candidate installed from its pinned
+line on a clean Mac user (and a clean Windows 11 when Windows changed):
+
+- [ ] `benchbar doctor` is clean, and `benchbar --version` and the app's
+      About say the candidate's version;
+- [ ] a first run: the wizard, then a bench from the app, then `benchup`
+      and the site opening;
+- [ ] an update over the previous release (install the previous release,
+      then the candidate with `--version`): the existing bench still starts
+      and nothing in `sites/` changed;
+- [ ] the feature the release is about, once, by hand, in light and dark;
+- [ ] Windows: the one liner of the notes with `-Version`, the tray's first
+      start, and `benchbar.exe self-update --check`.
+
+The release pull request says which candidate passed this list. The release
+itself is the merge of what the candidate tested plus fixes found by it.
+
 **Cut one.** On `next-release`:
 
 1. `scripts/bump-version.sh 0.9.0-rc.1` sets the version in every place. A
@@ -321,8 +364,89 @@ pre-releases:
 version, so Sparkle later moves it to `0.9.0` (its build number, the commit
 count, is higher). `benchbar.exe` built from a candidate behaves as a
 development build: it never offers an update, so a Windows tester installs
-the release with the one liner. `benchbar self-update` has no `--version`:
-to leave a candidate on the Mac, run the installer without a version.
+the release with the one liner.
+
+On a Mac, the installer pins both halves to the candidate: the app from the
+pre-release, and the CLI as a detached checkout of the tag
+(`install.sh --version v0.9.0-rc.1`, also with `--no-app` for the CLI alone).
+Two other routes cannot install a candidate, by design: **Homebrew** only
+ever sees a published release (the tap skips a candidate), and **`benchbar
+self-update` has no `--version`**: it installs the latest release. To leave
+a candidate and go back, run the installer without a version
+(`install.sh --yes`): it switches the CLI back to `main` and installs the
+latest app. An app update to a final release (Update Now) passes
+`--version` too, but leaves the CLI on `main`.
+
+## When a release goes wrong
+
+Releases are immutable: a published release's files and its tag can never
+be replaced or deleted, and the tag ruleset forbids moving any `v*` tag. So
+every repair below ends in the same place: a **new version** (the next
+patch), never an edit of the old one. What you can still change on a
+published release is its notes and its flags.
+
+### A release run failed
+
+The release job does not run the test suite. It first checks that the CI
+result of the tagged commit is green, and of the nearest commit that
+changed code when the tagged one changed only docs
+(`scripts/release-ci-gate.sh`), then `scripts/check-version.sh`, then builds.
+
+| What failed | What to do |
+|---|---|
+| `auto-tag.yml` stopped on `check-version.sh` (nothing is tagged) | `main` already holds the fast forward (`release-promote.sh` runs the same check first, so this is rare). Fix the named place on `next-release` by pull request and run `scripts/release-promote.sh` again: `main` is an ancestor of the fix, and a push to `main` with a version that has no tag tags it. |
+| The gate says CI is red or missing | Fix `next-release`, wait for a green push run, then release again as above. A tag that exists for a bad commit stays; the next patch version replaces it. |
+| `release.yml` failed after the tag exists (signing, notarization, a runner) | Re-run the failed jobs on the same run, or start it again on the tag: `gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z`. Approve the `release` environment again. A draft of that tag is reused: files of the same name are deleted from the draft and uploaded again, nothing is overwritten. |
+| `release-windows.yml` failed | Re-run it the same way (`gh workflow run release-windows.yml --ref vX.Y.Z -f version=X.Y.Z -f draft_release=true`) after `release.yml` has made the draft. Re-run it again after any later `release.yml` run, which replaces the notes. |
+| The release was published before a file arrived | A late file can never be added. Cut the next patch version. This is why you publish only after both workflows finish. |
+
+### A published release is bad
+
+Sparkle checks once a day, `install.sh` and `benchbar self-update` ask for
+the latest release whenever they run, and the tap serves a release once its
+pull request is merged. In this order:
+
+1. **Stop the spread.** Mark the bad release as a pre-release:
+   `gh release edit vX.Y.Z --prerelease`. GitHub's "latest" then falls back
+   to the previous release, and every reader of it (the Sparkle feed,
+   `install.sh`, `benchbar self-update`, the app's update check) stops
+   offering the bad one; the Windows installer and `benchbar.exe
+   self-update` skip pre-releases too. Check with
+   `gh release view --json tagName` that "latest" is the previous release;
+   if not, `gh release edit vPREVIOUS --latest`. If GitHub refuses to edit
+   the flag of a published release, `--latest` on the previous one is
+   enough.
+2. **The tap.** If its pull request is open, close it. If it is merged, revert
+   that commit in `askysh/homebrew-tap` by pull request and merge it, so
+   `brew upgrade` and a fresh `brew install` give the previous version again.
+3. **Say so.** Edit the notes of the bad release (notes stay editable): a line
+   at the top that names the problem and the version to use.
+4. **Fix forward.** Sparkle only moves forward (the build number is the
+   commit count), so installs that already updated stay on the bad build
+   until a newer one is out; nothing can take them back. Fix on `next-release`,
+   run `scripts/bump-version.sh X.Y.Z+1`, release as usual (a candidate if
+   the fix is not tiny), and put the cause in the changelog.
+
+### A key may have leaked
+
+A run you did not approve, a lost laptop, a secret in a log. **Revoke
+first, rotate after.** If a run is pending, reject its deployment (a rejected
+run costs nothing). Everything below is set in GitHub, Settings,
+Environments, `release`, Environment secrets, unless it says otherwise.
+
+| Secret | Revoke | Replace |
+|---|---|---|
+| `MACOS_CERTIFICATE_P12`, `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGN_IDENTITY` | developer.apple.com, Certificates, revoke the Developer ID Application certificate | make a new one (setup step 2), set all three; ship a release signed with it at once, since Apple may refuse what the old one signed |
+| `NOTARY_API_KEY_P8`, `NOTARY_API_KEY_ID`, `NOTARY_API_ISSUER_ID` | App Store Connect, Integrations, revoke the key | a new key (setup step 3), set all three |
+| `SPARKLE_ED_PRIVATE_KEY`, `SPARKLE_ED_PUBLIC_KEY` | none exists: installed apps trust the old public key until an update tells them otherwise | two releases: generate a new pair, set only `SPARKLE_ED_PUBLIC_KEY` to the new public key and ship a release still signed with the old private key (apps accept it and now carry the new key); once it is out, set `SPARKLE_ED_PRIVATE_KEY` to the new private key and ship the next |
+| `HOMEBREW_TAP_TOKEN` | GitHub, Settings, Developer settings, delete the token | a new fine grained token (setup step 5); read the tap's recent commits, branches and pull requests for anything you did not make |
+| `APPLE_TEAM_ID` | not secret | nothing |
+
+If the Sparkle or Developer ID key was used by someone else, say so: open a
+draft security advisory (the repository's Security tab, Advisories), list the
+affected versions and the fix, and name it in the notes of the release that
+rotates the key. Until a release carries the new Sparkle public key, check
+the Releases page for files you did not upload.
 
 ## The Developer ID path: one time setup
 
@@ -510,7 +634,7 @@ Every step above is in this page or in a workflow, but four things are
 settings and accounts that a second person must be given first. Until the
 maintainer does, only the maintainer can finish a release:
 
-- **Repository admin**, to push the fast forward to `main` (step 5): the
+- **Repository admin**, to push the fast forward to `main` (step 6): the
   `main` ruleset lets only admins bypass it.
 - **Required reviewer of the `release` environment** (Settings,
   Environments, `release`), to approve the signed build and the tap job.
@@ -525,7 +649,7 @@ maintainer does, only the maintainer can finish a release:
   private key cannot be re-created (see "Rotating a key"), so keep a
   backup of it with a second holder.
 - **Merge rights on `askysh/homebrew-tap`**, for the pull request of
-  step 8.
+  step 9.
 
 `.github/CODEOWNERS` names the maintainer on the release code, so a
 second reviewer's approval counts for it only once CODEOWNERS lists them.
