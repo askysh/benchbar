@@ -171,14 +171,17 @@ public class Parity187bTests
         await model.LoadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(PlanPhase.Review, model.Phase);
         Assert.True(model.CanConfirm);
-        Assert.Equal("7c1e5a90b2d44f10", model.Plan!.Token);
-        Assert.Equal(["Download the backup", "Create erpcopy.localhost", "Restore into erpcopy.localhost", "Neutralise the copy", "Migrate"], model.Plan.Steps.Select(s => s.Name));
+        Assert.Equal("0ae11fd8a7dd70b49af83085424cbdf431c4237d2da52d31abdd9ea35b2eeceb", model.Plan!.Token);
+        Assert.Equal("Download the backup", model.Plan.Steps[0].Name);
+        Assert.Contains("Create the site erpcopy.localhost (bench new-site)", model.Plan.Steps.Select(s => s.Name));
+        Assert.Contains("Neutralise the copy: integrations off, stored secrets cleared", model.Plan.Steps.Select(s => s.Name));
+        Assert.Matches("^[0-9a-f]{64}$", model.Plan.Token!);
         Assert.Equal(["pull", "prod:erp.example.com", "--as", "erpcopy.localhost", "--bench-dir", Bench, "--dry-run", "--json"], runner.Runs[0].Args);
 
         await model.ConfirmAsync();
         Assert.Equal(PlanPhase.Finished, model.Phase);
         Assert.True(model.Outcome.Applied);
-        Assert.Equal(["pull", "prod:erp.example.com", "--as", "erpcopy.localhost", "--bench-dir", Bench, "--apply", "7c1e5a90b2d44f10", "--yes", "--jsonl"], runner.Runs[1].Args);
+        Assert.Equal(["pull", "prod:erp.example.com", "--as", "erpcopy.localhost", "--bench-dir", Bench, "--apply", "0ae11fd8a7dd70b49af83085424cbdf431c4237d2da52d31abdd9ea35b2eeceb", "--yes", "--jsonl"], runner.Runs[1].Args);
         Assert.DoesNotContain("--keep-secrets", runner.Runs[1].Args);
         Assert.False(model.Request.CanStop); // a restore is not killed part way
     }
@@ -189,11 +192,12 @@ public class Parity187bTests
         var (model, _) = MakePull();
         await model.LoadAsync(TestContext.Current.CancellationToken);
         var lines = model.Request.Describe!(model.Plan!);
-        Assert.Contains("Backup: 20260925_020000-erp_example_com-database.sql.gz, 700.0 MB, 31 hours old", lines);
+        Assert.Contains("Backup: 20260925_020000-erp_example_com-database.sql.gz, 8.1 KB, 55 days old", lines);
         Assert.Contains("Local site: erpcopy.localhost is created on this bench.", lines);
         Assert.Contains("The copy: " + PullCommands.NeutralisedText, lines);
         Assert.Contains("App that differs: frappe: 15.41.0 here, 15.40.0 on production (local newer)", lines);
-        Assert.DoesNotContain(lines, l => l.Contains("erpnext")); // an app that is ok is not worth a line
+        Assert.Contains("App that differs: erpnext: 15.30.0 here, 15.30.0 on production (branch differs)", lines);
+        Assert.DoesNotContain(lines, l => l.Contains("hrms")); // a skipped app is not worth a line
         Assert.DoesNotContain(lines, l => l.StartsWith("Warning", StringComparison.Ordinal));
     }
 
@@ -203,7 +207,8 @@ public class Parity187bTests
         var (model, runner) = MakePull("pull-plan-keep.jsonl", keep: true);
         await model.LoadAsync(TestContext.Current.CancellationToken);
         Assert.Contains("--keep-secrets", runner.Runs[0].Args);
-        Assert.Equal("b04d77e2193a5c68", model.Plan!.Token);
+        Assert.DoesNotContain(model.Plan!.Steps, s => s.Id.StartsWith("Neutralise", StringComparison.Ordinal)); // the CLI leaves the step out
+        Assert.Equal("9c36a3b81ade9add42016679ef9a88612cd441084483b90ed8e066c2e0c33e0f", model.Plan!.Token);
         var lines = model.Request.Describe!(model.Plan);
         Assert.StartsWith("Warning: the copy keeps production's secrets", lines[0]);
         Assert.Contains("The copy: " + PullCommands.KeptText, lines);
@@ -215,7 +220,8 @@ public class Parity187bTests
     public async Task APlanWithoutAFieldReadsAsNotNeutralisedAndAPlanWithoutATokenCannotBeRun()
     {
         var (client, runner) = CliFixture.Scripted();
-        var old = string.Join('\n', CliFixture.Lines("pull-plan.jsonl")).Replace("\"neutralise\":true,", "").Replace(",\"token\":\"7c1e5a90b2d44f10\"", "");
+        var old = string.Join('\n', CliFixture.Lines("pull-plan.jsonl")).Replace("\"neutralise\":true,", "");
+        old = System.Text.RegularExpressions.Regex.Replace(old, ",\"token\":\"[0-9a-f]{64}\"", "");
         runner.On("pull").Print(old.Split('\n'));
         var model = new PlanReviewModel(PullCommands.Review(Input(), Bench), client);
         await model.LoadAsync(TestContext.Current.CancellationToken);
@@ -259,8 +265,8 @@ public class Parity187bTests
                 if (e is CliEvent.Progress p) labels.Add(p.Label);
             }, TestContext.Current.CancellationToken);
         Assert.True(result.Ok);
-        Assert.Equal(["Downloaded 350.0 MB of 700.0 MB"], labels);
-        Assert.Equal(["download", "download", "new_site", "restore", "neutralise", "migrate"], steps.Select(s => s.Id));
+        Assert.Equal(["Downloaded 4.0 KB of 8.1 KB"], labels);
+        Assert.Equal(["download", "download", "new_site", "restore", "encryption_key", "dev_safety", "neutralise", "skip_apps", "migrate", "clear_cache", "admin_password", "hosts", "cleanup", "verify"], steps.Select(s => s.Id));
         Assert.Equal("erpcopy.localhost", result.Done!.Raw["site"]!.GetValue<string>());
     }
 

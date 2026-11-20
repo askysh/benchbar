@@ -210,8 +210,11 @@ fix = [l.strip() for l in open(sys.argv[2]) if l.strip()]
 plain = {p.rstrip("+") for p in now}
 unjudged = {p.rstrip("+") for p in now if p.endswith("+")}
 for p in fix:
+    empty = p.endswith("+")
     p = p.rstrip("+")
     if p in plain: continue
+    # an empty array in the fixture (a bench that is ready waits on nothing) stands for the array the CLI fills when it has something to say
+    if empty and p + "[]" in plain: continue
     # below a value the mocks leave empty: cannot be judged
     if any(p.startswith(u + ".") or p.startswith(u + "[]") for u in unjudged): continue
     print(p)

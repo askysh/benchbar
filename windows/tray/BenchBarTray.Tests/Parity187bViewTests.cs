@@ -275,7 +275,7 @@ public class Parity187bViewTests
         Assert.Equal("Pull erpcopy.localhost", request.Title);
         var pulls = kit.Runner.Runs.Where(r => r.Args[0] == "pull").ToList();
         Assert.Equal(["pull", "prod:erp.example.com", "--as", "erpcopy.localhost", "--bench-dir", P, "--dry-run", "--json"], pulls[0].Args);
-        Assert.Equal(["pull", "prod:erp.example.com", "--as", "erpcopy.localhost", "--bench-dir", P, "--apply", "7c1e5a90b2d44f10", "--yes", "--jsonl"], pulls[1].Args);
+        Assert.Equal(["pull", "prod:erp.example.com", "--as", "erpcopy.localhost", "--bench-dir", P, "--apply", "0ae11fd8a7dd70b49af83085424cbdf431c4237d2da52d31abdd9ea35b2eeceb", "--yes", "--jsonl"], pulls[1].Args);
         Assert.DoesNotContain(pulls.SelectMany(r => r.Args), a => a == "--keep-secrets");
         Assert.Equal("erpcopy.localhost was pulled.", view.Message);
         Assert.Equal(1, kit.Refreshes);
@@ -297,7 +297,7 @@ public class Parity187bViewTests
         Wait(view.Pending);
         var pulls = kit.Runner.Runs.Where(r => r.Args[0] == "pull").ToList();
         Assert.All(pulls, r => Assert.Contains("--keep-secrets", r.Args));
-        Assert.Equal("b04d77e2193a5c68", pulls[1].Args[pulls[1].Args.ToList().IndexOf("--apply") + 1]);
+        Assert.Equal("9c36a3b81ade9add42016679ef9a88612cd441084483b90ed8e066c2e0c33e0f", pulls[1].Args[pulls[1].Args.ToList().IndexOf("--apply") + 1]);
     });
 
     [Fact]
