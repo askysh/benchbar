@@ -609,6 +609,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar console [--site S]` | yes | no | no | no | none |
 | `benchbar db [--site S] \| benchbar db orphans [--json]` | yes | no | no | no | none |
 | `benchbar db orphans [--json]` | no | no | no | no | document |
+| `benchbar db [--site S]` | yes | no | no | no | none |
 | `benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]` | no | no | no | no | document |
 | `benchbar users [--site S] [--search Q] [--limit N] [--json]` | no | no | no | no | document |
 | `benchbar report [--print] [--json]` | no | no | no | no | document |
