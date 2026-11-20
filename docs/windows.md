@@ -696,9 +696,12 @@ benchbar.exe self-update
 
 It shows the version you have and the newest release, asks once, then
 updates all of BenchBar for Windows to that release: `benchbar.exe`, the
-tray app and the BenchBar CLI inside WSL. It runs the one line installer for
-you, so the new files are checked against the release's SHA256 sums and
-Windows shows no SmartScreen dialog for them. The tray app closes and starts
+tray app and the BenchBar CLI inside WSL. It runs the installer of that
+release for you: `install.ps1` of the release's tag, downloaded and
+compared with the release's SHA256 sums before it runs, not whatever is on
+`main`. The installer checks the new files against the same sums, and
+Windows shows no SmartScreen dialog for them when the zip's build
+provenance verified (see [Verify a download](#verify-a-download)). The tray app closes and starts
 again. It ends with one line for each part. Your settings, benches and sites
 stay as they are.
 

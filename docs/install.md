@@ -370,7 +370,7 @@ Homebrew's CLI updates with `brew upgrade askysh/tap/benchbar`, which
 updates with `benchbar self-update`:
 
 ```bash
-benchbar self-update               # shows the plan, asks, then runs the installer
+benchbar self-update               # shows the plan, asks, checks the installer, then runs it
 benchbar self-update --check       # this version against the latest release
 ```
 
@@ -379,6 +379,13 @@ or, on any version, including 0.5.x, which has no `self-update`:
 ```bash
 curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes
 ```
+
+`self-update` runs the installer of the release it installs (the file at
+that release's tag), and only after its sha256 matched the line for
+`install.sh` in that release's `SHA256SUMS`. It then checks the CLI out at
+the release's tag, so the CLI and the app are the same version. A release
+whose sums do not list `install.sh` is refused, with the line above to
+update by hand.
 
 It pulls the CLI in `~/.local/share/benchbar`, replaces the app in
 `~/Applications` (it quits a running BenchBar first), and changes no

@@ -114,6 +114,12 @@ repository's workflow built the file. The tap workflow
 - `install.ps1` removes Windows' internet mark only when the zip's
   attestation verified.
 
+- `benchbar self-update` and `benchbar.exe self-update` run the installer
+  of the release they install, after checking its SHA256 against that
+  release's sums, not whatever `main` holds at that moment. The Mac CLI
+  is checked out at the release's tag. Installing the CLI inside WSL from
+  a release build of `benchbar.exe` follows the same rule.
+
 What this does not cover: an attestation proves where a file was built,
 not that the code is good. A `gh` that is not signed in leaves only the
 checksum. On Linux `install.sh` downloads no file: git fetches the CLI
