@@ -221,6 +221,7 @@ public class SelfUpdateTests : IDisposable
             "$Host.UI.RawUI.WindowTitle = 'BenchBar update'",
             "Write-Host 'Updating BenchBar. BenchBar closes now and starts again when the update is done.'",
             "Write-Host ''",
+            "$env:BENCHBAR_CALLER = 'tray'",
             @"& 'C:\Users\Pat Doe\AppData\Local\Programs\BenchBar\benchbar.exe' self-update --yes",
             "$code = $LASTEXITCODE",
             "Write-Host ''",

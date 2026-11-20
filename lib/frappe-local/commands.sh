@@ -157,7 +157,7 @@ flag~op list~--running~~Only the ones that run now.
 flag~op list~--limit~N~At most N (1 to 100, default 20).
 cmd~op wait~benchbar op wait OP_ID [--timeout SECS] [--json]~Wait until the operation is not running, then print it. Exit 0 when it ended with exit 0, else 1 (failed, interrupted or still running at the timeout: --json says which).~no~no~no~no~document
 flag~op wait~--timeout~SECS~Give up after SECS seconds (the operation goes on); default: wait for it.
-cmd~history~benchbar history [--bench PATH] [--since TIME] [--limit N] [--json]~What ran on this machine, newest first: every run that changed things, with its op_id, command line (secrets as ***), who started it, bench, site, times, exit, what it changed and its log. Joined with the MCP audit log: a run an agent started names the tool and the client. Kept in history.jsonl in the state folder, 1 MB and three older files.~no~no~no~no~document
+cmd~history~benchbar history [--bench PATH] [--since TIME] [--limit N] [--json]~What ran on this machine, newest first: every run that changed things, with its op_id, command line (secrets as ***), who started it, bench, site, times, exit, what it changed and its log. A run an agent started through benchbar mcp also names the MCP tool and the client that made the call. Kept in history.jsonl in the state folder, 1 MB and three older files.~no~no~no~no~document
 flag~history~--bench~PATH~Only the runs on this bench.
 flag~history~--since~TIME~Only the runs that started since 90m, 12h, 7d, 2w ago, a date (2026-11-19, UTC) or a time (2026-11-19T10:15:00Z).
 flag~history~--limit~N~At most N runs (1 to 1000, default 20).

@@ -68,6 +68,17 @@ assert_eq "script" "$(field "$(last_line)" 'd["caller"]')"
 BENCHBAR_CALLER=root run_quiet site backup bbtest.localhost --bench-dir "$BENCH"
 assert_eq "script" "$(field "$(last_line)" 'd["caller"]')"
 assert_not_contains "$(cat "$HIST")" '"x":"'
+# a text that only contains allowed words is no caller either: the check is equality with one word, not a substring
+for bad in "app tray" "terminal app" " app" "app " "mcp,agent" "appx" "xapp"; do
+  BENCHBAR_CALLER="$bad" run_quiet site backup bbtest.localhost --bench-dir "$BENCH"
+  assert_eq "script" "$(field "$(last_line)" 'd["caller"]')" "(BENCHBAR_CALLER=[$bad])"
+done
+# FL_CALLER is benchbar's own variable: one in the environment says nothing (any process could claim to be the app)
+FL_CALLER=app run_quiet site backup bbtest.localhost --bench-dir "$BENCH"
+assert_eq "script" "$(field "$(last_line)" 'd["caller"]')" "(an exported FL_CALLER is ignored)"
+FL_CALLER=mcp BENCHBAR_CALLER=tray run_quiet site backup bbtest.localhost --bench-dir "$BENCH"
+assert_eq "tray" "$(field "$(last_line)" 'd["caller"]')" "(BENCHBAR_CALLER, a label from the list, is what counts)"
+assert_contains "$(head -n 1 "$(field "$(last_line)" 'd["log"]')")" "(caller: tray, "
 # --for-agent says agent; an explicit caller (the Mac app asking for JSON) wins over it
 run_quiet site backup bbtest.localhost --for-agent --bench-dir "$BENCH"
 assert_eq "agent" "$(field "$(last_line)" 'd["caller"]')"
@@ -80,6 +91,8 @@ assert_eq "terminal" "$(field "$(last_line)" 'd["caller"]')"
 assert_contains "$(head -n 1 "$(field "$(last_line)" 'd["log"]')")" "(caller: terminal, op: "
 
 # ---- 3. the command line never holds a secret (the rules of the MCP audit log)
+# an option the command does not take is exit 64 since 0.9.0 and the run never starts: these runs pass unknown options on purpose
+export BENCHBAR_LENIENT_FLAGS=1
 run_quiet site backup bbtest.localhost --password hunter2 --api-key=k123tail --apply tok777 'FOO_SECRET=abc999' 'https://bob:pw555@example.com/r.git?token=zz888&x=1' --bench-dir "$BENCH"
 SECRETLINE="$(last_line)"
 assert_eq "True" "$(field "$SECRETLINE" 'd["argv"] == ["site", "backup", "bbtest.localhost", "--password", "***", "--api-key=***", "--apply", "***", "FOO_SECRET=***", "https://***@example.com/r.git?token=***&x=1", "--bench-dir", "'"$BENCH"'"]')" "$SECRETLINE"
@@ -94,6 +107,12 @@ run_quiet site backup bbtest.localhost "$LONG" --bench-dir "$BENCH"
 assert_eq "True" "$(field "$(last_line)" 'any(w.endswith("... [cut]") and len(w) < 230 for w in d["argv"])')"
 run_quiet site backup $(seq 1 60) --bench-dir "$BENCH"
 assert_eq "True" "$(field "$(last_line)" 'len(d["argv"]) == 41 and d["argv"][-1] == "..."')"
+# the word after a secret looking flag is its value, unless it is a flag itself
+run_quiet site backup bbtest.localhost --keep-secrets --yes --token T0KEN9 --bench-dir "$BENCH"
+assert_eq "True" "$(field "$(last_line)" 'd["argv"] == ["site", "backup", "bbtest.localhost", "--keep-secrets", "--yes", "--token", "***", "--bench-dir", "'"$BENCH"'"]')" "$(last_line)"
+run_quiet site backup bbtest.localhost --password --bench-dir "$BENCH"
+assert_eq "True" "$(field "$(last_line)" 'd["argv"][-3:] == ["--password", "--bench-dir", "'"$BENCH"'"]')" "(a flag after a secret flag is no value)"
+unset BENCHBAR_LENIENT_FLAGS
 
 # ---- 4. the changes of a run (from its done line), kept compact
 rm -f "$HIST"
@@ -130,7 +149,7 @@ assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "--limit takes a number from 1
 run_json history --since yesterday
 assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "--since takes a time"
 run_json history --nope
-assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "Unknown option for history: --nope"
+assert_eq "64" "$CODE"; assert_contains "$OUT$ERR" "Unknown option for history: --nope"
 run_fm history </dev/null
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "Started"
@@ -155,6 +174,31 @@ if [[ "$STAT_GNU" == "1" ]]; then MODE="$(stat -c %a "$HIST.old.1")"; else MODE=
 assert_eq "600" "$MODE" "(the rotated file keeps its mode)"
 assert_eq "True" "$(field "$("$FM" history --json --limit 1000 </dev/null)" '(lambda ws: len(ws) > 6 and ws[0] == "r20.localhost" and ws == sorted(ws, key=lambda w: -int(w[1:-10])))([h["argv"][2] for h in d["history"]])')" "(newest first across the files)"
 unset FL_HISTORY_MAX
+
+# two runs that end together neither rotate at once nor lose a line: the history file has its own lock
+rm -f "$HIST" "$HIST".old.* "$HIST.lck"
+LOCKTEST="$TMP_DIR/appendtest.sh"
+cat >"$LOCKTEST" <<'EOS'
+#!/usr/bin/env bash
+. "$ROOT/lib/frappe-local/ui.sh"
+. "$ROOT/lib/frappe-local/state.sh"
+FL_HISTORY_MAX=2500
+PAD="$(printf 'x%.0s' $(seq 1 150))"
+for n in 1 2 3 4 5 6; do
+  fl_hist_append "{\"op_id\":\"op-20261119-100000-$1$n\",\"pad\":\"$PAD\"}"
+done
+EOS
+for j in 1 2 3 4 5 6; do ROOT="$ROOT" bash "$LOCKTEST" "$j" 2>"$MOCK_STATE/append-err-$j" </dev/null & done
+wait
+assert_eq "36" "$(cat "$HIST" "$HIST".old.* 2>/dev/null | grep -c '"op_id":"op-20261119-100000-')" "(36 appended lines, none lost to a rotation)"
+assert_file "$HIST.old.1" "(it did rotate)"
+assert_no_file "$HIST.old.4"
+assert_no_file "$HIST.lck" "(the lock is released)"
+assert_eq "" "$(cat "$MOCK_STATE"/append-err-*)" "(nothing on stderr)"
+# a history file that does not exist yet says nothing on stderr either
+rm -f "$HIST" "$HIST".old.*
+assert_eq "" "$(ROOT="$ROOT" bash -c '. "$ROOT/lib/frappe-local/ui.sh"; . "$ROOT/lib/frappe-local/state.sh"; fl_hist_append "{\"op_id\":\"op-20261119-100000-1\"}"' 2>&1 </dev/null)"
+assert_eq "1" "$(wc -l <"$HIST" | tr -d ' ')"
 
 # ---- 7. a detached run keeps the caller of its launcher and the command line without --background
 rm -f "$HIST"

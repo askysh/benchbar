@@ -13,7 +13,9 @@
 #
 # Compatible with macOS /bin/bash 3.2.
 
-FL_CALLER="${FL_CALLER:-}"
+# never read from the environment: only fl_caller_resolve sets it, from BENCHBAR_CALLER checked against the list
+# (an exported FL_CALLER would let any process choose what the history and the log say)
+FL_CALLER=""
 # who may be named: a person at a terminal, the Mac app, the tray, an agent through MCP, an agent
 # that asked for --for-agent, a script (cron, CI, another program)
 FL_CALLERS="terminal app tray mcp agent script"
@@ -47,7 +49,10 @@ fl_hist_secret_name_p() {
 fl_caller_resolve() {
   local c="${BENCHBAR_CALLER:-}"
   [[ -z "${FL_CALLER:-}" ]] || return 0
-  case " ${FL_CALLERS} " in *" ${c} "*) ;; *) c="" ;; esac
+  # exact equality with one word of the list: a text that only contains an allowed word ("app tray") is no caller
+  local w ok=""
+  for w in $FL_CALLERS; do [[ "$c" != "$w" ]] || ok="$w"; done
+  c="$ok"
   if [[ -z "$c" ]]; then
     if [[ "${OPT_FOR_AGENT:-0}" == "1" ]]; then c=agent
     elif [[ -t 0 ]]; then c=terminal
@@ -66,7 +71,8 @@ FL_HIST_NEXT_SECRET=0
 fl_hist_word_v() {
   local __word="$2" __name __rest __q __base __p __out __sep
   FL_HIST_NEXT_SECRET=0
-  if [[ "${3:-0}" == "1" ]]; then printf -v "$1" '%s' '***'; return 0; fi
+  # the word after a secret looking flag is its value, unless it is a flag itself (--keep-secrets --yes)
+  if [[ "${3:-0}" == "1" && "$__word" != -* ]]; then printf -v "$1" '%s' '***'; return 0; fi
   if [[ "$__word" == -* ]]; then
     if [[ "$__word" == *=* ]]; then
       __name="${__word%%=*}"
@@ -160,15 +166,19 @@ fl_hist_changed_v() {
   printf -v "$2" '%s' "$__more"
 }
 
-# fl_hist_append LINE: the line into history.jsonl (0600). Past FL_HISTORY_MAX bytes (1 MB) the file moves to
-# .old.1 (.old.2 and .old.3 shift up, the oldest goes). A file that cannot be written never fails a run.
+# fl_hist_append LINE: the line into history.jsonl (0600), under the file's own lock (history.jsonl.lck, state.sh:
+# two runs that end together never rotate at once and never lose a line to a rotation). Past FL_HISTORY_MAX bytes
+# (1 MB) the file moves to .old.1 (.old.2 and .old.3 shift up, the oldest goes). A file that cannot be written, or a
+# lock that cannot be taken, never fails a run: the work is in a subshell, so a refusal of the lock ends only that.
 fl_hist_append() {
-  local line="$1" f max n size
+  local line="$1" f
   f="${FL_STATE_DIR}/${FL_HISTORY_FILE}"
-  max="${FL_HISTORY_MAX:-1000000}"; [[ "$max" =~ ^[0-9]+$ && "$max" -ge 1 ]] || max=1000000
   [[ ! -L "$f" ]] || return 0
-  if [[ -f "$f" ]]; then
-    size="$(wc -c <"$f" 2>/dev/null | tr -d ' ')"
+  (
+    declare -F fl__kv_lock >/dev/null && fl__kv_lock "$f"
+    local max n size
+    max="${FL_HISTORY_MAX:-1000000}"; [[ "$max" =~ ^[0-9]+$ && "$max" -ge 1 ]] || max=1000000
+    size="$({ wc -c <"$f"; } 2>/dev/null | tr -d ' ')"
     if [[ "$size" =~ ^[0-9]+$ && "$size" -ge "$max" ]]; then
       n="$FL_HISTORY_OLD"
       while [[ "$n" -gt 1 ]]; do
@@ -177,8 +187,11 @@ fl_hist_append() {
       done
       mv -f "$f" "${f}.old.1" 2>/dev/null || true
     fi
-  fi
-  ( umask 077; printf '%s\n' "$line" >>"$f" ) 2>/dev/null || true
+    umask 077
+    printf '%s
+' "$line" >>"$f"
+    declare -F fl__kv_unlock >/dev/null && fl__kv_unlock "$f"
+  ) 2>/dev/null || true
 }
 
 # fl_hist_record CODE: the run is over; its line into the history. Called by fl_op_end, so only the process

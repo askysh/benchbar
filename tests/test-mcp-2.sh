@@ -99,7 +99,7 @@ from mcpclient import Client, text
 fake, mode, tok = sys.argv[1], sys.argv[2], sys.argv[3]
 c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "FAKE_MODE": mode})
 tools = c.tools()
-assert len(tools) == 31, [t["name"] for t in tools]
+assert len(tools) == 32, [t["name"] for t in tools]
 LABEL = "Data from the bench ("
 for t in tools:
     props, required = t["inputSchema"]["properties"], t["inputSchema"].get("required", [])
