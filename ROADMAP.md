@@ -127,8 +127,8 @@ next, empty lists that say how to fill them. The CLI runs on Linux
 (Ubuntu 24.04, v15-lts) with each bench under `systemd --user`. On
 Windows, a preview: `benchbar.exe` forwards the CLI from PowerShell to
 WSL, BenchBar Tray shows the benches in the notification area, and a zip
-per CPU with a one line installer is attached to each release (unsigned
-until the signing application is approved). Agents get a contract: `benchbar COMMAND --help`
+per CPU with a one line installer is attached to each release (unsigned:
+SignPath declined the signing application on 2026-11-13, so they stay unsigned). Agents get a contract: `benchbar COMMAND --help`
 and `commands --json`, one JSON stream for every command that changes
 things ending in a `done` line (`exit`, `changed`, `warnings`,
 `next_actions`, `state_after`), `--for-agent`, a non interactive mode
@@ -168,33 +168,37 @@ The Windows programs are still unsigned.
 
 ## Later
 
-**The app's runner and CLI link.** The app's own runner stops a
+**The app's runner and CLI link** (no issue yet). The app's own runner stops a
 command's whole process group, as the CLI does since 0.7.3, and the app
 makes its CLI link again when a poll finds it missing.
 
-**Management in its own target.** Team profiles, bench discovery and
+**Management in its own target** (no issue yet). Team profiles, bench discovery and
 port setup move out of the menu bar app into a separate management
 target that runs only while it is open. The reason is scope: the menu
 bar app should start, stop and show benches. Not energy: 0.6.1 brought
 the app to under 0.1 percent of a core at rest with these in it.
 
-**0.8.x, the app for sites.** Restore from the app (backup and drop
-shipped in 0.5.8), and pull and lock apply in the app.
+**0.8.x, the app for sites** ([#177](https://github.com/askysh/benchbar/issues/177)).
+Restore from the app (backup and drop shipped in 0.5.8), and pull and lock
+apply in the app.
 
 **0.9, agents.** What the agent contracts round of 0.8 left out on
 purpose, so nobody reopens it in a pull request: operation handles for
-long jobs (an `op_id`, `benchbar op status`, MCP progress notifications
+long jobs ([#180](https://github.com/askysh/benchbar/issues/180): an `op_id`, `benchbar op status`, MCP progress notifications
 fed by the stream's `progress` lines; the MCP 2025-11-25 tasks primitive
 is the eventual home), `benchbar run --site X -- migrate|run-tests|...`
-with an allow list, site snapshots and rollback, scratch benches pinned to
-commits with a TTL and `bench gc`, leases per bench or site, `benchbar
-history --json`, `bench remove`, `bench forget`, `site move --to-bench`,
-`site hosts --prune` and `db orphans`. Two measurements come first as well: a comparative benchmark of
+with an allow list ([#181](https://github.com/askysh/benchbar/issues/181)), site snapshots and rollback
+([#182](https://github.com/askysh/benchbar/issues/182)), scratch benches pinned to
+commits with a TTL and `bench gc`, `bench remove`, `bench forget`,
+`site move --to-bench`, `site hosts --prune` and `db orphans`
+([#183](https://github.com/askysh/benchbar/issues/183)), leases per bench or site
+([#184](https://github.com/askysh/benchbar/issues/184)) and `benchbar
+history --json` ([#185](https://github.com/askysh/benchbar/issues/185)). Two measurements come first as well: a comparative benchmark of
 native versus container benches (idle memory, build time, file watch
 latency, startup) before the README keeps its performance wording, and a
 four week pilot with about ten developers across three teams.
 
-**Windows past the preview.** Signed binaries have no route in 0.9.0:
+**Windows past the preview** (tray parity is [#174](https://github.com/askysh/benchbar/issues/174), [#187](https://github.com/askysh/benchbar/issues/187)). Signed binaries have no route in 0.9.0:
 SignPath Foundation declined the project on 2026-11-13, and the
 Microsoft Store submission (the MSIX package, PR 124) is dropped from
 this release. The package code is landing in parts and CI builds it, but
@@ -203,6 +207,14 @@ run the command line inside WSL. The preview of 0.8.0 runs the
 benches inside WSL with the Linux platform layer (uv Python, fnm Node,
 MariaDB and Redis from apt, each bench under `systemd --user`), a
 `benchbar.exe` shim and a tray app.
+
+**Dropped from 0.9.0.** Three things need hardware or a third party, so
+0.9.0 does not do them: the Microsoft Store submission (see Windows past
+the preview), a dedicated VM for a runner (a machine that runs the macOS
+install and real bench tests off the maintainer's Mac), and a check on a
+real Intel Mac ([#22](https://github.com/askysh/benchbar/issues/22)). The
+code for each is fixed where a finding named it; what is missing is the
+machine or the account.
 
 **1.0.** A stable JSON API and runner format, an official Homebrew cask,
 full doctor coverage for v15 and v16. Vouch
@@ -219,12 +231,12 @@ Not scheduled, kept because they came up more than once.
 - Run one scheduler event now from the app.
 - Worker restart when Python files change, opt in.
 - More speed sources for the runner: job queue depth, requests per second.
-- A runner gallery in the docs.
+- A runner gallery in the docs ([#21](https://github.com/askysh/benchbar/issues/21)).
 - Log rotation on a size limit without a manual `repair`.
 - More failure path tests for bench creation and app installation.
 - `benchbar wipe`, the uninstall recipe behind an explicit confirmation,
   never touching MariaDB data without a backup.
-- Intel Mac verification of the CLI on real hardware. Dropped from 0.9.0: the CLI is written for
+- Intel Mac verification of the CLI on real hardware ([#22](https://github.com/askysh/benchbar/issues/22)). Dropped from 0.9.0: the CLI is written for
   x86_64 (Homebrew in `/usr/local`, the PDF package is an Intel binary) and the code has no known
   blocker, but nobody has run `install` on an Intel Mac yet, so it stays unverified.
 

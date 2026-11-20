@@ -334,6 +334,9 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 
 ## Contributing a change
 
+- A squash merge title is a plain imperative sentence ending in `(#PR)`.
+  No AI trailers in a commit or a pull request: no `Co-Authored-By` of a
+  tool, no "Generated with" line. The reviewer checks it.
 - Run `bash tests/affected.sh` for the tests your change touches. CI runs
   the full suite; run it yourself only when the selector says everything.
 - A change a user can see updates its guide or app page, `docs/features.md`
