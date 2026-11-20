@@ -13,6 +13,11 @@ A lease is benchbar's own state. It does not stop a process, lock a file or
 change a bench. It is a promise that every benchbar command, the BenchBar app
 and `benchbar mcp` keep.
 
+Leases are coordination between cooperating callers, not access control. An
+agent with a shell runs as the same user and can do what you can: read the
+lease file, run `bench` itself, change a site. A lease stops accidents between
+callers that mean to keep it. It does not keep out one that does not.
+
 ## lease
 
 ```
@@ -34,7 +39,7 @@ leases of every bench, or of the one `--bench` names.
 
 One holder at a time: a lease on a bench conflicts with a lease on any of its
 sites, and two leases on one site conflict. The second `lease take` stops and
-names the first holder. A lease that has expired is ignored everywhere and
+names the first holder and the end of the lease, never its id. A lease that has expired is ignored everywhere and
 dropped the next time the file is written.
 
 ```
@@ -50,9 +55,11 @@ $ benchbar restart --lease l-3f9a1c07be52
 The holder is `BENCHBAR_CALLER`: a name the agent or script chose, 1 to 40
 letters, digits or `. _ @ : + -`. `benchbar mcp` sets it for every command it
 runs, to `mcp:CLIENT:PID` (your own `BENCHBAR_CALLER` wins). Without it, a run
-under `BENCHBAR_NONINTERACTIVE` or `--for-agent` is `agent`, and a run in a
-terminal is the login name. Set `BENCHBAR_CALLER` when two agents share a
-machine, so they are two holders.
+in a terminal is the login name. An agent run (`BENCHBAR_NONINTERACTIVE`,
+`--for-agent`) without it cannot take a lease: it would be called `agent`, like
+every other agent, and could use their leases. `lease take` stops with the
+error id `lease_caller_required` and says to set `BENCHBAR_CALLER` to a name of
+its own. Set it when two agents share a machine, so they are two holders.
 
 ### What a lease stops
 
@@ -70,6 +77,13 @@ code 1 and the error id `lease_held` in `--json`. `--dry-run` and every read
 cannot tell what a console is for, and a backup is what a lease holder needs
 most.
 
+The commands that are not stopped change benchbar's own settings or the machine,
+not what a lease covers: `register`, `autostart`, `listen`, `site open-as`,
+`ports mode`, `labs`, `lock write`, `self-update`, `profile update`,
+`profile import` and `profile subscribe` (a profile reaches a bench only through
+`install`, `lock apply` or `app add`, which are stopped), `ports setup` with no
+path (nothing to cover), and `share` and `lan-guard` (the network).
+
 ### Passing a lease
 
 `--lease ID` is for the holder: the command goes ahead for the lease with that
@@ -81,13 +95,17 @@ prints a warning that names the holder. It is refused (exit code 2, error id
 `lease_break_refused`) under `BENCHBAR_NONINTERACTIVE`, `--for-agent`,
 `benchbar mcp` and in a run without a terminal, unless the Mac app or the
 Windows tray passes `BENCHBAR_NONINTERACTIVE=0` after its own alert, like
-[`labs on`](labs.md). An agent that meets a lease waits or asks the person.
+[`labs on`](labs.md). On Linux and WSL an exported `BENCHBAR_NONINTERACTIVE=0`
+counts as a person, the same as for `labs on` and `lan-guard`: a safety rail,
+not a boundary. An agent that meets a lease waits or asks the person.
 
 An id is what lets a run change a leased bench, so `lease list` shows it only
-to the lease's holder and to a person at a terminal; for anyone else `id` is
-`null`, and `status --json` never shows it. Like the other person checks this
-stops mistakes between cooperating tools. It is not a boundary against a
-process that means harm: whoever can read the state folder can read the file.
+for a lease whose holder is the caller; for anyone else `id` is `null`, and
+`status --json` never shows it. A person who is not the holder sees the
+holder, scope and end like anyone else; to read a named holder's ids they run
+`BENCHBAR_CALLER=NAME benchbar lease list`. Whoever can read the state folder
+can read the file: this keeps ids from being printed by accident, it is not a
+boundary.
 
 ### status
 

@@ -4,7 +4,7 @@
 
 ### Agents and MCP
 
-- `benchbar_lease_take`, `benchbar_lease_renew`, `benchbar_lease_release` and `benchbar_lease_list` let an agent take a lease before long work, so another agent or the app does not restart, drop or restore the bench or site meanwhile. `benchbar_restart`, `benchbar_down` and the four apply tools take the id as `lease`. The server sets `BENCHBAR_CALLER` to the client's name and pid, so each session is its own holder, and only a lease's holder is shown its id (#184).
+- `benchbar_lease_take`, `benchbar_lease_renew`, `benchbar_lease_release` and `benchbar_lease_list` let an agent take a lease before long work, so another agent or the app does not restart, drop or restore the bench or site meanwhile. `benchbar_restart`, `benchbar_down` and the four apply tools take the id as `lease`. The server sets `BENCHBAR_CALLER` to the client's name and pid, so each session is its own holder, and only a lease's holder is shown its id. An agent run without `BENCHBAR_CALLER` cannot take a lease (#184).
 
 ### Docs
 

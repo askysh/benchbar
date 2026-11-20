@@ -17,11 +17,13 @@
 # folder of their own (leases.lock): taking a lease must work while a long
 # command holds the run lock, which is the case a lease is for.
 #
-# An id is what lets a run change a leased bench, so only the lease's own
-# holder (BENCHBAR_CALLER, or the login name) and a person at a terminal see
-# it in `lease list`; status and the other readers never show it. Like the
-# other person checks (AGENTS.md) this stops mistakes between cooperating
-# tools; it is not a boundary against a process that means harm.
+# Leases are coordination between cooperating callers, not access control: an
+# agent with a shell runs as the same user and can do what the user can. What
+# they do is stop accidents. An id is what lets a run change a leased bench, so
+# `lease list` shows it only to the lease's own holder (BENCHBAR_CALLER, or the
+# login name), a clash names the holder and the end and never an id, status
+# and the other readers never show one, and an agent that did not name itself
+# cannot take a lease (it would be "agent", like every other one).
 
 FL_LEASE_DEFAULT_MINUTES=30
 FL_LEASE_MAX_MINUTES=480
@@ -69,12 +71,20 @@ fl__lease_write() {
 }
 
 # fl__lease_lock, fl__lease_unlock: the short lock around a read, change and write of the file. A
-# lock folder older than 30 seconds belongs to a run that died inside its few file operations.
+# lock folder older than 30 seconds belongs to a run that died inside its few file operations. It is
+# renamed to a name of this run's own first, and only the run that wins the rename removes it: two
+# waiters cannot both remove it, and one that renamed a lock a third run had just made puts it back.
 fl__lease_lock() {
-  local dir="${FL_STATE_DIR}/leases.lock" i=0
+  local dir="${FL_STATE_DIR}/leases.lock" i=0 stale
   mkdir -p "$FL_STATE_DIR" 2>/dev/null || true
   while ! mkdir "$dir" 2>/dev/null; do
-    if [[ -d "$dir" && "$(fl__lock_age "$dir")" -ge 30 ]]; then rmdir "$dir" 2>/dev/null || true; fi
+    if [[ -d "$dir" && "$(fl__lock_age "$dir")" -ge 30 ]]; then
+      stale="${dir}.stale.$$.${RANDOM}"
+      if mv "$dir" "$stale" 2>/dev/null; then
+        if [[ "$(fl__lock_age "$stale")" -ge 30 ]]; then rmdir "$stale" 2>/dev/null || true
+        else mv "$stale" "$dir" 2>/dev/null || rmdir "$stale" 2>/dev/null || true; fi
+      fi
+    fi
     i=$((i + 1))
     [[ "$i" -le 50 ]] || return 1
     sleep 0.1
@@ -203,6 +213,12 @@ fl_lease_take() {
     kind="bench"
   fi
   fl_lease_holder_v holder
+  # an agent that did not name itself would be "agent", like every other one, and could use their leases
+  if [[ -z "${BENCHBAR_CALLER:-}" ]] && fl_noninteractive; then
+    FL_ERROR_ID="lease_caller_required"
+    fl_die "A lease needs a holder name, and this run has none: every agent without BENCHBAR_CALLER would be called ${holder} and share the others' leases." \
+      "Set BENCHBAR_CALLER to a name of its own (for example BENCHBAR_CALLER=claude-qa), then take the lease again."
+  fi
   fl__lease_note_v note "$note"
   L_KIND="$kind"; L_BENCH="$FL_BENCH_DIR"; L_SITE="$site"
   fl__lease_what_v what
@@ -236,8 +252,9 @@ fl_lease_take() {
     fl__lease_what_v what
     clash_why="The ${what} is already leased by ${L_HOLDER} until ${L_EXP}${L_NOTE:+ (${L_NOTE})}."
     FL_ERROR_ID="lease_held"
+    # the holder and the end, never the id: it is what lets a run change what the lease covers
     if [[ "$L_HOLDER" == "$holder" ]]; then
-      fl_die "${clash_why} You hold it as lease ${L_ID}." "Renew it: benchbar lease renew ${L_ID} --for ${mins}"
+      fl_die "${clash_why} You already hold it." "Renew it: benchbar lease renew ID --for ${mins} (benchbar lease list shows the id of your leases)."
     fi
     fl_die "${clash_why}" "Wait until it ends, or ask ${L_HOLDER} to release it."
   fi
@@ -325,10 +342,10 @@ fl_lease_renew() {
 }
 
 # lease list [--bench PATH]: the active leases, of every bench or of one. A lease's id is shown to its
-# holder and to a person at a terminal; for anyone else it is null (the id is what a run passes to change
-# what the lease covers).
+# holder only (the holder is whoever BENCHBAR_CALLER names, or the login name); for anyone else it is null
+# (the id is what a run passes to change what the lease covers).
 fl_lease_list() {
-  local bench="" line holder person=0 show mine out="" sep="" jobj rows=() target id_text
+  local bench="" line holder show mine out="" sep="" jobj rows=() target id_text
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --bench) [[ "$#" -ge 2 ]] || fl_die "--bench needs a path."; bench="$2"; shift 2 ;;
@@ -339,14 +356,13 @@ fl_lease_list() {
   [[ -n "$bench" ]] || bench="$OPT_BENCH_DIR"
   if [[ -n "$bench" ]]; then fl_bench_detect "$bench"; bench="$FL_BENCH_DIR"; fi
   fl_lease_holder_v holder
-  fl_lease_person_ok && person=1
   fl__lease_load
   rows=("Lease|Scope|Target|Holder|Until|Note")
   for line in ${FL_LEASE_LINES[@]+"${FL_LEASE_LINES[@]}"}; do
     fl__lease_split "$line"
     [[ -z "$bench" || "$L_BENCH" == "$bench" ]] || continue
     mine=0; [[ "$L_HOLDER" != "$holder" ]] || mine=1
-    show=0; [[ "$mine" == "1" || "$person" == "1" ]] && show=1
+    show="$mine"
     fl__lease_obj_v jobj "$show" "$mine"
     out="${out}${sep}${jobj}"; sep=","
     target="$L_BENCH"; [[ "$L_KIND" != "site" ]] || target="${L_SITE} of ${L_BENCH}"
@@ -359,7 +375,7 @@ fl_lease_list() {
   fi
   if [[ "${#rows[@]}" -le 1 ]]; then fl_info "no active leases"; return 0; fi
   fl_table "${rows[@]}"
-  [[ "$person" == "1" ]] || fl_note "Only the holder of a lease and a person at a terminal see its id."
+  fl_note "Only the holder of a lease sees its id (the holder is BENCHBAR_CALLER; yours is ${holder})."
   return 0
 }
 

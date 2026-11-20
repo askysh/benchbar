@@ -96,13 +96,20 @@ holds for many. That is a [lease](../reference/cli/lease.md): a bench or a
 site held for a while, so another agent or the app does not restart, migrate,
 drop or restore it meanwhile.
 
+Leases are coordination between cooperating callers, not access control: an
+agent with a shell runs as the same user and can do what you can, so a lease
+stops accidents and does not keep out a caller that ignores it.
+
 An agent should take a lease before long work, keep it with
 `benchbar_lease_renew` while it works and let go with `benchbar_lease_release`:
 
 1. `benchbar_lease_take` with `site` (one site, of `bench` or the default
    bench) or `bench` (the whole bench), `minutes` (30 by default, at most 480)
    and a `note` that says why. It returns the lease id and its end. Keep the
-   id: no one else is shown it.
+   id: `benchbar_lease_list` shows it only to its holder, and a clash names
+   the holder and the end, never the id. The server names the holder
+   `mcp:CLIENT:PID`; in a terminal, set `BENCHBAR_CALLER` to a name of your own,
+   without it an agent run cannot take a lease.
 2. Pass it as `lease` to your own `benchbar_restart`, `benchbar_down` and the
    apply tools (`benchbar_app_add`, `benchbar_site_add`, `benchbar_site_restore`,
    `benchbar_service_install`).

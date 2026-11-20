@@ -54,8 +54,10 @@ holder's lease stands, a restart, drop, restore or app update of what it
 covers is refused with who holds it and until when: wait, or ask the user.
 That is not an error to work around, and `--break-lease` is a person's, never
 yours. Reads are never refused, and `benchbar_lease_list` shows who holds what.
-A lease is a promise between cooperating tools: it stops mistakes, not a
-process that means harm.
+Leases are coordination between cooperating callers, not access control: you
+run as the same user and could do what the user can, so keep to them. In a
+terminal, `BENCHBAR_CALLER` must be set to a name of your own, or `lease take`
+refuses. A clash names the holder and the end, never an id.
 
 Never probe MariaDB root, the Keychain or benchbar's state folder for a
 password: benchbar keeps the root password and uses it itself, and no

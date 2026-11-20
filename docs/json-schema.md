@@ -1126,8 +1126,8 @@ has `lab`.
 ```
 
 `scope` is `bench` or `site` (`site` is null for a bench lease). `id` is
-`l-` and 12 hex digits for a lease the caller holds (`yours` is true) and for
-a person at a terminal, else null. `minutes` is the length the lease was
+`l-` and 12 hex digits for a lease the caller holds (`yours` is true), else
+null. `minutes` is the length the lease was
 taken or renewed for. Only active leases are listed.
 
 `lease take` and `lease renew` stream like `site open-as`: the `done` line
@@ -1135,8 +1135,9 @@ carries `lease` (the object above, with its `id`) and the
 [done fields](#the-done-fields-08). `lease release` has `released` (false when
 the lease was already gone) and `lease` (the id). A refusal has `exit` 1 and
 `error_id` `lease_held` (the place is leased: `error` names the holder and the
-end), `lease_unknown` (renew of a lease that is gone) or `lease_break_refused`
-(`--break-lease` without a person, exit 2). The same `error_id`s end any
+end), `lease_unknown` (renew of a lease that is gone), `lease_caller_required`
+(`lease take` from an agent run with no `BENCHBAR_CALLER`) or
+`lease_break_refused` (`--break-lease` without a person, exit 2). The same `error_id`s end any
 changing command that a lease stops.
 
 ## Site backups

@@ -319,13 +319,13 @@ flag~lease take~--site~NAME~Lease one site (global option; the bench is --bench-
 flag~lease take~--for~MINUTES~How long, from 1 to 480. Default: 30.
 flag~lease take~--note~TEXT~Why, for whoever meets the lease: printable ASCII, at most 120 characters.
 flag~lease take~--json~~JSON lines, ending in a done line with the lease and its id.
-env~lease take~BENCHBAR_CALLER~The holder's name (1 to 40 letters, digits or . _ @ : + -). benchbar mcp sets it per client; without it an agent run is "agent" and a terminal run is the login name.
+env~lease take~BENCHBAR_CALLER~The holder's name (1 to 40 letters, digits or . _ @ : + -). benchbar mcp sets it per client; without it a terminal run is the login name, and an agent run (BENCHBAR_NONINTERACTIVE, --for-agent) cannot take a lease.
 cmd~lease release~benchbar lease release ID [--json]~Let go of a lease. Unchanged when it is already gone.~no~no~no~yes~stream
 flag~lease release~--json~~JSON lines, ending in a done line.
 cmd~lease renew~benchbar lease renew ID [--for MINUTES] [--json]~Push a lease's end to MINUTES from now (default: its first length). Refused once it has expired.~no~no~no~yes~stream
 flag~lease renew~--for~MINUTES~How long from now, from 1 to 480.
 flag~lease renew~--json~~JSON lines, ending in a done line with the lease.
-cmd~lease list~benchbar lease list [--bench PATH] [--json]~The active leases of every bench, or of one. The id is shown to the lease's holder and to a person at a terminal; for anyone else it is null.~no~no~no~no~document
+cmd~lease list~benchbar lease list [--bench PATH] [--json]~The active leases of every bench, or of one. The id is shown to the lease's holder only (BENCHBAR_CALLER); for anyone else it is null.~no~no~no~no~document
 flag~lease list~--bench~PATH~Only the leases of this bench.
 flag~lease list~--json~~One JSON document.
 TABLE

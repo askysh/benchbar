@@ -397,14 +397,15 @@ Experiments (off until a person turns one on)
 
 Leases (a bench or a site held for a while, so nothing restarts, migrates, drops or restores it meanwhile)
   lease take          --bench PATH or --site NAME, --for MINUTES (default 30, at most 480), --note TEXT;
-                      prints the lease id (--json). Set BENCHBAR_CALLER to a name for the holder.
+                      prints the lease id (--json). Set BENCHBAR_CALLER to a name for the holder;
+                      an agent run without one cannot take a lease.
   lease renew ID      Push the end back (--for MINUTES).   lease release ID  Let go of it.
   lease list          The active leases (--bench PATH, --json). A lease id is shown to its holder
-                      and to a person at a terminal. Pass --lease ID to a command that changes
+                      only. Pass --lease ID to a command that changes
                       what a lease covers; --break-lease is for a person at a terminal only.
 
 Production copy
-  pull HOST:SITE     Copy a production site over SSH into a NEW local site: the latest
+  pull HOST:SITE      Copy a production site over SSH into a NEW local site: the latest
                       backup on the server (nothing written there), the encryption key,
                       email muted, the scheduler paused and the copy neutralised
                       (integrations off, stored secrets cleared). HOST is from ~/.ssh/config.

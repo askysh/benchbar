@@ -92,7 +92,8 @@ How an agent should use them is in
   client's name from `initialize`, this server's pid; a `BENCHBAR_CALLER` of
   your own wins), so a [lease](lease.md) an agent takes is held by that
   client and no other, and `benchbar_lease_list` shows the id of its own
-  leases only. `benchbar_restart`, `benchbar_down` and the four apply tools
+  leases only (a lease is coordination between cooperating callers, not
+  access control). `benchbar_restart`, `benchbar_down` and the four apply tools
   take the id as `lease`; without it they are refused while another holder
   has a lease on what they change. Breaking a lease is a person's decision
   in a terminal: there is no tool for it.
