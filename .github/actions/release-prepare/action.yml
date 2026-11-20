@@ -50,9 +50,7 @@ runs:
     - name: CLI tests (ad hoc build only)
       if: inputs.ci_gate != 'true'
       shell: bash
-      run: |
-        brew install shellcheck
-        /bin/bash tests/run-tests.sh
+      run: /bin/bash tests/run-tests.sh
 
     # One script for every place the version lives, shared with auto-tag.yml
     # and tests/test-version-sources.sh. A release also needs its changelog
