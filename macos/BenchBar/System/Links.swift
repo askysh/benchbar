@@ -12,7 +12,7 @@ nonisolated enum BenchBarLinks {
 
     static let repository = URL(string: "https://github.com/askysh/benchbar")!
     static let releases = URL(string: "https://github.com/askysh/benchbar/releases")!
-    static let changelog = URL(string: "https://github.com/askysh/benchbar/blob/main/CHANGELOG.md")!
+    static let whatsNew = docs.appending(path: "whats-new/")
     static let license = URL(string: "https://github.com/askysh/benchbar/blob/main/LICENSE")!
 
     /// The doctor guide's section for one check id (underscores kept).

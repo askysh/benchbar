@@ -1,6 +1,6 @@
 ---
 title: "Troubleshooting"
-description: "Common stumbles with a local Frappe bench on macOS, the cleanup tool case, what benchbar writes, and how to wipe a bench."
+description: "Common stumbles with a local Frappe bench on macOS, Linux and Windows (WSL), the cleanup tool case, what benchbar writes, and how to wipe a bench."
 ---
 
 Start with `benchbar doctor`. It is read only, every warning and failure
@@ -12,7 +12,9 @@ every replaced file in `backups/<date>-<time>-<pid>/`. The state folder is
 CLI inside BenchBar.app, or `.benchbar` in the folder you cloned;
 `benchbar where` shows it.
 
-On Linux and Windows, see [Install: Linux](install.md#linux) and
+A first `benchbar install` that stops or ends with a warning has its own
+page: [First run problems](first-run-problems.md). On Linux, see also
+[Install: Linux](install.md#linux). On Windows, see
 [Windows and WSL](#windows-and-wsl) below.
 
 ## Common stumbles

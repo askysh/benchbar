@@ -36,7 +36,7 @@ internal sealed class AboutActions
 internal sealed class AboutWindow : ToolWindow
 {
     public const string DocsUrl = "https://benchbar.akashmishra.com/windows/";
-    public const string ChangelogUrl = "https://github.com/askysh/benchbar/blob/main/CHANGELOG.md";
+    public const string WhatsNewUrl = "https://benchbar.akashmishra.com/whats-new/";
     public const string RepositoryUrl = "https://github.com/askysh/benchbar";
 
     private readonly AboutActions _actions;
@@ -80,7 +80,7 @@ internal sealed class AboutWindow : ToolWindow
 
         var links = new StackPanel();
         links.Children.Add(Ui.Link("Documentation", () => _actions.OpenUrl(DocsUrl)));
-        links.Children.Add(Ui.Link("Release notes", () => _actions.OpenUrl(ChangelogUrl)));
+        links.Children.Add(Ui.Link("What's new", () => _actions.OpenUrl(WhatsNewUrl)));
         links.Children.Add(Ui.Link("Source code (github.com/askysh/benchbar)", () => _actions.OpenUrl(RepositoryUrl), "Source code on GitHub"));
         var bug = Ui.Button("Report a Bug", () => _actions.ReportBug(), "Report a bug", minWidth: 120);
         bug.Margin = new Thickness(0, 10, 0, 0);
