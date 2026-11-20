@@ -1037,8 +1037,7 @@ fl_table() {
       if [[ "$first" == "1" ]]; then printf '%s%-*s%s  ' "$FL_BOLD" "${widths[$i]}" "$w" "$FL_RESET"; else printf '%-*s  ' "${widths[$i]}" "$w"; fi
       i=$((i + 1))
     done
-    printf '
-'
+    printf '\n'
     first=0
   done
 }
