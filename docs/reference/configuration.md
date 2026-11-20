@@ -77,8 +77,8 @@ escapes, no inline tables.
 | `source` | no, schema 2 | Where `profile import` fetched the file (an https URL or a path); `profile update` fetches it again |
 | `exported_from` | no, schema 2 | Written by `profile export`, for example `"benchbar 0.6.0, 2026-09-29"` |
 | `[[apps]]` `name` | yes, per app | The app's folder name |
-| `[[apps]]` `repo` | yes, per app | Its git URL. A URL with a user name or token is refused |
-| `[[apps]]` `branch` | yes, per app | The branch to clone |
+| `[[apps]]` `repo` | yes, per app | Its git URL: `https://`, `ssh://` or `user@host:path`, never empty and without `\|`. `ext::`, `http://`, `git://` and local paths are refused, because the value goes to `git` and `bench get-app`. A URL with a user name or token is refused |
+| `[[apps]]` `branch` | yes, per app | The branch to clone (never empty, no `\|`) |
 | `[[apps]]` `commit` | no | A commit to pin; a clone that does not reach it stops `install` before anything is built |
 | `[[apps]]` `access` | no, schema 2 | `public`, `private`, `personal` or `unknown`: who can read the repo, as `profile export` found it |
 | `[[apps]]` `requires` | no, schema 2 | The apps this one needs, for example `["acme_base"]`. `install --profile` leaves an app out when one it requires cannot be read |

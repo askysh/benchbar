@@ -252,13 +252,13 @@ fl_profile_linux_json_v() {
 # fl_bundles_json_v VAR: [{"name","label","apps":[...],"description"},...] from config/app-bundles.tsv
 fl_bundles_json_v() {
   local __out="[" __sep="" __name __label __apps __notes __a __list __asep
-  while IFS=$'\t' read -r __name __label __apps __notes; do
+  while IFS=$'\037' read -r __name __label __apps __notes; do
     [[ -n "$__name" ]] || continue
     __list=""; __asep=""
     for __a in $__apps; do __list="${__list}${__asep}$(fl_json_str "$__a")"; __asep=","; done
     __out="${__out}${__sep}{\"name\":$(fl_json_str "$__name"),\"label\":$(fl_json_str "$__label"),\"apps\":[${__list}],\"description\":$(fl_json_str "$__notes")}"
     __sep=","
-  done < <(awk -F '\t' 'NR > 1' "$(fl_config_file app-bundles.tsv)")
+  done < <(awk -F '\t' 'NR > 1' "$(fl_config_file app-bundles.tsv)" | tr '\t' '\037')
   printf -v "$1" '%s]' "$__out"
 }
 
@@ -387,6 +387,7 @@ fl_team_profile_render() {
   while IFS= read -r app; do
     [[ -n "$app" && "$app" != "frappe" ]] || continue
     url="$(fl_app_remote_url "$app")"
+    fl_app_remote_url_warn "$app"
     branch="$(fl_app_branch "$app")"
     [[ -n "$branch" ]] || branch="$(fl_app_policy_branch "$app")"
     if [[ -z "$url" || -z "$branch" ]]; then
@@ -456,8 +457,42 @@ fl_cmd_profile_create() {
 # path, 64 KB at most), subscribe clones a team's config repo into
 # ~/.config/benchbar/sources/ and reads only its *.toml files, update
 # fetches again and asks, remove moves aside, check asks git whether each
-# repo can be read with your own credentials. Nothing here runs code from
-# a profile or a subscription, and nothing updates on its own.
+# repo can be read with your own credentials. Reading a profile or a
+# subscription runs nothing from it, but installing one does: get-app runs
+# pip install and a build of every repo it names, so import, subscribe,
+# update and install name those repos first (fl_profile_trust_print). Nothing
+# updates on its own.
+
+# fl_profile_trust_print WHAT: the repos of the loaded team profile (FL_TEAM_APPS)
+# and whose code WHAT will run; the new owners are called out
+fl_profile_trust_print() {
+  local spec n b r repos=()
+  for spec in ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"}; do
+    IFS='|' read -r n b r _ <<<"$spec"
+    repos+=("$r")
+  done
+  [[ "${#repos[@]}" -gt 0 ]] || return 0
+  fl_repo_trust_print "$1" "${repos[@]}"
+}
+
+# fl_profile_diff_trust_print DIFF: the repos a profile update adds or changes
+# (the + lines that set repo), when there are any
+fl_profile_diff_trust_print() {
+  local line repos=() re='^\+[[:space:]]*repo[[:space:]]*=[[:space:]]*"([^"]*)"'
+  while IFS= read -r line; do
+    [[ "$line" =~ $re ]] && repos+=("${BASH_REMATCH[1]}")
+  done <<<"$1"
+  [[ "${#repos[@]}" -gt 0 ]] || return 0
+  fl_warn "this update adds or changes a repo: $(printf '%s ' "${repos[@]}" | sed 's/ $//')"
+  fl_repo_trust_print "install" "${repos[@]}"
+}
+
+# fl_profile_trust_set: FL_TRUST_ALL and FL_TRUST_NEW for the loaded team profile, silently
+fl_profile_trust_set() {
+  local spec r repos=()
+  for spec in ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"}; do IFS='|' read -r _ _ r _ <<<"$spec"; repos+=("$r"); done
+  fl_repo_trust_compute ${repos[@]+"${repos[@]}"}
+}
 
 FL_PROFILE_MAX_BYTES=65536
 FL_PROFILE_NET_SECS="${FL_PROFILE_NET_SECS:-10}"
@@ -1232,13 +1267,16 @@ fl_cmd_profile_import() {
   if [[ "$plan" == "1" ]]; then
     fl_profile_check_loaded
     if [[ "${OPT_JSON:-0}" == "1" ]]; then
-      printf '{"schema_version":%d,"cli_version":"%s","name":%s,"source":%s,"exists":%s,"diff":%s,"base":%s,"apps":%s,"check":{"repos":%s},"skipped_apps":%s,"digest":"%s"}\n' \
+      fl_profile_trust_set
+      printf '{"schema_version":%d,"cli_version":"%s","name":%s,"source":%s,"exists":%s,"diff":%s,"base":%s,"apps":%s,"check":{"repos":%s},"skipped_apps":%s,"runs_code_from":%s,"new_owners":%s,"digest":"%s"}\n' \
         "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$name")" "$(fl_json_str "$FL_PROFILE_RECORD")" "$exists" "$(fl_profile_json_text "$diff")" \
         "$(fl_json_str "$FL_TEAM_BASE")" "$(fl_profile_import_apps_json)" "$(fl_profile_check_repos_json)" "$(fl_profile_json_list ${CK_SKIPPED[@]+"${CK_SKIPPED[@]}"})" \
+        "$(fl_profile_json_list ${FL_TRUST_ALL:+$FL_TRUST_ALL})" "$(fl_profile_json_list ${FL_TRUST_NEW:+$FL_TRUST_NEW})" \
         "$(fl_profile_import_digest "$tmp" "$target")" >&3
     else
       fl_info "${src}: team profile ${name}, base ${FL_TEAM_BASE}, ${#FL_TEAM_APPS[@]} app(s)$([[ "$exists" == true ]] && printf ', replaces %s' "$target")"
       [[ -n "$diff" ]] && printf '%s\n' "$diff" | sed 's/^/    /'
+      fl_profile_trust_print "install"
       fl_profile_check_print
     fi
     rm -f "$tmp"
@@ -1249,6 +1287,7 @@ fl_cmd_profile_import() {
     fl_die "${src} or ${target} changed since it was reviewed. Nothing was imported." "Review it again: benchbar profile import ${src} --as ${name} --plan"
   fi
   fl_info "${src}: team profile ${name}, base ${FL_TEAM_BASE}, ${#FL_TEAM_APPS[@]} app(s)"
+  fl_profile_trust_print "install"
   fl_write_reviewed "$target" "$tmp" "team profile ${name}" || code=1
   rm -f "$tmp"
   [[ "$code" == "0" ]] || exit 1
@@ -1306,7 +1345,7 @@ fl_profile_sub_behind() {
 }
 
 fl_cmd_profile_subscribe() {
-  local url="" plan=0 name dir tmp names="" n f valid=() code=0 sub
+  local url="" plan=0 name dir tmp names="" n f valid=() code=0 sub spec r sub_repos=()
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --plan) plan=1; shift ;;
@@ -1335,7 +1374,7 @@ fl_cmd_profile_subscribe() {
   fi
   [[ -e "$dir" ]] && fl_die "${dir} exists but is not in $(fl_profile_sources_list)." "Move it aside, then subscribe again."
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-sub.XXXXXX")"
-  fl_info "cloning ${url} (only its *.toml files are read, nothing in it runs)"
+  fl_info "cloning ${url} (only its *.toml files are read, nothing in it runs; installing one of its profiles does run its repos)"
   fl_profile_timed 120 "$tmp.out" fl_profile_git_net clone --quiet --no-tags --single-branch -- "$url" "$tmp/clone" || code=$?
   rm -f "$tmp.out"
   if [[ "$code" != "0" ]]; then
@@ -1349,6 +1388,7 @@ fl_cmd_profile_subscribe() {
     if fl_builtin_profile_exists "$n"; then fl_warn "${n}.toml: shadows a built in profile, ignored"; continue; fi
     if ! fl_team_profile_read "$f"; then fl_warn "${n}.toml is invalid: ${FL_TEAM_ERROR}"; continue; fi
     valid+=("$n"); names="${names}${names:+, }${n}"
+    for spec in ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"}; do IFS='|' read -r _ _ r _ <<<"$spec"; sub_repos+=("$r"); done
   done
   if [[ "${#valid[@]}" -eq 0 ]]; then
     rm -rf "${tmp:?}"
@@ -1357,9 +1397,11 @@ fl_cmd_profile_subscribe() {
   if [[ "$plan" == "1" || "${FL_DRY_RUN:-0}" == "1" ]]; then
     rm -rf "${tmp:?}"
     fl_info "${url} has ${#valid[@]} profile(s): ${names}; subscribing clones it into ${dir}"
+    fl_repo_trust_print "install of these profiles" ${sub_repos[@]+"${sub_repos[@]}"}
     fl_profile_sub_json "$url" "$dir" "${valid[@]}"
     return 0
   fi
+  fl_repo_trust_print "install of these profiles" ${sub_repos[@]+"${sub_repos[@]}"}
   if ! fl_confirm "Subscribe to ${url}? Its profiles (${names}) join the lookup path; nothing updates without you."; then
     rm -rf "${tmp:?}"
     fl_warn "Cancelled. Nothing was subscribed."
@@ -1505,6 +1547,7 @@ fl_cmd_profile_update() {
       if [[ -n "${UP_DIFF[$i]}" ]]; then
         fl_info "${UP_NAME[$i]} (${UP_KIND[$i]}): $([[ -n "${UP_BEHIND[$i]}" ]] && printf '%s commit(s) behind, ' "${UP_BEHIND[$i]}")changes:"
         printf '%s\n' "${UP_DIFF[$i]}" | sed 's/^/    /'
+        fl_profile_diff_trust_print "${UP_DIFF[$i]}"
       else
         fl_ok "${UP_NAME[$i]} (${UP_KIND[$i]}): up to date"
       fi
@@ -1529,6 +1572,7 @@ fl_cmd_profile_update() {
     elif [[ -n "${UP_DIFF[$i]}" ]]; then
       printf '\n%s%s: %s new commit(s)%s\n' "$FL_BOLD" "$n" "${UP_BEHIND[$i]}" "$FL_RESET"
       printf '%s\n' "${UP_DIFF[$i]}" | sed 's/^/    /'
+      fl_profile_diff_trust_print "${UP_DIFF[$i]}"
       if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
         fl_info "dry-run: nothing was changed"
       elif fl_confirm "Fast forward ${UP_PATH[$i]} to these commits?"; then

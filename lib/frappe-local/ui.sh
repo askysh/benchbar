@@ -203,9 +203,15 @@ fl_redact_url() { local r; fl_redact_url_v r "$1"; printf '%s' "$r"; }
 
 # https://user:token@host/x -> https://host/x (never shown, never written). In
 # ui.sh so the phase scripts have it too: the reach cache of profile check needs it.
+# Any other scheme (ssh://deploy:secret@host/x.git, git://user:pw@host/) loses only
+# the ":password": the user name of an ssh URL is part of the address.
 fl_url_strip_userinfo_v() {
-  if [[ "$2" =~ ^(https?://)[^/@]*@(.*)$ ]]; then printf -v "$1" '%s%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"; else printf -v "$1" '%s' "$2"; fi
+  if [[ "$2" =~ ^(https?://)[^/@]*@(.*)$ ]]; then printf -v "$1" '%s%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+  elif [[ "$2" =~ ^([A-Za-z][A-Za-z0-9+.-]*://)([^/@:]*):[^/@]*@(.*)$ ]]; then printf -v "$1" '%s%s@%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+  else printf -v "$1" '%s' "$2"; fi
 }
+# fl_url_has_secret URL: 0 when URL carries a password or token (user:secret@)
+fl_url_has_secret() { [[ "$1" =~ ^[A-Za-z][A-Za-z0-9+.-]*://[^/@]*:[^/@]*@ ]]; }
 fl_url_strip_userinfo() { local u; fl_url_strip_userinfo_v u "$1"; printf '%s' "$u"; }
 
 

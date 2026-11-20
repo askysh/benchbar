@@ -39,7 +39,9 @@ fl_load_profile() {
   if [[ -z "$row" ]] && declare -F fl_team_profile_load >/dev/null && fl_team_profile_load "$profile"; then return 0; fi
   FL_TEAM_PROFILE=""
   [[ -n "$row" ]] || fl_die "Unknown release profile: ${profile}" "Built in: --list-profiles. A team profile is ~/.config/benchbar/profiles/${profile}.toml or ${profile}.toml in a BENCHBAR_PROFILE_PATH folder."
-  IFS=$'\t' read -r FL_PROFILE FL_PROFILE_LABEL FL_FRAPPE_BRANCH FL_ERPNEXT_BRANCH \
+  # split on \037, not on the tab: a tab is white space for read, so two tabs (an empty cell) would become one
+  row="$(printf '%s' "$row" | tr '\t' '\037')"
+  IFS=$'\037' read -r FL_PROFILE FL_PROFILE_LABEL FL_FRAPPE_BRANCH FL_ERPNEXT_BRANCH \
     FL_PYTHON_FORMULA FL_PYTHON_BIN_NAME FL_NODE_FORMULA FL_NODE_MAJOR \
     FL_MARIADB_FORMULA FL_MARIADB_MAJOR_MINOR FL_PROFILE_STATUS FL_SUPPORT_END _default \
     FL_MARIADB_MIN FL_MARIADB_MAX FL_BENCH_MIN <<<"$row"
@@ -330,13 +332,13 @@ fl_check_updates() {
   default_support="$(awk -F '\t' -v p="$default_profile" 'NR > 1 && $1 == p {print $12; exit}' "$(fl_config_file release-profiles.tsv)")"
   max_support="$default_support"
   max_profile="$default_profile"
-  while IFS=$'\t' read -r profile _label _fb _eb _pf _pb _nf _nm _mf _mm _status support _default; do
+  while IFS=$'\037' read -r profile _label _fb _eb _pf _pb _nf _nm _mf _mm _status support _default; do
     [[ "$profile" == "profile" ]] && continue
     if [[ "$support" > "$max_support" ]]; then
       max_support="$support"
       max_profile="$profile"
     fi
-  done <"$(fl_config_file release-profiles.tsv)"
+  done < <(tr '\t' '\037' <"$(fl_config_file release-profiles.tsv)")
   if [[ "$max_profile" != "$default_profile" ]]; then
     fl_warn "${max_profile} is available and has a later public support window than ${default_profile}."
     fl_warn "v15-lts remains the conservative default; use newer profiles only when you intentionally want them."

@@ -110,7 +110,15 @@ fetched raw), 64 KB at most, and writes
 parses. A file of the same name is diffed and replaced only when you
 confirm. A profile names the repos `install` clones, and their code runs
 in your bench, so import only from people you trust and read the app
-list in the plan (`--plan` shows it without writing anything). `check` asks git, with your own keys and tokens and never a
+list in the plan (`--plan` shows it without writing anything). Reading a
+profile runs nothing from it, but installing one does: `bench get-app` runs
+`pip install` and a build of every repo it names, and an installed app's
+hooks run on your site. So `import`, `subscribe`, `update` and `install`
+print `install will run code from these repos` with the host and owner of
+each one (`github.com/acme`), and a second line for the owners that no app
+of this bench and no line of `config/apps.tsv` uses yet. An update that adds
+or changes a `repo` line says so. `--plan --json` has the same lists as
+`runs_code_from` and `new_owners`. `check` asks git, with your own keys and tokens and never a
 prompt, whether each repo and branch can be read. The repos are asked
 side by side, 8 at a time, so a profile of 20 repos takes about as long as
 its slowest repo. `install --profile` does the same and leaves out the
@@ -175,7 +183,11 @@ benchbar lock apply
 
 `lock apply` clones missing apps, switches clean apps to the locked
 branch and fast forwards to pinned commits, then runs requirements and
-build. It never touches a site (it prints the `site add`, `app install`
+build. A lock that lives in an app repo changes when that app is updated,
+so the plan marks each repo that is not in the bench yet (`NEW REPO`) and
+names the owners whose code `apply` will run before it asks. A `commit` in
+a lock is 12 to 40 hex characters: a short prefix is matched by prefix and
+can collide. It never touches a site (it prints the `site add`, `app install`
 and migrate steps instead) and never overwrites local work: an app with
 local changes or commits of its own is skipped with a warning. Doctor
 reports drift as a warning ([`lock_drift`](doctor-and-repair.md#lock_drift)).

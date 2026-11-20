@@ -1034,6 +1034,7 @@ cmd_install() {
     profile_name="$FL_TEAM_PROFILE"
     fl_header "benchbar install" "$(fl_mode_name)" "${FL_TEAM_PROFILE} (team, on ${FL_PROFILE})" "$FL_BENCH_DIR" "$FL_SITE"
     fl_info "team profile ${FL_TEAM_PROFILE_FILE}"
+    fl_profile_trust_print "install"
   else
     fl_header "benchbar install" "$(fl_mode_name)" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
   fi

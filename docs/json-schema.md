@@ -1065,14 +1065,18 @@ app's branch, so it writes exactly what the sheet showed.
  "exists":true,"diff":"@@ -3 +3 @@\n-description = \"Acme\"\n+description = \"Acme ERP\"","base":"v15-lts",
  "apps":[{"name":"acme_ecr","repo":"git@github.com:acme/acme_ecr.git","branch":"develop","access":"private","requires":["acme_base"]}],
  "check":{"repos":[{"app":"acme_ecr","repo":"git@github.com:acme/acme_ecr.git","reachable":false,"reason":"Permission denied (publickey)."}]},
- "skipped_apps":["acme_ecr"],"digest":"c2a1f0...64 hex characters"}
+ "skipped_apps":["acme_ecr"],"runs_code_from":["github.com/acme"],"new_owners":["github.com/acme"],
+ "digest":"c2a1f0...64 hex characters"}
 ```
 
 `exists` is whether `~/.config/benchbar/profiles/NAME.toml` is there;
 `diff` is the unified diff against it (`null` when there is none or they
 are equal). `apps[].access` is `null` when the file does not say.
 `skipped_apps` are the apps `install --profile` would leave out: the
-unreachable ones and every app that requires one. `digest` is the SHA-256
+unreachable ones and every app that requires one. `runs_code_from` is the
+host and owner of each repo the profile names (installing it runs their
+code: `pip install`, a build, the apps' hooks), and `new_owners` the ones
+no app of the bench and no line of `config/apps.tsv` uses yet. `digest` is the SHA-256
 of the file the import would write. With `--yes --json` it writes and
 prints `{"name","path","source"}`; with `--expect DIGEST` as well, it
 refuses (exit 1, nothing written) when the source changed since that plan.

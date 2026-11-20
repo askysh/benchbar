@@ -299,9 +299,11 @@ flag~app add~--commit~SHA~Pin the app to this commit (7 to 40 hex characters).
 flag~app add~--install-on~S,S~Install this app on these sites only.
 flag~app add~--site~S~Install it on this site.
 flag~app add~--all-sites~~Install it on every site.
+flag~app add~--skip-backup~~Install on the sites without a backup first (the plan takes one by default).
 flag~app add~--dry-run~~Print the plan and its token.
 flag~app add~--apply~TOKEN~Run exactly that plan (with --yes).
-cmd~app install~benchbar app install NAME --site S~Install an app of the bench on a site.~no~no~no~yes~none
+cmd~app install~benchbar app install NAME --site S [--skip-backup]~Back up a site, then install an app of the bench on it.~no~no~no~yes~none
+flag~app install~--skip-backup~~Install without a backup of the site first.
 cmd~app update~benchbar app update NAME [--skip-backup] [--dry-run] [--json]~Fast forward one app with a changelog first, back up its sites, migrate, build.~yes~no~yes~yes~stream
 flag~app update~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~app update~--skip-backup~~Migrate without a backup first.

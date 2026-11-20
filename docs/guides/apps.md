@@ -48,7 +48,18 @@ options belong to the app before them. See
 ## Installing on a site
 
 `app install NAME --site S` installs an app the bench already has on one
-of its sites.
+of its sites. `install-app` changes the site's database (it syncs the
+app's DocTypes and runs its patches), so `app install` and `app add --site`
+back the site up first, as `app update` does. The plan shows the
+`Back up SITE` step, and a backup that fails stops the install. Pass
+`--skip-backup` to leave the backup out, which makes sense only for a site
+you can rebuild; the plan's token changes with it. The site's older
+backups are kept.
+
+When a step fails after it started, `changed[]` of the `done` line still
+names what may have moved, with a detail that begins with `partial:` (an
+app cloned and then not built, an `install-app` or a `migrate` that
+failed). Read it before you decide that nothing changed.
 
 ## Updating an app
 

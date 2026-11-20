@@ -417,9 +417,20 @@ FL_GR_ERR=""     # its first line of stderr (without warnings), "timed out after
 FL_GR_OUT=""     # its stdout
 FL_GR_DEFAULT="" # fl_git_remote_default: the branch HEAD points at
 
-# git with your own keys and tokens, never a question
+# fl_git_ext_off: sets FL_GIT_EXT_OFF to the three GIT_CONFIG_* assignments that
+# turn the ext:: transport off (it runs a program), after any the caller set
+FL_GIT_EXT_OFF=()
+fl_git_ext_off() {
+  local n="${GIT_CONFIG_COUNT:-0}"
+  [[ "$n" =~ ^[0-9]+$ ]] || n=0
+  FL_GIT_EXT_OFF=("GIT_CONFIG_COUNT=$((n + 1))" "GIT_CONFIG_KEY_${n}=protocol.ext.allow" "GIT_CONFIG_VALUE_${n}=never")
+}
+
+# git with your own keys and tokens, never a question, and never the ext::
+# transport even when the user's git config allows it
 fl_git_net() {
-  env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=${FL_GIT_CONNECT_SECS}" git "$@"
+  fl_git_ext_off
+  env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=${FL_GIT_CONNECT_SECS}" "${FL_GIT_EXT_OFF[@]}" git "$@"
 }
 
 # fl_git_remote_run SECS GIT_ARGS...: fl_git_net with a deadline; sets
