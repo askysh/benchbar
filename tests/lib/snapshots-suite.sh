@@ -379,7 +379,7 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   # the bench's state key SNAPSHOT_KEEP is the default limit
   run_fm service --yes --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"
-  benv="$(ls "$FL_STATE_DIR"/benches/*.env 2>/dev/null | head -n 1 || true)"
+  benv=""; for d in "$FL_STATE_DIR"/benches/*.env; do [[ -f "$d" ]] && { benv="$d"; break; }; done
   [[ -n "$benv" ]] || fail "the bench has a state file"
   printf 'SNAPSHOT_KEEP=1
 ' >>"$benv"
