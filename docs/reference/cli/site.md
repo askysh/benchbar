@@ -40,7 +40,7 @@ site's Administrator password, or reads `ADMIN_PASSWORD`.
 |---|---|
 | `--bundle NAME` | Install the apps of a bundle (`minimal`, `common`, `extended`) |
 | `--apps "a b"` | Install these apps, which must be in `apps/` already |
-| `--dry-run` | Print the plan, change nothing |
+| `--dry-run` | Print the plan and its token, change nothing in the bench (the first plan creates the plan key, once) |
 | `-y`, `--yes` | Do not ask; `ADMIN_PASSWORD` must be set |
 | `--json` | JSON lines ending in a `done` with the site and the default site ([the done fields](../../json-schema.md#the-done-fields-08)) |
 
@@ -75,16 +75,26 @@ benchbar site default v16two
 ## site hosts
 
 ```
-benchbar site hosts
+benchbar site hosts [--prune] [--dry-run]
 ```
 
 Adds a `127.0.0.1` line to `/etc/hosts` for every site that has none,
 inside benchbar's markers, with one `sudo` prompt.
 
+With `--prune` it removes instead the lines of benchbar's block whose site no
+bench benchbar knows has (a site that was dropped, or a bench that was
+removed; a bench that was forgotten but whose folder is still there keeps its
+lines): one backup, one `sudo` rewrite. A line outside the block, or with
+more than one name, is never touched. Without a terminal, or with
+`BENCHBAR_SUDO=gui`, it prints the `sed` command to run instead (it keeps a
+`.bak` copy of the file). macOS only:
+Linux has no hosts block.
+
 Exit codes: 0; 1 when the hosts file could not be written.
 
 ```bash
 benchbar site hosts
+benchbar site hosts --prune --dry-run
 ```
 
 ## site open-as
@@ -300,7 +310,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar site add NAME [--bundle NAME\|--apps "a b"] [--dry-run\|--apply TOKEN] [--yes] [--json]` | yes | yes | no | yes | stream |
 | `benchbar site default NAME [--json]` | no | no | no | yes | stream |
 | `benchbar site open-as on\|off\|status [NAME] [--json]` | yes | no | no | yes | stream |
-| `benchbar site hosts` | yes | yes | no | yes | none |
+| `benchbar site hosts [--prune] [--dry-run]` | yes | yes | no | yes | stream |
 | `benchbar site backup NAME [--with-files] [--json]` | no | no | no | yes | document |
 | `benchbar site backups NAME [--json]` | no | no | no | no | document |
 | `benchbar site restore NAME --from STAMP\|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
@@ -319,6 +329,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site add` | `--yes` |  | Do not ask. |
 | `site open-as` | `--yes` |  | Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1). |
 | `site open-as` | `--json` |  | JSON lines for on and off, one document for status. |
+| `site hosts` | `--prune` |  | Remove the stale lines of benchbar's block instead of adding the missing ones (sites of a forgotten bench whose folder is still there count as sites). The printed fallback command keeps a .bak copy. macOS only. |
 | `site backup` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `site backup` | `--with-files` |  | Include the uploads. |
 | `site restore` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |

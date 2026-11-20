@@ -43,6 +43,8 @@ case "$*" in
   *"-e "*|*"-sNe "*)
     check_login || { echo "ERROR 1045 (28000): Access denied for user '${user}'@'localhost' (using password: $([[ -n "${MYSQL_PWD:-}" ]] && echo YES || echo NO))" >&2; exit 1; }
     case "$*" in
+      # ... WHERE SCHEMA_NAME LIKE '\_%': every name in $MOCK_STATE/mariadb_dbs that starts with an underscore
+      *"information_schema.SCHEMATA"*"LIKE"*) grep '^_' "$state/mariadb_dbs" 2>/dev/null || true ;;
       # SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='x': the names in $MOCK_STATE/mariadb_dbs
       *"information_schema.SCHEMATA"*)
         want="$(printf '%s' "$*" | sed -n "s/.*SCHEMA_NAME='\([^']*\)'.*/\1/p")"

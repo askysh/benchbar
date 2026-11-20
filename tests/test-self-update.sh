@@ -205,6 +205,21 @@ rm -rf "$MOCK_BREW_PREFIX/Caskroom" "$TMP_DIR/Apps"
 export FL_APP_DIRS="$HOME/Applications"
 release 99.0.0
 
+# ---- --check takes no run lock and opens no run log (the MCP read tool polls it); the update itself still does
+mkdir -p "$FL_STATE_DIR/lock"; printf '%s\n' "$$" >"$FL_STATE_DIR/lock/pid"
+LOGS_BEFORE="$(find "$FL_STATE_DIR/logs" -type f 2>/dev/null | wc -l)"
+run_fm self-update --check --json; assert_eq "0" "$CODE" "$OUT"
+assert_not_contains "$OUT" "Another benchbar run is active"
+assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["update_available"]')"
+run_fm self-update --check; assert_eq "0" "$CODE" "$OUT"
+assert_not_contains "$OUT" "Another benchbar run is active"
+assert_eq "$LOGS_BEFORE" "$(find "$FL_STATE_DIR/logs" -type f 2>/dev/null | wc -l)" "(--check must leave no run log)"
+reset_calls
+run_fm self-update --yes; assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "Another benchbar run is active"
+assert_eq "" "$(installer_log)" "(a refused self-update runs no installer)"
+rm -rf "$FL_STATE_DIR/lock"
+
 # ---- offline: exit 1 with the command to run later
 rm -f "$MOCK_STATE/release.json"
 run_fm self-update --check; assert_eq "1" "$CODE" "$OUT"

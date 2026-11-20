@@ -35,6 +35,46 @@ nonisolated struct AppAddPlan: Codable, Sendable, Equatable {
         var id: String { kind + "|" + name }
     }
 
+    /// One target of a plan with several apps (`apps[]`, CLI 0.8.3): its own repo, branch, pin and sites.
+    nonisolated struct Target: Codable, Sendable, Equatable, Identifiable {
+        var app: String
+        var repo: String?
+        var branch: String?
+        var commit: String?
+        /// `pin` (the commit was asked for) or `branch`
+        var commitSource: String?
+        var present: Bool
+        var installOn: [String]
+        var id: String { app }
+
+        enum CodingKeys: String, CodingKey {
+            case app, repo, branch, commit, present
+            case commitSource = "commit_source"
+            case installOn = "install_on"
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            app = try c.decode(String.self, forKey: .app)
+            repo = c.lenient(.repo, nil)
+            branch = c.lenient(.branch, nil)
+            commit = c.lenient(.commit, nil)
+            commitSource = c.lenient(.commitSource, nil)
+            present = c.lenient(.present, false)
+            installOn = c.lenient(.installOn, [])
+        }
+
+        /// "main at 9b1d2c4 (pinned), install on macdev, site2", for the plan's row of this app.
+        var summary: String {
+            var parts: [String] = []
+            if let branch { parts.append("branch \(branch)") }
+            if let commit { parts.append("commit \(commit.prefix(7))" + (commitSource == "pin" ? " (pinned)" : "")) }
+            if present { parts.append("already in the bench") }
+            parts.append(installOn.isEmpty ? "no site" : "install on " + installOn.joined(separator: ", "))
+            return parts.joined(separator: ", ")
+        }
+    }
+
     var schemaVersion: Int
     var bench: String
     var profile: String?
@@ -44,10 +84,14 @@ nonisolated struct AppAddPlan: Codable, Sendable, Equatable {
     var repo: String
     var branch: String?
     var commit: String?
+    /// `pin` or `branch`
+    var commitSource: String?
     /// given, policy, remote_default or present
     var branchSource: String?
     var present: Bool
     var reachable: Bool?
+    /// One entry per app, only when several were given (CLI 0.8.3).
+    var apps: [Target]?
     var sites: [Site]
     var sitesError: String?
     var requiredApps: [Required]
@@ -61,7 +105,8 @@ nonisolated struct AppAddPlan: Codable, Sendable, Equatable {
     var token: String
 
     enum CodingKeys: String, CodingKey {
-        case bench, profile, target, app, package, repo, branch, commit, present, reachable, sites
+        case bench, profile, target, app, package, repo, branch, commit, present, reachable, sites, apps
+        case commitSource = "commit_source"
         case order, steps, errors, changes, reason, token
         case schemaVersion = "schema_version"
         case branchSource = "branch_source"
@@ -70,6 +115,12 @@ nonisolated struct AppAddPlan: Codable, Sendable, Equatable {
         case missingRequired = "missing_required"
         case canApply = "can_apply"
     }
+
+    /// The plan is for several apps: it lists each one's own branch, pin and sites.
+    var isBatch: Bool { (apps?.count ?? 0) > 1 }
+
+    /// The apps the plan adds, by name: one for a single add.
+    var appNames: [String] { isBatch ? (apps ?? []).map(\.app) : [app] }
 
     /// Where the branch came from, in words.
     var branchSourceText: String? {
@@ -89,7 +140,12 @@ nonisolated struct AppAddPlan: Codable, Sendable, Equatable {
             out += ["apps/ and sites/apps.txt", "the bench's Python environment"]
         }
         if steps.contains(where: { $0.kind == "build" }) { out.append("built assets") }
-        let installs = steps.filter { $0.kind == "install" }.map { $0.name.replacingOccurrences(of: "Install on ", with: "") }
+        // "Install on SITE", or "Install APP on SITE" when several apps are added
+        var installs: [String] = []
+        for step in steps where step.kind == "install" {
+            let site = step.name.components(separatedBy: " on ").last ?? step.name
+            if !installs.contains(site) { installs.append(site) }
+        }
         if !installs.isEmpty { out.append("the database of " + installs.joined(separator: ", ")) }
         return out
     }

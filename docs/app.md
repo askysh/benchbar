@@ -188,12 +188,17 @@ in its footer, and Cancel on the first page goes back to where you were.
 Every bench has a page:
 
 - **Overview**: start, stop and restart (one group of buttons), **Open
-  Site**, the site and ports, and the scheduler switch. **Open in VS
+  Site**, the site and ports, and the background jobs: the scheduler
+  switch, **Start after login** (`benchbar autostart`) and **Install
+  Service…** or **Refresh Service…** (`benchbar service`). **Open in VS
   Code** (or Cursor, chosen in Settings, General) opens the bench folder.
   The ⋯ menu beside Open Site has **Open Console** and **Open Database**
   (Terminal with `benchbar console` and `benchbar db` for the default
-  site), Show in Finder and Copy Path. The ⋯ menu of each site on the
-  Sites tab has both for that site. **Port Settings & Setup…** sits in
+  site), Show in Finder and Copy Path. On a stopped bench the same menu
+  has **Start Services Only** (`benchbar up --services-only`: the bench's
+  Redis and nothing else, for a restore or a migrate) and **Stop
+  Services** (`benchbar down`); no plan, your click is the decision. The
+  ⋯ menu of each site on the Sites tab has both for that site. **Port Settings & Setup…** sits in
   the header of the Site and ports section. While the bench runs, two small charts show its CPU
   and memory for the last ten minutes (hover for the value at a moment);
   the popover shows the current values under the bench name. They count
@@ -237,8 +242,13 @@ Every bench has a page:
   MariaDB root password is needed for the restore", in place of a plan.
   Either way, run the command in Terminal with `MARIADB_ROOT_PASSWORD`
   set; the app never asks for it.
-- **Apps**: add an app from the registry or any GitHub URL, and update it
-  after reading the changelog. Each app's ⋯ menu installs it on a site
+- **Apps**: add apps from the registry or any git URL, and update an app
+  after reading the changelog. **Add App…** takes one app or several in one
+  plan: each has its own branch, an optional commit to pin it to (7 to 40
+  hex characters) and the site it is installed on, and **Add Another App**
+  adds a row (up to eight). Review shows one plan with one token
+  (`benchbar app add A B --dry-run --json`); an app another one needs is
+  cloned once, and **Add N Apps** runs exactly that plan. Each app's ⋯ menu installs it on a site
   that lacks it and sets its focus (Auto, Focus, Ignore). The ⋯ menu
   beside **Add App…** has **Refresh Site Lists** and **Check Remotes**.
   An update or an add that stopped part way (a failed migrate, build or
@@ -250,7 +260,10 @@ Every bench has a page:
   steps run and the app stays where it is.
   Right click a bench in the sidebar for its actions.
 - **Health**: doctor's checks, and Repair with its plan shown before
-  anything changes and each step as it runs.
+  anything changes and each step as it runs. **Acknowledge** on a warning
+  (`benchbar doctor --ack`) silences it for this bench until its message
+  changes; it then sits under **acknowledged**, with **Undo**
+  (`--unack`). A failure has no such button, the CLI refuses it.
 - **Sharing**: opens a room for this bench's site on your Wi-Fi. It shows
   only while the `lan-rooms` Lab is on. See
   [Share on your network](#share-on-your-network).
@@ -259,6 +272,16 @@ Every sheet works the same way: the plan or the form first, then your
 confirmation, the run with its progress at the bottom, and the outcome on
 top. Return confirms and Esc cancels; a sheet cannot be closed while its
 change runs. Drop Site is never on Return: it needs the site name typed.
+
+**Install Service…** and **Refresh Service…** show the plan of `benchbar
+service --dry-run --json` (the files it writes, and which step needs your
+password) and run exactly that plan by its token. A step that needs the
+Mac's password asks in macOS's own dialog; BenchBar never sees it, and a
+cancelled dialog skips that step. The window offers a button of a newer
+command only when `benchbar commands --json` lists it, so an older
+`benchbar` never gets a button that would fail. **Start after login** is
+read from the text `benchbar autostart` prints, because the command has no
+JSON.
 
 ![The BenchBar window: a bench's overview with Start, Stop, Restart, Open as and Open Site, its resources, site and ports](images/window-overview.png)
 

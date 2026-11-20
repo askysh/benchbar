@@ -49,6 +49,15 @@ The tool `benchbar_no_such_tool` does nothing.
 if OUT="$(python3 -I "$COPY/scripts/docs-reference.py" --check 2>&1)"; then fail "a page naming a tool the server lacks passed the docs reference check"; fi
 assert_contains "$OUT" "agents.md names benchbar_no_such_tool, which is not an MCP tool of the server"
 cp "$ROOT/docs/guides/agents.md" "$COPY/docs/guides/agents.md"
+# every page counts, not four fixed ones (json-schema.md, a CLI page, a guide), and a heading anchor is no tool name
+# shellcheck disable=SC2016 # the backticks are Markdown
+printf '
+The tool `benchbar_made_up_read` and the anchor (x.md#the-privileged-steps-and-benchbar_sudogui).
+' >>"$COPY/docs/json-schema.md"
+if OUT="$(python3 -I "$COPY/scripts/docs-reference.py" --check 2>&1)"; then fail "json-schema.md naming a tool the server lacks passed the docs reference check"; fi
+assert_contains "$OUT" "docs/json-schema.md names benchbar_made_up_read, which is not an MCP tool of the server"
+assert_not_contains "$OUT" "benchbar_sudogui"
+cp "$ROOT/docs/json-schema.md" "$COPY/docs/json-schema.md"
 # shellcheck disable=SC2016 # the backticks are Markdown
 sed -i.bak 's/`benchbar_where`/benchbar_where/g' "$COPY/docs/reference/cli/mcp.md"
 if OUT="$(python3 -I "$COPY/scripts/docs-reference.py" --check 2>&1)"; then fail "a tool the pages do not name passed the docs reference check"; fi

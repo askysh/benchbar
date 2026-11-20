@@ -155,6 +155,14 @@ assert_eq "Clone acme_shared2,Clone acme_b1,Clone acme_b2,Build,Back up macdev,I
 assert_eq "['acme_shared2', 'acme_b1', 'acme_b2']" "$(printf '%s' "$OUT" | jget - 'd["order"]')"
 assert_eq "bench build --apps acme_shared2,acme_b1,acme_b2" "$(printf '%s' "$OUT" | jget - '[s["command"] for s in d["steps"] if s["kind"]=="build"][0]')"
 assert_eq "acme_b1 acme_b2" "$(printf '%s' "$OUT" | jget - '" ".join(a["app"] for a in d["apps"])')"
+# the Mac app's fixture of a plan with several apps holds only keys this plan has
+printf '%s' "$OUT" | python3 -c '
+import json, sys
+live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
+assert set(fixture) <= set(live), set(fixture) - set(live)
+assert set(fixture["apps"][0]) <= set(live["apps"][0]), set(fixture["apps"][0]) - set(live["apps"][0])
+assert set(fixture["steps"][0]) <= set(live["steps"][0]), set(fixture["steps"][0]) - set(live["steps"][0])
+' "$ROOT/macos/BenchBarTests/Fixtures/app-add-plan-many.json" || fail "app add --dry-run --json (several apps) and the app fixture app-add-plan-many.json disagree"
 assert_eq "acme_b1:main:branch:False:['acme_shared2']" "$(printf '%s' "$OUT" | jget - '":".join(str(x) for x in [d["apps"][0]["app"], d["apps"][0]["branch"], d["apps"][0]["commit_source"], d["apps"][0]["present"], d["apps"][0]["required_apps"]])')"
 assert_eq "$(remote_head acme_b2)" "$(printf '%s' "$OUT" | jget - 'd["apps"][1]["commit"]')"
 assert_eq "['acme_shared2']" "$(printf '%s' "$OUT" | jget - '[r["name"] for r in d["required_apps"]]')" "(the shared app is in the graph once)"

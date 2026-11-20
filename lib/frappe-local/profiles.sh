@@ -346,13 +346,20 @@ fl_cmd_profile_list() {
   fl_info "team profiles: $(fl_team_profile_user_dir)/NAME.toml, then subscriptions ($(fl_profile_sources_list))${BENCHBAR_PROFILE_PATH:+, then BENCHBAR_PROFILE_PATH=${BENCHBAR_PROFILE_PATH}}"
 }
 
+# fl_profile_mariadb_text: what a profile installs for MariaDB: the Homebrew formula on a Mac, the apt package
+# and the versions the profile accepts on Linux (apt has no formula, and gives the series of the release)
+fl_profile_mariadb_text() {
+  if fl_is_linux; then printf 'mariadb-server from apt (the profile accepts %s to %s)' "$FL_MARIADB_MIN" "$FL_MARIADB_MAX"
+  else printf '%s' "$FL_MARIADB_FORMULA"; fi
+}
+
 fl_cmd_profile_show() {
   local name="$1" file spec n b r c rows=()
   [[ -n "$name" ]] || fl_die "Usage: benchbar profile show NAME"
   if fl_builtin_profile_exists "$name"; then
     fl_load_profile "$name"
     fl_table "Field|Value" "profile|${name} (built in)" "label|${FL_PROFILE_LABEL}" "frappe|${FL_FRAPPE_BRANCH}" "erpnext|${FL_ERPNEXT_BRANCH}" \
-      "python|${FL_PYTHON_FORMULA}" "node|${FL_NODE_FORMULA}" "mariadb|${FL_MARIADB_FORMULA}" "status|${FL_PROFILE_STATUS}"
+      "python|${FL_PYTHON_FORMULA}" "node|${FL_NODE_FORMULA}" "mariadb|$(fl_profile_mariadb_text)" "status|${FL_PROFILE_STATUS}"
     return 0
   fi
   file="$(fl_team_profile_file "$name")" || fl_die "No profile '${name}'." "Built in profiles: benchbar profile list. Team profiles live in $(fl_team_profile_user_dir)/${name}.toml or a BENCHBAR_PROFILE_PATH folder."
@@ -363,7 +370,7 @@ fl_cmd_profile_show() {
   [[ -n "$FL_TEAM_DESCRIPTION" ]] && rows+=("description|${FL_TEAM_DESCRIPTION}")
   rows+=("frappe|${FL_FRAPPE_BRANCH}${FL_TEAM_FRAPPE_COMMIT:+ at ${FL_TEAM_FRAPPE_COMMIT}}")
   [[ -z "$FL_TEAM_ERPNEXT_COMMIT" ]] || rows+=("erpnext|pinned at ${FL_TEAM_ERPNEXT_COMMIT}")
-  rows+=("python|${FL_PYTHON_FORMULA}" "node|${FL_NODE_FORMULA}" "mariadb|${FL_MARIADB_FORMULA}")
+  rows+=("python|${FL_PYTHON_FORMULA}" "node|${FL_NODE_FORMULA}" "mariadb|$(fl_profile_mariadb_text)")
   [[ -n "$FL_TEAM_BUNDLE" ]] && rows+=("bundle|${FL_TEAM_BUNDLE}: $(fl_bundle_apps "$FL_TEAM_BUNDLE")")
   [[ -n "$FL_TEAM_SITE" ]] && rows+=("site|${FL_TEAM_SITE}")
   [[ -n "$FL_TEAM_SCHEDULER" ]] && rows+=("scheduler|${FL_TEAM_SCHEDULER}")
@@ -429,6 +436,7 @@ fl_write_reviewed() {
   mkdir -p "$(dirname "$file")" 2>/dev/null || { fl_fail "could not create $(dirname "$file")"; return 1; }
   cp "$new" "$file" 2>/dev/null || { fl_fail "could not write ${file}; it is as it was"; return 1; }
   fl_ok "wrote ${file}${FL_LAST_BACKUP:+ (backup: ${FL_LAST_BACKUP})}"
+  fl_changed state "$file" "written"
 }
 
 fl_cmd_profile_create() {
@@ -901,6 +909,8 @@ fl_profile_check_print() {
 # fl_profile_json_begin: with --json, the human lines go to stderr and the
 # JSON document to fd 3 (stdout); without, fd 3 is stdout too
 fl_profile_json_begin() {
+  # (under --jsonl and --for-agent the stream has set fd 3 up already)
+  [[ "${FL_JSONL:-0}" != "1" ]] || return 0
   if [[ "${OPT_JSON:-0}" == "1" ]]; then exec 3>&1 1>&2; else exec 3>&1; fi
 }
 
