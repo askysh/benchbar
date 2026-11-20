@@ -87,7 +87,8 @@ SHIM="$TMP_DIR/shim"; mkdir -p "$SHIM"
 cat >"$SHIM/git" <<SH
 #!/bin/bash
 if [[ -n "\${HANG_LSREMOTE:-}" && " \$* " == *" ls-remote "* ]]; then echo \$\$ >"\$HANG_PIDFILE"; exec sleep 60; fi
-exec "$ROOT/tests/mocks/bin/git" "\$@"
+# the mock passes some commands (config) on to the next git on PATH: that must not be this shim again
+PATH="\${PATH#$SHIM:}" exec "$ROOT/tests/mocks/bin/git" "\$@"
 SH
 chmod +x "$SHIM/git"
 SECONDS=0
