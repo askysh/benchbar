@@ -144,6 +144,9 @@ fl_tmp_cleanup() {
 # then the EXIT trap releases the lock (after, never before).
 fl_on_signal() {
   local sig="$1" code=143
+  # a background job of a doctor run is forked and its pid not kept yet: the
+  # signal waits for that (fl_par_group_off sends it again), so no job is missed
+  if [[ -n "${FL_PAR_STARTING:-}" ]]; then FL_SIG_DEFERRED="$sig"; return 0; fi
   case "$sig" in INT) code=130 ;; HUP) code=129 ;; esac
   trap - TERM INT HUP
   fl_spinner_stop 2>/dev/null || true

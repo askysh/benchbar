@@ -137,4 +137,52 @@ for t in 0.3 0.8 1.5 brew; do
   assert_eq "" "$extra" "(stderr after a stop at ${t}s)"
 done
 
+# ---- a stop that lands while a job is forked but not yet recorded waits for that job too.
+# fl_par_add raises the TERM itself: the one moment the job is out and its pid is unknown.
+# The job needs 0.3 s to answer TERM (fl_par_stop waits a second before KILL); the run may not end (and delete the folder) before it did.
+TIMING="$TMP_DIR/startwin"; mkdir -p "$TIMING"
+code=0
+TMPDIR="$TIMING" MARK="$TIMING/answered" bash -c '
+  . "$1"; . "$2"; . "$3"
+  fl_log() { :; }
+  fl_doctor_job() { trap "sleep 0.3; : >\"\$MARK\"; exit 0" TERM; : >"$MARK.ready"; sleep 9.41 & wait; }
+  fl_par_add_real() { FL_PAR_PIDS+=("$1"); }
+  # the TERM comes once the job has its trap (a loaded machine starts a job late)
+  fl_par_add() {
+    local w=0
+    if [[ -z "${HIT:-}" ]]; then
+      HIT=1
+      while [[ ! -f "$MARK.ready" && "$w" -lt 100 ]]; do sleep 0.1; w=$((w + 1)); done
+      kill -TERM "$$"
+    fi
+    fl_par_add_real "$1"
+  }
+  trap "fl_on_signal TERM" TERM
+  trap fl_facts_end EXIT
+  fl_facts_begin
+  fl_doctor_start x
+  fl_facts_end' _ "$FACTS" "$ROOT/lib/frappe-local/run.sh" "$DOCTOR" >"$TIMING/out" 2>&1 || code=$?
+assert_eq "143" "$code" "(the stop was lost: $(cat "$TIMING/out"))"
+assert_file "$TIMING/answered" "(the run ended before a job that was being started had answered the stop)"
+assert_eq "0" "$(find "$TIMING" -maxdepth 1 -name 'benchbar-facts.*' | wc -l | tr -d ' ')" "(a facts folder was left after a stop while a job was starting)"
+assert_eq "0" "$(/usr/bin/pgrep -f 'sleep 9.41' | wc -l | tr -d ' ' || true)" "(a job outlived a stop that came while it was being started)"
+
+# ---- a stop during the load of the apps' facts (fl_app_facts_load makes a folder of its own) leaves
+# no folder and no collector: it is the run's to clean up (a doctor stopped here left two folders)
+APPSLIB="$ROOT/lib/frappe-local/apps.sh"
+AFWIN="$TMP_DIR/afwin"; mkdir -p "$AFWIN"
+code=0
+TMPDIR="$AFWIN" bash -c '
+  . "$1"; . "$2"; . "$3"
+  fl_log() { :; }; fl_now() { echo 1; }; fl_apps_all() { printf "a\nb\n"; }
+  fl__af_collect() { exec sleep 9.37; }
+  trap "fl_on_signal TERM" TERM
+  trap fl_facts_end EXIT
+  ( sleep 0.5; kill -TERM "$$" ) &
+  fl_app_facts_load
+  printf "not reached\n"' _ "$FACTS" "$ROOT/lib/frappe-local/run.sh" "$APPSLIB" >"$AFWIN/out" 2>&1 || code=$?
+assert_eq "143" "$code" "(the stop was lost: $(cat "$AFWIN/out"))"
+assert_eq "0" "$(find "$AFWIN" -maxdepth 1 -name 'benchbar-facts.*' | wc -l | tr -d ' ')" "(a stop during the load of the apps' facts left a folder)"
+assert_eq "0" "$(/usr/bin/pgrep -f 'sleep 9.37' | wc -l | tr -d ' ' || true)" "(a collector outlived the stop)"
+
 printf 'test-facts: ok\n'

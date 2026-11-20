@@ -19,11 +19,27 @@ trap cleanup EXIT
 # 404 for any other, writing every Host it was asked about to a file, and
 # plain listeners for the Redis ports
 cat >"$TMP_DIR/listeners.py" <<'PY'
-import http.server, socket, sys
+import http.server, random, socket, sys
+
+taken = set()
 
 def free():
-    s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
-    return port
+    # Not port 0: the system hands out its ephemeral range, where the client end of
+    # any other connection (a test running beside this one) can take the number
+    # between here and the listener. A random port below that range, one that binds now.
+    while True:
+        port = random.randrange(20000, 30000)
+        if port in taken:
+            continue
+        s = socket.socket()
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            continue
+        finally:
+            s.close()
+        taken.add(port)
+        return port
 
 mode = sys.argv[1]
 if mode == "ports":
