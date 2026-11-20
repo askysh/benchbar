@@ -156,9 +156,10 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 - [Runners](runners.md): custom runners for the menu bar.
 - [Concepts](concepts/port-blocks.md): [port blocks](concepts/port-blocks.md) and
   [how sharing keeps your bench safe](concepts/sharing-safety.md).
-- For contributors: [Testing](testing.md), [Releasing](releasing.md) and
-  [Decisions](DECISIONS.md), the ten minute guide for testers, how releases
-  are built and every non obvious choice.
+- For testers: [Test a build](testing.md), the ten minute guide.
+- For contributors: [Contributing](../CONTRIBUTING.md) (the tests and the pull
+  request rules), [Releasing](releasing.md) (how releases are built) and
+  [Decisions](DECISIONS.md) (every non obvious choice).
 - [AGENTS.md](../AGENTS.md): guidance for AI coding agents working on a
   bench.
 - [CHANGELOG.md](../CHANGELOG.md) and the [Roadmap](../ROADMAP.md).

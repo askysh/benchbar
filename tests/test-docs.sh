@@ -85,4 +85,11 @@ while IFS= read -r lab; do
   done < <(grep "\*\*Lab\*\* \`${lab}\`" "$ROOT/docs/features.md")
 done < <(sed -n 's/^lab~\([^~]*\)~.*/\1/p' "$ROOT/lib/frappe-local/labs.sh")
 
+# ---- every link in the features table is a page that exists (DOC-1: each feature has a guide)
+while IFS= read -r link; do
+  target="${link%%#*}"
+  [[ -n "$target" ]] || continue
+  [[ -f "$ROOT/docs/$target" ]] || fail "docs/features.md links to ${target}, which is not a page in docs/"
+done < <(grep -o '\]([^)]*)' "$ROOT/docs/features.md" | sed 's/^](//; s/)$//' | grep -v '^http' | grep -v '^\.\./' )
+
 printf 'test-docs: ok\n'

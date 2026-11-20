@@ -56,6 +56,8 @@ macOS version. A row that says "macOS" does not work on Linux.
 | Rooms on your Wi-Fi (`share`, `lan-guard`) | Lets colleagues on the same Wi-Fi use a hardened copy of a site behind a room code. **Lab** `lan-rooms`. | 0.8.2 | macOS | [share and lan-guard](reference/cli/share.md), [How sharing keeps your bench safe](concepts/sharing-safety.md) |
 | Labs | `benchbar labs` lists, turns on and turns off experiments. | 0.8.2 | macOS, Linux | [labs](reference/cli/labs.md) |
 | Notices after an update | Every default an update changes shows a notice once, with its switch back. `benchbar notices` lists and dismisses them, and the Mac app shows a banner. | 0.9.0 | macOS, Linux | [notices](reference/cli/other.md#notices), [What's new](whats-new.md) |
+| Rooms on your Wi-Fi (`share`, `lan-guard`) | Lets colleagues on the same Wi-Fi use a hardened copy of a site behind a room code. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Share a site on your network](guides/share-on-your-network.md), [share and lan-guard](reference/cli/share.md), [How sharing keeps your bench safe](concepts/sharing-safety.md) |
+| Labs | `benchbar labs` lists, turns on and turns off experiments. | 0.8.2 | macOS, Linux | [Labs](guides/labs.md), [labs](reference/cli/labs.md) |
 
 On Linux, only the v15-lts bench is supported, and the site is
 `linuxdev.localhost`. See [Install](install.md#linux).
@@ -83,9 +85,9 @@ JSON. See [The menu bar app](app.md).
 | Updates | Checks once a day, with Update Now. | 0.6.0 | macOS | [Updates](app.md#updates) |
 | First run wizard | Creates or adopts a bench on a Mac that has none. | 0.8.0 | macOS | [A new bench from the app](app.md#a-new-bench-from-the-app) |
 | Open as and Find User | Opens a site as a pinned user from the popover or the window. | 0.8.1 | macOS | [Open as a user](app.md#open-as-a-user) |
-| Quick Switch | A panel on ⌃⌥U that opens a site as any pinned user from any app. **Lab** `quick-switch`. | 0.8.2 | macOS | [Quick Switch](app.md#quick-switch) |
-| Sharing tab | Sets up, starts and stops a room, shows the room code and the people in it. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Share on your network](app.md#share-on-your-network) |
-| On your network | Finds the rooms of colleagues on your Wi-Fi and joins them. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Join a room](app.md#join-a-room-on-your-network) |
+| Quick Switch | A panel on ⌃⌥U that opens a site as any pinned user from any app. **Lab** `quick-switch`. | 0.8.2 | macOS | [Quick Switch](guides/quick-switch.md), [in the app](app.md#quick-switch) |
+| Sharing tab | Sets up, starts and stops a room, shows the room code and the people in it. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Share a site on your network](guides/share-on-your-network.md#open-a-room-in-the-mac-app), [in the app](app.md#share-on-your-network) |
+| On your network | Finds the rooms of colleagues on your Wi-Fi and joins them. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Join a room](guides/share-on-your-network.md#join-a-room-in-the-mac-app), [in the app](app.md#join-a-room-on-your-network) |
 | Settings > Labs | Lists the experiments, with a switch, a warning and the version of each. | 0.8.2 | macOS | [The menu bar app](app.md#the-benchbar-window) |
 | Restore a backup | Restores one of a site's backups into the site or into a copy, from the plan the CLI shows, by its token. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | Pull a site | Copies a production site over SSH, or a downloaded backup, into a new site. The copy is neutralised unless you choose to keep the secrets. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
@@ -140,12 +142,3 @@ Windows (`benchbar.exe mcp`) since 0.8.0. The tools below are the ones in
 A person approves each plan before the agent applies it. Rooms, Labs,
 sharing, the LAN guard, `self-update` and the repairs of `repair` are not MCP tools. A change that needs a person
 stays with the person.
-
-## Guides still to write
-
-These features have a reference or an app page, and no task guide yet:
-
-- Rooms on your Wi-Fi: a guide to share a site for 30 minutes.
-- Labs: what a Lab is and how to turn one on.
-- Quick Switch.
-- On your network: join a room as a guest.
