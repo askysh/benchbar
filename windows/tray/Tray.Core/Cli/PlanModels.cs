@@ -28,6 +28,9 @@ public sealed record PlanDocument(IReadOnlyList<PlanStepInfo> Steps, IReadOnlyLi
         var steps = new List<PlanStepInfo>();
         if (o["steps"] is JsonArray array)
         {
+            // pull lists its steps as plain sentences: the sentence is the name, and the run's step lines match it by name
+            foreach (var line in array.OfType<JsonValue>().Select(v => v.TryGetValue<string>(out var t) ? t : null).OfType<string>().Where(t => t.Length > 0))
+                steps.Add(new PlanStepInfo(line, line, null, null, false, true));
             foreach (var s in array.OfType<JsonObject>())
             {
                 var id = JsonRead.Str(s, "id") ?? JsonRead.Str(s, "kind") ?? "";
@@ -66,7 +69,7 @@ public sealed record PlanDocument(IReadOnlyList<PlanStepInfo> Steps, IReadOnlyLi
 /// </summary>
 public static partial class PlanStale
 {
-    [System.Text.RegularExpressions.GeneratedRegex(@"\b(plan|update|export)\b[^.\n]*\bchanged since it was (shown|reviewed)\b|\bThe port plan changed\.|\bchanged since it was reviewed\. Nothing was",
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(plan|update|export)\b[^.\n]*\bchanged since it was (shown|reviewed)\b|\bThe port plan changed\.|\bThe plan token expired\b|\bchanged since it was reviewed\. Nothing was",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex Refusal();
 

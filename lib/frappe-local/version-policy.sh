@@ -109,6 +109,51 @@ fl_version_lt() {
   return 1
 }
 
+# fl_dep_fits SPEC VERSION: VERSION satisfies a PEP 440 style SPEC such as
+# ">=15.0.0,<16.0.0" (numbers only, pre-release tags ignored). A clause it
+# cannot read is skipped, so an odd spec never blocks anything.
+fl_dep_fits() {
+  local spec="$1" ver="$2" clause op want
+  local -a clauses=()
+  IFS=, read -r -a clauses <<<"$spec"
+  for clause in ${clauses[@]+"${clauses[@]}"}; do
+    clause="${clause// /}"
+    case "$clause" in
+      '>='*) op=ge; want="${clause#>=}" ;;
+      '<='*) op=le; want="${clause#<=}" ;;
+      '=='*) op=eq; want="${clause#==}" ;;
+      '!='*) op=ne; want="${clause#!=}" ;;
+      '>'*) op=gt; want="${clause#>}" ;;
+      '<'*) op=lt; want="${clause#<}" ;;
+      *) continue ;;
+    esac
+    want="${want%%[^0-9.]*}"
+    [[ "$want" =~ ^[0-9]+(\.[0-9]+)*$ ]] || continue
+    case "$op" in
+      ge) ! fl_version_lt "$ver" "$want" || return 1 ;;
+      gt) fl_version_lt "$want" "$ver" || return 1 ;;
+      le) ! fl_version_lt "$want" "$ver" || return 1 ;;
+      lt) fl_version_lt "$ver" "$want" || return 1 ;;
+      eq) if fl_version_lt "$ver" "$want" || fl_version_lt "$want" "$ver"; then return 1; fi ;;
+      ne) if ! fl_version_lt "$ver" "$want" && ! fl_version_lt "$want" "$ver"; then return 1; fi ;;
+    esac
+  done
+  return 0
+}
+
+# fl_pyproject_frappe_dep FILE: the frappe specifier of [tool.bench.frappe-dependencies]
+fl_pyproject_frappe_dep() {
+  [[ -s "$1" ]] || return 0
+  awk '/^\[/ {s = ($0 ~ /^\[tool\.bench\.frappe-dependencies\]/)}
+    s && /^[[:space:]]*frappe[[:space:]]*=/ {sub(/^[^=]*=[[:space:]]*/, ""); sub(/[[:space:]]+#.*/, ""); gsub(/["\047 ]/, ""); print; exit}' "$1"
+}
+
+# fl_bench_frappe_version: the version of apps/frappe in the bench (15.113.4), or nothing
+fl_bench_frappe_version() {
+  # shellcheck disable=SC2153  # set by the bench selection
+  sed -n 's/^__version__[[:space:]]*=[[:space:]]*["'"'"']\([0-9][0-9.]*\).*/\1/p' "${FL_BENCH_DIR}/apps/frappe/frappe/__init__.py" 2>/dev/null | awk 'NR==1' || true
+}
+
 # The Frappe major version of the loaded profile: 15 for version-15.
 fl_profile_major() {
   local v="${FL_FRAPPE_BRANCH#version-}"
@@ -322,8 +367,10 @@ fl_check_updates() {
     return 0
   fi
 
-  frappe_heads="$(git ls-remote --heads https://github.com/frappe/frappe 'version-*' 2>/dev/null | awk -F/ '{print $NF}' | sort -u | tr '\n' ' ')"
-  erpnext_heads="$(git ls-remote --heads https://github.com/frappe/erpnext 'version-*' 2>/dev/null | awk -F/ '{print $NF}' | sort -u | tr '\n' ' ')"
+  fl_git_remote_run "${FL_GIT_TIMEOUT:-30}" ls-remote --heads -- https://github.com/frappe/frappe 'refs/heads/version-*'
+  frappe_heads="$(printf '%s\n' "$FL_GR_OUT" | awk -F/ 'NF {print $NF}' | sort -u | tr '\n' ' ')"
+  fl_git_remote_run "${FL_GIT_TIMEOUT:-30}" ls-remote --heads -- https://github.com/frappe/erpnext 'refs/heads/version-*'
+  erpnext_heads="$(printf '%s\n' "$FL_GR_OUT" | awk -F/ 'NF {print $NF}' | sort -u | tr '\n' ' ')"
   {
     printf 'Known local profiles:\n'
     fl_list_profiles

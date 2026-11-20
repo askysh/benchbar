@@ -45,6 +45,7 @@ FL_TEAM_SITE=""
 FL_TEAM_SCHEDULER=""
 FL_TEAM_DESCRIPTION=""
 FL_TEAM_FRAPPE_BRANCH=""
+FL_TEAM_ERPNEXT_BRANCH=""
 FL_TEAM_FRAPPE_COMMIT=""
 FL_TEAM_ERPNEXT_COMMIT=""
 FL_TEAM_APPS=()
@@ -57,7 +58,7 @@ FL_TEAM_EXPORTED_FROM=""
 FL_TEAM_APP_ACCESS=()
 FL_TEAM_APP_REQUIRES=()
 
-FL_TEAM_KEYS="top.schema=i top.base=s top.description=s top.frappe_branch=s top.frappe_commit=s top.erpnext_commit=s top.bundle=s top.site=s top.scheduler=b top.source=s top.exported_from=s apps.name=s apps.repo=s apps.branch=s apps.commit=s apps.access=s apps.requires=a"
+FL_TEAM_KEYS="top.schema=i top.base=s top.description=s top.frappe_branch=s top.erpnext_branch=s top.frappe_commit=s top.erpnext_commit=s top.bundle=s top.site=s top.scheduler=b top.source=s top.exported_from=s apps.name=s apps.repo=s apps.branch=s apps.commit=s apps.access=s apps.requires=a"
 FL_TEAM_REQUIRED="top.base apps.name apps.repo apps.branch"
 
 fl_team_profile_user_dir() { printf '%s/.config/benchbar/profiles' "$HOME"; }
@@ -108,7 +109,7 @@ fl_team__app_add() {
 fl_team_profile_read() {
   local file="$1" out err sec idx key val cur=0 name="" repo="" branch="" commit="" access="" requires="" v2="" r
   FL_TEAM_BASE=""; FL_TEAM_BUNDLE=""; FL_TEAM_SITE=""; FL_TEAM_SCHEDULER=""; FL_TEAM_DESCRIPTION=""; FL_TEAM_FRAPPE_BRANCH=""
-  FL_TEAM_FRAPPE_COMMIT=""; FL_TEAM_ERPNEXT_COMMIT=""
+  FL_TEAM_FRAPPE_COMMIT=""; FL_TEAM_ERPNEXT_COMMIT=""; FL_TEAM_ERPNEXT_BRANCH=""
   FL_TEAM_SCHEMA=""; FL_TEAM_SOURCE=""; FL_TEAM_EXPORTED_FROM=""
   FL_TEAM_APPS=(); FL_TEAM_APP_ACCESS=(); FL_TEAM_APP_REQUIRES=(); FL_TEAM_ERROR=""
   err="$(mktemp "${TMPDIR:-/tmp}/benchbar-toml.XXXXXX")"
@@ -150,6 +151,7 @@ fl_team_profile_read() {
       base) FL_TEAM_BASE="$val" ;;
       description) FL_TEAM_DESCRIPTION="$val" ;;
       frappe_branch) FL_TEAM_FRAPPE_BRANCH="$val" ;;
+      erpnext_branch) FL_TEAM_ERPNEXT_BRANCH="$val" ;;
       frappe_commit) FL_TEAM_FRAPPE_COMMIT="$val" ;;
       erpnext_commit) FL_TEAM_ERPNEXT_COMMIT="$val" ;;
       bundle) FL_TEAM_BUNDLE="$val" ;;
@@ -168,7 +170,29 @@ fl_team_profile_read() {
   fl_builtin_profile_exists "$FL_TEAM_BASE" || { FL_TEAM_ERROR="$(basename "$file"): base \"${FL_TEAM_BASE}\" is not a built in profile ($(awk -F '\t' 'NR > 1 {printf "%s ", $1}' "$(fl_config_file release-profiles.tsv)"| sed 's/ $//'))"; return 1; }
   if [[ -n "$FL_TEAM_BUNDLE" && "${#FL_TEAM_APPS[@]}" -gt 0 ]]; then FL_TEAM_ERROR="$(basename "$file"): bundle and [[apps]] together; use one"; return 1; fi
   if [[ -n "$FL_TEAM_BUNDLE" && -z "$(fl_bundle_apps "$FL_TEAM_BUNDLE")" ]]; then FL_TEAM_ERROR="$(basename "$file"): unknown bundle ${FL_TEAM_BUNDLE}"; return 1; fi
+  # erpnext has to fit the frappe it is installed on: a frappe branch that is
+  # neither version-N nor develop gives no way to tell which erpnext goes with it
+  # (no bundle and no [[apps]] installs the default erpnext too; [[apps]] name their own branches)
+  if [[ -n "$FL_TEAM_FRAPPE_BRANCH" && -z "$FL_TEAM_ERPNEXT_BRANCH" && "${#FL_TEAM_APPS[@]}" -eq 0 ]]; then
+    case "$FL_TEAM_FRAPPE_BRANCH" in
+      version-[0-9]*|develop) ;;
+      *) case " $([[ -n "$FL_TEAM_BUNDLE" ]] && fl_bundle_apps "$FL_TEAM_BUNDLE" || printf erpnext) " in
+        *" erpnext "*) FL_TEAM_ERROR="$(basename "$file"): frappe_branch \"${FL_TEAM_FRAPPE_BRANCH}\" is not a version branch or develop, and the profile installs erpnext${FL_TEAM_BUNDLE:+ (bundle ${FL_TEAM_BUNDLE})}: set erpnext_branch for the erpnext that goes with it"; return 1 ;;
+      esac ;;
+    esac
+  fi
   return 0
+}
+
+# fl_team_apply_branches: the team profile's frappe_branch and erpnext_branch
+# over the base's. erpnext follows frappe (version-N and develop move together)
+# unless erpnext_branch says otherwise.
+fl_team_apply_branches() {
+  [[ -z "$FL_TEAM_FRAPPE_BRANCH" ]] || FL_FRAPPE_BRANCH="$FL_TEAM_FRAPPE_BRANCH"
+  if [[ -n "$FL_TEAM_ERPNEXT_BRANCH" ]]; then FL_ERPNEXT_BRANCH="$FL_TEAM_ERPNEXT_BRANCH"
+  else
+    case "$FL_TEAM_FRAPPE_BRANCH" in version-[0-9]*|develop) FL_ERPNEXT_BRANCH="$FL_TEAM_FRAPPE_BRANCH" ;; esac
+  fi
 }
 
 # fl_team_profile_load NAME: loads the base profile, then the team's
@@ -179,7 +203,7 @@ fl_team_profile_load() {
   file="$(fl_team_profile_file "$name")" || return 1
   fl_team_profile_read "$file" || fl_die "Team profile ${name} (${file}) is invalid: ${FL_TEAM_ERROR}" "Fix the file; benchbar profile show ${name} checks it."
   fl_load_profile "$FL_TEAM_BASE"
-  [[ -n "$FL_TEAM_FRAPPE_BRANCH" ]] && FL_FRAPPE_BRANCH="$FL_TEAM_FRAPPE_BRANCH"
+  fl_team_apply_branches
   FL_TEAM_PROFILE="$name"; FL_TEAM_PROFILE_FILE="$file"
   FL_PROFILE_LABEL="Team profile ${name} (on ${FL_TEAM_BASE})"
   return 0
@@ -351,11 +375,11 @@ fl_cmd_profile_show() {
   file="$(fl_team_profile_file "$name")" || fl_die "No profile '${name}'." "Built in profiles: benchbar profile list. Team profiles live in $(fl_team_profile_user_dir)/${name}.toml or a BENCHBAR_PROFILE_PATH folder."
   fl_team_profile_read "$file" || fl_die "Team profile ${name} is invalid: ${FL_TEAM_ERROR}" "File: ${file}"
   fl_load_profile "$FL_TEAM_BASE"
-  [[ -n "$FL_TEAM_FRAPPE_BRANCH" ]] && FL_FRAPPE_BRANCH="$FL_TEAM_FRAPPE_BRANCH"
+  fl_team_apply_branches
   rows+=("Field|Value" "profile|${name} (team)" "file|${file}" "base|${FL_TEAM_BASE}")
   [[ -n "$FL_TEAM_DESCRIPTION" ]] && rows+=("description|${FL_TEAM_DESCRIPTION}")
   rows+=("frappe|${FL_FRAPPE_BRANCH}${FL_TEAM_FRAPPE_COMMIT:+ at ${FL_TEAM_FRAPPE_COMMIT}}")
-  [[ -z "$FL_TEAM_ERPNEXT_COMMIT" ]] || rows+=("erpnext|pinned at ${FL_TEAM_ERPNEXT_COMMIT}")
+  rows+=("erpnext|${FL_ERPNEXT_BRANCH}${FL_TEAM_ERPNEXT_COMMIT:+, pinned at ${FL_TEAM_ERPNEXT_COMMIT}}")
   rows+=("python|${FL_PYTHON_FORMULA}" "node|${FL_NODE_FORMULA}" "mariadb|$(fl_profile_mariadb_text)")
   [[ -n "$FL_TEAM_BUNDLE" ]] && rows+=("bundle|${FL_TEAM_BUNDLE}: $(fl_bundle_apps "$FL_TEAM_BUNDLE")")
   [[ -n "$FL_TEAM_SITE" ]] && rows+=("site|${FL_TEAM_SITE}")
@@ -693,7 +717,7 @@ fl_profile_default_branch() {
 
 fl_profile_branch_exists() {
   fl_profile_offline_mode && return 1
-  fl_git_remote_run "$FL_PROFILE_NET_SECS" ls-remote --exit-code --heads -- "$1" "$2"
+  fl_git_remote_run "$FL_PROFILE_NET_SECS" ls-remote --exit-code --heads -- "$1" "refs/heads/$2"
   return "$FL_GR_CODE"
 }
 
@@ -988,6 +1012,7 @@ fl_profile_export_render() {
   printf 'base = "%s"\n' "$FL_TEAM_BASE"
   [[ -n "$FL_TEAM_DESCRIPTION" ]] && printf 'description = "%s"\n' "$FL_TEAM_DESCRIPTION"
   [[ -n "$FL_TEAM_FRAPPE_BRANCH" ]] && printf 'frappe_branch = "%s"\n' "$FL_TEAM_FRAPPE_BRANCH"
+  [[ -n "$FL_TEAM_ERPNEXT_BRANCH" ]] && printf 'erpnext_branch = "%s"\n' "$FL_TEAM_ERPNEXT_BRANCH"
   [[ -n "$FL_TEAM_FRAPPE_COMMIT" ]] && printf 'frappe_commit = "%s"\n' "$FL_TEAM_FRAPPE_COMMIT"
   [[ -n "$FL_TEAM_ERPNEXT_COMMIT" ]] && printf 'erpnext_commit = "%s"\n' "$FL_TEAM_ERPNEXT_COMMIT"
   [[ -n "$FL_TEAM_BUNDLE" ]] && printf 'bundle = "%s"\n' "$FL_TEAM_BUNDLE"

@@ -121,6 +121,9 @@ internal sealed class OverviewView : UserControl
     /// <summary>"Up for 2 h 5 min", null unless the bench runs.</summary>
     public string? UptimeText { get; private set; }
 
+    /// <summary>"Ready", "Needs restart (code changed)" or "Running, not ready" from <c>status --json</c> <c>ready</c>; null for a bench that does not run or a CLI older than 0.9.</summary>
+    public string? ReadinessWord { get; private set; }
+
     /// <summary>Every line of text shown, in order (for tests).</summary>
     public IReadOnlyList<string> Lines { get; private set; } = [];
 
@@ -152,7 +155,7 @@ internal sealed class OverviewView : UserControl
         var key = string.Join('|', bench.Path, bench.Name, bench.State, bench.RawState, bench.StopReason, bench.WebUrl, bench.Site, site,
             _busy.Contains(bench.Path), _failures.TryGetValue(bench.Path, out var g) ? g.Message : "", bench.Problem, MessageText,
             bench.Scheduler, UptimeText, _portConflict.ContainsKey(bench.Path), _schedulerBusy.Contains(bench.Path), _version, _showDrift,
-            _autostart.GetValueOrDefault(bench.Path), _autostartBusy.Contains(bench.Path), _catalogue is not null);
+            _autostart.GetValueOrDefault(bench.Path), _autostartBusy.Contains(bench.Path), _catalogue is not null, ReadyKey(bench.Ready));
         _bench = bench;
         _site = site;
         if (key == _key) return;
@@ -222,7 +225,9 @@ internal sealed class OverviewView : UserControl
         var state = BenchPresentation.StateWord(bench);
         var stateLine = _site is null ? state : $"{bench.Name}, {state}";
         if (UptimeText is { } up) stateLine += ", " + up.ToLowerInvariant();
-        root.Children.Add(Ui.Text(stateLine, 14, opacity: 0.75, margin: new Thickness(22, 2, 0, 12)));
+        var readiness = ReadinessBlock(bench);
+        root.Children.Add(Ui.Text(stateLine, 14, opacity: 0.75, margin: new Thickness(22, 2, 0, readiness is null ? 12 : 4)));
+        if (readiness is not null) root.Children.Add(readiness);
 
         Guidance = NextActionRow.For(BenchGuidance.For(bench, needsService, _portConflict.ContainsKey(bench.Path), busy), PerformGuidance, GuidanceAction.Start, enabled: !busy);
         if (Guidance is not null) root.Children.Add(Guidance);
@@ -263,6 +268,39 @@ internal sealed class OverviewView : UserControl
 
         Lines = TextProbe.Lines(root);
         Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root, Padding = new Thickness(0, 0, 8, 0) };
+    }
+
+    // --- readiness ---
+
+    private static string ReadyKey(ReadyInfo? r) =>
+        r is null ? "" : string.Join(',', r.Ready, r.Stale, r.StaleFile, r.Fix, string.Join('+', r.WaitingOn));
+
+    /// <summary>
+    /// What <c>status --json</c> says about readiness, under the state line of a running bench: the headline, what it waits on, the file that
+    /// changed and the CLI's own fix line with Copy. Null (and <see cref="ReadinessWord"/> null) for a bench that does not run or an older CLI.
+    /// </summary>
+    private UIElement? ReadinessBlock(BenchStatus bench)
+    {
+        ReadinessWord = ReadinessText.Headline(bench);
+        if (ReadinessWord is null || bench.Ready is not { } ready) return null;
+        var panel = new StackPanel { Margin = new Thickness(22, 0, 0, 12) };
+        var notReady = !ready.Ready || ready.Stale == true;
+        var head = Ui.Text(ReadinessWord, 13, FontWeights.SemiBold, opacity: notReady ? 1 : 0.75);
+        if (notReady) head.Foreground = Ui.CautionTextBrush;
+        Ui.Name(head, "Readiness");
+        panel.Children.Add(head);
+        foreach (var line in ReadinessText.Detail(bench)) panel.Children.Add(Ui.Text(line, 12, opacity: 0.8));
+        if (notReady && ready.Fix is { } fix)
+        {
+            var row = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
+            var copy = Ui.Button("Copy", () => _services?.CopyText(fix), "Copy the command that gets the bench ready", minWidth: 0);
+            copy.Margin = new Thickness(8, 0, 0, 0);
+            DockPanel.SetDock(copy, Dock.Right);
+            row.Children.Add(copy);
+            row.Children.Add(Ui.Mono(fix));
+            panel.Children.Add(row);
+        }
+        return panel;
     }
 
     // --- guidance ---

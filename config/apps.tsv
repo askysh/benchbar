@@ -2,11 +2,11 @@ app	repo	v15-lts	v16-lts	priority	notes
 erpnext		${erpnext_branch}	${erpnext_branch}	10	Official ERP app; bench can resolve by name
 hrms		${frappe_branch}	${frappe_branch}	20	Official HR app; bench can resolve by name
 payments		${frappe_branch}	${frappe_branch}	30	Official payments app; bench can resolve by name
-crm	https://github.com/frappe/crm	main	main	40	Frappe CRM
-helpdesk	https://github.com/frappe/helpdesk	main	main	50	Frappe Helpdesk
-lms	https://github.com/frappe/lms	main	main	60	Frappe Learning
+crm	https://github.com/frappe/crm	version-15	version-16	40	Frappe CRM
+helpdesk	https://github.com/frappe/helpdesk	version-15	version-16	50	Frappe Helpdesk
+lms	https://github.com/frappe/lms	version-15	version-16	60	Frappe Learning
 wiki	https://github.com/frappe/wiki	master	master	70	Frappe Wiki
 insights	https://github.com/frappe/insights	version-3	version-3	80	Frappe Insights
 drive	https://github.com/frappe/drive	main	main	90	Frappe Drive
-builder	https://github.com/frappe/builder	main	main	100	Frappe Builder
+builder	https://github.com/frappe/builder	master	master	100	Frappe Builder
 raven	https://github.com/frappe/raven	main	main	110	Third-party Frappe app

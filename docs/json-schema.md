@@ -12,6 +12,7 @@ Raycast extensions and the like can rely on it too.
 |---|---|
 | `benchbar list --json` | every bench benchbar knows about |
 | `benchbar status --json [--bench-dir DIR]` | the live state of one bench |
+| `benchbar stats --json [--bench-dir DIR]` | CPU and memory of the running bench's own processes (0.9) |
 | `benchbar doctor --json [--bench-dir DIR]` | every health check with its fix |
 | `benchbar app list --json` | the bench's apps, their git state and sites (0.5) |
 | `benchbar app update NAME --dry-run --json` | the changelog and plan of an update (0.5) |
@@ -321,6 +322,7 @@ listener: it is polled at rest (0.6.1).
 | `processes_running` | bool | any honcho, serve, worker, schedule or socketio process of this bench (before 0.6.1 a port listener counted too) |
 | `sites` | array | added in 0.4, see [Sites](#sites) |
 | `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
+| `autostart` | bool | added in 0.9: the bench may come back after a login (`benchbar autostart on`, the default; `off` keeps it down until `benchbar up`) |
 | `listen` | string | added in 0.9: `"local"` (the web server and socketio listen on 127.0.0.1) or `"all"` (every interface, `benchbar listen all`) |
 | `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
 | `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null), `url` (an add's repo URL, so `app add NAME` can finish an app that was never cloned or that no profile lists; null for an update and for a record an older version wrote) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
@@ -338,6 +340,52 @@ service or when no such file is there. It is read from the agent file in
 bash, so `status` still starts no process for it. With `--ping`, every
 site is asked only while the bench's processes run; a stopped bench is
 never pinged and never started.
+
+## `benchbar stats --json`
+
+CPU and memory of a running bench, for the Windows tray (which cannot sample
+processes inside WSL) and for agents. It is its own command, not a flag of
+`status`, because status is polled for every bench and its process count is
+pinned; `stats` reads the process table once, on request. Read only: no lock,
+no log, no site ping.
+
+```json
+{
+  "schema_version": 1,
+  "cli_version": "0.9.0",
+  "bench_dir": "/Users/me/frappe-bench",
+  "running": true,
+  "resources": {
+    "cpu_percent": 112.8,
+    "memory_bytes": 26624000,
+    "processes": 4,
+    "sampled_at": "2026-11-20T11:09:20Z",
+    "cpu_source": "ps",
+    "window_ms": null,
+    "speed": {"raw": 12.0, "min": 1, "max": 12, "smoothing_alpha": 0.35,
+              "formula": "clamp(1 + cpu_percent / 10, min, max)"}
+  }
+}
+```
+
+`resources` is `null` (and `running` false) while nothing serves the site: a
+stopped bench, a bench with no processes, or a Redis kept alone by
+`up --services-only`. The processes are the ones `benchbar down` stops (honcho,
+serve, worker, schedule, socketio and the bench's listeners, each proven to
+run in this bench's folder) and every descendant of them.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `cpu_percent` | number | summed over those processes, in percent of one core (250 is two and a half cores busy), one decimal |
+| `memory_bytes` | number | the sum of their resident set sizes (RSS), in bytes. The Mac app reads the physical footprint instead, which is a little different |
+| `processes` | number | how many processes were measured |
+| `sampled_at` | string | ISO 8601 UTC time of the sample |
+| `cpu_source` | string | `ps` (macOS: ps's own `%cpu`, the system's decaying average, one call) or `proc_delta` (Linux and WSL: two reads of `/proc` `window_ms` apart, so it is the load over that window) |
+| `window_ms` | number or null | the time between the two samples; `null` for `ps` |
+| `speed.raw` | number | the runner speed of the Mac app for this sample: `clamp(1 + cpu_percent / 10, 1, 12)`. 110 percent is already the top speed |
+| `speed.smoothing_alpha` | number | a client smooths successive raw values the way the Mac app does: `value = alpha * raw + (1 - alpha) * value`, starting at 1 |
+
+`benchbar_stats` is the same document through the MCP server.
 
 ## Readiness
 
@@ -487,7 +535,10 @@ stream ends in the usual `done` line.
 The plan line of the service stream (as for `adopt --json`) carries a `token`:
 a SHA-256 of the planned actions, the bench, the port block, the scheduler
 choice and the site. `benchbar service --apply TOKEN --yes [--json]` runs that
-plan and refuses, before any action, a token that no longer matches.
+plan and refuses, before any action, a token that no longer matches. Since 0.9 the
+apply takes `--with-schedule` or `--without-schedule` too (the one the dry run was
+made with): the choice is stored only after the run succeeded, and a refused token
+stores nothing.
 
 ## MCP results of the site and service tools
 
@@ -1339,12 +1390,21 @@ dry run.
   "schema_version": 1, "cli_version": "0.5.8",
   "bench": "/Users/you/frappe-bench", "site": "bbtest.localhost",
   "dry_run": true, "is_default": false, "new_default": null,
+  "database": "_bbtest",
+  "token": "9f2c...64 hex characters",
   "steps": [
     {"title": "Back up bbtest.localhost with files, drop its database and user, move the folder to archived/sites", "command": "bench drop-site bbtest.localhost", "needs_password": false},
     {"title": "Remove '127.0.0.1 bbtest.localhost' from /etc/hosts", "command": "sudo, backup first", "needs_password": true}
   ]
 }
 ```
+
+Since 0.9 the plan has a `token`, a SHA-256 of the plan and of the site list,
+the default site, the hosts line and the database name (`database`, from the site's own
+`site_config.json`: it is the database that gets dropped). `benchbar site drop NAME --confirm-site
+NAME --apply TOKEN --yes [--json]` runs that plan and refuses, before anything
+changes, a token that no longer matches (exit 1). The MCP tools
+`benchbar_site_drop_plan` and `benchbar_site_drop` pass it on as it is.
 
 And the result, without `--dry-run`:
 

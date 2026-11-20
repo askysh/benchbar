@@ -7,9 +7,10 @@
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
-INSTALLER="https://raw.githubusercontent.com/askysh/benchbar/main/install.sh"
-# an offered release is installed from its own tag, pinned with --version
+# an offered release is installed from its own tag, pinned with --version,
+# after its sha256 matched the release's SHA256SUMS
 PINNED="https://raw.githubusercontent.com/askysh/benchbar/v99.0.0/install.sh"
+SUMS99="https://github.com/askysh/benchbar/releases/download/v99.0.0/SHA256SUMS"
 
 # ---- the version compare
 lt() { bash -c '. "$1/lib/frappe-local/selfupdate.sh"; fl_version_lt "$2" "$3"' _ "$ROOT" "$1" "$2"; }
@@ -33,9 +34,15 @@ JSON
 cat >"$MOCK_STATE/installer.sh" <<'SH'
 printf 'args: %s\n' "$*" >>"$MOCK_STATE/installer.log"
 printf 'app_dir: %s\n' "${BENCHBAR_APP_DIR:-}" >>"$MOCK_STATE/installer.log"
+printf 'api: %s repo: %s\n' "${BENCHBAR_API:-}" "${BENCHBAR_REPO:-}" >>"$MOCK_STATE/installer.log"
 echo "stub installer ran"
 SH
 installer_log() { cat "$MOCK_STATE/installer.log" 2>/dev/null || true; }
+# the release's SHA256SUMS lists the stub installer (the curl mock serves release.sums)
+sums_for_installer() {
+  printf '%s  install.sh\n' "$(shasum -a 256 "$MOCK_STATE/installer.sh" | awk '{print $1}')" >"$MOCK_STATE/release.sums"
+}
+sums_for_installer
 app_at() {
   mkdir -p "$1/BenchBar.app/Contents"
   printf '<plist><dict>\n<key>CFBundleShortVersionString</key>\n<string>%s</string>\n</dict></plist>\n' "$2" >"$1/BenchBar.app/Contents/Info.plist"
@@ -76,12 +83,14 @@ assert_eq "checkout" "$(jget "$TMP_DIR/su.json" 'd["install"]')"
 assert_eq "True" "$(jget "$TMP_DIR/su.json" 'd["app_only"]')"
 assert_eq "None" "$(jget "$TMP_DIR/su.json" 'd["app_version"]')"
 assert_eq "None" "$(jget "$TMP_DIR/su.json" 'd["error"]')"
-assert_eq "curl -fsSL ${PINNED} | bash -s -- --yes --app-only --version v99.0.0" "$(jget "$TMP_DIR/su.json" 'd["command"]')"
+assert_eq "cd \"\$(mktemp -d)\" && curl --proto '=https' --tlsv1.2 -fsSL -o install.sh ${PINNED} && curl --proto '=https' --tlsv1.2 -fsSL ${SUMS99} | grep ' install.sh\$' | shasum -a 256 -c - && bash install.sh --yes --app-only --version v99.0.0" "$(jget "$TMP_DIR/su.json" 'd["command"]')"
 assert_eq "" "$(installer_log)"
 
 # ---- --dry-run: the plan, nothing runs
 run_fm self-update --dry-run; assert_eq "0" "$CODE" "$OUT"
-assert_contains "$OUT" "runs: curl -fsSL ${PINNED} | bash -s -- --yes --app-only --version v99.0.0"
+assert_contains "$OUT" "runs: cd "
+assert_contains "$OUT" "-o install.sh ${PINNED} && "
+assert_contains "$OUT" "bash install.sh --yes --app-only --version v99.0.0"
 assert_contains "$OUT" "dry-run: nothing was run"
 assert_eq "" "$(installer_log)"
 
@@ -95,20 +104,87 @@ reset_calls
 run_fm self-update --yes; assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "stub installer ran"
 assert_eq "args: --yes --app-only --version v99.0.0" "$(installer_log | sed -n 1p)" "(the release that was shown, not whatever is latest later)"
-assert_calls_contain "^curl -fsSL ${PINNED}$"
+assert_contains "$OUT" "install.sh of v99.0.0 matches the release's SHA256SUMS"
+assert_calls_contain "^curl --proto =https --tlsv1.2 -fsSL --max-time 60 -o .*/install.sh ${PINNED}$"
+assert_calls_contain "^curl --proto =https --tlsv1.2 -fsSL --max-time 60 -o .*/SHA256SUMS ${SUMS99}$"
 assert_calls_not_contain '^bench '
+# app only: the CLI is not this command's, so git is not asked to check it out
+assert_calls_not_contain '^git '
+rm -f "$MOCK_STATE/installer.log"
+
+# ---- the installer is checked before it runs
+# a changed install.sh (the hash in SHA256SUMS is of another file)
+printf '%s  install.sh\n' "$(printf 'something else' | shasum -a 256 | awk '{print $1}')" >"$MOCK_STATE/release.sums"
+reset_calls
+run_fm self-update --yes; assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "install.sh of v99.0.0 does not match the release's SHA256SUMS"
+assert_contains "$OUT" "it was not run"
+assert_eq "" "$(installer_log)" "(a changed installer never runs)"
+assert_not_contains "$OUT" "stub installer ran"
+# a release whose SHA256SUMS does not list install.sh (made before they were)
+printf '%s  BenchBar-99.0.0.zip\n' "$STUB_SHA" >"$MOCK_STATE/release.sums"
+run_fm self-update --yes; assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "has no line for install.sh, so the installer cannot be checked and was not run"
+assert_eq "" "$(installer_log)"
+sums_for_installer
+# the two test seams are read only under FL_TESTING=1: with it off, an
+# installer or an API in the environment changes nothing
+reset_calls
+FL_TESTING=0 BENCHBAR_INSTALLER_URL="https://evil.example/install.sh" BENCHBAR_API="https://evil.example/api" run_fm self-update --dry-run
+assert_eq "0" "$CODE" "$OUT"
+assert_not_contains "$OUT" "evil.example"
+assert_calls_not_contain 'evil.example'
+assert_calls_contain "^curl .*https://api.github.com/repos/askysh/benchbar/releases/latest"
+# and with it on, the installer seam is used (and still checked against the sums)
+reset_calls
+BENCHBAR_INSTALLER_URL="https://raw.githubusercontent.com/askysh/benchbar/testing/install.sh" run_fm self-update --dry-run
+assert_contains "$OUT" "-o install.sh https://raw.githubusercontent.com/askysh/benchbar/testing/install.sh && "
+
+# ---- install.sh does not inherit BENCHBAR_API or BENCHBAR_REPO from the
+# shell, unless the tests ask for them (FL_TESTING=1)
+rm -f "$MOCK_STATE/installer.log"
+FL_TESTING=0 BENCHBAR_API="https://evil.example/api" BENCHBAR_REPO="https://evil.example/repo.git" run_fm self-update --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "api:  repo: " "$(installer_log | sed -n 3p)" "(the installer got no BENCHBAR_API or BENCHBAR_REPO)"
+rm -f "$MOCK_STATE/installer.log"
+BENCHBAR_API="https://api.github.com/repos/askysh/benchbar" BENCHBAR_REPO="file:///repo.git" run_fm self-update --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "api: https://api.github.com/repos/askysh/benchbar repo: file:///repo.git" "$(installer_log | sed -n 3p)" "(kept under FL_TESTING=1)"
 rm -f "$MOCK_STATE/installer.log"
 
 # ---- a managed install (the CLI in BENCHBAR_HOME): CLI and app
 reset_calls
-export BENCHBAR_HOME="$ROOT"
+# a copy of the CLI that the git mock treats as a checkout (never the repo itself)
+MANAGED="$TMP_DIR/managed-cli"; mkdir -p "$MANAGED/.git"
+cp -R "$ROOT/benchbar" "$ROOT/lib" "$ROOT/templates" "$ROOT/config" "$MANAGED/"
+: >"$MANAGED/.git/mock-checkout"; printf 'ref: refs/heads/main\n' >"$MANAGED/.git/HEAD"
+export BENCHBAR_HOME="$MANAGED"
+FM_ROOT="$FM"; FM="$MANAGED/benchbar"
 run_fm self-update --json; assert_eq "managed" "$(printf '%s' "$OUT" | jget - 'd["install"]')"
 assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["app_only"]')"
 run_fm self-update --yes; assert_eq "0" "$CODE" "$OUT"
-assert_contains "$OUT" "it pulls the CLI in ${ROOT}"
+assert_contains "$OUT" "it pulls the CLI in ${MANAGED}"
 assert_eq "args: --yes --version v99.0.0" "$(installer_log | sed -n 1p)"
 assert_eq "app_dir: " "$(installer_log | sed -n 2p)"
 assert_calls_not_contain '^bench '
+# the CLI is left at the release's tag, after the installer (which pins only the app on a Mac)
+assert_calls_contain "^git -C ${MANAGED} fetch --quiet --tags$"
+assert_calls_contain "^git -C ${MANAGED} checkout --quiet v99.0.0$"
+assert_contains "$OUT" "CLI at ${MANAGED} is at v99.0.0"
+assert_eq "deadbee" "$(cat "$MANAGED/.git/HEAD")" "(a detached checkout of the tag)"
+printf 'ref: refs/heads/main\n' >"$MANAGED/.git/HEAD"
+# an installer that fails: no checkout, its exit code
+printf 'echo "stub installer failed"; exit 7\n' >"$MOCK_STATE/installer.sh"; sums_for_installer
+reset_calls
+run_fm self-update --yes; assert_eq "7" "$CODE" "$OUT"
+assert_calls_not_contain 'checkout'
+cat >"$MOCK_STATE/installer.sh" <<'SH'
+printf 'args: %s\n' "$*" >>"$MOCK_STATE/installer.log"
+printf 'app_dir: %s\n' "${BENCHBAR_APP_DIR:-}" >>"$MOCK_STATE/installer.log"
+printf 'api: %s repo: %s\n' "${BENCHBAR_API:-}" "${BENCHBAR_REPO:-}" >>"$MOCK_STATE/installer.log"
+echo "stub installer ran"
+SH
+sums_for_installer
 rm -f "$MOCK_STATE/installer.log"
 
 # ---- an older app with a current CLI is an update too; an app in a writable
@@ -120,7 +196,7 @@ run_fm self-update --json
 assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["update_available"]')"
 assert_eq "0.1.0" "$(printf '%s' "$OUT" | jget - 'd["app_version"]')"
 assert_eq "$TMP_DIR/Apps" "$(printf '%s' "$OUT" | jget - 'd["app_dir"]')"
-assert_contains "$(printf '%s' "$OUT" | jget - 'd["command"]')" "| BENCHBAR_APP_DIR=${TMP_DIR}/Apps bash -s -- --yes"
+assert_contains "$(printf '%s' "$OUT" | jget - 'd["command"]')" "&& BENCHBAR_APP_DIR=${TMP_DIR}/Apps bash install.sh --yes"
 run_fm self-update --yes; assert_eq "0" "$CODE" "$OUT"
 assert_eq "app_dir: $TMP_DIR/Apps" "$(installer_log | sed -n 2p)"
 rm -f "$MOCK_STATE/installer.log"
@@ -129,6 +205,7 @@ rm -rf "$TMP_DIR/Apps"; app_at "$HOME/Applications" 0.1.0
 run_fm self-update --json
 assert_eq "None" "$(printf '%s' "$OUT" | jget - 'd["app_dir"]')"
 unset BENCHBAR_HOME
+FM="$FM_ROOT"
 
 # ---- a CLI installed some other way (no .git, not BENCHBAR_HOME): app only
 OTHER="$TMP_DIR/other-cli"; mkdir -p "$OTHER"
@@ -224,7 +301,8 @@ rm -rf "$FL_STATE_DIR/lock"
 rm -f "$MOCK_STATE/release.json"
 run_fm self-update --check; assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "could not ask GitHub"
-assert_contains "$OUT" "fix: try again later, or run it yourself: curl -fsSL ${INSTALLER}"
+assert_contains "$OUT" "fix: try again later"
+assert_not_contains "$OUT" "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh"
 assert_not_contains "$OUT" "Last command failed"
 run_fm self-update --json; assert_eq "1" "$CODE" "$OUT"
 assert_eq "None" "$(printf '%s' "$OUT" | jget - 'd["latest"]')"

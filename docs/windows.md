@@ -44,15 +44,22 @@ marked by Windows as "from the internet", and that mark brings dialogs.
 
 | Route | What Windows may show | What to do |
 | --- | --- | --- |
-| One line installer (`irm ... \| iex`) | On our Windows 11 test PC (one PC, Smart App Control off): nothing. No SmartScreen dialog, no Defender block and no administrator prompt. The files it writes carry no internet mark, and starting them shows no dialog. | Nothing. |
+| One line installer (`irm ... \| iex`) | On our Windows 11 test PC (one PC, Smart App Control off): nothing. No SmartScreen dialog, no Defender block and no administrator prompt. The files it writes carry no internet mark when it could verify the build provenance (`gh` signed in), and starting them shows no dialog then. | Nothing. |
 | Zip, started with `.\install.ps1` | With the default execution policy: "cannot be loaded because running scripts is disabled on this system". `Unblock-File` does not change that. | Start it with `powershell -ExecutionPolicy Bypass -File .\install.ps1`. |
 | Zip saved by a browser | Edge saves it without a warning, but marks it as downloaded (`Zone.Identifier`, ZoneId 3). Extract All in Explorer marks every file in it. `Expand-Archive` marks none. | Nothing, if you run the installer from the zip. It removes the mark from the files it installs. |
 | Starting a marked program yourself | "Open File - Security Warning: The publisher could not be verified. Are you sure you want to run this software?" with **Run** and **Cancel**. The dialog can open behind other windows. | Click **Run**. If nothing seems to happen, look for a flashing icon in the taskbar. |
 | The tray without the .NET runtime | Microsoft's dialog "You must install .NET Desktop Runtime to run this application." | Install the runtime: see [If Windows blocks it](#if-windows-blocks-it). |
 
-The installer removes the internet mark from every file it installs, for
-every route, so the programs in the install folder start without the
-Open File dialog. It checks every file against `SHA256SUMS` first.
+The installer checks every file against `SHA256SUMS` first. It removes
+the internet mark from the files it installs only when the zip's build
+provenance verified, which needs the [GitHub CLI](https://cli.github.com)
+(`gh`) signed in. The checksums come from the same release as the zip,
+so they find a damaged download, not a swapped one, and they are no reason
+to drop a mark that Windows put there. Without `gh`, or when the check
+fails, the installer keeps the mark and says so, and Windows shows the
+Open File dialog once for each program: click **Run**. A zip you run
+`install.ps1` from after unpacking it has no zip left to verify, so the
+mark stays there too.
 
 ### Smart App Control
 
@@ -106,7 +113,7 @@ The command line tool step runs the
 as `benchbar.exe` inside the distro (`install.sh` from the `v<version>`
 tag, with `--version v<version>`); a development build uses `main`. To
 do it by hand, run in Ubuntu:
-`curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash`.
+`curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash`.
 
 ![The first run wizard at Welcome](images/windows-wizard-welcome.png)
 
@@ -198,7 +205,8 @@ releases for the newest published one that has a Windows zip for your CPU
 `benchbar-windows-<version>-SHA256SUMS.txt` and installs it to
 `%LOCALAPPDATA%\Programs\BenchBar`. Then it:
 
-1. removes the internet mark from the installed files;
+1. removes the internet mark from the installed files when the zip's build
+   provenance verified (`gh attestation verify`), and keeps it otherwise;
 2. puts that folder on your user PATH (`benchbar.exe path install`);
 3. checks the .NET 10 Desktop Runtime and, when `winget` is there, offers
    to install it (Windows asks for permission);
@@ -279,11 +287,14 @@ with the zip:
 
 The installer does this for you. Releases after 0.8.2 also carry a build
 provenance attestation, made by the release workflow. It proves that the
-zip was built from this repository by GitHub Actions. With the
+zip was built from this repository by GitHub Actions. The installer
+checks it when `gh` is installed and signed in, and says so when it
+cannot. The checksums file is attested too. With the
 [GitHub CLI](https://cli.github.com):
 
 ```powershell
-gh attestation verify benchbar-windows-<version>-amd64.zip -R askysh/benchbar
+gh attestation verify benchbar-windows-<version>-amd64.zip -R askysh/benchbar `
+  --signer-workflow askysh/benchbar/.github/workflows/release-windows.yml
 ```
 
 ## If Windows blocks it
@@ -294,9 +305,10 @@ with "Smart App Control is on". See [Smart App Control](#smart-app-control).
 **"Open File - Security Warning: The publisher could not be verified."**
 The file carries an internet mark, for example because you started a
 program from an unpacked zip. Click **Run**. The dialog can open behind
-other windows. The installer removes the mark from what it installs, so
-you should not see this for the installed programs. If you do, run the
-installer again, or run
+other windows. The installer removes the mark from what it installs when it verified
+the zip's build provenance (`gh` signed in). Without that, you see this
+once for each program. To remove the mark yourself, once you have checked
+the zip, run
 `Get-ChildItem "$env:LOCALAPPDATA\Programs\BenchBar" -Recurse | Unblock-File`.
 
 **Microsoft Defender or another antivirus removes a file**, or the
@@ -492,6 +504,40 @@ warnings and failures of `doctor --prerequisites` for the folder are listed
 with the fix to copy; they stop nothing, the plan on the Review page still
 decides.
 
+When an update changes a default (0.9.0 does: the bench listens on this
+computer only, an option a command does not take is an error, `pull`
+neutralises the copy), the CLI lists it in `status --json` as `notices[]`
+and the window shows one banner for each above the tabs: what changed, the
+command that switches it back, a link to the page that explains it, and
+**Dismiss**, which runs `benchbar notices --dismiss ID`. Nothing dismisses a
+notice but your click. Under the state line of a running bench the Overview
+says **Ready**, **Needs restart (code changed)** or **Running, not ready**
+from the `ready` object of `status --json`, with what the bench waits on
+(the realtime server, Redis, the site, a worker), the Python file that
+changed, and the CLI's own fix line with **Copy**. A CLI older than 0.9 sends
+neither member, and the window shows neither.
+
+**Pull...** on the Sites tab copies a production site into a new site of the
+bench (`benchbar pull`). Give `HOST:SITE`, where HOST is a Host of
+`~/.ssh/config` inside Ubuntu and its key must work without a prompt, or tick
+the box for a backup folder inside Ubuntu, and a name for the new site (the
+name follows the server until you type over it; a name that is already a
+site is refused, Pull never overwrites one). **Review Plan...** runs
+`pull --dry-run --json` and shows the backup (name, size, age), whether the
+site is created, the apps that differ from production, what the copy loses
+and the steps; **Pull** then runs `pull --apply TOKEN --yes` with the token
+from that plan, so a newer backup on the server or a changed app list
+stops the run with nothing changed and asks for a fresh plan. A restore is
+not stopped part way: **Stop Waiting** closes the sheet and the run goes on.
+The copy is neutralised by default (integrations off, stored passwords
+cleared except the Administrator's). **Keep production's passwords and
+integrations** is off until you tick it, and ticking it says that the copy
+can still reach the outside and that its scheduler and workers should stay
+off. The button is offered when the CLI lists `pull` with `--apply`; the
+tray does not add a hosts line, so a name that does not end in `.localhost`
+shows a note. **Watch Assets in Terminal** and **Run in Foreground in
+Terminal** (above) are the tray's `watch` and `fg`; **Logs** follows the log.
+
 **Quick Switch...** in the tray menu opens a small panel over any window:
 Administrator, your pinned users and, when you type two letters or more,
 the site's other users. Up, Down and Enter choose, **0** to **9** open a row
@@ -546,7 +592,9 @@ opens, **Ask before a link acts** (see [benchbar:// links](#benchbar-links)), th
 (VS Code, Cursor or VS Code Insiders), the command line tool's path, and
 the tray's appearance and runner. About: the versions of the tray,
 `benchbar.exe` and the CLI inside the distro, Check for Updates, Report a
-Bug and the MCP line.
+Bug and the MCP line (`claude mcp add benchbar -- benchbar.exe mcp`, and the
+same server as a JSON entry for Cursor, Claude Desktop and other clients),
+each with **Copy**.
 
 When a bench crashes, is paused by the crash guard or meets a port
 conflict, the tray shows one Windows notification with the bench and
@@ -684,9 +732,12 @@ benchbar.exe self-update
 
 It shows the version you have and the newest release, asks once, then
 updates all of BenchBar for Windows to that release: `benchbar.exe`, the
-tray app and the BenchBar CLI inside WSL. It runs the one line installer for
-you, so the new files are checked against the release's SHA256 sums and
-Windows shows no SmartScreen dialog for them. The tray app closes and starts
+tray app and the BenchBar CLI inside WSL. It runs the installer of that
+release for you: `install.ps1` of the release's tag, downloaded and
+compared with the release's SHA256 sums before it runs, not whatever is on
+`main`. The installer checks the new files against the same sums, and
+Windows shows no SmartScreen dialog for them when the zip's build
+provenance verified (see [Verify a download](#verify-a-download)). The tray app closes and starts
 again. It ends with one line for each part. Your settings, benches and sites
 stay as they are.
 

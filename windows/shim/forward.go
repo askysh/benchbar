@@ -108,6 +108,7 @@ var forwardedEnv = []string{
 // noForwardEnv are CLI variables that are not passed on, with why.
 var noForwardEnv = map[string]string{
 	"BENCHBAR_MCP_CLI": "names the CLI to start: a Windows path means nothing in the distro, and the shim starts the right one",
+	"FL_STATS_WINDOW":  "the sampling window of benchbar stats on Linux, a tuning knob of the CLI inside the distro; a Windows caller has no reason to set it",
 }
 
 // proxyEnv are the proxy settings of the Windows side. Linux tools (curl,
