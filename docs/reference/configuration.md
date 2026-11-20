@@ -111,6 +111,7 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 | `BENCHBAR_REPORT_DIR` | `report` | Where the zip goes instead of `~/Desktop` |
 | `NO_COLOR` | every command | `NO_COLOR=1` turns off colors and spinners, like `--plain` |
 | `BENCHBAR_NO_HANDOFF` | every command | `BENCHBAR_NO_HANDOFF=1`: Homebrew's or the one line installer's `benchbar` runs itself instead of handing off to the CLI inside BenchBar.app (0.7.1) |
+| `BENCHBAR_LENIENT_FLAGS` | every command | `BENCHBAR_LENIENT_FLAGS=1`: an option a command does not take is a warning on stderr and the command runs, as it did before 0.9.0. Without it the run stops with exit 64 and names the option and the command's usage line, so a mistyped `--dry-run` can never run for real. It covers an unknown option only: a flag without its value (`--bench-dir` with nothing after it) stays an error. For scripts written against the old behaviour; fix the script when you can |
 | `BENCHBAR_NONINTERACTIVE` | every command | `BENCHBAR_NONINTERACTIVE=1`: nothing is asked. A command that lacks an input names all of them in one error before it takes the lock. `--for-agent` and `benchbar mcp` set it |
 | `BENCHBAR_SUDO` | `install`, `adopt`, `repair`, `ports apply`, `site hosts`, `site add` | `BENCHBAR_SUDO=gui` (macOS): each root step asks in macOS's own password dialog, at most two per run; the BenchBar app sets it. `BENCHBAR_SUDO=env` (Linux): the root steps use `BENCHBAR_SUDO_PASSWORD` and need no terminal; the Windows tray sets it. Any other value is the terminal path |
 | `BENCHBAR_CALLER` | every command that changes things, `history` | Who started the run, for `benchbar history` and the first line of the run's log: `terminal`, `app`, `tray`, `mcp`, `agent` or `script`. The Mac app, the tray and `benchbar mcp` set it; `--for-agent` says `agent`; without it a terminal on stdin is `terminal` and anything else `script`. A label, not a proof: any process of the user can set it, and a value outside the list is ignored |
@@ -131,6 +132,12 @@ remembered. Without it, benchbar uses `BENCH_DIR` when it is set, then
 the remembered bench, then `~/frappe-bench`, `~/dev/frappe-bench`, and
 any folder directly under `~` or `~/dev` (one level deep) that holds
 `sites/common_site_config.json`. `benchbar scan PATH` looks deeper.
+
+A command that changes things (`up`, `down`, `restart`, `repair`, `service` and the
+like) on a bench picked that way says so: `benchbar: acting on PATH
+(auto-detected ...)` on stderr. Under `--for-agent` or `BENCHBAR_NONINTERACTIVE=1`,
+when more than one bench is known, it refuses to pick and lists them: pass
+`--bench-dir PATH` or set `BENCH_DIR`.
 
 The first bench you install or adopt becomes the default; a second one
 keeps the first as the default unless you pass `--make-default`. See

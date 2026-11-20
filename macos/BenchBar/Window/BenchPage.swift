@@ -59,7 +59,8 @@ struct BenchPage: View {
                 Text(activity).font(.caption).foregroundStyle(.secondary)
             }
             StatePill(state: bench.state, text: BenchText.headline(bench.state, reason: bench.machine.stopReason,
-                                                                    exitCode: bench.status?.lastExitCode))
+                                                                    exitCode: bench.status?.lastExitCode,
+                                                                    ready: bench.status?.ready))
         }
     }
 }
@@ -260,6 +261,7 @@ struct BenchSites: View {
     @State private var hosts: HostsRun?
     @State private var dropping: String?
     @State private var restoring: String?
+    @State private var pulling = false
     @State private var findingUser: String?
     @State private var allowingOpenAs: String?
 
@@ -304,6 +306,9 @@ struct BenchSites: View {
                 HStack {
                     Text("Sites")
                     Spacer()
+                    Button { pulling = true } label: { Label("Pull…", systemImage: "arrow.down.circle") }
+                        .help("Copy a production site, or a downloaded backup, into a new site")
+                        .disabled(busy)
                     Button { addingSite = true } label: { Label("Add Site…", systemImage: "plus") }
                         .primaryAction()
                         .disabled(busy)
@@ -366,6 +371,9 @@ struct BenchSites: View {
         }
         .sheet(item: Binding(get: { restoring.map(DropTarget.init) }, set: { restoring = $0?.site })) { target in
             SiteRestoreSheet(workbench: workbench, bench: bench, site: target.site) { restoring = nil }
+        }
+        .sheet(isPresented: $pulling) {
+            PullSheet(workbench: workbench, bench: bench) { pulling = false }
         }
     }
 }

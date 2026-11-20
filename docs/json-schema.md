@@ -49,8 +49,9 @@ Raycast extensions and the like can rely on it too.
 - `null` means "not known" or "does not apply". Numbers are JSON numbers.
 - JSON goes to stdout on one line. Errors and warnings go to stderr as
   text. Exit codes: 0 success, 1 failure (for `doctor`: at least one
-  check is `fail`; the JSON is still printed). A missing bench exits 1
-  with a message on stderr and nothing on stdout.
+  check is `fail`; the JSON is still printed), 2 the MariaDB root password
+  is unknown, 64 a command line the CLI cannot read (see "Usage errors"
+  below). A missing bench exits 1 with a message on stderr and nothing on stdout.
 - `status --json`, `list --json` and `doctor --json` are read only. They
   never start, stop or write anything, so they are safe to poll. The one
   exception is the one time move of the state folder on the first run
@@ -72,7 +73,7 @@ command that read only prints none of them.
 | `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints. `"quoted": true` is added when the command was built with every word quoted for the shell (a program may split it); it is absent for a command written as text |
 | `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`). A stream's is read after the CLI's locks are released; a one document command's and `pull`'s while its lock is still held (a read, so nothing waits on it) |
 | `missing[]` | only on a refusal of the non interactive mode: the inputs the command lacked (`ADMIN_PASSWORD`, `--yes`, `sudo`, `BENCHBAR_SUDO_PASSWORD`, ...) |
-| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. Every CLI done line can carry it. So far: `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change). `password_has_newline` (a password in `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` or `BENCHBAR_SUDO_PASSWORD` holds a line break; it travels on one line; refused before any change, only the variable's name is printed). `systemd_not_running` (Linux, `install` only: PID 1 is not systemd, and MariaDB, Redis and the bench service are systemd services; on WSL the fix names `[boot] systemd=true` in `/etc/wsl.conf`), `bench_on_windows_fs` (WSL, `install` and `adopt`: the bench folder is on the Windows file system, `/mnt/<drive>` or a drvfs or 9p mount; slow, no file watching, broken permissions; `--allow-windows-fs` accepts it), `github_unreachable` (Linux, `install` only: `github.com`, which holds frappe and the uv Pythons, did not answer within 10 seconds, after one retry; the plan's `blockers[]` names it, nothing was changed) and `port_3306_in_use` and `port_6379_in_use` (Linux, `install` only: another program, or on WSL another distro, already listens on the MariaDB or the system Redis port; the plan's `blockers[]` names them, the done line has `exit` 1, the `fix` and the `error`, and nothing was changed, no sudo asked). Docker, a native MariaDB or a second WSL distro are the usual cause: WSL distros share one network, so only one of them can run MariaDB on port 3306. Stop it in the other distro (`sudo systemctl stop mariadb`) and run `install` again; benchbar never stops it. The Windows shim adds `distro_running`, see [Windows shim](#windows-shim) |
+| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. Every CLI done line can carry it. So far: `unknown_flag`, `missing_value` and `root_refused` (exit 64, see "Usage errors"), `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change). `password_has_newline` (a password in `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` or `BENCHBAR_SUDO_PASSWORD` holds a line break; it travels on one line; refused before any change, only the variable's name is printed). `systemd_not_running` (Linux, `install` only: PID 1 is not systemd, and MariaDB, Redis and the bench service are systemd services; on WSL the fix names `[boot] systemd=true` in `/etc/wsl.conf`), `bench_on_windows_fs` (WSL, `install` and `adopt`: the bench folder is on the Windows file system, `/mnt/<drive>` or a drvfs or 9p mount; slow, no file watching, broken permissions; `--allow-windows-fs` accepts it), `github_unreachable` (Linux, `install` only: `github.com`, which holds frappe and the uv Pythons, did not answer within 10 seconds, after one retry; the plan's `blockers[]` names it, nothing was changed) and `port_3306_in_use` and `port_6379_in_use` (Linux, `install` only: another program, or on WSL another distro, already listens on the MariaDB or the system Redis port; the plan's `blockers[]` names them, the done line has `exit` 1, the `fix` and the `error`, and nothing was changed, no sudo asked). Docker, a native MariaDB or a second WSL distro are the usual cause: WSL distros share one network, so only one of them can run MariaDB on port 3306. Stop it in the other distro (`sudo systemctl stop mariadb`) and run `install` again; benchbar never stops it. The Windows shim adds `distro_running`, see [Windows shim](#windows-shim) |
 
 Which shape a command prints:
 
@@ -101,6 +102,25 @@ Which shape a command prints:
   log and stderr, a refusal included.
 - `repair --json` keeps `exit_code` in its `done` and adds `exit` with the
   same value. `install`, `adopt` and `pull` add the fields to their `done`.
+- Usage errors: an option the command does not take (`error_id`
+  `unknown_flag`), or a flag that needs a value and has none (`missing_value`:
+  `--bench-dir`, `--site`, `--profile`, `--bundle`, `--port-offset`, `--ack`,
+  `--unack`) exits **64**, the
+  `EX_USAGE` of `sysexits.h`, before the stream, the log, the lock or any
+  change. Exit 2 keeps one meaning, "the MariaDB root password is unknown"
+  (a program that sees 2 asks for that password), and 1 keeps "failure", so a
+  caller that accepts only 0 and 1 reads a usage error as the failure it is.
+  With `--json`, `--jsonl` or `--for-agent` stdout holds the answer on one line
+  and stderr the text: for a command that changes things (or with `--jsonl`) a
+  `done` event with `exit` 64, `error_id`, `error` (the option, named), `fix`
+  (the command's usage line) and the shared done fields; for a command that
+  reads one document with `schema_version`, `cli_version`, `exit`, `error_id`,
+  `error` and `fix`. `BENCHBAR_LENIENT_FLAGS=1` turns an unknown option into a
+  warning on stderr; it does not cover a missing value.
+  The refusal to run as root (`error_id` `root_refused`, a distro whose default
+  user is `root` gets it) has the same shape and the same exit 64, for the same
+  reasons: a client that asked for JSON must get JSON, and 1 or 2 would be read
+  as another failure.
 - `BENCHBAR_NONINTERACTIVE=1` (set by `benchbar mcp` for every CLI it
   starts): nothing is ever asked. A command that needs an input it does
   not have (`ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` when benchbar has none
@@ -244,6 +264,7 @@ listener: it is polled at rest (0.6.1).
 | `listen` | string | added in 0.9: `"local"` (the web server and socketio listen on 127.0.0.1) or `"all"` (every interface, `benchbar listen all`) |
 | `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
 | `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null), `url` (an add's repo URL, so `app add NAME` can finish an app that was never cloned or that no profile lists; null for an update and for a record an older version wrote) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
+| `ready` | object | added in 0.9: whether the bench can serve, and the parts that say so; see [Readiness](#readiness) |
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
 `loaded` (`"yes"` or `"no"`), `stop_flag` (`"manual"`, `"crash"`,
@@ -257,6 +278,82 @@ service or when no such file is there. It is read from the agent file in
 bash, so `status` still starts no process for it. With `--ping`, every
 site is asked only while the bench's processes run; a stopped bench is
 never pinged and never started.
+
+## Readiness
+
+`status --json` has a `ready` object, and `benchbar wait` blocks until it
+says yes. It is one definition: `up` and `restart` wait for its `web` part,
+`wait` for all of them, and `state_after` of every command that changes a
+bench carries it. Use it instead of probing ports and processes yourself.
+
+```json
+"ready": {
+  "ready": false,
+  "deep": true,
+  "agent": true, "processes": true, "web": true, "socketio": true, "redis": true,
+  "workers": true, "stale": true,
+  "stale_file": "apps/erpnext/erpnext/hooks.py",
+  "waiting_on": ["stale"],
+  "fix": "benchbar restart --bench-dir /Users/you/frappe-bench"
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `ready` | bool | true when no part is `false` and `stale` is not `true` |
+| `deep` | bool | the deep parts (`workers`, `stale`) were asked: `status --json --deep`, `wait`, `up`, `restart` and the MCP tools. `false` means `workers` and `stale` are `null` because nobody asked |
+| `agent` | bool | the service is loaded in launchd or systemd |
+| `processes` | bool | the bench's processes run (`processes_running`) |
+| `web` | bool | the default site's ping answered with a 2xx or 3xx (`web_ping_code`) |
+| `socketio` | bool | the realtime port accepts a connection (asked only while processes run) |
+| `redis` | bool | the queue and the cache Redis accept a connection (`redis`) |
+| `workers` | bool or null | a background worker of this bench runs. `null` unless asked (see below) |
+| `stale` | bool or null | a `*.py` file under `apps/` (not in `node_modules`, `.git` or `__pycache__`) changed after the bench started, so the running code is old and the bench needs `benchbar restart`. Any `*.py` counts, tests and docs too, so a false positive is possible (it errs towards a restart). `null` when not asked (`deep` is `false`), when the bench's processes do not run, or when the start time is not known (no `started_at`, so no `state.json`) |
+| `stale_file` | string or null | the first such file, relative to the bench |
+| `waiting_on` | array | the names of the parts that are not ready, in the order above |
+| `fix` | string or null | the command that moves the first missing part; `null` when ready |
+
+The start time is `started_at` of `logs/.benchbar/state.json`: when the
+runner of the current run started, a second or two before the web server
+loaded its code. Without `--deep`, `status` starts no program for `ready`:
+`agent`, `processes` and `web` come from what status reads anyway, and
+`socketio` and `redis` from bash itself (`/dev/tcp`). `workers` and `stale`
+need `pgrep`, `lsof` and `find`, so they are `null` in a plain `status`
+and are asked by `status --json --deep`, `benchbar wait`, and the MCP tool
+`benchbar_status`. A `null` part never makes `ready` false: a reader that needs
+`stale` to be known checks `deep` and that `stale` is not `null`.
+Not ready is not an error: `status` exits 0.
+
+### `benchbar wait --json`
+
+```
+benchbar wait [--ready] [--for PART] [--timeout SECS] [--json]
+```
+
+Polls once a second until the bench is ready, or until `PART` is
+(`agent`, `processes`, `web`, `socketio`, `redis`, `workers` or `stale`),
+and starts nothing. `--timeout` is whole seconds, 0 to 3600, default 60;
+0 checks once. Exit 0 when ready, 1 when not: after the timeout, or at once
+for a bench that cannot become ready by itself (`state` `paused`, or
+`not_adopted`). A stopped bench is waited for, because another command may be
+starting it. `--for stale` is refused (exit 1, with the reason) when `stale` is
+`null`, that is for a bench that does not run or has no `started_at`: a `null`
+part counts as holding, so the wait would end at once and say nothing. Exit 2
+is never used (it stays the MariaDB password).
+
+| Field | Type | Notes |
+|---|---|---|
+| `for` | string | `ready`, or the part waited for |
+| `satisfied` | bool | the wait ended because it was ready |
+| `timed_out` | bool | it gave up after `timeout_s` |
+| `waited_s`, `timeout_s` | number | seconds waited, and the limit |
+| `waiting_on` | array | what was still not ready; `[]` when satisfied |
+| `ready` | object | the object above, as of the last look, with the deep parts |
+
+The `done` fields follow (`exit`, `changed`, `warnings`, `next_actions`
+with the fix, `state_after`). With `--jsonl` there is one `progress` line a
+second while it waits. The MCP tool `benchbar_wait` is the same call,
+capped at 120 seconds, with progress notifications.
 
 ## Sites
 
@@ -1021,7 +1118,7 @@ reaches it is checked by `install`, before anything is built.
 
 ## `benchbar pull --json`
 
-Since 0.8 the `done` line also carries `changed`, `next_actions` and `state_after` ([done fields](#the-done-fields-08)); its `warnings` are as before. Since 0.9 the `plan` line has `neutralise` and the `done` line `neutralised`.
+Since 0.8 the `done` line also carries `changed`, `next_actions` and `state_after` ([done fields](#the-done-fields-08)); its `warnings` are as before. Since 0.9 the `plan` line has `neutralise` and the `done` line `neutralised`. Since 0.9 the `plan` line has `token` (see `--apply TOKEN`).
 
 Added in 0.5. Unlike the commands above, `pull` changes things, so it
 streams: one JSON object per line on stdout, written as the run goes, and
@@ -1039,7 +1136,7 @@ answered counts as no). Each line carries `schema_version`,
 
 | Event | Fields | Notes |
 |---|---|---|
-| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `neutralise`, `apps`, `migrate`, `create_site`, `before_migrate`, `steps`, `dry_run` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value. Since 0.8 `create_site` says the target does not exist and a `new_site` step makes it, `before_migrate` is the path of the `--before-migrate` script or `null`, and `migrate` is `false` with `--no-migrate`. Since 0.9 `neutralise` is `false` with `--keep-secrets`. A target the restore cannot go into (a folder without a `site_config.json`, a `bench new-site` that did not finish, no MariaDB root password) ends the run before this line, in a dry run too |
+| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `neutralise`, `apps`, `migrate`, `create_site`, `before_migrate`, `needs`, `steps`, `dry_run`, `token` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value. Since 0.8 `create_site` says the target does not exist and a `new_site` step makes it, `before_migrate` is the path of the `--before-migrate` script or `null`, and `migrate` is `false` with `--no-migrate`. Since 0.9 `neutralise` is `false` with `--keep-secrets`. Since 0.9 `token` is a hash of the plan without `dry_run`, `bytes` and `age_hours`: pass it to `--apply TOKEN --yes` with the same arguments to run exactly this plan; a plan that changed since ends the run with exit 1 before anything is changed. A target the restore cannot go into (a folder without a `site_config.json`, a `bench new-site` that did not finish, no MariaDB root password) ends the run before this line, in a dry run too |
 | `gate` | `name` (`new_backup`, `apply`, `replace`), `answer` (`yes`, `no`) | a question the run asked. `new_backup` is `yes` only when the typed (or `--confirm-site`) name matches |
 | `progress` | `file`, `bytes`, `total` | after each downloaded file; `bytes` counts the files so far |
 | `step` | `n`, `id`, `name`, `status` | `n` counts from 1 in the order of `plan.steps`; `status` is `done`, `unchanged`, `skipped` or `failed` |
@@ -1120,6 +1217,17 @@ can ask. Added after 0.8.1: `status --json` and `commands --json` have `labs`
 (the enabled names); `commands --json` also has `gated` (`[{"name","lab"}]`
 for a command left out because its lab is off) and a command of an enabled lab
 has `lab`.
+
+## Notices (0.9.0)
+
+`status --json` has `notices`: the defaults an update changed, until they are
+dismissed. `[]` when there are none, and a fresh install has none. Each entry:
+`id` (`listen-local`, `unknown-flags`, `pull-neutralise`), `title`, `text`,
+`switch_back` (the command or variable that goes back), `doc` (a full URL of
+the page that explains it) and `since` (the version of the change).
+`benchbar notices --json` prints `{"schema_version":1,"cli_version":"...","notices":[...]}`;
+`--dismiss ID` or `--all` hides entries and prints what is left. A client shows
+a notice once and dismisses it through that command.
 
 ## Site backups
 

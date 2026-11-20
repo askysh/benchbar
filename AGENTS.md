@@ -8,7 +8,10 @@ without surprising the user.
 
 If your client speaks the Model Context Protocol, add the server once
 (`claude mcp add benchbar -- benchbar mcp`) and use its tools instead of
-parsing text: `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
+parsing text: `benchbar_list`, `benchbar_status` (its `ready` object says
+whether the bench can serve; `ready.stale` means Python code changed since
+it started, so restart it), `benchbar_wait` (blocks until it is ready, with
+progress notifications), `benchbar_doctor`,
 `benchbar_logs_tail` (`file`: `bench`, `worker`, `worker_error` or
 `previous`), `benchbar_site_list`, `benchbar_site_backups` (the stamps a
 restore takes), `benchbar_app_list`, `benchbar_app_focus_list`,
@@ -68,7 +71,10 @@ around the missing tool.
 ./benchbar doctor                 # same, for humans
 ```
 
-Both are safe to run at any time. Every check carries a `fix` string
+Both are safe to run at any time. After `up` or `restart`, or after you
+changed Python code, `./benchbar wait --json` blocks until the bench is
+ready (exit 0) or says what is not (exit 1, with the fix); `status --json --deep`
+shows the same `ready` object without waiting. Every check carries a `fix` string
 (the exact command) and an `action` id (what `repair` would do).
 
 The examples run `./benchbar` from this checkout. On a user's Mac the
@@ -206,6 +212,19 @@ stamps), plan first, show it to the user, then apply with the token:
 
 It backs the site up first, never moves the default site and ends with a
 check. Do not run `bench restore` or `mariadb -u root` yourself.
+
+A `pull` has a token too (the CLI form only; it is not an MCP tool). Show
+the plan to the user, then run exactly it:
+
+```bash
+./benchbar pull HOST:SITE --as NAME --dry-run --json            # the plan line has the token
+./benchbar pull HOST:SITE --as NAME --apply TOKEN --yes --json  # same arguments
+```
+
+The run makes the plan again after its checks; a newer backup on the
+server or another set of apps is another plan, and it stops with "The
+plan changed since it was shown; nothing was changed" (exit 1). Without
+`--apply` the old behaviour stays: a person in a terminal is asked.
 `benchbar up --services-only` starts only the bench's Redis.
 
 ## Port setup and conflicts
@@ -277,8 +296,10 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   package (which includes Rosetta 2, when the package needs it and it is
   missing), the LAN guard (`benchbar lan-guard install` and `remove`: the
   pf anchor, its launch daemon and the pf reference it took) and the firewall allow for node
-  (`benchbar lan-guard allow-node`); on Linux for apt, the wkhtmltopdf .deb
-  and MariaDB (see above). The `lan-guard` commands are a person's
+  (`benchbar lan-guard allow-node`); on Linux for apt, the wkhtmltopdf .deb,
+  MariaDB (see above) and the LAN guard (`benchbar lan-guard install` and
+  `remove`: the `inet benchbar` nftables table, its systemd unit and
+  `/etc/benchbar`). The `lan-guard` commands are a person's
   decision: never run them under `--for-agent`, `mcp` or
   `BENCHBAR_NONINTERACTIVE`, which refuse them; give the user the command.
   The run asks for it once up front; with `--yes` the confirmation is
@@ -381,7 +402,12 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   installer, `.benchbar` here means `~/.local/state/benchbar`.
 - Exit codes: 0 success, 1 failure or a failing check, 2 the MariaDB root
   password is unknown (install phase 00 or 01, `site add`, `site drop`,
-  `pull`, `site restore`; pass `MARIADB_ROOT_PASSWORD`). Only an explicit refusal exits 2:
+  `pull`, `site restore`; pass `MARIADB_ROOT_PASSWORD`), 64 a usage error: an
+  unknown option, or an option without its value, stops the run before it changes
+  anything (`error_id` `unknown_flag` or `missing_value`, the option and the
+  command's usage line in the error; with `--json` or `--for-agent` the same answer
+  as JSON on stdout). `BENCHBAR_LENIENT_FLAGS=1` turns an unknown option back into a
+  warning; it does not cover a missing value. Only an explicit refusal exits 2:
   a command that happens to fail with code 2 is reported as 1. An install
   cancelled at its plan exits 1 and says `Cancelled. No bench or site was
   created`; the system dependencies of step 1 stay in place.

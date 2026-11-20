@@ -14,7 +14,9 @@
 # (lan-guard install and remove: the pf anchor and its launch daemon) and the
 # firewall allow for node (lan-guard allow-node). On Linux: apt (the packages and
 # the wkhtmltopdf .deb), the MariaDB admin step, its drop-in and restart, and
-# starting a stopped mariadb or redis-server (platform-linux.sh). Nothing
+# starting a stopped mariadb or redis-server (platform-linux.sh), and the LAN
+# guard (lan-guard install and remove: the inet benchbar nftables table, its
+# systemd unit and /etc/benchbar; lan-guard-linux.sh). Nothing
 # else in benchbar runs as root, and fl_sudo_drop ("sudo -k") ends the
 # credential as soon as those steps are done, before brew, pip, npm, yarn,
 # uv, fnm or bench run any third party code on the same terminal: a
@@ -104,14 +106,23 @@ fl_sudo_begin() {
 
 # Keep the timestamp fresh while this process lives. The loop owns no
 # stdio and not fd 3, the JSON stream (a reader must not wait for it), sleeps in
-# short slices so it notices the parent leaving, and dies on TERM.
+# short slices so it notices the parent leaving, and dies on TERM. The sleep
+# is a child the loop waits for: bash runs a trap only after the foreground
+# command ends, so a plain "sleep 5" made fl_sudo_end wait up to 5 seconds.
 fl__sudo_keepalive() {
-  ( trap 'exit 0' TERM
+  ( # the trap stops whatever the loop has in the background (jobs -p knows the sleep from the
+    # moment it is forked, before any variable could name it), so no sleep is left behind
+    trap 'kill $(jobs -p) 2>/dev/null; exit 0' TERM
     parent="$$"
     while kill -0 "$parent" 2>/dev/null; do
       sudo -n true 2>/dev/null || exit 0
       slice=0
-      while [[ "$slice" -lt 10 ]]; do sleep 5; kill -0 "$parent" 2>/dev/null || exit 0; slice=$((slice + 1)); done
+      while [[ "$slice" -lt 10 ]]; do
+        sleep 5 &
+        wait "$!" 2>/dev/null || true
+        kill -0 "$parent" 2>/dev/null || exit 0
+        slice=$((slice + 1))
+      done
     done ) </dev/null >/dev/null 2>&1 3>&- &
   FL_SUDO_KEEPALIVE_PID="$!"
   fl_log "sudo session started (keepalive pid ${FL_SUDO_KEEPALIVE_PID})"

@@ -108,8 +108,9 @@ assert_contains "$ERR" "No operation op-20200101-000000-1"
 run_json op status '../../etc/passwd' --json
 assert_eq "1" "$CODE"
 assert_contains "$ERR" "Not an op id"
+# an unknown flag is a usage error since 0.9.0 (exit 64)
 run_json op status --bogus
-assert_eq "1" "$CODE"
+assert_eq "64" "$CODE"; assert_contains "$OUT$ERR" "Unknown option for op status: --bogus"
 run_json op frobnicate
 assert_eq "1" "$CODE"
 assert_contains "$OUT$ERR" "Unknown subcommand"
@@ -265,7 +266,12 @@ rm -f "$FL_STATE_DIR/lock/pid"; rmdir "$FL_STATE_DIR/lock"
 
 # ---- 6c. a record whose pid another process now holds is interrupted, and op wait does not hang on it
 # LIVE is alive: a record with its pid and its real start time is running, one with another start time is a reused pid
-LIVE_START="$(sed 's/^.*) //' "/proc/$LIVE/stat" | awk '{print $20}')"
+# the start time as the CLI reads it (/proc on Linux, ps -o lstart= on macOS)
+if [[ -r /proc/self/stat ]]; then
+  LIVE_START="$(sed 's/^.*) //' "/proc/$LIVE/stat" | awk '{print $20}')"
+else
+  LIVE_START="$(ps -o lstart= -p "$LIVE" | sed 's/^ *//; s/ *$//')"
+fi
 [[ -n "$LIVE_START" ]] || fail "could not read the start time of $LIVE"
 fake_op op-20260102-000001-21 running "$LIVE"
 sed_inplace "s/\"pid\":$LIVE,/\"pid\":$LIVE,\"pid_start\":\"$LIVE_START\",/" "$OPS/op-20260102-000001-21.json"
