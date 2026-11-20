@@ -83,7 +83,7 @@ fl__ap_pin_resolve() {
 # hooks.py), AP__REQ (its required_apps, one per line) and AP__SHA (the
 # commit it read); 1 with AP__ERR when it cannot be read.
 fl__ap_read_hooks() {
-  local repo="$1" branch="$2" name="$3" pin="${4:-}" tmp code=0 path="" ref="HEAD"
+  local repo="$1" branch="$2" name="$3" pin="${4:-}" tmp code=0 path="" ref="HEAD" dep have
   AP__PKG=""; AP__REQ=""; AP__ERR=""; AP__SHA=""
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-plan.XXXXXX")"
   fl__ap_git "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/out" "$tmp/err" \
@@ -116,6 +116,14 @@ fl__ap_read_hooks() {
   fi
   AP__PKG="${path%/hooks.py}"
   AP__REQ="$(fl_hooks_required_apps "$tmp/hooks.py")"
+  # the Frappe this app is built for ([tool.bench.frappe-dependencies]) against the bench's
+  fl__ap_git "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/pyproject.toml" "$tmp/err" -C "$tmp/repo" show "${ref}:pyproject.toml" || true
+  dep="$(fl_pyproject_frappe_dep "$tmp/pyproject.toml")"
+  have="$(fl_bench_frappe_version)"
+  if [[ -n "$dep" && -n "$have" ]] && ! fl_dep_fits "$dep" "$have"; then
+    AP__ERR="${name} (${branch}${pin:+ at ${pin}}) needs frappe ${dep}, and this bench has frappe ${have}: pick a branch for it with --branch (often version-${have%%.*}), or leave the app out"
+    rm -rf "$tmp"; return 1
+  fi
   rm -rf "$tmp"
   return 0
 }
@@ -909,9 +917,34 @@ fl__ap_clone_info() {
 fl__ap_pin_checkout() {
   local path
   path="$(fl_app_path "$1")"
+  AP__PRE="$(git -C "$path" rev-parse HEAD 2>/dev/null || true)"
   if fl_commit_reach "$path" "$2" && fl_run git -C "$path" checkout --quiet "$2"; then return 0; fi
   AP__GOT="$(git -C "$path" rev-parse HEAD 2>/dev/null || true)"
   return 1
+}
+
+# fl__ap_tip_unmoved NAME: before get-app, the branch (or tag) of an app to
+# clone is still at the commit the plan read; a pin is exempt, it names its
+# commit. Nothing has been cloned when this fails.
+fl__ap_tip_unmoved() {
+  fl__ap_clone_info "$1"
+  [[ -n "$AP_CI_SHA" && -z "$AP_CI_PIN" ]] || return 0
+  if ! fl_git_remote_tip "$AP_CI_REPO" "$AP_CI_BRANCH" "${FL_GIT_TIMEOUT:-30}"; then
+    fl_fail "${1}: could not read ${AP_CI_BRANCH} of ${AP_CI_REPO} again before get-app (${FL_GR_ERR:-git ls-remote exit ${FL_GR_CODE}}); nothing was cloned."
+    fl_fix "Plan again: benchbar app add ${1} --dry-run --json"
+    return 1
+  fi
+  [[ "$FL_GR_TIP" == "$AP_CI_SHA" ]] && return 0
+  fl_fail "${1}: ${AP_CI_BRANCH} moved after the plan was made (planned ${AP_CI_SHA:0:12}, now ${FL_GR_TIP:0:12}); nothing was cloned."
+  fl_fix "Review a fresh plan: benchbar app add ${1} ... --dry-run --json"
+  return 1
+}
+
+# fl__ap_pin_requirements DIR: the Python and node requirements of the pinned
+# commit now checked out in apps/DIR (get-app installed those of the branch tip)
+fl__ap_pin_requirements() {
+  fl_run_long "bench setup requirements --python ${1} (at the pinned commit)" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --python "$1" || return 1
+  fl_run_long "bench setup requirements --node ${1} (at the pinned commit)" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --node "$1"
 }
 
 # fl__ap_apply TARGET: runs AP_STEPS in order, with the dependencies
@@ -964,18 +997,22 @@ fl__ap_apply() {
     case "$kind" in
       clone_required|clone)
         fl__ap_clone_info "$arg"
-        if ! fl_app_clone "$arg" "$AP_CI_REPO" "$AP_CI_BRANCH"; then res="failed"
+        if ! fl__ap_tip_unmoved "$arg"; then res="failed"
+        elif ! fl_app_clone "$arg" "$AP_CI_REPO" "$AP_CI_BRANCH"; then res="failed"
         elif [[ -n "$AP_CI_PIN" ]] && ! fl__ap_pin_checkout "$FL_CLONED_DIR" "$AP_CI_PIN"; then
           # the clone does not reach the commit that was reviewed
           res="failed"
-          fl_fail "${arg}: the clone does not reach the pinned commit (planned ${AP_CI_PIN:0:12}, cloned ${AP__GOT:0:12}); nothing was built or installed."
+          fl_fail "${arg}: the clone does not reach the pinned commit (planned ${AP_CI_PIN:0:12}, cloned ${AP__GOT:0:12}); get-app cloned it and installed its Python requirements, but nothing was built or installed on a site."
           fl_fix "Check the commit is on a branch or tag of ${AP_CI_REPO}, then: cd $(printf '%q' "$FL_BENCH_DIR") && bench remove-app $(printf '%q' "$FL_CLONED_DIR"), and plan again"
         elif ! fl__ap_at_commit "$FL_CLONED_DIR" "$AP_CI_SHA"; then
           # the branch moved between the plan and get-app: build and install
           # would run code nobody reviewed
           res="failed"
-          fl_fail "${arg}: ${AP_CI_BRANCH} moved after the plan was made (planned ${AP_CI_SHA:0:12}, cloned ${AP__GOT:0:12}); nothing was built or installed."
-          fl_fix "Review a fresh plan: benchbar app add ${target} ... --dry-run --json"
+          fl_fail "${arg}: ${AP_CI_BRANCH} moved after the plan was made (planned ${AP_CI_SHA:0:12}, cloned ${AP__GOT:0:12}); get-app cloned it and installed its Python requirements, but nothing was built or installed on a site."
+          fl_fix "Remove the clone, then review a fresh plan: cd $(printf '%q' "$FL_BENCH_DIR") && bench remove-app $(printf '%q' "$FL_CLONED_DIR"); benchbar app add ${target} ... --dry-run --json"
+        elif [[ -n "$AP_CI_PIN" && "$AP__PRE" != "$AP_CI_PIN" ]] && ! fl__ap_pin_requirements "$FL_CLONED_DIR"; then
+          # get-app installed the requirements of the tip it cloned; the pin has its own
+          res="failed"
         else cloned+=("$FL_CLONED_DIR"); fi ;;
       build)
         # the folders of the apps to build, as bench named them

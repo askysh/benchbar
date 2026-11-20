@@ -45,7 +45,7 @@ assert_eq "$snap" "$(snapshot "$BENCH" "$FL_STATE_DIR")" "(dry run writes nothin
 reset_calls
 run_fm app add acme_crm --site macdev --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-assert_calls_contain "^git ls-remote --exit-code --heads --tags -- file://${REMOTES}/acme_crm.git main$"
+assert_calls_contain "^git ls-remote --exit-code --heads --tags -- file://${REMOTES}/acme_crm.git refs/heads/main refs/tags/main$"
 assert_calls_contain "^bench get-app --skip-assets --branch main file://${REMOTES}/acme_crm.git$"
 assert_calls_not_contain 'get-app.*(--overwrite|--resolve-deps)'
 assert_calls_contain '^bench --site macdev install-app acme_crm$'
