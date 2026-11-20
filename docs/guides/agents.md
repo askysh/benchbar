@@ -22,6 +22,7 @@ the argument `mcp`.
 |---|---|---|---|
 | `benchbar_list` | read | Every Frappe bench benchbar knows on this machine: path, default site, sites, ports, whether its service is installed. | none |
 | `benchbar_status` | read | Live state of one bench: stopped, starting, running, crashed, paused or not_adopted (a bench folder benchbar does not manage yet), with pid, uptime start, ports, the bench command its service runs (bench_bin), sites and the ping of every site (only while the bench runs). | `bench` |
+| `benchbar_wait` | read | Wait until a bench is ready (the ready object of benchbar_status: the service loaded, the site answers its ping, socketio and Redis accept connections, a worker runs, no Python file changed since the bench started), or until one part is (for). | `bench`, `timeout`, `for` |
 | `benchbar_doctor` | read | Read only health report of one bench: every check with its level and the exact fix command. | `bench` |
 | `benchbar_logs_tail` | read | The last lines of one log file of a bench. | `bench`, `lines`, `file`, `process`, `since`, `since_restart` |
 | `benchbar_site_list` | read | The sites of one bench, which one is the default, whether /etc/hosts has it, its ping code, its database name and the MariaDB port (never the password). | `bench` |
@@ -31,13 +32,14 @@ the argument `mcp`.
 | `benchbar_up` | acts | Start a bench in the background (as a service) and wait for its default site to answer. | `bench`, `services_only` |
 | `benchbar_down` | acts | Stop a bench and keep it stopped, also across reboots. | `bench` |
 | `benchbar_restart` | acts | Restart every process of a bench, for example after changing Python code. | `bench` |
+| `benchbar_op_status` | read | The long runs: one operation by op_id (what an apply tool or a background run returned), or without op_id the ten newest. | `op_id` |
 | `benchbar_app_add_plan` | plan (read only) | Plan adding a Frappe app to a bench from a git URL or a known app name, read only: the resolved repo and branch, whether the repo is readable, the sites, the required apps (from hooks.py) and whether each resolves, the steps, and a token for benchbar_app_add. | `url_or_name`, `branch`, `name`, `commit`, `install_on`, `apps`, `site`, `all_sites`, `bench` |
-| `benchbar_app_add` | acts | Apply a plan from benchbar_app_add_plan: clone the app and its planned required apps, build, install on the planned sites. | `url_or_name`, `branch`, `name`, `commit`, `install_on`, `apps`, `site`, `all_sites`, `bench`, `token`* |
+| `benchbar_app_add` | acts | Apply a plan from benchbar_app_add_plan: clone the app and its planned required apps, build, install on the planned sites. | `url_or_name`, `branch`, `name`, `commit`, `install_on`, `apps`, `site`, `all_sites`, `bench`, `token`*, `background` |
 | `benchbar_site_add_plan` | plan (read only) | Plan a new site on a bench, read only: the steps (bench new-site, install the given apps, the hosts line), what they touch, the default site (which never moves) and a token for benchbar_site_add. | `site`*, `apps`, `bench` |
 | `benchbar_site_add` | acts | Apply a plan from benchbar_site_add_plan: create the site with benchbar's own MariaDB credentials, install the apps, add the hosts line. | `site`*, `apps`, `bench`, `token`*, `admin_password` |
 | `benchbar_site_backup` | acts | Back up one site (bench --site S backup, into the site's private/backups): the database, and with with_files the uploads. | `site`*, `with_files`, `bench` |
 | `benchbar_site_restore_plan` | plan (read only) | Plan restoring a backup set into a site, read only: the steps, what they touch (database, files, site_config), the backup of the target taken first, whether migrate runs, and a token for benchbar_site_restore. | `site`*, `from`*, `from_site`, `new`, `no_migrate`, `with_files`, `bench` |
-| `benchbar_site_restore` | acts | Apply a plan from benchbar_site_restore_plan: back up the target with its files, restore the set (from a copy, so the backup cannot prune it), carry the encryption key over, migrate unless no_migrate, verify. | `site`*, `from`*, `from_site`, `new`, `no_migrate`, `with_files`, `bench`, `token`* |
+| `benchbar_site_restore` | acts | Apply a plan from benchbar_site_restore_plan: back up the target with its files, restore the set (from a copy, so the backup cannot prune it), carry the encryption key over, migrate unless no_migrate, verify. | `site`*, `from`*, `from_site`, `new`, `no_migrate`, `with_files`, `bench`, `token`*, `background` |
 | `benchbar_service_install_plan` | plan (read only) | Plan the background service of a bench that has none (or an outdated one), read only: Procfile.lean, the runner, the agent (launchd on macOS, systemd --user on Linux), the helpers and the hosts line, with a token for benchbar_service_install. | `bench` |
 | `benchbar_service_install` | acts | Apply a plan from benchbar_service_install_plan: write the service files and load the agent. | `token`*, `bench` |
 | `benchbar_site_backups` | read | The backup sets of one site, newest first: stamp, time, size, whether files are in it and whether it is complete (and the folder they are in). | `site`*, `bench` |
@@ -138,6 +140,53 @@ bench benchbar does not know. A folder that only looks like a bench
 under `~` or `~/dev` is listed with `adopted: false` and is refused:
 register it first in a terminal with `benchbar register PATH`, or name it
 in your client's setup for that server (`benchbar mcp --allow-bench PATH`).
+
+## Long runs and op_id
+
+Every run that changes things has an `op_id` (`op-20261119-101500-4242`).
+The apply tools return it with the result, as `op_id`, and it is in every
+line of the CLI's stream. A client that stops waiting after a few minutes,
+a timeout, a cancelled call: the run's record is still there, and
+`benchbar_op_status` with the `op_id` says whether it runs (`running`),
+which step it is on, its last progress line (`yarn build`, 42 seconds) and
+how it ended (`done` or `failed`, with `exit`). Without an `op_id` it lists
+the newest ten. A run whose process died without a `done` line is
+`interrupted`: its log says how far it got. Poll every few seconds, not
+faster; the tool only reads.
+
+`benchbar_app_add` and `benchbar_site_restore` also take `background:
+true`. The call then returns at once with the `op_id` (state `starting`)
+and the run goes on without the call: follow it with `benchbar_op_status`
+until its state is `done` or `failed`; `result` then holds the `done`
+line, with `changed`, `warnings` and `next_actions`. Use it when the
+client gives up on a call after a few minutes. The plan, its token and the
+person's OK work as before. There is no tool that waits for an operation: a
+tool that blocks for minutes is what `background` replaces.
+
+In a terminal the same handles are `benchbar op status|list|wait` and
+`--background` on `install`, `repair`, `pull`, `app add`, `app update`,
+`site add`, `site backup` and `site restore` (it needs `--yes`: nothing
+can be asked of a run nobody watches). See [op](../reference/cli/other.md#op).
+
+The MCP protocol of 2025-11-25 has a tasks primitive for exactly this
+(a call that returns a task id, polled with `tasks/get`). This server
+speaks 2025-06-18 and clients are only starting on tasks, so for now the
+`op_id` is the handle; a task id will be the same string when tasks come.
+
+## Waiting for a bench
+
+After `benchbar_up` or `benchbar_restart`, and after you change Python code,
+call `benchbar_wait`. It blocks (up to `timeout` seconds, at most 120, 60 by
+default) until the bench is ready: the service is loaded, the site answers
+its ping, socketio and Redis accept connections, a worker runs and no Python
+file under `apps/` changed since the bench started. It returns `satisfied`,
+`waiting_on` (what is not ready) and the `ready` object, with a `next_actions`
+entry that names the fix. A bench that cannot become ready by itself (paused
+after crashes, not managed by benchbar) returns at once. `benchbar_status`
+carries the same `ready` object without waiting: `ready.stale: true` means
+the running code is old, so `benchbar_restart` first. In a terminal the same
+is `benchbar wait --json`, exit 0 when ready and 1 when not; the fields are in
+[the JSON reference](../json-schema.md#readiness).
 
 ## What was run
 

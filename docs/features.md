@@ -33,6 +33,7 @@ macOS version. A row that says "macOS" does not work on Linux.
 | Doctor and repair | `doctor` reads the state and names the fix. `repair` applies only the flagged fixes, with a backup first. | 0.2.0 | macOS; Linux 0.8.0 | [Doctor and repair](guides/doctor-and-repair.md) |
 | Shell helpers | `benchup`, `benchdown`, `benchrestart`, `benchwatch`, `benchlogs` and `benchstatus`. | 0.2.0 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md#daily-use) |
 | `up`, `down`, `restart`, `status` | Start, stop, restart and read the state of a bench. | 0.2.0 | macOS; Linux 0.8.0 | [running](reference/cli/running.md) |
+| `wait` and `ready` | `status --json` has a `ready` object: agent, processes, site ping, socketio, Redis, a worker, and whether Python code changed since the bench started. `benchbar wait` and the MCP tool `benchbar_wait` block until it is ready and say what is missing. | 0.9.0 | macOS, Linux | [Readiness](json-schema.md#readiness), [running](reference/cli/running.md) |
 | `list` | Every bench benchbar knows, without pinging a site. | 0.3.0 | macOS; Linux 0.8.0 | [list](reference/cli/other.md#list) |
 | `logs`, `fg`, `watch` | Tail the bench log, run the bench in the foreground, rebuild assets. | 0.2.0 | macOS; Linux 0.8.0 | [running](reference/cli/running.md#logs) |
 | `autostart`, `uninstall-service` | Let a bench come back after login or not, and remove its service. | 0.2.0 | macOS; Linux 0.8.0 | [autostart](reference/cli/other.md#autostart), [uninstall-service](reference/cli/other.md#uninstall-service) |
@@ -54,9 +55,12 @@ macOS version. A row that says "macOS" does not work on Linux.
 | Open as a user | `open --as USER` signs in to a development site as another user, with no password. Off until you turn it on for a site. | 0.8.1 | macOS, Linux | [open](reference/cli/other.md#open), [site open-as](reference/cli/site.md#site-open-as) |
 | Rooms on your Wi-Fi (`share`, `lan-guard`) | Lets colleagues on the same Wi-Fi use a hardened copy of a site behind a room code. **Lab** `lan-rooms`. | 0.8.2 | macOS | [share and lan-guard](reference/cli/share.md), [How sharing keeps your bench safe](concepts/sharing-safety.md) |
 | Labs | `benchbar labs` lists, turns on and turns off experiments. | 0.8.2 | macOS, Linux | [labs](reference/cli/labs.md) |
+| Notices after an update | Every default an update changes shows a notice once, with its switch back. `benchbar notices` lists and dismisses them, and the Mac app shows a banner. | 0.9.0 | macOS, Linux | [notices](reference/cli/other.md#notices), [What's new](whats-new.md) |
+| Rooms on your Wi-Fi (`share`, `lan-guard`) | Lets colleagues on the same Wi-Fi use a hardened copy of a site behind a room code. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Share a site on your network](guides/share-on-your-network.md), [share and lan-guard](reference/cli/share.md), [How sharing keeps your bench safe](concepts/sharing-safety.md) |
+| Labs | `benchbar labs` lists, turns on and turns off experiments. | 0.8.2 | macOS, Linux | [Labs](guides/labs.md), [labs](reference/cli/labs.md) |
 
-On Linux, only the v15-lts bench is supported, and the site is
-`linuxdev.localhost`. See [Install](install.md#linux).
+On Linux the default site is `linuxdev.localhost`. See
+[Install](install.md#linux).
 
 ## Mac app
 
@@ -81,13 +85,17 @@ JSON. See [The menu bar app](app.md).
 | Updates | Checks once a day, with Update Now. | 0.6.0 | macOS | [Updates](app.md#updates) |
 | First run wizard | Creates or adopts a bench on a Mac that has none. | 0.8.0 | macOS | [A new bench from the app](app.md#a-new-bench-from-the-app) |
 | Open as and Find User | Opens a site as a pinned user from the popover or the window. | 0.8.1 | macOS | [Open as a user](app.md#open-as-a-user) |
-| Quick Switch | A panel on ⌃⌥U that opens a site as any pinned user from any app. **Lab** `quick-switch`. | 0.8.2 | macOS | [Quick Switch](app.md#quick-switch) |
-| Sharing tab | Sets up, starts and stops a room, shows the room code and the people in it. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Share on your network](app.md#share-on-your-network) |
-| On your network | Finds the rooms of colleagues on your Wi-Fi and joins them. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Join a room](app.md#join-a-room-on-your-network) |
+| Quick Switch | A panel on ⌃⌥U that opens a site as any pinned user from any app. **Lab** `quick-switch`. | 0.8.2 | macOS | [Quick Switch](guides/quick-switch.md), [in the app](app.md#quick-switch) |
+| Sharing tab | Sets up, starts and stops a room, shows the room code and the people in it. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Share a site on your network](guides/share-on-your-network.md#open-a-room-in-the-mac-app), [in the app](app.md#share-on-your-network) |
+| On your network | Finds the rooms of colleagues on your Wi-Fi and joins them. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Join a room](guides/share-on-your-network.md#join-a-room-in-the-mac-app), [in the app](app.md#join-a-room-on-your-network) |
 | Settings > Labs | Lists the experiments, with a switch, a warning and the version of each. | 0.8.2 | macOS | [The menu bar app](app.md#the-benchbar-window) |
 | Restore a backup | Restores one of a site's backups into the site or into a copy, from the plan the CLI shows, by its token. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | Pull a site | Copies a production site over SSH, or a downloaded backup, into a new site. The copy is neutralised unless you choose to keep the secrets. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | Unfinished changes | Lists an app update or add that stopped part way, with Resume and Drop the Record. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Several apps in one add | **Add App…** takes up to eight apps in one plan with one token, each with its own branch, commit pin and site. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Acknowledge a warning | **Acknowledge** and **Undo** on a Health warning (`doctor --ack`, `--unack`); not for a failure. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Services only, autostart | **Start Services Only** and **Stop Services** for a stopped bench, and **Start after login** (`autostart`) in the Overview. Offered when the CLI lists them. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Install or refresh the service | **Install Service…** or **Refresh Service…** shows the plan of `service` and runs it by its token. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 
 ## BenchBar for Windows
 
@@ -138,12 +146,3 @@ Windows (`benchbar.exe mcp`) since 0.8.0. The tools below are the ones in
 A person approves each plan before the agent applies it. Rooms, Labs,
 sharing, the LAN guard, `self-update` and the repairs of `repair` are not MCP tools. A change that needs a person
 stays with the person.
-
-## Guides still to write
-
-These features have a reference or an app page, and no task guide yet:
-
-- Rooms on your Wi-Fi: a guide to share a site for 30 minutes.
-- Labs: what a Lab is and how to turn one on.
-- Quick Switch.
-- On your network: join a room as a guest.

@@ -1,5 +1,5 @@
 #!/bin/bash
-#@version 9
+#@version 10
 #@unhashed CLI_VERSION
 #@default NOTIFY_BODY pgrep -xq BenchBar 2>/dev/null && return 0\n  osascript -e "display notification \"$1\" with title \"BenchBar: __BENCH_NAME__\"" >/dev/null 2>&1
 #@default CWD_OF lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
@@ -213,10 +213,13 @@ write_state starting "" "$$" "$started" "" ""
     sleep "$PING_EVERY"
     kill -0 "$HPID" 2>/dev/null || exit 0
     code="$(curl -s -o /dev/null -m 2 -w '%{http_code}' -H "Host: $SITE" "http://127.0.0.1:$WEB_PORT/api/method/ping" 2>/dev/null)"
-    if [ "$code" = "200" ]; then
-      kill -0 "$HPID" 2>/dev/null && write_state running "" "$$" "$started" "" 200
-      exit 0
-    fi
+    # 2xx or 3xx, the same rule as the CLI's web check (a site that redirects is up)
+    case "$code" in
+      2??|3??)
+        kill -0 "$HPID" 2>/dev/null && write_state running "" "$$" "$started" "" "$code"
+        exit 0
+        ;;
+    esac
     i=$((i + 1))
   done
 ) &

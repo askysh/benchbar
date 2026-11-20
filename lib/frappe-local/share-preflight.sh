@@ -114,14 +114,22 @@ fl_sp_detail() {
 # an idle timeout: a connect that gets no answer (a blocked link-local IPv6 port sends no RST) waits 75 s
 # unless -G bounds it. Other nc builds (OpenBSD's on Linux) bound the connect with -w and have no -G.
 fl_sp_nc_open() {
-  if [[ "${FL_PLATFORM:-macos}" == macos ]]; then "${FL_NC:-/usr/bin/nc}" -z -G1 -w1 "$@" >/dev/null 2>&1
-  else "${FL_NC:-/usr/bin/nc}" -z -w1 "$@" >/dev/null 2>&1; fi
+  local nc="${FL_NC:-/usr/bin/nc}"
+  if [[ "${FL_PLATFORM:-macos}" == macos ]]; then "$nc" -z -G1 -w1 "$@" >/dev/null 2>&1
+  elif [[ -x "$nc" ]]; then "$nc" -z -w1 "$@" >/dev/null 2>&1
+  else
+    # no nc (a minimal Linux): bash's own /dev/tcp, bounded to a second; the address names the family
+    [[ "${1:-}" != -6 ]] || shift
+    # shellcheck disable=SC2016  # the inner shell expands its own arguments
+    /usr/bin/timeout 1 /bin/bash -c 'exec 3<>"/dev/tcp/$1/$2"' _ "$1" "$2" >/dev/null 2>&1
+  fi
 }
 
 # fl_sp_lan_v: SP_LAN_IFACE and SP_LAN_IP, the address of the default route's interface
 fl_sp_lan_v() {
   local out iface ip
   SP_LAN_IFACE=""; SP_LAN_IP=""; SP_LAN_IP6=""
+  if [[ "${FL_PLATFORM:-macos}" == linux ]]; then fl_sp_lan_linux_v; return 0; fi
   out="$("${FL_ROUTE:-/sbin/route}" -n get default 2>/dev/null || true)"
   iface="$(printf '%s\n' "$out" | awk '$1 == "interface:" { print $2; exit }')"
   [[ "$iface" =~ ^[A-Za-z0-9]+$ ]] || return 0
@@ -129,6 +137,23 @@ fl_sp_lan_v() {
   [[ "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 0
   SP_LAN_IFACE="$iface"; SP_LAN_IP="$ip"
   fl_sp_lan6_v "$iface"
+}
+
+# fl_sp_lan_linux_v: the same on Linux, from the route to a public address: its interface and the source
+# address the kernel would use ("1.1.1.1 via 192.168.1.1 dev eth0 src 192.168.1.20 uid 1000"), and a
+# global IPv6 address of that interface. FL_IP is the tests' ip.
+fl_sp_lan_linux_v() {
+  local ip_bin="/usr/sbin/ip" out iface ip p
+  [[ "${FL_TESTING:-}" == "1" && -n "${FL_IP:-}" ]] && ip_bin="$FL_IP"
+  if [[ ! -x "$ip_bin" ]]; then
+    for p in /sbin/ip /usr/bin/ip /bin/ip; do [[ -x "$p" ]] && { ip_bin="$p"; break; }; done
+  fi
+  out="$("$ip_bin" -4 route get 1.1.1.1 2>/dev/null || true)"
+  iface="$(printf '%s\n' "$out" | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }')"
+  ip="$(printf '%s\n' "$out" | awk '{ for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+  [[ "$iface" =~ ^[A-Za-z0-9._-]+$ && "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 0
+  SP_LAN_IFACE="$iface"; SP_LAN_IP="$ip"
+  SP_LAN_IP6="$("$ip_bin" -o -6 addr show dev "$iface" scope global 2>/dev/null | awk '!/deprecated|tentative/ { sub(/\/.*/, "", $4); print $4; exit }')"
 }
 
 # fl_sp_lan6_v IFACE: SP_LAN_IP6, a non-link-local address of the interface, else its link-local one with its scope
@@ -219,6 +244,8 @@ fl_sp_fetch() {
 
 # fl_sp_pf_files_problem_v VAR: why the anchor or its daemon is not what lan-guard installs (empty: they are)
 fl_sp_pf_files_problem_v() {
+  # Linux: the nftables rules file and the systemd unit (lan-guard-linux.sh)
+  if [[ "${FL_PLATFORM:-macos}" == linux ]]; then fl_lgl_files_problem_v "$1"; return 0; fi
   local anchor="${FL_LANGUARD_ANCHOR:-$FL_SHARE_PF_ANCHOR_FILE}" daemon="${FL_LANGUARD_DAEMON:-$FL_SHARE_PF_DAEMON_FILE}" lines want
   local squeeze='s/^[[:space:]]*//; /^#/d; /^$/d; s/[[:space:]][[:space:]]*/ /g; s/[[:space:]]$//'
   # a whole-line XML comment is the header an earlier install wrote, not part of what launchd reads
@@ -422,6 +449,8 @@ fl_sp_path_problem_v() {
   fl_sp_stat_v __info "$2" || { printf -v "$__var" 'cannot read %s' "$2"; return 0; }
   read -r __uid __group __mode <<<"$__info"
   __me="$(id -u)"
+  # on Linux the group that may write a system folder (/tmp is root's, sticky) is root, not the Mac's admin
+  [[ "${FL_PLATFORM:-macos}" != linux || -n "${FL_SHARE_ADMIN_GROUP:-}" ]] || __admin=root
   if [[ "$__uid" != 0 && "$__uid" != "$__me" ]]; then printf -v "$__var" '%s is owned by another user (uid %s)' "$2" "$__uid"; return 0; fi
   if (( (${__mode:3:1} & 2) != 0 )); then
     if [[ "$3" == 1 ]] && (( (${__mode:0:1} & 1) != 0 )); then :; else printf -v "$__var" '%s is world-writable' "$2"; return 0; fi
