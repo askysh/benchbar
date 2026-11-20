@@ -7,7 +7,6 @@
 # Refresh it from a green full run (a push to next-release or the nightly):
 #   scripts/ci-timings.sh --write RUN_ID
 # Rows merge with merge=union (.gitattributes), so two branches that add rows do not conflict.
-t-flaky	1	1
 test-adopt	52	36
 test-affected	10	5
 test-agent-contracts	127	83

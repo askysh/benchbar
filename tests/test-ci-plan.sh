@@ -216,6 +216,9 @@ t='2026-11-17T09:26:32.3938790Z'
   printf 'CLI tests (Linux, shard 1/8)\tCLI tests\t%s --- ok: test-a (20s)\n' "$t"
   printf 'CLI tests (bash 3.2, shard 1/4)\tCLI tests\t%s --- ok: test-a (40s)\n' "$t"
   printf 'shellcheck\tshellcheck\t%s --- ok: shellcheck (150s)\n' "$t"
+  # not tests: a stand in run's line inside a failing test's output, and a quoted line
+  printf 'CLI tests (Linux, shard 2/8)\tCLI tests\t%s --- ok: t-flaky (1s)\n' "$t"
+  printf 'CLI tests (Linux, shard 2/8)\tCLI tests\t%s   | --- ok: test-a (900s)\n' "$t"
 } >"$LOG"
 TAB="$(printf '\t')"
 # the table it starts from: a header, a test the run timed again, one it timed on one platform only, one it did not time
@@ -227,6 +230,7 @@ test-a${TAB}100${TAB}30
 test-b${TAB}50${TAB}77
 test-old${TAB}5${TAB}-" "$OUT"
 assert_not_contains "$OUT" "shellcheck"
+assert_not_contains "$OUT" "t-flaky"
 assert_contains "$(cat "$TABLE")" "test-a${TAB}1${TAB}1" "(without --write the table is not touched)"
 # --write puts it in the file, and run-tests.sh weighs a test from it
 TIMINGS_FILE="$TABLE" bash scripts/ci-timings.sh --write "$LOG" 2>/dev/null

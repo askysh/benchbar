@@ -35,7 +35,10 @@ fi
 rows="$(printf '%s\n' "$log" | awk -F'\t' '
   $1 ~ /^CLI tests \(macOS/ { leg = "mac" }
   $1 ~ /^CLI tests \((Linux|bash 3\.2)/ { leg = "linux" }
-  $1 ~ /^CLI tests \(/ && match($3, /--- ok: [^ ]+ \([0-9]+s\)/) {
+  # only the line run-tests.sh prints for a real test: the time stamp, "--- ok: test-NAME (Ns)" and
+  # nothing more. A failing test prints the output of the stand in runs it started, and a line
+  # such as "--- ok: t-flaky (1s)" in there is not a test.
+  $1 ~ /^CLI tests \(/ && $3 ~ /^[^ ]+ --- ok: test-[a-z0-9-]+ \([0-9]+s\)$/ && match($3, /--- ok: [^ ]+ \([0-9]+s\)/) {
     s = substr($3, RSTART + 8, RLENGTH - 8)
     name = s; sub(/ .*/, "", name)
     secs = s; sub(/^[^(]*\(/, "", secs); sub(/s\)$/, "", secs)
