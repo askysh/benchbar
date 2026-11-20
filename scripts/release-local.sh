@@ -97,6 +97,7 @@ TARBALL="${DIST}/benchbar-cli-${VERSION}.tar.gz"
 
 step "checksums"
 (cd "$DIST" && shasum -a 256 "$(basename "$ZIP")" "$(basename "$DMG")" "$(basename "$TARBALL")" >SHA256SUMS)
+(cd "$ROOT" && shasum -a 256 install.sh install.ps1) >>"${DIST}/SHA256SUMS"
 cat "${DIST}/SHA256SUMS"
 
 printf '\n[OK] unsigned release %s in %s\n' "$VERSION" "$DIST"

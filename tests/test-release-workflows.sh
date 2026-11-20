@@ -191,6 +191,69 @@ D="$TMP_DIR/docsrepo"
   [[ "$rc" == 2 ]] || { echo "--commit unknown: rc=$rc" >&2; exit 1; }
 ) || fail "scripts/docs-only.sh"
 
+# ---- build provenance (#134): the Mac files are attested by one job that alone
+# has id-token and attestations write, the tap verifies before it renders, and
+# the sums carry the installers that self-update runs
+set +e
+OUT="$(python3 -I - "$ROOT" <<'PY' 2>&1
+import re, sys
+root = sys.argv[1]
+bad = []
+rel = open(root + "/.github/workflows/release.yml").read()
+m = re.search(r"^  attest:\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)", rel, re.M | re.S)
+rest = rel.replace(m.group(0), "") if m else rel
+if not m:
+    bad.append("release.yml has no attest job")
+else:
+    job = m.group(1)
+    if not re.search(r"^      id-token: write$", job, re.M) or not re.search(r"^      attestations: write$", job, re.M):
+        bad.append("the attest job lacks id-token and attestations write")
+    if re.search(r"^    environment:", job, re.M) or re.search(r"secrets\.", job):
+        bad.append("the attest job has an environment or reads a secret")
+    if not re.search(r"needs:\s*\[check, build-signed\]", job):
+        bad.append("the attest job does not wait for build-signed")
+    if "needs.check.outputs.mode == 'signed'" not in job:
+        bad.append("the attest job is not limited to the signed (tag) path")
+    uses = re.findall(r"uses:\s*(\S+)[ \t]*(#.*)?$", job, re.M)
+    attest = [u for u in uses if u[0].startswith("actions/attest-build-provenance@")]
+    if len(attest) != 1:
+        bad.append("expected one attest-build-provenance step, found %d" % len(attest))
+    for ref, comment in uses:
+        if not re.search(r"@[0-9a-f]{40}$", ref) or not re.match(r"#\s*v\d", comment or ""):
+            bad.append("%s is not pinned by commit sha with a version comment" % ref)
+    subjects = job.split("subject-path:")[-1]
+    for want in (".dmg", ".zip", ".tar.gz", "dist/SHA256SUMS"):
+        if want not in subjects:
+            bad.append("the attest job does not attest *%s" % want)
+if re.search(r"id-token:\s*write", rest):
+    bad.append("release.yml: a job other than attest has id-token: write")
+tap = open(root + "/.github/workflows/homebrew-tap.yml").read()
+v = tap.find("gh attestation verify \"$f\"")
+r = tap.find("scripts/homebrew-render.sh")
+if v < 0 or r < 0 or v > r:
+    bad.append("homebrew-tap.yml does not run gh attestation verify before it renders the formula")
+if "askysh/benchbar/.github/workflows/release.yml" not in tap:
+    bad.append("homebrew-tap.yml does not pin the signer workflow")
+if '-lt 9' not in tap or "files_to_verify" not in tap:
+    bad.append("homebrew-tap.yml does not skip the check for a version below 0.9.0")
+if "attestations: read" not in tap:
+    bad.append("homebrew-tap.yml has no attestations: read permission")
+win = open(root + "/.github/workflows/release-windows.yml").read()
+if "'{0}  install.ps1'" not in win:
+    bad.append("release-windows.yml does not put install.ps1 into the checksums")
+if "SHA256SUMS.txt" not in win.split("subject-path:")[1].split("- name:")[0]:
+    bad.append("release-windows.yml does not attest the checksums file")
+for f in ("scripts/macos-release.sh", "scripts/release-local.sh"):
+    if "shasum -a 256 install.sh install.ps1)" not in open(root + "/" + f).read():
+        bad.append("%s does not append install.sh and install.ps1 to SHA256SUMS" % f)
+print("\n".join(bad))
+sys.exit(1 if bad else 0)
+PY
+)"
+code=$?
+set -e
+assert_eq "0" "$code" "$OUT"
+
 # ---- the signed release does not run the suite again: CI's verdict on the tagged
 # tree is checked (scripts/release-ci-gate.sh), and the Swift tests are left out
 PREP="$(cat "$ROOT/.github/actions/release-prepare/action.yml")"
