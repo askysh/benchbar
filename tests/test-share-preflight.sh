@@ -481,7 +481,7 @@ assert_eq "1" "$CODE"; assert_contains "$(cat "$TMP_DIR/text.out")" "8097 answer
 set +e; "$FM" share preflight --critical --bench-dir "$BENCH" >"$TMP_DIR/text.out" 2>&1; set -e
 assert_contains "$(cat "$TMP_DIR/text.out")" "lan_ip"
 # arguments
-run_fm share preflight --bogus --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown argument for share preflight: --bogus"
+run_fm share preflight --bogus --bench-dir "$BENCH"; assert_eq "64" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown option for share preflight: --bogus"
 run_fm share preflight extra --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"
 # a read: no lock, no change to the bench, the hosts file or the share folder
 reset_world

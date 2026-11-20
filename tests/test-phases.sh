@@ -39,8 +39,12 @@ assert_contains "$sql" "IDENTIFIED VIA mysql_native_password"
 assert_not_contains "$OUT" "$PW" "(the password is never printed)"
 assert_not_contains "$(cat "$MOCK_LOG")" "$PW" "(the password is never on a command line)"
 assert_contains "$OUT" "saved to the Keychain"
-# wkhtmltopdf: Rosetta offered and installed, package downloaded, verified, installed with sudo
+# wkhtmltopdf: said up front that the package is Intel only, then Rosetta offered
+# and installed, package downloaded over https only, verified, installed with sudo
+assert_contains "$OUT" "has no Apple Silicon build"
+assert_contains "$OUT" "runs under Rosetta 2"
 assert_contains "$OUT" "Rosetta 2 installed"
+assert_calls_contain "^curl .*--proto =https --tlsv1.2 .*wkhtmltox-0.12.6-2.macos-cocoa.pkg"
 assert_calls_contain '^softwareupdate --install-rosetta --agree-to-license$'
 assert_calls_contain '^curl .*wkhtmltox-0.12.6-2.macos-cocoa.pkg'
 assert_contains "$OUT" "sha256 ok"

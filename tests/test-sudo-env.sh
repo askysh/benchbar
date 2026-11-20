@@ -70,6 +70,12 @@ mkdir -p "\$dir"
 printf '#!/usr/bin/env bash\nexec "$ROOT/tests/mocks/bin/fnm" "\$@"\n' >"\$dir/fnm"
 chmod +x "\$dir/fnm"
 SCRIPT
+# the installers are pinned by URL and sha256 (INST-9); a test is a mirror, so it
+# names its own URLs and the sums of the scripts above
+export UV_INSTALLER_URL=https://astral.sh/uv/install.sh FNM_INSTALLER_URL=https://fnm.vercel.app/install
+UV_INSTALLER_SHA256="$(shasum -a 256 "$MOCK_STATE/http/$(key "$UV_INSTALLER_URL")" | awk '{print $1}')"
+FNM_INSTALLER_SHA256="$(shasum -a 256 "$MOCK_STATE/http/$(key "$FNM_INSTALLER_URL")" | awk '{print $1}')"
+export UV_INSTALLER_SHA256 FNM_INSTALLER_SHA256
 
 
 # the machine's sudo asks for this password and has no terminal (see the sudo mock)
@@ -144,7 +150,7 @@ assert_not_contains "$trace" "Zq7"
 fresh_machine
 trace="$(env BENCHBAR_SUDO=env BENCHBAR_NONINTERACTIVE=1 BENCHBAR_SUDO_PASSWORD="$SECRET" bash -x "$FM" install --dry-run --yes --json --bench-dir "$BENCH" --site linuxdev.localhost 2>&1 </dev/null | grep -v '^{"schema' || true)"
 assert_contains "$trace" "+ [[ -n x ]]" "(first image: the password variable was set)"
-assert_eq "2" "$(printf '%s\n' "$trace" | grep -c '^+ set -euo pipefail')" "(benchbar started twice: the second image has no variable)"
+assert_eq "2" "$(printf '%s\n' "$trace" | grep -c '^+ set -Eeuo pipefail')" "(benchbar started twice: the second image has no variable)"
 assert_contains "$trace" "+ [[ -n '' ]]" "(second image: the variable is gone)"
 assert_not_contains "$trace" "$SECRET" "(re-exec under xtrace)"
 if [[ -r /proc/self/environ ]]; then

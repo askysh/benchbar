@@ -99,8 +99,11 @@ nonisolated struct CLIClient: Sendable {
         return try BenchJSON.decode(BenchList.self, from: Data(output.stdout.utf8))
     }
 
-    func status(bench: String) async throws(CLIError) -> BenchStatus {
-        let output = try await run(["status", "--json", "--bench-dir", bench], timeout: Timeout.query, acceptExitCodes: [0], qos: .utility)
+    /// `deep` also asks the ready parts that start programs (a worker, and whether Python code
+    /// changed since the bench started): only for a bench that runs.
+    func status(bench: String, deep: Bool = false) async throws(CLIError) -> BenchStatus {
+        let output = try await run(["status", "--json"] + (deep ? ["--deep"] : []) + ["--bench-dir", bench],
+                                   timeout: Timeout.query, acceptExitCodes: [0], qos: .utility)
         return try BenchJSON.decode(BenchStatus.self, from: Data(output.stdout.utf8))
     }
 
@@ -173,29 +176,22 @@ nonisolated struct CLIClient: Sendable {
         return list
     }
 
-    /// benchbar app add SOURCE --dry-run --json: the plan and its token. Read
-    /// only; it reads the remote (a shallow clone of hooks.py), so a private
+    /// benchbar app add APP... --dry-run --json: one plan and its token for one app or several.
+    /// Read only; it reads the remotes (a shallow clone of hooks.py), so a private
     /// repository is checked here and a missing key fails in seconds.
-    func addAppPlan(_ source: String, branch: String?, site: String?, bench: String) async throws(CLIError) -> AppAddPlan {
-        let output = try await run(["app", "add", source, "--dry-run", "--json", "--bench-dir", bench] + Self.addAppOptions(branch: branch, site: site),
+    func addAppPlan(_ entries: [AppAddEntry], bench: String) async throws(CLIError) -> AppAddPlan {
+        let output = try await run(["app", "add"] + AppAddBatch.arguments(entries) + ["--dry-run", "--json", "--bench-dir", bench],
                                    timeout: Timeout.doctor, acceptExitCodes: [0])
         return try BenchJSON.decode(AppAddPlan.self, from: Data(output.stdout.utf8))
     }
 
-    /// benchbar app add SOURCE --apply TOKEN: runs the plan the person saw.
+    /// benchbar app add APP... --apply TOKEN: runs the plan the person saw.
     /// The CLI recomputes it under its lock and refuses a token that no
     /// longer matches the bench; the arguments are the plan's.
     @discardableResult
-    func addApp(_ source: String, branch: String?, site: String?, token: String, bench: String) async throws(CLIError) -> CommandOutput {
-        let args = ["app", "add", source, "--apply", token, "--yes", "--plain", "--bench-dir", bench] + Self.addAppOptions(branch: branch, site: site)
+    func addApp(_ entries: [AppAddEntry], token: String, bench: String) async throws(CLIError) -> CommandOutput {
+        let args = ["app", "add"] + AppAddBatch.arguments(entries) + ["--apply", token, "--yes", "--plain", "--bench-dir", bench]
         return try await run(args, timeout: Timeout.long, acceptExitCodes: [0])
-    }
-
-    private static func addAppOptions(branch: String?, site: String?) -> [String] {
-        var args: [String] = []
-        if let branch, !branch.isEmpty { args += ["--branch", branch] }
-        if let site, !site.isEmpty { args += ["--site", site] }
-        return args
     }
 
     @discardableResult

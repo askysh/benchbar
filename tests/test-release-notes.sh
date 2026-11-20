@@ -40,6 +40,7 @@ assert_contains "$OUT" 'a plain `brew upgrade` skips a cask that updates itself'
 assert_contains "$OUT" "--app-only"
 assert_contains "$OUT" "The summary line."
 assert_contains "$OUT" "- a thing"
+assert_contains "$OUT" "https://benchbar.akashmishra.com/whats-new/"
 assert_not_contains "$OUT" "older"
 assert_not_contains "$OUT" "not yet"
 assert_not_contains "$OUT" "## 9.1.0"

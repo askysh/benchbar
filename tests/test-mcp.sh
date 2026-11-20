@@ -52,7 +52,7 @@ assert_eq "1" "$CODE"; assert_contains "$OUT" "no previous file"
 INIT='{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}'
 mcp() { printf '%s\n' "$INIT" '{"jsonrpc":"2.0","method":"notifications/initialized"}' "$@" | "$FM" mcp 2>/dev/null | tail -n +2; }
 call() { printf '{"jsonrpc":"2.0","id":%s,"method":"tools/call","params":{"name":"%s","arguments":%s}}' "$1" "$2" "$3"; }
-TOOL_NAMES='["benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_app_list", "benchbar_profile_list", "benchbar_profile_check", "benchbar_up", "benchbar_down", "benchbar_restart", "benchbar_app_add_plan", "benchbar_app_add", "benchbar_site_add_plan", "benchbar_site_add", "benchbar_site_backup", "benchbar_site_restore_plan", "benchbar_site_restore", "benchbar_service_install_plan", "benchbar_service_install"]'
+TOOL_NAMES='["benchbar_list", "benchbar_status", "benchbar_wait", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_app_list", "benchbar_profile_list", "benchbar_profile_check", "benchbar_up", "benchbar_down", "benchbar_restart", "benchbar_op_status", "benchbar_app_add_plan", "benchbar_app_add", "benchbar_site_add_plan", "benchbar_site_add", "benchbar_site_backup", "benchbar_site_restore_plan", "benchbar_site_restore", "benchbar_service_install_plan", "benchbar_service_install", "benchbar_site_backups", "benchbar_ports_check", "benchbar_ports_plan", "benchbar_lock_check", "benchbar_labs_list", "benchbar_where", "benchbar_doctor_prerequisites", "benchbar_self_update_check", "benchbar_app_focus_list"]'
 REPLIES="$(mcp \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
@@ -81,10 +81,16 @@ names = [t["name"] for t in by[2]["result"]["tools"]]
 assert names == json.loads(sys.argv[1]), names
 # repairs and bench installs stay terminal work; a service install is a reviewed plan
 assert not any("repair" in n or n.endswith("_install_bench") or n == "benchbar_install" for n in names)
+# the safety decisions stay with the person: no tool turns a lab on, applies ports, shares, guards the LAN or updates
+assert not any(w in n for n in names for w in ("labs_on", "labs_off", "ports_apply", "ports_setup", "share", "lan_guard", "uninstall"))
+assert "benchbar_self_update" not in names
 an = {t["name"]: t["annotations"] for t in by[2]["result"]["tools"]}
-for n in ("benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_app_list", "benchbar_profile_list"):
+for n in ("benchbar_list", "benchbar_status", "benchbar_wait", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_app_list", "benchbar_profile_list",
+          "benchbar_site_backups", "benchbar_ports_check", "benchbar_ports_plan", "benchbar_lock_check", "benchbar_labs_list", "benchbar_where",
+          "benchbar_doctor_prerequisites", "benchbar_app_focus_list"):
     assert an[n] == {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}, (n, an[n])
 assert an["benchbar_profile_check"] == {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}, an["benchbar_profile_check"]
+assert an["benchbar_self_update_check"] == {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}, an["benchbar_self_update_check"]
 assert an["benchbar_app_add_plan"] == {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}, an["benchbar_app_add_plan"]
 assert an["benchbar_up"] == {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}, an["benchbar_up"]
 for n in ("benchbar_down", "benchbar_restart"):
@@ -432,6 +438,11 @@ assert "OK" in a["description"] and "plan" in a["description"], a["description"]
 tok = a["inputSchema"]["properties"]["token"]["description"]
 assert "proves only" in tok and "Ask the person" in tok, tok
 assert "approved" not in tok and "approved" not in a["description"], (tok, a["description"])
+# every tool that applies a plan says that its token expires after about an hour
+for n in ("benchbar_app_add", "benchbar_site_add", "benchbar_site_restore", "benchbar_service_install"):
+    x = t[n]
+    assert "expires about an hour" in x["description"], (n, x["description"])
+    assert "expires about an hour" in x["inputSchema"]["properties"]["token"]["description"], n
 ' || fail "MCP app add tools: $R"
 ARGS='{"url_or_name":"'"$URL"'","branch":"main","site":"macdev","bench":"'"$BENCH"'"}'
 reset_calls
@@ -607,6 +618,37 @@ assert progress and all(p["params"]["progressToken"] == "p1" for p in progress),
 assert [p["params"]["progress"] for p in progress] == list(range(1, len(progress) + 1)), progress
 ' || fail "MCP progress notifications: $R"
 
+# ---- benchbar_wait: a read tool; the bench is not ready (nothing runs), so it waits its timeout and says
+# what is missing; progress notifications arrive while it waits
+R="$(printf '%s\n' "$INIT" '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"benchbar_wait","arguments":{"timeout":2,"bench":"'"$BENCH"'"},"_meta":{"progressToken":"w1"}}}' \
+  '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"benchbar_wait","arguments":{"timeout":121,"bench":"'"$BENCH"'"}}}' \
+  '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"benchbar_wait","arguments":{"timeout":0,"for":"web","bench":"'"$BENCH"'"}}}' \
+  | "$FM" mcp 2>/dev/null | tail -n +2)"
+printf '%s\n' "$R" | python3 -c '
+import json, sys
+msgs = [json.loads(l) for l in sys.stdin if l.strip()]
+by = {m.get("id"): m for m in msgs if m.get("id") is not None}
+progress = [m for m in msgs if m.get("method") == "notifications/progress"]
+w = by[8]["result"]
+sc = w["structuredContent"]
+assert not w["isError"], w
+assert sc["satisfied"] is False and sc["timed_out"] is True and sc["exit"] == 1 and sc["for"] == "ready", sc
+assert "web" in sc["waiting_on"] and sc["ready"]["ready"] is False and sc["next_actions"], sc
+assert w["content"][0]["text"].startswith("Data from the bench"), w["content"][0]["text"]
+assert progress and all(p["params"]["progressToken"] == "w1" for p in progress), msgs
+assert [p["params"]["progress"] for p in progress] == list(range(1, len(progress) + 1)), progress
+assert "waiting on" in progress[-1]["params"]["message"] or "Wait" in progress[-1]["params"]["message"], progress
+# above the cap the call is refused, nothing runs
+assert by[9]["result"]["isError"] and "at most 120" in by[9]["result"]["content"][0]["text"], by[9]
+# one part, checked once, with no progress token: a plain document
+q = by[10]["result"]["structuredContent"]
+assert q["for"] == "web" and q["satisfied"] is False and q["waiting_on"] == ["web"], q
+' || fail "benchbar_wait over MCP: $R"
+# the status tool carries the ready object, with the deep parts
+R="$(mcp "$(call 1 benchbar_status '{"bench":"'"$BENCH"'"}')")"
+assert_eq "None False" "$(printf '%s' "$R" | jget - 'str(d["result"]["structuredContent"]["ready"]["stale"]) + " " + str(d["result"]["structuredContent"]["ready"]["ready"])')" "$R"
+
 # ---- the service of a bench that has none: up says so, then plan and install
 NOSVC="$HOME/dev/nosvc-bench"
 make_fake_bench "$NOSVC" nosvc
@@ -627,10 +669,41 @@ assert_file "$NOSVC/Procfile.lean"
 run_fm status --json --bench-dir "$NOSVC"
 [[ "$(printf '%s' "$OUT" | jget - 'd["state"]')" != "not_adopted" ]] || fail "the bench still has no service after service install: $OUT"
 
+# ---- the read tools of review MCP-15 / PAR-7, on the real CLI: each returns the CLI's JSON, labeled
+python3 - "$FM" "$BENCH" <<'PY' || fail "MCP read tools on the real CLI"
+import json, subprocess, sys
+fm, bench = sys.argv[1], sys.argv[2]
+INIT = {"jsonrpc": "2.0", "id": "init", "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}}
+calls = [
+    ("benchbar_site_backups", {"site": "macdev", "bench": bench}),
+    ("benchbar_ports_check", {"bench": bench}),
+    ("benchbar_where", {}),
+    ("benchbar_labs_list", {}),
+    ("benchbar_site_backups", {"site": "nosuch.localhost", "bench": bench}),
+]
+lines = [json.dumps(INIT), json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"})]
+for i, (name, args) in enumerate(calls, 1):
+    lines.append(json.dumps({"jsonrpc": "2.0", "id": i, "method": "tools/call", "params": {"name": name, "arguments": args}}))
+out = subprocess.run([fm, "mcp"], input="\n".join(lines) + "\n", capture_output=True, text=True, timeout=300).stdout
+by = {m["id"]: m["result"] for m in (json.loads(l) for l in out.splitlines() if l.strip()) if "result" in m and m["id"] != "init"}
+for i in (1, 2, 3, 4):
+    r = by[i]
+    assert not r["isError"], (calls[i - 1], r)
+    assert r["content"][0]["text"].startswith("Data from the bench ("), r["content"][0]["text"][:120]
+assert by[1]["structuredContent"]["site"] == "macdev" and by[1]["structuredContent"]["backups"] == [], by[1]
+assert "conflicts" in by[2]["structuredContent"] and by[2]["structuredContent"]["mode"], by[2]
+assert by[3]["structuredContent"]["state_dir"] and by[3]["structuredContent"]["install"], by[3]
+assert by[4]["structuredContent"]["labs"], by[4]
+bad = by[5]                                              # a site the bench does not have: the CLI's refusal, labeled
+assert bad["isError"] and bad["content"][0]["text"].startswith("Data from the bench ("), bad
+PY
+
 # ---- the AGENTS.md snippet
 run_fm mcp --print-agents-md
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "benchbar_site_add"
 assert_contains "$OUT" "Never probe MariaDB root"
+assert_contains "$OUT" "benchbar_site_backups"
+assert_contains "$OUT" "there is no tool for them"
 
 printf 'test-mcp: ok\n'

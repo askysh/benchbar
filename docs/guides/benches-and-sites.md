@@ -124,11 +124,13 @@ What is kept, and for how long:
   (`logs/<date>-<time>-<pid>.log`), the newest 50 folders of
   `backups/<date>-<time>-<pid>/` (one that still holds a `restore-set`
   copy stays until that copy goes; the three newest per bench are kept),
-  the newest 14 `update-check.<date>.txt` files, and no `state.env.*`
-  temp file older than a day. The pruning runs at the start of a run
-  that makes a log, and the run's `changed[]` says what it removed. The
-  limits are `FL_KEEP_RUN_LOGS`, `FL_KEEP_STATE_BACKUPS` and
-  `FL_KEEP_UPDATE_CHECKS`.
+  the newest 14 `update-check.<date>.txt` files, the newest 100 records
+  of operations (`ops/<op_id>.json`, with the output of a `--background`
+  run; never one that still runs: see [op](../reference/cli/other.md#op)),
+  and no `state.env.*` temp file older than a day. The pruning runs at
+  the start of a run that makes a log, and the run's `changed[]` says what
+  it removed. The limits are `FL_KEEP_RUN_LOGS`, `FL_KEEP_STATE_BACKUPS`,
+  `FL_KEEP_UPDATE_CHECKS` and `FL_KEEP_OPS`.
 - **The bench's own log.** `benchup` keeps the tail of the log it
   replaces in `logs/bench.previous.log` and the three copies before it
   in `logs/bench.previous.1.log` to `.3.log`, so a crash is still there
@@ -210,6 +212,28 @@ gives each bench its own block.
 
 Each bench has its own port block. How blocks work and how to sort out
 the ports of several benches is in [Port blocks](../concepts/port-blocks.md).
+
+## Limits of the background service
+
+The agent (launchd on a Mac, a systemd user unit on Linux) raises the open
+file limit of the bench: 10240 on a Mac, where launchd's own default of 256
+is too low for Frappe's file watchers, and 65536 on Linux (the hard limit
+stays at systemd's 524288, so the unit sets `LimitNOFILE=65536:524288`). Nothing else
+changes by default: priority is normal and memory is not capped.
+
+Three optional settings go in the bench's own state file (`benchbar where
+--json` shows `state_dir`; the file is `benches/<name>-<hash>.env` in it),
+one `KEY=value` per line, then `benchbar repair` writes the agent again:
+
+| Key | Values | Effect |
+|---|---|---|
+| `SERVICE_NICE` | `0` to `19` | `Nice` (launchd) and `Nice=` (systemd): the bench yields to other programs |
+| `SERVICE_BACKGROUND` | `on` | launchd `ProcessType` Background: low CPU and disk priority (Mac only) |
+| `SERVICE_MEMORY_HIGH` | `4G`, `512M`, `50%` | systemd `MemoryHigh=`: the unit is slowed and its memory reclaimed above it, never killed (Linux only). `0` and `0%` are refused: use `infinity` for no limit |
+
+A value that is not valid is ignored and the default stays. A runaway
+worker is still yours to stop with `benchbar down`; these settings only
+make a bench a better neighbour on a laptop.
 
 ## Autostart
 

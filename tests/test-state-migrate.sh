@@ -52,7 +52,9 @@ MA_FILE="benches/m-a-$(printf '%08x' "$crc").env"
 seed_legacy() {
   rm -rf "$MH" "$NEW" "$GUARD"
   mkdir -p "$LEGACY/benches" "$LEGACY/logs" "$LEGACY/backups"
-  printf 'BENCH_DIR=%s\nPIPX_BIN_DIR=%s\n' "$MA" "$HOME/.local/bin" >"$LEGACY/state.env"
+  # LAST_VERSION: the update notices (notices.sh) write it on the first run of a new version; this
+  # test is about the move, so the state already says that the version of the tree below ran
+  printf 'BENCH_DIR=%s\nPIPX_BIN_DIR=%s\nLAST_VERSION=0.7.3\n' "$MA" "$HOME/.local/bin" >"$LEGACY/state.env"
   printf 'SITE_NAME=macdev\nPORT_OFFSET=2\nPORTS_MODE=fixed\n' >"$LEGACY/$MA_FILE"
   printf '%s\n' "$MB" >"$LEGACY/registered-benches.txt"
   printf 'an old run\n' >"$LEGACY/logs/20260930-120000.log"
@@ -121,11 +123,11 @@ assert_contains "$(listed)" "default=$MA"
 # a new folder with state of its own is never merged into: both stay
 seed_legacy
 register
-printf 'BENCH_DIR=%s\n' "$MB" >"$NEW/state.env"
+printf 'BENCH_DIR=%s\nLAST_VERSION=0.7.3\n' "$MB" >"$NEW/state.env"
 run "$LINK" list --json
 assert_eq "0" "$CODE" "$OUT"
 [[ -d "$LEGACY" && ! -L "$LEGACY" ]] || fail "an existing state folder must not be merged into"
-assert_eq "BENCH_DIR=$MB" "$(cat "$NEW/state.env")"
+assert_eq "BENCH_DIR=$MB"$'\n'"LAST_VERSION=0.7.3" "$(cat "$NEW/state.env")"
 assert_contains "$(listed)" "default=$MB"
 
 # an empty new folder (nothing registered yet) is no state: the move happens

@@ -83,7 +83,8 @@ benchbar app add NAME|URL [same flags] --dry-run --json
 benchbar app add NAME|URL [same flags] --apply TOKEN --yes [--json]
 ```
 
-`--dry-run --json` prints the plan and changes nothing: the resolved app,
+`--dry-run --json` prints the plan and changes nothing in the bench (the
+first plan creates the plan key for tokens, once): the resolved app,
 repo and branch, whether git can read the repo (without a prompt, with a
 timeout), the sites, the required apps from `hooks.py` (read from a
 shallow clone in a temp folder, then removed; at the pinned commit with
@@ -218,6 +219,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
+| `app list` | `--no-sites` |  | Leave out the sites that have each app (faster). |
+| `app add` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `app add` | `--branch` | `B` | Branch or tag. |
 | `app add` | `--name` | `N` | The app's package name. |
 | `app add` | `--commit` | `SHA` | Pin the app to this commit (7 to 40 hex characters). |
@@ -226,7 +229,11 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `app add` | `--all-sites` |  | Install it on every site. |
 | `app add` | `--dry-run` |  | Print the plan and its token. |
 | `app add` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
+| `app update` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `app update` | `--skip-backup` |  | Migrate without a backup first. |
 | `app update` | `--dry-run` |  | Print the plan as one JSON document with --json. |
 | `app update` | `--discard-pending` |  | Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs. |
+| `app focus` | `--list` |  | List the focus apps (the default without a name). |
+| `app focus` | `--auto` |  | With NAME: let benchbar decide again (undo a pin). |
+| `app focus` | `--fetch` |  | git fetch the branches of the focus apps first. |
 <!-- /generated:cli-commands -->

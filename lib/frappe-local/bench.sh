@@ -179,7 +179,7 @@ fl_bench_require_uv() {
     return 0
   fi
   local hint="brew install uv"
-  fl_is_linux && hint="curl -LsSf https://astral.sh/uv/install.sh | sh"
+  fl_is_linux && hint="curl -LsSf https://astral.sh/uv/0.13.9/install.sh | sh"
   fl_die "uv is not installed, and bench init needs it to make the bench's environment." \
     "Run ./$(fl_phase00_script) --profile ${FL_PROFILE:-v15-lts} (it installs uv), or by hand: ${hint}"
 }

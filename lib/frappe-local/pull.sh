@@ -53,6 +53,11 @@ FL_PULL_NEUTRALISE_ROWS=""
 FL_PULL_NEUTRALISE_JSON='{"on":false}'
 FL_PULL_KEEP_STAGING=0
 FL_PULL_STAGING=""
+# --apply TOKEN: run the plan whose token was shown by --dry-run --json
+FL_PULL_APPLY=0
+FL_PULL_TOKEN_IN=""
+FL_PULL_TOKEN=""
+FL_PULL_TOKEN_DATA=""
 # the backup set: file names (remote) and their sizes
 FL_PULL_DB=""; FL_PULL_PUB=""; FL_PULL_PRIV=""; FL_PULL_CONF=""
 FL_PULL_DB_BYTES=0; FL_PULL_PUB_BYTES=0; FL_PULL_PRIV_BYTES=0; FL_PULL_TOTAL_BYTES=0
@@ -83,6 +88,10 @@ FL_PULL_NEEDS=""
 # --before-migrate SCRIPT: runs after the restore, before migrate (or where
 # it would be); a failing script stops the run
 FL_PULL_HOOK=""
+# the sha256 of the script when the plan was made; the script is hashed again
+# right before it runs and not run when it differs (a restore can take
+# minutes between the plan and that step)
+FL_PULL_HOOK_SHA=""
 # pull's own JSON lines (plan, step, done); site restore shares the restore
 # steps below and has its own output, so it sets this to 0
 FL_PULL_EMIT=1
@@ -161,7 +170,7 @@ print("benchbar-probe %d %d" % (ok, bad))'
 # fl_pull_emit EVENT [,"field":value...]: one JSON line on the saved stdout (fd 3)
 fl_pull_emit() {
   [[ "${OPT_JSON:-0}" == "1" && "$FL_PULL_EMIT" == "1" ]] || return 0
-  printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$1" "${2:-}" >&3
+  printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s%s}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$1" "${FL_OP_JSON:-}" "${2:-}" >&3
 }
 
 # the done fields pull adds to its own (exit, site, warnings): changed, next_actions, state_after
@@ -350,7 +359,7 @@ fl_pull_parse_args() {
   local src=""
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
-      --as|--from-dir|--remote-bench|--skip-app|--confirm-site|--before-migrate)
+      --as|--from-dir|--remote-bench|--skip-app|--confirm-site|--before-migrate|--apply)
         [[ "$#" -ge 2 && -n "$2" ]] || fl_die "$1 needs a value." "Run: benchbar --help"
         case "$1" in
           --as) FL_PULL_AS="$2" ;;
@@ -359,8 +368,10 @@ fl_pull_parse_args() {
           --skip-app) FL_PULL_SKIP_APPS="${FL_PULL_SKIP_APPS}${FL_PULL_SKIP_APPS:+ }$2" ;;
           --confirm-site) FL_PULL_CONFIRM_SITE="$2" ;;
           --before-migrate) FL_PULL_HOOK="$2" ;;
+          --apply) FL_PULL_APPLY=1; FL_PULL_TOKEN_IN="$2" ;;
         esac
         shift 2 ;;
+      --apply=*) FL_PULL_APPLY=1; FL_PULL_TOKEN_IN="${1#*=}"; shift ;;
       --before-migrate=*) FL_PULL_HOOK="${1#*=}"; shift ;;
       --no-migrate) FL_PULL_NO_MIGRATE=1; shift ;;
       --as=*) FL_PULL_AS="${1#*=}"; shift ;;
@@ -660,6 +671,7 @@ fl_pull_hook_resolve() {
   [[ -f "$h" ]] || fl_die "--before-migrate: no file ${FL_PULL_HOOK}." "Pass the path of an executable script."
   [[ -x "$h" ]] || fl_die "--before-migrate: ${FL_PULL_HOOK} is not executable." "chmod +x ${FL_PULL_HOOK}"
   FL_PULL_HOOK="$h"
+  FL_PULL_HOOK_SHA="$(shasum -a 256 "$h" | awk '{print $1}')"
 }
 
 fl_pull_check_local() {
@@ -763,7 +775,42 @@ fl_pull_print_plan() {
     json_steps="${json_steps}${json_steps:+,}$(fl_json_str "${s#*|}")"
     i=$((i + 1))
   done
-  fl_pull_emit plan ",\"source\":$(fl_json_str "$(fl_pull_source_label)"),\"host\":$(fl_json_str "$FL_PULL_HOST"),\"remote_site\":$(fl_json_str "$FL_PULL_RSITE"),\"remote_bench\":$(fl_json_str "$FL_PULL_RBENCH"),\"from_dir\":$(fl_json_str "$FL_PULL_FROM_DIR"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_PULL_AS"),\"replace\":$(fl_json_bool "$FL_PULL_SITE_EXISTS"),\"backup\":{\"name\":$(fl_json_str "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_DB")"),\"new\":$(fl_json_bool "$FL_PULL_NEW_BACKUP"),\"bytes\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_TOTAL_BYTES")"),\"age_hours\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || fl_pull_age_hours "${FL_PULL_DB%%-*}")"),\"encrypted\":$(fl_json_bool "$FL_PULL_ENCRYPTED")},\"encryption_key\":$(fl_json_bool "$FL_PULL_HAS_KEY"),\"neutralise\":$([[ "$FL_PULL_KEEP_SECRETS" == "1" ]] && printf false || printf true),\"apps\":[${FL_PULL_APPS_JSON:-}],\"migrate\":$(fl_json_bool "$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf 0 || printf '%s' "$FL_PULL_NEED_MIGRATE")"),\"create_site\":$(fl_json_bool "$FL_PULL_SITE_CREATE"),\"before_migrate\":$(fl_json_str "$FL_PULL_HOOK"),\"needs\":[${FL_PULL_NEEDS}],\"steps\":[${json_steps}],\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}")"
+  local bname bbytes bage p_head p_size p_tail
+  bname="$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_DB")"
+  bbytes="$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_TOTAL_BYTES")"
+  bage="$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || fl_pull_age_hours "${FL_PULL_DB%%-*}")"
+  p_head=",\"source\":$(fl_json_str "$(fl_pull_source_label)"),\"host\":$(fl_json_str "$FL_PULL_HOST"),\"remote_site\":$(fl_json_str "$FL_PULL_RSITE"),\"remote_bench\":$(fl_json_str "$FL_PULL_RBENCH"),\"from_dir\":$(fl_json_str "$FL_PULL_FROM_DIR"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_PULL_AS"),\"replace\":$(fl_json_bool "$FL_PULL_SITE_EXISTS"),\"backup\":{\"name\":$(fl_json_str "$bname"),\"new\":$(fl_json_bool "$FL_PULL_NEW_BACKUP")"
+  # the size and the age of the backup change with the clock and a retry, so the token leaves them out
+  p_size=",\"bytes\":$(fl_json_num "$bbytes"),\"age_hours\":$(fl_json_num "$bage")"
+  p_tail=",\"encrypted\":$(fl_json_bool "$FL_PULL_ENCRYPTED")},\"encryption_key\":$(fl_json_bool "$FL_PULL_HAS_KEY"),\"neutralise\":$([[ "$FL_PULL_KEEP_SECRETS" == "1" ]] && printf false || printf true),\"apps\":[${FL_PULL_APPS_JSON:-}],\"migrate\":$(fl_json_bool "$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf 0 || printf '%s' "$FL_PULL_NEED_MIGRATE")"),\"create_site\":$(fl_json_bool "$FL_PULL_SITE_CREATE"),\"before_migrate\":$(fl_json_str "$FL_PULL_HOOK"),\"needs\":[${FL_PULL_NEEDS}],\"steps\":[${json_steps}]"
+  # what the plan line does not say but the run does: the files, the scheduler, the hook's content, the quiet scheduler
+  FL_PULL_TOKEN_DATA="$(printf '%s%s\nno_files\n%s\nkeep_scheduler\n%s\nquiesce\n%s\nhook\n%s\n' "$p_head" "$p_tail" "$FL_PULL_NO_FILES" "$FL_PULL_KEEP_SCHEDULER" "$FL_PULL_QUIESCE" "$([[ -n "$FL_PULL_HOOK" && -f "$FL_PULL_HOOK" ]] && shasum -a 256 "$FL_PULL_HOOK" | awk '{print $1}')")"
+  fl_pull_token_v FL_PULL_TOKEN "$FL_PULL_TOKEN_DATA"
+  fl_pull_emit plan "${p_head}${p_size}${p_tail},\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}"),\"token\":\"${FL_PULL_TOKEN}\""
+}
+
+# ---------------------------------------------------------------- token
+
+# fl_pull_token_v VAR DATA: the approval token of the plan. The keyed, timed
+# token of plan-token.sh when this build has it, else a plain hash of the
+# plan, as site restore made it before that file existed.
+fl_pull_token_v() {
+  if declare -F fl_plan_token_v >/dev/null 2>&1; then
+    fl_plan_token_v "$1" "$2"
+  else
+    printf -v "$1" '%s' "$(printf '%s\n' "$2" | shasum -a 256 | awk '{print $1}')"
+  fi
+}
+
+# fl_pull_token_check DATA TOKEN: 0 good, 1 not this plan's, 2 expired
+fl_pull_token_check() {
+  local want
+  if declare -F fl_plan_token_check >/dev/null 2>&1; then
+    fl_plan_token_check "$1" "$2"
+    return $?
+  fi
+  fl_pull_token_v want "$1"
+  [[ "$want" == "$2" ]]
 }
 
 # ---------------------------------------------------------------- gates
@@ -1078,6 +1125,15 @@ fl_pull_hook_run() {
 }
 
 fl_pull_step_before_migrate() {
+  local now_sha=""
+  if [[ -n "$FL_PULL_HOOK_SHA" ]]; then
+    [[ -f "$FL_PULL_HOOK" ]] && now_sha="$(shasum -a 256 "$FL_PULL_HOOK" 2>/dev/null | awk '{print $1}')"
+    if [[ "$now_sha" != "$FL_PULL_HOOK_SHA" ]]; then
+      fl_fail "${FL_PULL_HOOK} is not the script the plan showed (its hash changed since the plan); it was not run, and ${FL_PULL_AS} is restored but not migrated"
+      fl_fix "read the script, run it by hand if it is right, then: cd $(printf '%q' "$FL_BENCH_DIR") && bench --site $(printf '%q' "$FL_PULL_AS") migrate"
+      return 1
+    fi
+  fi
   fl_bench_env_exports
   fl_run_long "${FL_PULL_HOOK##*/} (before migrate)" fl_pull_hook_run || {
     fl_fail "the --before-migrate script failed; ${FL_PULL_AS} is restored but not migrated"
@@ -1207,7 +1263,7 @@ fl_pull_run_step() {
 # ---------------------------------------------------------------- command
 
 fl_cmd_pull() {
-  local i labels=() s
+  local i labels=() s code
   if [[ "${OPT_JSON:-0}" == "1" ]]; then
     # JSON lines on stdout, everything for humans on stderr
     exec 3>&1 1>&2
@@ -1215,6 +1271,11 @@ fl_cmd_pull() {
   FL_PULL_ACTIVE=1
   fl_require_bench
   fl_pull_parse_args "$@"
+  if [[ "$FL_PULL_APPLY" == "1" ]]; then
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
+    [[ "$FL_PULL_TOKEN_IN" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar pull ... --dry-run --json prints it"
+    [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (--dry-run --json), then pass its token with --apply TOKEN --yes."
+  fi
   fl_header "benchbar pull" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_PULL_AS"
   [[ -x "${FL_BENCH_DIR}/env/bin/python" ]] || fl_die "${FL_BENCH_DIR}/env/bin/python is missing." "Run: benchbar repair --bench-dir ${FL_BENCH_DIR}"
 
@@ -1253,8 +1314,24 @@ fl_cmd_pull() {
     return 0
   fi
 
+  # an applied plan is the one that was shown: made again here, after the
+  # check, it must give the same token (a newer backup, another set of apps
+  # or a changed hook is another plan)
+  if [[ "$FL_PULL_APPLY" == "1" ]]; then
+    code=0; fl_pull_token_check "$FL_PULL_TOKEN_DATA" "$FL_PULL_TOKEN_IN" || code=$?
+    case "$code" in
+      0) ;;
+      2) fl_die "The plan token expired: a token is good for about an hour after its plan was made, and this one is older. Nothing was changed." "Review a fresh plan: benchbar pull ... --dry-run --json, then pass its token." ;;
+      *) fl_die "The plan changed since it was shown; nothing was changed." \
+        "Review a fresh plan: benchbar pull ... --dry-run --json, then pass its token." ;;
+    esac
+  fi
   [[ "$FL_PULL_NEW_BACKUP" == "1" ]] && fl_pull_gate_new_backup
-  fl_pull_gate_apply
+  if [[ "$FL_PULL_APPLY" == "1" ]]; then
+    fl_pull_emit gate ",\"name\":\"apply\",\"answer\":\"yes\""
+  else
+    fl_pull_gate_apply
+  fi
 
   for s in "${FL_PULL_STEPS[@]}"; do labels+=("${s#*|}"); done
   fl_steps_define "${labels[@]}"
