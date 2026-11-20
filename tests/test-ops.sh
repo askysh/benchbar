@@ -108,8 +108,9 @@ assert_contains "$ERR" "No operation op-20200101-000000-1"
 run_json op status '../../etc/passwd' --json
 assert_eq "1" "$CODE"
 assert_contains "$ERR" "Not an op id"
+# an unknown flag is a usage error since 0.9.0 (exit 64)
 run_json op status --bogus
-assert_eq "1" "$CODE"
+assert_eq "64" "$CODE"; assert_contains "$OUT$ERR" "Unknown option for op status: --bogus"
 run_json op frobnicate
 assert_eq "1" "$CODE"
 assert_contains "$OUT$ERR" "Unknown subcommand"
