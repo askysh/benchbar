@@ -1385,6 +1385,7 @@ Written for the macOS arm64 runner shortage of November 2026 (pull requests wait
 - History and leases share BENCHBAR_CALLER (0.9.0, #185 with #184): a lease uses its full value as the holder name, the history only its kind. The history keeps the kind in FL_CALLER and passes it to child runs as BENCHBAR_CALLER_KIND, and never rewrites BENCHBAR_CALLER; a value NAME:REST counts as the kind NAME when NAME is in the list (the MCP server holds leases as mcp:CLIENT:PID and its runs are mcp), and benchbar mcp sets BENCHBAR_CALLER_KIND=mcp so a holder name of the person's own still reads as mcp in the history.
 - `benchbar run` is gated by a lease when its bench command changes the site (migrate, clear-cache, clear-website-cache, build, run-tests): a site lease when --site names one, else the bench; the reads of its allow list (doctor, list-apps, version) pass. The MCP tools that change things and came with or after leases (site drop, app install, app update, run, ports apply) take a `lease` argument like the others, so a lease you hold never refuses your own change.
 
+
 ## JSON correctness (issue 150)
 
 - `fl_json_escape_v` runs under `local LC_ALL=C` (bytes, as under launchd) and tests for a byte above 127 with `[![:print:][:cntrl:]]`, a class test that needs no range; a plain ASCII value costs that one test and no process. Invalid UTF-8 is repaired in bash, byte by byte, not with `iconv`: a non-ASCII bench path is escaped many times per status poll, and one fork each would show in `tests/test-status-cost.sh`.
