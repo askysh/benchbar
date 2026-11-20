@@ -269,7 +269,12 @@ assert_calls_contain '^osascript .*to quit'
 cs="$(grep -n -m1 '^codesign ' "$MOCK_LOG" | cut -d: -f1)"; qt="$(grep -n -m1 '^osascript .*to quit' "$MOCK_LOG" | cut -d: -f1)"
 [[ -n "$cs" && -n "$qt" && "$cs" -lt "$qt" ]] || fail "codesign (line ${cs:-none}) must run before the running app is quit (line ${qt:-none})"
 
-# the copy beside the app fails: the old app is as it was, and no half copy stays
+# the copy beside the app fails: the old app is as it was, and no half copy stays.
+# The run above installed 0.9.0, and the same version is "unchanged", so put 0.8.0 back first.
+make_release 0.8.0
+run_install --yes --app-only --version v0.8.0
+assert_eq "0.8.0" "$(installed_app_version)" "$OUT"
+make_release 0.9.0
 touch "$MOCK_STATE/ditto_fail_new"
 run_install --yes --app-only
 assert_eq "1" "$CODE" "$OUT"
