@@ -132,13 +132,13 @@ assert [a["name"] for a in s["apps"]] == ["frappe", "erpnext"] and s["apps_match
   assert_eq "3 True,True,True" "$(printf '%s' "$OUT" | jget - '"%d %s" % (len(d["snapshots"]), ",".join(str(x["apps_match"]) for x in d["snapshots"]))')"
   assert_eq "$id2" "$(printf '%s' "$OUT" | jget - 'd["snapshots"][0]["id"]')" "(newest first)"
   run_fm site snapshots acme.localhost --bench-dir "$BENCH"
-  assert_contains "$OUT" "before-upgrade"; assert_contains "$OUT" "same as the bench"
+  assert_contains "$OUT" "before-upgrade"; assert_contains "$OUT" "same apps"; assert_contains "$OUT" "frappe@$(git_head frappe | cut -c1-7)"
   # an app moves on after the snapshot: allowed, and said
   git_commit erpnext "a new commit"
   run_json site snapshots acme.localhost --json --bench-dir "$BENCH"
   assert_eq "False erpnext" "$(printf '%s' "$OUT" | jget - '"%s %s" % (d["snapshots"][0]["apps_match"], " ".join(d["snapshots"][0]["changed_apps"]))')"
   run_fm site snapshots acme.localhost --bench-dir "$BENCH"
-  assert_contains "$OUT" "bench changed: erpnext"
+  assert_contains "$OUT" "changed: erpnext"
 
   # ---- the rollback plan across an app change: read only, with a token, migrate and a warning
   reset_calls

@@ -63,7 +63,7 @@ fl_snap_ids() {
   for d in "$(fl_snap_dir "$1")"/[0-9]*_[0-9]*; do
     [[ -d "$d" && ! -L "$d" ]] || continue
     basename "$d"
-  done | grep -E '^[0-9]{8}_[0-9]{6}' | sort -r
+  done | { grep -E '^[0-9]{8}_[0-9]{6}' || true; } | sort -r
 }
 
 # fl_snap_last_rollback SITE: the "before rollback" snapshot of the last rollback, when it is still there
@@ -374,7 +374,7 @@ fl_cmd_site_snapshot() {
 
 # site snapshots SITE [--keep N]: newest first. Read only.
 fl_cmd_site_snapshots() {
-  local name="" json="$OPT_JSON" dir id sep="" rows=() set keep over last apps n=0 rc
+  local name="" json="$OPT_JSON" dir id sep="" rows=() set keep over last apps now aname acommit n=0 rc
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --keep) FL_SNAP_KEEP_OPT="${2:-}"; shift 2 || shift ;;
@@ -405,19 +405,23 @@ fl_cmd_site_snapshots() {
     } >&3
     return 0
   fi
-  rows+=("Snapshot|Label|Size|Apps")
+  rows+=("Snapshot|Label|Size|Apps at the time|The bench now")
   while IFS= read -r id; do
     [[ -n "$id" ]] || continue
     n=$((n + 1))
     set="$(fl_snap_json "$name" "$id")"
     rc=0; fl_snap_apps_diff "${dir}/${id}/manifest.json" || rc=$?
     case "$rc" in
-      0) apps="same as the bench" ;;
-      1) apps="bench changed: ${FL_SNAP_CHANGED}" ;;
-      *) apps="not recorded" ;;
+      0) now="same apps" ;;
+      1) now="changed: ${FL_SNAP_CHANGED}" ;;
+      *) now="not recorded" ;;
     esac
-    [[ "$(fl_backup_field "$set" complete)" == "true" ]] || apps="${apps} (incomplete)"
-    rows+=("${id}|$(fl_snap_mfield "${dir}/${id}/manifest.json" label)$([[ "$id" == "$last" ]] && printf ' (undo point of the last rollback)')|$(fl_fmt_bytes "$(fl_backup_field "$set" size_bytes)")|${apps}")
+    [[ "$(fl_backup_field "$set" complete)" == "true" ]] || now="${now} (incomplete)"
+    apps=""
+    while IFS='|' read -r aname acommit _; do
+      [[ -n "$aname" ]] && apps="${apps}${apps:+ }${aname}@${acommit:0:7}"
+    done < <(fl_snap_apps_list "${dir}/${id}/manifest.json")
+    rows+=("${id}|$(fl_snap_mfield "${dir}/${id}/manifest.json" label)$([[ "$id" == "$last" ]] && printf ' (undo point of the last rollback)')|$(fl_fmt_bytes "$(fl_backup_field "$set" size_bytes)")|${apps:--}|${now}")
   done < <(fl_snap_ids "$name")
   if [[ "$n" == "0" ]]; then fl_info "no snapshots of ${name} yet; take one with: benchbar site snapshot ${name} --label TEXT"; return 0; fi
   fl_table "${rows[@]}"
