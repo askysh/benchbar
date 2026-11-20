@@ -15,6 +15,13 @@ run_json() {
   ERR="$(cat "$MOCK_STATE/stderr")"
   set -e
 }
+# the dump every backup of the mock bench holds: a restore reads the installed apps out of it
+SQL="$TMP_DIR/dump.sql"
+cat >"$SQL" <<'SQLEOF'
+INSERT INTO `tabDefaultValue` VALUES ('a','__default','installed_apps','[\"frappe\",\"erpnext\"]');
+SQLEOF
+export MOCK_BENCH_BACKUP_DB="$TMP_DIR/dump.sql.gz"
+gzip -c "$SQL" >"$MOCK_BENCH_BACKUP_DB"
 # line numbers of the first mock call matching a pattern
 at() { grep -m1 -n -E -- "$1" "$MOCK_LOG" | cut -d: -f1; }
 git_commit() { (cd "$BENCH/apps/$1" && printf '%s\n' "$2" >>README && git add README && git -c user.email=t@example.com -c user.name=t commit -q -m "$2"); }
