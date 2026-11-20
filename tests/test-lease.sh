@@ -78,9 +78,17 @@ assert_not_contains "$OUT" "$ID_A" "(a refusal never names another holder's id)"
 as agent-b lease take --bench "$BENCH"
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "is already leased by agent-"
+assert_not_contains "$OUT" "$ID_A" "(a bench lease over a leased site names no id either)"
+asj agent-b lease take --site two.localhost --bench-dir "$BENCH" --json
+assert_eq "1" "$CODE" "$OUT"
+assert_eq "lease_held" "$(done_of 'd["error_id"]')"
+assert_not_contains "$OUT" "$ID_A" "(the stream of a clash names no id)"
+# the holder asking again is told to renew, and is not given its id back in the refusal either
 as agent-a lease take --site two.localhost --bench-dir "$BENCH"
 assert_eq "1" "$CODE" "$OUT"
-assert_contains "$OUT" "You hold it as lease $ID_A"
+assert_contains "$OUT" "is already leased by agent-a"
+assert_contains "$OUT" "benchbar lease renew"
+assert_not_contains "$OUT" "$ID_A" "(a clash never prints a lease id, not even the holder's own)"
 as agent-a lease take --bench "$OTHER" --for 5
 assert_eq "0" "$CODE" "(another bench is its own: $OUT)"
 ID_O="$(printf '%s\n' "$OUT" | sed -n 's/.*lease \(l-[0-9a-f]*\) taken.*/\1/p')"
@@ -96,8 +104,12 @@ assert_eq "480" "$(printf '%s' "$OUT" | jget - 'd["max_minutes"]')"
 asj agent-a lease list --json
 assert_eq "$ID_A" "$(printf '%s' "$OUT" | jget - '[l["id"] for l in d["leases"] if l["site"] == "two.localhost"][0]')"
 assert_eq "None" "$(printf '%s' "$OUT" | jget - '[l["id"] for l in d["leases"] if l["holder"] == "agent-b"][0]')"
+# leases are coordination, not access control: a person sees an id only as the holder, like anyone else
 set +e; OUT="$(BENCHBAR_NONINTERACTIVE=0 "$FM" lease list --json 2>/dev/null)"; set -e
-assert_eq "3" "$(printf '%s' "$OUT" | jget - 'len([l for l in d["leases"] if l["id"]])')" "(a person at the app sees every id)"
+assert_eq "0" "$(printf '%s' "$OUT" | jget - 'len([l for l in d["leases"] if l["id"]])')" "(a person who is not the holder sees no id)"
+assert_eq "3" "$(printf '%s' "$OUT" | jget - 'len(d["leases"])')" "(but sees every lease: holder, scope, expiry)"
+set +e; OUT="$(BENCHBAR_NONINTERACTIVE=0 BENCHBAR_CALLER=agent-a "$FM" lease list --json 2>/dev/null)"; set -e
+assert_eq "1" "$(printf '%s' "$OUT" | jget - 'len([l for l in d["leases"] if l["id"]])')" "(a person naming the holder sees that holder's ids)"
 asj agent-b lease list --bench "$OTHER" --json
 assert_eq "1" "$(printf '%s' "$OUT" | jget - 'len(d["leases"])')"
 as agent-b lease list --bench-dir "$BENCH"
@@ -106,7 +118,7 @@ assert_contains "$OUT" "running tests"
 assert_not_contains "$OUT" "$ID_A"
 assert_not_contains "$OUT" "secondsite"
 as agent-b lease list
-assert_contains "$OUT" "Only the holder of a lease and a person at a terminal see its id"
+assert_contains "$OUT" "Only the holder of a lease sees its id"
 
 # ---- status --json lists the bench's leases, never an id; another bench has its own
 run_fm status --json --bench-dir "$BENCH"
@@ -234,9 +246,9 @@ assert_not_contains "$OUT" "--break-lease is a person's decision"
 assert_contains "$OUT" "--break-lease: going ahead although The site two.localhost"
 # the lease stands: breaking it is for that one run
 assert_eq "3" "$(lease_count)"
-# a person at a real terminal sees every id in the list (a pty on stdin; nothing here reads from it)
+# a person at a real terminal (a pty on stdin; nothing here reads from it) sees an id only as the holder too
 run_fm_tty lease list --json
-assert_eq "3" "$(printf '%s' "$OUT" | jget - 'len([l for l in d["leases"] if l["id"]])')"
+assert_eq "0" "$(printf '%s' "$OUT" | jget - 'len([l for l in d["leases"] if l["id"]])')"
 # nothing in the way, nothing to break
 as agent-c restart --bench-dir "$OTHER" --break-lease --dry-run
 assert_not_contains "$OUT" "is a person's decision"
@@ -343,11 +355,20 @@ for bad in 'bad name!' '-lead' 'a/b' "$(printf 'x%.0s' $(seq 1 41))"; do
   assert_contains "$OUT" "BENCHBAR_CALLER is not a usable name"
 done
 assert_no_file "$LEASES" "(nothing of those was written)"
-# the holder: BENCHBAR_CALLER, else "agent" for an agent, else the login name
-set +e; OUT="$(BENCHBAR_NONINTERACTIVE=1 "$FM" lease take --site macdev --bench-dir "$BENCH" 2>&1)"; set -e
-assert_contains "$OUT" "held by agent"
-ID_X="$(printf '%s\n' "$OUT" | sed -n 's/.*lease \(l-[0-9a-f]*\) taken.*/\1/p')"
-as agent lease release "$ID_X"
+# the holder: BENCHBAR_CALLER, else the login name; an agent run without a name of its own is refused,
+# since every such agent would be "agent" and share each other's leases
+set +e; OUT="$(BENCHBAR_NONINTERACTIVE=1 "$FM" lease take --site macdev --bench-dir "$BENCH" 2>&1)"; CODE="$?"; set -e
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "Set BENCHBAR_CALLER to a name of its own"
+set +e; OUT="$(BENCHBAR_NONINTERACTIVE=1 "$FM" lease take --site macdev --bench-dir "$BENCH" --for-agent 2>/dev/null)"; CODE="$?"; set -e
+assert_eq "1" "$CODE" "$OUT"
+assert_eq "lease_caller_required" "$(done_of 'd["error_id"]')"
+set +e; OUT="$(BENCHBAR_NONINTERACTIVE=1 "$FM" lease take --site macdev --bench-dir "$BENCH" --dry-run 2>&1)"; CODE="$?"; set -e
+assert_eq "1" "$CODE" "(a dry run refuses it too: $OUT)"
+assert_no_file "$LEASES" "(nothing of those was written)"
+# an agent without a name may still read: it is nobody's holder
+set +e; OUT="$(BENCHBAR_NONINTERACTIVE=1 "$FM" lease list --json 2>/dev/null)"; CODE="$?"; set -e
+assert_eq "0" "$CODE" "$OUT"
 set +e; OUT="$(BENCHBAR_NONINTERACTIVE=0 "$FM" lease take --site macdev --bench-dir "$BENCH" 2>&1)"; set -e
 assert_contains "$OUT" "held by tester" "(the login name, FL_OS_USER here)"
 ID_X="$(printf '%s\n' "$OUT" | sed -n 's/.*lease \(l-[0-9a-f]*\) taken.*/\1/p')"
@@ -390,6 +411,17 @@ touch -t 202001010000 "$FL_STATE_DIR/leases.lock"
 as agent-a lease take --site macdev --bench-dir "$BENCH" --for 1
 assert_eq "0" "$CODE" "(a stale lock folder does not stop a take: $OUT)"
 assert_no_file "$FL_STATE_DIR/leases.lock"
+# six takes meeting one stale lock: every one is taken, and the stale folder is renamed away and removed once
+python3 -c 'import os, sys; os.remove(sys.argv[1])' "$LEASES"
+mkdir "$FL_STATE_DIR/leases.lock"
+touch -t 202001010000 "$FL_STATE_DIR/leases.lock"
+for n in 1 2 3 4 5 6; do
+  (BENCHBAR_NONINTERACTIVE=1 BENCHBAR_CALLER="stale-${n}" "$FM" lease take --site "s${n}.localhost" --bench-dir "$BENCH" --for 5 >/dev/null 2>&1) &
+done
+wait
+assert_eq "6" "$(lease_count)" "(six takes over one stale lock) $(cat "$LEASES")"
+assert_no_file "$FL_STATE_DIR/leases.lock"
+assert_eq "0" "$(find "$FL_STATE_DIR" -maxdepth 1 -name 'leases.lock.stale*' | grep -c . || true)" "(no renamed lock is left behind)"
 # the cap
 python3 - "$LEASES" "$BENCH" "$((T0 + 600))" <<'PY'
 import sys
@@ -424,5 +456,7 @@ assert_contains "$OUT" "lease take|release|renew|list"
 run_fm --help
 assert_contains "$OUT" "lease take"
 assert_contains "$OUT" "--break-lease"
+# the help keeps the column of the lines around it
+assert_contains "$OUT" "  pull HOST:SITE      Copy a production site over SSH"
 
 echo "ok: test-lease"
