@@ -282,7 +282,8 @@ fl_sq() { local q="'"; printf "'%s'" "${1//$q/$q\\$q$q}"; }
 
 # fl_json_escape_v VAR TEXT: TEXT as the inside of a JSON string. Backslash
 # and quote are escaped; a newline, tab and carriage return go as \n, \t and
-# \r; a terminal color code (ESC [ ... final byte) is dropped whole; any other
+# \r; a terminal color code (ESC [ ... final byte) is dropped whole, and so are
+# the internal marks \034 \036 \037 (FL_FIXQ and the row separators); any other
 # control character goes as \u00XX; a byte that is not part of a valid UTF-8
 # character becomes U+FFFD (Python's json.loads and Swift's JSONDecoder refuse
 # a document with one). The control characters are listed one by one: a range
@@ -401,6 +402,9 @@ fl_json_escape_v() {
       $'\n') __o="${__o}\\n" ;;
       $'\t') __o="${__o}\\t" ;;
       $'\r') __o="${__o}\\r" ;;
+      # the marks the code puts in its own strings (fl_fix_cmd's, the doctor jobs' and the check rows' separators)
+      # never reach a document
+      $'\034'|$'\036'|$'\037') ;;
       *) fl__json_byte_v __b "${__e:0:1}"; printf -v __b '\\u%04x' "$__b"; __o="${__o}${__b}" ;;
     esac
     __e="${__e:1}"

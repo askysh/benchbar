@@ -54,7 +54,9 @@ run_unit() {
   # ---- CORE-11: newline, tab, control characters
   want $'git: fatal: not a repo\nhint: use x' "'git: fatal: not a repo\\nhint: use x'"
   want $'a\tb\rc' "'a\\tb\\rc'"
-  want $'bell\x07 nul-ish\x01 us\x1f' "'bell\\x07 nul-ish\\x01 us\\x1f'"
+  want $'bell\x07 nul-ish\x01 us\x02' "'bell\\x07 nul-ish\\x01 us\\x02'"
+  # the marks the CLI puts in its own strings (the fix mark, the row separators) never reach a document
+  want $'\034benchbar up\036a\037b' "'benchbar upab'"
   want $'q"uo\\te' "'q\"uo\\\\te'"
   want $'\x1b[31mred\x1b[0m plain' "'red plain'"            # a color code goes whole, as before
   want $'lone\x1bESC' "'lone\\x1bESC'"
