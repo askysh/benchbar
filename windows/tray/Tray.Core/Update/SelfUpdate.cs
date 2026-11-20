@@ -272,6 +272,8 @@ public sealed class SelfUpdateLauncher(Func<string?> locateShim, Func<ProcessSta
         "$Host.UI.RawUI.WindowTitle = '" + WindowTitle + "'",
         "Write-Host 'Updating BenchBar. BenchBar closes now and starts again when the update is done.'",
         "Write-Host ''",
+        // who started it, for the run log's first line (a ShellExecute window cannot take an environment from ProcessStartInfo)
+        "$env:" + TrayCaller.Variable + " = '" + TrayCaller.Name + "'",
         "& " + PowerShellQuote(shimPath) + " " + string.Join(' ', UpdateArgs),
         "$code = $LASTEXITCODE",
         "Write-Host ''",

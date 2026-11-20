@@ -171,6 +171,11 @@ flag~op list~--running~~Only the ones that run now.
 flag~op list~--limit~N~At most N (1 to 100, default 20).
 cmd~op wait~benchbar op wait OP_ID [--timeout SECS] [--json]~Wait until the operation is not running, then print it. Exit 0 when it ended with exit 0, else 1 (failed, interrupted or still running at the timeout: --json says which).~no~no~no~no~document
 flag~op wait~--timeout~SECS~Give up after SECS seconds (the operation goes on); default: wait for it.
+cmd~history~benchbar history [--bench PATH] [--since TIME] [--limit N] [--json]~What ran on this machine, newest first: every run that changed things, with its op_id, command line (secrets as ***), who started it, bench, site, times, exit, what it changed and its log. A run an agent started through benchbar mcp also names the MCP tool and the client that made the call. Kept in history.jsonl in the state folder, 1 MB and three older files.~no~no~no~no~document
+flag~history~--bench~PATH~Only the runs on this bench.
+flag~history~--since~TIME~Only the runs that started since 90m, 12h, 7d, 2w ago, a date (2026-11-19, UTC) or a time (2026-11-19T10:15:00Z).
+flag~history~--limit~N~At most N runs (1 to 1000, default 20).
+env~history~BENCHBAR_CALLER~Who started a run, for the history: terminal, app, tray, mcp, agent or script. The Mac app, the tray and benchbar mcp set it; --for-agent says agent; without it a terminal on stdin is terminal and anything else script. A label the caller sets, not a proof: any process of the user can set it, and a value outside the list is ignored; NAME:REST counts as NAME (the MCP server's holder mcp:CLIENT:PID is mcp). The history never changes BENCHBAR_CALLER, which a lease uses as its holder name.
 cmd~help~benchbar help~The global help text.~no~no~no~no~none
 cmd~commands~benchbar commands --json~This table: every command, flag and environment variable.~no~no~no~no~document
 env~commands~BENCHBAR_LENIENT_FLAGS~Applies to every command: 1 turns the error for an unknown option (exit 64) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real.
@@ -315,9 +320,11 @@ flag~app add~--commit~SHA~Pin the app to this commit (7 to 40 hex characters).
 flag~app add~--install-on~S,S~Install this app on these sites only.
 flag~app add~--site~S~Install it on this site.
 flag~app add~--all-sites~~Install it on every site.
+flag~app add~--skip-backup~~Install on the sites without a backup first (the plan takes one by default).
 flag~app add~--dry-run~~Print the plan and its token.
 flag~app add~--apply~TOKEN~Run exactly that plan (with --yes).
-cmd~app install~benchbar app install NAME --site S~Install an app of the bench on a site.~no~no~no~yes~stream
+cmd~app install~benchbar app install NAME --site S [--skip-backup]~Back up a site, then install an app of the bench on it.~no~no~no~yes~stream
+flag~app install~--skip-backup~~Install without a backup of the site first.
 cmd~app update~benchbar app update NAME [--skip-backup] [--dry-run] [--json]~Fast forward one app with a changelog first, back up its sites, migrate, build.~yes~no~yes~yes~stream
 flag~app update~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~app update~--skip-backup~~Migrate without a backup first.
@@ -390,6 +397,22 @@ cmd~labs off~benchbar labs off NAME [--json]~Turn an experiment off and undo wha
 flag~labs off~--json~~JSON lines, ending in a done line.
 cmd~labs status~benchbar labs status NAME [--json]~Whether an experiment is on. Exit 0 on, 1 off.~no~no~no~no~document
 flag~labs status~--json~~One JSON document.
+cmd~lease~benchbar lease take|release|renew|list ...~Leases: a bench or a site held for a while, so that restart, down, migrate, drop and restore by another agent or the app wait.~no~no~no~no~none
+cmd~lease take~benchbar lease take (--bench PATH | --site NAME) [--for MINUTES] [--note TEXT] [--json]~Take a lease on a bench, or on one site of it, and return its id. Commands that change what it covers refuse, naming the holder and the end, unless they pass --lease ID. Reads are never refused. Benchbar's own state only.~no~no~no~yes~stream
+flag~lease take~--bench~PATH~Lease the whole bench (every site of it).
+flag~lease take~--site~NAME~Lease one site (global option; the bench is --bench-dir or the default one).
+flag~lease take~--for~MINUTES~How long, from 1 to 480. Default: 30.
+flag~lease take~--note~TEXT~Why, for whoever meets the lease: printable ASCII, at most 120 characters.
+flag~lease take~--json~~JSON lines, ending in a done line with the lease and its id.
+env~lease take~BENCHBAR_CALLER~The holder's name (1 to 40 letters, digits or . _ @ : + -). benchbar mcp sets it per client; without it a terminal run is the login name, and an agent run (BENCHBAR_NONINTERACTIVE, --for-agent) cannot take a lease.
+cmd~lease release~benchbar lease release ID [--json]~Let go of a lease. Unchanged when it is already gone.~no~no~no~yes~stream
+flag~lease release~--json~~JSON lines, ending in a done line.
+cmd~lease renew~benchbar lease renew ID [--for MINUTES] [--json]~Push a lease's end to MINUTES from now (default: its first length). Refused once it has expired.~no~no~no~yes~stream
+flag~lease renew~--for~MINUTES~How long from now, from 1 to 480.
+flag~lease renew~--json~~JSON lines, ending in a done line with the lease.
+cmd~lease list~benchbar lease list [--bench PATH] [--json]~The active leases of every bench, or of one. The id is shown to the lease's holder only (BENCHBAR_CALLER); for anyone else it is null.~no~no~no~no~document
+flag~lease list~--bench~PATH~Only the leases of this bench.
+flag~lease list~--json~~One JSON document.
 cmd~notices~benchbar notices [--json] [--dismiss ID|--all]~The notices an update left: a default that changed, how to switch back and where it is explained. Each shows once in the terminal after the update and stays in status --json until dismissed.~no~no~no~no~document
 flag~notices~--json~~One JSON document: notices[] with id, title, text, switch_back, doc and since.
 flag~notices~--dismiss~ID~Hide one notice (also in the BenchBar app). An id that is already hidden is unchanged.
@@ -417,6 +440,8 @@ fl_cmd_global_flags() {
 --bench-dir~DIR~Bench to act on (default: remembered, or auto-detected).
 --site~NAME~Site name (default: remembered, or from the bench).
 --json~~JSON: one document for a command that reads, JSON lines for one that changes things.
+--lease~ID~A lease you hold (benchbar lease take): lets this command change what the lease covers. Repeatable.
+--break-lease~~Go ahead although a lease covers this command. A person at a terminal only; refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.
 --jsonl~~JSON lines (plan, step, progress, done) for any command that changes things.
 --for-agent~~--jsonl for a command that changes things, --json for one that reads, plus BENCHBAR_NONINTERACTIVE=1, NO_COLOR=1 and --plain.
 --plain~~No colors or spinners.

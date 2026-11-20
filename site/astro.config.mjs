@@ -121,6 +121,7 @@ export default defineConfig({
                 { label: 'pull', slug: 'reference/cli/pull' },
                 { label: 'run', slug: 'reference/cli/run' },
                 { label: 'mcp', slug: 'reference/cli/mcp' },
+                { label: 'lease', slug: 'reference/cli/lease' },
                 { label: 'labs (experiments)', slug: 'reference/cli/labs' },
                 { label: 'share and lan-guard', slug: 'reference/cli/share' },
                 { label: 'report and other commands', slug: 'reference/cli/other' },

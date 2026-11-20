@@ -69,7 +69,7 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
     public void Bind(BenchContext context)
     {
         var key = string.Join('|', context.Bench.Path, context.Bench.State, context.Bench.WebUrl, context.Site,
-            string.Join(',', context.Bench.Sites.Select(s => s.Name + (s.IsDefault ? "*" : "") + (s.OpenAs is { } o ? $"[{o.Enabled}{o.DeveloperMode}{o.Usable}]" : ""))));
+            string.Join(',', context.Bench.Sites.Select(s => s.Name + (s.IsDefault ? "*" : "") + (s.OpenAs is { } o ? $"[{o.Enabled}{o.DeveloperMode}{o.Usable}]" : ""))), PullAvailable);
         // one view serves every bench: a panel opened for another bench must not outlive the switch
         if (_context is not null && _context.Bench.Path != context.Bench.Path)
         {
@@ -96,6 +96,14 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         add.Margin = new Thickness(0);
         DockPanel.SetDock(add, Dock.Right);
         if (Rows.Count > 0) head.Children.Add(add); // without sites the empty state below has the one action
+        if (PullAvailable == true)
+        {
+            var pull = Ui.Button("Pull...", OpenPull, "Pull a site into " + Bench.Name);
+            pull.IsEnabled = !_busy;
+            pull.Margin = new Thickness(0, 0, Rows.Count > 0 ? 8 : 0, 0);
+            DockPanel.SetDock(pull, Dock.Right);
+            head.Children.Add(pull);
+        }
         head.Children.Add(Ui.Title("Sites"));
         _root.Children.Add(head);
         _root.Children.Add(Ui.Text("The default site is the one benchup waits for, the runner pings and Open uses.", 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 12)));
@@ -231,6 +239,12 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         _addPassword = null;
         _addConfirm = null;
         _addProblem = null;
+        _pullFolder = null;
+        _pullSource = null;
+        _pullName = null;
+        _pullKeep = null;
+        _pullProblem = null;
+        _pullKeepNote = null;
         _drop = null;
         SetPanel(null);
     }

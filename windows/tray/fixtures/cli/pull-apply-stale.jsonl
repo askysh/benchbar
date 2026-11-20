@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.9.0","event":"done","exit":1,"error":"The plan changed since it was shown; nothing was changed.","fix":"Review a fresh plan: benchbar pull ... --dry-run --json, then pass its token.","warnings":[]}

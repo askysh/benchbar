@@ -326,13 +326,14 @@ fl__ap_parse() {
   local usage="$1" cur=-1 idx opt val
   shift
   AP_T_TARGET=(""); AP_T_BRANCH=(""); AP_T_NAME=(""); AP_T_COMMIT=(""); AP_T_ON=("")
-  AP_ALL=0; AP_APPLY=0; AP_TOKEN_IN=""
+  AP_ALL=0; AP_APPLY=0; AP_TOKEN_IN=""; AP_SKIP_BACKUP=0
   while [[ "$#" -gt 0 ]]; do
     opt=""; val=""
     case "$1" in
       --branch|--name|--commit|--install-on) opt="$1"; val="${2:-}"; shift; [[ "$#" -eq 0 ]] || shift ;;
       --branch=*|--name=*|--commit=*|--install-on=*) opt="${1%%=*}"; val="${1#*=}"; shift ;;
       --all-sites) AP_ALL=1; shift ;;
+      --skip-backup) AP_SKIP_BACKUP=1; shift ;;
       --apply) AP_APPLY=1; AP_TOKEN_IN="${2:-}"; shift; [[ "$#" -eq 0 ]] || shift ;;
       --apply=*) AP_APPLY=1; AP_TOKEN_IN="${1#*=}"; shift ;;
       -*) fl_die "Unknown option for app add: $1" "$usage" ;;
@@ -605,12 +606,18 @@ fl_app_add_plan() {
     AP_STEPS+=("build|${s}|Build|${cmd}|the new apps' JS and CSS")
   fi
   # installs: site by site, each site in dependency order
+  AP_BK_NOTE=""
+  [[ "${AP_SKIP_BACKUP:-0}" != "1" ]] || AP_BK_NOTE="; --skip-backup: no backup is taken first"
   for s in ${AP_INSTALL[@]+"${AP_INSTALL[@]}"}; do
+    # a full backup of the site first (install-app syncs DocTypes and runs patches): --skip-backup drops it
+    if [[ "${AP_SKIP_BACKUP:-0}" != "1" ]]; then
+      AP_STEPS+=("backup|${s}|Back up ${s}|bench --site ${s} backup|a full backup of the site (database and files) before its database changes; the site's older backups are kept")
+    fi
     for j in ${AP_MORDER[@]+"${AP_MORDER[@]}"}; do
       case " ${M_INSTALL[$j]} " in *" $s "*) ;; *) continue ;; esac
       e="${M_NAME[$j]}"
       if [[ "$cnt" == "1" ]]; then label="Install on ${s}"; else label="Install ${e} on ${s}"; fi
-      AP_STEPS+=("install|${e}@${s}|${label}|bench --site ${s} install-app ${e}|changes the site's database: installs ${e} (and its required apps) and syncs their DocTypes and patches, like a migrate of these apps only; no backup is taken first")
+      AP_STEPS+=("install|${e}@${s}|${label}|bench --site ${s} install-app ${e}|changes the site's database: installs ${e} (and its required apps) and syncs their DocTypes and patches, like a migrate of these apps only${AP_BK_NOTE}")
     done
   done
   if [[ "${#AP_ORDER[@]}" -gt 0 || "$pd_restart" == "1" ]]; then
@@ -845,6 +852,8 @@ fl__ap_record() {
         *" $i "*) ;;
         *)
           IFS='|' read -r kind arg label _ <<<"$entry"
+          # a retry plans its backup again, so the record does not keep one
+          if [[ "$kind" == "backup" ]]; then i=$((i + 1)); continue; fi
           if [[ "$kind" == "install" ]]; then
             if [[ "${arg%%@*}" == "${M_NAME[$m]}" ]]; then arg="${arg#*@}"; label="Install on ${arg}"; else i=$((i + 1)); continue; fi
           fi
@@ -956,7 +965,7 @@ fl__ap_pin_requirements() {
 # Returns 1 when a step or the verify pass failed.
 fl__ap_apply() {
   local target="$1" labels=() ids=() entry kind arg label i=0 code=0 e s a m nm res fail_from reason ia is
-  local clone_failed="" build_failed="" py_failed="" first_kind="" first_reason="" done_set=" " cloned=() inst_failed=" " mains=" " vfail=""
+  local clone_failed="" build_failed="" py_failed="" first_kind="" first_reason="" done_set=" " cloned=() inst_failed=" " mains=" " vfail="" bk_failed=" "
   AP_STEP_NOTE=()
   for ((m = 0; m < ${#M_NAME[@]}; m++)); do mains="${mains}${M_NAME[$m]} "; done
   for entry in "${AP_STEPS[@]}"; do
@@ -975,11 +984,12 @@ fl__ap_apply() {
     IFS='|' read -r kind arg label _ <<<"$entry"
     res=""
     if [[ -n "$clone_failed" ]]; then res="after failed ${clone_failed}"
-    elif [[ -n "$py_failed" && ( "$kind" == "build" || "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed requirements_python"
-    elif [[ -n "$build_failed" && ( "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed build"
+    elif [[ -n "$py_failed" && ( "$kind" == "build" || "$kind" == "backup" || "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed requirements_python"
+    elif [[ -n "$build_failed" && ( "$kind" == "backup" || "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed build"
     elif [[ "$kind" == "install" ]]; then
       # an app that this one requires failed to install on this site
       ia="${arg%%@*}"; is="${arg#*@}"
+      case "$bk_failed" in *" ${is} "*) res="after failed backup of ${is}" ;; esac
       fl__ap_blockers "$ia" "$mains"
       for a in $AP_BLK; do
         case "$inst_failed" in *" ${a}@${is} "*) res="after failed install of ${a}" ;; esac
@@ -1027,6 +1037,8 @@ fl__ap_apply() {
         for a in ${arg//,/ }; do
           fl_run_long "bench setup requirements --python ${a}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --python "$a" || { res="failed"; break; }
         done ;;
+      backup)
+        fl_site_backup_run "$arg" || { res="failed"; bk_failed="${bk_failed}${arg} "; } ;;
       install)
         fl_app_install_on_sites "${arg%%@*}" "${arg#*@}" || { res="failed"; inst_failed="${inst_failed}${arg} "; } ;;
       restart)
@@ -1040,6 +1052,7 @@ fl__ap_apply() {
         # what the run changed, for the done line
         case "$kind" in
           clone_required|clone) fl_changed app "$arg" "cloned" ;;
+          backup) fl_changed backup "$arg" "bench --site backup" ;;
           install) fl_changed app "${arg%%@*}" "installed on ${arg#*@}" ;;
           restart) fl_changed process "$FL_BENCH_NAME" "restarted" ;;
         esac ;;
@@ -1047,6 +1060,14 @@ fl__ap_apply() {
       *)
         fl_step_end failed
         code=1
+        # a step that mutates and then fails is still a change: changed[] says "partial", so
+        # an agent that reads it first does not believe nothing moved
+        case "$kind" in
+          clone_required|clone)
+            e="$(fl_app_existing_dir "$arg")"
+            [[ -z "$e" ]] || fl_changed app "$arg" "partial: apps/${e} was cloned, then the step failed" ;;
+          install) fl_changed app "${arg%%@*}" "partial: install on ${arg#*@} failed, the site database may have changed" ;;
+        esac
         fl_pending_reason_v reason "$fail_from"
         if [[ -z "$first_kind" ]]; then first_kind="$kind"; first_reason="${reason:-${label} failed}"; fi
         case "$kind" in clone_required|clone) clone_failed="$kind" ;; build) build_failed=1 ;; requirements_python) py_failed=1 ;; esac ;;

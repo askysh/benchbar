@@ -57,7 +57,7 @@ BENCHBAR_SUDO=gui run_fm site open-as on macdev --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 
 # commands with no JSON mode: a terminal program, a text only helper, or a group that prints its usage
-NO_JSON=" fg watch console db docs mcp help mariadb-password path site app lock profile share lan-guard ports profile-show op bench "
+NO_JSON=" fg watch console db docs mcp help mariadb-password path site app lock profile share lan-guard ports profile-show op bench lease "
 
 # key|args that succeed|args that fail ("-" for none)|exit of the success row (default 0)
 # $B is the bench, $NOBENCH a folder that is no bench; @TOKEN@ is the token of `ports plan` for the bench.
@@ -65,6 +65,10 @@ NO_JSON=" fg watch console db docs mcp help mariadb-password path site app lock 
 # The last field is for a row that cannot exit 0 for an agent: a person's decision (labs on, share setup, start,
 # code, invite, open-as and teardown, lan-guard remove and allow-node) is refused under --for-agent with exit 1
 # (2 for labs on), and with nothing shared (a person has to start it) the commands of a room refuse with exit 1.
+# a lease needs a holder name under --for-agent (lease take refuses an agent without one)
+export BENCHBAR_CALLER=envelope-test
+# the fixture profile names file:// repos, which an imported profile accepts only with this (#153)
+export BENCHBAR_ALLOW_LOCAL_REPOS=1
 ROWS="
 install|install --dry-run|install
 run|run -- version|run -- frobnicate
@@ -161,6 +165,11 @@ bench gc|bench gc --dry-run|bench gc --apply bogus --yes
 bench scratch|bench scratch $B2 --ttl 3 --yes|bench scratch $NOBENCH --yes
 db orphans|db orphans|db orphans --bogus
 stats|stats|stats --bench-dir $NOBENCH
+history|history|history --limit bogus
+lease list|lease list|lease list --bogus
+lease take|lease take --bench $B2 --for 5|lease take --bench $B2 --for 0
+lease renew|lease renew l-000000000000 --for 5|lease renew nonsense|1
+lease release|lease release l-000000000000|lease release nonsense
 "
 
 BENCHBAR_LABS="" run_fm commands --json

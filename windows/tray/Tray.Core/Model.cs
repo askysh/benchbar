@@ -41,6 +41,12 @@ public sealed record BenchStatus(
 
     /// <summary><c>pending_operations</c> in the JSON: an app update or app add that stopped part way. Empty when none, and from a CLI older than 0.8.</summary>
     public IReadOnlyList<PendingOperation> PendingOperations { get; init; } = [];
+
+    /// <summary><c>notices[]</c> in the JSON: defaults an update changed, until dismissed. Empty when none, and from a CLI older than 0.9.</summary>
+    public IReadOnlyList<BenchNotice> Notices { get; init; } = [];
+
+    /// <summary><c>ready</c> in the JSON: whether the bench can serve. Null from a CLI older than 0.9.</summary>
+    public ReadyInfo? Ready { get; init; }
 }
 
 /// <summary>One bench from <c>list --json</c> (<c>benches[]</c>).</summary>
@@ -139,6 +145,10 @@ internal sealed class StatusDto
     [JsonPropertyName("scheduler")] public bool? Scheduler { get; set; }
     [JsonPropertyName("started_at")] public string? StartedAt { get; set; }
     [JsonPropertyName("pending_operations")] public List<PendingDto>? PendingOperations { get; set; }
+
+    // read by hand (StatusExtras): a member of an unexpected shape must not fail the whole status
+    [JsonPropertyName("notices")] public System.Text.Json.Nodes.JsonNode? Notices { get; set; }
+    [JsonPropertyName("ready")] public System.Text.Json.Nodes.JsonNode? Ready { get; set; }
 }
 
 internal sealed class PendingDto
@@ -263,6 +273,8 @@ public static class BenchJson
             Sites = sites,
             Scheduler = dto.Scheduler,
             PendingOperations = PendingJson.Parse(dto.PendingOperations),
+            Notices = StatusExtras.ParseNotices(dto.Notices),
+            Ready = StatusExtras.ParseReady(dto.Ready),
             StartedAt = DateTimeOffset.TryParse(dto.StartedAt, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var started) ? started : null,
         };
     }

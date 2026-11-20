@@ -100,6 +100,9 @@ public sealed partial class WizardModel : IDisposable
             ? $"curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/v{v}/install.sh | bash -s -- --version v{v}"
             : "curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash";
     public const string McpLine = "claude mcp add benchbar -- benchbar.exe mcp";
+
+    /// <summary>The stdio server entry for a client that is not Claude Code (Cursor, Claude Desktop, VS Code): a command and one argument, as docs/guides/agents.md says.</summary>
+    public const string McpJson = "{\"mcpServers\":{\"benchbar\":{\"command\":\"benchbar.exe\",\"args\":[\"mcp\"]}}}";
     public const string DefaultSite = "linuxdev.localhost";
     public const string DefaultProfile = "v15-lts";
     public const string RestartRefusedMessage = "Windows did not allow the restart. Restart from the Start menu.";
