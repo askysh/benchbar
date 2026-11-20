@@ -67,6 +67,7 @@ NO_JSON=" fg watch console db docs mcp help mariadb-password path site app lock 
 # (2 for labs on), and with nothing shared (a person has to start it) the commands of a room refuse with exit 1.
 ROWS="
 install|install --dry-run|install
+run|run -- version|run -- frobnicate
 notices|notices|notices --dismiss
 wait|wait --timeout 0|wait --timeout soon|1
 op list|op list|op list --limit 0
