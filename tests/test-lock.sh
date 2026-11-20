@@ -108,6 +108,25 @@ sed_inplace 's#^repo = "git@example.com:acme/acme_crm.git"#repo = "git@example.c
 assert_eq "repo_mismatch:acme_crm" "$(drift_kinds)"
 git -C "$BENCH/apps/acme_crm" remote set-url upstream "file://${REMOTES}/acme_crm.git"
 cp "$TMP_DIR/lock.good" "$LOCK"
+# a password in an ssh:// remote is left out of what lock write would write, with a warning
+git -C "$BENCH/apps/acme_crm" remote set-url upstream "ssh://deploy:secret@git.example.com/acme/acme_crm.git"
+run_fm lock write --dry-run --bench-dir "$BENCH"
+assert_not_contains "$OUT" "secret"
+assert_contains "$OUT" "ssh://deploy@git.example.com/acme/acme_crm.git"
+assert_contains "$OUT" "password or token in its URL"
+git -C "$BENCH/apps/acme_crm" remote set-url upstream "file://${REMOTES}/acme_crm.git"
+# a remote that is a local path or plain http is written as it is, with a warning, and the file reads back
+for remote in "$REMOTES/acme_crm.git" "http://git.lan/acme/acme_crm.git" "git://git.lan/acme/acme_crm.git"; do
+  git -C "$BENCH/apps/acme_crm" remote set-url upstream "$remote"
+  run_fm lock write --yes --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "(${remote}) $OUT"
+  assert_contains "$OUT" "apps/acme_crm: the git remote is a local path or a plain http or git URL; teammates cannot clone this repo"
+  grep -q "^repo = \"${remote}\"$" "$LOCK" || fail "the lock keeps ${remote}"
+  run_fm lock check --bench-dir "$BENCH"
+  assert_not_contains "$OUT" "would not parse"; assert_not_contains "$OUT" "not supported"
+done
+git -C "$BENCH/apps/acme_crm" remote set-url upstream "file://${REMOTES}/acme_crm.git"
+cp "$TMP_DIR/lock.good" "$LOCK"
 # behind: the pin is newer than the checkout
 git -C "$BENCH/apps/acme_crm" commit -q --allow-empty -m "local one"
 run_fm lock write --yes --allow-dirty --bench-dir "$BENCH"
@@ -183,6 +202,8 @@ snap="$(snapshot "$BENCH")"
 run_fm lock apply --dry-run --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "bench get-app --skip-assets --branch main file://${REMOTES}/acme_new.git"
+assert_contains "$OUT" "NEW REPO, not in this bench"
+assert_contains "$OUT" "apply will run code from these repos: local"
 assert_eq "$snap" "$(snapshot "$BENCH")" "(apply --dry-run changes nothing)"
 reset_calls
 run_fm lock apply --yes --bench-dir "$BENCH"
@@ -190,6 +211,16 @@ assert_eq "0" "$CODE" "$OUT"
 assert_calls_contain "^bench get-app --skip-assets --branch main file://${REMOTES}/acme_new.git$"
 assert_calls_contain '^bench build --app acme_new$'
 assert_calls_not_contain 'install-app|migrate|new-site'
+assert_eq "" "$(drift_kinds)"
+# a pin behind the tip, on a fresh clone: get-app clones the tip, apply then goes back to the pin
+make_app_remote acme_old
+add_policy acme_old main
+OLD_PIN="$(git -C "$REMOTES/acme_old.git" rev-parse main)"
+push_commits acme_old 2
+printf '\n[[app]]\nname = "acme_old"\nrepo = "file://%s/acme_old.git"\nbranch = "main"\ncommit = "%s"\n' "$REMOTES" "$OLD_PIN" >>"$LOCK"
+run_fm lock apply --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$OLD_PIN" "$(app_head "$BENCH/apps/acme_old")" "(the fresh clone is at the pin, not at the tip)"
 assert_eq "" "$(drift_kinds)"
 # a pinned commit the remote never had: the clone step fails, exit 1, no build of that app
 make_app_remote acme_pin
@@ -251,7 +282,22 @@ bad 'schema = 1\n[[app]]\nname = "x"\nrepo = "https://user:ghp_token@github.com/
 bad 'schema = 1\n[[app]]\nname = "x"\nbranch = "main"\n' "[[app]] needs repo"
 bad 'schema = 2\n' "schema 2"
 bad 'schema = 1\n[bench.x]\n' "benchbar.toml:2: not supported: table header"
-bad 'schema = 1\n[[app]]\nname = "x"\nrepo = "r"\nbranch = "b"\ncommit = "xyz"\n' "commit must be 7 to 40 lower case hex characters"
+bad 'schema = 1\n[[app]]\nname = "x"\nrepo = "https://example.com/x"\nbranch = "b"\ncommit = "xyz"\n' "commit must be 7 to 40 lower case hex characters"
+# a lock pins a full commit: a 7 character prefix is matched by prefix and collides
+bad 'schema = 1\n[[app]]\nname = "x"\nrepo = "https://example.com/x"\nbranch = "b"\ncommit = "abcdef0"\n' "commit must be 12 to 40 lower case hex characters"
+bad 'schema = 1\n[[app]]\nname = "x"\nrepo = "ext::sh -c id"\nbranch = "b"\n' "a git transport helper (transport::address) is never accepted"
+bad 'schema = 1\n[[app]]\nname = "x"\nrepo = "example.com/x"\nbranch = "b"\n' "use https://, ssh:// or user@host:path"
+bad 'schema = 1\n[[app]]\nname = "x"\nrepo = ""\nbranch = "b"\n' "repo must not be empty"
+bad 'schema = 1\n[[app]]\nname = "x"\nrepo = "https://example.com/x"\nbranch = ""\n' "branch must not be empty"
+bad 'schema = 1\n[[app]]\nname = "x"\nrepo = "https://example.com/x"\nbranch = "a|b"\n' 'branch must not contain "|"'
+# a lock of the person's own (outside apps/) takes a local path, file://, http:// and git://
+for own in "file:///tmp/x.git" "/Users/me/dev/x" "http://git.lan/x.git" "git://git.lan/x.git"; do
+  printf 'schema = 1\n[[app]]\nname = "x"\nrepo = "%s"\nbranch = "b"\n' "$own" >"$LOCK"
+  run_fm lock check --bench-dir "$BENCH"
+  assert_not_contains "$OUT" "not supported" "(${own})"
+done
+# (the doctor check below reads the last file written)
+bad 'schema = 1\n[[app]]\nname = "x"\nrepo = "https://example.com/x"\nbranch = "b"\ncommit = "xyz"\n' "commit must be 7 to 40 lower case hex characters"
 # doctor fails on it, without a repair action
 run_fm doctor --json --bench-dir "$BENCH"
 assert_eq "fail None" "$(printf '%s' "$OUT" | jget - '" ".join(str(c[k]) for c in d["checks"] if c["id"]=="lock_parse" for k in ("level","action"))')"
@@ -262,6 +308,11 @@ run_fm lock write --lock apps/acme_crm/benchbar.toml --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 TEAM_LOCK="$BENCH/apps/acme_crm/benchbar.toml"
 assert_file "$TEAM_LOCK"
+# a lock inside an app repo changes with that app: it is read like a file from someone else, so a
+# file:// repo (these tests' remotes) is refused until the person allows it
+run_fm lock check --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "use https://, ssh:// or user@host:path"
+export BENCHBAR_ALLOW_LOCAL_REPOS=1
 ! grep -q '^commit' <<<"$(sed -n '/name = "acme_crm"/,/^$/p' "$TEAM_LOCK")" || fail "the app holding the lockfile is not pinned"
 run_fm lock check --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "$TEAM_LOCK"

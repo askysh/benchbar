@@ -31,6 +31,7 @@ export default defineConfig({
       components: {
         SocialIcons: './src/components/TopNav.astro',
         ThemeSelect: './src/components/ThemeToggle.astro',
+        Footer: './src/components/Footer.astro',
       },
       // code blocks take the page's surface colours (src/styles/custom.css);
       // shell snippets get a plain frame instead of a terminal window
@@ -113,10 +114,12 @@ export default defineConfig({
                 { label: 'ports', slug: 'reference/cli/ports' },
                 { label: 'scan and register', slug: 'reference/cli/scan' },
                 { label: 'site', slug: 'reference/cli/site' },
+                { label: 'bench', slug: 'reference/cli/bench' },
                 { label: 'app', slug: 'reference/cli/app' },
                 { label: 'profile', slug: 'reference/cli/profile' },
                 { label: 'lock', slug: 'reference/cli/lock' },
                 { label: 'pull', slug: 'reference/cli/pull' },
+                { label: 'run', slug: 'reference/cli/run' },
                 { label: 'mcp', slug: 'reference/cli/mcp' },
                 { label: 'lease', slug: 'reference/cli/lease' },
                 { label: 'labs (experiments)', slug: 'reference/cli/labs' },

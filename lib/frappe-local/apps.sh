@@ -476,13 +476,40 @@ fl_app_remote() {
   printf '%s' "$r"
 }
 
-fl_app_remote_url() {
+# the remote URL as git has it, with any password or token (never shown or written)
+fl__app_remote_raw() {
   local app="$1" r
   fl_app_has_git "$app" || return 0
-  if fl__af_field "$app" url; then fl_url_strip_userinfo "$FL_AF_VAL"; return 0; fi
+  if fl__af_field "$app" url; then printf '%s' "$FL_AF_VAL"; return 0; fi
   r="$(fl_app_remote "$app")"
   [[ -n "$r" ]] || return 0
-  fl_url_strip_userinfo "$(fl_app_git "$app" remote get-url "$r" 2>/dev/null || true)"
+  fl_app_git "$app" remote get-url "$r" 2>/dev/null || true
+}
+
+fl_app_remote_url() { fl_url_strip_userinfo "$(fl__app_remote_raw "$1")"; }
+
+# fl_repo_shareable URL: 0 when a teammate can clone URL (https, ssh, user@host:path);
+# 1 for a local path, file://, http:// or git:// (no encryption, often a LAN host)
+fl_repo_shareable() {
+  case "$1" in
+    https://*|ssh://*) return 0 ;;
+    http://*|git://*|file://*|/*|./*|../*|~*) return 1 ;;
+  esac
+  return 0
+}
+
+# fl_app_remote_url_warn APP: lines on stderr for the commands that write a URL into a
+# file: a password or token in the remote (left out), a remote teammates cannot clone
+fl_app_remote_url_warn() {
+  local raw
+  raw="$(fl__app_remote_raw "$1")"
+  if fl_url_has_secret "$raw"; then
+    printf 'apps/%s: the git remote has a password or token in its URL; it was left out of the file\n' "$1" >&2
+  fi
+  if ! fl_repo_shareable "$(fl_url_strip_userinfo "$raw")"; then
+    printf 'apps/%s: the git remote is a local path or a plain http or git URL; teammates cannot clone this repo\n' "$1" >&2
+  fi
+  return 0
 }
 
 # The version bench recorded in sites/apps.json for APP.
@@ -605,7 +632,8 @@ fl_site_apps_refresh() {
   file="$(fl_site_apps_cache_file)"
   if [[ "$#" -gt 0 ]]; then sites=("$@"); else while IFS= read -r s; do [[ -n "$s" ]] && sites+=("$s"); done < <(fl_sites_list); fi
   fl_bench_env_exports
-  tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-siteapps.XXXXXX")"
+  # a dry run keeps its copy for the rest of the run: the exit trap removes it
+  fl_tmp_new_v tmp benchbar-siteapps
   printf '@checked_at %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$tmp"
   for s in ${sites[@]+"${sites[@]}"}; do
     if apps="$(fl_site_apps_live "$s")"; then
@@ -613,7 +641,7 @@ fl_site_apps_refresh() {
     else
       errors="${errors}${errors:+, }${s}"
       # keep what was known
-      [[ -f "$file" ]] && grep "^${s} " "$file" >>"$tmp" 2>/dev/null || true
+      if [[ -f "$file" ]]; then awk -v s="$s" '$1 == s' "$file" >>"$tmp" 2>/dev/null || true; fi
     fi
   done
   # sites not asked this time keep their line
@@ -628,11 +656,13 @@ fl_site_apps_refresh() {
   [[ -n "$errors" ]] && FL_SITE_APPS_ERROR="bench list-apps failed for ${errors} (is MariaDB running?)"
   [[ -n "$FL_SITE_APPS_ERROR" ]] && printf '@error %s\n' "$FL_SITE_APPS_ERROR" >>"$tmp"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    [[ -z "${FL_SITE_APPS_DRY:-}" ]] || fl_tmp_done "$FL_SITE_APPS_DRY"
     FL_SITE_APPS_DRY="$tmp"
     return 0
   fi
   mkdir -p "$(dirname "$file")"
   mv "$tmp" "$file"
+  fl_tmp_done "$tmp"
 }
 
 fl__site_apps_source() {
@@ -644,8 +674,9 @@ fl_site_apps_cached() {
   local file line
   file="$(fl__site_apps_source)"
   [[ -f "$file" ]] || return 1
-  line="$(grep "^$1 " "$file" 2>/dev/null)" || return 1
-  line="${line%%$'\n'*}"
+  # the site name is text, not a pattern: "a.localhost" must not match "axlocalhost"
+  line="$(awk -v s="$1" '$1 == s {print; exit}' "$file" 2>/dev/null)"
+  [[ -n "$line" ]] || return 1
   printf '%s' "${line#* }"
 }
 
@@ -788,15 +819,77 @@ fl_is_url() {
   return 1
 }
 
+# fl_repo_is_helper REPO: git's "transport::address" form (ext::sh -c ..., fd::3)
+# hands the address to a program; never accepted as a repo, whoever typed it
+fl_repo_is_helper() {
+  case "$1" in
+    *::*) return 0 ;;
+  esac
+  return 1
+}
+
+# fl_repo_owner REPO: host/owner of a git URL, lower case (github.com/acme), for
+# the notice of whose code a command will run; "local" for a path or file://
+fl_repo_owner() {
+  local u h rest
+  u="$(fl_url_strip_userinfo "$1")"
+  case "$u" in
+    file://*|/*|./*|../*) printf 'local' ;;
+    *://*) u="${u#*://}"; u="${u#*@}"; h="${u%%/*}"; h="${h%%:*}"; rest="${u#*/}"; printf '%s/%s' "$h" "${rest%%/*}" | tr '[:upper:]' '[:lower:]' ;;
+    *@*:*) u="${u#*@}"; h="${u%%:*}"; rest="${u#*:}"; rest="${rest#/}"; printf '%s/%s' "$h" "${rest%%/*}" | tr '[:upper:]' '[:lower:]' ;;
+    *) printf '%s' "$u" | tr '[:upper:]' '[:lower:]' ;;
+  esac
+}
+
+# fl_repo_known_owners: the host/owner of every repo this Mac already trusts to
+# run code: the apps in the bench, the ones config/apps.tsv names, and frappe
+fl_repo_known_owners() {
+  local d r
+  printf 'github.com/frappe\n'
+  while IFS= read -r r; do [[ -z "$r" ]] || { fl_repo_owner "$r"; printf '\n'; }; done < <(awk -F '\t' 'NR > 1 && $2 != "" {print $2}' "$(fl_config_file apps.tsv)" 2>/dev/null)
+  [[ -n "${FL_BENCH_DIR:-}" && -d "${FL_BENCH_DIR}/apps" ]] || return 0
+  while IFS= read -r d; do
+    r="$(fl_app_remote_url "$d" 2>/dev/null || true)"
+    [[ -z "$r" ]] || { fl_repo_owner "$r"; printf '\n'; }
+  done < <(fl__apps_dirs)
+}
+
+# fl_repo_trust_compute REPO...: FL_TRUST_ALL and FL_TRUST_NEW, the host/owner
+# of the repos (once each, one per line), and of those the user has none of yet
+FL_TRUST_ALL=""; FL_TRUST_NEW=""
+fl_repo_trust_compute() {
+  local r o known
+  FL_TRUST_ALL=""; FL_TRUST_NEW=""
+  [[ "$#" -gt 0 ]] || return 0
+  known="$(fl_repo_known_owners)"
+  for r in "$@"; do
+    o="$(fl_repo_owner "$r")"
+    [[ -n "$o" ]] || continue
+    fl_has_line "$FL_TRUST_ALL" "$o" && continue
+    FL_TRUST_ALL="${FL_TRUST_ALL}${o}"$'\n'
+    fl_has_line "$known" "$o" || FL_TRUST_NEW="${FL_TRUST_NEW}${o}"$'\n'
+  done
+  FL_TRUST_ALL="${FL_TRUST_ALL%$'\n'}"; FL_TRUST_NEW="${FL_TRUST_NEW%$'\n'}"
+}
+
+# fl_repo_trust_print WHAT REPO...: one line saying whose code WHAT will run
+# (get-app runs pip install and a build; an app's hooks run on the site), and
+# one for the owners nothing here uses yet
+fl_repo_trust_print() {
+  local what="$1"
+  shift
+  fl_repo_trust_compute "$@"
+  [[ -n "$FL_TRUST_ALL" ]] || return 0
+  fl_warn "${what} will run code from these repos: $(printf '%s' "$FL_TRUST_ALL" | tr '\n' ' ' | sed 's/ $//') (get-app runs pip install and a build; an installed app's hooks run on the site)"
+  [[ -z "$FL_TRUST_NEW" ]] || fl_warn "new here, nothing in this bench or config/apps.tsv uses them: $(printf '%s' "$FL_TRUST_NEW" | tr '\n' ' ' | sed 's/ $//'); read what they ship before you go on"
+}
+
 # the app name a repo URL gives: its last path part, without .git, lower case
 fl_app_name_from_url() {
   local n="${1%/}"
   n="${n%.git}"; n="${n##*/}"; n="${n##*:}"
   printf '%s' "$n" | tr '[:upper:]-' '[:lower:]_'
 }
-
-# git that never prompts: a missing key or token fails at once
-fl_git_batch() { fl_git_net "$@"; }
 
 fl_url_is_ssh() {
   case "$1" in
@@ -850,6 +943,7 @@ fl_app_resolve() {
   local target="$1" branch="${2:-}" name="${3:-}" policy repo pbranch
   FL_RES_NAME=""; FL_RES_REPO=""; FL_RES_BRANCH=""
   if fl_is_url "$target"; then
+    ! fl_repo_is_helper "$target" || fl_die "The repo '${target}' uses a git transport helper (transport::address)." "Use an https:// or ssh:// URL, or user@host:path."
     FL_RES_REPO="$(fl_url_strip_userinfo "$target")"
     [[ "$FL_RES_REPO" == "$target" ]] || fl_die "The repo URL carries a user name or token." "Use the URL without it (git uses your SSH key or: gh auth setup-git)."
     FL_RES_NAME="${name:-$(fl_app_name_from_url "$target")}"
@@ -911,9 +1005,14 @@ FL_CLONED_DIR=""
 fl_app_clone() {
   local name="$1" repo="$2" branch="$3" before after new
   FL_CLONED_DIR=""
+  if fl_repo_is_helper "$repo"; then
+    fl_fail "${name}: the repo uses a git transport helper (transport::address); nothing was cloned."
+    return 1
+  fi
   before="$(fl__apps_dirs)"
   fl_bench_env_exports
-  if fl_run_long "bench get-app ${name} (${branch})" fl__in_dir "$FL_BENCH_DIR" env GIT_TERMINAL_PROMPT=0 bench get-app --skip-assets --branch "$branch" "$repo"; then
+  fl_git_ext_off
+  if fl_run_long "bench get-app ${name} (${branch})" fl__in_dir "$FL_BENCH_DIR" env GIT_TERMINAL_PROMPT=0 "${FL_GIT_EXT_OFF[@]}" bench get-app --skip-assets --branch "$branch" "$repo"; then
     after="$(fl__apps_dirs)"
     new="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | awk 'NR==1')"
     FL_CLONED_DIR="${new:-$(fl_app_existing_dir "$name")}"
@@ -979,10 +1078,11 @@ fl_app_verify() {
 # ---------------------------------------------------------------- app install
 
 fl_cmd_app_install() {
-  local app="" a missing="" dep
+  local app="" a missing="" dep skip_backup=0
   for a in "$@"; do
     case "$a" in
-      -*) fl_die "Unknown option for app install: $a" "Use: benchbar app install NAME --site SITE" ;;
+      --skip-backup) skip_backup=1 ;;
+      -*) fl_die "Unknown option for app install: $a" "Use: benchbar app install NAME --site SITE [--skip-backup]" ;;
       *) [[ -z "$app" ]] && app="$a" ;;
     esac
   done
@@ -1004,14 +1104,27 @@ fl_cmd_app_install() {
   fi
   [[ -n "$(fl_site_apps_meta error)" ]] && fl_warn "$(fl_site_apps_meta error)"
   printf '\n%sPlan%s\n' "$FL_BOLD" "$FL_RESET"
-  fl_table "#|Step|Command" "1|Install on ${OPT_SITE}|bench --site ${OPT_SITE} install-app ${app}"
+  if [[ "$skip_backup" == "1" ]]; then
+    fl_table "#|Step|Command" "1|Install on ${OPT_SITE}|bench --site ${OPT_SITE} install-app ${app}"
+    fl_warn "--skip-backup: the site database changes without a backup first"
+  else
+    fl_table "#|Step|Command" "1|Back up ${OPT_SITE}|bench --site ${OPT_SITE} backup" "2|Install on ${OPT_SITE}|bench --site ${OPT_SITE} install-app ${app}"
+  fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then printf '\n'; fl_info "dry-run: nothing was changed"; return 0; fi
   fl_confirm "Install ${app} on ${OPT_SITE}?" || { fl_warn "Cancelled. Nothing was changed."; return 1; }
-  fl_steps_define "Install on ${OPT_SITE}"
-  fl_step_begin 0
+  if [[ "$skip_backup" == "1" ]]; then fl_steps_define "Install on ${OPT_SITE}"; else fl_steps_define "Back up ${OPT_SITE}" "Install on ${OPT_SITE}"; fi
+  if [[ "$skip_backup" != "1" ]]; then
+    fl_step_begin 0
+    if fl_site_backup_run "$OPT_SITE"; then fl_step_end "done"; fl_changed backup "$OPT_SITE" "bench --site backup"
+    else fl_step_end failed; fl_bench_redis_down; fl_steps_summary; fl_fail "the backup of ${OPT_SITE} failed; ${app} was not installed"; return 1; fi
+    fl_step_begin 1
+  else
+    fl_step_begin 0
+  fi
   if fl_app_install_on_sites "$app" "$OPT_SITE"; then fl_step_end "done"; else fl_step_end failed; fl_bench_redis_down; fl_steps_summary; return 1; fi
   fl_bench_redis_down
   fl_app_verify "$app" "" "$OPT_SITE" || { fl_steps_summary; return 1; }
+  fl_changed app "$app" "installed on ${OPT_SITE}"
   fl_steps_summary
 }
 
@@ -1208,21 +1321,26 @@ fl_pending_json_v() {
 # fl_app_fetch APP REMOTE BRANCH: FETCH_HEAD is the remote branch. A
 # shallow clone fetches back to its own HEAD's date, so old..new exists.
 fl_app_fetch() {
-  local app="$1" remote="$2" branch="$3" args=() ts err code=0
+  local app="$1" remote="$2" branch="$3" args=() ts heads code=0
   if fl_app_shallow "$app"; then
     ts="$(fl_app_git "$app" log -1 --format=%ct HEAD 2>/dev/null || true)"
     [[ "$ts" =~ ^[0-9]+$ ]] && args+=("--shallow-since=@$((ts - 1))")
   fi
-  err="$(mktemp "${TMPDIR:-/tmp}/benchbar-fetch.XXXXXX")"
-  fl_git_batch -C "$(fl_app_path "$app")" fetch --quiet ${args[@]+"${args[@]}"} "$remote" "$branch" >/dev/null 2>"$err" || code=$?
-  fl_log_file_append "$err"
+  fl_git_in "$(fl_app_path "$app")" fetch --quiet ${args[@]+"${args[@]}"} "$remote" "$branch" || code=$?
   if [[ "$code" != "0" ]]; then
-    fl_fail "git fetch ${remote} ${branch} failed in apps/${app}: $(grep -v '^[[:space:]]*$' "$err" | awk 'NR==1')"
-    rm -f "$err"
-    fl_repo_access_hint "$(fl_app_remote_url "$app")"
+    fl_fail "git fetch ${remote} ${branch} failed in apps/${app}: ${FL_GR_ERR}"
+    case "${FL_GR_ERR}" in
+      *"couldn't find remote ref"*)
+        # the branch is gone upstream (deleted or renamed): not a key problem
+        heads="$(fl_git_remote_heads "$(fl_app_remote_url "$app")" | tr '\n' ' ')"
+        fl_fail "${remote} no longer has the branch ${branch}: upstream deleted or renamed it"
+        fl_note "remote branches: ${heads:-none}"
+        fl_fix "git -C $(printf '%q' "$(fl_app_path "$app")") fetch ${remote} NEW_BRANCH && git -C $(printf '%q' "$(fl_app_path "$app")") checkout -B NEW_BRANCH ${remote}/NEW_BRANCH   (then benchbar app update ${app})" ;;
+      "timed out"*) fl_fix "check the network, then: benchbar app update ${app}" ;;
+      *) fl_repo_access_hint "$(fl_app_remote_url "$app")" ;;
+    esac
     return 1
   fi
-  rm -f "$err"
 }
 
 # fl__au_command KIND TARGET APP TO: the command a step runs, for the plan
@@ -1238,17 +1356,22 @@ fl__au_command() {
   esac
 }
 
+# fl_site_backup_run SITE: bench --site SITE backup, with the bench's Redis up. Bench's
+# backup deletes the site's backups older than 23 hours, so those are kept.
+fl_site_backup_run() {
+  local site="$1" code=0
+  fl_bench_redis_up "$FL_BENCH_DIR" >/dev/null 2>&1 || true
+  fl_backups_keep_begin "$site" || return 1
+  fl_run_long "bench --site ${site} backup" fl__in_dir "$FL_BENCH_DIR" bench --site "$site" backup || code=$?
+  fl_backups_keep_end
+  return "$code"
+}
+
 # fl__au_run KIND TARGET APP TO: one step of app update; its own [FAIL] line says why it failed
 fl__au_run() {
   local kind="$1" target="$2" app="$3" to="$4" code
   case "$kind" in
-    backup) fl_bench_redis_up "$FL_BENCH_DIR" >/dev/null 2>&1 || true
-      # bench's backup deletes the site's backups older than 23 hours: keep them
-      fl_backups_keep_begin "$target" || return 1
-      code=0
-      fl_run_long "bench --site ${target} backup" fl__in_dir "$FL_BENCH_DIR" bench --site "$target" backup || code=$?
-      fl_backups_keep_end
-      return "$code" ;;
+    backup) fl_site_backup_run "$target" ;;
     fast_forward) fl_run_long "git merge --ff-only" git -C "$(fl_app_path "$app")" merge --ff-only --quiet "$to" ;;
     requirements_python) fl_run_long "bench setup requirements --python ${app}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --python "$app" ;;
     requirements_node) fl_run_long "bench setup requirements --node ${app}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --node "$app" ;;
@@ -1468,6 +1591,11 @@ fl_cmd_app_update() {
         fl_step_end failed
         fl_pending_reason_v reason "$fail_from"
         fl_pending_write app_update "$app" "$branch" "$from" "$to" "$kind" "${reason:-${name} failed}" "${steps[@]:$i}"
+        # a step that mutates and then fails is still a change (changed[] says "partial")
+        case "$kind" in
+          fast_forward) [[ "$(fl_app_commit "$app")" == "$old" ]] || fl_changed app "$app" "partial: apps/${app} moved from ${old:0:7} to $(fl_app_commit "$app" | cut -c1-7), then the step failed" ;;
+          migrate) fl_changed site "$target" "partial: migrate failed, the database may have changed" ;;
+        esac
         fl_bench_redis_down
         fl_steps_summary
         fl_fail "update of ${app} stopped at: ${name}"

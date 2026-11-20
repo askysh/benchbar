@@ -158,6 +158,12 @@ assert_contains "$OUT" "The site two.localhost of $BENCH is leased by agent-a"
 as agent-c site restore two.localhost --from 20260101_000000 --yes
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "is leased by agent-a"
+# benchbar run: a change of the leased site is stopped, a read of the allow list is not
+as agent-c run --site two.localhost --yes -- migrate
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "is leased by agent-a"
+as agent-c run --site two.localhost -- version
+assert_not_contains "$OUT" "is leased" "(run version only reads)"
 ops_before="$(find "$FL_STATE_DIR/ops" -type f 2>/dev/null | grep -c . || true)"
 as agent-c site restore two.localhost --from 20260101_000000 --yes --background
 assert_eq "1" "$CODE" "(a background run is refused at once, not in a detached run: $OUT)"

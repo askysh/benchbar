@@ -15,7 +15,7 @@ apply_json() { run_fm app add "$@" --apply "$AP_TOKEN" --yes --json --bench-dir 
 plan_json acme_site --site macdev
 assert_eq "0" "$CODE" "$OUT"
 AP_TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
-assert_eq "clone,build,install,restart" "$(steps_of "$OUT")"
+assert_eq "clone,build,backup,install,restart" "$(steps_of "$OUT")"
 assert_eq "None" "$(printf '%s' "$OUT" | jget - 'd["reason"]')"
 assert_eq "['acme_site']" "$(printf '%s' "$OUT" | jget - 'd["order"]')"
 # a failed build: no install on a site whose assets were never built, no restart
@@ -27,14 +27,14 @@ assert_calls_not_contain 'install-app'
 assert_eq "app_add build" "$(pending_get acme_site 'd["op"] + " " + d["failed_step"]')"
 assert_eq "build,install,restart" "$(pending_get acme_site '",".join(s["kind"] for s in d["steps"])')"
 doc="$(printf '%s\n' "$OUT" | grep '"applied"' | tail -n1)"
-assert_eq "done failed skipped skipped" "$(printf '%s' "$doc" | jget - '" ".join(s["status"] for s in d["steps"])')"
-assert_eq "after failed build" "$(printf '%s' "$doc" | jget - 'd["steps"][2]["reason"]')"
+assert_eq "done failed skipped skipped skipped" "$(printf '%s' "$doc" | jget - '" ".join(s["status"] for s in d["steps"])')"
+assert_eq "after failed build" "$(printf '%s' "$doc" | jget - 'd["steps"][2]["reason"]')" "(the backup waits for the build too: nothing will be installed)"
 run_fm doctor --json --bench-dir "$BENCH"
 assert_eq "app_add_pending" "$(printf '%s' "$OUT" | jget - '[c["id"] for c in d["checks"] if c["id"].endswith("_pending") and c["level"]=="warn"][0]')"
 # the next plan: the build and the install are steps again, with the reason
 plan_json acme_site --site macdev
 assert_eq "0" "$CODE" "$OUT"
-assert_eq "build,install,restart" "$(steps_of "$OUT")"
+assert_eq "build,backup,install,restart" "$(steps_of "$OUT")"
 assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["changes"]')"
 assert_contains "$(printf '%s' "$OUT" | jget - 'd["reason"]')" "stopped at build"
 AP_TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
@@ -59,7 +59,7 @@ run_with MOCK_BENCH_INSTALL_APP_EXIT 1 app add acme_shop --site macdev --apply "
 assert_eq "1" "$CODE" "$OUT"
 assert_eq "install" "$(pending_get acme_shop '",".join(s["kind"] for s in d["steps"])')"
 plan_json acme_shop
-assert_eq "install" "$(steps_of "$OUT")" "(the site comes from the record)"
+assert_eq "backup,install" "$(steps_of "$OUT")" "(the site comes from the record)"
 AP_TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 reset_calls
 apply_json acme_shop
@@ -84,7 +84,7 @@ run_with MOCK_BENCH_GET_APP_EXIT 1 app add acme_bad --site macdev --apply "$AP_T
 assert_eq "1" "$CODE" "$OUT"
 assert_eq "requirements_python,build,restart" "$(pending_get acme_bad '",".join(s["kind"] for s in d["steps"])')"
 plan_json acme_bad --site macdev
-assert_eq "requirements_python,build,install,restart" "$(steps_of "$OUT")"
+assert_eq "requirements_python,build,backup,install,restart" "$(steps_of "$OUT")"
 AP_TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 # a failed requirements step skips the build, the install and the restart, and the record keeps them
 reset_calls
@@ -92,7 +92,7 @@ run_with MOCK_BENCH_REQUIREMENTS_PYTHON_EXIT 1 app add acme_bad --site macdev --
 assert_eq "1" "$CODE" "$OUT"
 assert_calls_not_contain 'build --app|install-app'
 doc="$(printf '%s\n' "$OUT" | grep '"applied"' | tail -n1)"
-assert_eq "failed skipped skipped skipped" "$(printf '%s' "$doc" | jget - '" ".join(s["status"] for s in d["steps"])')"
+assert_eq "failed skipped skipped skipped skipped" "$(printf '%s' "$doc" | jget - '" ".join(s["status"] for s in d["steps"])')"
 assert_eq "after failed requirements_python" "$(printf '%s' "$doc" | jget - 'd["steps"][1]["reason"]')"
 assert_eq "requirements_python,build,install,restart" "$(pending_get acme_bad '",".join(s["kind"] for s in d["steps"])')"
 plan_json acme_bad --site macdev

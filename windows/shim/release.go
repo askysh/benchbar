@@ -16,11 +16,25 @@ const (
 	releasesAPIURL  = "https://api.github.com/repos/askysh/benchbar/releases?per_page=30"
 	latestPageURL   = repoWeb + "/releases/latest"
 	releasesPageURL = repoWeb + "/releases"
-	// installerPS1URL is the one line installer the docs give. It is main's,
-	// so it is the newest installer, and it installs any release by -Version.
+	// installerPS1URL is the one line installer the docs give, for a person
+	// to run. It is main's. self-update never runs it: it runs the install.ps1
+	// of the release it installs (installerURLFor), after checking its SHA256.
 	installerPS1URL = "https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1"
 	oneLineInstall  = "irm " + installerPS1URL + " | iex"
+	installerRawURL = "https://raw.githubusercontent.com/askysh/benchbar"
 )
+
+// installerURLFor is install.ps1 of the v<version> tag.
+func installerURLFor(version string) string {
+	return installerRawURL + "/v" + strings.TrimPrefix(version, "v") + "/install.ps1"
+}
+
+// sumsURLFor is the checksums file of the v<version> release. It lists the
+// zips and, from the release that introduced the check, install.ps1.
+func sumsURLFor(version string) string {
+	v := strings.TrimPrefix(version, "v")
+	return repoWeb + "/releases/download/v" + v + "/" + windowsSumsName(v)
+}
 
 // webTimeout bounds the release lookup. A variable so a test can shorten it.
 var webTimeout = 10 * time.Second

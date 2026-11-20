@@ -532,6 +532,18 @@ assert_calls_contain '^hook ran$'
 assert_calls_not_contain 'hookfail migrate$'
 assert_calls_not_contain 'hookfail clear-cache$'
 unset MY_API_TOKEN DB_PASSWORD KEEP_ME
+# a hook that is not the script of the plan (swapped while the restore ran) is not run
+SWAPPED="$TMP_DIR/swapped.sh"
+# shellcheck disable=SC2016  # the script text is written as it is
+printf '#!/bin/bash\nprintf "swapped hook ran\\n" >>"$MOCK_LOG"\n' >"$SWAPPED"; chmod +x "$SWAPPED"
+reset_calls
+# shellcheck disable=SC2016  # bash -c expands its own variables
+OUT="$(FL_BENCH_DIR="$BENCH" bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/run.sh"; . "$1/lib/frappe-local/pull.sh"
+  FL_PULL_HOOK="$2"; FL_PULL_HOOK_SHA="$3"; FL_PULL_AS=swapsite; fl_pull_step_before_migrate' _ "$ROOT" "$SWAPPED" "$(printf 'the script of the plan' | shasum -a 256 | awk '{print $1}')" 2>&1)" && CODE=0 || CODE=$?
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "is not the script the plan showed"
+assert_contains "$OUT" "swapsite is restored but not migrated"
+assert_calls_not_contain 'swapped hook ran'
 # the plan names the hook and the site it creates
 JOUT="$("$FM" pull --from-dir "$DL" --as hookplan --skip-app hrms --before-migrate "$HOOK" --dry-run --json --bench-dir "$BENCH" 2>/dev/null)" || fail "pull --dry-run --json"
 assert_eq "$HOOK True True" "$(printf '%s\n' "${JOUT%%$'\n'*}" | jget - 'd["before_migrate"] + " " + str(d["migrate"]) + " " + str(d["create_site"])')"

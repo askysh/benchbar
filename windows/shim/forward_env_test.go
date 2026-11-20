@@ -100,3 +100,17 @@ func TestWithForwardedEnvKeepsTheCallersEnvironment(t *testing.T) {
 		t.Error("the input slice was changed")
 	}
 }
+
+// the tray says who started a run (BENCHBAR_CALLER=tray): the shim carries it into the distro, where the CLI
+// keeps it in the run log's first line and in benchbar history
+func TestForwardCarriesTheCallerLabel(t *testing.T) {
+	e := newEnv(t)
+	t.Setenv("BENCHBAR_CALLER", "tray")
+	t.Setenv("WSLENV", "")
+	if code := e.run("site", "backup", "x.localhost"); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if got := ":" + e.starts()[0].Wslenv + ":"; !strings.Contains(got, ":BENCHBAR_CALLER:") {
+		t.Errorf("WSLENV %q does not carry BENCHBAR_CALLER", got)
+	}
+}

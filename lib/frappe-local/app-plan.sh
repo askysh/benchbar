@@ -83,7 +83,7 @@ fl__ap_pin_resolve() {
 # hooks.py), AP__REQ (its required_apps, one per line) and AP__SHA (the
 # commit it read); 1 with AP__ERR when it cannot be read.
 fl__ap_read_hooks() {
-  local repo="$1" branch="$2" name="$3" pin="${4:-}" tmp code=0 path="" ref="HEAD"
+  local repo="$1" branch="$2" name="$3" pin="${4:-}" tmp code=0 path="" ref="HEAD" dep have
   AP__PKG=""; AP__REQ=""; AP__ERR=""; AP__SHA=""
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-plan.XXXXXX")"
   fl__ap_git "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/out" "$tmp/err" \
@@ -116,6 +116,14 @@ fl__ap_read_hooks() {
   fi
   AP__PKG="${path%/hooks.py}"
   AP__REQ="$(fl_hooks_required_apps "$tmp/hooks.py")"
+  # the Frappe this app is built for ([tool.bench.frappe-dependencies]) against the bench's
+  fl__ap_git "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/pyproject.toml" "$tmp/err" -C "$tmp/repo" show "${ref}:pyproject.toml" || true
+  dep="$(fl_pyproject_frappe_dep "$tmp/pyproject.toml")"
+  have="$(fl_bench_frappe_version)"
+  if [[ -n "$dep" && -n "$have" ]] && ! fl_dep_fits "$dep" "$have"; then
+    AP__ERR="${name} (${branch}${pin:+ at ${pin}}) needs frappe ${dep}, and this bench has frappe ${have}: pick a branch for it with --branch (often version-${have%%.*}), or leave the app out"
+    rm -rf "$tmp"; return 1
+  fi
   rm -rf "$tmp"
   return 0
 }
@@ -318,13 +326,14 @@ fl__ap_parse() {
   local usage="$1" cur=-1 idx opt val
   shift
   AP_T_TARGET=(""); AP_T_BRANCH=(""); AP_T_NAME=(""); AP_T_COMMIT=(""); AP_T_ON=("")
-  AP_ALL=0; AP_APPLY=0; AP_TOKEN_IN=""
+  AP_ALL=0; AP_APPLY=0; AP_TOKEN_IN=""; AP_SKIP_BACKUP=0
   while [[ "$#" -gt 0 ]]; do
     opt=""; val=""
     case "$1" in
       --branch|--name|--commit|--install-on) opt="$1"; val="${2:-}"; shift; [[ "$#" -eq 0 ]] || shift ;;
       --branch=*|--name=*|--commit=*|--install-on=*) opt="${1%%=*}"; val="${1#*=}"; shift ;;
       --all-sites) AP_ALL=1; shift ;;
+      --skip-backup) AP_SKIP_BACKUP=1; shift ;;
       --apply) AP_APPLY=1; AP_TOKEN_IN="${2:-}"; shift; [[ "$#" -eq 0 ]] || shift ;;
       --apply=*) AP_APPLY=1; AP_TOKEN_IN="${1#*=}"; shift ;;
       -*) fl_die "Unknown option for app add: $1" "$usage" ;;
@@ -597,12 +606,18 @@ fl_app_add_plan() {
     AP_STEPS+=("build|${s}|Build|${cmd}|the new apps' JS and CSS")
   fi
   # installs: site by site, each site in dependency order
+  AP_BK_NOTE=""
+  [[ "${AP_SKIP_BACKUP:-0}" != "1" ]] || AP_BK_NOTE="; --skip-backup: no backup is taken first"
   for s in ${AP_INSTALL[@]+"${AP_INSTALL[@]}"}; do
+    # a full backup of the site first (install-app syncs DocTypes and runs patches): --skip-backup drops it
+    if [[ "${AP_SKIP_BACKUP:-0}" != "1" ]]; then
+      AP_STEPS+=("backup|${s}|Back up ${s}|bench --site ${s} backup|a full backup of the site (database and files) before its database changes; the site's older backups are kept")
+    fi
     for j in ${AP_MORDER[@]+"${AP_MORDER[@]}"}; do
       case " ${M_INSTALL[$j]} " in *" $s "*) ;; *) continue ;; esac
       e="${M_NAME[$j]}"
       if [[ "$cnt" == "1" ]]; then label="Install on ${s}"; else label="Install ${e} on ${s}"; fi
-      AP_STEPS+=("install|${e}@${s}|${label}|bench --site ${s} install-app ${e}|changes the site's database: installs ${e} (and its required apps) and syncs their DocTypes and patches, like a migrate of these apps only; no backup is taken first")
+      AP_STEPS+=("install|${e}@${s}|${label}|bench --site ${s} install-app ${e}|changes the site's database: installs ${e} (and its required apps) and syncs their DocTypes and patches, like a migrate of these apps only${AP_BK_NOTE}")
     done
   done
   if [[ "${#AP_ORDER[@]}" -gt 0 || "$pd_restart" == "1" ]]; then
@@ -668,7 +683,8 @@ fl_app_add_plan() {
   # the bench state the plan was made against: a changed apps.txt, apps/
   # folder or site list makes the token stale
   state="$(printf 'apps.txt\n%s\napps\n%s\nsites\n%s\n' "$(fl_apps_txt)" "$(fl__apps_dirs)" "$(fl_sites_list)")"
-  AP_TOKEN="$(printf '%s\n%s\n' "$body" "$state" | shasum -a 256 | awk '{print $1}')"
+  AP_TOKEN_DATA="$(printf '%s\n%s\n' "$body" "$state")"
+  fl_plan_token_v AP_TOKEN "$AP_TOKEN_DATA"
   AP_JSON="$(printf '{"schema_version":%d,"cli_version":"%s",%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$body" "$AP_TOKEN")"
 }
 
@@ -777,7 +793,7 @@ fl_cmd_app_add() {
 # ---------------------------------------------------------------- the command
 
 fl_cmd_app_add_planned() {
-  local json="$OPT_JSON" code=0 target usage="Use: benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on SITES] [NAME|URL ...] [--site S | --all-sites] --dry-run --json, then --apply TOKEN --yes"
+  local json="$OPT_JSON" code=0 ap_code=0 target usage="Use: benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on SITES] [NAME|URL ...] [--site S | --all-sites] --dry-run --json, then --apply TOKEN --yes"
   # JSON on fd 3, every line of text on stderr
   if [[ "$json" == "1" ]]; then fl_json_doc_begin; elif [[ "${FL_JSONL:-0}" != "1" ]]; then exec 3>&1; fi
   fl__ap_parse "$usage" "$@"
@@ -800,8 +816,13 @@ fl_cmd_app_add_planned() {
   fi
 
   fl_header "benchbar app add --apply" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "${AP_INSTALL[*]:-no site}"
-  [[ "$AP_TOKEN_IN" == "$AP_TOKEN" ]] || fl_die "The app add plan changed since it was shown (apps.txt, apps/, the sites or the remote). Nothing was changed." \
-    "Review a fresh plan: benchbar app add ${target} ... --dry-run --json, then pass its token."
+  ap_code=0; fl_plan_token_check "$AP_TOKEN_DATA" "$AP_TOKEN_IN" || ap_code=$?
+  case "$ap_code" in
+    0) ;;
+    2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: benchbar app add ${target} ... --dry-run --json, then pass its token." ;;
+    *) fl_die "The app add plan changed since it was shown (apps.txt, apps/, the sites or the remote). Nothing was changed." \
+      "Review a fresh plan: benchbar app add ${target} ... --dry-run --json, then pass its token." ;;
+  esac
   fl__ap_print_plan
   [[ "$AP_CAN_APPLY" == "1" ]] || fl_die "The plan cannot be applied (see above). Nothing was changed."
   if [[ "${#AP_STEPS[@]}" == "0" ]]; then
@@ -831,6 +852,8 @@ fl__ap_record() {
         *" $i "*) ;;
         *)
           IFS='|' read -r kind arg label _ <<<"$entry"
+          # a retry plans its backup again, so the record does not keep one
+          if [[ "$kind" == "backup" ]]; then i=$((i + 1)); continue; fi
           if [[ "$kind" == "install" ]]; then
             if [[ "${arg%%@*}" == "${M_NAME[$m]}" ]]; then arg="${arg#*@}"; label="Install on ${arg}"; else i=$((i + 1)); continue; fi
           fi
@@ -903,9 +926,34 @@ fl__ap_clone_info() {
 fl__ap_pin_checkout() {
   local path
   path="$(fl_app_path "$1")"
+  AP__PRE="$(git -C "$path" rev-parse HEAD 2>/dev/null || true)"
   if fl_commit_reach "$path" "$2" && fl_run git -C "$path" checkout --quiet "$2"; then return 0; fi
   AP__GOT="$(git -C "$path" rev-parse HEAD 2>/dev/null || true)"
   return 1
+}
+
+# fl__ap_tip_unmoved NAME: before get-app, the branch (or tag) of an app to
+# clone is still at the commit the plan read; a pin is exempt, it names its
+# commit. Nothing has been cloned when this fails.
+fl__ap_tip_unmoved() {
+  fl__ap_clone_info "$1"
+  [[ -n "$AP_CI_SHA" && -z "$AP_CI_PIN" ]] || return 0
+  if ! fl_git_remote_tip "$AP_CI_REPO" "$AP_CI_BRANCH" "${FL_GIT_TIMEOUT:-30}"; then
+    fl_fail "${1}: could not read ${AP_CI_BRANCH} of ${AP_CI_REPO} again before get-app (${FL_GR_ERR:-git ls-remote exit ${FL_GR_CODE}}); nothing was cloned."
+    fl_fix "Plan again: benchbar app add ${1} --dry-run --json"
+    return 1
+  fi
+  [[ "$FL_GR_TIP" == "$AP_CI_SHA" ]] && return 0
+  fl_fail "${1}: ${AP_CI_BRANCH} moved after the plan was made (planned ${AP_CI_SHA:0:12}, now ${FL_GR_TIP:0:12}); nothing was cloned."
+  fl_fix "Review a fresh plan: benchbar app add ${1} ... --dry-run --json"
+  return 1
+}
+
+# fl__ap_pin_requirements DIR: the Python and node requirements of the pinned
+# commit now checked out in apps/DIR (get-app installed those of the branch tip)
+fl__ap_pin_requirements() {
+  fl_run_long "bench setup requirements --python ${1} (at the pinned commit)" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --python "$1" || return 1
+  fl_run_long "bench setup requirements --node ${1} (at the pinned commit)" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --node "$1"
 }
 
 # fl__ap_apply TARGET: runs AP_STEPS in order, with the dependencies
@@ -917,7 +965,7 @@ fl__ap_pin_checkout() {
 # Returns 1 when a step or the verify pass failed.
 fl__ap_apply() {
   local target="$1" labels=() ids=() entry kind arg label i=0 code=0 e s a m nm res fail_from reason ia is
-  local clone_failed="" build_failed="" py_failed="" first_kind="" first_reason="" done_set=" " cloned=() inst_failed=" " mains=" " vfail=""
+  local clone_failed="" build_failed="" py_failed="" first_kind="" first_reason="" done_set=" " cloned=() inst_failed=" " mains=" " vfail="" bk_failed=" "
   AP_STEP_NOTE=()
   for ((m = 0; m < ${#M_NAME[@]}; m++)); do mains="${mains}${M_NAME[$m]} "; done
   for entry in "${AP_STEPS[@]}"; do
@@ -936,11 +984,12 @@ fl__ap_apply() {
     IFS='|' read -r kind arg label _ <<<"$entry"
     res=""
     if [[ -n "$clone_failed" ]]; then res="after failed ${clone_failed}"
-    elif [[ -n "$py_failed" && ( "$kind" == "build" || "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed requirements_python"
-    elif [[ -n "$build_failed" && ( "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed build"
+    elif [[ -n "$py_failed" && ( "$kind" == "build" || "$kind" == "backup" || "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed requirements_python"
+    elif [[ -n "$build_failed" && ( "$kind" == "backup" || "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed build"
     elif [[ "$kind" == "install" ]]; then
       # an app that this one requires failed to install on this site
       ia="${arg%%@*}"; is="${arg#*@}"
+      case "$bk_failed" in *" ${is} "*) res="after failed backup of ${is}" ;; esac
       fl__ap_blockers "$ia" "$mains"
       for a in $AP_BLK; do
         case "$inst_failed" in *" ${a}@${is} "*) res="after failed install of ${a}" ;; esac
@@ -958,18 +1007,22 @@ fl__ap_apply() {
     case "$kind" in
       clone_required|clone)
         fl__ap_clone_info "$arg"
-        if ! fl_app_clone "$arg" "$AP_CI_REPO" "$AP_CI_BRANCH"; then res="failed"
+        if ! fl__ap_tip_unmoved "$arg"; then res="failed"
+        elif ! fl_app_clone "$arg" "$AP_CI_REPO" "$AP_CI_BRANCH"; then res="failed"
         elif [[ -n "$AP_CI_PIN" ]] && ! fl__ap_pin_checkout "$FL_CLONED_DIR" "$AP_CI_PIN"; then
           # the clone does not reach the commit that was reviewed
           res="failed"
-          fl_fail "${arg}: the clone does not reach the pinned commit (planned ${AP_CI_PIN:0:12}, cloned ${AP__GOT:0:12}); nothing was built or installed."
+          fl_fail "${arg}: the clone does not reach the pinned commit (planned ${AP_CI_PIN:0:12}, cloned ${AP__GOT:0:12}); get-app cloned it and installed its Python requirements, but nothing was built or installed on a site."
           fl_fix "Check the commit is on a branch or tag of ${AP_CI_REPO}, then: cd $(printf '%q' "$FL_BENCH_DIR") && bench remove-app $(printf '%q' "$FL_CLONED_DIR"), and plan again"
         elif ! fl__ap_at_commit "$FL_CLONED_DIR" "$AP_CI_SHA"; then
           # the branch moved between the plan and get-app: build and install
           # would run code nobody reviewed
           res="failed"
-          fl_fail "${arg}: ${AP_CI_BRANCH} moved after the plan was made (planned ${AP_CI_SHA:0:12}, cloned ${AP__GOT:0:12}); nothing was built or installed."
-          fl_fix "Review a fresh plan: benchbar app add ${target} ... --dry-run --json"
+          fl_fail "${arg}: ${AP_CI_BRANCH} moved after the plan was made (planned ${AP_CI_SHA:0:12}, cloned ${AP__GOT:0:12}); get-app cloned it and installed its Python requirements, but nothing was built or installed on a site."
+          fl_fix "Remove the clone, then review a fresh plan: cd $(printf '%q' "$FL_BENCH_DIR") && bench remove-app $(printf '%q' "$FL_CLONED_DIR"); benchbar app add ${target} ... --dry-run --json"
+        elif [[ -n "$AP_CI_PIN" && "$AP__PRE" != "$AP_CI_PIN" ]] && ! fl__ap_pin_requirements "$FL_CLONED_DIR"; then
+          # get-app installed the requirements of the tip it cloned; the pin has its own
+          res="failed"
         else cloned+=("$FL_CLONED_DIR"); fi ;;
       build)
         # the folders of the apps to build, as bench named them
@@ -984,6 +1037,8 @@ fl__ap_apply() {
         for a in ${arg//,/ }; do
           fl_run_long "bench setup requirements --python ${a}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --python "$a" || { res="failed"; break; }
         done ;;
+      backup)
+        fl_site_backup_run "$arg" || { res="failed"; bk_failed="${bk_failed}${arg} "; } ;;
       install)
         fl_app_install_on_sites "${arg%%@*}" "${arg#*@}" || { res="failed"; inst_failed="${inst_failed}${arg} "; } ;;
       restart)
@@ -997,6 +1052,7 @@ fl__ap_apply() {
         # what the run changed, for the done line
         case "$kind" in
           clone_required|clone) fl_changed app "$arg" "cloned" ;;
+          backup) fl_changed backup "$arg" "bench --site backup" ;;
           install) fl_changed app "${arg%%@*}" "installed on ${arg#*@}" ;;
           restart) fl_changed process "$FL_BENCH_NAME" "restarted" ;;
         esac ;;
@@ -1004,6 +1060,14 @@ fl__ap_apply() {
       *)
         fl_step_end failed
         code=1
+        # a step that mutates and then fails is still a change: changed[] says "partial", so
+        # an agent that reads it first does not believe nothing moved
+        case "$kind" in
+          clone_required|clone)
+            e="$(fl_app_existing_dir "$arg")"
+            [[ -z "$e" ]] || fl_changed app "$arg" "partial: apps/${e} was cloned, then the step failed" ;;
+          install) fl_changed app "${arg%%@*}" "partial: install on ${arg#*@} failed, the site database may have changed" ;;
+        esac
         fl_pending_reason_v reason "$fail_from"
         if [[ -z "$first_kind" ]]; then first_kind="$kind"; first_reason="${reason:-${label} failed}"; fi
         case "$kind" in clone_required|clone) clone_failed="$kind" ;; build) build_failed=1 ;; requirements_python) py_failed=1 ;; esac ;;

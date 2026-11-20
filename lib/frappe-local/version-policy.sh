@@ -39,7 +39,9 @@ fl_load_profile() {
   if [[ -z "$row" ]] && declare -F fl_team_profile_load >/dev/null && fl_team_profile_load "$profile"; then return 0; fi
   FL_TEAM_PROFILE=""
   [[ -n "$row" ]] || fl_die "Unknown release profile: ${profile}" "Built in: --list-profiles. A team profile is ~/.config/benchbar/profiles/${profile}.toml or ${profile}.toml in a BENCHBAR_PROFILE_PATH folder."
-  IFS=$'\t' read -r FL_PROFILE FL_PROFILE_LABEL FL_FRAPPE_BRANCH FL_ERPNEXT_BRANCH \
+  # split on \037, not on the tab: a tab is white space for read, so two tabs (an empty cell) would become one
+  row="$(printf '%s' "$row" | tr '\t' '\037')"
+  IFS=$'\037' read -r FL_PROFILE FL_PROFILE_LABEL FL_FRAPPE_BRANCH FL_ERPNEXT_BRANCH \
     FL_PYTHON_FORMULA FL_PYTHON_BIN_NAME FL_NODE_FORMULA FL_NODE_MAJOR \
     FL_MARIADB_FORMULA FL_MARIADB_MAJOR_MINOR FL_PROFILE_STATUS FL_SUPPORT_END _default \
     FL_MARIADB_MIN FL_MARIADB_MAX FL_BENCH_MIN <<<"$row"
@@ -55,9 +57,15 @@ fl_load_profile() {
 # mariadb@10.11 a v15 bench set up). FL_MARIADB_FORMULA_PINNED (a bench's
 # stored MARIADB_FORMULA) wins over detection.
 
-# "formula version" of the server listening on 3306, from its binary path
-# (.../opt/<formula>/bin/mariadbd or .../Cellar/<formula>/<ver>/bin/mariadbd).
+# "formula version" of the server listening on 3306. On Linux that is the
+# server's own version (an apt or a vendor mariadbd, doctor-linux.sh), on a Mac
+# it comes from the Homebrew path of the binary.
 fl_mariadb_running_formula() {
+  if fl_is_linux; then fl_mariadb_running_formula_linux; else fl_mariadb_running_formula_brew; fi
+}
+
+# from the binary path (.../opt/<formula>/bin/mariadbd or .../Cellar/<formula>/<ver>/bin/mariadbd).
+fl_mariadb_running_formula_brew() {
   local pid bin formula ver
   pid="$(lsof -ti tcp:3306 -sTCP:LISTEN 2>/dev/null | awk 'NR==1' || true)"
   [[ -n "$pid" ]] || return 0
@@ -101,6 +109,51 @@ fl_version_lt() {
     [[ "${x[$i]:-0}" -gt "${y[$i]:-0}" ]] && return 1
   done
   return 1
+}
+
+# fl_dep_fits SPEC VERSION: VERSION satisfies a PEP 440 style SPEC such as
+# ">=15.0.0,<16.0.0" (numbers only, pre-release tags ignored). A clause it
+# cannot read is skipped, so an odd spec never blocks anything.
+fl_dep_fits() {
+  local spec="$1" ver="$2" clause op want
+  local -a clauses=()
+  IFS=, read -r -a clauses <<<"$spec"
+  for clause in ${clauses[@]+"${clauses[@]}"}; do
+    clause="${clause// /}"
+    case "$clause" in
+      '>='*) op=ge; want="${clause#>=}" ;;
+      '<='*) op=le; want="${clause#<=}" ;;
+      '=='*) op=eq; want="${clause#==}" ;;
+      '!='*) op=ne; want="${clause#!=}" ;;
+      '>'*) op=gt; want="${clause#>}" ;;
+      '<'*) op=lt; want="${clause#<}" ;;
+      *) continue ;;
+    esac
+    want="${want%%[^0-9.]*}"
+    [[ "$want" =~ ^[0-9]+(\.[0-9]+)*$ ]] || continue
+    case "$op" in
+      ge) ! fl_version_lt "$ver" "$want" || return 1 ;;
+      gt) fl_version_lt "$want" "$ver" || return 1 ;;
+      le) ! fl_version_lt "$want" "$ver" || return 1 ;;
+      lt) fl_version_lt "$ver" "$want" || return 1 ;;
+      eq) if fl_version_lt "$ver" "$want" || fl_version_lt "$want" "$ver"; then return 1; fi ;;
+      ne) if ! fl_version_lt "$ver" "$want" && ! fl_version_lt "$want" "$ver"; then return 1; fi ;;
+    esac
+  done
+  return 0
+}
+
+# fl_pyproject_frappe_dep FILE: the frappe specifier of [tool.bench.frappe-dependencies]
+fl_pyproject_frappe_dep() {
+  [[ -s "$1" ]] || return 0
+  awk '/^\[/ {s = ($0 ~ /^\[tool\.bench\.frappe-dependencies\]/)}
+    s && /^[[:space:]]*frappe[[:space:]]*=/ {sub(/^[^=]*=[[:space:]]*/, ""); sub(/[[:space:]]+#.*/, ""); gsub(/["\047 ]/, ""); print; exit}' "$1"
+}
+
+# fl_bench_frappe_version: the version of apps/frappe in the bench (15.113.4), or nothing
+fl_bench_frappe_version() {
+  # shellcheck disable=SC2153  # set by the bench selection
+  sed -n 's/^__version__[[:space:]]*=[[:space:]]*["'"'"']\([0-9][0-9.]*\).*/\1/p' "${FL_BENCH_DIR}/apps/frappe/frappe/__init__.py" 2>/dev/null | awk 'NR==1' || true
 }
 
 # The Frappe major version of the loaded profile: 15 for version-15.
@@ -316,8 +369,10 @@ fl_check_updates() {
     return 0
   fi
 
-  frappe_heads="$(git ls-remote --heads https://github.com/frappe/frappe 'version-*' 2>/dev/null | awk -F/ '{print $NF}' | sort -u | tr '\n' ' ')"
-  erpnext_heads="$(git ls-remote --heads https://github.com/frappe/erpnext 'version-*' 2>/dev/null | awk -F/ '{print $NF}' | sort -u | tr '\n' ' ')"
+  fl_git_remote_run "${FL_GIT_TIMEOUT:-30}" ls-remote --heads -- https://github.com/frappe/frappe 'refs/heads/version-*'
+  frappe_heads="$(printf '%s\n' "$FL_GR_OUT" | awk -F/ 'NF {print $NF}' | sort -u | tr '\n' ' ')"
+  fl_git_remote_run "${FL_GIT_TIMEOUT:-30}" ls-remote --heads -- https://github.com/frappe/erpnext 'refs/heads/version-*'
+  erpnext_heads="$(printf '%s\n' "$FL_GR_OUT" | awk -F/ 'NF {print $NF}' | sort -u | tr '\n' ' ')"
   {
     printf 'Known local profiles:\n'
     fl_list_profiles
@@ -330,13 +385,13 @@ fl_check_updates() {
   default_support="$(awk -F '\t' -v p="$default_profile" 'NR > 1 && $1 == p {print $12; exit}' "$(fl_config_file release-profiles.tsv)")"
   max_support="$default_support"
   max_profile="$default_profile"
-  while IFS=$'\t' read -r profile _label _fb _eb _pf _pb _nf _nm _mf _mm _status support _default; do
+  while IFS=$'\037' read -r profile _label _fb _eb _pf _pb _nf _nm _mf _mm _status support _default; do
     [[ "$profile" == "profile" ]] && continue
     if [[ "$support" > "$max_support" ]]; then
       max_support="$support"
       max_profile="$profile"
     fi
-  done <"$(fl_config_file release-profiles.tsv)"
+  done < <(tr '\t' '\037' <"$(fl_config_file release-profiles.tsv)")
   if [[ "$max_profile" != "$default_profile" ]]; then
     fl_warn "${max_profile} is available and has a later public support window than ${default_profile}."
     fl_warn "v15-lts remains the conservative default; use newer profiles only when you intentionally want them."

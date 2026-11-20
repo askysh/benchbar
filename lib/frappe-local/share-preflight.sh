@@ -2,7 +2,7 @@
 # shellcheck disable=SC2034  # globals are shared with the other lib files
 #
 # share-preflight.sh: benchbar share preflight [--static|--critical] [--quiet] [--json]
-# (shown to people as "Checks"). It proves this Mac is safe to share the hardened
+# (shown to people as "Checks"). It proves this computer is safe to share the hardened
 # copy on the LAN, and it fails closed: a probe that cannot run is a failure,
 # never an ok.
 #
@@ -13,9 +13,9 @@
 # The pf check is not vacuous. A probe of a blocked port that is refused proves
 # nothing when the probe itself cannot connect, so each run opens its own
 # throwaway listener on 0.0.0.0 inside the blocked range, plus a control above
-# the range, and probes both from this Mac's own LAN address: the listener must
+# the range, and probes both from this computer's own LAN address: the listener must
 # be refused and the control must answer. The anchor's rule is "from !
-# 127.0.0.1", so the LAN address of this very Mac is blocked too.
+# 127.0.0.1", so the LAN address of this very computer is blocked too.
 #
 # Every program is the absolute system one, or the file named by its FL_* seam
 # (FL_NC, FL_CURL, FL_ROUTE, FL_IPCONFIG, FL_IFCONFIG, FL_SOCKETFILTERFW,
@@ -122,6 +122,60 @@ fl_sp_nc_open() {
     [[ "${1:-}" != -6 ]] || shift
     # shellcheck disable=SC2016  # the inner shell expands its own arguments
     /usr/bin/timeout 1 /bin/bash -c 'exec 3<>"/dev/tcp/$1/$2"' _ "$1" "$2" >/dev/null 2>&1
+  fi
+}
+
+# ---- WSL: where a room can be reached from. Inside WSL the address `ip route get` names is the VM's own. On
+# NAT networking (the default) that address is private to the Windows PC, so nobody on the Wi-Fi reaches it,
+# and every probe here runs inside the VM, so they would still pass. Mirrored networking gives the VM the PC's
+# own LAN address; Windows then still drops inbound connections to it until a Hyper-V firewall rule allows
+# them (Microsoft: learn.microsoft.com/windows/wsl/networking#mirrored-mode-networking). FL_WSLINFO is the
+# tests' wslinfo (read under FL_TESTING=1).
+FL_SP_WSL_VMCREATOR='{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}'
+
+# fl_sp_wsl_net_v VAR: "" outside WSL, else nat (also when wslinfo is missing, as on a WSL that has no
+# mirrored mode) or mirrored (bridged is the same to a room: the VM has an address on the Wi-Fi)
+fl_sp_wsl_net_v() {
+  local __bin=/usr/bin/wslinfo __m=""
+  printf -v "$1" '%s' ""
+  declare -F fl_is_wsl >/dev/null && fl_is_wsl || return 0
+  if [[ "${FL_TESTING:-}" == "1" && -n "${FL_WSLINFO+x}" ]]; then __bin="$FL_WSLINFO"; fi
+  [[ -x "$__bin" ]] && __m="$("$__bin" --networking-mode 2>/dev/null | tr -d '\r\n[:space:]' | tr '[:upper:]' '[:lower:]')"
+  case "$__m" in mirrored|bridged) printf -v "$1" '%s' mirrored ;; *) printf -v "$1" '%s' nat ;; esac
+}
+
+# fl_sp_wsl_rule_v VAR: the PowerShell line (run as administrator in Windows) that lets the room's port in
+fl_sp_wsl_rule_v() {
+  printf -v "$1" '%s' "New-NetFirewallHyperVRule -Name BenchBarRoom -DisplayName \"BenchBar room\" -Direction Inbound -VMCreatorId '${FL_SP_WSL_VMCREATOR}' -Protocol TCP -LocalPorts ${FL_SHARE_GATEWAY_PORT}"
+}
+
+FL_SP_WSL_NAT_MSG="WSL uses NAT networking, so a room here is not reachable from the Wi-Fi: its address is private to this PC. A room is not available on WSL NAT."
+FL_SP_WSL_NAT_FIX='Switch WSL to mirrored networking: add networkingMode=mirrored under [wsl2] in %UserProfile%\.wslconfig (BenchBar never edits that file), run wsl.exe --shutdown in Windows, then allow the room port in the Hyper-V firewall (benchbar share preflight prints the PowerShell line). See docs/windows.md'
+
+# fl_sp_wsl_networking: the static check
+fl_sp_wsl_networking() {
+  local mode rule
+  fl_sp_wsl_net_v mode
+  case "$mode" in
+    "") return 0 ;;
+    nat) fl_sp_add wsl_networking static fail "$FL_SP_WSL_NAT_MSG" "$FL_SP_WSL_NAT_FIX" none ;;
+    *)
+      fl_sp_wsl_rule_v rule
+      fl_sp_add wsl_networking static warn "WSL uses mirrored networking: Windows blocks inbound connections to WSL until port ${FL_SHARE_GATEWAY_PORT} is allowed." "$rule" none
+      fl_sp_detail "\"rule\":$(fl_json_str "$rule")" "Allow it once, in a PowerShell run as administrator: ${rule}"
+      ;;
+  esac
+}
+
+# fl_share_wsl_gate [warn]: share start and share invite stop here on WSL NAT; "warn" also says what mirrored needs
+fl_share_wsl_gate() {
+  local mode rule
+  fl_sp_wsl_net_v mode
+  [[ -n "$mode" ]] || return 0
+  [[ "$mode" != nat ]] || fl_die "$FL_SP_WSL_NAT_MSG" "$FL_SP_WSL_NAT_FIX"
+  if [[ "${1:-}" == warn ]]; then
+    fl_sp_wsl_rule_v rule
+    fl_warn "WSL mirrored networking: Windows blocks inbound connections to port ${FL_SHARE_GATEWAY_PORT} until you allow it, once, in a PowerShell run as administrator: ${rule}"
   fi
 }
 
@@ -279,13 +333,13 @@ fl_sp_probe_pf() {
     listener_bad=1; problems+=("Node cannot be trusted to run the gateway: ${node_problem}")
   elif fl_sp_listener_start "$SP_NODE_REAL" "$want6"; then
     if ! fl_sp_nc_open "$ip" "$SP_L4C"; then
-      control_bad=1; problems+=("the probe itself does not work: this Mac did not answer its own address ${ip} on port ${SP_L4C}, outside the blocked ranges")
+      control_bad=1; problems+=("the probe itself does not work: this computer did not answer its own address ${ip} on port ${SP_L4C}, outside the blocked ranges")
     elif fl_sp_nc_open "$ip" "$SP_L4R"; then
       pf_bad=1; answered=1; problems+=("${SP_L4R} answers on ${ip}: the pf block let a test listener through")
     fi
     if [[ -n "$want6" ]]; then
       if ! fl_sp_nc_open -6 "$SP_LAN_IP6" "$SP_L6C"; then
-        control_bad=1; problems+=("the probe itself does not work over IPv6: this Mac did not answer its own address ${SP_LAN_IP6} on port ${SP_L6C}")
+        control_bad=1; problems+=("the probe itself does not work over IPv6: this computer did not answer its own address ${SP_LAN_IP6} on port ${SP_L6C}")
       elif fl_sp_nc_open -6 "$SP_LAN_IP6" "$SP_L6R"; then
         pf_bad=1; answered=1; problems+=("IPv6 ${SP_L6R} answers on ${SP_LAN_IP6}: the pf block let a test listener through")
       fi
@@ -308,6 +362,9 @@ fl_sp_probe_pf() {
 
   if [[ "$listener_bad" == 1 ]]; then
     fl_sp_add local_network critical skip "no probe could run"
+  elif [[ "$control_bad" == 1 && "${FL_PLATFORM:-macos}" == linux ]]; then
+    fl_sp_add local_network critical fail "This computer did not answer its own address ${ip} on a port outside the bench ports. A firewall may be refusing it." \
+      "Look at the host firewall: sudo nft list ruleset, and ufw status." none
   elif [[ "$control_bad" == 1 ]]; then
     fl_sp_add local_network critical fail "This Mac did not answer its own address ${ip} on a port outside the bench ports. If BenchBar has no Local Network access, allow it under System Settings > Privacy & Security > Local Network." \
       "Open System Settings > Privacy & Security > Local Network and allow BenchBar." open_local_network_settings
@@ -496,6 +553,11 @@ fl_sp_node_problem_v() {
 
 fl_sp_firewall() {
   local state app out real="$SP_NODE_REAL"
+  # Linux has no list of programs allowed through the firewall (lan-guard allow-node is the macOS one)
+  if [[ "${FL_PLATFORM:-macos}" == linux ]]; then
+    fl_sp_add firewall_node static skip "Linux has no per-program firewall list; with ufw on, the room's port needs: sudo ufw allow ${FL_SHARE_GATEWAY_PORT}/tcp"
+    return 0
+  fi
   if [[ -z "$real" ]]; then fl_sp_add firewall_node static skip "needs a usable node"; return 0; fi
   local fw="${FL_SOCKETFILTERFW:-/usr/libexec/ApplicationFirewall/socketfilterfw}"
   local blocked="macOS is blocking incoming connections to node."
@@ -620,6 +682,7 @@ fl_sp_static() {
   if [[ -z "$problem" ]]; then fl_sp_add node_ok static ok "node ${SP_NODE_REAL}"
   else fl_sp_add node_ok static fail "Node cannot be trusted to run the gateway: ${problem}." "Install Node ${FL_SHARE_MIN_NODE} or later with Homebrew, and keep it writable only by you." none; fi
   fl_sp_firewall
+  fl_sp_wsl_networking
 
   SP_COPY_READY=0
   fl_share_cfg_raw_v version v

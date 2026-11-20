@@ -43,13 +43,15 @@ LK_SITE_NAME=(); LK_SITE_DEFAULT=(); LK_SITE_APPS=()
 
 # fl_lock_load FILE: the LK_* globals; 1 with FL_LOCK_ERROR set
 fl_lock_load() {
-  local file="$1" out err sec idx key val
+  local file="$1" out err sec idx key val mode=own
   LK_PROFILE=""; LK_FRAPPE_BENCH=""; LK_BUNDLE=""
   LK_APP_NAME=(); LK_APP_REPO=(); LK_APP_BRANCH=(); LK_APP_COMMIT=()
   LK_SITE_NAME=(); LK_SITE_DEFAULT=(); LK_SITE_APPS=()
   FL_LOCK_ERROR=""
   err="$(mktemp "${TMPDIR:-/tmp}/benchbar-toml.XXXXXX")"
-  if ! out="$(fl_toml_parse "$file" "$FL_LOCK_KEYS" "bench" "app site" "$FL_LOCK_REQUIRED" 2>"$err")"; then
+  # a lock inside an app repo of the bench changes with that app: it is someone else's file
+  case "$file" in "${FL_BENCH_DIR:-/nonexistent}"/apps/*) mode=strict ;; esac
+  if ! out="$(FL_TOML_REPOS="$mode" fl_toml_parse "$file" "$FL_LOCK_KEYS" "bench" "app site" "$FL_LOCK_REQUIRED" 2>"$err")"; then
     FL_LOCK_ERROR="$(head -n1 "$err")"; rm -f "$err"
     return 1
   fi
@@ -288,7 +290,7 @@ fl_lock_render() {
 }
 
 fl_cmd_lock_write() {
-  local tmp err code=0
+  local tmp err code=0 app
   fl__lock_args "$@"
   fl_require_bench
   fl_lock_file_resolve "$LOCK_FLAG"
@@ -303,6 +305,8 @@ fl_cmd_lock_write() {
     return 1
   fi
   rm -f "$err"
+  # a password or token in a remote is not written (fl_app_remote_url cuts it): say so
+  while IFS= read -r app; do [[ -z "$app" ]] || fl_app_remote_url_warn "$app"; done < <(fl_apps_txt)
   fl_lock_load "$tmp" || { rm -f "$tmp"; fl_die "the lockfile would not parse: ${FL_LOCK_ERROR}"; }
   [[ -n "$(fl__lock_home_app)" && "$LOCK_NO_COMMITS" != "1" ]] && fl_info "apps/$(fl__lock_home_app) holds the lockfile, so its commit is not pinned (committing the file moves it)"
   fl_write_reviewed "$FL_LOCK_FILE" "$tmp" "the lockfile" || code=1
@@ -366,9 +370,10 @@ fl_lock_reach_commit() {
   remote="$(fl_app_remote "$app")"
   state="$(fl_lock_commit_state "$app" "$sha")"
   if [[ "$state" == "unknown" ]]; then
-    fl_git_batch -C "$(fl_app_path "$app")" fetch --quiet "$remote" "$sha" >>"${FL_LOG_FILE:-/dev/null}" 2>&1 \
-      || { fl_app_shallow "$app" && fl_git_batch -C "$(fl_app_path "$app")" fetch --quiet --unshallow "$remote" >>"${FL_LOG_FILE:-/dev/null}" 2>&1; } || true
+    fl_git_in "$(fl_app_path "$app")" fetch --quiet "$remote" "$sha" \
+      || { fl_app_shallow "$app" && fl_git_in "$(fl_app_path "$app")" fetch --quiet --unshallow "$remote"; } || true
     state="$(fl_lock_commit_state "$app" "$sha")"
+    [[ "$state" != "unknown" || "$FL_GR_CODE" != "124" ]] || { fl_fail "${app}: git fetch ${remote} ${FL_GR_ERR}"; return 1; }
   fi
   case "$state" in
     equal) return 0 ;;
@@ -391,7 +396,8 @@ fl_lock_detached_with_work() {
 fl_lock_switch_branch() {
   local app="$1" remote="$2" branch="$3" args=()
   fl_app_shallow "$app" && args=(--depth 1)
-  fl_run_long "git fetch ${remote} ${branch} (${app})" fl_git_batch -C "$(fl_app_path "$app")" fetch --quiet ${args[@]+"${args[@]}"} "$remote" "+refs/heads/${branch}:refs/remotes/${remote}/${branch}" || return 1
+  fl_git_in "$(fl_app_path "$app")" fetch --quiet ${args[@]+"${args[@]}"} "$remote" "+refs/heads/${branch}:refs/remotes/${remote}/${branch}" \
+    || { fl_fail "${app}: git fetch ${remote} ${branch} failed: ${FL_GR_ERR}"; return 1; }
   if fl_app_git "$app" show-ref --verify --quiet "refs/heads/${branch}"; then
     fl_run_long "git checkout ${branch} (${app})" git -C "$(fl_app_path "$app")" checkout --quiet "$branch"
   else
@@ -400,7 +406,7 @@ fl_lock_switch_branch() {
 }
 
 fl_cmd_lock_apply() {
-  local i n name dir cur state rows=() plan=() skipped=() changed=() cloned=() a s code=0 r kind sha step
+  local i n name dir cur state rows=() plan=() skipped=() changed=() cloned=() a s code=0 r kind sha step new_repos=()
   fl__lock_args "$@"
   fl_require_bench
   fl_lock_file_resolve "$LOCK_FLAG"
@@ -416,7 +422,7 @@ fl_cmd_lock_apply() {
     dir="$(fl_app_existing_dir "$name")"
     sha="$(fl_lock_app_commit "$i")"
     if [[ -z "$dir" ]]; then
-      plan+=("clone|${i}|${name}|bench get-app --skip-assets --branch ${LK_APP_BRANCH[$i]} ${LK_APP_REPO[$i]}${sha:+, then ${sha:0:7}}")
+      plan+=("clone|${i}|${name}|NEW REPO, not in this bench: bench get-app --skip-assets --branch ${LK_APP_BRANCH[$i]} ${LK_APP_REPO[$i]}${sha:+, then ${sha:0:7}}")
     elif ! fl_app_in_apps_txt "$dir" || ! fl_app_has_git "$dir"; then
       skipped+=("${name}: apps/${dir} is there but not a listed git app; see benchbar doctor")
     elif fl_app_dirty "$dir"; then
@@ -454,6 +460,9 @@ fl_cmd_lock_apply() {
   i=1
   for step in "${plan[@]}"; do IFS='|' read -r kind r name a <<<"$step"; rows+=("${i}|${name}|${a}"); i=$((i + 1)); done
   fl_table "${rows[@]}"
+  # a lock inside an app repo changes with that app: its new repos are cloned and built, so they are named
+  for step in "${plan[@]}"; do IFS='|' read -r kind r _ _ <<<"$step"; [[ "$kind" != "clone" ]] || new_repos+=("${LK_APP_REPO[$r]}"); done
+  [[ "${#new_repos[@]}" -eq 0 ]] || fl_repo_trust_print "apply" "${new_repos[@]}"
   fl_info "then bench setup requirements and bench build --app for each changed app; no site is touched"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then printf '\n'; fl_info "dry-run: nothing was changed"; return 0; fi
   fl_confirm "Apply ${#plan[@]} change(s) to the apps?" || { fl_warn "Cancelled. Nothing was changed."; return 1; }
@@ -482,6 +491,8 @@ fl_cmd_lock_apply() {
               [[ "$state" == "0" ]] && fl_fail "${name}: cloned, but not at the pinned ${sha:0:7}"
               state=1
             fi
+            # get-app installed the requirements of the branch tip: the pin's own are set up with the changed apps
+            [[ "$state" != "0" ]] || changed+=("$name")
           fi
           # a clone that did not reach its pin is not built with the others
           if [[ "$state" != "0" ]]; then unset 'cloned[${#cloned[@]}-1]'; fi

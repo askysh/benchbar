@@ -35,6 +35,25 @@ Private repositories work with your SSH key or your `gh` login. It never
 replaces an existing app. A clone that does not finish is moved to the
 backups, not left half done.
 
+The check is exact (`refs/heads/NAME` or `refs/tags/NAME`), so a branch
+`feature/main` does not pass for `main`. benchbar uses your own SSH setup
+for it: a key, config file or proxy in `GIT_SSH_COMMAND` or `core.sshCommand`
+is kept, and only `BatchMode` and a connect timeout are added. The options
+are appended as `-o BatchMode=yes -o ConnectTimeout=N`, so a command that is not
+ssh compatible (plink, a wrapper script) gets them too and has to accept them. Every call
+to a remote has a deadline (30 s to read, 120 s to fetch or clone;
+`FL_GIT_TIMEOUT` and `FL_GIT_CLONE_TIMEOUT` change them), so a stalled VPN
+ends the command with "timed out after Ns" instead of a hang.
+
+The plan reads the app's `pyproject.toml` too. When it names a Frappe
+range (`[tool.bench.frappe-dependencies]`) that the bench's Frappe does
+not meet, the plan refuses with the range and the bench's version; pick a
+branch that fits with `--branch`. Just before `bench get-app` the branch
+is read once more: if it moved since the plan, nothing is cloned and you
+review a fresh plan. A pinned commit that is behind the branch tip gets
+`bench setup requirements` again after the checkout, so the Python and
+node requirements are the pin's, not the tip's.
+
 `app add URL --dry-run --json` prints the whole plan first, required
 apps from `hooks.py` included, with a token; `--apply TOKEN --yes` runs
 exactly that plan without a question. Coding agents add apps this way
@@ -48,7 +67,18 @@ options belong to the app before them. See
 ## Installing on a site
 
 `app install NAME --site S` installs an app the bench already has on one
-of its sites.
+of its sites. `install-app` changes the site's database (it syncs the
+app's DocTypes and runs its patches), so `app install` and `app add --site`
+back the site up first, as `app update` does. The plan shows the
+`Back up SITE` step, and a backup that fails stops the install. Pass
+`--skip-backup` to leave the backup out, which makes sense only for a site
+you can rebuild; the plan's token changes with it. The site's older
+backups are kept.
+
+When a step fails after it started, `changed[]` of the `done` line still
+names what may have moved, with a detail that begins with `partial:` (an
+app cloned and then not built, an `install-app` or a `migrate` that
+failed). Read it before you decide that nothing changed.
 
 ## Updating an app
 
@@ -59,6 +89,9 @@ the sites' databases and is not undone by moving the app back, so keep
 the backup: `--skip-backup` skips it, which makes sense only for a site
 you can rebuild. `--dry-run` shows the changelog and the plan and
 changes nothing.
+
+If upstream deleted or renamed the branch, `app update` says so, lists the
+remote's branches and prints the commands to switch, instead of an SSH hint.
 
 `app update` never runs `bench update`, never rebases and never resets: a
 dirty or diverged app is refused.

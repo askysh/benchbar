@@ -49,6 +49,7 @@ The app's own code runs on your Mac, so add only repos you trust.
 | `--install-on S[,S]` | Install the app on these sites (comma separated), instead of `--site` or `--all-sites` |
 | `--site S` | Install every app (without `--install-on`) on this site afterwards |
 | `--all-sites` | Install it on every site |
+| `--skip-backup` | Do not back the sites up before `install-app`. The plan has a `Back up SITE` step for each site by default; the token changes with the flag |
 
 ### Several apps at once
 
@@ -83,7 +84,8 @@ benchbar app add NAME|URL [same flags] --dry-run --json
 benchbar app add NAME|URL [same flags] --apply TOKEN --yes [--json]
 ```
 
-`--dry-run --json` prints the plan and changes nothing: the resolved app,
+`--dry-run --json` prints the plan and changes nothing in the bench (the
+first plan creates the plan key for tokens, once): the resolved app,
 repo and branch, whether git can read the repo (without a prompt, with a
 timeout), the sites, the required apps from `hooks.py` (read from a
 shallow clone in a temp folder, then removed; at the pinned commit with
@@ -118,14 +120,17 @@ benchbar app add https://github.com/acme/acme_crm --site macdev --apply 3f9c...e
 ## app install
 
 ```
-benchbar app install NAME --site S
+benchbar app install NAME --site S [--skip-backup]
 ```
 
-Installs an app of the bench on one site.
+Installs an app of the bench on one site. `install-app` changes the site's
+database, so it backs the site up first (the site's older backups are kept),
+and stops when the backup fails.
 
 | Flag | What it does |
 |---|---|
 | `--site S` | The site to install on |
+| `--skip-backup` | Install without a backup first |
 
 Exit codes: 0; 1 on failure.
 
@@ -208,10 +213,10 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar app list\|add\|install\|update\|focus\|unfocus ...` | no | no | no | no | none |
 | `benchbar app list [--json] [--no-sites]` | no | no | no | no | document |
 | `benchbar app add NAME\|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME\|URL ...] [--site S\|--all-sites] --dry-run --json, then --apply TOKEN --yes` | no | no | yes | yes | document |
-| `benchbar app install NAME --site S` | no | no | no | yes | none |
+| `benchbar app install NAME --site S [--skip-backup]` | no | no | no | yes | stream |
 | `benchbar app update NAME [--skip-backup] [--dry-run] [--json]` | yes | no | yes | yes | stream |
 | `benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]` | no | no | no | no | document |
-| `benchbar app unfocus NAME` | no | no | no | yes | none |
+| `benchbar app unfocus NAME` | no | no | no | yes | document |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.
@@ -226,8 +231,10 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `app add` | `--install-on` | `S,S` | Install this app on these sites only. |
 | `app add` | `--site` | `S` | Install it on this site. |
 | `app add` | `--all-sites` |  | Install it on every site. |
+| `app add` | `--skip-backup` |  | Install on the sites without a backup first (the plan takes one by default). |
 | `app add` | `--dry-run` |  | Print the plan and its token. |
 | `app add` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
+| `app install` | `--skip-backup` |  | Install without a backup of the site first. |
 | `app update` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `app update` | `--skip-backup` |  | Migrate without a backup first. |
 | `app update` | `--dry-run` |  | Print the plan as one JSON document with --json. |

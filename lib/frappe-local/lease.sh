@@ -414,6 +414,10 @@ fl__lease_scope() {
       done
       if [[ -z "$as" && "${ARGS[0]:-}" == *:* ]]; then as="$(printf '%s.local' "${ARGS[0]##*:}" | tr '[:upper:]' '[:lower:]')"; fi
       FL_LS_SITE="$as" ;;
+    "run "*)
+      # the bench command of benchbar run (after its "--"): the reads of the allow list pass, a change is gated
+      case "${ARGS[${FL_RUN_SEP:-0}]:-}" in doctor|list-apps|version|"") return 1 ;; esac
+      if [[ -n "$OPT_SITE" ]]; then FL_LS_CLASS="S"; FL_LS_SITE="$OPT_SITE"; else FL_LS_CLASS="W"; fi ;;
     "ports apply"|"ports setup")
       FL_LS_CLASS="W"
       idx=1; [[ "${ARGS[0]}" != "apply" ]] || idx=2

@@ -79,7 +79,7 @@ SCRIPT_DIR="$(fl_resolve_self)"
 # holds that the output is the same). BENCHBAR_LOAD_ALL=1 loads everything.
 FL_LEAN=0
 if [[ "${BENCHBAR_LOAD_ALL:-0}" != "1" ]]; then
-  case "${1:-}" in path|commands|where|list|status|op|--version|--help|-h) FL_LEAN=1 ;; esac
+  case "${1:-}" in path|commands|where|list|status|op|history|--version|--help|-h) FL_LEAN=1 ;; esac
   # --profile checks the name against the profiles (version-policy.sh, profiles.sh)
   for _a in "$@"; do case "$_a" in --profile|--profile=*) FL_LEAN=0 ;; esac; done
   unset _a
@@ -100,6 +100,8 @@ FL_OP_ID=""; FL_OP_OWNER=""; FL_OP_JSON=""; FL_OP_COMMAND=""; FL_OP_STARTED=""; 
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/profiles.sh"
 # shellcheck source=lib/frappe-local/state.sh
 . "${SCRIPT_DIR}/lib/frappe-local/state.sh"
+# shellcheck source=lib/frappe-local/plan-token.sh
+. "${SCRIPT_DIR}/lib/frappe-local/plan-token.sh"
 # shellcheck source=lib/frappe-local/lock.sh
 . "${SCRIPT_DIR}/lib/frappe-local/lock.sh"
 # shellcheck source=lib/frappe-local/templates.sh
@@ -128,6 +130,8 @@ FL_OP_ID=""; FL_OP_OWNER=""; FL_OP_JSON=""; FL_OP_COMMAND=""; FL_OP_STARTED=""; 
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/repair.sh"
 # shellcheck source=lib/frappe-local/service.sh
 . "${SCRIPT_DIR}/lib/frappe-local/service.sh"
+# shellcheck source=lib/frappe-local/stats.sh
+. "${SCRIPT_DIR}/lib/frappe-local/stats.sh"
 # shellcheck source=lib/frappe-local/report.sh
 . "${SCRIPT_DIR}/lib/frappe-local/report.sh"
 # shellcheck source=lib/frappe-local/docs.sh
@@ -166,6 +170,8 @@ FL_OP_ID=""; FL_OP_OWNER=""; FL_OP_JSON=""; FL_OP_COMMAND=""; FL_OP_STARTED=""; 
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/lan-guard.sh"
 # shellcheck source=lib/frappe-local/lan-guard-linux.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/lan-guard-linux.sh"
+# shellcheck source=lib/frappe-local/share-linux.sh
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/share-linux.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 # shellcheck source=lib/frappe-local/freshness.sh
@@ -178,6 +184,10 @@ FL_OP_ID=""; FL_OP_OWNER=""; FL_OP_JSON=""; FL_OP_COMMAND=""; FL_OP_STARTED=""; 
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/pull.sh"
 # shellcheck source=lib/frappe-local/site-restore.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/site-restore.sh"
+# shellcheck source=lib/frappe-local/lifecycle.sh
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/lifecycle.sh"
+# shellcheck source=lib/frappe-local/bench-run.sh
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/bench-run.sh"
 # shellcheck source=lib/frappe-local/selfupdate.sh
 . "${SCRIPT_DIR}/lib/frappe-local/selfupdate.sh"
 # shellcheck source=lib/frappe-local/labs.sh
@@ -225,6 +235,9 @@ FL_FETCH=0
 # install --frappe-commit SHA --erpnext-commit SHA: pin the clones
 OPT_FRAPPE_COMMIT=""
 OPT_ERPNEXT_COMMIT=""
+# install --scratch [--ttl DAYS]: the bench expires; bench scratch PATH --ttl DAYS (lifecycle.sh)
+OPT_SCRATCH=0
+OPT_TTL=""
 # confirmations come from flags only: a value left in the environment must
 # never answer a question (--yes, --make-default, an approved port plan)
 FL_ASSUME_YES=0
@@ -233,6 +246,8 @@ FL_MAKE_DEFAULT=0
 OPT_REPAIR_BENCH=0
 # install, adopt: --allow-windows-fs lets a bench live on the Windows file system under WSL
 FL_ALLOW_WINDOWS_FS=0
+# install (Linux): --allow-unsupported-distro tries a system other than Ubuntu 24.04
+FL_ALLOW_UNSUPPORTED_DISTRO=0
 FL_PORT_PLAN_APPROVED=0
 # --offline, OFFLINE=1 or BENCHBAR_OFFLINE=1: install skips its remote
 # checks (the phase scripts get --offline), doctor --fetch fetches nothing
@@ -302,6 +317,8 @@ Daily
   restart             Restart it, for example after changing Python code.
   status              State, pid, stop reason, site ping, Redis (benchstatus). --json adds
                       redis and sites[].served (does the running bench serve the site).
+  stats               CPU and memory of the running bench's own processes, and the figure the
+                      app's runner speed comes from (--json; resources is null when stopped).
   wait                Block until the bench is ready (site answers, socketio, Redis, a worker, code
                       not changed since the start); --for PART for one part, --timeout SECS, --json.
   list                Every bench benchbar knows about.
@@ -357,6 +374,10 @@ Daily
                       lines too); status shows one (or the ten newest) with its step and last
                       progress, list shows the recent ones, wait OP_ID [--timeout SECS] waits for
                       one to end. A run that died without a done line is interrupted.
+  history             What ran on this machine, newest first: the command line (secrets as ***), who
+                      started it (a terminal, the app, the tray, an agent through MCP, a script), the
+                      bench, the times, the exit and what it changed. --bench PATH, --since 7d,
+                      --limit N, --json.
   docs [TOPIC]        Open the documentation, or one topic's page (benchbar docs --help lists
                       them: install, doctor, apps, mcp, json ...); --print prints the URL.
 
@@ -456,12 +477,17 @@ Options
   --profile NAME      Release profile for install/repair (default: v15-lts), or a team
                       profile (~/.config/benchbar/profiles/NAME.toml, BENCHBAR_PROFILE_PATH)
   --bundle NAME       App bundle for install (minimal, common, extended)
+  --scratch, --ttl DAYS
+                      install: the bench expires after DAYS (default 7); benchbar bench gc removes it
   --make-default      install, adopt, service: make this the default bench even when
                       another one is already the default
   --repair-bench      install: move a bench folder that is incomplete aside and start over (never
                       one that holds a site; --dry-run shows the move)
   --allow-windows-fs  install, adopt (WSL): accept a bench on the Windows file system
                       (/mnt/c, drvfs, 9p), which is slow and breaks file watching
+  --allow-unsupported-distro
+                      install (Linux): try a system other than Ubuntu 24.04, which is the one
+                      the install is tested on and supports (at your own risk)
   --with-schedule     service: add the scheduler to Procfile.lean (per bench, kept by repair)
   --without-schedule  service: remove it again (the default)
   --port-offset N     install, adopt, service: use port block N (web 8000+N, socketio 9000+N,
@@ -487,6 +513,8 @@ Options
 Environment:
   BENCHBAR_SUDO=gui   root steps (wkhtmltopdf, /etc/hosts) ask in a macOS password dialog, not sudo
   BENCHBAR_SUDO=env   Linux: sudo steps use the password in BENCHBAR_SUDO_PASSWORD, no terminal needed
+  BENCHBAR_CALLER     Who started the run, for benchbar history: terminal, app, tray, mcp, agent or
+                      script (set by the app, the tray and benchbar mcp; --for-agent says agent)
   BENCH_INIT_TIMEOUT_SECONDS   install: how long bench init may run (default 2700, 0 for no limit)
   BENCHBAR_LENIENT_FLAGS=1     an unknown option is a warning, not an error (exit 64), as before 0.9.0
 
@@ -538,6 +566,7 @@ while [[ "$#" -gt 0 ]]; do
     --make-default) FL_MAKE_DEFAULT=1; shift ;;
     --repair-bench) OPT_REPAIR_BENCH=1; shift ;;
     --allow-windows-fs) FL_ALLOW_WINDOWS_FS=1; shift ;;
+    --allow-unsupported-distro) FL_ALLOW_UNSUPPORTED_DISTRO=1; export BENCHBAR_ALLOW_UNSUPPORTED_DISTRO=1; shift ;;
     --with-schedule) FL_SCHEDULER=on; shift ;;
     --without-schedule) FL_SCHEDULER=off; shift ;;
     --port-offset) fl_opt_value "$1" "$#" "${2-}"; OPT_PORT_OFFSET="$2"; shift 2 ;;
@@ -564,12 +593,16 @@ while [[ "$#" -gt 0 ]]; do
     --frappe-commit=*) OPT_FRAPPE_COMMIT="${1#*=}"; shift ;;
     --erpnext-commit) [[ -n "${2:-}" && "${2:-}" != -* ]] || fl_die "--erpnext-commit needs a commit hash." "Example: benchbar install --erpnext-commit 0123abc"; OPT_ERPNEXT_COMMIT="$2"; shift 2 ;;
     --erpnext-commit=*) OPT_ERPNEXT_COMMIT="${1#*=}"; shift ;;
+    --scratch) OPT_SCRATCH=1; shift ;;
+    --ttl) OPT_TTL="${2:-}"; shift 2 || shift ;;
+    --ttl=*) OPT_TTL="${1#*=}"; shift ;;
     --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
     --version) fl_print_version; exit 0 ;;
     # benchbar docs --help lists the topics; a command's --help is its entry in
     # commands.sh (after the loop: the subcommand may come later), else this one
     -h|--help) if [[ "$COMMAND" == "docs" || "$COMMAND" == "self-update" ]]; then ARGS+=("$1"); shift; else FL_WANT_HELP=1; shift; fi ;;
-    --) shift; FL_ARGS_FLAGS_N="${#ARGS[@]}"; ARGS+=("$@"); break ;;
+    # run keeps where "--" was: the words before it are benchbar's, the ones after it the bench command's
+    --) shift; FL_ARGS_FLAGS_N="${#ARGS[@]}"; [[ "$COMMAND" != "run" ]] || FL_RUN_SEP="${#ARGS[@]}"; ARGS+=("$@"); break ;;
     -*)
       if [[ -n "$COMMAND" ]]; then ARGS+=("$1"); shift; else fl_usage_refuse unknown_flag "Unknown option: $1" "Run: benchbar --help"; fi ;;
     *)
@@ -614,6 +647,13 @@ FL_JSON_MODE=""
 fl_json_mode_resolve() {
   local mut kind
   FL_JSON_KEY="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")" || FL_JSON_KEY=""
+  # a command or subcommand that does not exist ends the stream like any refusal: one done line
+  if [[ -z "$FL_JSON_KEY" && ( "$OPT_FOR_AGENT" == "1" || "$OPT_JSONL" == "1" ) ]]; then
+    export BENCHBAR_NONINTERACTIVE=1 NO_COLOR=1
+    FL_PLAIN=1; fl_ui_init
+    OPT_JSON=1; OPT_JSONL=1; FL_JSON_MODE=stream
+    return 0
+  fi
   if [[ "$OPT_FOR_AGENT" == "1" ]]; then
     export BENCHBAR_NONINTERACTIVE=1 NO_COLOR=1
     FL_PLAIN=1; fl_ui_init
@@ -632,23 +672,35 @@ fl_json_mode_resolve() {
     up|down|restart|service|"site default"|"ports apply") FL_JSON_MODE=stream ;;
     # a dry run of these is their plan, one document with its token
     "app update"|"site add") if [[ "$FL_DRY_RUN" == "1" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
-    "site backup"|"site drop"|"site restore"|"app add") FL_JSON_MODE=doc ;;
+    "site backup"|"site drop"|"site restore"|"app add"|"run"|"bench forget"|"bench remove"|"bench scratch"|"bench gc"|"db orphans") FL_JSON_MODE=doc ;;
     # on and off stream like site default; status only reads
     "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
     "share setup"|"share start"|"share stop"|"share extend"|"share lock"|"share unlock"|"share remove"|"share revoke"|"share assign"|"share teardown") FL_JSON_MODE=stream ;;
     "share users"|"share preflight"|"share status"|"share code"|"share invite"|"share people"|"share devices"|"share log"|"share open-as") FL_JSON_MODE=doc ;;
-    "lan-guard install"|"lan-guard remove"|"lan-guard allow-node") FL_JSON_MODE=stream ;;
+    "lan-guard"|"lan-guard install"|"lan-guard remove"|"lan-guard allow-node") FL_JSON_MODE=stream ;;
     "lan-guard status"|wait) FL_JSON_MODE=doc ;;
     "labs on"|"labs off") FL_JSON_MODE=stream ;;
     "lease take"|"lease release"|"lease renew") FL_JSON_MODE=stream ;;
+    # the commands that changed things and had no JSON before: a stream, as site default
+    autostart|listen|uninstall-service|"app install"|"lock write"|"lock apply"|"profile create"|"ports setup"|"ports mode"|"site hosts") FL_JSON_MODE=stream ;;
+    # these print a document of their own under --json, and keep it
+    register|"app unfocus"|"profile export"|"profile import"|"profile subscribe"|"profile update"|"profile remove"|self-update) FL_JSON_MODE=doc ;;
   esac
 }
 # status, list and the other readers are polled: they skip the table unless
 # --for-agent asks for it
 case "$COMMAND" in
-  install|adopt|repair|pull|up|down|restart|wait|service|site|app|ports|share|lan-guard|labs|lease) fl_json_mode_resolve ;;
-  *) if [[ "$OPT_FOR_AGENT" == "1" ]]; then fl_json_mode_resolve; fi ;;
+  install|adopt|repair|pull|up|down|restart|wait|service|site|app|ports|share|lan-guard|labs|register|autostart|listen|uninstall-service|profile|lock|self-update|run|bench|db|lease) fl_json_mode_resolve ;;
+  *) if [[ "$OPT_FOR_AGENT" == "1" || "$OPT_JSONL" == "1" ]]; then fl_json_mode_resolve; fi ;;
 esac
+# --jsonl and --for-agent: a command that only reads ends with one document that has `exit`
+# (a read that has the share family's fields already is only kept back to catch a failure)
+FL_READ_KIND=""; FL_READ_MUT=""
+if [[ "$OPT_JSON" == "1" && ( "$OPT_JSONL" == "1" || "$OPT_FOR_AGENT" == "1" ) && ( -z "$FL_JSON_MODE" || ( "$FL_JSON_MODE" == "doc" && "$OPT_JSONL" != "1" ) ) && -n "$FL_JSON_KEY" ]]; then
+  fl_cmd_attr_v FL_READ_KIND "$FL_JSON_KEY" json
+  fl_cmd_attr_v FL_READ_MUT "$FL_JSON_KEY" mutating
+  if [[ "$FL_READ_KIND" == "document" && "$FL_READ_MUT" == "no" ]]; then fl_read_env_begin; fi
+fi
 
 # fl_app_focus_is_listing ARGS...: "app focus" with no app name lists the
 # focus apps (a read), with any of --list, --json, --fetch
@@ -696,6 +748,8 @@ fl_cleanup() {
   fl_op_end "$code"
   # repair --json: its done line, when the run ended before it could send one
   fl_repair_done "$code"
+  # --jsonl and --for-agent on a command that reads: its document, with exit
+  fl_read_env_finish "$code"
   [[ -z "${FL_CHANGED_FILE:-}" || "${FL_CHANGED_OWNER:-}" != "$$" ]] || rm -f "$FL_CHANGED_FILE"
 }
 trap fl_cleanup EXIT
@@ -763,7 +817,7 @@ fl_jsonl_begin_generic() {
   # plan of their own (once they know it); for the others the plan is the command.
   if [[ "$FL_DRY_RUN" == "1" ]]; then
     case "$FL_JSON_KEY" in
-      service|"site add"|"site backup"|"site drop"|"site restore"|"app update"|"app add"|"share setup") ;;
+      service|"site add"|"site backup"|"site drop"|"site restore"|"app update"|"app add"|"share setup"|run) ;;
       *)
         fl_bench_detect "$OPT_BENCH_DIR"
         fl_jsonl plan ",\"command\":$(fl_json_str "$FL_JSON_KEY"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"dry_run\":true"
@@ -827,6 +881,17 @@ fl_next_steps_box() {
     "benchstatus / benchlogs     check on it" \
     "benchrestart                after changing Python code" \
     "benchwatch                  while editing JS or CSS"
+}
+
+# after an install that did not finish its service step: the fix first, and
+# benchup only once it is done (a bench with no loaded service cannot start)
+fl_install_fix_box() {
+  local bd=""
+  [[ "$FL_BENCH_DIR" == "$(fl_state_get BENCH_DIR 2>/dev/null || true)" ]] || bd=" --bench-dir ${FL_BENCH_DIR}"
+  fl_box "Next steps" \
+    "benchbar repair${bd}    fix what failed above" \
+    "benchbar doctor${bd}    what is left, if repair says it is done" \
+    "then: benchup, and $(fl_open_cmd) $(fl_site_url)"
 }
 
 # One sudo prompt for the whole install: ask up front when a step ahead will
@@ -1041,6 +1106,14 @@ cmd_install() {
   local profile_name
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_plain_bench
+  # --scratch and --ttl are checked before any prompt or step
+  SCRATCH_DAYS=""
+  if [[ "$OPT_SCRATCH" == "1" ]]; then
+    [[ "$FL_MAKE_DEFAULT" != "1" ]] || fl_die "--scratch and --make-default do not go together: a scratch bench expires, the default bench never does." "Leave one of them out."
+    fl_lc_ttl_days_v SCRATCH_DAYS "$OPT_TTL"
+  elif [[ -n "$OPT_TTL" ]]; then
+    fl_die "--ttl goes with --scratch." "Example: benchbar install --scratch --ttl 3"
+  fi
   # a password with a line break would be cut off on its pipe: refused before any work
   fl_secrets_single_line ADMIN_PASSWORD MARIADB_ROOT_PASSWORD
   # a malformed pin is refused before any prompt or step
@@ -1058,6 +1131,7 @@ cmd_install() {
     profile_name="$FL_TEAM_PROFILE"
     fl_header "benchbar install" "$(fl_mode_name)" "${FL_TEAM_PROFILE} (team, on ${FL_PROFILE})" "$FL_BENCH_DIR" "$FL_SITE"
     fl_info "team profile ${FL_TEAM_PROFILE_FILE}"
+    fl_profile_trust_print "install"
   else
     fl_header "benchbar install" "$(fl_mode_name)" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
   fi
@@ -1095,6 +1169,14 @@ cmd_install() {
   # credential or the BENCHBAR_SUDO=env password is still there: phase 00 drops
   # it. A refusal is a warning with the fix, not a failure.
   fl_linger_ensure sudo
+  # the user manager lingering starts: without it the service step at the end
+  # cannot work (sudo -iu, su - and cron have no login session), so the run
+  # stops here with the reason and the fix instead of after steps 1 and 2
+  if [[ "$FL_DRY_RUN" != "1" ]] && ! fl_user_bus_wait; then
+    FL_ERROR_ID="user_bus_unreachable"
+    FL_ERROR_FIX="$(fl_user_manager_fix)"
+    fl_die "$(fl_user_manager_msg). No package or bench was changed." "$FL_ERROR_FIX"
+  fi
   # from here on nothing runs as root: brew, pip, npm, yarn and bench get-app
   # must not find a cached sudo credential. On Linux the apt and MariaDB
   # steps are phase 00 itself: it drops the credential when they are done
@@ -1173,6 +1255,11 @@ cmd_install() {
     return "$code"
   fi
   fl_remember_bench || fl_info "the default bench stays $(fl_state_get BENCH_DIR) (--make-default changes it)"
+  # install --scratch: this bench expires (benchbar bench gc removes it, never when it is the default bench)
+  if [[ "$OPT_SCRATCH" == "1" && "$FL_DRY_RUN" != "1" ]]; then
+    fl_lc_scratch_mark "$FL_BENCH_DIR" "$SCRATCH_DAYS" install
+    fl_ok "scratch bench: expires in ${SCRATCH_DAYS} day(s); benchbar bench scratch ${FL_BENCH_DIR} --clear keeps it"
+  fi
   if [[ -n "$FL_SCHEDULER" ]]; then fl_bstate_set SCHEDULER "$FL_SCHEDULER"; fi
 
   fl_step_begin 2
@@ -1208,11 +1295,14 @@ cmd_install() {
     fl_step_end "done"
   else
     fl_steps_pop
-    fl_step_end warning "see above"
+    # an action that failed is a failure (the [FAIL] line above says which);
+    # "warning" is for a run whose actions worked and whose verify pass still has
+    # something to look at
+    if [[ "$FL_ENGINE_ACTION_FAILED" == "1" ]]; then fl_step_end failed; else fl_step_end warning "see above"; fi
     code=1
   fi
   fl_steps_summary
-  fl_next_steps_box
+  if [[ "$code" == "0" ]]; then fl_next_steps_box; else fl_install_fix_box; fi
   return "$code"
 }
 
@@ -1233,10 +1323,8 @@ cmd_service() {
     [[ "$FL_SERVICE_APPLY_TOKEN" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar service --dry-run --json prints it"
     [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
     [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (service --dry-run --json), then pass its token with --apply TOKEN --yes."
-    # the scheduler choice is stored before the plan is made: with a token it
-    # would be written even when the token turns out stale. It belongs to a
-    # plain service run (or the dry run's flags reviewed, then a plain run).
-    [[ -z "${FL_SCHEDULER:-}" ]] || fl_die "--apply runs a reviewed plan as it is; --with-schedule and --without-schedule cannot come with it." "Run benchbar service --with-schedule (or --without-schedule) without --apply."
+    # a scheduler choice that comes with a token (the one the dry run was made with) is only
+    # kept in memory while the token is checked; it is stored once the run has succeeded
   fi
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
@@ -1248,12 +1336,14 @@ cmd_service() {
   fi
   fl_remember_bench || true
   if [[ -n "$FL_SCHEDULER" ]]; then
-    # stored now (not in a dry run) and rendered for the plan either way
-    fl_bstate_set SCHEDULER "$FL_SCHEDULER"
+    # stored now (not in a dry run) and rendered for the plan either way; with a token it is stored
+    # only after the plan was checked and the run succeeded (a stale token must change nothing)
+    [[ -n "${FL_SERVICE_APPLY_TOKEN:-}" ]] || fl_bstate_set SCHEDULER "$FL_SCHEDULER"
     fl_render_all
   fi
   if FL_PLAN_CHECKS="port_block" FL_ENGINE_PLAN_HOOK=fl_adopt_plan_json fl_repair_engine "Background service" service; then
     fl_pm_remember
+    [[ -z "$FL_SCHEDULER" || -z "${FL_SERVICE_APPLY_TOKEN:-}" ]] || fl_bstate_set SCHEDULER "$FL_SCHEDULER"
     if [[ -n "$FL_SCHEDULER" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_bench_is_running; then
       fl_warn "the running bench still uses the old Procfile.lean; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"
     fi
@@ -1269,16 +1359,22 @@ cmd_service() {
 # adopt --json: the plan line, called by the repair engine once it knows the
 # actions (FL_ENGINE_PLAN_HOOK). Its steps are the actions, numbered from 1.
 fl_adopt_plan_json() {
-  local a n=0 pl_steps="" move=false off mode=terminal token
+  local a n=0 pl_steps="" move=false off mode=terminal token token_data code
   [[ "${FL_PM_APPLYING:-0}" != "1" ]] || return 0
   # the token of the plan: its actions and what they are made from (the
   # bench, the port block, the scheduler choice); service --apply TOKEN is
   # refused here, before any action runs, when it no longer matches
   off="${FL_PORT_TARGET:-$((FL_WEB_PORT - FL_PORT_BASE_WEB))}"
-  token="$(printf '%s\n' "$FL_BENCH_DIR" "$1" "$off" "${FL_SCHEDULER:-}" "$FL_SITE" | shasum -a 256 | awk '{print $1}')"
-  if [[ -n "${FL_SERVICE_APPLY_TOKEN:-}" && "$FL_SERVICE_APPLY_TOKEN" != "$token" ]]; then
-    fl_die "The service plan changed since it was shown (its actions, the ports or the scheduler). Nothing was changed." \
-      "Review a fresh plan: benchbar service --dry-run --json --bench-dir ${FL_BENCH_DIR}, then pass its token."
+  token_data="$(printf '%s\n' "$FL_BENCH_DIR" "$1" "$off" "${FL_SCHEDULER:-}" "$FL_SITE")"
+  fl_plan_token_v token "$token_data"
+  if [[ -n "${FL_SERVICE_APPLY_TOKEN:-}" ]]; then
+    code=0; fl_plan_token_check "$token_data" "$FL_SERVICE_APPLY_TOKEN" || code=$?
+    case "$code" in
+      0) ;;
+      2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: benchbar service --dry-run --json --bench-dir ${FL_BENCH_DIR}, then pass its token." ;;
+      *) fl_die "The service plan changed since it was shown (its actions, the ports or the scheduler). Nothing was changed." \
+        "Review a fresh plan: benchbar service --dry-run --json --bench-dir ${FL_BENCH_DIR}, then pass its token." ;;
+    esac
   fi
   for a in $1; do
     n=$((n + 1))
@@ -1421,7 +1517,8 @@ fl_repair_done() {
   local code="$1" f err="" msg
   [[ "${FL_JSON_EVENTS:-0}" == "1" && "$FL_REPAIR_DONE_SENT" != "1" ]] || return 0
   # a dry run that worked is the plan alone; one that was refused ends with its done line
-  [[ "${FL_DRY_RUN:-0}" != "1" || "$code" != "0" ]] || return 0
+  # (--jsonl and --for-agent end every command with the envelope: the dry run gets its done line too)
+  [[ "${FL_DRY_RUN:-0}" != "1" || "$code" != "0" || "$OPT_JSONL" == "1" ]] || return 0
   FL_REPAIR_DONE_SENT=1
   fl_done_fields_v f "$code"
   if [[ "$code" != "0" ]]; then
@@ -1429,7 +1526,7 @@ fl_repair_done() {
     err=",\"error\":$(fl_json_str "$msg")"
     { printf '[FAIL] %s\n' "${msg:-benchbar repair failed; see the log}" >&4; } 2>/dev/null || true
   fi
-  fl_event "{\"event\":\"done\",\"exit_code\":${code},${f},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")${err}}"
+  fl_event "{\"event\":\"done\",\"schema_version\":${FL_SCHEMA_VERSION:-1},\"cli_version\":\"${FL_VERSION:-0}\",\"exit_code\":${code},${f},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")${err}}"
 }
 
 # benchbar where [--json]: how this CLI was installed and where its things
@@ -1580,6 +1677,10 @@ fl_noninteractive_preflight() {
       # password-less sign in is turned on by a person: refused before the lock, whatever else is given
       [[ "${ARGS[1]:-}" != "on" ]] || fl_need "a person at a terminal" "turning on Open as is a person's decision; run benchbar site open-as on NAME in a terminal"
       ;;
+    "bench remove"|"bench gc")
+      # deleting a bench's databases and moving its folder is a person's decision: its plan (--dry-run) is open to agents
+      fl_need "a person at a terminal" "removing a bench is a person's decision; read the plan with --dry-run --json, then run benchbar bench ${ARGS[0]} in a terminal" ;;
+    "db orphans") fl_need_mariadb_password ;;
     "share setup")
       # the copy holds real data and others sign in to it: a person's decision, refused before the lock
       fl_need "a person at a terminal" "sharing a site is a person's decision; run benchbar share setup in a terminal"
@@ -1663,8 +1764,12 @@ case "$COMMAND" in
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi ;;
   register|self-update)
-    fl_log_init "${FL_STATE_DIR}/logs"
-    fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
+    # self-update --check only asks GitHub (one curl of up to 10 s) and writes nothing: no run lock, so a
+    # check never holds up an up or a repair, and no run log, so a poll leaves no file behind
+    if [[ "$COMMAND" == "self-update" && " ${ARGS[*]:-} " == *" --check "* ]]; then :; else
+      fl_log_init "${FL_STATE_DIR}/logs"
+      fl_lock_acquire "${FL_STATE_DIR}/lock"
+    fi ;;
   # labs on and off write the state file and off may stop a share; list and status read
   labs)
     if [[ "${ARGS[0]:-}" == "on" || "${ARGS[0]:-}" == "off" ]]; then
@@ -1690,6 +1795,18 @@ case "$COMMAND" in
     esac ;;
   lan-guard)
     case "${ARGS[0]:-}" in install|remove|allow-node) fl_log_init "${FL_STATE_DIR}/logs" ;; esac ;;
+  # forget, remove, scratch and gc change the list of benches and the state folder (a plan too: it reads under the lock)
+  bench)
+    fl_log_init "${FL_STATE_DIR}/logs"
+    fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
+  # run: the allow list decides (refused here with exit 64, before the lock); a run that executes has a
+  # log of its own, and one that changes things takes the lock; a plan and a read take none
+  run)
+    fl_run_prepare
+    if [[ "$RUN_EXECUTES" == "1" ]]; then
+      fl_log_init "${FL_STATE_DIR}/logs"
+      [[ "$RUN_CHANGES" != "yes" ]] || fl_lock_acquire "${FL_STATE_DIR}/lock"
+    fi ;;
   site|app|profile|lock)
     # the list, show and check commands are read only, and so is a --plan
     # and "app focus" without an app name (the focus listing, with or
@@ -1735,6 +1852,7 @@ case "$COMMAND" in
   doctor) cmd_doctor || exit 1 ;;
   repair) cmd_repair || exit $? ;;
   status) cmd_status ;;
+  stats) FL_CONTEXT_LIGHT=1; fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_stats ;;
   list) FL_CONTEXT_LIGHT=1; fl_cmd_list "$OPT_JSON" ;;
   ports)
     [[ "${ARGS[0]:-}" == check ]] && FL_CONTEXT_LIGHT=1
@@ -1764,11 +1882,22 @@ case "$COMMAND" in
     if [[ -n "$OPT_PROFILE" ]]; then fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; else fl_bench_detect "$OPT_BENCH_DIR"; fi
     printf '%s\n' "$FL_BENCH_DIR" ;;
   console) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_console ${ARGS[@]+"${ARGS[@]}"} ;;
+  run) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_run || exit $? ;;
   open) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_open ${ARGS[@]+"${ARGS[@]}"} ;;
   users) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_users ${ARGS[@]+"${ARGS[@]}"} ;;
   share) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_share ${ARGS[@]+"${ARGS[@]}"} ;;
   lan-guard) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_lan_guard ${ARGS[@]+"${ARGS[@]}"} ;;
   db) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_db ${ARGS[@]+"${ARGS[@]}"} ;;
+  bench)
+    # forget and remove name the bench by PATH, the others work on every known bench (gc) or on PATH (scratch)
+    case "${ARGS[0]:-}" in
+      forget|remove|scratch)
+        # PATH may come after --apply TOKEN: the same parse as the command's own finds it
+        fl_lc_parse "${ARGS[@]:1}"
+        if [[ -n "$LC_PATH" ]]; then OPT_BENCH_DIR="$LC_PATH"; fi
+        fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE" ;;
+    esac
+    fl_cmd_bench ${ARGS[@]+"${ARGS[@]}"} ;;
   site) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_site ${ARGS[@]+"${ARGS[@]}"} ;;
   app) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_app ${ARGS[@]+"${ARGS[@]}"} ;;
   profile) fl_cmd_profile ${ARGS[@]+"${ARGS[@]}"} ;;
@@ -1788,6 +1917,7 @@ case "$COMMAND" in
   mcp) cmd_mcp ;;
   # a run that is not done is exit 1 without the ERR trap's line, like doctor
   op) fl_cmd_op ${ARGS[@]+"${ARGS[@]}"} || exit 1 ;;
+  history) fl_cmd_history ${ARGS[@]+"${ARGS[@]}"} ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;
 esac
