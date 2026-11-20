@@ -394,6 +394,19 @@ public class WizardModelTests
     }
 
     [Fact]
+    public async Task ExitSixtyFourIsAPlainFailureWithTheErrorTextNotAPasswordPrompt()
+    {
+        // 64 is EX_USAGE (an option the CLI does not know); only 2 means "the MariaDB root password is unknown"
+        var (model, fixture, _) = await ReadyForReview();
+        model.AskLinuxPassword = _ => Task.FromResult<Secret?>(Pass("linux-pass"));
+        fixture.Install("install-usage-error.jsonl");
+        await model.StartInstallAsync();
+        Assert.Equal(InstallPhase.Failed, model.Phase);
+        Assert.Equal("Unknown option for install: --bogus", model.Failure!.Message);
+        Assert.Contains("benchbar install --help", model.Failure.Fix);
+    }
+
+    [Fact]
     public async Task StopEndsTheRunAndRunAgainContinues()
     {
         var fixture = new SetupFixture();

@@ -275,6 +275,16 @@ struct WizardStateTests {
         #expect(s.send(.primary) == [.startInstall(s.request, withRootPassword: true)])
     }
 
+    @Test func exitSixtyFourIsAPlainFailureNotARootPasswordPrompt() throws {
+        // 64 is EX_USAGE (an option the CLI does not know); only 2 means "the MariaDB root password is unknown"
+        var s = try installing()
+        try stream(&s, "install-stream-exit64")
+        s.send(.installEnded(exitCode: 64, error: nil))
+        guard case .failed(let failure) = s.installPhase else { Issue.record("exit 64 must fail, got \(s.installPhase)"); return }
+        #expect(failure.message.contains("Unknown option for install: --bogus"))
+        #expect(failure.fix?.contains("benchbar install --help") == true)
+    }
+
     @Test func stopEndsTheRunAndOffersRunAgain() throws {
         var s = try installing()
         #expect(s.send(.stop) == [.stopInstall])

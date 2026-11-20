@@ -157,6 +157,10 @@ assert_contains "$OUT" "The site two.localhost of $BENCH is leased by agent-a"
 as agent-c site restore two.localhost --from 20260101_000000 --yes
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "is leased by agent-a"
+as agent-c site restore two.localhost --from 20260101_000000 --yes --background
+assert_eq "1" "$CODE" "(a background run is refused at once, not in a detached run: $OUT)"
+assert_contains "$OUT" "is leased by agent-a"
+assert_eq "0" "$(find "$FL_STATE_DIR/ops" -type f 2>/dev/null | grep -c . || true)" "(and no operation was started)"
 as agent-c pull prod:two --as two.localhost --yes
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "is leased by agent-a"
