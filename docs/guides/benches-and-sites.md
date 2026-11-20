@@ -124,11 +124,13 @@ What is kept, and for how long:
   (`logs/<date>-<time>-<pid>.log`), the newest 50 folders of
   `backups/<date>-<time>-<pid>/` (one that still holds a `restore-set`
   copy stays until that copy goes; the three newest per bench are kept),
-  the newest 14 `update-check.<date>.txt` files, and no `state.env.*`
-  temp file older than a day. The pruning runs at the start of a run
-  that makes a log, and the run's `changed[]` says what it removed. The
-  limits are `FL_KEEP_RUN_LOGS`, `FL_KEEP_STATE_BACKUPS` and
-  `FL_KEEP_UPDATE_CHECKS`.
+  the newest 14 `update-check.<date>.txt` files, the newest 100 records
+  of operations (`ops/<op_id>.json`, with the output of a `--background`
+  run; never one that still runs: see [op](../reference/cli/other.md#op)),
+  and no `state.env.*` temp file older than a day. The pruning runs at
+  the start of a run that makes a log, and the run's `changed[]` says what
+  it removed. The limits are `FL_KEEP_RUN_LOGS`, `FL_KEEP_STATE_BACKUPS`,
+  `FL_KEEP_UPDATE_CHECKS` and `FL_KEEP_OPS`.
 - **The bench's own log.** `benchup` keeps the tail of the log it
   replaces in `logs/bench.previous.log` and the three copies before it
   in `logs/bench.previous.1.log` to `.3.log`, so a crash is still there

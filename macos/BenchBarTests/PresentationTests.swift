@@ -39,6 +39,21 @@ struct PresentationTests {
         #expect(BenchText.headline(.running, reason: nil, exitCode: nil) == "Running")
     }
 
+    @Test func headlinesFollowTheReadinessContract() throws {
+        func ready(_ name: String) throws -> ReadyInfo? {
+            try BenchJSON.decode(BenchStatus.self, from: Fixture.data(name)).ready
+        }
+        // a 0.9 CLI: Ready, Needs restart (code changed), or running but not ready yet
+        #expect(BenchText.headline(.running, reason: nil, exitCode: nil, ready: try ready("status-ready")) == "Ready")
+        #expect(BenchText.headline(.running, reason: nil, exitCode: nil, ready: try ready("status-stale")) == "Needs restart (code changed)")
+        #expect(BenchText.headline(.running, reason: nil, exitCode: nil, ready: try ready("status-not-ready")) == "Running, not ready")
+        // an older CLI sends no ready object: the word stays Running
+        #expect(try ready("status-running") == nil)
+        // only a running bench has a readiness to show; the other states keep their words
+        #expect(BenchText.headline(.starting, reason: nil, exitCode: nil, ready: try ready("status-ready")) == "Starting")
+        #expect(BenchText.headline(.stopped, reason: .manual, exitCode: nil, ready: try ready("status-ready")) == "Stopped")
+    }
+
     @Test func uptimeIsShortAndReadable() {
         let start = Date(timeIntervalSince1970: 0)
         func up(_ seconds: TimeInterval) -> String { BenchText.uptime(since: start, now: start + seconds) }

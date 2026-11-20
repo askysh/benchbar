@@ -382,6 +382,40 @@ a block that still lets a bench port through.
 benchbar lan-guard install --dry-run
 ```
 
+### lan-guard install on Linux
+
+The same command, with nftables in place of pf and systemd in place of
+launchd. It writes the rules file `/etc/benchbar/lan-guard.nft` (one table,
+`inet benchbar`, with one input chain at priority -10 and a policy of
+accept) and the unit `/etc/systemd/system/benchbar-lan-guard.service`, then
+enables the unit and starts it again. The unit loads the table at every boot
+and deletes it when it stops. Only the bench ports are touched, from the
+same list and for the same reason as on macOS: TCP to them is refused with a
+reset unless it comes from loopback, and this machine's own LAN address
+counts as not loopback, which is how `status` proves the rule works.
+
+It needs `nft` (`sudo apt install nftables`) and systemd as the init (in WSL,
+`systemd=true` in `/etc/wsl.conf`); without them it stops before it asks for
+sudo and changes nothing. The root step names the system tools by absolute
+path and carries both files as literals, as on macOS. `BENCHBAR_SUDO=gui` is
+the Mac's dialog and does nothing on Linux. From the Windows tray the
+password comes in `BENCHBAR_SUDO=env`.
+
+**ufw and firewalld.** The guard does not change them. A host that runs ufw
+refuses incoming ports it was not told to allow, and the guard adds to that:
+both can refuse, neither accepts for the other. A room's port (8443) then
+needs a rule of your own, `sudo ufw allow 8443/tcp`; `install` and `status`
+say so when ufw is active. A service that flushes the whole ruleset
+(`nftables.service` reloading `/etc/nftables.conf`, which starts with `flush
+ruleset`) takes the table away: `status` then shows `active: false` and
+`install` loads it again. A published Docker port is forwarded, not
+delivered to this machine, and is outside what the input chain sees.
+
+`lan-guard allow-node` is macOS only: it changes the macOS application
+firewall, and Linux has no such list. On Linux it says so and changes
+nothing. The `lan-rooms` lab is still listed for macOS only; the Linux guard
+is reachable on its own under the lab once `share` runs on Linux.
+
 ## lan-guard status
 
 ```
@@ -389,8 +423,9 @@ benchbar lan-guard status [--json]
 ```
 
 `installed`, `missing` or `outdated`, and `active`: whether the bench ports
-are refused on this Mac's LAN address (null with no LAN address). Reads
-only; never refused.
+are refused on this machine's LAN address (null with no LAN address, or when
+the probe could not run: it needs the bench's Node). `anchor` is the pf
+anchor on macOS and `inet benchbar` on Linux. Reads only; never refused.
 
 ```bash
 benchbar lan-guard status --json
@@ -404,7 +439,9 @@ benchbar lan-guard remove [--yes] [--json]
 
 Unloads and deletes the anchor and its daemon, with sudo once. Asks first.
 Without them the bench ports answer the LAN and `share start` refuses to
-run.
+run. On Linux it stops and disables the unit, deletes the table `inet
+benchbar` (no other table, chain or rule), and removes the unit, the rules
+file and their folder.
 
 It also gives back the pf token that install recorded (`pfctl -X TOKEN`), so
 pf is turned off again when the guard was the only thing that turned it on.
@@ -506,6 +543,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `share remove` | `--new-code` |  | Also draw a new room code, for when the person is not known: a fresh Mac could join again with the old one. The new code also lets the removed Mac back, if they get it. |
 | `share remove` | `--yes` |  | Do not ask first. |
 | `share remove` | `--json` |  | JSON lines: done, with removed, new_code and the wipe. |
+| `share revoke` | `--new-code` |  | As share remove --new-code. |
+| `share revoke` | `--yes` |  | Do not ask first. |
 | `share revoke` | `--json` |  | As share remove --json. |
 | `share assign` | `--json` |  | JSON lines: done, with the device and its new seat. |
 | `share log` | `--device` | `ID` | Only this Mac (an id of share people). |
