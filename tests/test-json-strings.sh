@@ -42,7 +42,7 @@ run_unit() {
   long=""; for i in $(seq 1 300); do long="${long}"$'\xe6\x97\xa5'; done   # 900 bytes of one character
   for i in 499 500 501; do
     fl_json_cut_v c "$long" "$i"
-    [[ "${#c}" -le 500 ]] || fail "cut to $i bytes left more than 500 bytes"
+    [[ "${#c}" -le "$i" ]] || fail "cut to $i bytes left more than $i bytes"
     parse "$(fl_json_str "$c")" >/dev/null || fail "a cut at $i bytes is not valid JSON"
     assert_eq "" "$(printf '%s' "$c" | LC_ALL=C tr -d '\346\227\245')" "(a cut at $i bytes holds whole characters only)"
   done
