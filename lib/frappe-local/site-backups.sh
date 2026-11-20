@@ -379,9 +379,53 @@ fl_backup_field() {
   printf '%s' "$v"
 }
 
+# fl_site_backup_take NAME [WITH_FILES]: bench --site NAME backup, kept older
+# backups put back, and the new set found. Sets FL_BACKUP_TAKEN_STAMP and
+# FL_BACKUP_TAKEN_SET (the set's JSON); on a failure returns 1 with
+# FL_BACKUP_TAKEN_ERR and FL_BACKUP_TAKEN_HINT. The caller has made the
+# bench's Redis available (fl_bench_redis_up) and stops it afterwards.
+FL_BACKUP_TAKEN_STAMP=""
+FL_BACKUP_TAKEN_SET="null"
+FL_BACKUP_TAKEN_ERR=""
+FL_BACKUP_TAKEN_HINT=""
+fl_site_backup_take() {
+  local name="$1" with_files="${2:-0}" dir before args
+  FL_BACKUP_TAKEN_STAMP=""; FL_BACKUP_TAKEN_SET="null"; FL_BACKUP_TAKEN_ERR=""; FL_BACKUP_TAKEN_HINT=""
+  dir="$(fl_site_backup_dir "$name")"
+  args=(bench --site "$name" backup)
+  [[ "$with_files" == "1" ]] && args+=(--with-files)
+  # what bench writes from now on is the new backup: two backups in one
+  # second share a timestamp, and bench then overwrites the older files,
+  # so the files' age tells, not their names
+  before="$(mktemp "${TMPDIR:-/tmp}/benchbar-backup-start.XXXXXX")"
+  # bench's backup deletes the site's backups older than 23 hours: keep them
+  if ! fl_backups_keep_begin "$name"; then
+    rm -f "$before"
+    FL_BACKUP_TAKEN_ERR="The older backups of ${name} could not be kept while bench takes a new one; nothing was backed up."
+    FL_BACKUP_TAKEN_HINT="Free space on the volume of ${FL_STATE_DIR}, or move the old backups away."
+    return 1
+  fi
+  if ! fl_bench_run_long "bench --site ${name} backup$([[ "$with_files" == "1" ]] && printf ' --with-files')" "$FL_BENCH_DIR" "${args[@]}"; then
+    rm -f "$before"
+    fl_backups_keep_end
+    FL_BACKUP_TAKEN_ERR="The backup of ${name} failed."
+    FL_BACKUP_TAKEN_HINT="Run it by hand to see why: cd ${FL_BENCH_DIR} && ${args[*]}"
+    return 1
+  fi
+  fl_backups_keep_end
+  FL_BACKUP_TAKEN_STAMP="$(find "$dir" -maxdepth 1 -type f -newer "$before" -name '[0-9]*_[0-9]*-*' 2>/dev/null | sed -n 's#.*/\([0-9]\{8\}_[0-9]\{6\}\)-.*#\1#p' | sort -r | awk 'NR==1')"
+  rm -f "$before"
+  if [[ -z "$FL_BACKUP_TAKEN_STAMP" ]]; then
+    FL_BACKUP_TAKEN_ERR="bench reported success, but ${dir} has no new backup."
+    FL_BACKUP_TAKEN_HINT="Look in ${dir}"
+    return 1
+  fi
+  FL_BACKUP_TAKEN_SET="$(fl_backup_set_json "$dir" "$FL_BACKUP_TAKEN_STAMP")"
+}
+
 # site backup NAME [--with-files]: bench --site NAME backup, then the new set.
 fl_cmd_site_backup() {
-  local name="" with_files=0 json="$OPT_JSON" dir before stamp set args
+  local name="" with_files=0 json="$OPT_JSON" dir set args
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --with-files) with_files=1; shift ;;
@@ -403,31 +447,15 @@ fl_cmd_site_backup() {
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")")" plan
     return 0
   fi
-  # what bench writes from now on is the new backup: two backups in one
-  # second share a timestamp, and bench then overwrites the older files,
-  # so the files' age tells, not their names
-  before="$(mktemp "${TMPDIR:-/tmp}/benchbar-backup-start.XXXXXX")"
   fl_bench_env_exports
   # frappe reads the site's settings through the bench's Redis cache
   fl_bench_redis_up "$FL_BENCH_DIR"
-  # bench's backup deletes the site's backups older than 23 hours: keep them
-  if ! fl_backups_keep_begin "$name"; then
-    rm -f "$before"
+  if ! fl_site_backup_take "$name" "$with_files"; then
     fl_bench_redis_down
-    fl_die "The older backups of ${name} could not be kept while bench takes a new one; nothing was backed up." "Free space on the volume of ${FL_STATE_DIR}, or move the old backups away."
+    fl_die "$FL_BACKUP_TAKEN_ERR" "$FL_BACKUP_TAKEN_HINT"
   fi
-  if ! fl_bench_run_long "bench --site ${name} backup$([[ "$with_files" == "1" ]] && printf ' --with-files')" "$FL_BENCH_DIR" "${args[@]}"; then
-    rm -f "$before"
-    fl_backups_keep_end
-    fl_bench_redis_down
-    fl_die "The backup of ${name} failed." "Run it by hand to see why: cd ${FL_BENCH_DIR} && ${args[*]}"
-  fi
-  fl_backups_keep_end
   fl_bench_redis_down
-  stamp="$(find "$dir" -maxdepth 1 -type f -newer "$before" -name '[0-9]*_[0-9]*-*' 2>/dev/null | sed -n 's#.*/\([0-9]\{8\}_[0-9]\{6\}\)-.*#\1#p' | sort -r | awk 'NR==1')"
-  rm -f "$before"
-  [[ -n "$stamp" ]] || fl_die "bench reported success, but ${dir} has no new backup." "Look in ${dir}"
-  set="$(fl_backup_set_json "$dir" "$stamp")"
+  set="$FL_BACKUP_TAKEN_SET"
   fl_changed backup "$name" "$(fl_backup_field "$set" path)"
   if [[ "$json" == "1" ]]; then
     fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":false,"backup":%s}' \

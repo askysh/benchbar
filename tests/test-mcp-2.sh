@@ -99,14 +99,14 @@ from mcpclient import Client, text
 fake, mode, tok = sys.argv[1], sys.argv[2], sys.argv[3]
 c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "FAKE_MODE": mode})
 tools = c.tools()
-assert len(tools) == 31, [t["name"] for t in tools]
+assert len(tools) == 34, [t["name"] for t in tools]
 LABEL = "Data from the bench ("
 for t in tools:
     props, required = t["inputSchema"]["properties"], t["inputSchema"].get("required", [])
     args = {}
     for key in list(required) + (["url_or_name"] if "url_or_name" in props else []):
         kind = props[key]["type"]
-        args[key] = tok if key == "token" else ("20261029_101500" if key == "from" else ("qa1.localhost" if key == "site" else (["/x/acme"] if kind == "array" else "acme")))
+        args[key] = tok if key == "token" else ("20261029_101500" if key == "from" else ("qa1.localhost" if key == "site" else (["/x/acme"] if kind == "array" else (props[key]["enum"][0] if "enum" in props[key] else "acme"))))
     r = c.call(t["name"], args)
     assert "result" in r, (t["name"], r)
     body = text(r)

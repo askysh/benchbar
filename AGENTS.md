@@ -35,6 +35,11 @@ the apply tool with the same arguments and the token (the CLI form is
 - `benchbar_site_backup`, then `benchbar_site_restore_plan` /
   `benchbar_site_restore` (`new: true` for a copy of a site for QA,
   `no_migrate` to stop before migrate).
+- `benchbar_run_plan` / `benchbar_run`: `migrate`, `clear-cache`,
+  `clear-website-cache`, `build` and `run-tests` (`migrate` backs the site
+  up first). `benchbar_run_read` runs `doctor`, `list-apps` and `version`
+  at once. Use them instead of raw `bench` commands; anything else, such as
+  `bench update`, `console` or `execute`, is refused.
 - `benchbar_service_install_plan` / `benchbar_service_install`: the
   service of a bench that has none (`benchbar_up` says `service:
   "missing"` then). `benchbar_up` with `services_only` starts Redis alone.
@@ -122,6 +127,24 @@ returns, the run goes on detached, and `op status --json` carries its
 `done` line as `result` at the end. It needs `--yes` and the inputs in the
 environment, like any run without a person; a person only command never
 takes it. Prefer it to a call that waits for minutes.
+
+To run a bench command (`migrate`, `clear-cache`, `clear-website-cache`,
+`build`, `run-tests`, and the reads `doctor`, `list-apps`, `version`) use
+`benchbar run` and not raw `bench`: it runs in the right bench and site
+with the bench's environment, under a deadline, and ends with the done
+fields plus `command_exit` and `output_tail`. A command that changes
+things follows the plan rule (`--dry-run --json`, then `--apply TOKEN
+--yes`); a read runs at once. A command that is not on the list exits 64
+and names the list: do not look for another way to run it. `run-tests`,
+`migrate` and `build` run code from the bench's apps (their tests,
+patches and build scripts): the list limits which command runs, not what
+that code does.
+
+```bash
+benchbar run --site NAME --dry-run --json -- migrate
+benchbar run --site NAME --apply TOKEN --yes --json -- migrate
+benchbar run --site NAME --json -- list-apps
+```
 
 With `BENCHBAR_NONINTERACTIVE=1` a command that needs an input it cannot
 ask for stops before it takes the lock, and names all missing inputs in
@@ -261,7 +284,7 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   site's `private/backups` are never pruned, and neither is a state backup
   folder that holds `kept-sets` files (older backups that a cut short run
   did not put back; `benchbar repair` puts them back).
-- Never run `bench update` unless the user asked for it by name.
+- Never run `bench update` unless the user asked for it by name. `benchbar run` does not run it, and neither `console`, `execute` nor a shell.
 - Two hooks in `.claude/` check every Bash call: `guard-rm.sh` blocks a
   recursive delete (`rm -r`, `find -delete`, `git clean`, `git reset --hard`,
   `rsync --delete`) outside the repo, the temp folder and `~/.benchbar/logs`,

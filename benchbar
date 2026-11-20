@@ -178,6 +178,8 @@ FL_OP_ID=""; FL_OP_OWNER=""; FL_OP_JSON=""; FL_OP_COMMAND=""; FL_OP_STARTED=""; 
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/pull.sh"
 # shellcheck source=lib/frappe-local/site-restore.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/site-restore.sh"
+# shellcheck source=lib/frappe-local/bench-run.sh
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/bench-run.sh"
 # shellcheck source=lib/frappe-local/selfupdate.sh
 . "${SCRIPT_DIR}/lib/frappe-local/selfupdate.sh"
 # shellcheck source=lib/frappe-local/labs.sh
@@ -556,7 +558,8 @@ while [[ "$#" -gt 0 ]]; do
     # benchbar docs --help lists the topics; a command's --help is its entry in
     # commands.sh (after the loop: the subcommand may come later), else this one
     -h|--help) if [[ "$COMMAND" == "docs" || "$COMMAND" == "self-update" ]]; then ARGS+=("$1"); shift; else FL_WANT_HELP=1; shift; fi ;;
-    --) shift; FL_ARGS_FLAGS_N="${#ARGS[@]}"; ARGS+=("$@"); break ;;
+    # run keeps where "--" was: the words before it are benchbar's, the ones after it the bench command's
+    --) shift; FL_ARGS_FLAGS_N="${#ARGS[@]}"; [[ "$COMMAND" != "run" ]] || FL_RUN_SEP="${#ARGS[@]}"; ARGS+=("$@"); break ;;
     -*)
       if [[ -n "$COMMAND" ]]; then ARGS+=("$1"); shift; else fl_usage_refuse unknown_flag "Unknown option: $1" "Run: benchbar --help"; fi ;;
     *)
@@ -626,7 +629,7 @@ fl_json_mode_resolve() {
     up|down|restart|service|"site default"|"ports apply") FL_JSON_MODE=stream ;;
     # a dry run of these is their plan, one document with its token
     "app update"|"site add") if [[ "$FL_DRY_RUN" == "1" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
-    "site backup"|"site drop"|"site restore"|"app add") FL_JSON_MODE=doc ;;
+    "site backup"|"site drop"|"site restore"|"app add"|"run") FL_JSON_MODE=doc ;;
     # on and off stream like site default; status only reads
     "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
     "share setup"|"share start"|"share stop"|"share extend"|"share lock"|"share unlock"|"share remove"|"share revoke"|"share assign"|"share teardown") FL_JSON_MODE=stream ;;
@@ -643,7 +646,7 @@ fl_json_mode_resolve() {
 # status, list and the other readers are polled: they skip the table unless
 # --for-agent asks for it
 case "$COMMAND" in
-  install|adopt|repair|pull|up|down|restart|wait|service|site|app|ports|share|lan-guard|labs|register|autostart|listen|uninstall-service|profile|lock|self-update) fl_json_mode_resolve ;;
+  install|adopt|repair|pull|up|down|restart|wait|service|site|app|ports|share|lan-guard|labs|register|autostart|listen|uninstall-service|profile|lock|self-update|run) fl_json_mode_resolve ;;
   *) if [[ "$OPT_FOR_AGENT" == "1" || "$OPT_JSONL" == "1" ]]; then fl_json_mode_resolve; fi ;;
 esac
 # --jsonl and --for-agent: a command that only reads ends with one document that has `exit`
@@ -768,7 +771,7 @@ fl_jsonl_begin_generic() {
   # plan of their own (once they know it); for the others the plan is the command.
   if [[ "$FL_DRY_RUN" == "1" ]]; then
     case "$FL_JSON_KEY" in
-      service|"site add"|"site backup"|"site drop"|"site restore"|"app update"|"app add"|"share setup") ;;
+      service|"site add"|"site backup"|"site drop"|"site restore"|"app update"|"app add"|"share setup"|run) ;;
       *)
         fl_bench_detect "$OPT_BENCH_DIR"
         fl_jsonl plan ",\"command\":$(fl_json_str "$FL_JSON_KEY"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"dry_run\":true"
@@ -1719,6 +1722,14 @@ case "$COMMAND" in
     esac ;;
   lan-guard)
     case "${ARGS[0]:-}" in install|remove|allow-node) fl_log_init "${FL_STATE_DIR}/logs" ;; esac ;;
+  # run: the allow list decides (refused here with exit 64, before the lock); a run that executes has a
+  # log of its own, and one that changes things takes the lock; a plan and a read take none
+  run)
+    fl_run_prepare
+    if [[ "$RUN_EXECUTES" == "1" ]]; then
+      fl_log_init "${FL_STATE_DIR}/logs"
+      [[ "$RUN_CHANGES" != "yes" ]] || fl_lock_acquire "${FL_STATE_DIR}/lock"
+    fi ;;
   site|app|profile|lock)
     # the list, show and check commands are read only, and so is a --plan
     # and "app focus" without an app name (the focus listing, with or
@@ -1793,6 +1804,7 @@ case "$COMMAND" in
     if [[ -n "$OPT_PROFILE" ]]; then fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; else fl_bench_detect "$OPT_BENCH_DIR"; fi
     printf '%s\n' "$FL_BENCH_DIR" ;;
   console) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_console ${ARGS[@]+"${ARGS[@]}"} ;;
+  run) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_run || exit $? ;;
   open) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_open ${ARGS[@]+"${ARGS[@]}"} ;;
   users) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_users ${ARGS[@]+"${ARGS[@]}"} ;;
   share) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_share ${ARGS[@]+"${ARGS[@]}"} ;;

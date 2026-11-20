@@ -108,6 +108,11 @@ flag~uninstall-service~--yes~~Do not ask; required without a terminal.
 cmd~path~benchbar path~Print the bench directory.~no~no~no~no~none
 env~path~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~console~benchbar console [--site S]~bench --site SITE console: a Python shell with frappe.~yes~no~no~no~none
+cmd~run~benchbar run [--site S] [--timeout SECS] [--dry-run --json | --apply TOKEN --yes] -- COMMAND [FLAGS]~Run one command of the allow list (migrate, clear-cache, clear-website-cache, build, run-tests, doctor, list-apps, version) with bench's own environment, in the right bench and site, under a deadline. A command that changes things: --dry-run --json prints the plan and its token, --apply TOKEN --yes runs exactly that plan; migrate backs the site up first. Anything else is refused with exit 64 and the list.~yes~no~no~yes~document
+flag~run~--timeout~SECS~Stop the bench command after this many seconds (1 to 7200; each command has a default, 60 to 1800). The backup before migrate is not counted.
+flag~run~--dry-run~~Print the plan and its token, run nothing.
+flag~run~--apply~TOKEN~Run exactly that plan (with --yes).
+flag~run~--yes~~Do not ask before a change; with --apply it confirms the plan was reviewed.
 cmd~db~benchbar db [--site S]~bench --site SITE mariadb: the site's database.~yes~no~no~no~none
 cmd~open~benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]~Open a site in the browser, or open it signed in as USER (developer_mode sites that were opted in with site open-as on).~no~no~no~no~document
 flag~open~--as~USER~Sign in as this user, no password. Refused unless site open-as is on for the site and developer_mode is on. A sign in runs the apps' on_login and on_session_creation hooks as a real login does: last_login, an Activity Log entry, a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User, and Frappe may end the user's oldest session (simultaneous_sessions).

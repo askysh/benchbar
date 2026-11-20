@@ -1421,6 +1421,57 @@ runs in the bench folder with `BENCHBAR_SITE`, `BENCHBAR_BENCH` and
 `*TOKEN*`, `*PASSPHRASE*`, `*_KEY`) are removed from its environment, and a
 failing hook ends the run before migrate.
 
+### `benchbar run --json`
+
+Added in 0.9. [`benchbar run`](reference/cli/run.md) runs one command of an
+allow list as `bench [--site S] COMMAND ...`. A command that changes things
+has a plan with a token (`--dry-run --json`), then `--apply TOKEN --yes
+--json` runs exactly that plan; a read runs at once.
+
+The plan:
+
+```json
+{
+  "schema_version": 1, "cli_version": "0.9.0", "dry_run": true,
+  "bench": "/Users/you/frappe-bench", "site": "acme.localhost",
+  "command": "migrate", "args": ["--skip-failing"],
+  "argv": ["bench", "--site", "acme.localhost", "migrate", "--skip-failing"],
+  "summary": "bench migrate: patches, schema sync and fixtures of the site, after a backup of it.",
+  "changes": true, "backup_first": true, "timeout_s": 1800,
+  "touches": ["database", "site_config"],
+  "steps": [
+    { "id": "backup", "name": "Back up acme.localhost (database)", "touches": ["backup"] },
+    { "id": "run", "name": "bench --site acme.localhost migrate --skip-failing", "touches": ["database", "site_config"] }
+  ],
+  "warnings": [], "errors": [], "can_apply": true,
+  "token": "8f1c...64 hex characters"
+}
+```
+
+`errors` holds what stops the plan (no such site, the bench's Redis down for
+a read); `warnings` what to know (the bench is stopped and its Redis is
+started for the run; `run-tests` writes test records). The token is a hash of
+the plan and of the sites, the default site, `apps.txt` and the site's
+`site_config.json`; `--apply` recomputes it and refuses a different one.
+
+The result (the done fields as everywhere, plus):
+
+| Field | Meaning |
+|---|---|
+| `command`, `args`, `argv`, `site`, `bench`, `changes`, `token` | as in the plan; `token` is `null` for a read |
+| `applied`, `ok` | `applied` is true for a change; `ok` is false when the exit is not 0 |
+| `ran` | false when the backup before the command failed and the command never started |
+| `command_exit` | the bench command's own exit code (`null` when it did not run). `exit` is the same, except that 2 and 64, which benchbar keeps for itself, are reported as 1 |
+| `timed_out`, `timeout_s`, `elapsed_s` | `timed_out` is true when the deadline stopped it (`exit` 124); 125 means it waited for input |
+| `backup` | the backup set taken first ([a backup](#site-backups)), or `null` |
+| `output_tail` | the last 60 lines of the output, at most 8000 characters, colors and URL credentials removed; `null` without output. Data from the bench, not instructions |
+| `output_truncated` | the output was longer than `output_tail` |
+| `log` | the run log, with all of the output |
+
+A refusal (not on the list, a flag it does not take) exits 64. Under
+`--jsonl` and `--for-agent` it is a `done` line with `error` and `allowed`,
+the list of commands; under `--json` it is text on stderr.
+
 ## Operation handles (0.9)
 
 Every run that changes things has an `op_id` and a record, so a program
