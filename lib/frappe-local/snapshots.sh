@@ -452,6 +452,8 @@ fl_cmd_site_snapshot() {
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")")" plan
     return 0
   fi
+  # before the bench's Redis is started: a snapshot that cannot fit starts nothing
+  fl_snap_space_check "$name" || fl_die "$FL_SNAP_ERR" "$FL_SNAP_HINT"
   fl_bench_env_exports
   # frappe reads the site's settings through the bench's Redis cache
   fl_bench_redis_up "$FL_BENCH_DIR"
