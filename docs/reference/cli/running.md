@@ -250,6 +250,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `logs` | `--since` | `TIMESTAMP` | Only lines at or after it (--json; ISO 8601, or HH:MM:SS today). |
 | `logs` | `--since-restart` |  | Only lines after the bench's last start (--json). |
 | `logs` | `--no-follow` |  | Print and exit. |
+| `logs` | `-n` | `N` | The last N lines (default 50); -nN, or a bare number, also works. |
 
 | Command | Environment variable | What it does |
 |---|---|---|

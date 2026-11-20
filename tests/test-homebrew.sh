@@ -176,10 +176,13 @@ MA="$HOME/work/m-a"; MB="$HOME/work/m-b"; MC="$HOME/work/m-c"
 for b in "$MA" "$MB" "$MC"; do make_fake_bench "$b"; done
 # seed_legacy: the state an install.sh CLI left: MA the default, MB
 # registered; and no state in the new place yet
+CUR_VERSION="$(sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$ROOT/benchbar")"
 seed_legacy() {
   rm -rf "$HOME/.local/share/benchbar" "$NEW"
   mkdir -p "$LEGACY/benches" "$LEGACY/logs" "$LEGACY/backups"
-  printf 'BENCH_DIR=%s\nPIPX_BIN_DIR=%s\n' "$MA" "$HOME/.local/bin" >"$LEGACY/state.env"
+  # LAST_VERSION of the running CLI: the update notices (notices.sh) would record a version
+  # change with their own writes, and this test counts the move's mv and ln alone
+  printf 'BENCH_DIR=%s\nPIPX_BIN_DIR=%s\nLAST_VERSION=%s\n' "$MA" "$HOME/.local/bin" "$CUR_VERSION" >"$LEGACY/state.env"
   printf 'SITE_NAME=macdev\nAUTOSTART=off\n' >"$LEGACY/benches/m-a-0badf00d.env"
   printf '%s\n' "$MB" >"$LEGACY/registered-benches.txt"
   printf 'an old run\n' >"$LEGACY/logs/20260930-120000.log"
@@ -289,7 +292,7 @@ run_bb list --json
 assert_eq "0" "$CODE" "$OUT"
 assert_no_file "$HOME/.local/share/benchbar/.frappe-local"
 [[ -L "$LEGACY" ]] || fail "the renamed folder must be moved and linked"
-assert_eq "BENCH_DIR=$MA" "$(cat "$NEW/state.env")"
+assert_eq "BENCH_DIR=$MA" "$(grep '^BENCH_DIR=' "$NEW/state.env")"  # (the notices may add their own lines)
 
 # the installer's own CLI (managed) moves its state the same way
 seed_legacy
@@ -308,7 +311,7 @@ mkdir -p "$NEW"; printf 'BENCH_DIR=%s\n' "$MC" >"$NEW/state.env"
 run_bb list --json
 assert_eq "0" "$CODE" "$OUT"
 [[ -d "$LEGACY" && ! -L "$LEGACY" ]] || fail "an existing state folder must not be merged into"
-assert_eq "BENCH_DIR=$MC" "$(cat "$NEW/state.env")"
+assert_eq "BENCH_DIR=$MC" "$(grep '^BENCH_DIR=' "$NEW/state.env")"  # (the notices may add their own lines)
 assert_contains "$(listed)" "default=$MC"
 
 # FL_STATE_DIR from the environment wins: nothing moves

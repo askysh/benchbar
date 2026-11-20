@@ -213,7 +213,7 @@ fl_bench_adopted() {
 # fl_status_print_json [PINGS]: PINGS "ping" asks every site (status --ping);
 # without it only web_ping_code, the default site's, is known.
 fl_status_print_json() {
-  local mode="${1:-none}" j_listen j_labs j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending j_ready sched=0
+  local mode="${1:-none}" j_notices j_listen j_labs j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending j_ready sched=0
   # a folder benchbar does not know has no site of its own to name: never the
   # default bench's, never one it guessed
   [[ "$ST_STATE" != "not_adopted" ]] || FL_SITE=""
@@ -244,7 +244,8 @@ fl_status_print_json() {
     "$j_url" "$j_label" "$([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)" "${ST_FLAG:-none}" "$ST_PING"
   # app update or app add runs that stopped half way, with the steps left
   fl_lab_enabled_json_v j_labs
-  printf ',"pending_operations":%s,"ready":%s,"labs":%s}\n' "$j_pending" "$j_ready" "$j_labs"
+  fl_notices_json_v j_notices
+  printf ',"pending_operations":%s,"ready":%s,"labs":%s,"notices":%s}\n' "$j_pending" "$j_ready" "$j_labs" "$j_notices"
 }
 
 # fl_redis_json_v VAR: {"queue":{"port","running"},"cache":{...}}. running is whether
@@ -560,4 +561,24 @@ fl_site_ping_code() {
     [0-9][0-9][0-9]) printf '%s' "$code" ;;
     *) printf '000' ;;
   esac
+}
+
+# fl_bench_guess_gate: a command that changes things and was not told which
+# bench (no --bench-dir, no BENCH_DIR, none remembered) acts on the first one
+# fl_bench_detect finds. Say which, and why; and where nobody can be asked
+# (--for-agent, BENCHBAR_NONINTERACTIVE=1) with more than one bench known,
+# refuse to guess. The note goes to stderr: a --json run keeps its stdout.
+fl_bench_guess_gate() {
+  local d n=0 list="" sep=""
+  fl_bench_detect "$OPT_BENCH_DIR"
+  [[ "${FL_BENCH_SOURCE:-}" == "detected" ]] || return 0
+  while IFS= read -r d; do
+    [[ -n "$d" ]] || continue
+    n=$((n + 1)); list="${list}${sep}${d}"; sep=", "
+  done < <(fl_known_benches)
+  if [[ "$n" -gt 1 ]] && fl_noninteractive; then
+    fl_die "More than one bench is possible and none was chosen: ${list}." "Choose one: benchbar ${COMMAND}${ARGS[0]:+ ${ARGS[0]}} --bench-dir PATH (or set BENCH_DIR). benchbar list shows them."
+  fi
+  printf 'benchbar: acting on %s (auto-detected: no --bench-dir, BENCH_DIR or remembered bench%s; pass --bench-dir to choose)\n' \
+    "$FL_BENCH_DIR" "$([[ "$n" -gt 1 ]] && printf '; %s benches are known: %s' "$n" "$list")" >&2
 }
