@@ -317,7 +317,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar site backup NAME [--with-files] [--json]` | no | no | no | yes | document |
 | `benchbar site backups NAME [--json]` | no | no | no | no | document |
 | `benchbar site restore NAME --from STAMP\|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
-| `benchbar site snapshot NAME [--label TEXT] [--json]; benchbar site snapshot drop NAME SNAPSHOT\|--prune [--keep N] [--yes] [--dry-run]` | no | no | no | yes | document |
+| `benchbar site snapshot NAME [--label TEXT] [--json]; benchbar site snapshot drop NAME SNAPSHOT\|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run]` | no | no | no | yes | document |
 | `benchbar site snapshots NAME [--keep N] [--json]` | no | no | no | no | document |
 | `benchbar site rollback NAME --to SNAPSHOT\|latest [--no-migrate] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
 | `benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run\|--apply TOKEN --yes] [--json]` | no | yes | no | yes | document |
@@ -351,6 +351,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site snapshot` | `--label` | `TEXT` | What the snapshot is for (up to 120 characters, no quotes); it is part of the folder name. |
 | `site snapshot` | `--prune` |  | With drop: remove the snapshots beyond the newest N (never the undo point of the last rollback). |
 | `site snapshot` | `--keep` | `N` | With drop --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's state file). |
+| `site snapshot` | `--force-undo-point` |  | With drop and one named snapshot: also remove the undo point of the last rollback (a plain drop refuses it). |
 | `site snapshot` | `--yes` |  | With drop: do not ask. Refused for an agent (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1): drop is a person's choice. |
 | `site snapshot` | `--dry-run` |  | Print what would happen (for drop: what would be removed), change nothing. |
 | `site snapshots` | `--keep` | `N` | Say which snapshots are beyond the newest N (default 10, or SNAPSHOT_KEEP in the bench's state file). Nothing is removed. |
