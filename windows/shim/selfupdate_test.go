@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -25,6 +28,19 @@ type fakeWeb struct {
 	calls   []string
 	answers map[string]WebResponse
 	err     error
+	// installers answers the install.ps1 of any tag, and the checksums file
+	// of any release, with a consistent pair (fakeInstaller and its sum), for
+	// a URL that has no answer of its own
+	installers bool
+}
+
+// fakeInstaller is the install.ps1 the fake GitHub serves; the launcher
+// reads the file it was handed and keeps what it found there.
+const fakeInstaller = "# a stand-in install.ps1\nparam()\n"
+
+func fakeInstallerSum() string {
+	h := sha256.Sum256([]byte(fakeInstaller))
+	return hex.EncodeToString(h[:])
 }
 
 func (f *fakeWeb) Get(_ context.Context, u string, follow bool) (WebResponse, error) {
@@ -34,6 +50,15 @@ func (f *fakeWeb) Get(_ context.Context, u string, follow bool) (WebResponse, er
 	}
 	if a, ok := f.answers[u]; ok {
 		return a, nil
+	}
+	if f.installers {
+		switch {
+		case strings.HasPrefix(u, installerRawURL+"/v") && strings.HasSuffix(u, "/install.ps1"):
+			return WebResponse{Status: 200, Body: []byte(fakeInstaller)}, nil
+		case strings.HasPrefix(u, repoWeb+"/releases/download/v") && strings.HasSuffix(u, "-SHA256SUMS.txt"):
+			z := strings.Repeat("a", 64) + "  benchbar-windows-0.0.0-amd64.zip\n"
+			return WebResponse{Status: 200, Body: []byte(z + fakeInstallerSum() + "  install.ps1\n")}, nil
+		}
 	}
 	return WebResponse{Status: 404}, nil
 }
@@ -59,6 +84,9 @@ type suEnvT struct {
 	launch   *fakeLauncher
 	envs     map[string]string
 	trayRuns bool
+	// installerSeen is the content of the installer file the launcher was
+	// handed, read when it ran; installerPath is where it was
+	installerSeen, installerPath string
 	// trayGen counts tray starts: each start is a new process with a new
 	// creation time (and here a new pid).
 	trayGen int
@@ -67,7 +95,7 @@ type suEnvT struct {
 func newSUEnv(t *testing.T) *suEnvT {
 	t.Helper()
 	withVersion(t, "0.8.3")
-	e := &suEnvT{env: newEnv(t), web: &fakeWeb{answers: map[string]WebResponse{}}, launch: &fakeLauncher{},
+	e := &suEnvT{env: newEnv(t), web: &fakeWeb{answers: map[string]WebResponse{}, installers: true}, launch: &fakeLauncher{},
 		envs: map[string]string{"LOCALAPPDATA": suLocal}, trayRuns: true}
 	e.Getenv = func(k string) string {
 		if v, ok := e.envs[k]; ok {
@@ -306,6 +334,7 @@ func (e *suEnvT) updateHandler(newVersion string, cliEvents string) {
 	e.launch.handler = func(s LaunchSpec) (int, error) {
 		switch {
 		case s.Path == suPS:
+			e.recordInstaller(s)
 			e.trayRuns = true
 			e.trayGen++
 			return 0, nil
@@ -320,6 +349,23 @@ func (e *suEnvT) updateHandler(newVersion string, cliEvents string) {
 			return 0, nil
 		}
 		return 0, nil
+	}
+}
+
+// installerFileRE finds the file a script reads with Get-Content.
+var installerFileRE = regexp.MustCompile(`Get-Content -Raw -LiteralPath '((?:[^']|'')*)'`)
+
+// recordInstaller keeps the file that the installer line reads, as it is
+// when the launcher runs (the shim removes it afterwards).
+func (e *suEnvT) recordInstaller(s LaunchSpec) {
+	if len(s.Args) < 6 {
+		return
+	}
+	if m := installerFileRE.FindStringSubmatch(s.Args[5]); m != nil {
+		e.installerPath = strings.ReplaceAll(m[1], "''", "'")
+		if b, err := os.ReadFile(e.installerPath); err == nil {
+			e.installerSeen = string(b)
+		}
 	}
 }
 
@@ -341,8 +387,28 @@ func TestSelfUpdateYesRunsInstallerThenNewExe(t *testing.T) {
 	if len(calls) != 3 {
 		t.Fatalf("calls %+v", calls)
 	}
+	// the installer is a file downloaded from the v0.8.4 tag and checked, not main's text piped in
+	if e.installerPath == "" || filepath.Base(e.installerPath) != "install.ps1" {
+		t.Fatalf("the installer file: %q", e.installerPath)
+	}
+	if e.installerSeen != fakeInstaller {
+		t.Fatalf("the launcher found %q in the installer file", e.installerSeen)
+	}
+	if _, err := os.Stat(e.installerPath); err == nil {
+		t.Fatal("the installer file is removed after the run")
+	}
+	for _, u := range []string{sumsURLFor("0.8.4") + " follow=true", installerURLFor("0.8.4") + " follow=true"} {
+		if !contains(e.web.calls, u) {
+			t.Fatalf("no request for %s in %v", u, e.web.calls)
+		}
+	}
+	for _, c := range e.web.calls {
+		if strings.Contains(c, "/main/") {
+			t.Fatalf("nothing is fetched from main: %s", c)
+		}
+	}
 	wantScript := "$ErrorActionPreference = 'Stop'; [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; " +
-		"& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1'))) -Yes -Version '0.8.4'; exit $LASTEXITCODE"
+		"& ([scriptblock]::Create((Get-Content -Raw -LiteralPath " + psQuote(e.installerPath) + "))) -Yes -Version '0.8.4'; exit $LASTEXITCODE"
 	want := []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", wantScript}
 	if calls[0].Path != suPS || !reflect.DeepEqual(calls[0].Args, want) {
 		t.Fatalf("installer line:\n got %q %q\nwant %q", calls[0].Path, calls[0].Args, want)
@@ -877,5 +943,142 @@ func TestInstallerEnvResultFile(t *testing.T) {
 	}
 	if envValue(installerEnv(e.System, ""), "BENCHBAR_INSTALL_RESULT") != "" {
 		t.Fatal("no result path, no variable")
+	}
+}
+
+func contains(list []string, want string) bool {
+	for _, x := range list {
+		if x == want {
+			return true
+		}
+	}
+	return false
+}
+
+// A changed install.ps1, a checksums file without a line for it, and a
+// missing file each stop the update before the installer starts.
+func TestSelfUpdateRefusesAnInstallerThatDoesNotCheckOut(t *testing.T) {
+	zipLine := strings.Repeat("a", 64) + "  benchbar-windows-0.8.4-amd64.zip\n"
+	cases := []struct {
+		name    string
+		answers map[string]WebResponse
+		want    string
+	}{
+		{"changed installer", map[string]WebResponse{
+			installerURLFor("0.8.4"): {Status: 200, Body: []byte("Invoke-Evil\n")},
+		}, "install.ps1 of v0.8.4 does not match the release's checksums"},
+		{"checksums without install.ps1", map[string]WebResponse{
+			sumsURLFor("0.8.4"): {Status: 200, Body: []byte(zipLine)},
+		}, "v0.8.4 is older than 0.9.0, and releases before 0.9.0 do not list install.ps1 in their checksums, so its installer cannot be checked, and benchbar.exe does not run an installer it cannot check"},
+		{"no checksums file", map[string]WebResponse{
+			sumsURLFor("0.8.4"): {Status: 404},
+		}, "could not get the checksums of v0.8.4"},
+		{"no installer file", map[string]WebResponse{
+			installerURLFor("0.8.4"): {Status: 404},
+		}, "could not download install.ps1 of v0.8.4"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := newSUEnv(t)
+			e.updateHandler("0.8.4", cliUpdated)
+			for u, a := range c.answers {
+				e.web.answers[u] = a
+			}
+			if code := e.run("self-update", "--yes"); code != 1 {
+				t.Fatalf("exit %d\n%s%s", code, e.stdout(), e.stderr())
+			}
+			if !strings.Contains(e.stderr(), c.want) {
+				t.Fatalf("stderr %q lacks %q", e.stderr(), c.want)
+			}
+			if len(e.launch.calls) != 0 {
+				t.Fatalf("nothing runs: %+v", e.launch.calls)
+			}
+		})
+	}
+}
+
+// --dry-run shows the line that would run and fetches no installer;
+// --installer FILE downloads nothing and runs that file, unchecked.
+func TestSelfUpdateDryRunAndInstallerFileFetchNothing(t *testing.T) {
+	e := newSUEnv(t)
+	if code := e.run("self-update", "--dry-run"); code != 0 {
+		t.Fatalf("exit %d\n%s%s", code, e.stdout(), e.stderr())
+	}
+	out := e.stdout()
+	for _, s := range []string{"install.ps1 of the v0.8.4 tag", "<install.ps1 of v0.8.4>", "dry-run: nothing was run"} {
+		if !strings.Contains(out, s) {
+			t.Errorf("dry run lacks %q:\n%s", s, out)
+		}
+	}
+	for _, c := range e.web.calls {
+		if strings.Contains(c, "install.ps1") || strings.Contains(c, "SHA256SUMS") {
+			t.Errorf("a dry run fetched %s", c)
+		}
+	}
+	e2 := newSUEnv(t)
+	e2.updateHandler("0.8.4", cliUpdated)
+	if code := e2.run("self-update", "--yes", "--installer", `C:\mine\install.ps1`); code != 0 {
+		t.Fatalf("exit %d\n%s%s", code, e2.stdout(), e2.stderr())
+	}
+	for _, c := range e2.web.calls {
+		if strings.Contains(c, "install.ps1") || strings.Contains(c, "SHA256SUMS") {
+			t.Errorf("--installer FILE fetched %s", c)
+		}
+	}
+}
+
+func TestInstallerSumParsing(t *testing.T) {
+	h := strings.Repeat("AB", 32)
+	for text, want := range map[string]string{
+		h + "  install.ps1\n":                       strings.ToLower(h),
+		h + " *install.ps1\r\n":                     strings.ToLower(h),
+		h + "  ./install.ps1\n":                     strings.ToLower(h),
+		h + "  install.ps1.txt\n":                   "",
+		h + "  other/install.ps1\n":                 "",
+		strings.Repeat("a", 63) + "  install.ps1\n": "",
+		"": "",
+		strings.Repeat("b", 64) + "  benchbar-windows.zip\n": "",
+	} {
+		if got := installerSum([]byte(text)); got != want {
+			t.Errorf("installerSum(%q) = %q, want %q", text, got, want)
+		}
+	}
+}
+
+// A release before 0.9.0 has no install.ps1 line in its checksums. --version
+// for one is refused plainly, with how to install it, and not with "try
+// again later"; nothing runs unchecked.
+func TestSelfUpdateOldReleaseCannotBeChecked(t *testing.T) {
+	e := newSUEnv(t)
+	e.updateHandler("0.8.2", cliUpdated)
+	e.web.answers[sumsURLFor("0.8.2")] = WebResponse{Status: 200, Body: []byte(strings.Repeat("a", 64) + "  benchbar-windows-0.8.2-amd64.zip\n")}
+	if code := e.run("self-update", "--yes", "--version", "0.8.2"); code != 1 {
+		t.Fatalf("exit %d\n%s%s", code, e.stdout(), e.stderr())
+	}
+	msg := e.stderr()
+	for _, want := range []string{
+		"v0.8.2 is older than 0.9.0, and releases before 0.9.0 do not list install.ps1 in their checksums",
+		"benchbar.exe does not run an installer it cannot check. Nothing was changed",
+		"fix: to install v0.8.2 anyway, run (this installer is not checked): & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/askysh/benchbar/v0.8.2/install.ps1'))) -Version '0.8.2'",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, msg)
+		}
+	}
+	if strings.Contains(msg, "try again later") {
+		t.Errorf("an old release is not a transient failure:\n%s", msg)
+	}
+	if len(e.launch.calls) != 0 {
+		t.Fatalf("nothing runs: %+v", e.launch.calls)
+	}
+}
+
+func TestOlderThan090(t *testing.T) {
+	for v, want := range map[string]bool{
+		"0.8.3": true, "v0.8.3": true, "0.1.0": true, "0.9.0": false, "0.9.0-rc.1": false, "0.10.0": false, "1.0.0": false, "x": false,
+	} {
+		if got := olderThan090(v); got != want {
+			t.Errorf("olderThan090(%q) = %v, want %v", v, got, want)
+		}
 	}
 }

@@ -213,7 +213,7 @@ fl_bench_adopted() {
 # fl_status_print_json [PINGS]: PINGS "ping" asks every site (status --ping);
 # without it only web_ping_code, the default site's, is known.
 fl_status_print_json() {
-  local mode="${1:-none}" j_notices j_listen j_labs j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending j_ready sched=0
+  local mode="${1:-none}" j_auto j_notices j_listen j_labs j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending j_ready sched=0
   # a folder benchbar does not know has no site of its own to name: never the
   # default bench's, never one it guessed
   [[ "$ST_STATE" != "not_adopted" ]] || FL_SITE=""
@@ -225,6 +225,7 @@ fl_status_print_json() {
   fl_ready_json_v j_ready
   fl_scheduler_enabled && sched=1
   fl_json_bool_v j_sched "$sched"
+  fl_autostart_enabled && j_auto=true || j_auto=false
   fl_json_str_v j_listen "$(fl_listen_mode)"
   fl_json_str_v j_file "${FL_BENCH_DIR}/logs/.benchbar/state.json"
   fl_json_str_v j_log "${FL_BENCH_DIR}/logs/bench.log"
@@ -236,7 +237,7 @@ fl_status_print_json() {
   printf '{'
   fl_state_core_json "$ST_STATE" "$ST_REASON" "$ST_PID" "$ST_STARTED" "$ST_EXIT" "$ST_PING"
   fl_bench_bin_v j_bin
-  printf ',"ports":%s,"sites":%s,"scheduler":%s,"listen":%s,"redis":%s,"bench_bin":%s' "$j_ports" "$j_sites" "$j_sched" "$j_listen" "$j_redis" "$j_bin"
+  printf ',"ports":%s,"sites":%s,"scheduler":%s,"autostart":%s,"listen":%s,"redis":%s,"bench_bin":%s' "$j_ports" "$j_sites" "$j_sched" "$j_auto" "$j_listen" "$j_redis" "$j_bin"
   printf ',"state_file":%s,"log":%s,"agent_loaded":%s,"agent_state":%s,"processes_running":%s' \
     "$j_file" "$j_log" "$j_loaded" "$j_astate" "$j_procs"
   # fields from frappe-mac 0.2.0, kept for older readers

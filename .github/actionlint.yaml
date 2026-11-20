@@ -1,0 +1,13 @@
+# actionlint's settings (ci.yml, job "workflows"). Every entry here is a
+# finding the repository accepts, with the reason; the rest fails the job.
+paths:
+  .github/workflows/release.yml:
+    ignore:
+      # The signed build puts the new keychain first in the user's search
+      # list: `security list-keychains -s "$keychain" $(security list-keychains
+      # -d user | tr -d '"')`. The command substitution must split into one
+      # argument per keychain, so quoting it would break the call. A
+      # `while read` loop into an array removes the finding; that edit to
+      # release.yml waits for the change that reworks the release workflow's
+      # steps (issue 132), which owns the file now.
+      - 'SC2046'

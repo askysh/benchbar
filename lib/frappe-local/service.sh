@@ -596,6 +596,16 @@ fl_cmd_restart() {
   fi
 }
 
+# the agent's cell of status: "loaded: no" is said only when systemd answered
+# (a user manager that cannot be asked, FL_UMGR_DOWN from fl_agent_read, is unknown)
+fl_status_agent_word() {
+  if [[ "$ST_LOADED" != "1" ]] && fl_user_manager_down; then
+    printf '(unknown (no user bus))'
+    return 0
+  fi
+  printf '(loaded: %s%s)' "$([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)" "${ST_AGENT_STATE:+, ${ST_AGENT_STATE}}"
+}
+
 fl_cmd_status() {
   local json="${1:-0}"
   fl_require_bench
@@ -610,13 +620,17 @@ fl_cmd_status() {
     "bench|${FL_BENCH_DIR}" \
     "site|$(fl_site_url)" \
     "state|${ST_STATE}${ST_PID:+, pid ${ST_PID}}${ST_REASON:+ (${ST_REASON})}${ST_EXIT:+, last exit code ${ST_EXIT}}" \
-    "agent|$(fl_agent_label) (loaded: $([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)${ST_AGENT_STATE:+, ${ST_AGENT_STATE}})" \
+    "agent|$(fl_agent_label) $(fl_status_agent_word)" \
     "stop flag|${ST_FLAG:-none (auto-restart armed)}" \
     "processes|$([[ "$ST_PROCS" == "1" ]] && printf yes || printf no)" \
     "web ping|${ST_PING}" \
     "ready|$([[ "$RD_READY" == true ]] && printf yes || printf 'no, waiting on %s' "${RD_WAITING// /, }")" \
     "ports|web ${FL_WEB_PORT}, socketio ${FL_SOCKETIO_PORT}, redis ${FL_REDIS_QUEUE_PORT}/${FL_REDIS_CACHE_PORT}" \
     "log|$(fl_bench_log_path)"
+  if [[ "$ST_LOADED" != "1" ]] && fl_user_manager_down; then
+    fl_warn "$(fl_user_manager_msg)"
+    fl_fix "$(fl_user_manager_fix)"
+  fi
   if [[ "$ST_PING" == "200" ]]; then
     fl_ok "site responds"
   elif [[ "$ST_PROCS" == "1" ]]; then
@@ -842,18 +856,21 @@ fl_cmd_watch() {
 }
 
 fl_cmd_autostart() {
-  local mode="${1:-}"
+  local mode="${1:-}" was
   case "$mode" in
     on|off) fl_require_plain_bench ;;
     "") fl_require_service; if fl_autostart_enabled; then fl_ok "autostart is on (bench returns after login if it was running)"; else fl_ok "autostart is off"; fi; return 0 ;;
     *) fl_die "Usage: benchbar autostart on|off" ;;
   esac
   fl_require_service
+  was=off
+  fl_autostart_enabled && was=on
   fl_bench_state_migrate "$FL_BENCH_DIR"
   fl_bstate_set AUTOSTART "$mode"
   fl_render_all
   act_write_plist || return 1
   [[ "$mode" == "on" ]] && fl_linger_ensure
+  [[ "$was" == "$mode" ]] || fl_changed service "$FL_BENCH_NAME" "autostart ${mode}"
   fl_ok "autostart ${mode}"
 }
 
@@ -864,7 +881,7 @@ fl_cmd_autostart() {
 # lands in Procfile.lean (and the two files it starts) the way the scheduler
 # choice does. A running bench takes it at its next restart.
 fl_cmd_listen() {
-  local mode="${1:-}" running=0
+  local mode="${1:-}" running=0 was=local
   case "$mode" in
     local|all) fl_require_plain_bench ;;
     "")
@@ -878,6 +895,7 @@ fl_cmd_listen() {
     *) fl_die "Usage: benchbar listen [local|all]" ;;
   esac
   fl_require_service
+  fl_listen_is_all && was=all
   if [[ "$mode" == "all" ]] && ! fl_listen_is_all; then
     # opening the dev server to the network is a person's decision, like the LAN guard and Open as
     fl_noninteractive && fl_die "benchbar listen all puts the dev web server and its debugger on the network, a person's decision, so nothing run without a terminal can do it." "Run it in a terminal: benchbar listen all"
@@ -894,6 +912,7 @@ fl_cmd_listen() {
   fl_bench_is_running && running=1
   fl_render_all
   act_write_procfile || return 1
+  [[ "$was" == "$mode" ]] || fl_changed service "$FL_BENCH_NAME" "listen ${mode}"
   fl_ok "listen ${mode}"
   if [[ "$running" == "1" && "${FL_DRY_RUN:-0}" != "1" ]]; then
     fl_warn "the running bench still listens as before; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"
@@ -906,7 +925,7 @@ fl_cmd_listen() {
 # agent whose WorkingDirectory is that path. Nothing else is touched.
 # "confirmed": --all asked once already.
 fl_uninstall_orphan_agents() {
-  local list plist label dest code=0
+  local list plist label code=0
   list="$(fl_agents_for_dir "$FL_BENCH_DIR")"
   [[ -n "$list" ]] || fl_die "No bench at ${FL_BENCH_DIR}, and no com.benchbar agent points at it." \
     "Check the path, or list the agents: $(fl_agent_list_hint)"
@@ -915,36 +934,41 @@ fl_uninstall_orphan_agents() {
   [[ "${1:-}" == confirmed ]] || fl_confirm "Remove the agent for ${FL_BENCH_DIR}?" || { fl_warn "Cancelled."; return 1; }
   while IFS='|' read -r plist label; do
     [[ -n "$plist" ]] || continue
-    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-      fl_info "dry-run: would boot out ${label} and move ${plist} to ${FL_LEGACY_DIR}/"
-      continue
-    fi
-    if fl_agent_listed "$(fl_launchd_domain)/${label}"; then
-      # still loaded: keep the plist, or the job would go on restarting
-      # with nothing left on disk to remove it by
-      if ! fl_agent_unload "$(fl_launchd_domain)/${label}" "$plist"; then
-        fl_fail "${FL_AGENT_MANAGER} still runs ${label}; its plist stays at ${plist}"
-        fl_fix "$(fl_agent_bootout_hint "$(fl_launchd_domain)/${label}"), then run this command again"
-        code=1
-        continue
-      fi
-      fl_ok "booted out ${label}"
-    fi
-    dest="${FL_LEGACY_DIR}/${label}-$(fl_backup_stamp)"
-    if ! mkdir -p "$dest" 2>/dev/null || ! mv "$plist" "$dest/" 2>/dev/null; then
-      fl_fail "could not move ${plist} to ${dest}/"; code=1; continue
-    fi
-    fl_ok "moved ${plist} to ${dest}/"
-    fl_agent_files_changed
+    fl_agent_retire "$plist" "$label" || code=1
   done <<<"$list"
   [[ "$code" == "0" ]] || return 1
   fl_ok "agent removed; nothing else in ${FL_BENCH_DIR} was touched"
 }
 
+# fl_agent_retire PLIST LABEL: boots the agent out and moves its plist aside
+# (never deletes it). A job the manager still holds keeps its plist, or it
+# would go on restarting with nothing left on disk to remove it by.
+fl_agent_retire() {
+  local plist="$1" label="$2" dest
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: would boot out ${label} and move ${plist} to ${FL_LEGACY_DIR}/"
+    return 0
+  fi
+  if fl_agent_listed "$(fl_launchd_domain)/${label}"; then
+    if ! fl_agent_unload "$(fl_launchd_domain)/${label}" "$plist"; then
+      fl_fail "${FL_AGENT_MANAGER} still runs ${label}; its plist stays at ${plist}"
+      fl_fix "$(fl_agent_bootout_hint "$(fl_launchd_domain)/${label}"), then run this command again"
+      return 1
+    fi
+    fl_ok "booted out ${label}"
+  fi
+  dest="${FL_LEGACY_DIR}/${label}-$(fl_backup_stamp)"
+  if ! mkdir -p "$dest" 2>/dev/null || ! mv "$plist" "$dest/" 2>/dev/null; then
+    fl_fail "could not move ${plist} to ${dest}/"; return 1
+  fi
+  fl_ok "moved ${plist} to ${dest}/"
+  fl_agent_files_changed
+}
+
 # fl_cmd_uninstall_service [confirmed]: "confirmed" when --all asked once
 # for every bench already
 fl_cmd_uninstall_service() {
-  local plist rc dest
+  local plist rc dest had=0 keep f others
   if ! fl_is_bench_dir "$FL_BENCH_DIR"; then
     fl_uninstall_orphan_agents "${1:-}"
     return $?
@@ -952,10 +976,19 @@ fl_cmd_uninstall_service() {
   fl_require_bench
   plist="$(fl_agent_plist_path)"
   rc="$(fl_rc_file)"
-  fl_info "This removes the launchd agent, runner, Procfile.lean and the shell helper block."
+  fl_info "This removes the launchd agent, runner, Procfile.lean and, with the last service, the shell helper block."
   fl_info "The bench, its sites, apps and databases are not touched."
   [[ "${1:-}" == confirmed ]] || fl_confirm "Uninstall the background service for ${FL_BENCH_NAME}?" || { fl_warn "Cancelled."; return 1; }
+  # a second run has nothing to stop or remove: changed[] stays empty then
+  fl_bench_is_running && had=1
+  fl_agent_loaded && had=1
+  for f in "$plist" "$(fl_runner_path)" "$(fl_runner_path_legacy)" "$(fl_procfile_path)" "$(fl_listen_py_path)" "$(fl_listen_js_path)"; do
+    [[ ! -f "$f" ]] || had=1
+  done
+  case "$(fl_rc_block_state "$rc")" in present|legacy) had=1 ;; esac
+  keep="$FL_DONE_CHANGED"
   fl_cmd_down || true
+  [[ "$had" == "1" ]] || FL_DONE_CHANGED="$keep"
   # a job launchd keeps must keep its plist too, or it would go on
   # restarting with nothing left on disk to remove it by (the orphan path
   # does the same)
@@ -983,8 +1016,23 @@ fl_cmd_uninstall_service() {
   fl_backup_file "$(fl_procfile_path)" || return 1
   [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_procfile_path)" ]] || { rm -f "$(fl_procfile_path)"; fl_ok "removed Procfile.lean (backup: ${FL_LAST_BACKUP})"; }
   fl_uninstall_listen_files || return 1
-  fl_uninstall_helper_block "$rc"
+  # the block is one for every bench: it goes with the last service, not the first
+  others="$(fl_uninstall_other_services)"
+  if [[ "$others" == "0" ]]; then fl_uninstall_helper_block "$rc"
+  else fl_note "the shell helper block in ${rc} stays: ${others} other bench(es) still have a service; the last one removes it"; fi
+  [[ "$had" == "0" ]] || fl_changed service "$FL_BENCH_NAME" "uninstalled"
   fl_ok "service uninstalled; start the bench by hand with: cd ${FL_BENCH_DIR} && bench start"
+}
+
+# fl_uninstall_other_services: how many agents point at a bench folder other than this one (a number)
+fl_uninstall_other_services() {
+  local f d n=0
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    d="$(fl_plist_working_dir "$f")"
+    if [[ -n "$d" ]] && ! fl_same_path "$d" "$FL_BENCH_DIR"; then n=$((n + 1)); fi
+  done < <(fl_agent_files all)
+  printf '%s' "$n"
 }
 
 # the two files Procfile.lean's web and socketio lines start with, each backed

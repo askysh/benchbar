@@ -4,4 +4,6 @@
 . "${0%/*}/_mocklib.sh"
 mock_log "$@"
 printf 'bus=%s\n' "${DBUS_SESSION_BUS_ADDRESS:-}" >>"${MOCK_LOG:-/dev/null}"
+# MOCK_NOTIFY_HANG=1: never answers (the runner's timeout has to end it)
+[[ -z "${MOCK_NOTIFY_HANG:-}" ]] || exec sleep 30
 exit "${MOCK_NOTIFY_EXIT:-0}"

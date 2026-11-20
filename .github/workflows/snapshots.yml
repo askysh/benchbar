@@ -55,22 +55,25 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
 
       - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           # the runner's default for macos-26 when this was pinned; another
           # Xcode can draw controls differently, so bump it with the references
           xcode-version: '26.6'
 
       - name: Install XcodeGen
-        run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
+        run: scripts/ci-install-tool.sh xcodegen
 
       - name: Generate the project
-        run: cd macos && xcodegen generate --quiet
+        run: |
+          cd macos && xcodegen generate --quiet
+          cd .. && scripts/macos-packages.sh macos/build/DerivedData
 
       - name: Commit of the render
         id: rev
@@ -102,7 +105,7 @@ jobs:
           xcodebuild -project macos/BenchBar.xcodeproj -scheme BenchBar -configuration Debug \
             -derivedDataPath macos/build/DerivedData -destination 'platform=macOS,arch=arm64' \
             -only-testing:BenchBarTests/SnapshotTests -only-testing:BenchBarTests/SnapshotCompareTests \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= test 2>&1 | tee macos/build/test.log | \
+            -disableAutomaticPackageResolution CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= test 2>&1 | tee macos/build/test.log | \
             grep -E '^(✔|✘)|Test run with|error:|\*\* TEST' || true
           ls ~/Library/Caches/BenchBarSnapshots
           grep -q -E '\*\* TEST SUCCEEDED \*\*|Test run with [0-9]+ tests? passed' macos/build/test.log
@@ -113,7 +116,7 @@ jobs:
 
       - name: Upload the PNGs
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: snapshots-${{ steps.rev.outputs.sha }}
           path: ~/Library/Caches/BenchBarSnapshots/*.png
@@ -122,7 +125,7 @@ jobs:
 
       - name: Upload the references
         if: always() && steps.mode.outputs.record == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: references
           path: macos/BenchBarTests/Snapshots
@@ -131,7 +134,7 @@ jobs:
 
       - name: Upload the test log
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: snapshots-test-log-${{ steps.rev.outputs.sha }}
           path: macos/build/test.log

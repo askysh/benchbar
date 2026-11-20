@@ -1,0 +1,15 @@
+#!/bin/bash
+# netstat mock (macOS): "netstat -an -p tcp". It lists the listeners of
+# $MOCK_STATE/netstat_listen, lines "port addr": the sockets of other users
+# (root's) that lsof cannot show a normal user but netstat can. Nothing else,
+# so a test never sees the ports of the Mac it runs on.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+printf 'Active Internet connections (including servers)\n'
+printf 'Proto Recv-Q Send-Q  Local Address          Foreign Address        (state)\n'
+[[ -f "${MOCK_STATE:?}/netstat_listen" ]] || exit 0
+while read -r port addr; do
+  [[ -n "$port" ]] || continue
+  printf 'tcp4       0      0  %s.%s       *.*                    LISTEN\n' "${addr:-*}" "$port"
+done <"${MOCK_STATE}/netstat_listen"

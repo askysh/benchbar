@@ -97,8 +97,8 @@ public sealed partial class WizardModel : IDisposable
     /// <summary>X.Y.Z uses the v X.Y.Z installer and asks for that version; anything else (0.0.0-dev, a pre release) uses main.</summary>
     public static string LinuxCliInstallLineFor(string? version) =>
         version is { } v && System.Text.RegularExpressions.Regex.IsMatch(v, @"^\d+\.\d+\.\d+$") && v != "0.0.0"
-            ? $"curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v{v}/install.sh | bash -s -- --version v{v}"
-            : "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash";
+            ? $"curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/v{v}/install.sh | bash -s -- --version v{v}"
+            : "curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash";
     public const string McpLine = "claude mcp add benchbar -- benchbar.exe mcp";
 
     /// <summary>The stdio server entry for a client that is not Claude Code (Cursor, Claude Desktop, VS Code): a command and one argument, as docs/guides/agents.md says.</summary>

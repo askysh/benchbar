@@ -305,8 +305,8 @@ fl_freshness_fetch() {
     fi
     (
       code=0
-      fl_run_capture_timeout "$FL_FRESHNESS_FETCH_TIMEOUT" /dev/null "${codes}/err/${app}" fl__in_dir "$FL_BENCH_DIR" env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10' \
-        git -C "$dir" fetch --quiet --no-tags ${args[@]+"${args[@]}"} "$remote" "+refs/heads/${branch}:refs/remotes/${remote}/${branch}" || code=$?
+      fl_run_capture_timeout "$FL_FRESHNESS_FETCH_TIMEOUT" /dev/null "${codes}/err/${app}" fl__in_dir "$FL_BENCH_DIR" \
+        fl_git_net -C "$dir" fetch --quiet --no-tags ${args[@]+"${args[@]}"} "$remote" "+refs/heads/${branch}:refs/remotes/${remote}/${branch}" || code=$?
       printf '%s' "$code" >"${codes}/${app}"
     ) &
     pids+=("$!")
@@ -560,9 +560,10 @@ fl_cmd_app_focus() {
   fl_focus_apps >/dev/null
   if [[ "$OPT_JSON" == "1" ]]; then
     while IFS= read -r a; do [[ -n "$a" ]] && reasons+=("$a"); done < <(fl_app_focus_reasons "$app")
-    printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"pin":%s,"focus":%s,"reasons":%s}\n' \
+    fl_json_doc_begin
+    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"pin":%s,"focus":%s,"reasons":%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$pin")" \
-      "$(fl_json_bool "$(fl_is_focus_app "$app" && printf 1 || printf 0)")" "$(fl_json_str_array ${reasons[@]+"${reasons[@]}"})"
+      "$(fl_json_bool "$(fl_is_focus_app "$app" && printf 1 || printf 0)")" "$(fl_json_str_array ${reasons[@]+"${reasons[@]}"})")"
     return 0
   fi
   case "$pin" in

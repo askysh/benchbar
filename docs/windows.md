@@ -44,15 +44,22 @@ marked by Windows as "from the internet", and that mark brings dialogs.
 
 | Route | What Windows may show | What to do |
 | --- | --- | --- |
-| One line installer (`irm ... \| iex`) | On our Windows 11 test PC (one PC, Smart App Control off): nothing. No SmartScreen dialog, no Defender block and no administrator prompt. The files it writes carry no internet mark, and starting them shows no dialog. | Nothing. |
+| One line installer (`irm ... \| iex`) | On our Windows 11 test PC (one PC, Smart App Control off): nothing. No SmartScreen dialog, no Defender block and no administrator prompt. The files it writes carry no internet mark when it could verify the build provenance (`gh` signed in), and starting them shows no dialog then. | Nothing. |
 | Zip, started with `.\install.ps1` | With the default execution policy: "cannot be loaded because running scripts is disabled on this system". `Unblock-File` does not change that. | Start it with `powershell -ExecutionPolicy Bypass -File .\install.ps1`. |
 | Zip saved by a browser | Edge saves it without a warning, but marks it as downloaded (`Zone.Identifier`, ZoneId 3). Extract All in Explorer marks every file in it. `Expand-Archive` marks none. | Nothing, if you run the installer from the zip. It removes the mark from the files it installs. |
 | Starting a marked program yourself | "Open File - Security Warning: The publisher could not be verified. Are you sure you want to run this software?" with **Run** and **Cancel**. The dialog can open behind other windows. | Click **Run**. If nothing seems to happen, look for a flashing icon in the taskbar. |
 | The tray without the .NET runtime | Microsoft's dialog "You must install .NET Desktop Runtime to run this application." | Install the runtime: see [If Windows blocks it](#if-windows-blocks-it). |
 
-The installer removes the internet mark from every file it installs, for
-every route, so the programs in the install folder start without the
-Open File dialog. It checks every file against `SHA256SUMS` first.
+The installer checks every file against `SHA256SUMS` first. It removes
+the internet mark from the files it installs only when the zip's build
+provenance verified, which needs the [GitHub CLI](https://cli.github.com)
+(`gh`) signed in. The checksums come from the same release as the zip,
+so they find a damaged download, not a swapped one, and they are no reason
+to drop a mark that Windows put there. Without `gh`, or when the check
+fails, the installer keeps the mark and says so, and Windows shows the
+Open File dialog once for each program: click **Run**. A zip you run
+`install.ps1` from after unpacking it has no zip left to verify, so the
+mark stays there too.
 
 ### Smart App Control
 
@@ -106,7 +113,7 @@ The command line tool step runs the
 as `benchbar.exe` inside the distro (`install.sh` from the `v<version>`
 tag, with `--version v<version>`); a development build uses `main`. To
 do it by hand, run in Ubuntu:
-`curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash`.
+`curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash`.
 
 ![The first run wizard at Welcome](images/windows-wizard-welcome.png)
 
@@ -198,7 +205,8 @@ releases for the newest published one that has a Windows zip for your CPU
 `benchbar-windows-<version>-SHA256SUMS.txt` and installs it to
 `%LOCALAPPDATA%\Programs\BenchBar`. Then it:
 
-1. removes the internet mark from the installed files;
+1. removes the internet mark from the installed files when the zip's build
+   provenance verified (`gh attestation verify`), and keeps it otherwise;
 2. puts that folder on your user PATH (`benchbar.exe path install`);
 3. checks the .NET 10 Desktop Runtime and, when `winget` is there, offers
    to install it (Windows asks for permission);
@@ -279,11 +287,14 @@ with the zip:
 
 The installer does this for you. Releases after 0.8.2 also carry a build
 provenance attestation, made by the release workflow. It proves that the
-zip was built from this repository by GitHub Actions. With the
+zip was built from this repository by GitHub Actions. The installer
+checks it when `gh` is installed and signed in, and says so when it
+cannot. The checksums file is attested too. With the
 [GitHub CLI](https://cli.github.com):
 
 ```powershell
-gh attestation verify benchbar-windows-<version>-amd64.zip -R askysh/benchbar
+gh attestation verify benchbar-windows-<version>-amd64.zip -R askysh/benchbar `
+  --signer-workflow askysh/benchbar/.github/workflows/release-windows.yml
 ```
 
 ## If Windows blocks it
@@ -294,9 +305,10 @@ with "Smart App Control is on". See [Smart App Control](#smart-app-control).
 **"Open File - Security Warning: The publisher could not be verified."**
 The file carries an internet mark, for example because you started a
 program from an unpacked zip. Click **Run**. The dialog can open behind
-other windows. The installer removes the mark from what it installs, so
-you should not see this for the installed programs. If you do, run the
-installer again, or run
+other windows. The installer removes the mark from what it installs when it verified
+the zip's build provenance (`gh` signed in). Without that, you see this
+once for each program. To remove the mark yourself, once you have checked
+the zip, run
 `Get-ChildItem "$env:LOCALAPPDATA\Programs\BenchBar" -Recurse | Unblock-File`.
 
 **Microsoft Defender or another antivirus removes a file**, or the
@@ -720,9 +732,12 @@ benchbar.exe self-update
 
 It shows the version you have and the newest release, asks once, then
 updates all of BenchBar for Windows to that release: `benchbar.exe`, the
-tray app and the BenchBar CLI inside WSL. It runs the one line installer for
-you, so the new files are checked against the release's SHA256 sums and
-Windows shows no SmartScreen dialog for them. The tray app closes and starts
+tray app and the BenchBar CLI inside WSL. It runs the installer of that
+release for you: `install.ps1` of the release's tag, downloaded and
+compared with the release's SHA256 sums before it runs, not whatever is on
+`main`. The installer checks the new files against the same sums, and
+Windows shows no SmartScreen dialog for them when the zip's build
+provenance verified (see [Verify a download](#verify-a-download)). The tray app closes and starts
 again. It ends with one line for each part. Your settings, benches and sites
 stay as they are.
 
@@ -919,6 +934,30 @@ every distro, so stop your benches first).
   Mac app and has no `benchbar` command, so it is not on Windows yet. A
   `benchbar://share/...` link shows a note that says so. Hosting a room is
   the **Sharing** tab above.
+
+## Rooms on Windows
+
+A room is the host side of **Share with people on the same Wi-Fi**. The bench runs in WSL, so the room's
+address is the one WSL has, and that depends on WSL's networking mode:
+
+- **NAT (the default).** WSL has a private address that only this PC can reach. Nobody on the Wi-Fi can join
+  a room there, and the checks run inside WSL, so they would pass without telling you. A room is not available on
+  WSL NAT: `share preflight`, `share start` and `share invite` refuse and say so.
+- **Mirrored.** WSL shares the PC's own Wi-Fi address. Put `networkingMode=mirrored` under `[wsl2]` in
+  `%UserProfile%\.wslconfig` (Windows 11 22H2 or later; BenchBar never edits that file), then run
+  `wsl.exe --shutdown`. Windows still drops inbound connections to WSL until its Hyper-V firewall allows the
+  room's port. Run this once in a PowerShell opened as administrator:
+
+  ```powershell
+  New-NetFirewallHyperVRule -Name BenchBarRoom -DisplayName "BenchBar room" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8443
+  ```
+
+  `share preflight` and `share start` show this line as a warning, and `share start` goes on. The other way,
+  `Set-NetFirewallHyperVVMSetting -Name '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -DefaultInboundAction Allow`,
+  opens every port of WSL, so the rule above is the narrower one. Microsoft documents both under
+  [mirrored mode networking](https://learn.microsoft.com/windows/wsl/networking#mirrored-mode-networking).
+
+BenchBar reads the mode with `wslinfo --networking-mode`; a WSL that has no `wslinfo` counts as NAT.
 
 ## Labs
 

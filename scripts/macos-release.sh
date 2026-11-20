@@ -29,7 +29,7 @@
 #   BenchBar-<version>.zip      the stapled app: for Sparkle updates
 #   appcast.xml                 the Sparkle feed, signed with the EdDSA key
 #   benchbar-cli-<version>.tar.gz  the CLI for the Homebrew formula
-#   SHA256SUMS
+#   SHA256SUMS                     the files above, and install.sh and install.ps1 of the tag
 #
 # The tap's formula and cask are written after the release is published,
 # from these files (.github/workflows/homebrew-tap.yml).
@@ -156,7 +156,11 @@ notarize() {
 # ------------------------------------------------------------------- build
 step "build with Developer ID and Sparkle"
 export BENCHBAR_SPARKLE=YES
-BENCHBAR_VERSION="$VERSION" BENCHBAR_BUILD="$BUILD_NUMBER" "${ROOT}/scripts/macos-build.sh" --test --sparkle
+# BENCHBAR_SKIP_TESTS=1: the release workflow checked that CI passed on this tree,
+# Swift tests included, so they are not run twice
+test_flag=(--test)
+[[ "${BENCHBAR_SKIP_TESTS:-}" != "1" ]] || test_flag=()
+BENCHBAR_VERSION="$VERSION" BENCHBAR_BUILD="$BUILD_NUMBER" "${ROOT}/scripts/macos-build.sh" ${test_flag[@]+"${test_flag[@]}"} --sparkle
 built="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "${APP}/Contents/Info.plist")"
 [[ "$built" == "$BUILD_NUMBER" ]] || die "the app says build ${built}, expected ${BUILD_NUMBER}"
 
@@ -205,7 +209,10 @@ ok "appcast.xml signed and checked"
 step "CLI tarball"
 "${ROOT}/scripts/cli-tarball.sh" "$VERSION" "$DIST"
 (cd "$DIST" && shasum -a 256 ./*.dmg ./*.zip ./*.tar.gz >SHA256SUMS)
-ok "SHA256SUMS"
+# the installers of this tag, so `benchbar self-update` checks the install.sh
+# it runs against the release's own sums before it runs it
+(cd "$ROOT" && shasum -a 256 install.sh install.ps1) >>"${DIST}/SHA256SUMS"
+ok "SHA256SUMS (the files, and install.sh and install.ps1)"
 
 printf '\n[OK] release %s in %s\n' "$VERSION" "$DIST"
 ls -1 "$DIST"

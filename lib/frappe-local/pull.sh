@@ -88,6 +88,10 @@ FL_PULL_NEEDS=""
 # --before-migrate SCRIPT: runs after the restore, before migrate (or where
 # it would be); a failing script stops the run
 FL_PULL_HOOK=""
+# the sha256 of the script when the plan was made; the script is hashed again
+# right before it runs and not run when it differs (a restore can take
+# minutes between the plan and that step)
+FL_PULL_HOOK_SHA=""
 # pull's own JSON lines (plan, step, done); site restore shares the restore
 # steps below and has its own output, so it sets this to 0
 FL_PULL_EMIT=1
@@ -226,7 +230,10 @@ fl_pull_on_exit() {
   fi
   if [[ "$FL_PULL_DONE_SENT" == "0" ]]; then
     FL_PULL_DONE_SENT=1
-    fl_pull_emit "done" ",\"exit\":${code},\"site\":$(fl_json_str "$FL_PULL_AS"),\"warnings\":[${FL_PULL_WARNINGS}]$(fl_pull_done_extra)"
+    local perr=""
+    # a failed run says why (the envelope: error whenever exit is not 0)
+    [[ "$code" == "0" ]] || perr=",\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-${FL_LAST_PROBLEM:-the pull failed; see the log}}")"
+    fl_pull_emit "done" ",\"exit\":${code},\"site\":$(fl_json_str "$FL_PULL_AS"),\"warnings\":[${FL_PULL_WARNINGS}]${perr}$(fl_pull_done_extra)"
   fi
 }
 
@@ -667,6 +674,7 @@ fl_pull_hook_resolve() {
   [[ -f "$h" ]] || fl_die "--before-migrate: no file ${FL_PULL_HOOK}." "Pass the path of an executable script."
   [[ -x "$h" ]] || fl_die "--before-migrate: ${FL_PULL_HOOK} is not executable." "chmod +x ${FL_PULL_HOOK}"
   FL_PULL_HOOK="$h"
+  FL_PULL_HOOK_SHA="$(shasum -a 256 "$h" | awk '{print $1}')"
 }
 
 fl_pull_check_local() {
@@ -1120,6 +1128,15 @@ fl_pull_hook_run() {
 }
 
 fl_pull_step_before_migrate() {
+  local now_sha=""
+  if [[ -n "$FL_PULL_HOOK_SHA" ]]; then
+    [[ -f "$FL_PULL_HOOK" ]] && now_sha="$(shasum -a 256 "$FL_PULL_HOOK" 2>/dev/null | awk '{print $1}')"
+    if [[ "$now_sha" != "$FL_PULL_HOOK_SHA" ]]; then
+      fl_fail "${FL_PULL_HOOK} is not the script the plan showed (its hash changed since the plan); it was not run, and ${FL_PULL_AS} is restored but not migrated"
+      fl_fix "read the script, run it by hand if it is right, then: cd $(printf '%q' "$FL_BENCH_DIR") && bench --site $(printf '%q' "$FL_PULL_AS") migrate"
+      return 1
+    fi
+  fi
   fl_bench_env_exports
   fl_run_long "${FL_PULL_HOOK##*/} (before migrate)" fl_pull_hook_run || {
     fl_fail "the --before-migrate script failed; ${FL_PULL_AS} is restored but not migrated"

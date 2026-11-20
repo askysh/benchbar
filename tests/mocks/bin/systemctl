@@ -109,11 +109,18 @@ case "$cmd" in
       [[ -f "$f" ]] || continue
       new_unit "$(basename "$f")"; put "$(basename "$f")" LoadState loaded
     done
+    # the user manager also reads its runtime folder (a share's job lives there)
+    if [[ "$scope" == user ]]; then
+      for f in "${XDG_RUNTIME_DIR:-/nonexistent}/systemd/user"/*.service; do
+        [[ -f "$f" ]] || continue
+        new_unit "$(basename "$f")"; put "$(basename "$f")" LoadState loaded
+      done
+    fi
     # a user unit whose file is gone is no longer found; the system units (where their files live is not
     # modelled) keep what they were given
     for f in "$sdir"/*.service; do
       [[ -f "$f" && "$scope" == user ]] || continue
-      [[ -f "$udir/$(basename "$f")" ]] || put "$(basename "$f")" LoadState not-found
+      [[ -f "$udir/$(basename "$f")" || -f "${XDG_RUNTIME_DIR:-/nonexistent}/systemd/user/$(basename "$f")" ]] || put "$(basename "$f")" LoadState not-found
     done
     exit 0 ;;
   enable)
