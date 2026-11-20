@@ -57,7 +57,7 @@ BENCHBAR_SUDO=gui run_fm site open-as on macdev --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 
 # commands with no JSON mode: a terminal program, a text only helper, or a group that prints its usage
-NO_JSON=" fg watch console db docs mcp help mariadb-password path site app lock profile share lan-guard ports profile-show op "
+NO_JSON=" fg watch console db docs mcp help mariadb-password path site app lock profile share lan-guard ports profile-show op bench "
 
 # key|args that succeed|args that fail ("-" for none)|exit of the success row (default 0)
 # $B is the bench, $NOBENCH a folder that is no bench; @TOKEN@ is the token of `ports plan` for the bench.
@@ -155,6 +155,11 @@ share assign|share assign d_0123abcd nowhere|share assign|1
 share log|share log --limit 5|-
 share open-as|share open-as nobody|share open-as|1
 share teardown|share teardown --yes|-|1
+bench forget|bench forget $B2 --dry-run|bench forget $B2 --apply bogus --yes
+bench remove|bench remove $B2 --dry-run|bench remove $B2 --apply bogus --yes
+bench gc|bench gc --dry-run|bench gc --apply bogus --yes
+bench scratch|bench scratch $B2 --ttl 3 --yes|bench scratch $NOBENCH --yes
+db orphans|db orphans|db orphans --bogus
 "
 
 BENCHBAR_LABS="" run_fm commands --json
