@@ -22,6 +22,22 @@ page: [First run problems](first-run-problems.md). On Linux, see also
 **`benchup: command not found`.** Run `source ~/.zshrc` once, or open a
 new Terminal tab.
 
+**"Cannot write ...: ... is not writable" or "is not a folder".** A state file's
+folder cannot be written: it belongs to root (an earlier `sudo benchbar`), is on a
+read only volume, or a file sits where a folder belongs. The message names the
+path. Fix the owner or the file, then run again; before 0.9.0 the run waited for
+ever without a word.
+
+**"Waiting for benchbar up (pid ...)".** Another benchbar run holds the lock, for
+example the app and a terminal starting at the same moment. A run waits up to 8
+seconds for it, then stops with "Another benchbar run is active". The lock is
+judged by its owner's pid and start time, so a lock left by a crash is reclaimed
+even when another process now has that pid.
+
+**`benchbar` stops with a "[FAIL] Command failed (exit N): ..." line.** A command
+inside benchbar failed that it does not handle itself. The line names the command,
+the file and the function; `benchbar report` collects the log for a bug report.
+
 **`benchstatus` says `stop flag crash`.** The bench crashed three times in
 ten minutes and paused itself. `benchlogs` shows why, and `--previous`
 shows the run before. Fix the cause, then `benchup`.
@@ -398,6 +414,9 @@ and PATH) do not stop you.
 - **A restart is pending.** When the `reboot` step is missing, restart
   Windows, then run `setup check` again. The tray's **Restart Now** asks
   first.
+- **"Do not run benchbar as root or with sudo" in the distro.** The distro's
+  default user is `root`. Create a user and make it the default: see
+  [the Windows page](windows.md#troubleshooting).
 - **Something else.** Use **Report a Bug** in the tray menu, the wizard
   footer or next to a failed step. It writes a redacted zip and opens the
   bug form. See [Report a bug](windows.md#report-a-bug).
@@ -408,6 +427,15 @@ and PATH) do not stop you.
 
 ## Things to avoid
 
+- Do not run `benchbar` with `sudo` or as root. It refuses ("Do not run
+  benchbar as root"). It asks for `sudo` itself, for the few steps that need
+  it (`/etc/hosts`, the wkhtmltopdf package, the LAN guard). A run as root keeps
+  your home folder on a Mac and leaves root owned files in the state folder, the
+  logs and the bench's lock, which later runs as you cannot write. If that
+  happened, give them back: `sudo chown -R $USER ~/.local/state/benchbar` (or
+  `.benchbar` next to a checkout's CLI) and the bench's `logs` folder.
+  With `--json`, `--jsonl` or `--for-agent` the refusal is JSON (exit 64,
+  `error_id` `root_refused`, `error`, `fix`).
 - Do not use the unversioned Homebrew `mariadb` formula for the v15
   profile. Pin to `mariadb@10.11`.
 - Do not `brew install wkhtmltopdf`. Use the official patched Qt package,

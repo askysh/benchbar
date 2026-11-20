@@ -135,6 +135,9 @@ final class BenchStore {
     /// Started without a bench: the CLI listed none, or there is no CLI to
     /// ask. A list that failed is not an answer, the benches may be there.
     var hasNoBench: Bool { benches.isEmpty && listError == nil }
+    /// The defaults an update changed (`status --json` notices[], the same for
+    /// every bench) until they are dismissed. The window shows them as a banner.
+    private(set) var notices: [BenchNotice] = []
     private var changeAnchor: BenchModel?
 
     var selectedPath: String? {
@@ -402,6 +405,14 @@ final class BenchStore {
         openAs.prune(keeping: known)
     }
 
+    /// The banner's Dismiss: gone at once, and `benchbar notices --dismiss ID`
+    /// makes it stay gone (a failed call brings it back with the next status).
+    func dismissNotice(_ id: String) {
+        notices.removeAll { $0.id == id }
+        guard let client else { return }
+        Task { try? await client.dismissNotice(id) }
+    }
+
     func refreshAll() async {
         await forEachLimited(benches) { await self.refresh($0) }
     }
@@ -444,6 +455,8 @@ final class BenchStore {
                 if superseded.contains(bench.path) { continue }
                 apply(.observed(status, .status), to: bench)
                 readFiles(bench, verdict: status)
+                // an older CLI has no notices[]: the list stays as it was
+                if let list = status.notices, list != notices { notices = list }
                 if bench.sitesKnown, let openAs = openAsStore {
                     openAs.forgetSessions(bench: bench.path, keeping: Set(bench.siteRows.filter { $0.openAs == true }.map(\.name)))
                 }
@@ -461,7 +474,7 @@ final class BenchStore {
     private func askStatus(_ client: CLIClient, _ bench: BenchModel) async throws(CLIError) -> BenchStatus {
         asking.insert(bench.path)
         defer { asking.remove(bench.path) }
-        return try await client.status(bench: bench.path)
+        return try await client.status(bench: bench.path, deep: bench.state == .running || bench.state == .starting)
     }
 
     /// The CLI did not answer (a timeout on a cold start, say). The files

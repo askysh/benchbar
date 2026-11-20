@@ -115,4 +115,11 @@ for f in README.md docs/index.md site/astro.config.mjs; do
   if grep -q 'benches on your Mac, in the background\|benches on macOS, in the background\|benches on macOS"' "$ROOT/$f"; then fail "$f describes BenchBar as macOS only"; fi
 done
 
+# ---- every link in the features table is a page that exists (DOC-1: each feature has a guide)
+while IFS= read -r link; do
+  target="${link%%#*}"
+  [[ -n "$target" ]] || continue
+  [[ -f "$ROOT/docs/$target" ]] || fail "docs/features.md links to ${target}, which is not a page in docs/"
+done < <(grep -o '\]([^)]*)' "$ROOT/docs/features.md" | sed 's/^](//; s/)$//' | grep -v '^http' | grep -v '^\.\./' )
+
 printf 'test-docs: ok\n'

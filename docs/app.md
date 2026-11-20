@@ -417,6 +417,14 @@ instead.
 The close button on the banner hides it until the next version; the
 menu item stays. See [Updating](install.md#updating).
 
+After an update that changes a default (0.9.0 changes three: the bench
+listens on this computer only, an unknown option is an error, and `pull`
+neutralises the copy), the BenchBar window also shows a banner for each
+one, one at a time: what changed, the command that switches it back and
+**Learn More**, which opens [What's new](whats-new.md). **Dismiss** runs
+`benchbar notices --dismiss ID`, so the notice is gone in the terminal list
+too. A fresh install shows none.
+
 ## The command line tool inside the app
 
 BenchBar.app has the `benchbar` CLI inside it

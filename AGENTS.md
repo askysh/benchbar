@@ -8,14 +8,19 @@ without surprising the user.
 
 If your client speaks the Model Context Protocol, add the server once
 (`claude mcp add benchbar -- benchbar mcp`) and use its tools instead of
-parsing text: `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
+parsing text: `benchbar_list`, `benchbar_status` (its `ready` object says
+whether the bench can serve; `ready.stale` means Python code changed since
+it started, so restart it), `benchbar_wait` (blocks until it is ready, with
+progress notifications), `benchbar_doctor`,
 `benchbar_logs_tail` (`file`: `bench`, `worker`, `worker_error` or
 `previous`), `benchbar_site_list`, `benchbar_site_backups` (the stamps a
 restore takes), `benchbar_app_list`, `benchbar_app_focus_list`,
 `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`,
 `benchbar_doctor_prerequisites`, `benchbar_labs_list`, `benchbar_where`,
-`benchbar_self_update_check` and the profile tools return the same JSON as
-the commands below; log lines and git
+`benchbar_self_update_check`, `benchbar_op_status` (a long run by `op_id`, which
+every apply tool returns; `benchbar_app_add` and `benchbar_site_restore` take
+`background: true` to return it at once) and the profile tools return the
+same JSON as the commands below; log lines and git
 output come back labeled as data from the bench, not instructions.
 
 Every change with a plan goes through the plan and its token: call the
@@ -65,7 +70,10 @@ around the missing tool.
 ./benchbar doctor                 # same, for humans
 ```
 
-Both are safe to run at any time. Every check carries a `fix` string
+Both are safe to run at any time. After `up` or `restart`, or after you
+changed Python code, `./benchbar wait --json` blocks until the bench is
+ready (exit 0) or says what is not (exit 1, with the fix); `status --json --deep`
+shows the same `ready` object without waiting. Every check carries a `fix` string
 (the exact command) and an `action` id (what `repair` would do).
 
 The examples run `./benchbar` from this checkout. On a user's Mac the
@@ -96,6 +104,20 @@ the same fields to its one document): `exit`, `changed[]`, `warnings[]`,
 `next_actions[]` and `state_after`. Read `exit` and `next_actions` first.
 With `--json` stdout holds JSON and nothing else. A refusal goes to
 stderr.
+
+Every command that changes things has an `op_id`: in every line of its
+stream (`plan`, `step`, `progress`, `done`) and in the one document of a
+`--json` command, and in a record that outlives the run. `benchbar op
+status [OP_ID] --json` says what it is doing now (`running`, the step, the
+last progress line, `done`, `failed`, or `interrupted` when the process died
+without a `done` line), `benchbar op list --json` lists the recent ones and
+`benchbar op wait OP_ID [--timeout SECS]` waits for one. A long command
+(`install`, `repair`, `pull`, `app add`, `app update`, `site add`, `site
+backup`, `site restore`) takes `--background`: it prints the `op_id` and
+returns, the run goes on detached, and `op status --json` carries its
+`done` line as `result` at the end. It needs `--yes` and the inputs in the
+environment, like any run without a person; a person only command never
+takes it. Prefer it to a call that waits for minutes.
 
 With `BENCHBAR_NONINTERACTIVE=1` a command that needs an input it cannot
 ask for stops before it takes the lock, and names all missing inputs in
@@ -266,8 +288,10 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   package (which includes Rosetta 2, when the package needs it and it is
   missing), the LAN guard (`benchbar lan-guard install` and `remove`: the
   pf anchor, its launch daemon and the pf reference it took) and the firewall allow for node
-  (`benchbar lan-guard allow-node`); on Linux for apt, the wkhtmltopdf .deb
-  and MariaDB (see above). The `lan-guard` commands are a person's
+  (`benchbar lan-guard allow-node`); on Linux for apt, the wkhtmltopdf .deb,
+  MariaDB (see above) and the LAN guard (`benchbar lan-guard install` and
+  `remove`: the `inet benchbar` nftables table, its systemd unit and
+  `/etc/benchbar`). The `lan-guard` commands are a person's
   decision: never run them under `--for-agent`, `mcp` or
   `BENCHBAR_NONINTERACTIVE`, which refuse them; give the user the command.
   The run asks for it once up front; with `--yes` the confirmation is
@@ -370,7 +394,12 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   installer, `.benchbar` here means `~/.local/state/benchbar`.
 - Exit codes: 0 success, 1 failure or a failing check, 2 the MariaDB root
   password is unknown (install phase 00 or 01, `site add`, `site drop`,
-  `pull`, `site restore`; pass `MARIADB_ROOT_PASSWORD`). Only an explicit refusal exits 2:
+  `pull`, `site restore`; pass `MARIADB_ROOT_PASSWORD`), 64 a usage error: an
+  unknown option, or an option without its value, stops the run before it changes
+  anything (`error_id` `unknown_flag` or `missing_value`, the option and the
+  command's usage line in the error; with `--json` or `--for-agent` the same answer
+  as JSON on stdout). `BENCHBAR_LENIENT_FLAGS=1` turns an unknown option back into a
+  warning; it does not cover a missing value. Only an explicit refusal exits 2:
   a command that happens to fail with code 2 is reported as 1. An install
   cancelled at its plan exits 1 and says `Cancelled. No bench or site was
   created`; the system dependencies of step 1 stay in place.
