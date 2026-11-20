@@ -75,7 +75,7 @@ suite() {
   run_fm site rollback acme.localhost --to 20200101_000000 --bench-dir "$BENCH" --dry-run
   assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "no snapshot '20200101_000000' of acme.localhost"
   run_fm site rollback acme.localhost --to latest --bench-dir "$BENCH" --dry-run
-  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "has no snapshots yet"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "has no complete snapshot"
   assert_calls_not_contain '^(bench|python benchbar|redis-server)'
 
   # ---- free space: a snapshot that cannot fit is refused before bench writes anything
