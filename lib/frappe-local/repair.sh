@@ -658,7 +658,8 @@ FL_JSON_EVENTS="${FL_JSON_EVENTS:-0}"
 
 fl_event() {
   [[ "$FL_JSON_EVENTS" == "1" ]] || return 0
-  printf '%s\n' "$1" >&3
+  # the operation's handle leads every event (ops.sh)
+  if [[ -n "${FL_OP_ID:-}" ]]; then printf '{"op_id":"%s",%s\n' "$FL_OP_ID" "${1#\{}" >&3; else printf '%s\n' "$1" >&3; fi
 }
 
 # Actions that need sudo: the app cannot type a password, so it shows them

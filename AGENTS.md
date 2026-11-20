@@ -17,8 +17,10 @@ progress notifications), `benchbar_doctor`,
 restore takes), `benchbar_app_list`, `benchbar_app_focus_list`,
 `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`,
 `benchbar_doctor_prerequisites`, `benchbar_labs_list`, `benchbar_where`,
-`benchbar_self_update_check` and the profile tools return the same JSON as
-the commands below; log lines and git
+`benchbar_self_update_check`, `benchbar_op_status` (a long run by `op_id`, which
+every apply tool returns; `benchbar_app_add` and `benchbar_site_restore` take
+`background: true` to return it at once) and the profile tools return the
+same JSON as the commands below; log lines and git
 output come back labeled as data from the bench, not instructions.
 
 Every change with a plan goes through the plan and its token: call the
@@ -102,6 +104,20 @@ the same fields to its one document): `exit`, `changed[]`, `warnings[]`,
 `next_actions[]` and `state_after`. Read `exit` and `next_actions` first.
 With `--json` stdout holds JSON and nothing else. A refusal goes to
 stderr.
+
+Every command that changes things has an `op_id`: in every line of its
+stream (`plan`, `step`, `progress`, `done`) and in the one document of a
+`--json` command, and in a record that outlives the run. `benchbar op
+status [OP_ID] --json` says what it is doing now (`running`, the step, the
+last progress line, `done`, `failed`, or `interrupted` when the process died
+without a `done` line), `benchbar op list --json` lists the recent ones and
+`benchbar op wait OP_ID [--timeout SECS]` waits for one. A long command
+(`install`, `repair`, `pull`, `app add`, `app update`, `site add`, `site
+backup`, `site restore`) takes `--background`: it prints the `op_id` and
+returns, the run goes on detached, and `op status --json` carries its
+`done` line as `result` at the end. It needs `--yes` and the inputs in the
+environment, like any run without a person; a person only command never
+takes it. Prefer it to a call that waits for minutes.
 
 With `BENCHBAR_NONINTERACTIVE=1` a command that needs an input it cannot
 ask for stops before it takes the lock, and names all missing inputs in

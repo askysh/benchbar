@@ -23,6 +23,7 @@
 # are polled and start no process, and `cat` is one.
 read -r -d '' FL_CMD_TABLE <<'TABLE' || true
 cmd~install~benchbar install [--profile NAME] [--bundle NAME] [--dry-run] [--yes] [--json]~Phase 00 (system dependencies), 01 (bench and site) and the background service, idempotent.~yes~yes~yes~yes~stream
+flag~install~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~install~--profile~NAME~Release profile (default v15-lts) or a team profile.
 flag~install~--bundle~NAME~App bundle: minimal, common or extended.
 flag~install~--port-offset~N~Use port block N (web 8000+N).
@@ -66,6 +67,7 @@ flag~doctor~--unack~CHECK~Undo --ack.
 flag~doctor~--prerequisites~~What this machine needs before an install, no bench needed.
 flag~doctor~--fetch~~git fetch the branches of the apps your focus apps need first.
 cmd~repair~benchbar repair [--dry-run] [--yes] [--json]~Apply only the fixes doctor flagged, in dependency order.~yes~yes~yes~yes~stream
+flag~repair~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~repair~--dry-run~~Print the plan, change nothing.
 flag~repair~--yes~~Do not ask.
 env~repair~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
@@ -117,6 +119,7 @@ flag~users~--search~TEXT~Only users whose id or full name contains TEXT.
 flag~users~--limit~N~At most N users (1 to 500, default 50).
 flag~users~--json~~One JSON document.
 cmd~pull~benchbar pull HOST:SITE [--as NAME] [--from-dir DIR] [--replace] [--dry-run|--apply TOKEN --yes] [--json]~Copy a production site over SSH into a new local site.~yes~no~yes~yes~stream
+flag~pull~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~pull~--as~NAME~Local site name (default SITE.local).
 flag~pull~--from-dir~DIR~A backup set downloaded by hand, no SSH.
 flag~pull~--remote-bench~DIR~The bench folder on the server.
@@ -147,6 +150,13 @@ flag~mcp~--print-agents-md~~Print a snippet for a project's AGENTS.md or CLAUDE.
 flag~mcp~--calls~[N]~Print the last N (default 50) lines of the audit log of MCP calls (mcp-calls.jsonl in the state folder) and exit.
 flag~mcp~--allow-bench~PATH~Let the changing tools act on this bench folder although benchbar does not know it (repeatable; the environment variable BENCHBAR_MCP_ALLOW_BENCH holds a : separated list). A person's choice, never a tool argument.
 env~mcp~BENCHBAR_MCP_APPLY_DELAY~Seconds a plan must have been returned before its apply is accepted (default 5; 0 turns the wait off).
+cmd~op~benchbar op status|list|wait ...~The long runs: every run that changes things has an op_id (in its plan, step, progress and done lines) and a record that benchbar remembers (the newest 100).~no~no~no~no~none
+cmd~op status~benchbar op status [OP_ID] [--json]~One operation (its command, bench, site, state, last step, last progress, exit, log), or the ten newest. A run that died without a done line is interrupted. --json adds the run's done line as result once it ended.~no~no~no~no~document
+cmd~op list~benchbar op list [--running] [--limit N] [--json]~The operations, newest first.~no~no~no~no~document
+flag~op list~--running~~Only the ones that run now.
+flag~op list~--limit~N~At most N (1 to 100, default 20).
+cmd~op wait~benchbar op wait OP_ID [--timeout SECS] [--json]~Wait until the operation is not running, then print it. Exit 0 when it ended with exit 0, else 1 (failed, interrupted or still running at the timeout: --json says which).~no~no~no~no~document
+flag~op wait~--timeout~SECS~Give up after SECS seconds (the operation goes on); default: wait for it.
 cmd~help~benchbar help~The global help text.~no~no~no~no~none
 cmd~commands~benchbar commands --json~This table: every command, flag and environment variable.~no~no~no~no~document
 env~commands~BENCHBAR_LENIENT_FLAGS~Applies to every command: 1 turns the error for an unknown option (exit 64) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real.
@@ -163,6 +173,7 @@ cmd~ports mode~benchbar ports mode automatic|fixed~Keep automatic or fixed ports
 cmd~site~benchbar site list|add|default|hosts|backup|backups|restore|drop|open-as ...~The sites of a bench.~no~no~no~no~none
 cmd~site list~benchbar site list [--json]~The bench's sites; the default one is what benchup waits for.~no~no~no~no~document
 cmd~site add~benchbar site add NAME [--bundle NAME|--apps "a b"] [--dry-run|--apply TOKEN] [--yes] [--json]~bench new-site, the hosts line and apps from apps/. The default site stays.~yes~yes~no~yes~stream
+flag~site add~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site add~--bundle~NAME~App bundle to install.
 flag~site add~--apps~"a b"~Apps of apps/ to install.
 flag~site add~--dry-run~~Print the plan and its token, change nothing.
@@ -258,9 +269,11 @@ flag~lan-guard allow-node~--yes~~Do not ask first.
 flag~lan-guard allow-node~--json~~JSON lines: done, with node (the realpath).
 cmd~site hosts~benchbar site hosts~Add a 127.0.0.1 line for every site to /etc/hosts.~yes~yes~no~yes~none
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
+flag~site backup~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site backup~--with-files~~Include the uploads.
 cmd~site backups~benchbar site backups NAME [--json]~The site's backups, newest first.~no~no~no~no~document
 cmd~site restore~benchbar site restore NAME --from STAMP|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes~Restore a local backup set into a site (a new one with --new), after a backup of the target; a reviewed plan.~no~yes~no~yes~document
+flag~site restore~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site restore~--from~STAMP|PATH~The backup set: its stamp in the target's (or --from-site's) backup folder, or the database file's path.
 flag~site restore~--from-site~S~Read the stamp from this site's backups.
 flag~site restore~--new~~Create the site (bench new-site) first.
@@ -279,6 +292,7 @@ cmd~app~benchbar app list|add|install|update|focus|unfocus ...~The apps of a ben
 cmd~app list~benchbar app list [--json] [--no-sites]~Every app: branch, commit, local changes, the sites that have it.~no~no~no~no~document
 flag~app list~--no-sites~~Leave out the sites that have each app (faster).
 cmd~app add~benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME|URL ...] [--site S|--all-sites] --dry-run --json, then --apply TOKEN --yes~bench get-app from config/apps.tsv or any git URL, as a reviewed plan.~no~no~yes~yes~document
+flag~app add~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~app add~--branch~B~Branch or tag.
 flag~app add~--name~N~The app's package name.
 flag~app add~--commit~SHA~Pin the app to this commit (7 to 40 hex characters).
@@ -289,6 +303,7 @@ flag~app add~--dry-run~~Print the plan and its token.
 flag~app add~--apply~TOKEN~Run exactly that plan (with --yes).
 cmd~app install~benchbar app install NAME --site S~Install an app of the bench on a site.~no~no~no~yes~none
 cmd~app update~benchbar app update NAME [--skip-backup] [--dry-run] [--json]~Fast forward one app with a changelog first, back up its sites, migrate, build.~yes~no~yes~yes~stream
+flag~app update~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~app update~--skip-backup~~Migrate without a backup first.
 flag~app update~--dry-run~~Print the plan as one JSON document with --json.
 flag~app update~--discard-pending~~Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs.
