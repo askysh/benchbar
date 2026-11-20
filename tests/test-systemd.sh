@@ -40,6 +40,25 @@ grep -q -x 'Description=BenchBar bench frappe-bench' "$unit" || fail "unit descr
 grep -q -x "WorkingDirectory=${BENCH}" "$unit" || fail "WorkingDirectory"
 grep -q -x "ExecStart=/bin/bash \"${BENCH}/benchbar-run.sh\"" "$unit" || fail "ExecStart runs the runner"
 grep -q -x 'Type=simple' "$unit" || fail "Type"
+grep -q -x 'LimitNOFILE=65536:524288' "$unit" || fail "LimitNOFILE"
+grep -q -x 'Nice=0' "$unit" || fail "Nice is 0 by default"
+grep -q -x 'MemoryHigh=infinity' "$unit" || fail "MemoryHigh is infinity by default"
+# SERVICE_MEMORY_HIGH: a size is written, zero (a limit that starves the bench) is not
+benv="$(ls "$FL_STATE_DIR"/benches/frappe-bench-????????.env)"
+for zero in 0 0% 00G; do
+  sed_inplace '/^SERVICE_/d' "$benv"
+  printf 'SERVICE_MEMORY_HIGH=%s\n' "$zero" >>"$benv"
+  run_fm service --yes --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT"
+  grep -q -x 'MemoryHigh=infinity' "$unit" || fail "SERVICE_MEMORY_HIGH=${zero} must be ignored"
+done
+sed_inplace '/^SERVICE_/d' "$benv"
+printf 'SERVICE_MEMORY_HIGH=4G\n' >>"$benv"
+run_fm service --yes --bench-dir "$BENCH"
+grep -q -x 'MemoryHigh=4G' "$unit" || fail "SERVICE_MEMORY_HIGH=4G"
+sed_inplace '/^SERVICE_/d' "$benv"
+run_fm service --yes --bench-dir "$BENCH"
+grep -q -x 'MemoryHigh=infinity' "$unit" || fail "MemoryHigh back to infinity"
 grep -q -x 'Restart=on-failure' "$unit" || fail "Restart"
 grep -q -x 'RestartSec=20' "$unit" || fail "RestartSec"
 grep -q -x 'KillMode=mixed' "$unit" || fail "KillMode"
@@ -296,7 +315,7 @@ assert_contains "$mac_runner" "for pid in \$(lsof -ti \"tcp:\$PORTS\" -sTCP:LIST
 assert_contains "$mac_runner" "held=\"\$(lsof -ti \"tcp:\$PORTS\" -sTCP:LISTEN 2>/dev/null | tr '\\n' ' ')\""
 assert_not_contains "$mac_runner" "__NOTIFY_BODY__"
 mac_plist="$(fl_template_render launchagent.plist "LABEL=com.benchbar.frappe-bench" "APP_BUNDLE_ID=x.y" "RUNNER=$B/benchbar-run.sh" "BENCH_DIR=$B" "PATH=/a:/b" "RUN_AT_LOAD=true" "LOG=$B/logs/bench.log")"
-assert_eq "launchagent.plist v2 e8668b7bf322" "$(fl_template_header_of "$mac_plist")" "(the macOS plist renders as before)"
+assert_eq "launchagent.plist v3 e22a07973e71" "$(fl_template_header_of "$mac_plist")" "(the macOS plist renders as before)"
 # a value passed for a key beats the template's default, and a default is not
 # part of the hash twice
 over="$(fl_template_render bench-run.sh "BENCH_DIR=$B" "BENCH_NAME=frappe-bench" "HONCHO=/h/honcho" \

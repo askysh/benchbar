@@ -2,7 +2,7 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "${0%/*}/_mocklib.sh"
 mock_log "$@"
-pattern=""; quiet=0; long=0
+pattern=""; quiet=0; long=0; exact=0
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     -f) pattern="$2"; shift 2 ;;
@@ -11,7 +11,9 @@ while [[ "$#" -gt 0 ]]; do
     -lf|-fl|-af|-fa) long=1; pattern="$2"; shift 2 ;;
     # -a: the whole command line, like procps
     -a) long=1; shift ;;
-    -q*) quiet=1; [[ "$1" == *f* ]] && { pattern="$2"; shift; }; shift ;;
+    -q*) quiet=1; [[ "$1" == *x* ]] && exact=1; [[ "$1" == *f* ]] && { pattern="$2"; shift; }; shift ;;
+    # -x: the program's name, argv[0] without its folder, is the pattern exactly
+    -x) exact=1; shift ;;
     -*) shift ;;
     *) pattern="$1"; shift ;;
   esac
@@ -19,9 +21,13 @@ done
 found=1
 while read -r pid cmdline; do
   [[ -n "$pid" ]] || continue
-  if grep -qE -- "$pattern" <<<"$cmdline"; then
-    found=0
-    if [[ "$quiet" == "1" ]]; then :; elif [[ "$long" == "1" ]]; then printf '%s %s\n' "$pid" "$cmdline"; else printf '%s\n' "$pid"; fi
+  if [[ "$exact" == "1" ]]; then
+    prog="${cmdline%% *}"; prog="${prog##*/}"
+    grep -qE -- "^(${pattern})\$" <<<"$prog" || continue
+  elif ! grep -qE -- "$pattern" <<<"$cmdline"; then
+    continue
   fi
+  found=0
+  if [[ "$quiet" == "1" ]]; then :; elif [[ "$long" == "1" ]]; then printf '%s %s\n' "$pid" "$cmdline"; else printf '%s\n' "$pid"; fi
 done <"${MOCK_PROCS:?}"
 exit "$found"

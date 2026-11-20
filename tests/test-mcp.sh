@@ -438,6 +438,11 @@ assert "OK" in a["description"] and "plan" in a["description"], a["description"]
 tok = a["inputSchema"]["properties"]["token"]["description"]
 assert "proves only" in tok and "Ask the person" in tok, tok
 assert "approved" not in tok and "approved" not in a["description"], (tok, a["description"])
+# every tool that applies a plan says that its token expires after about an hour
+for n in ("benchbar_app_add", "benchbar_site_add", "benchbar_site_restore", "benchbar_service_install"):
+    x = t[n]
+    assert "expires about an hour" in x["description"], (n, x["description"])
+    assert "expires about an hour" in x["inputSchema"]["properties"]["token"]["description"], n
 ' || fail "MCP app add tools: $R"
 ARGS='{"url_or_name":"'"$URL"'","branch":"main","site":"macdev","bench":"'"$BENCH"'"}'
 reset_calls

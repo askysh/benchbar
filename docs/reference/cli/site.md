@@ -40,7 +40,7 @@ site's Administrator password, or reads `ADMIN_PASSWORD`.
 |---|---|
 | `--bundle NAME` | Install the apps of a bundle (`minimal`, `common`, `extended`) |
 | `--apps "a b"` | Install these apps, which must be in `apps/` already |
-| `--dry-run` | Print the plan, change nothing |
+| `--dry-run` | Print the plan and its token, change nothing in the bench (the first plan creates the plan key, once) |
 | `-y`, `--yes` | Do not ask; `ADMIN_PASSWORD` must be set |
 | `--json` | JSON lines ending in a `done` with the site and the default site ([the done fields](../../json-schema.md#the-done-fields-08)) |
 

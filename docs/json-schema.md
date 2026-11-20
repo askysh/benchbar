@@ -1339,7 +1339,7 @@ token. `--apply TOKEN --yes` runs exactly that plan:
 | `needs` | inputs a run in a terminal would ask for, for example `["MARIADB_ROOT_PASSWORD"]` when none is stored. In a terminal (no `--json`, no `--yes`) the plan stays applicable; for `--json` it is an error as well, because nothing can answer |
 | `steps` | in the order they run, each with the `touches` of that step. Ids: `local_backup`, `quiesce`, `new_site`, `restore`, `encryption_key`, `resume`, `before_migrate`, `migrate`, `clear_cache`, `hosts`, `verify` |
 | `errors`, `can_apply` | what stops the plan (no such site, a set that is not there, an encrypted or file-less set, MariaDB down, the root password unknown to benchbar, apps the bench lacks, a hook that is not an executable file); `can_apply` is `false` when there is one. The command still exits 0 with `--json` |
-| `token` | a hash of the plan and of what it was made against: the sites, the default site, the hook and the set's files. `--apply` recomputes it and refuses a different one: `The site restore plan changed since it was shown`, nothing changed |
+| `token` | a keyed hash of the plan and of what it was made against: the sites, the default site, the hook and the set's files. The key is per install (`plan-key` in the state folder, 0600) and the token carries a ten minute window: `--apply` recomputes it and refuses a different one (`The site restore plan changed since it was shown`) or one older than 60 to 70 minutes (`The plan token expired`), nothing changed. The script of `--before-migrate` is hashed again right before it runs and not run when it changed since the plan |
 
 The result of `--apply TOKEN --yes --json`:
 

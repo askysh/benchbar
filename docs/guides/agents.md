@@ -109,7 +109,8 @@ add only repos you trust, and read the plan:
 1. `benchbar_app_add_plan` with `url_or_name` (and `branch`, `name`,
    `site` or `all_sites`) reads the repo and its `hooks.py` and returns
    the plan: repo, branch, the required apps and where each comes from,
-   the sites, the steps, and a `token`. Nothing changes.
+   the sites, the steps, and a `token`. Nothing changes in the bench; the
+   first plan also creates the plan key described below, once.
 2. The agent shows you that plan and waits for your OK. benchbar cannot
    tell whether you saw it: the token proves only that the bench has not
    changed since the plan, and the tool says so. What the server does
@@ -123,7 +124,11 @@ add only repos you trust, and read the plan:
    answers every question by itself, with nobody looking, defeats the
    gate, because its `accept` looks like yours. The question holds the
    whole plan (a plan over 20000 characters is cut, and the question says
-   so).
+   so). A token is keyed with a secret that stays on your Mac
+   (`plan-key` in benchbar's state folder, readable by you only), so it
+   cannot be worked out from a plan, and it expires about an hour (60 to
+   70 minutes) after the plan was made: an older one is refused with "The
+   plan token expired" and the agent plans again.
 3. `benchbar_app_add` with the same arguments and the `token` runs
    exactly that plan. If `sites/apps.txt`, `apps/` or the sites changed
    in between, the token is refused and the agent plans again.

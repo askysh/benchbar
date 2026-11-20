@@ -324,14 +324,15 @@ TOOLS["benchbar_app_add"] = (
     "Apply a plan from benchbar_app_add_plan: clone the app and its planned required apps, build, install on the planned "
     "sites. Only call this after showing that plan to the person and getting their OK; pass the same arguments and the "
     "plan's token. The token proves only that the bench has not changed since the plan, not that anyone saw it. A stale "
-    "token (apps.txt, apps/ or the sites changed) is refused: plan again. Takes minutes.",
-    dict(APP_ADD, token={"type": "string", "description": "The token from benchbar_app_add_plan; it proves only that the bench has not changed since the plan. Ask the person before calling this."}, background=BACKGROUND),
+    "token (apps.txt, apps/ or the sites changed) is refused: plan again. A token expires about an hour after its plan "
+    "(60 to 70 minutes): an older one is refused as expired, plan again. Takes minutes.",
+    dict(APP_ADD, token={"type": "string", "description": "The token from benchbar_app_add_plan; it proves only that the bench has not changed since the plan, and it expires about an hour after the plan. Ask the person before calling this."}, background=BACKGROUND),
     lambda a: app_add_args(a) + ["--apply", a["token"], "--yes", "--json"] + background_args(a),
     False,
     (0,),
 )
 SITE = {"type": "string", "description": "The site name, for example qa1.localhost."}
-TOKEN = {"type": "string", "description": "The token of the plan; it proves only that the bench has not changed since the plan. Ask the person before calling this."}
+TOKEN = {"type": "string", "description": "The token of the plan; it proves only that the bench has not changed since the plan, and it expires about an hour after the plan. Ask the person before calling this."}
 SITE_ADD = {
     "site": SITE,
     "apps": {"type": "string", "description": "Apps already in the bench's apps/ to install on the new site, space separated."},
@@ -386,7 +387,7 @@ TOOLS["benchbar_site_add"] = (
     "add the hosts line. Only after the person saw the plan; pass the same arguments and the plan's token. "
     "admin_password is the new site's Administrator password; without it one is generated and saved for the person "
     "in a file only they read (the result names it as admin_password_file, never the password): ask the person for the "
-    "login, or pass your own admin_password. The default site does not change. Takes minutes.",
+    "login, or pass your own admin_password. The default site does not change. A token expires about an hour after its plan (60 to 70 minutes): an older one is refused as expired, plan again. Takes minutes.",
     dict(SITE_ADD, token=TOKEN, admin_password={"type": "string", "description": "The new site's Administrator password (optional; generated when absent)."}),
     lambda a: site_add_args(a) + ["--apply", a["token"], "--yes", "--json"],
     False,
@@ -413,7 +414,7 @@ TOOLS["benchbar_site_restore_plan"] = (
 TOOLS["benchbar_site_restore"] = (
     "Apply a plan from benchbar_site_restore_plan: back up the target with its files, restore the set (from a copy, so "
     "the backup cannot prune it), carry the encryption key over, migrate unless no_migrate, verify. Only after the "
-    "person saw the plan; pass the same arguments and the plan's token. The default site does not change. Takes minutes.",
+    "person saw the plan; pass the same arguments and the plan's token. The default site does not change. A token expires about an hour after its plan (60 to 70 minutes): an older one is refused as expired, plan again. Takes minutes.",
     dict(SITE_RESTORE, token=TOKEN, background=BACKGROUND),
     lambda a: site_restore_args(a) + ["--apply", a["token"], "--yes", "--json"] + background_args(a),
     False,
@@ -430,7 +431,7 @@ TOOLS["benchbar_service_install_plan"] = (
 )
 TOOLS["benchbar_service_install"] = (
     "Apply a plan from benchbar_service_install_plan: write the service files and load the agent. Only after the person "
-    "saw the plan; pass its token. A step that needs sudo (the hosts line) is skipped and named in the result.",
+    "saw the plan; pass its token. A token expires about an hour after its plan (60 to 70 minutes): an older one is refused as expired, plan again. A step that needs sudo (the hosts line) is skipped and named in the result.",
     {"token": TOKEN, "bench": BENCH},
     lambda a: ["service", "--apply", a["token"], "--yes", "--json"] + bench_args(a),
     False,

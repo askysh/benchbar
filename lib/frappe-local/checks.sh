@@ -884,9 +884,15 @@ chk_legacy_agents() {
 }
 
 # Any bench's agent, not only this one's: a loaded agent whose runner is
-# gone restarts every 20 seconds, exits 127 and writes to its bench.log.
+# gone restarts every 20 seconds, exits 127 and writes to its bench.log (a
+# failure, not a hint: it goes on for as long as the person is logged in).
+# Only runners benchbar writes count, so a person's own script never does.
+# The fix depends on the folder: a folder that is no bench any more loses
+# its agent (the dead_agents action, which repair runs from any bench), this
+# bench's runner is written again by the runner check, another bench that
+# is still there is repaired from its own folder.
 chk_dead_agents() {
-  local list n=0 desc="" fixes="" plist label dir
+  local list n=0 desc="" fixes="" plist label dir act=""
   list="$(fl_dead_agents_list)"
   if [[ -z "$list" ]]; then
     chk__set ok "every loaded benchbar agent has its runner"
@@ -896,9 +902,15 @@ chk_dead_agents() {
     [[ -n "$plist" ]] || continue
     n=$((n + 1))
     desc="${desc}${desc:+; }${label} (${dir:-no folder})"
-    fixes="${fixes}${fixes:+ ; }${FL_SELF} uninstall-service --bench-dir $(fl_sq "$dir")"
+    if [[ -n "$dir" ]] && fl_is_bench_dir "$dir"; then
+      if fl_same_path "$dir" "$FL_BENCH_DIR"; then fixes="${fixes}${fixes:+ ; }${FL_SELF} repair"
+      else fixes="${fixes}${fixes:+ ; }${FL_SELF} repair --bench-dir $(fl_sq "$dir")"; fi
+    else
+      act="dead_agents"
+      fixes="${fixes}${fixes:+ ; }${FL_SELF} uninstall-service --bench-dir $(fl_sq "$dir")"
+    fi
   done <<<"$list"
-  chk__set warn "${n} loaded agent(s) whose runner script is missing, restarted every 20 s: ${desc}" "$fixes"
+  chk__set fail "${n} loaded agent(s) whose runner script is missing, restarted every 20 s: ${desc}" "$fixes" "$act"
 }
 
 fl_mariadb_dropin_path() {

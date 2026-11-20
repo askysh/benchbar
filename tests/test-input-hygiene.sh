@@ -113,7 +113,7 @@ r="$(fl_template_render bench-run.sh "BENCH_DIR=/Users/bob/dev/Bob's Bench" "BEN
 assert_eq "bench-run.sh v10 d164eb650257" "$(fl_template_header_of "$r")" "(an ordinary runner renders to a stable hash)"
 r="$(fl_template_render launchagent.plist "LABEL=com.benchbar.Bob-s-Bench" "APP_BUNDLE_ID=com.akashmishra.benchbar" "RUNNER=/Users/bob/dev/Bob's Bench/benchbar-run.sh" \
   "BENCH_DIR=/Users/bob/dev/Bob's Bench" "PATH=/opt/homebrew/bin:/usr/bin:/bin" "RUN_AT_LOAD=true" "LOG=/Users/bob/dev/Bob's Bench/logs/bench.log")"
-assert_eq "launchagent.plist v2 3b09ae107fcf" "$(fl_template_header_of "$r")" "(an ordinary plist renders as before)"
+assert_eq "launchagent.plist v3 ac1c8838bef8" "$(fl_template_header_of "$r")" "(an ordinary plist renders as before)"
 r="$(fl_template_render shell-helpers "PROFILE_EXPORTS=export PATH=\"/opt/homebrew/opt/python@3.11/bin:\$PATH\"" "BENCHBAR=/Users/bob/.local/bin/benchbar")"
 assert_eq "shell-helpers v2 db59c9f03a56" "$(fl_template_header_of "$r")" "(the helper block renders as before)"
 assert_contains "$r" 'export PATH="/opt/homebrew/opt/python@3.11/bin:$PATH"' "(the exports are raw bash)"
@@ -133,7 +133,7 @@ compat_out="$(BASH_COMPAT=32 SCRIPT_DIR="$ROOT" FL_STATE_DIR="$FL_STATE_DIR" bas
 ' _ "$ROOT")"
 assert_eq "bench-run.sh v10 d164eb650257
 1
-launchagent.plist v2 3b09ae107fcf
+launchagent.plist v3 ac1c8838bef8
 1
 shell-helpers v2 db59c9f03a56
 1
