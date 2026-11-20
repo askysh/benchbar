@@ -218,6 +218,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
+| `app list` | `--no-sites` |  | Leave out the sites that have each app (faster). |
 | `app add` | `--branch` | `B` | Branch or tag. |
 | `app add` | `--name` | `N` | The app's package name. |
 | `app add` | `--commit` | `SHA` | Pin the app to this commit (7 to 40 hex characters). |
@@ -229,4 +230,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `app update` | `--skip-backup` |  | Migrate without a backup first. |
 | `app update` | `--dry-run` |  | Print the plan as one JSON document with --json. |
 | `app update` | `--discard-pending` |  | Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs. |
+| `app focus` | `--list` |  | List the focus apps (the default without a name). |
+| `app focus` | `--auto` |  | With NAME: let benchbar decide again (undo a pin). |
+| `app focus` | `--fetch` |  | git fetch the branches of the focus apps first. |
 <!-- /generated:cli-commands -->

@@ -168,6 +168,10 @@ jobs:
           ONLY_TESTS: ${{ needs.changes.outputs.tests }}
           SHELLCHECK: '0'
           SKIP_TESTS: ${{ needs.changes.outputs.macos_skip }}
+          # a flake passes the rerun, and fails the run here: green runs in a row must hold none
+          STRICT_FLAKY: ${{ (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/next-release')) && '1' || '' }}
+          # these have node here: a skip would be a pass that ran nothing
+          NO_SKIP: test-share-gateway
         run: /bin/bash tests/run-tests.sh
 
   # The mocked suite on Linux, for the Linux platform layer
@@ -199,6 +203,9 @@ jobs:
           ONLY_TESTS: ${{ needs.changes.outputs.tests }}
           SHELLCHECK: '0'
           SKIP_TESTS: ${{ needs.changes.outputs.linux_skip }}
+          # a flake passes the rerun, and fails the run here: green runs in a row must hold none
+          STRICT_FLAKY: ${{ (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/next-release')) && '1' || '' }}
+          NO_SKIP: test-share-gateway
         run: bash tests/run-tests.sh
 
   # The mocked suite under bash 3.2.57, the bash of macOS, on cheap Linux
@@ -243,9 +250,11 @@ jobs:
           ONLY_TESTS: ${{ needs.changes.outputs.tests }}
           SHELLCHECK: '0'
           SKIP_TESTS: ${{ needs.changes.outputs.bash32_skip }}
+          # a flake passes the rerun, and fails the run here: green runs in a row must hold none
+          STRICT_FLAKY: ${{ (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/next-release')) && '1' || '' }}
         run: |
           for attempt in 1 2 3; do docker pull -q bash:3.2.57 >/dev/null && break; [ "$attempt" = 3 ] && exit 1; sleep 5; done
-          docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS bash:3.2.57 sh -euc '
+          docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS -e CI -e STRICT_FLAKY bash:3.2.57 sh -euc '
             for attempt in 1 2 3; do
               apk add --no-cache coreutils findutils diffutils grep sed gawk procps git python3 zip unzip curl perl-utils musl-locales >/dev/null && break
               [ "$attempt" = 3 ] && exit 1
@@ -513,7 +522,7 @@ jobs:
   # The shim against a real WSL distro on a GitHub hosted Windows runner:
   # Ubuntu 24.04 is installed with Vampire/setup-wsl and the CLI of this
   # checkout is put on the distro's PATH the way the installer does
-  # (~/.local/bin/benchbar). No job depends on a personal machine, so a pull
+  # (~/.local/bin/benchbar) for a normal default user, as a real user has. No job depends on a personal machine, so a pull
   # request from this repo runs in the same fenced VM as any other job. Read
   # only inside the distro: status, exit codes through the hop, quoting, mcp
   # over stdio and wslconfig without --apply.
@@ -551,6 +560,21 @@ jobs:
         with:
           distribution: Ubuntu-24.04
           use-cache: 'true'
+
+      # The hosted runner's distro runs every command as root, and benchbar
+      # refuses root (CORE-9), as it does for a real user whose distro has no
+      # user. Real users run it as a normal user: create one, make it the
+      # distro's default (/etc/wsl.conf, read when the distro starts again) and
+      # stop the distro so that the next wsl.exe call starts it as that user.
+      - name: Make a normal user the default user of the distro
+        run: |
+          wsl.exe -d $env:BENCHBAR_TEST_DISTRO -u root --exec /bin/sh -c 'set -eu; useradd -m -s /bin/bash benchuser; printf "[user]\ndefault=benchuser\n" >> /etc/wsl.conf; cat /etc/wsl.conf'
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          wsl.exe --terminate $env:BENCHBAR_TEST_DISTRO
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $who = (wsl.exe -d $env:BENCHBAR_TEST_DISTRO --exec /bin/sh -c 'id -un').Trim()
+          Write-Host "default user: $who"
+          if ($who -ne 'benchuser') { Write-Error "the distro still starts as '$who'"; exit 1 }
 
       - name: Put the CLI of this checkout in the distro
         run: |

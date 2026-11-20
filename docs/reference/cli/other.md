@@ -534,6 +534,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `users` | `--limit` | `N` | At most N users (1 to 500, default 50). |
 | `users` | `--json` |  | One JSON document. |
 | `report` | `--print` |  | Print to the terminal instead of writing the zip. |
+| `report` | `--out` | `DIR` | Write the zip into this folder (default: the Desktop). |
+| `docs` | `--print` |  | Print the page's address instead of opening it. |
 | `self-update` | `--check` |  | This version against the latest. |
 | `notices` | `--json` |  | One JSON document: notices[] with id, title, text, switch_back, doc and since. |
 | `notices` | `--dismiss` | `ID` | Hide one notice (also in the BenchBar app). An id that is already hidden is unchanged. |
@@ -543,5 +545,6 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 |---|---|---|
 | `list` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
 | `where` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
+| `commands` | `BENCHBAR_LENIENT_FLAGS` | Applies to every command: 1 turns the error for an unknown option (exit 64) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real. |
 | `commands` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
 <!-- /generated:cli-commands -->
