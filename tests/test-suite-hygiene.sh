@@ -137,4 +137,30 @@ OUT="$(env -u CI -u RERUN_FAILED NO_SKIP="t-skip" PARALLEL=1 SHELLCHECK=0 bash "
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "t-skip skipped itself"
 
+# ---- the test list is the files: a new tests/test-*.sh runs with no entry anywhere, and its time comes
+# from tests/timings.tsv (10 without a row)
+printf '#!/usr/bin/env bash\nprintf "test-new-one: ok\\n"\n' >"$FAKE/tests/test-new-one.sh"
+OUT="$(env -u CI -u SHARD -u ONLY_TESTS -u SKIP_TESTS LIST_ONLY=1 SHELLCHECK=0 bash "$FAKE/tests/run-tests.sh" 2>&1)" && CODE=0 || CODE=$?
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "test-new-one"
+assert_contains "$OUT" "test-docs"
+OUT="$(env -u CI -u SHARD -u ONLY_TESTS -u SKIP_TESTS SECS_ONLY=1 SHELLCHECK=0 bash "$FAKE/tests/run-tests.sh" 2>&1)"
+assert_eq "20" "$OUT" "(two tests with no table weigh 10 each)"
+printf '# a header\ntest-new-one\t70\t30\ntest-docs\t-\t5\n' >"$FAKE/tests/timings.tsv"
+OUT="$(env -u CI -u SHARD -u ONLY_TESTS -u SKIP_TESTS TEST_PLATFORM=mac SECS_ONLY=1 SHELLCHECK=0 bash "$FAKE/tests/run-tests.sh" 2>&1)"
+assert_eq "80" "$OUT" "(macOS column, a dash counts as 10)"
+OUT="$(env -u CI -u SHARD -u ONLY_TESTS -u SKIP_TESTS TEST_PLATFORM=linux SECS_ONLY=1 SHELLCHECK=0 bash "$FAKE/tests/run-tests.sh" 2>&1)"
+assert_eq "35" "$OUT" "(Linux column)"
+# the real table: every row is NAME, two columns of seconds or a dash, and names a test that exists
+# (a row for a test that was renamed or removed would sit there for ever)
+bad="$(awk -F'\t' '
+  /^#/ || /^$/ { next }
+  NF != 3 || $1 !~ /^test-[a-z0-9-]+$/ || $2 !~ /^([0-9]+|-)$/ || $3 !~ /^([0-9]+|-)$/ { print "bad row: " $0 }
+' "$ROOT/tests/timings.tsv")"
+assert_eq "" "$bad" "(tests/timings.tsv)"
+while IFS="$(printf '\t')" read -r name _; do
+  case "$name" in ''|'#'*) continue ;; esac
+  [[ -f "$ROOT/tests/$name.sh" ]] || fail "tests/timings.tsv has a row for $name, and tests/$name.sh does not exist"
+done <"$ROOT/tests/timings.tsv"
+
 if [[ -n "$SKIPPED" ]]; then printf 'test-suite-hygiene: ok (SKIPPED%s)\n' "$SKIPPED"; else printf 'test-suite-hygiene: ok\n'; fi

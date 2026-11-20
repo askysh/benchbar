@@ -1,0 +1,103 @@
+# Seconds each test takes in a CI shard, as the CI log reports them ("--- ok: test-x (Ns)").
+# One row per test: NAME <tab> macOS <tab> Linux. The macOS shards have 3 CPUs. The Linux column
+# is the average of the Linux (bash 5) and the bash 3.2 container shards, which have 4 CPUs.
+# A dash means no time is known. A test with no row or a dash counts as 10: a new test needs no
+# row. Only the proportions matter: tests/run-tests.sh fills the shards from this table and
+# scripts/ci-plan.sh sizes the matrix from it.
+# Refresh it from a green full run (a push to next-release or the nightly):
+#   scripts/ci-timings.sh --write RUN_ID
+# Rows merge with merge=union (.gitattributes), so two branches that add rows do not conflict.
+test-adopt	42	45
+test-affected	4	3
+test-agent-contracts	123	99
+test-agent-contracts-2	134	103
+test-agent-contracts-3	159	119
+test-app-batch	156	148
+test-app-cli	104	84
+test-app-recovery	128	114
+test-app-recovery-2	181	130
+test-app-recovery-3	149	122
+test-apps	165	176
+test-apps-speed	20	20
+test-bench-flow	20	17
+test-changelog	0	0
+test-ci-plan	25	25
+test-cli	76	56
+test-command-cost	35	20
+test-discovery	5	4
+test-docs	1	2
+test-docs-command	20	18
+test-doctor	270	184
+test-doctor-hardening	179	118
+test-doctor-linux	-	74
+test-envelope	100	80
+test-freshness	115	92
+test-homebrew	116	106
+test-hygiene	80	69
+test-input-hygiene	104	94
+test-install-failures	-	60
+test-install-json	220	135
+test-install-json-2	128	164
+test-install-linux	-	136
+test-install-sh	57	40
+test-install-sh-linux	10	7
+test-json	47	35
+test-labs	20	24
+test-labs-share	19	14
+test-lan-guard	50	-
+test-lock	200	148
+test-macos-appcast	2	1
+test-mcp	161	145
+test-mcp-parity	90	80
+test-migrate	48	39
+test-multi-bench	101	89
+test-open-as	65	72
+test-packaging	2	1
+test-phases	137	139
+test-pipelines	57	84
+test-platform	0	0
+test-platform-linux	-	3
+test-port-management	232	138
+test-ports	108	89
+test-prerequisites-linux	20	12
+test-process	43	41
+test-profile-v16	38	37
+test-profiles	45	33
+test-profiles-2	121	97
+test-profiles-3	57	57
+test-pull	216	175
+test-redact	35	22
+test-release-ci-gate	1	1
+test-release-notes	0	1
+test-release-promote	1	1
+test-repair	223	157
+test-repair-json	34	29
+test-report	49	32
+test-run	13	12
+test-run-lock	36	27
+test-runner	19	17
+test-self-update	5	7
+test-service	109	99
+test-services-served	297	115
+test-share	222	-
+test-share-admin	108	-
+test-share-gateway	33	17
+test-share-preflight	174	-
+test-share-run	232	-
+test-shellrc	4	2
+test-site-backups	61	69
+test-site-restore	219	159
+test-site-restore-2	194	153
+test-sites	81	96
+test-state-migrate	36	25
+test-stats	8	8
+test-status-cost	14	10
+test-sudo-env	193	172
+test-suite-hygiene	6	6
+test-systemd	-	48
+test-templates	4	4
+test-ui	0	0
+test-version-policy	0	0
+test-version-sources	1	1
+test-windows-commands	197	165
+test-wsl-preflight	176	137

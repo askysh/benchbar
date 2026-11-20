@@ -34,8 +34,8 @@
 #                  themselves run everything everywhere.
 #   push, schedule everything everywhere (push: unless only docs, site or *.md changed)
 #   dispatch       what INPUT_TESTS and INPUT_LEGS say
-# The shard count of a leg follows its weight in the tables of
-# tests/run-tests.sh: one shard per TARGET table seconds, at most MAX.
+# The shard count of a leg follows its weight in tests/timings.tsv (run-tests.sh
+# reads it): one shard per TARGET table seconds, at most MAX.
 
 set -euo pipefail
 

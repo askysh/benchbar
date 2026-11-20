@@ -26,5 +26,5 @@ You implement changes to the BenchBar CLI. Read AGENTS.md first; its rules apply
 1. `bash tests/run-tests.sh <the tests you touched>` passes, and the full `bash tests/run-tests.sh`
    shows no new failures compared with before your change.
 2. `shellcheck -x` is clean on every file you changed.
-3. A new test file is added to `ALL_TESTS` in `tests/run-tests.sh`.
+3. A new test file is `tests/test-NAME.sh`: every such file is a test, with no list to add it to.
 4. Report: files changed, tests run with their result, anything you could not do.
