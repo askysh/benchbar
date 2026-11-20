@@ -16,7 +16,7 @@ import AppKit
 let background = NSColor(srgbRed: 0.961, green: 0.961, blue: 0.961, alpha: 1)
 let ink = NSColor(srgbRed: 0.114, green: 0.114, blue: 0.122, alpha: 1)
 let secondary = NSColor(srgbRed: 0.40, green: 0.40, blue: 0.42, alpha: 1)
-let tagline = "Frappe and ERPNext dev benches on your Mac, run by launchd, watched from the menu bar."
+let tagline = "Frappe and ERPNext dev benches on macOS, Linux and Windows."
 
 func load(_ path: String) -> NSBitmapImageRep {
     guard let data = FileManager.default.contents(atPath: path),
