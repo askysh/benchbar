@@ -114,8 +114,8 @@ fl_snap_resolve() {
 # fl_snap_mfield FILE KEY: one value of the manifest (a line ` "KEY": VALUE,`)
 fl_snap_mfield() {
   local v
-  v="$(sed -n -E "s/^ \"$2\": \"(.*)\",?\$/\\1/p" "$1" 2>/dev/null | head -n 1)"
-  if [[ -z "$v" ]]; then v="$(sed -n -E "s/^ \"$2\": ([^\",]*),?\$/\\1/p" "$1" 2>/dev/null | head -n 1)"; fi
+  v="$(sed -n -E "s/^ \"$2\": \"(.*)\",?\$/\\1/p" "$1" 2>/dev/null | awk 'NR==1')"
+  if [[ -z "$v" ]]; then v="$(sed -n -E "s/^ \"$2\": ([^\",]*),?\$/\\1/p" "$1" 2>/dev/null | awk 'NR==1')"; fi
   printf '%s' "$v"
 }
 
