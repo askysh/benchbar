@@ -319,8 +319,10 @@ fl_backup_set_check() {
 
 # In JSON mode only the JSON goes to stdout (on fd 3); every line of text,
 # refusals included, goes to stderr.
+FL_SITE_JSON_ON=0
 fl_site_json_begin() {
-  if [[ "$OPT_JSON" == "1" ]]; then fl_json_doc_begin; fi
+  # once: a second begin would point the document's fd 3 at stderr (site rollback begins, then runs site restore)
+  if [[ "$OPT_JSON" == "1" && "$FL_SITE_JSON_ON" != "1" ]]; then fl_json_doc_begin; FL_SITE_JSON_ON=1; fi
   return 0
 }
 
