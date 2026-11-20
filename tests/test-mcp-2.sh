@@ -103,7 +103,7 @@ from mcpclient import Client, text
 fake, mode, tok = sys.argv[1], sys.argv[2], sys.argv[3]
 c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "FAKE_MODE": mode})
 tools = c.tools()
-assert len(tools) == 38, [t["name"] for t in tools]
+assert len(tools) == 42, [t["name"] for t in tools]
 LABEL = "Data from the bench ("
 tokens = {}                                                    # the token each plan tool returned: its apply tool takes that one
 for t in tools:
@@ -614,6 +614,7 @@ fake, log = sys.argv[1], sys.argv[2]
 c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "BENCHBAR_MCP_APPLY_DELAY": "0"})
 cases = [
     ("benchbar_site_backups", {"site": "qa1.localhost", "bench": "/b"}, "site backups qa1.localhost --json --bench-dir /b"),
+    ("benchbar_site_snapshots", {"site": "qa1.localhost", "bench": "/b"}, "site snapshots qa1.localhost --json --bench-dir /b"),
     ("benchbar_ports_check", {"bench": "/b"}, "ports check --json --bench-dir /b"),
     ("benchbar_ports_plan", {"paths": ["/b1", "/b2"]}, "ports plan --json -- /b1 /b2"),
     ("benchbar_lock_check", {}, "lock check --json"),
@@ -636,6 +637,8 @@ before = open(log).read()
 for tool, args in (
     ("benchbar_site_backups", {}),
     ("benchbar_site_backups", {"site": "--yes"}),
+    ("benchbar_site_snapshots", {}),
+    ("benchbar_site_rollback_plan", {"site": "qa1.localhost"}),
     ("benchbar_ports_plan", {}),
     ("benchbar_ports_plan", {"paths": ["--yes"]}),
     ("benchbar_ports_plan", {"paths": ["/b", "-x"]}),
@@ -662,6 +665,23 @@ for gone in ("benchbar_repair", "benchbar_install", "benchbar_labs_on", "benchba
 c.close()
 PY
 FM="$FM" python3 "$TMP_DIR/readtools.py" "$FAKE" "$FAKE_LOG" || fail "MCP-15: the read tools"
+
+# ---- the snapshot tools: the arguments they build, and what they leave to the person
+python3 - "$ROOT/lib/frappe-local/mcp.py" <<'PY' || fail "the snapshot tools (arguments, plan and apply pairing, no removal)"
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("mcp", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+t = m.TOOLS
+assert t["benchbar_site_snapshot"][2]({"site": "s", "label": "x y", "bench": "/b", "background": True}) == ["site", "snapshot", "s", "--label", "x y", "--json", "--bench-dir", "/b", "--background"]
+assert t["benchbar_site_snapshot"][2]({"site": "s"}) == ["site", "snapshot", "s", "--json"]
+assert t["benchbar_site_snapshot"][3] is False, "a snapshot is an action: it writes a folder"
+assert t["benchbar_site_snapshots"][3] is True
+assert t["benchbar_site_rollback_plan"][2]({"site": "s", "to": "latest", "no_migrate": True}) == ["site", "rollback", "s", "--to", "latest", "--no-migrate", "--dry-run", "--json"]
+assert t["benchbar_site_rollback"][2]({"site": "s", "to": "x", "token": "T" * 10, "background": True}) == ["site", "rollback", "s", "--to", "x", "--apply", "T" * 10, "--yes", "--json", "--background"]
+assert m.PLAN_OF["benchbar_site_rollback"] == "benchbar_site_rollback_plan" and "benchbar_site_rollback_plan" in m.PLAN_TOOLS
+assert m.ANNOTATIONS["benchbar_site_rollback"]["destructiveHint"] is True
+assert not any("drop" in n and "snapshot" in n for n in t), "removing a snapshot is a person's decision"
+assert "default site" in t["benchbar_site_rollback_plan"][0] and "default site" in t["benchbar_site_rollback"][0]
+PY
 
 # ---- the label holds by construction, a plan is kept a day, the question holds the whole plan, the token pattern
 python3 - "$ROOT/lib/frappe-local/mcp.py" "$TMP_DIR/followups-state" <<'PY' || fail "MCP follow ups (label by construction, plan age, whole plan, token)"
