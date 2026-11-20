@@ -95,11 +95,11 @@ fl_toml_parse() {
       if (t != ktype[sec "." key]) fail(key " must be " (ktype[sec "." key] == "s" ? "a string" : ktype[sec "." key] == "b" ? "true or false" : ktype[sec "." key] == "i" ? "an integer" : "an array of strings"))
       if ((key == "repo" || key == "branch") && val == "") fail(key " must not be empty")
       if ((key == "repo" || key == "branch") && index(val, "|")) fail(key " must not contain \"|\"")
+      # a value git would read as an option (--upload-pack=...) runs commands: never accepted
+      if ((key == "repo" || key == "branch" || key == "commit" || key == "frappe_commit" || key == "erpnext_commit" || key == "name") && val ~ /^-/) fail("\"" key "\" must not start with \"-\"")
       if (key == "repo" && index(val, "::")) fail("repo \"" val "\": a git transport helper (transport::address) is never accepted")
       if (key == "repo" && !repo_ok(val)) fail("repo \"" val "\": use https://, ssh:// or user@host:path")
       if (key == "repo" && val ~ /^[a-zA-Z+]+:\/\/[^\/]*@/ && val !~ /^ssh:\/\//) fail("a user name or token in a repo URL (the file gets committed)")
-      # a value git would read as an option (--upload-pack=...) runs commands: never accepted
-      if ((key == "repo" || key == "branch" || key == "commit" || key == "frappe_commit" || key == "erpnext_commit" || key == "name") && val ~ /^-/) fail("\"" key "\" must not start with \"-\"")
       if ((key == "commit" || key == "frappe_commit" || key == "erpnext_commit") && (val !~ /^[0-9a-f]+$/ || length(val) < 7 || length(val) > 40)) fail(key " must be 7 to 40 lower case hex characters")
       # a lock pins a full commit: a 7 character prefix is matched by prefix and is easy to collide
       if (sec == "app" && key == "commit" && length(val) < 12) fail("commit must be 12 to 40 lower case hex characters (a lock pins a full commit)")
