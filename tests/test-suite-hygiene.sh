@@ -85,6 +85,11 @@ cat >"$FAKE/tests/t-fine.sh" <<'EOF'
 #!/usr/bin/env bash
 printf 't-fine: ok\n'
 EOF
+# The stand in runs below must not take the switches of the run this test is part of. On a push to
+# next-release CI sets STRICT_FLAKY=1 for every job, and the inner runs that expect a flake to pass
+# then failed: the branch was red after every merge while the same tree was green on its pull request.
+# Each inner run sets what it tests itself.
+unset STRICT_FLAKY NO_SKIP ONLY_TESTS SKIP_TESTS SHARD LIST_ONLY SECS_ONLY SHELLCHECK_FILES
 run_rt() { OUT="$(env -u CI -u RERUN_FAILED PARALLEL=1 SHELLCHECK=0 bash "$FAKE/tests/run-tests.sh" "$@" 2>&1)" && CODE=0 || CODE=$?; }
 
 run_rt t-fine
