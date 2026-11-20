@@ -370,9 +370,10 @@ fl_lock_reach_commit() {
   remote="$(fl_app_remote "$app")"
   state="$(fl_lock_commit_state "$app" "$sha")"
   if [[ "$state" == "unknown" ]]; then
-    fl_git_batch -C "$(fl_app_path "$app")" fetch --quiet "$remote" "$sha" >>"${FL_LOG_FILE:-/dev/null}" 2>&1 \
-      || { fl_app_shallow "$app" && fl_git_batch -C "$(fl_app_path "$app")" fetch --quiet --unshallow "$remote" >>"${FL_LOG_FILE:-/dev/null}" 2>&1; } || true
+    fl_git_in "$(fl_app_path "$app")" fetch --quiet "$remote" "$sha" \
+      || { fl_app_shallow "$app" && fl_git_in "$(fl_app_path "$app")" fetch --quiet --unshallow "$remote"; } || true
     state="$(fl_lock_commit_state "$app" "$sha")"
+    [[ "$state" != "unknown" || "$FL_GR_CODE" != "124" ]] || { fl_fail "${app}: git fetch ${remote} ${FL_GR_ERR}"; return 1; }
   fi
   case "$state" in
     equal) return 0 ;;
@@ -395,7 +396,8 @@ fl_lock_detached_with_work() {
 fl_lock_switch_branch() {
   local app="$1" remote="$2" branch="$3" args=()
   fl_app_shallow "$app" && args=(--depth 1)
-  fl_run_long "git fetch ${remote} ${branch} (${app})" fl_git_batch -C "$(fl_app_path "$app")" fetch --quiet ${args[@]+"${args[@]}"} "$remote" "+refs/heads/${branch}:refs/remotes/${remote}/${branch}" || return 1
+  fl_git_in "$(fl_app_path "$app")" fetch --quiet ${args[@]+"${args[@]}"} "$remote" "+refs/heads/${branch}:refs/remotes/${remote}/${branch}" \
+    || { fl_fail "${app}: git fetch ${remote} ${branch} failed: ${FL_GR_ERR}"; return 1; }
   if fl_app_git "$app" show-ref --verify --quiet "refs/heads/${branch}"; then
     fl_run_long "git checkout ${branch} (${app})" git -C "$(fl_app_path "$app")" checkout --quiet "$branch"
   else
@@ -489,6 +491,8 @@ fl_cmd_lock_apply() {
               [[ "$state" == "0" ]] && fl_fail "${name}: cloned, but not at the pinned ${sha:0:7}"
               state=1
             fi
+            # get-app installed the requirements of the branch tip: the pin's own are set up with the changed apps
+            [[ "$state" != "0" ]] || changed+=("$name")
           fi
           # a clone that did not reach its pin is not built with the others
           if [[ "$state" != "0" ]]; then unset 'cloned[${#cloned[@]}-1]'; fi

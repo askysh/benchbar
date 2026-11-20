@@ -47,6 +47,8 @@ nonisolated struct CLIClient: Sendable {
             "NO_COLOR": "1",
             "TERM": "dumb",
             "LANG": "en_US.UTF-8",
+            // who started the run, for `benchbar history` and the run log's first line (not a proof: the CLI keeps it as a label)
+            "BENCHBAR_CALLER": "app",
         ]
     }
 

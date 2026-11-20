@@ -112,7 +112,17 @@ fl_log_init() {
   export FL_LOG_FILE FL_BACKUP_STAMP
   # a run that makes a log changes things: it is an operation with a handle (ops.sh)
   fl_op_begin
+  fl_log_header
   fl_state_prune "$dir"
+}
+
+# fl_log_header: the first line of a run's log says what ran and who started it (BENCHBAR_CALLER, history.sh);
+# the command line has its secrets as ***
+fl_log_header() {
+  [[ -n "${FL_LOG_FILE:-}" ]] || return 0
+  fl_caller_resolve
+  fl_hist_words
+  fl_log "run: benchbar ${FL_HIST_WORDS[*]-} (caller: ${FL_CALLER}${FL_OP_ID:+, op: ${FL_OP_ID}})"
 }
 
 # ---------------------------------------------------------------- state limits
@@ -1309,3 +1319,5 @@ fl_ask_secret() {
 # the operation handles (op_id, ops/<op_id>.json, benchbar op ...): here for the same reason
 # shellcheck source=lib/frappe-local/ops.sh
 . "${BASH_SOURCE[0]%/*}/ops.sh"
+# shellcheck source=lib/frappe-local/history.sh
+. "${BASH_SOURCE[0]%/*}/history.sh"

@@ -89,10 +89,13 @@ FL_BG_DIR=""
 
 # fl_bg_job_stop: the TERM trap of a background job's subshell: its running
 # command's group goes down with it (the job table knows a command that
-# FL_RUN_PGID was not set for yet)
+# FL_RUN_PGID was not set for yet). Later TERM, INT and HUP are ignored while
+# it works: benchbar sends a job TERM twice (fl_on_signal, then
+# fl_bg_stop_all) and a terminal's INT comes on top, and a second signal under
+# the default action ended the job before its git group was stopped.
 fl_bg_job_stop() {
   local job
-  trap - TERM INT HUP
+  trap '' TERM INT HUP
   for job in $(jobs -p 2>/dev/null); do
     kill -TERM -- "-${job}" 2>/dev/null || kill -TERM "$job" 2>/dev/null || true
   done
@@ -426,11 +429,27 @@ fl_git_ext_off() {
   FL_GIT_EXT_OFF=("GIT_CONFIG_COUNT=$((n + 1))" "GIT_CONFIG_KEY_${n}=protocol.ext.allow" "GIT_CONFIG_VALUE_${n}=never")
 }
 
+# fl_git_ssh_command [DIR]: the ssh command for git over ssh: the user's own
+# (GIT_SSH_COMMAND, else core.sshCommand as git sees it in DIR) or plain ssh,
+# then our options. ssh takes the first value of an option, so a BatchMode or
+# ConnectTimeout the user set stays; a key, a config file or a proxy they set
+# is kept (setting GIT_SSH_COMMAND replaces core.sshCommand for git).
+fl_git_ssh_command() {
+  local base="${GIT_SSH_COMMAND:-}"
+  [[ -n "$base" ]] || base="$(git ${1:+-C "$1"} config --get core.sshCommand 2>/dev/null || true)"
+  printf '%s -o BatchMode=yes -o ConnectTimeout=%s' "${base:-ssh}" "$FL_GIT_CONNECT_SECS"
+}
+
 # git with your own keys and tokens, never a question, and never the ext::
 # transport even when the user's git config allows it
 fl_git_net() {
+  local dir="" a=("$@")
+  while [[ "${a[0]:-}" == "-C" || "${a[0]:-}" == "-c" ]]; do
+    [[ "${a[0]}" == "-C" ]] && dir="${a[1]:-}"
+    a=("${a[@]:2}")
+  done
   fl_git_ext_off
-  env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=${FL_GIT_CONNECT_SECS}" "${FL_GIT_EXT_OFF[@]}" git "$@"
+  env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_SSH_COMMAND="$(fl_git_ssh_command "$dir")" "${FL_GIT_EXT_OFF[@]}" git "$@"
 }
 
 # fl_git_remote_run SECS GIT_ARGS...: fl_git_net with a deadline; sets
@@ -454,11 +473,34 @@ fl_git_remote_run() {
   return 0
 }
 
+# fl_git_in DIR GIT_ARGS...: git in a clone that talks to its remote (fetch),
+# with the clone deadline (FL_GIT_CLONE_TIMEOUT, 120 s) and the helpers' error
+# in FL_GR_ERR; returns FL_GR_CODE (124 after a timeout)
+fl_git_in() {
+  local dir="$1"
+  shift
+  fl_git_remote_run "${FL_GIT_CLONE_TIMEOUT:-120}" -C "$dir" "$@"
+  return "$FL_GR_CODE"
+}
+
 # fl_git_remote_ref REPO REF [SECS]: is REF a branch or tag of REPO?
 # Returns FL_GR_CODE: 0 found, 2 not there, 124 timeout, else git's own code.
 fl_git_remote_ref() {
-  fl_git_remote_run "${3:-${FL_GIT_TIMEOUT:-30}}" ls-remote --exit-code --heads --tags -- "$1" "$2"
+  fl_git_remote_run "${3:-${FL_GIT_TIMEOUT:-30}}" ls-remote --exit-code --heads --tags -- "$1" "refs/heads/$2" "refs/tags/$2"
   return "$FL_GR_CODE"
+}
+
+# fl_git_remote_tip REPO REF [SECS]: the commit of branch or tag REF of REPO in
+# FL_GR_TIP (nothing when it is not there); returns FL_GR_CODE. A tag gives
+# the commit it points at (the peeled line), not the tag object.
+FL_GR_TIP=""
+fl_git_remote_tip() {
+  FL_GR_TIP=""
+  fl_git_remote_run "${3:-${FL_GIT_TIMEOUT:-30}}" ls-remote --exit-code --heads --tags -- "$1" "refs/heads/$2" "refs/tags/$2" "refs/tags/$2^{}"
+  [[ "$FL_GR_CODE" == "0" ]] || return "$FL_GR_CODE"
+  FL_GR_TIP="$(printf '%s\n' "$FL_GR_OUT" | awk -v h="refs/heads/$2" -v t="refs/tags/$2" -v p="refs/tags/$2^{}" \
+    '$2 == h {a = $1} $2 == t {b = $1} $2 == p {c = $1} END {print (a != "" ? a : (c != "" ? c : b))}')"
+  return 0
 }
 
 # fl_git_remote_default REPO [SECS]: the branch HEAD points at, in FL_GR_DEFAULT

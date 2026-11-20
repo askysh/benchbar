@@ -79,6 +79,8 @@ cmd~status~benchbar status [--json] [--ping] [--deep]~State, pid, stop reason, s
 env~status~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 flag~status~--ping~~Ask every site, not only the default one.
 flag~status~--deep~~Also ask the ready parts that start programs: workers (pgrep, lsof) and stale (find: a Python file under apps/ changed after the bench started). Without it ready.workers and ready.stale are null.
+cmd~stats~benchbar stats [--json]~CPU, memory and process count of the running bench's own processes (the set down stops, with their children), and the speed figure the Mac app derives from the CPU. resources is null while the bench is stopped. Read only.~no~no~no~no~document
+env~stats~FL_STATS_WINDOW~Linux only: seconds between the two CPU samples (default 0.5).
 cmd~list~benchbar list [--json]~Every bench benchbar knows about. Never pings a site.~no~no~no~no~document
 env~list~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~scan~benchbar scan PATH [--json]~Find benches recursively in a folder (read only).~no~no~no~no~document
@@ -169,6 +171,11 @@ flag~op list~--running~~Only the ones that run now.
 flag~op list~--limit~N~At most N (1 to 100, default 20).
 cmd~op wait~benchbar op wait OP_ID [--timeout SECS] [--json]~Wait until the operation is not running, then print it. Exit 0 when it ended with exit 0, else 1 (failed, interrupted or still running at the timeout: --json says which).~no~no~no~no~document
 flag~op wait~--timeout~SECS~Give up after SECS seconds (the operation goes on); default: wait for it.
+cmd~history~benchbar history [--bench PATH] [--since TIME] [--limit N] [--json]~What ran on this machine, newest first: every run that changed things, with its op_id, command line (secrets as ***), who started it, bench, site, times, exit, what it changed and its log. A run an agent started through benchbar mcp also names the MCP tool and the client that made the call. Kept in history.jsonl in the state folder, 1 MB and three older files.~no~no~no~no~document
+flag~history~--bench~PATH~Only the runs on this bench.
+flag~history~--since~TIME~Only the runs that started since 90m, 12h, 7d, 2w ago, a date (2026-11-19, UTC) or a time (2026-11-19T10:15:00Z).
+flag~history~--limit~N~At most N runs (1 to 1000, default 20).
+env~history~BENCHBAR_CALLER~Who started a run, for the history: terminal, app, tray, mcp, agent or script. The Mac app, the tray and benchbar mcp set it; --for-agent says agent; without it a terminal on stdin is terminal and anything else script. A label the caller sets, not a proof: any process of the user can set it, and a value outside the list is ignored.
 cmd~help~benchbar help~The global help text.~no~no~no~no~none
 cmd~commands~benchbar commands --json~This table: every command, flag and environment variable.~no~no~no~no~document
 env~commands~BENCHBAR_LENIENT_FLAGS~Applies to every command: 1 turns the error for an unknown option (exit 64) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real.
@@ -296,10 +303,11 @@ flag~site restore~--with-files~~Restore the uploads too.
 flag~site restore~--dry-run~~Print the plan and its token.
 flag~site restore~--apply~TOKEN~Run exactly that plan (with --yes).
 env~site restore~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
-cmd~site drop~benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run] [--json]~bench drop-site: a backup with files first, the folder moved to archived/sites.~no~yes~no~yes~document
+cmd~site drop~benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run|--apply TOKEN --yes] [--json]~bench drop-site: a backup with files first, the folder moved to archived/sites.~no~yes~no~yes~document
 flag~site drop~--confirm-site~NAME~Repeat the site name exactly.
 flag~site drop~--new-default~OTHER~Required when NAME is the default site.
-flag~site drop~--dry-run~~Print the plan, change nothing.
+flag~site drop~--dry-run~~Print the plan, change nothing. With --json the plan carries a token.
+flag~site drop~--apply~TOKEN~Run the plan of a dry run; refused when the sites, the default or the hosts line changed since (needs --yes).
 env~site drop~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~app~benchbar app list|add|install|update|focus|unfocus ...~The apps of a bench.~no~no~no~no~none
 cmd~app list~benchbar app list [--json] [--no-sites]~Every app: branch, commit, local changes, the sites that have it.~no~no~no~no~document

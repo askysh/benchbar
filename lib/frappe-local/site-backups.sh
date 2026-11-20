@@ -562,15 +562,19 @@ fl_site_archive_latest() {
   printf '%s' "$newest"
 }
 
-# site drop NAME --confirm-site NAME [--new-default OTHER]
+# site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run [--json] | --apply TOKEN --yes]
+# The plan (--dry-run --json) carries a token: a SHA-256 of the plan and of what it was made from (the
+# site list, the default site, the hosts line, the database name); --apply TOKEN --yes runs that plan and refuses a stale one.
 fl_cmd_site_drop() {
-  local name="" confirm="" new_default="" json="$OPT_JSON" plan_doc="" others=() s st t c p sep="" steps=() archive_before archive="" stamp backup="null" code=0 is_default=0 hosts_place bench_default="" default_failed=0
+  local apply=0 token="" plan_token db_name="" name="" confirm="" new_default="" json="$OPT_JSON" plan_doc="" others=() s st t c p sep="" steps=() archive_before archive="" stamp backup="null" code=0 is_default=0 hosts_place bench_default="" default_failed=0
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --confirm-site) confirm="${2:-}"; shift 2 ;;
       --confirm-site=*) confirm="${1#*=}"; shift ;;
       --new-default) new_default="${2:-}"; shift 2 ;;
       --new-default=*) new_default="${1#*=}"; shift ;;
+      --apply) apply=1; token="${2:-}"; shift 2 || shift ;;
+      --apply=*) apply=1; token="${1#*=}"; shift ;;
       -*) fl_die "Unknown option for site drop: $1" "Use: benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--json]" ;;
       *) [[ -z "$name" ]] && name="$1"; shift ;;
     esac
@@ -578,6 +582,11 @@ fl_cmd_site_drop() {
   fl_site_json_begin
   fl_require_bench
   [[ -n "$name" ]] || fl_die "Usage: benchbar site drop NAME --confirm-site NAME [--new-default OTHER]"
+  if [[ "$apply" == "1" ]]; then
+    [[ "$token" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar site drop ${name} --confirm-site ${name} --dry-run --json prints it"
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
+    [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (site drop ${name} --confirm-site ${name} --dry-run --json), then pass its token with --apply TOKEN --yes."
+  fi
   fl_site_valid_name "$name"
   fl_site_require "$name"
   [[ "$confirm" == "$name" ]] || fl_die "Refusing to drop ${name}: --confirm-site must repeat the site name exactly." \
@@ -603,6 +612,8 @@ fl_cmd_site_drop() {
     fl_site_require "$new_default"
   fi
   hosts_place="$(fl_hosts_line_place "$name")"
+  # the database bench drop-site drops is the one the site's own config names: it is in the plan and in the token
+  fl_site_file_value_v db_name "${FL_BENCH_DIR}/sites/${name}/site_config.json" db_name
 
   # the plan: the app shows it before asking, the terminal before running
   steps+=("Back up ${name} with files, drop its database and user, move the folder to archived/sites|bench drop-site ${name}|0")
@@ -610,10 +621,15 @@ fl_cmd_site_drop() {
   if [[ "$hosts_place" == "block" ]] && ! fl_site_name_elsewhere "$name" >/dev/null; then
     steps+=("Remove '127.0.0.1 ${name}' from ${FL_HOSTS_FILE}|sudo, backup first|1")
   fi
+  plan_token="$({ printf 'site drop\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' "$FL_BENCH_DIR" "$name" "$is_default" "$new_default" "$FL_SITE" "${others[*]}" "$bench_default" "$hosts_place" "$db_name"; printf '%s\n' "${steps[@]}"; } | shasum -a 256 | awk '{print $1}')"
+  if [[ "$apply" == "1" && "$token" != "$plan_token" ]]; then
+    fl_die "The site drop plan changed since it was shown (the sites, the default site or the hosts line). Nothing was changed." \
+      "Review a fresh plan: benchbar site drop ${name} --confirm-site ${name} --dry-run --json, then pass its token."
+  fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     if [[ "$json" == "1" ]]; then
-      plan_doc="$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":true,"is_default":%s,"new_default":%s,"default_site":%s,"steps":[' \
-        "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_bool "$is_default")" "$(fl_json_str "$new_default")" "$(fl_json_str "$FL_SITE")")"
+      plan_doc="$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":true,"is_default":%s,"new_default":%s,"default_site":%s,"database":%s,"token":"%s","steps":[' \
+        "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_bool "$is_default")" "$(fl_json_str "$new_default")" "$(fl_json_str "$FL_SITE")" "$(fl_json_str "$db_name")" "$plan_token")"
       for st in "${steps[@]}"; do
         IFS='|' read -r t c p <<<"$st"
         plan_doc="${plan_doc}${sep}$(printf '{"title":%s,"command":%s,"needs_password":%s}' "$(fl_json_str "$t")" "$(fl_json_str "$c")" "$(fl_json_bool "$p")")"; sep=","

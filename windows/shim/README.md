@@ -180,15 +180,20 @@ that it updates only that CLI.
   output on the console:
 
   ```
-  powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1'))) -Yes -Version 'X.Y.Z'; exit $LASTEXITCODE"
+  powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; & ([scriptblock]::Create((Get-Content -Raw -LiteralPath 'C:\Users\you\AppData\Local\Temp\benchbar-self-update-123\install.ps1'))) -Yes -Version 'X.Y.Z'; exit $LASTEXITCODE"
   ```
 
-  The installer runs as a script block, so a Restricted execution policy does
-  not stop it. It is main's installer (the newest), pinned with `-Version` to
-  the release the user agreed to. `-NoTray` is added when the install has no
-  tray app. `--zip PATH` passes `-Zip PATH` instead of `-Version`, and
-  `--installer FILE` reads that `install.ps1` instead of the one on GitHub
-  (both for testing a build). The installer gets `BENCHBAR_FROM_SELF_UPDATE=1`
+  The installer is `install.ps1` of the `vX.Y.Z` tag, not main's. The shim
+  downloads it and the release's `benchbar-windows-X.Y.Z-SHA256SUMS.txt`,
+  compares the SHA256 of the file with the line for `install.ps1`, writes it
+  to a temporary folder and runs that file as a script block, so a Restricted
+  execution policy does not stop it and nothing is piped into PowerShell.
+  A release whose sums do not list `install.ps1`, a changed file or a missing
+  download stops the update before anything runs. `--version X.Y.Z` pins
+  `-Version` to the release the user agreed to. `-NoTray` is added when the
+  install has no tray app. `--zip PATH` passes `-Zip PATH` instead of
+  `-Version`, and `--installer FILE` reads that `install.ps1` instead,
+  unchecked and with nothing downloaded (both for testing a build). The installer gets `BENCHBAR_FROM_SELF_UPDATE=1`
   and none of `BENCHBAR_VERSION`, `BENCHBAR_ZIP`, `BENCHBAR_SOURCE`,
   `BENCHBAR_UNINSTALL`, `BENCHBAR_NO_TRAY`, `BENCHBAR_YES` that may be left in
   the shell. Nothing is set in the user's shell.
@@ -248,7 +253,7 @@ and `what`; it holds no paths or user names and stays under 4000 characters.
 
 When set in the shim's environment, `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD`,
 `BENCHBAR_SUDO`, `BENCHBAR_SUDO_PASSWORD`, `BENCHBAR_NONINTERACTIVE`,
-`BENCHBAR_LABS`, `BENCH_INIT_TIMEOUT_SECONDS`, `BENCHBAR_PROFILE_PATH` and the
+`BENCHBAR_LABS`, `BENCHBAR_CALLER` (the tray sets `tray`; `benchbar history` shows it), `BENCH_INIT_TIMEOUT_SECONDS`, `BENCHBAR_PROFILE_PATH` and the
 MCP settings `BENCHBAR_MCP_TIMEOUT`, `BENCHBAR_MCP_MAX_BYTES`,
 `BENCHBAR_MCP_KILL_GRACE` and `BENCHBAR_MCP_EOF_GRACE` are
 passed into WSL for that one run through `WSLENV` (appended to the child's

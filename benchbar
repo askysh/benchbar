@@ -79,7 +79,7 @@ SCRIPT_DIR="$(fl_resolve_self)"
 # holds that the output is the same). BENCHBAR_LOAD_ALL=1 loads everything.
 FL_LEAN=0
 if [[ "${BENCHBAR_LOAD_ALL:-0}" != "1" ]]; then
-  case "${1:-}" in path|commands|where|list|status|op|--version|--help|-h) FL_LEAN=1 ;; esac
+  case "${1:-}" in path|commands|where|list|status|op|history|--version|--help|-h) FL_LEAN=1 ;; esac
   # --profile checks the name against the profiles (version-policy.sh, profiles.sh)
   for _a in "$@"; do case "$_a" in --profile|--profile=*) FL_LEAN=0 ;; esac; done
   unset _a
@@ -130,6 +130,8 @@ FL_OP_ID=""; FL_OP_OWNER=""; FL_OP_JSON=""; FL_OP_COMMAND=""; FL_OP_STARTED=""; 
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/repair.sh"
 # shellcheck source=lib/frappe-local/service.sh
 . "${SCRIPT_DIR}/lib/frappe-local/service.sh"
+# shellcheck source=lib/frappe-local/stats.sh
+. "${SCRIPT_DIR}/lib/frappe-local/stats.sh"
 # shellcheck source=lib/frappe-local/report.sh
 . "${SCRIPT_DIR}/lib/frappe-local/report.sh"
 # shellcheck source=lib/frappe-local/docs.sh
@@ -308,6 +310,8 @@ Daily
   restart             Restart it, for example after changing Python code.
   status              State, pid, stop reason, site ping, Redis (benchstatus). --json adds
                       redis and sites[].served (does the running bench serve the site).
+  stats               CPU and memory of the running bench's own processes, and the figure the
+                      app's runner speed comes from (--json; resources is null when stopped).
   wait                Block until the bench is ready (site answers, socketio, Redis, a worker, code
                       not changed since the start); --for PART for one part, --timeout SECS, --json.
   list                Every bench benchbar knows about.
@@ -363,6 +367,10 @@ Daily
                       lines too); status shows one (or the ten newest) with its step and last
                       progress, list shows the recent ones, wait OP_ID [--timeout SECS] waits for
                       one to end. A run that died without a done line is interrupted.
+  history             What ran on this machine, newest first: the command line (secrets as ***), who
+                      started it (a terminal, the app, the tray, an agent through MCP, a script), the
+                      bench, the times, the exit and what it changed. --bench PATH, --since 7d,
+                      --limit N, --json.
   docs [TOPIC]        Open the documentation, or one topic's page (benchbar docs --help lists
                       them: install, doctor, apps, mcp, json ...); --print prints the URL.
 
@@ -487,6 +495,8 @@ Options
 Environment:
   BENCHBAR_SUDO=gui   root steps (wkhtmltopdf, /etc/hosts) ask in a macOS password dialog, not sudo
   BENCHBAR_SUDO=env   Linux: sudo steps use the password in BENCHBAR_SUDO_PASSWORD, no terminal needed
+  BENCHBAR_CALLER     Who started the run, for benchbar history: terminal, app, tray, mcp, agent or
+                      script (set by the app, the tray and benchbar mcp; --for-agent says agent)
   BENCH_INIT_TIMEOUT_SECONDS   install: how long bench init may run (default 2700, 0 for no limit)
   BENCHBAR_LENIENT_FLAGS=1     an unknown option is a warning, not an error (exit 64), as before 0.9.0
 
@@ -1289,10 +1299,8 @@ cmd_service() {
     [[ "$FL_SERVICE_APPLY_TOKEN" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar service --dry-run --json prints it"
     [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
     [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (service --dry-run --json), then pass its token with --apply TOKEN --yes."
-    # the scheduler choice is stored before the plan is made: with a token it
-    # would be written even when the token turns out stale. It belongs to a
-    # plain service run (or the dry run's flags reviewed, then a plain run).
-    [[ -z "${FL_SCHEDULER:-}" ]] || fl_die "--apply runs a reviewed plan as it is; --with-schedule and --without-schedule cannot come with it." "Run benchbar service --with-schedule (or --without-schedule) without --apply."
+    # a scheduler choice that comes with a token (the one the dry run was made with) is only
+    # kept in memory while the token is checked; it is stored once the run has succeeded
   fi
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
@@ -1304,12 +1312,14 @@ cmd_service() {
   fi
   fl_remember_bench || true
   if [[ -n "$FL_SCHEDULER" ]]; then
-    # stored now (not in a dry run) and rendered for the plan either way
-    fl_bstate_set SCHEDULER "$FL_SCHEDULER"
+    # stored now (not in a dry run) and rendered for the plan either way; with a token it is stored
+    # only after the plan was checked and the run succeeded (a stale token must change nothing)
+    [[ -n "${FL_SERVICE_APPLY_TOKEN:-}" ]] || fl_bstate_set SCHEDULER "$FL_SCHEDULER"
     fl_render_all
   fi
   if FL_PLAN_CHECKS="port_block" FL_ENGINE_PLAN_HOOK=fl_adopt_plan_json fl_repair_engine "Background service" service; then
     fl_pm_remember
+    [[ -z "$FL_SCHEDULER" || -z "${FL_SERVICE_APPLY_TOKEN:-}" ]] || fl_bstate_set SCHEDULER "$FL_SCHEDULER"
     if [[ -n "$FL_SCHEDULER" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_bench_is_running; then
       fl_warn "the running bench still uses the old Procfile.lean; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"
     fi
@@ -1813,6 +1823,7 @@ case "$COMMAND" in
   doctor) cmd_doctor || exit 1 ;;
   repair) cmd_repair || exit $? ;;
   status) cmd_status ;;
+  stats) FL_CONTEXT_LIGHT=1; fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_stats ;;
   list) FL_CONTEXT_LIGHT=1; fl_cmd_list "$OPT_JSON" ;;
   ports)
     [[ "${ARGS[0]:-}" == check ]] && FL_CONTEXT_LIGHT=1
@@ -1875,6 +1886,7 @@ case "$COMMAND" in
   mcp) cmd_mcp ;;
   # a run that is not done is exit 1 without the ERR trap's line, like doctor
   op) fl_cmd_op ${ARGS[@]+"${ARGS[@]}"} || exit 1 ;;
+  history) fl_cmd_history ${ARGS[@]+"${ARGS[@]}"} ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;
 esac

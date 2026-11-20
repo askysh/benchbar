@@ -68,7 +68,8 @@ escapes, no inline tables.
 | `schema` | no | `1` or `2`; `1` when absent. A file with any schema 2 key must say `schema = 2` |
 | `base` | yes | The built in profile for Python, Node and MariaDB, for example `"v15-lts"` |
 | `description` | no | One line shown by `profile list` |
-| `frappe_branch` | no | Another Frappe branch than the base's |
+| `frappe_branch` | no | Another Frappe branch than the base's. erpnext moves with it: `version-N` and `develop` give the same erpnext branch |
+| `erpnext_branch` | no | The erpnext branch that goes with `frappe_branch`. Required when `frappe_branch` is neither `version-N` nor `develop` and the bundle has erpnext |
 | `frappe_commit` | no | A commit to pin frappe to (7 to 40 lower case hex characters). `install` checks that the clone has it before it builds, and stops otherwise |
 | `erpnext_commit` | no | The same for erpnext (also `[[apps]]` `commit` for an erpnext listed there) |
 | `bundle` | no | An app bundle, instead of `[[apps]]`: a file with both is refused |
@@ -115,6 +116,7 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 | `BENCHBAR_LENIENT_FLAGS` | every command | `BENCHBAR_LENIENT_FLAGS=1`: an option a command does not take is a warning on stderr and the command runs, as it did before 0.9.0. Without it the run stops with exit 64 and names the option and the command's usage line, so a mistyped `--dry-run` can never run for real. It covers an unknown option only: a flag without its value (`--bench-dir` with nothing after it) stays an error. For scripts written against the old behaviour; fix the script when you can |
 | `BENCHBAR_NONINTERACTIVE` | every command | `BENCHBAR_NONINTERACTIVE=1`: nothing is asked. A command that lacks an input names all of them in one error before it takes the lock. `--for-agent` and `benchbar mcp` set it |
 | `BENCHBAR_SUDO` | `install`, `adopt`, `repair`, `ports apply`, `site hosts`, `site add` | `BENCHBAR_SUDO=gui` (macOS): each root step asks in macOS's own password dialog, at most two per run; the BenchBar app sets it. `BENCHBAR_SUDO=env` (Linux): the root steps use `BENCHBAR_SUDO_PASSWORD` and need no terminal; the Windows tray sets it. Any other value is the terminal path. The steps that use root are listed in [AGENTS.md](../../AGENTS.md) |
+| `BENCHBAR_CALLER` | every command that changes things, `history` | Who started the run, for `benchbar history` and the first line of the run's log: `terminal`, `app`, `tray`, `mcp`, `agent` or `script`. The Mac app, the tray and `benchbar mcp` set it; `--for-agent` says `agent`; without it a terminal on stdin is `terminal` and anything else `script`. A label, not a proof: any process of the user can set it, and a value outside the list is ignored |
 | `BENCHBAR_APP_PID` | `site open-as on`, `open --as --print-url`, `lan-guard`, `share`, `labs on` | The BenchBar app's process id, set by the app with `BENCHBAR_SUDO=gui` or `BENCHBAR_NONINTERACTIVE=0`. On a Mac those two lift the "needs a terminal" refusal of these commands only when it names a running ancestor of the CLI whose name (the path `ps` prints) is inside a `BenchBar.app`; on Linux and WSL it is not checked. A name check, so a safety rail, not a boundary |
 | `BENCHBAR_SUDO_PASSWORD` | with `BENCHBAR_SUDO=env` | The sudo password (Linux). Read once at startup and removed from the environment; never in an argument, the log or a child process. A wrong one fails at once with `error_id` `sudo_password_wrong`, before any change |
 

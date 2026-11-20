@@ -29,7 +29,7 @@
 #   BenchBar-<version>.zip      the stapled app: for Sparkle updates
 #   appcast.xml                 the Sparkle feed, signed with the EdDSA key
 #   benchbar-cli-<version>.tar.gz  the CLI for the Homebrew formula
-#   SHA256SUMS
+#   SHA256SUMS                     the files above, and install.sh and install.ps1 of the tag
 #
 # The tap's formula and cask are written after the release is published,
 # from these files (.github/workflows/homebrew-tap.yml).
@@ -209,7 +209,10 @@ ok "appcast.xml signed and checked"
 step "CLI tarball"
 "${ROOT}/scripts/cli-tarball.sh" "$VERSION" "$DIST"
 (cd "$DIST" && shasum -a 256 ./*.dmg ./*.zip ./*.tar.gz >SHA256SUMS)
-ok "SHA256SUMS"
+# the installers of this tag, so `benchbar self-update` checks the install.sh
+# it runs against the release's own sums before it runs it
+(cd "$ROOT" && shasum -a 256 install.sh install.ps1) >>"${DIST}/SHA256SUMS"
+ok "SHA256SUMS (the files, and install.sh and install.ps1)"
 
 printf '\n[OK] release %s in %s\n' "$VERSION" "$DIST"
 ls -1 "$DIST"

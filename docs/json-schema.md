@@ -12,6 +12,7 @@ Raycast extensions and the like can rely on it too.
 |---|---|
 | `benchbar list --json` | every bench benchbar knows about |
 | `benchbar status --json [--bench-dir DIR]` | the live state of one bench |
+| `benchbar stats --json [--bench-dir DIR]` | CPU and memory of the running bench's own processes (0.9) |
 | `benchbar doctor --json [--bench-dir DIR]` | every health check with its fix |
 | `benchbar app list --json` | the bench's apps, their git state and sites (0.5) |
 | `benchbar app update NAME --dry-run --json` | the changelog and plan of an update (0.5) |
@@ -33,6 +34,8 @@ Raycast extensions and the like can rely on it too.
 | `benchbar site drop NAME --json` | the plan (with `--dry-run`) or the result of dropping a site (0.5.8) |
 | `benchbar op status [OP_ID]\|list\|wait OP_ID --json` | the long runs: one record or the recent ones (0.9), see [operation handles](#operation-handles-09) |
 | `<state folder>/ops/<op_id>.json` | the record a run keeps of itself, rewritten at each step (0.9) |
+| `benchbar history [--bench PATH] [--since TIME] [--limit N] --json` | the runs that changed things on this machine, newest first (0.9), see [action history](#action-history-09) |
+| `<state folder>/history.jsonl` | one line per finished run, 1 MB and three older files (0.9) |
 
 ## Rules for readers
 
@@ -319,6 +322,7 @@ listener: it is polled at rest (0.6.1).
 | `processes_running` | bool | any honcho, serve, worker, schedule or socketio process of this bench (before 0.6.1 a port listener counted too) |
 | `sites` | array | added in 0.4, see [Sites](#sites) |
 | `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
+| `autostart` | bool | added in 0.9: the bench may come back after a login (`benchbar autostart on`, the default; `off` keeps it down until `benchbar up`) |
 | `listen` | string | added in 0.9: `"local"` (the web server and socketio listen on 127.0.0.1) or `"all"` (every interface, `benchbar listen all`) |
 | `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
 | `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null), `url` (an add's repo URL, so `app add NAME` can finish an app that was never cloned or that no profile lists; null for an update and for a record an older version wrote) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
@@ -336,6 +340,52 @@ service or when no such file is there. It is read from the agent file in
 bash, so `status` still starts no process for it. With `--ping`, every
 site is asked only while the bench's processes run; a stopped bench is
 never pinged and never started.
+
+## `benchbar stats --json`
+
+CPU and memory of a running bench, for the Windows tray (which cannot sample
+processes inside WSL) and for agents. It is its own command, not a flag of
+`status`, because status is polled for every bench and its process count is
+pinned; `stats` reads the process table once, on request. Read only: no lock,
+no log, no site ping.
+
+```json
+{
+  "schema_version": 1,
+  "cli_version": "0.9.0",
+  "bench_dir": "/Users/me/frappe-bench",
+  "running": true,
+  "resources": {
+    "cpu_percent": 112.8,
+    "memory_bytes": 26624000,
+    "processes": 4,
+    "sampled_at": "2026-11-20T11:09:20Z",
+    "cpu_source": "ps",
+    "window_ms": null,
+    "speed": {"raw": 12.0, "min": 1, "max": 12, "smoothing_alpha": 0.35,
+              "formula": "clamp(1 + cpu_percent / 10, min, max)"}
+  }
+}
+```
+
+`resources` is `null` (and `running` false) while nothing serves the site: a
+stopped bench, a bench with no processes, or a Redis kept alone by
+`up --services-only`. The processes are the ones `benchbar down` stops (honcho,
+serve, worker, schedule, socketio and the bench's listeners, each proven to
+run in this bench's folder) and every descendant of them.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `cpu_percent` | number | summed over those processes, in percent of one core (250 is two and a half cores busy), one decimal |
+| `memory_bytes` | number | the sum of their resident set sizes (RSS), in bytes. The Mac app reads the physical footprint instead, which is a little different |
+| `processes` | number | how many processes were measured |
+| `sampled_at` | string | ISO 8601 UTC time of the sample |
+| `cpu_source` | string | `ps` (macOS: ps's own `%cpu`, the system's decaying average, one call) or `proc_delta` (Linux and WSL: two reads of `/proc` `window_ms` apart, so it is the load over that window) |
+| `window_ms` | number or null | the time between the two samples; `null` for `ps` |
+| `speed.raw` | number | the runner speed of the Mac app for this sample: `clamp(1 + cpu_percent / 10, 1, 12)`. 110 percent is already the top speed |
+| `speed.smoothing_alpha` | number | a client smooths successive raw values the way the Mac app does: `value = alpha * raw + (1 - alpha) * value`, starting at 1 |
+
+`benchbar_stats` is the same document through the MCP server.
 
 ## Readiness
 
@@ -485,7 +535,10 @@ stream ends in the usual `done` line.
 The plan line of the service stream (as for `adopt --json`) carries a `token`:
 a SHA-256 of the planned actions, the bench, the port block, the scheduler
 choice and the site. `benchbar service --apply TOKEN --yes [--json]` runs that
-plan and refuses, before any action, a token that no longer matches.
+plan and refuses, before any action, a token that no longer matches. Since 0.9 the
+apply takes `--with-schedule` or `--without-schedule` too (the one the dry run was
+made with): the choice is stored only after the run succeeded, and a refused token
+stores nothing.
 
 ## MCP results of the site and service tools
 
@@ -1341,12 +1394,21 @@ dry run.
   "schema_version": 1, "cli_version": "0.5.8",
   "bench": "/Users/you/frappe-bench", "site": "bbtest.localhost",
   "dry_run": true, "is_default": false, "new_default": null,
+  "database": "_bbtest",
+  "token": "9f2c...64 hex characters",
   "steps": [
     {"title": "Back up bbtest.localhost with files, drop its database and user, move the folder to archived/sites", "command": "bench drop-site bbtest.localhost", "needs_password": false},
     {"title": "Remove '127.0.0.1 bbtest.localhost' from /etc/hosts", "command": "sudo, backup first", "needs_password": true}
   ]
 }
 ```
+
+Since 0.9 the plan has a `token`, a SHA-256 of the plan and of the site list,
+the default site, the hosts line and the database name (`database`, from the site's own
+`site_config.json`: it is the database that gets dropped). `benchbar site drop NAME --confirm-site
+NAME --apply TOKEN --yes [--json]` runs that plan and refuses, before anything
+changes, a token that no longer matches (exit 1). The MCP tools
+`benchbar_site_drop_plan` and `benchbar_site_drop` pass it on as it is.
 
 And the result, without `--dry-run`:
 
@@ -1542,6 +1604,39 @@ out (then with `"timed_out": true`).
 `pending_operations[]` of `status --json` is a different thing: the record
 of an `app add` or `app update` that stopped part way, kept until it is
 finished or discarded. An op record says what a run is doing, or did.
+
+## Action history (0.9)
+
+What ran on this machine, and who started it. A run that changes things
+(one that has an `op_id`, see above) appends one line to
+`history.jsonl` in benchbar's state folder when it ends (mode 0600; for
+Homebrew and the one line installer `~/.local/state/benchbar/history.jsonl`).
+At 1 MB the file moves to `history.jsonl.old.1` (`.old.2` and `.old.3`
+shift up, the oldest goes), like the MCP audit log `mcp-calls.jsonl`, so
+the history reaches back further than the newest 100 operation records.
+A dry run, a read and a refusal before the log have no line, and a run that
+was killed (SIGKILL, a power cut) wrote none: `op list` shows it as
+`interrupted`. A reader skips a line that is not a whole object.
+
+`benchbar history --json` prints `{"schema_version", "cli_version",
+"history": [entry, ...]}`, newest first (`--bench PATH`, `--since TIME`,
+`--limit N`, 1 to 1000, default 20; see the
+[reference](reference/cli/other.md#history)). An entry:
+
+| Field | Type | Notes |
+|---|---|---|
+| `op_id` | string | the run's handle: `benchbar op status OP_ID` while its record is still kept |
+| `command` | string or null | the command's key in `benchbar commands --json` (`site add`) |
+| `argv` | array of strings | the command line without `benchbar`, as typed. The value after a flag named like a password, secret, token, key, credential, auth, cookie or session (and after `--apply`), the credentials of a URL, and a secret looking `KEY=VALUE` or `?query=value` are `***`; a word is cut at 200 characters (`... [cut]`) and the list at 40 words (a last word `...`). For `--background` the launcher's extra `--jsonl` is not there |
+| `caller` | string | who started the run: `terminal`, `app`, `tray`, `mcp`, `agent` or `script`. From `BENCHBAR_CALLER` when it is one of these (the Mac app, the tray and `benchbar mcp` set it), else `agent` for `--for-agent`, `terminal` when stdin is a terminal, `script`. A label the caller sets, not a proof. A new value may be added later: treat an unknown one as unknown |
+| `mcp` | object or null | for `caller` `mcp`: `tool` (`benchbar_app_add`) and `client` (what the MCP client called itself, with its version), each a string or null. The same run is in `mcp-calls.jsonl` under its `op_id` |
+| `bench`, `site` | string or null | as in the op record |
+| `started_at`, `ended_at` | string | ISO 8601 UTC |
+| `exit` | number | the exit code |
+| `changed` | array | what the run changed, as in `changed[]` of the done line but only `kind` and `name` (the detail is in the done line and the log); at most 20 |
+| `changed_more` | number | how many more entries `changed[]` had |
+| `cli_version` | string | the version that ran |
+| `log` | string or null | the run's log file. Its first line says what ran and who started it: `run: benchbar site backup x (caller: app, op: op-...)` |
 
 ## `logs/.benchbar/state.json`
 

@@ -125,6 +125,22 @@ FL_LOCAL_PROBES=1 shimmed run_fm status --json --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "$checkout_programs" "$(summary)" "(the probes start no program)"
 
+# ---- the action history (history.sh) costs a poll nothing: with a history file in the state folder the same
+# status starts the same programs, and reading the history starts almost none (a lean command)
+for n in 1 2 3 4 5 6; do
+  printf '{"op_id":"op-20261119-10000%s-%s","command":"up","argv":["up"],"caller":"app","mcp":null,"bench":"%s","site":null,"started_at":"2026-11-19T10:00:0%sZ","ended_at":"2026-11-19T10:00:0%sZ","exit":0,"changed":[],"changed_more":0,"cli_version":"0.9.0","log":null}\n' "$n" "$n" "$BENCH" "$n" "$n" >>"$FL_STATE_DIR/history.jsonl"
+done
+reset_calls
+shimmed run_fm status --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$checkout_programs" "$(summary)" "(a history file adds no program to status)"
+reset_calls
+shimmed run_fm history --json --limit 3 --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "3" "$(printf '%s' "$OUT" | jget - 'len(d["history"])')"
+[[ "$(execs)" -le 2 ]] || fail "history --json: $(execs) programs started, budget 2"$'\n'"$(cat "$MOCK_LOG")"
+assert_calls_not_contain '^exec (python3|perl|ruby|date|sed|awk|tr|head|cut|sort)( |$)' "(reading the history forks no per line program)"
+
 # ---- the same status from a Homebrew CLI (a keg copy run by its opt path,
 # its state folder ~/.local/state/benchbar, here a link to the pinned one,
 # the bench its remembered default; the installer's folder is there too,
