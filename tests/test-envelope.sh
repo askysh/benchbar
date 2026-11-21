@@ -112,6 +112,7 @@ site hosts|site hosts --yes|site hosts --bench-dir $NOBENCH
 site backup|site backup macdev|site backup nosuchsite
 site backups|site backups macdev|site backups nosuchsite
 site snapshot|site snapshot macdev --label envelope|site snapshot nosuchsite
+site snapshot drop|site snapshot drop macdev --prune --dry-run|site snapshot drop macdev --prune
 site snapshots|site snapshots macdev|site snapshots nosuchsite
 site rollback|site rollback macdev --to latest --dry-run|site rollback --dry-run
 site restore|site restore macdev --from nonexist --dry-run|site restore --dry-run

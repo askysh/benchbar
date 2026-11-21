@@ -303,14 +303,16 @@ flag~site restore~--with-files~~Restore the uploads too.
 flag~site restore~--dry-run~~Print the plan and its token.
 flag~site restore~--apply~TOKEN~Run exactly that plan (with --yes).
 env~site restore~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
-cmd~site snapshot~benchbar site snapshot NAME [--label TEXT] [--json]; benchbar site snapshot drop NAME SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run]~Save the state of a site (database, files, site_config, the apps and their commits) in sites/NAME/snapshots, which frappe's backup pruning never touches. Changes nothing in the site. drop removes snapshots and is a person's choice.~no~no~no~yes~document
+cmd~site snapshot~benchbar site snapshot NAME [--label TEXT] [--json]~Save the state of a site (database, files, site_config, the apps and their commits) in sites/NAME/snapshots, which frappe's backup pruning never touches. Changes nothing in the site. To remove snapshots: benchbar site snapshot drop.~no~no~no~yes~document
 flag~site snapshot~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site snapshot~--label~TEXT~What the snapshot is for (up to 120 characters, no quotes); it is part of the folder name.
-flag~site snapshot~--prune~~With drop: remove the snapshots beyond the newest N (never the undo point of the last rollback).
-flag~site snapshot~--keep~N~With drop --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's state file).
-flag~site snapshot~--force-undo-point~~With drop and one named snapshot: also remove the undo point of the last rollback (a plain drop refuses it).
-flag~site snapshot~--yes~~With drop: do not ask. Refused for an agent (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1): drop is a person's choice.
-flag~site snapshot~--dry-run~~Print what would happen (for drop: what would be removed), change nothing.
+flag~site snapshot~--dry-run~~Print what would happen, change nothing.
+cmd~site snapshot drop~benchbar site snapshot drop NAME SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run] [--json]~Remove one snapshot of a site, or with --prune the ones beyond the newest N. A person's choice: refused for an agent (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1); its --dry-run says what would go and is open to an agent. Never the undo point of a rollback unless --force-undo-point.~no~no~no~yes~document
+flag~site snapshot drop~--prune~~Remove the snapshots beyond the newest N (never an undo point of a rollback).
+flag~site snapshot drop~--keep~N~With --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's state file).
+flag~site snapshot drop~--force-undo-point~~With one named snapshot: also remove an undo point of a rollback (a plain drop refuses it).
+flag~site snapshot drop~--yes~~Do not ask. Refused for an agent: drop is a person's choice.
+flag~site snapshot drop~--dry-run~~Print what would be removed, change nothing.
 cmd~site snapshots~benchbar site snapshots NAME [--keep N] [--json]~The site's snapshots, newest first: label, time, size, apps with their commits, and whether the bench's apps still match.~no~no~no~no~document
 flag~site snapshots~--keep~N~Say which snapshots are beyond the newest N (default 10, or SNAPSHOT_KEEP in the bench's state file). Nothing is removed.
 cmd~site rollback~benchbar site rollback NAME --to SNAPSHOT|latest [--no-migrate] --dry-run --json, then --apply TOKEN --yes~Put a snapshot back into the site: its database and files. The current state is snapshotted first (label before rollback), so a rollback can be undone. Migrates only when the bench's apps differ from the snapshot's; a reviewed plan.~no~yes~no~yes~document
@@ -469,7 +471,13 @@ FLAGS
 # fl_cmd_key_for COMMAND ARG: the table key: "COMMAND ARG" when the table has
 # that subcommand, else COMMAND; fails when the table knows neither
 fl_cmd_key_for() {
-  local cmd="$1" arg="${2:-}" line
+  local cmd="$1" arg="${2:-}" line third="${ARGS[1]:-}"
+  # three words where the table has them (site snapshot drop): the third is the global ARGS[1]
+  if [[ -n "$arg" && "$arg" != -* && -n "$third" && "$third" != -* ]]; then
+    while IFS= read -r line; do
+      [[ "$line" == "cmd~${cmd} ${arg} ${third}~"* ]] && { printf '%s' "${cmd} ${arg} ${third}"; return 0; }
+    done < <(fl_cmd_table)
+  fi
   if [[ -n "$arg" && "$arg" != -* ]]; then
     while IFS= read -r line; do
       [[ "$line" == "cmd~${cmd} ${arg}~"* ]] && { printf '%s' "${cmd} ${arg}"; return 0; }

@@ -499,6 +499,10 @@ fl_pull_step_snapshot() {
   fl_changed snapshot "$SR_TARGET" "$FL_SNAP_ID"
 }
 
+# SR_PERSON: 1 when a person is here, decided once by fl_cmd_site_rollback while stdin is still the terminal
+# (an applied plan points stdin at /dev/null before the plan is rebuilt, and a terminal test then fails)
+SR_PERSON=0
+
 # fl_snap_plan_hook: what only a rollback adds to site restore's plan (called from fl_srestore_plan)
 fl_snap_plan_hook() {
   local m="${SR_SNAP_DIR}/manifest.json" bench_default rc=0 match=null label time chg="" word f b put=0 open
@@ -508,7 +512,7 @@ fl_snap_plan_hook() {
     SR_IS_DEFAULT=1
     # a person: a terminal (or the app's own claim), not only the absence of --for-agent. --yes with no
     # terminal is no person either
-    if ! fl_lease_person_ok; then
+    if [[ "$SR_PERSON" != "1" ]]; then
       fl_srestore_err "${SR_TARGET} is the default site of this bench: rolling it back is a person's decision, not an agent's, and this run has no person at a terminal.${FL_PERSON_WHY:+ $FL_PERSON_WHY} Ask the person to run it in a terminal: benchbar site rollback ${SR_TARGET} --to ${SR_SNAP_ID}"
     fi
   fi
@@ -693,6 +697,8 @@ fl_cmd_site_rollback() {
       "benchbar site snapshots ${name} lists them; a person removes this one with: benchbar site snapshot drop ${name} ${FL_SNAP_ID}"
   fi
   SR_ROLLBACK=1
+  SR_PERSON=0
+  if fl_lease_person_ok; then SR_PERSON=1; fi
   SR_SNAP_ID="$FL_SNAP_ID"
   SR_SNAP_DIR="$(fl_snap_dir "$name")/${FL_SNAP_ID}"
   fl_cmd_site_restore "$name" --from "$SR_SNAP_DIR" --with-files ${rargs[@]+"${rargs[@]}"}

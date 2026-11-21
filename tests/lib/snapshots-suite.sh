@@ -434,6 +434,14 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   # a person at a terminal plans it as any site
   run_fm_tty site rollback macdev --to "$id3" --dry-run --json --bench-dir "$BENCH"
   assert_contains "$OUT" '"can_apply":true'
+  # and the token applies at a terminal: stdin is pointed at /dev/null before the plan is rebuilt, so the
+  # person is decided once, before that
+  token="$(printf '%s' "$OUT" | grep -o '"token":"[0-9a-f]\{64\}"' | grep -o '[0-9a-f]\{64\}')"
+  reset_calls
+  MARIADB_ROOT_PASSWORD=rootpw run_fm_tty site rollback macdev --to "$id3" --apply "$token" --yes --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "(an apply of the default site at a terminal: $OUT)"
+  assert_calls_contain "^python benchbar-frappe macdev restore "
+  assert_eq "macdev" "$(tr -d '[:space:]' <"$BENCH/sites/currentsite.txt")" "(the default site never moves)"
 
   # ---- drop is a person's choice: refused for an agent, whatever the flags
   reset_calls
