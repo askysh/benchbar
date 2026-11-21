@@ -158,6 +158,22 @@ assert_contains "$OUT" "The site two.localhost of $BENCH is leased by agent-a"
 as agent-c site restore two.localhost --from 20260101_000000 --yes
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "is leased by agent-a"
+# a rollback to a snapshot replaces the site, like a restore; taking a snapshot only adds one
+as agent-c site rollback two.localhost --to latest --yes
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "is leased by agent-a"
+as agent-c site snapshot two.localhost
+assert_not_contains "$OUT" "is leased" "(a snapshot is what a lease holder needs, like a backup)"
+# removing snapshots changes the site's folder, so a lease gates it, whichever way the site is placed:
+# after drop, first or after an option, and behind an option with a value
+person site snapshot drop two.localhost 20260101_000000 --yes
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "is leased by agent-a"
+person site snapshot drop two.localhost --prune --yes
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "is leased by agent-a"
+person site snapshot drop --prune two.localhost --yes
+assert_eq "1" "$CODE" "(--prune before the site: $OUT)"; assert_contains "$OUT" "The site two.localhost of $BENCH is leased by agent-a"
+person site snapshot drop --keep 2 --prune two.localhost --yes
+assert_eq "1" "$CODE" "(an option with a value before the site: $OUT)"; assert_contains "$OUT" "is leased by agent-a"
 # benchbar run: a change of the leased site is stopped, a read of the allow list is not
 as agent-c run --site two.localhost --yes -- migrate
 assert_eq "1" "$CODE" "$OUT"

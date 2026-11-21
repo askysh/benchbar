@@ -242,6 +242,89 @@ benchbar site restore acme.localhost --from 20260902_090000 --with-files --apply
 benchbar site restore copy.localhost --from 20260902_090000 --from-site acme.localhost --new --yes
 ```
 
+## site snapshot
+
+```
+benchbar site snapshot NAME [--label TEXT] [--json] [--dry-run]
+benchbar site snapshot drop NAME SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run]
+```
+
+Saves the state of a site before a risky change: `bench --site NAME backup
+--with-files` (the database, the public and private files and the site
+config), moved at once out of `sites/NAME/private/backups`, which frappe
+prunes, into `sites/NAME/snapshots/<time>[-label]/`, next to a
+`manifest.json` with the time, the label, the sizes and the apps of the
+bench with their commits. Nothing in the site changes, and nothing removes
+a snapshot by itself. Before it runs, the free space of the volume is
+checked against the site's files plus its largest database dump, and the
+command stops when the set would not fit. An encrypted backup is refused
+(a restore takes plain sets only). The folder is readable by its owner only.
+
+`site snapshot drop` removes a snapshot, or with `--prune` the ones beyond
+the newest 10 (`SNAPSHOT_KEEP` in the bench's state file, or `--keep N`). It
+is a person's choice: it asks first and is refused for an agent
+(`--for-agent`, `benchbar mcp`, `BENCHBAR_NONINTERACTIVE=1`), though
+`--dry-run` shows what would go. It removes the files one by one and then the
+folder, and keeps the `before rollback` snapshot of the last rollback: `--prune`
+never takes it, and dropping it by name needs `--force-undo-point`.
+
+| Flag | What it does |
+|---|---|
+| `--label TEXT` | What the snapshot is for (up to 120 characters, no quotes or backslashes); it is part of the folder name |
+| `--json` | Print the snapshot as JSON ([schema](../../json-schema.md#site-snapshots)) |
+| `--dry-run` | Print what would happen, change nothing |
+
+Exit codes: 0; 1 when the site does not exist, the backup failed or did not
+fit, or an agent asked for `drop`.
+
+```bash
+benchbar site snapshot acme.localhost --label "before the erpnext update"
+benchbar site snapshot drop acme.localhost --prune --dry-run
+```
+
+## site snapshots
+
+```
+benchbar site snapshots NAME [--keep N] [--json]
+```
+
+The snapshots of the site, newest first: the label, the size, the apps with
+their commits when it was taken, and whether the bench's apps are still those
+(`changed: erpnext` when one moved, was added or removed). It also says what
+all the snapshots hold, how much is free on the volume and which snapshots are
+beyond the newest N. Read only.
+
+```bash
+benchbar site snapshots acme.localhost --json
+```
+
+## site rollback
+
+```
+benchbar site rollback NAME --to SNAPSHOT|latest [--no-migrate]
+  --dry-run --json | --apply TOKEN --yes [--json]
+```
+
+Puts a snapshot back into the site. It is [site restore](#site-restore) with
+a snapshot as its source: the same plan, token and checks. The first step
+takes a snapshot of the current state, labelled `before rollback` (the result
+names it, and `--to latest` right after the rollback goes back); then the
+snapshot's database and files are restored into the same site. `bench
+migrate` runs only when the bench's apps differ from the snapshot's, which
+the plan says (a rollback across an app change is allowed and warned);
+`--no-migrate` stops before it. `--to` takes the name from `site snapshots`,
+its time stamp, or `latest`, which skips a cut short folder.
+
+The default site is a person's to roll back: an agent gets a plan that cannot
+be applied. The plan also cannot be applied when the extra snapshot would not
+fit in the free space. The MariaDB root password is needed, as for `site
+restore`.
+
+```bash
+benchbar site rollback acme.localhost --to latest --dry-run --json
+benchbar site rollback acme.localhost --to latest --apply TOKEN --yes
+```
+
 ## site drop
 
 ```
@@ -309,7 +392,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 
 | Command | Terminal | `sudo` | Network | Changes things | JSON |
 |---|---|---|---|---|---|
-| `benchbar site list\|add\|default\|hosts\|backup\|backups\|restore\|drop\|open-as ...` | no | no | no | no | none |
+| `benchbar site list\|add\|default\|hosts\|backup\|backups\|restore\|snapshot\|snapshots\|rollback\|drop\|open-as ...` | no | no | no | no | none |
 | `benchbar site list [--json]` | no | no | no | no | document |
 | `benchbar site add NAME [--bundle NAME\|--apps "a b"] [--dry-run\|--apply TOKEN] [--yes] [--json]` | yes | yes | no | yes | stream |
 | `benchbar site default NAME [--json]` | no | no | no | yes | stream |
@@ -318,6 +401,10 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar site backup NAME [--with-files] [--json]` | no | no | no | yes | document |
 | `benchbar site backups NAME [--json]` | no | no | no | no | document |
 | `benchbar site restore NAME --from STAMP\|PATH [--from-site S] [--new] [--neutralise] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
+| `benchbar site snapshot NAME [--label TEXT] [--json]` | no | no | no | yes | document |
+| `benchbar site snapshot drop NAME SNAPSHOT\|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run] [--json]` | no | no | no | yes | document |
+| `benchbar site snapshots NAME [--keep N] [--json]` | no | no | no | no | document |
+| `benchbar site rollback NAME --to SNAPSHOT\|latest [--no-migrate] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
 | `benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run\|--apply TOKEN --yes] [--json]` | no | yes | no | yes | document |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
@@ -346,6 +433,20 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site restore` | `--with-files` |  | Restore the uploads too. |
 | `site restore` | `--dry-run` |  | Print the plan and its token. |
 | `site restore` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
+| `site snapshot` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
+| `site snapshot` | `--label` | `TEXT` | What the snapshot is for (up to 120 characters, no quotes); it is part of the folder name. |
+| `site snapshot` | `--dry-run` |  | Print what would happen, change nothing. |
+| `site snapshot drop` | `--prune` |  | Remove the snapshots beyond the newest N (never an undo point of a rollback). |
+| `site snapshot drop` | `--keep` | `N` | With --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's state file). |
+| `site snapshot drop` | `--force-undo-point` |  | With one named snapshot: also remove an undo point of a rollback (a plain drop refuses it). |
+| `site snapshot drop` | `--yes` |  | Do not ask. Refused for an agent: drop is a person's choice. |
+| `site snapshot drop` | `--dry-run` |  | Print what would be removed, change nothing. |
+| `site snapshots` | `--keep` | `N` | Say which snapshots are beyond the newest N (default 10, or SNAPSHOT_KEEP in the bench's state file). Nothing is removed. |
+| `site rollback` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
+| `site rollback` | `--to` | `SNAPSHOT` | The snapshot: its name, its stamp, or latest (benchbar site snapshots NAME lists them). |
+| `site rollback` | `--no-migrate` |  | Stop after the restore, before bench migrate. |
+| `site rollback` | `--dry-run` |  | Print the plan and its token. |
+| `site rollback` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
 | `site drop` | `--confirm-site` | `NAME` | Repeat the site name exactly. |
 | `site drop` | `--new-default` | `OTHER` | Required when NAME is the default site. |
 | `site drop` | `--dry-run` |  | Print the plan, change nothing. With --json the plan carries a token. |
@@ -358,5 +459,6 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site add` | `BENCHBAR_SUDO` | Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change). |
 | `site add` | `BENCHBAR_SUDO_PASSWORD` | The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child. |
 | `site restore` | `MARIADB_ROOT_PASSWORD` | Only when MariaDB has a password benchbar does not know. |
+| `site rollback` | `MARIADB_ROOT_PASSWORD` | Only when MariaDB has a password benchbar does not know. |
 | `site drop` | `MARIADB_ROOT_PASSWORD` | Only when MariaDB has a password benchbar does not know. |
 <!-- /generated:cli-commands -->
