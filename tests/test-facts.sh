@@ -167,6 +167,21 @@ assert_file "$TIMING/answered" "(the run ended before a job that was being start
 assert_eq "0" "$(find "$TIMING" -maxdepth 1 -name 'benchbar-facts.*' | wc -l | tr -d ' ')" "(a facts folder was left after a stop while a job was starting)"
 assert_eq "0" "$(/usr/bin/pgrep -f 'sleep 9.41' | wc -l | tr -d ' ' || true)" "(a job outlived a stop that came while it was being started)"
 
+# ---- a stop that lands while fl_par_group_off lets go of a started job is not lost. The TERM
+# comes at its "set +m": the signal is still held there, and the held one used to be read before
+# that line, so it was dropped and the run went on to its end (exit 0, seen in CI as "expected
+# [143], got [0]").
+code=0
+bash -c '
+  . "$1"; . "$2"
+  fl_log() { :; }
+  set() { if [[ "$*" == "+m" && -z "${HIT:-}" ]]; then HIT=1; kill -TERM "$$"; fi; builtin set "$@"; }
+  trap "fl_on_signal TERM" TERM
+  fl_par_group_on
+  fl_par_group_off
+  exit 0' _ "$FACTS" "$ROOT/lib/frappe-local/run.sh" >/dev/null 2>&1 || code=$?
+assert_eq "143" "$code" "(a stop that came while a job start was ending was lost)"
+
 # ---- a stop during the load of the apps' facts (fl_app_facts_load makes a folder of its own) leaves
 # no folder and no collector: it is the run's to clean up (a doctor stopped here left two folders)
 APPSLIB="$ROOT/lib/frappe-local/apps.sh"
