@@ -421,6 +421,12 @@ flag~notices~--all~~Hide every notice.
 TABLE
 
 fl_cmd_table() { printf '%s\n' "$FL_CMD_TABLE"; }
+# The readers below loop over the variable with a here string, never over a
+# pipe from fl_cmd_table: one that returns at its match closes the pipe on a
+# writer that is still printing the table. A shell whose parent ignores
+# SIGPIPE (GitHub Actions, an app) then prints "printf: write error: Broken
+# pipe" on stderr, in the middle of a command's output, and the larger the
+# table grew the more often it did.
 
 # fl_cmd_visible_table: the table without the commands of a lab that is off
 fl_cmd_visible_table() {
@@ -432,7 +438,7 @@ fl_cmd_visible_table() {
              case " ${hidden} " in *" ${word} "*) skip=1 ;; *) skip=0 ;; esac ;;
     esac
     [[ "$skip" == 1 ]] || printf '%s\n' "$line"
-  done < <(fl_cmd_table)
+  done <<<"$FL_CMD_TABLE"
 }
 
 # Options every command takes, for the help text and `commands --json`.
@@ -457,11 +463,11 @@ fl_cmd_key_for() {
   if [[ -n "$arg" && "$arg" != -* ]]; then
     while IFS= read -r line; do
       [[ "$line" == "cmd~${cmd} ${arg}~"* ]] && { printf '%s' "${cmd} ${arg}"; return 0; }
-    done < <(fl_cmd_table)
+    done <<<"$FL_CMD_TABLE"
   fi
   while IFS= read -r line; do
     [[ "$line" == "cmd~${cmd}~"* ]] && { printf '%s' "$cmd"; return 0; }
-  done < <(fl_cmd_table)
+  done <<<"$FL_CMD_TABLE"
   return 1
 }
 
@@ -473,7 +479,7 @@ fl_cmd_attr_v() {
     IFS='~' read -r _ __k __u __s __t __sd __n __m __j <<<"$__line"
     case "$3" in tty) __r="$__t" ;; sudo) __r="$__sd" ;; network) __r="$__n" ;; mutating) __r="$__m" ;; json) __r="$__j" ;; esac
     break
-  done < <(fl_cmd_table)
+  done <<<"$FL_CMD_TABLE"
   printf -v "$1" '%s' "$__r"
 }
 
@@ -488,7 +494,7 @@ fl_cmd_help() {
       flag) flags="${flags}  $(printf '%-22s' "${a}${b:+ ${b}}") ${c}"$'\n' ;;
       env) envs="${envs}  $(printf '%-22s' "$a") ${b}"$'\n' ;;
     esac
-  done < <(fl_cmd_table)
+  done <<<"$FL_CMD_TABLE"
   printf 'benchbar %s: %s\n\nUsage: %s\n' "$key" "$summary" "$usage"
   [[ -z "$flags" ]] || printf '\nOptions:\n%s' "$flags"
   [[ -z "$envs" ]] || printf '\nEnvironment:\n%s' "$envs"

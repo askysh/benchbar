@@ -631,7 +631,11 @@ fl_bench_canonical() {
     */*) parent="${path%/*}" base="${path##*/}"; [[ -n "$parent" ]] || parent=/ ;;
     *) parent=. base="$path" ;;
   esac
-  if [[ -d "$parent" ]]; then printf '%s/%s' "$(cd "$parent" && pwd -P)" "$base"; else printf '%s' "$1"; fi
+  if [[ -d "$parent" ]]; then
+    real="$(cd "$parent" && pwd -P)"
+    # a parent of / gives /name, not //name
+    printf '%s/%s' "${real%/}" "$base"
+  else printf '%s' "$1"; fi
 }
 
 fl_bench_state_file_for() {

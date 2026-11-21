@@ -453,14 +453,22 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   tool, no "Generated with" line. The reviewer checks it.
 - Run `bash tests/affected.sh` for the tests your change touches. CI runs
   the full suite; run it yourself only when the selector says everything.
-- A change a user can see updates its guide or app page, `docs/features.md`
-  and `CHANGELOG.md`; a new command, flag or MCP tool also needs
-  `python3 scripts/docs-reference.py --write` (the reference tables are
-  generated, and `test-docs` fails when they drift). The pull request
-  template lists the same checks.
+- A change a user can see updates its guide or app page and
+  `docs/features.md`, and adds a changelog fragment; a new command, flag
+  or MCP tool also needs `python3 scripts/docs-reference.py --write` (the
+  reference tables are generated, and `test-docs` fails when they drift).
+  The pull request template lists the same checks.
 - Branch from `next-release` and open the pull request against it.
   `main` holds the last release and moves only when one is cut
   (docs/releasing.md).
+- Link the issue in the pull request: `Fixes #N` only when the pull
+  request finishes the issue, `Part of #N` otherwise. The merge into
+  `next-release` does not close an issue, so close a finished one by hand
+  with a comment that names the pull request.
+- An issue you file for the owner starts with the line "Filed by an agent
+  session for the maintainer.", gets its labels and the release's
+  milestone, and is closed in the pull request that fixes it. A security
+  hole is not a public issue: tell the owner (SECURITY.md).
 - Do not commit your own working notes: design briefs, plans, specs,
   state or progress files, or anything your tooling writes for itself
   (for example `design-state.md`, `docs/designpowers/`, `docs/plans/`,

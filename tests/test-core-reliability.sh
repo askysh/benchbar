@@ -193,8 +193,13 @@ HOLDER=$!
 mkdir -p "$LOCK"; printf '%s\n' "$HOLDER" >"$LOCK/pid"
 sh_lib 'fl__lock_start_v s "$2"; printf "%s" "$s" >"$1/pstart"' "$LOCK" "$HOLDER"
 printf 'up \t2026-11-19T10:00:00Z\n' >"$LOCK/info"
-( sleep 1; rm -rf "$LOCK" ) &
-set +e; OUT="$(FL_LOCK_WAIT_SECS=8 sh_lib 'fl_lock_acquire "$1" && printf "held by %s\n" "$(cat "$1/pid")"' "$LOCK" 2>&1)"; CODE=$?; set -e
+# the holder lets go once the second run says it waits (a second at the earliest): on a loaded
+# machine the second run can need more than a second to start, and a lock that was gone by
+# then was taken with no wait and no message
+WAITLOG="$TMP_DIR/lock13.out"; : >"$WAITLOG"
+( sleep 1; for _ in $(seq 1 70); do grep -q 'Waiting for' "$WAITLOG" 2>/dev/null && break; sleep 0.1; done; rm -rf "$LOCK" ) &
+set +e; FL_LOCK_WAIT_SECS=8 sh_lib 'fl_lock_acquire "$1" && printf "held by %s\n" "$(cat "$1/pid")"' "$LOCK" >"$WAITLOG" 2>&1; CODE=$?; set -e
+OUT="$(cat "$WAITLOG")"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "Waiting for benchbar up, started 2026-11-19T10:00:00Z (pid ${HOLDER})"
 assert_contains "$OUT" "held by"
@@ -241,10 +246,13 @@ CLEAN="$TMP_DIR/cleaned"; rm -f "$CLEAN"
 cat >"$TMP_DIR/graceful.sh" <<'SH'
 #!/usr/bin/env bash
 trap 'sleep 1.5; echo cleaned >"$1"; exit 0' TERM
+: >"$1.ready"
 while :; do sleep 0.2; done
 SH
 chmod +x "$TMP_DIR/graceful.sh"
-sh_lib 'FL_KILL_GRACE=8; fl_run_bg_group "$2" "$3" "$4"; sleep 0.5; fl_run_group_kill' "$ROOT" "$TMP_DIR/g.log" "$TMP_DIR/graceful.sh" "$CLEAN"
+# the TERM comes once the command has its trap (a loaded machine starts it late, and a TERM
+# before the trap ends it with no cleanup)
+sh_lib 'FL_KILL_GRACE=8; fl_run_bg_group "$2" "$3" "$4"; w=0; while [[ ! -f "$4.ready" && "$w" -lt 100 ]]; do sleep 0.1; w=$((w + 1)); done; fl_run_group_kill' "$ROOT" "$TMP_DIR/g.log" "$TMP_DIR/graceful.sh" "$CLEAN"
 assert_file "$CLEAN" "(the command finished its cleanup before the KILL)"
 # the grace is not slept when the group is gone at once
 cat >"$TMP_DIR/quick.sh" <<'SH'

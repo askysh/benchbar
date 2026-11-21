@@ -207,7 +207,7 @@ assert_eq "test-apps test-cli test-doctor test-lock test-pull " "$got"
 OUT="$(ONLY_TESTS="test-nope" bash tests/run-tests.sh 2>&1)" && CODE=0 || CODE=$?
 assert_eq "1" "$CODE"; assert_contains "$OUT" "no such test: test-nope"
 
-# ---- ci-timings.sh: the two tables from a log, the Linux one averaging the bash 5 and the container legs
+# ---- ci-timings.sh: the table from a log, the Linux column averaging the bash 5 and the container legs
 LOG="$TMP_DIR/run.log"
 t='2026-11-17T09:26:32.3938790Z'
 {
@@ -216,13 +216,32 @@ t='2026-11-17T09:26:32.3938790Z'
   printf 'CLI tests (Linux, shard 1/8)\tCLI tests\t%s --- ok: test-a (20s)\n' "$t"
   printf 'CLI tests (bash 3.2, shard 1/4)\tCLI tests\t%s --- ok: test-a (40s)\n' "$t"
   printf 'shellcheck\tshellcheck\t%s --- ok: shellcheck (150s)\n' "$t"
+  # not tests: a stand in run's line inside a failing test's output, and a quoted line
+  printf 'CLI tests (Linux, shard 2/8)\tCLI tests\t%s --- ok: t-flaky (1s)\n' "$t"
+  printf 'CLI tests (Linux, shard 2/8)\tCLI tests\t%s   | --- ok: test-a (900s)\n' "$t"
 } >"$LOG"
-OUT="$(bash scripts/ci-timings.sh "$LOG")"
-assert_contains "$OUT" 'TEST_SECS_MAC="test-a=100 test-b=50"'
-assert_contains "$OUT" 'TEST_SECS_LINUX="test-a=30"'
-assert_not_contains "$OUT" "shellcheck="
+TAB="$(printf '\t')"
+# the table it starts from: a header, a test the run timed again, one it timed on one platform only, one it did not time
+TABLE="$TMP_DIR/timings.tsv"
+printf '# the header stays\ntest-a\t1\t1\ntest-b\t2\t77\ntest-old\t5\t-\n' >"$TABLE"
+OUT="$(TIMINGS_FILE="$TABLE" bash scripts/ci-timings.sh "$LOG")"
+assert_eq "# the header stays
+test-a${TAB}100${TAB}30
+test-b${TAB}50${TAB}77
+test-old${TAB}5${TAB}-" "$OUT"
+assert_not_contains "$OUT" "shellcheck"
+assert_not_contains "$OUT" "t-flaky"
+assert_contains "$(cat "$TABLE")" "test-a${TAB}1${TAB}1" "(without --write the table is not touched)"
+# --write puts it in the file, and run-tests.sh weighs a test from it
+TIMINGS_FILE="$TABLE" bash scripts/ci-timings.sh --write "$LOG" 2>/dev/null
+assert_contains "$(cat "$TABLE")" "test-a${TAB}100${TAB}30"
+# a table of its own with no rows yet: only what the run timed
+: >"$TMP_DIR/empty.tsv"
+OUT="$(TIMINGS_FILE="$TMP_DIR/empty.tsv" bash scripts/ci-timings.sh "$LOG")"
+assert_eq "test-a${TAB}100${TAB}30
+test-b${TAB}50${TAB}-" "$OUT"
 printf 'nothing\n' >"$LOG"
-OUT="$(bash scripts/ci-timings.sh "$LOG" 2>&1)" && CODE=0 || CODE=$?
+OUT="$(TIMINGS_FILE="$TABLE" bash scripts/ci-timings.sh "$LOG" 2>&1)" && CODE=0 || CODE=$?
 assert_eq "1" "$CODE"; assert_contains "$OUT" '"--- ok'
 
 printf 'test-ci-plan: ok\n'
