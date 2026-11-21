@@ -1196,37 +1196,6 @@ fl_step_end() {
   FL_STEP_CURRENT=-1
 }
 
-# fl_step_run INDEX FUNCTION [ARGS]: runs a quiet step behind a spinner. The
-# function sets FL_STEP_RESULT to done, unchanged, skipped or warning; a
-# non-zero exit means failed. Its output is captured and replayed afterwards
-# so [WARN] and [FAIL] lines are never lost.
-fl_step_run() {
-  local i="$1" fn="$2" out code=0 label
-  shift 2
-  label="${FL_STEP_LABELS[$i]}"
-  FL_STEP_CURRENT="$i"
-  FL_STEP_START="$SECONDS"
-  FL_STEP_STATUS[i]="running"
-  FL_STEP_RESULT="done"
-  out="$(mktemp "${TMPDIR:-/tmp}/benchbar-step.XXXXXX")"
-  fl_log "step $((i + 1)) start: $label"
-  fl_log_lines_v FL_STEP_LOG_FROM
-  fl_step_json running "$i"
-  fl_spinner_start "$((i + 1)). $label" "$out"
-  "$fn" "$@" >"$out" 2>&1 || code=$?
-  fl_spinner_stop
-  fl_log_file_append "$out"
-  if [[ "$code" -ne 0 ]]; then
-    fl_step_end failed
-    fl_tail_indented "$out"
-  else
-    fl_step_end "$FL_STEP_RESULT"
-    grep -E '^[[:space:]]*([^[:space:]]*\[(WARN|FAIL)\]|fix:)' "$out" 2>/dev/null | sed 's/^/   /' || true
-  fi
-  rm -f "$out"
-  return "$code"
-}
-
 fl_steps_summary() {
   local i=0 rows=() total
   rows+=("#|Step|Status|Time")
@@ -1239,19 +1208,6 @@ fl_steps_summary() {
   fl_table "${rows[@]}"
   printf '  total %s\n' "$(fl_fmt_secs "$total")"
   fl_log "total $(fl_fmt_secs "$total")"
-}
-
-fl_steps_counts() {
-  # prints "N unchanged, N to update, N to repair" style counts from a status list
-  local unchanged=0 update=0 repair=0 s
-  for s in "$@"; do
-    case "$s" in
-      unchanged) unchanged=$((unchanged + 1)) ;;
-      update) update=$((update + 1)) ;;
-      repair) repair=$((repair + 1)) ;;
-    esac
-  done
-  printf '%d unchanged, %d to update, %d to repair' "$unchanged" "$update" "$repair"
 }
 
 # ---------------------------------------------------------------- prompts
@@ -1448,6 +1404,30 @@ fl_ask_secret() {
     [[ "$__answer" == "$__confirm" ]] && { printf -v "$__varname" '%s' "$__answer"; return 0; }
     fl_warn "values do not match; retry"
   done
+}
+
+# fl_version_lt A B: true when version A is older than B ("v0.5.8" < "0.6.0",
+# 0.10 after 0.9, a prerelease before its release). The one version compare:
+# it lives here because the entry point, the phase scripts and every test load
+# ui.sh, and two functions of this name in two files once gave two answers. A
+# caller that wants numbers only cuts the suffix off first (fl_dep_fits,
+# fl_notices_since_lt). A version that does not parse is never older.
+fl_version_lt() {
+  local a="${1#v}" b="${2#v}" pa="" pb="" x y i
+  [[ "$a" == *-* ]] && { pa="${a#*-}"; a="${a%%-*}"; }
+  [[ "$b" == *-* ]] && { pb="${b#*-}"; b="${b%%-*}"; }
+  local -a na nb
+  IFS=. read -r -a na <<<"$a"
+  IFS=. read -r -a nb <<<"$b"
+  for ((i = 0; i < ${#na[@]} || i < ${#nb[@]}; i++)); do
+    x="${na[i]:-0}"; y="${nb[i]:-0}"
+    [[ "$x" =~ ^[0-9]+$ && "$y" =~ ^[0-9]+$ ]] || return 1
+    ((10#$x < 10#$y)) && return 0
+    ((10#$x > 10#$y)) && return 1
+  done
+  [[ -n "$pa" && -z "$pb" ]] && return 0
+  [[ -n "$pa" && -n "$pb" && "$pa" < "$pb" ]] && return 0
+  return 1
 }
 
 # what one doctor run reads once (fl_memo, fl_memo_v, the background jobs);

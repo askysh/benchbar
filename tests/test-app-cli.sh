@@ -87,6 +87,8 @@ assert_contains "$OUT" "benchbar 0.7.1"
 register
 run "$PREFIX/bin/benchbar" --version
 assert_contains "$OUT" "benchbar 0.7.2"
+assert_contains "$OUT" "via $OPT_SELF (0.7.1), which hands off to the CLI inside BenchBar.app" "(--version says the app's CLI answered)"
+assert_not_contains "$OUT" "is newer than this CLI" "(an older copy needs no word)"
 run "$PREFIX/bin/benchbar" where --json
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "app" "$(where_field install)"
@@ -238,6 +240,17 @@ assert_eq "9.9.9" "$(where_field handoff_from_version)"
 assert_eq "$HOME/.local/state/benchbar" "$(where_field state_dir_real)" "(not a link: the same as state_dir)"
 run "$PREFIX/bin/benchbar" where
 assert_contains "$OUT" "via      $OPT_SELF (9.9.9), which hands off to this CLI"
+assert_contains "$OUT" "is newer than this CLI (0.7.2)" "(where says the app's CLI is the older one)"
+assert_contains "$OUT" "Check for Updates in BenchBar"
+# --version says so too (CORE-24): the first line stays the answering CLI's
+# version, which the app reads; the hand off and the newer copy follow
+run "$PREFIX/bin/benchbar" --version
+assert_eq "benchbar 0.7.2" "$(printf '%s\n' "$OUT" | sed -n 1p)" "(the first line of --version is unchanged)"
+assert_contains "$OUT" "via $OPT_SELF (9.9.9), which hands off to the CLI inside BenchBar.app"
+assert_contains "$OUT" "is newer than this CLI (0.7.2)"
+assert_contains "$OUT" "brew upgrade askysh/tap/benchbar-app"
+run "$LINK" --version
+assert_not_contains "$OUT" "hands off" "(run directly: nothing handed off, nothing said)"
 run "$LINK" where --json
 assert_eq "None" "$(where_field handoff_from_version)" "(run directly: nothing handed off)"
 keg 0.7.1

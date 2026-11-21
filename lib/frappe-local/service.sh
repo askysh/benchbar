@@ -150,9 +150,7 @@ fl_render_all() {
     ${FL_RUNNER_EXTRA[@]+"${FL_RUNNER_EXTRA[@]}"})"
   # the agent's plist, or the systemd unit on Linux
   fl_render_agent "$run_at_load"
-  FL_R_HELPERS="$(fl_template_render shell-helpers \
-    "PROFILE_EXPORTS=$(fl_profile_path_exports "$(fl_rc_profile)")" \
-    "BENCHBAR=$(fl_helpers_cli)")"
+  FL_R_HELPERS="$(fl_rc_helpers_render "$(fl_rc_profile)" "$(fl_helpers_cli)")"
 }
 
 # The Procfile and, for the default "local" listen mode, the two files its web
@@ -200,7 +198,7 @@ fl_render_procfile() {
 fl_helpers_cli() {
   local recorded c
   if [[ "${FL_INSTALL_KIND:-}" == app ]]; then
-    recorded="$(fl_rc_block_extract "$(fl_rc_file)" 2>/dev/null | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | awk 'NR==1')"
+    fl_rc_recorded_cli_v recorded "$(fl_rc_file)"
     if [[ "$FL_SELF" != "$FL_APP_CLI" ]]; then
       case "$recorded" in */BenchBar.app/Contents/Resources/cli/benchbar) recorded="" ;; esac
       for c in "$recorded" "$(fl_brew_cli)" "${FL_MANAGED_HOME}/benchbar" "$FL_APP_CLI"; do
@@ -1113,7 +1111,7 @@ fl_cmd_uninstall_service_all() {
     case "$(fl_rc_block_state "$rc")" in
       present|legacy) ;;
       *)
-        fl_ok "nothing to uninstall: no benchbar agent in ~/Library/LaunchAgents and no helper block in ${rc}"
+        fl_ok "nothing to uninstall: no benchbar agent in ~/Library/LaunchAgents and no helper block${rc:+ in ${rc}}"
         fl_uninstall_hosts_offer || true
         return 0 ;;
     esac

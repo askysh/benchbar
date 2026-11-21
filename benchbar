@@ -526,13 +526,18 @@ USAGE
 }
 
 # benchbar --version: the first line stays "benchbar X.Y.Z" (the app and
-# scripts read it); the installed app's version follows on its own line.
+# scripts read it); the installed app's version follows on its own line, and
+# after a hand off the copy that was started and its version: the version
+# above is then the app's CLI's, not the one of the benchbar the person ran.
 fl_print_version() {
-  local app tab=$'\t'
+  local app tab=$'\t' via=""
   printf 'benchbar %s\n' "$FL_VERSION"
   app="$(fl_app_bundle_info)"
-  [[ -n "$app" ]] && printf 'BenchBar app %s (%s)\n' "${app%%"$tab"*}" "${app#*"$tab"}"
-  return 0
+  [[ -z "$app" ]] || printf 'BenchBar app %s (%s)\n' "${app%%"$tab"*}" "${app#*"$tab"}"
+  [[ -n "$FL_HANDOFF_FROM" ]] || return 0
+  fl_handoff_via_v via
+  printf 'via %s%s, which hands off to the CLI inside BenchBar.app\n' "$FL_HANDOFF_FROM" "${via:+ (${via})}"
+  fl_handoff_newer_hint "$via"
 }
 
 # fl_opt_value FLAG ARGC VALUE: a flag that takes a value has one, and the value is not the next
@@ -875,7 +880,7 @@ fl_jsonl_on_exit() {
 
 fl_next_steps_box() {
   fl_box "Next steps" \
-    "source $(fl_rc_file)      (once, so benchup and friends exist)" \
+    "$(fl_rc_source_hint "      (once, so benchup and friends exist)")" \
     "benchup                     start the bench in the background" \
     "$(fl_open_cmd) $(fl_site_url)" \
     "benchstatus / benchlogs     check on it" \
@@ -1097,7 +1102,7 @@ fl_install_rerun_hint() {
   local link
   link="$(fl_cli_link_path)"
   if [[ -x "$link" || -L "$link" ]]; then
-    fl_info "Run it again: ${link} install   (a new terminal, or: source $(fl_rc_file), puts benchbar on PATH)"
+    fl_info "Run it again: ${link} install$([[ -z "$(fl_rc_file)" ]] || printf '   (a new terminal, or: source %s, puts benchbar on PATH)' "$(fl_rc_file)")"
   fi
 }
 
@@ -1532,7 +1537,7 @@ fl_repair_done() {
 # benchbar where [--json]: how this CLI was installed and where its things
 # are. Read only: no bench, no lock, no log.
 cmd_where() {
-  local info app_version="" app_path="" tab=$'\t' how via_version="" via_script="" state_real
+  local info app_version="" app_path="" tab=$'\t' how via_version="" state_real
   [[ "${#ARGS[@]}" == "0" ]] || fl_die "Unexpected argument for where: ${ARGS[0]}" "Usage: benchbar where [--json]"
   if [[ "$FL_INSTALL_KIND" == app ]]; then
     # the app this CLI is part of, not the first one found
@@ -1542,8 +1547,7 @@ cmd_where() {
     if [[ -n "$info" ]]; then app_version="${info%%"$tab"*}"; app_path="${info#*"$tab"}"; fi
   fi
   # the version of the copy that handed off: an older app's CLI runs in its place
-  [[ -z "$FL_HANDOFF_FROM" ]] || via_script="$(fl_cli_standalone_script "$FL_HANDOFF_FROM")"
-  [[ -z "$via_script" || ! -f "$via_script" ]] || via_version="$(fl_cli_version_at "$via_script")"
+  fl_handoff_via_v via_version
   # the folder behind the state path: the same, unless ~/.local/state/benchbar
   # is a link to the installer checkout's folder on another volume (state.sh)
   state_real="$FL_STATE_DIR"
@@ -1566,6 +1570,7 @@ cmd_where() {
   printf '  install  %s\n' "$FL_INSTALL_KIND"
   printf '  self     %s\n' "$FL_SELF"
   [[ -z "$FL_HANDOFF_FROM" ]] || printf '  via      %s%s, which hands off to this CLI\n' "$FL_HANDOFF_FROM" "${via_version:+ (${via_version})}"
+  [[ -z "$(fl_handoff_newer_hint "$via_version")" ]] || printf '           %s\n' "$(fl_handoff_newer_hint "$via_version")"
   if [[ "$state_real" != "$FL_STATE_DIR" ]]; then printf '  state    %s -> %s\n' "$FL_STATE_DIR" "$state_real"; else printf '  state    %s\n' "$FL_STATE_DIR"; fi
   if [[ -n "$app_path" ]]; then printf '  app      %s (%s)\n' "$app_path" "$app_version"; else printf '  app      not installed\n'; fi
 }

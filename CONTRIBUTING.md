@@ -124,6 +124,18 @@ without an entry counts as 10 seconds, so a new test needs no entry to run.
 - **Shell** targets macOS `/bin/bash` 3.2: no associative arrays, no
   `mapfile`, no `${var,,}`. No dependencies beyond the ones the installer
   needs. Every script passes `shellcheck` with the repo's `.shellcheckrc`.
+- **Two older names.** The project was `frappe-mac` until 0.3.0 and its
+  library `frappe-local` before that. The internal spelling stays on
+  purpose, because a rename would touch every file for nothing a person
+  sees: the `fl_` and `FL_` prefixes and the folder `lib/frappe-local/`.
+  What an install has on disk under an old name is still read and
+  migrated: the `frappe-mac` command next to `benchbar`, `com.frappe-mac.*`
+  agents, `frappe-mac-run.sh`, the `# >>> frappe-mac >>>` rc block,
+  `frappe-mac-template:` headers, the `.frappe-local` state folder and the
+  MariaDB drop-in `frappe-mac-local-only.cnf`. None of these goes before
+  1.0.0, and one goes only after a doctor check has named what is left of
+  it. Do not add to the list: a new name, message or temp file says
+  `benchbar`.
 - **Idempotent.** Every command can run twice: a second run changes
   nothing and says `unchanged`. A test for a new step runs it twice and
   checks the second run.

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_DIR="$ROOT"
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/frappe-local-test.XXXXXX")"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-test.XXXXXX")"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 mkdir -p "$TMP_DIR/bin"
@@ -74,5 +74,20 @@ if [[ -s "$GIT_CALL_LOG" ]]; then
   printf 'Expected offline update check not to call git\n'
   exit 1
 fi
+
+# ---- one fl_version_lt (CORE-16): the entry point (which also loads
+# selfupdate.sh) and the phase scripts (version-policy.sh alone) give the same
+# answer, and a dependency spec ignores a prerelease tag, as fl_dep_fits says
+assert_eq "1" "$(cat "$ROOT"/lib/frappe-local/*.sh | grep -c '^fl_version_lt()')"
+lt_as() { bash -c 'set -euo pipefail; SCRIPT_DIR="$1"; shift; for f in $1; do . "$SCRIPT_DIR/lib/frappe-local/$f.sh"; done; shift; "$@"' _ "$ROOT" "$@"; }
+for libs in "ui run version-policy" "ui run version-policy selfupdate"; do
+  lt_as "$libs" fl_version_lt 0.9.0-rc.1 0.9.0 || { printf 'a prerelease comes before its release (%s)\n' "$libs"; exit 1; }
+  lt_as "$libs" fl_version_lt v0.5.8 0.6.0 || { printf 'v0.5.8 < 0.6.0 (%s)\n' "$libs"; exit 1; }
+  lt_as "$libs" fl_version_lt 0.9.0 0.10.0 || { printf '0.9 < 0.10 (%s)\n' "$libs"; exit 1; }
+  ! lt_as "$libs" fl_version_lt 0.6.0 0.6.0-beta.1 || { printf 'a release is newer than its prerelease (%s)\n' "$libs"; exit 1; }
+  lt_as "$libs" fl_dep_fits ">=16.0.0-dev,<17.0.0-dev" 16.0.0-dev || { printf '16.0.0-dev fits >=16.0.0-dev (%s)\n' "$libs"; exit 1; }
+  lt_as "$libs" fl_dep_fits ">=15.0.0,<16.0.0" 15.88.1 || { printf '15.88.1 fits 15.x (%s)\n' "$libs"; exit 1; }
+  ! lt_as "$libs" fl_dep_fits ">=15.0.0,<16.0.0" 16.0.0-dev || { printf '16.0.0-dev does not fit <16.0.0 (%s)\n' "$libs"; exit 1; }
+done
 
 printf 'test-version-policy: ok\n'

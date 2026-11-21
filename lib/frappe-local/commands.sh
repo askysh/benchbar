@@ -387,7 +387,6 @@ cmd~profile remove~benchbar profile remove NAME [--yes] [--json]~Move an import 
 cmd~profile check~benchbar profile check NAME [--json]~Can git read every repo with your credentials?~no~no~yes~no~document
 cmd~labs~benchbar labs [list|on NAME|off NAME|status NAME] [--yes] [--json]~Experiments: off until a person turns one on.~no~no~no~no~document
 flag~labs~--json~~One JSON document.
-env~labs~BENCHBAR_LABS~Comma separated lab names that replace the saved list (tests and CI).
 cmd~labs list~benchbar labs list [--json]~The experiments, whether each is on, and the commands each gates.~no~no~no~no~document
 flag~labs list~--json~~One JSON document.
 cmd~labs on~benchbar labs on NAME [--yes] [--json]~Turn an experiment on after its warning. Refused without a person (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an app passes BENCHBAR_NONINTERACTIVE=0.~yes~no~no~yes~stream

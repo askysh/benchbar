@@ -359,9 +359,12 @@ the app, updating the app updates everything, by either channel:
   it. Right after a release the tap can be a few minutes behind.
 
 `benchbar where` shows which CLI runs (`install app`) and which one it
-was handed off from. To run Homebrew's or the installer's own copy for
-once, set `BENCHBAR_NO_HANDOFF=1`. A git checkout of your own never
-hands off.
+was handed off from, and `benchbar --version` adds a `via` line for it.
+When Homebrew's or the installer's copy is newer than the app's CLI, both
+say so: the app's older CLI still runs, so that one version works on your
+benches, until the app updates. To run Homebrew's or the installer's own
+copy for once, set `BENCHBAR_NO_HANDOFF=1`. A git checkout of your own
+never hands off.
 
 ### Without the app
 
@@ -469,7 +472,14 @@ its window starts the [first run wizard](app.md#a-new-bench-from-the-app).
   (`$ZDOTDIR/.zshrc` when set). A fish user gets `fish_add_path` printed at
   the end, a bash user on a Mac the line for `~/.bash_profile`. On Linux
   the block goes to `~/.bashrc`, or `~/.zshrc` when your login shell is zsh.
-  The `bench*` helpers are zsh and bash functions; fish has none.
+  The `bench*` helpers follow your login shell (`$SHELL`). zsh gets them in
+  `~/.zshrc`. fish gets its own file, `~/.config/fish/conf.d/benchbar.fish`,
+  written as fish functions. bash on a Mac gets them in the file a login
+  shell reads: `~/.bash_profile` (or `~/.bash_login` or `~/.profile` when
+  that is the one you have), and `~/.bashrc` only when that file loads it.
+  nushell, xonsh, elvish, tcsh and PowerShell get no file: use `benchbar up`,
+  `benchbar down` and the other long forms there. A helper file that is read
+  only is never replaced: `repair` says so and names the `chmod`.
 
 ## Uninstall
 
