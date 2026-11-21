@@ -185,7 +185,7 @@ fl_sp_lan_v() {
   SP_LAN_IFACE=""; SP_LAN_IP=""; SP_LAN_IP6=""
   if [[ "${FL_PLATFORM:-macos}" == linux ]]; then fl_sp_lan_linux_v; return 0; fi
   out="$("${FL_ROUTE:-/sbin/route}" -n get default 2>/dev/null || true)"
-  iface="$(printf '%s\n' "$out" | awk '$1 == "interface:" { print $2; exit }')"
+  iface="$(printf '%s\n' "$out" | awk '$1 == "interface:" && !f { print $2; f = 1 }')"
   [[ "$iface" =~ ^[A-Za-z0-9]+$ ]] || return 0
   ip="$("${FL_IPCONFIG:-/usr/sbin/ipconfig}" getifaddr "$iface" 2>/dev/null || true)"
   [[ "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 0
@@ -203,8 +203,8 @@ fl_sp_lan_linux_v() {
     for p in /sbin/ip /usr/bin/ip /bin/ip; do [[ -x "$p" ]] && { ip_bin="$p"; break; }; done
   fi
   out="$("$ip_bin" -4 route get 1.1.1.1 2>/dev/null || true)"
-  iface="$(printf '%s\n' "$out" | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }')"
-  ip="$(printf '%s\n' "$out" | awk '{ for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+  iface="$(printf '%s\n' "$out" | awk '!f { for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); f = 1; break } }')"
+  ip="$(printf '%s\n' "$out" | awk '!f { for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); f = 1; break } }')"
   [[ "$iface" =~ ^[A-Za-z0-9._-]+$ && "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 0
   SP_LAN_IFACE="$iface"; SP_LAN_IP="$ip"
   SP_LAN_IP6="$("$ip_bin" -o -6 addr show dev "$iface" scope global 2>/dev/null | awk '!/deprecated|tentative/ { sub(/\/.*/, "", $4); print $4; exit }')"

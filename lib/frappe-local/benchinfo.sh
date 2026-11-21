@@ -39,7 +39,7 @@ fl_is_bench_dir() {
 
 fl_bench_candidates() {
   local d
-  printf '%s\n' "$HOME/frappe-bench" "$HOME/dev/frappe-bench" "${SCRIPT_DIR}/frappe-bench"
+  printf '%s\n' "$HOME/frappe-bench" "$HOME/dev/frappe-bench"
   for d in "$HOME"/*/sites/common_site_config.json "$HOME"/dev/*/sites/common_site_config.json; do
     [[ -f "$d" ]] || continue
     printf '%s\n' "${d%/sites/common_site_config.json}"
