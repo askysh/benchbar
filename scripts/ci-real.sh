@@ -99,24 +99,37 @@ listen_addrs() {
 }
 
 # exposed: the listeners on the web and socketio ports that are not on
-# loopback, on one line (empty: loopback only). MISSING names a port with no
-# listener at all.
+# loopback, on one line (empty: loopback only)
 exposed() {
-  local port a out=""
-  MISSING=""
+  local port out=""
   for port in "$WEB_PORT" "$SOCKETIO_PORT"; do
-    a="$(listen_addrs "$port")"
-    [[ -n "$a" ]] || MISSING="${MISSING} ${port}"
-    out="${out} $(printf '%s\n' "$a" | grep -v -E '^(127\.0\.0\.1|\[::1\]):' | tr '\n' ' ' || true)"
+    out="${out} $(listen_addrs "$port" | grep -v -E '^(127\.0\.0\.1|\[::1\]):' | tr '\n' ' ' || true)"
   done
   printf '%s' "$out" | tr -s ' ' | sed 's/^ //; s/ $//'
+}
+
+# silent_ports: the web or socketio port that has no listener at all (empty: both listen)
+silent_ports() {
+  local port out=""
+  for port in "$WEB_PORT" "$SOCKETIO_PORT"; do
+    [[ -n "$(listen_addrs "$port")" ]] || out="${out}${out:+ }${port}"
+  done
+  printf '%s' "$out"
+}
+
+# get URL: the body of URL on stdout, non zero when the request fails. Into a
+# file first: under pipefail a reader that stops early (grep -q) would fail curl.
+get() {
+  local f="${RUNNER_TEMP}/ci-real-body"
+  curl -fsS --max-time 30 -o "$f" "$1" 2>/dev/null || return 1
+  cat "$f"
 }
 
 # wait_ping SECS: the site answers /api/method/ping by its name
 wait_ping() {
   local i=0
   while [[ "$i" -lt "$1" ]]; do
-    if curl -fsS --max-time 5 "http://${SITE}:${WEB_PORT}/api/method/ping" 2>/dev/null | grep -q pong; then return 0; fi
+    if [[ "$(get "http://${SITE}:${WEB_PORT}/api/method/ping" || true)" == *pong* ]]; then return 0; fi
     sleep 2; i=$((i + 2))
   done
   return 1
@@ -170,7 +183,7 @@ prepare_macos() {
       printf 'the image has %s at %s: removing it\n' "$tool" "$p"
       if [[ "$tool" == uv ]] && brew list --formula uv >/dev/null 2>&1; then
         brew uninstall --ignore-dependencies uv
-      elif [[ "$tool" == bench ]] && command -v pipx >/dev/null 2>&1 && pipx list --short 2>/dev/null | grep -q '^frappe-bench '; then
+      elif [[ "$tool" == bench ]] && command -v pipx >/dev/null 2>&1 && [[ "$(pipx list --short 2>/dev/null)" == *frappe-bench* ]]; then
         pipx uninstall frappe-bench
       else
         sudo mv "$p" "${p}.hidden-by-ci-real"
@@ -215,9 +228,9 @@ cmd_second_install() {
 
 # loopback_check WHAT: both ports have a listener and none is off loopback
 loopback_check() {
-  local e
-  e="$(exposed)"
-  if [[ -n "$MISSING" ]]; then bad "$1: nothing listens on port(s)${MISSING}"
+  local e silent
+  e="$(exposed)"; silent="$(silent_ports)"
+  if [[ -n "$silent" ]]; then bad "$1: nothing listens on port(s) ${silent}"
   elif [[ -n "$e" ]]; then bad "$1: the web server or socketio listens on ${e}, not on 127.0.0.1 only"
   else ok "$1: the web server and socketio listen on loopback only"; fi
 }
@@ -241,7 +254,9 @@ cmd_serve() {
   if "$CLI" wait --timeout 180 --bench-dir "$BENCH"; then ok "benchbar wait: the bench is ready"; else bad "benchbar wait: not ready after 180 s"; fi
   if wait_ping 60; then ok "http://${SITE}:${WEB_PORT}/api/method/ping answers pong"; else bad "no pong from http://${SITE}:${WEB_PORT}/api/method/ping"; fi
   # a page, not only the ping: the login page is rendered from the site's database and the built assets
-  if curl -fsS --max-time 30 "http://${SITE}:${WEB_PORT}/login" | grep -q -i '<html'; then ok "the login page renders"; else bad "http://${SITE}:${WEB_PORT}/login is not a page"; fi
+  local page
+  page="$(get "http://${SITE}:${WEB_PORT}/login" || true)"
+  if [[ "$page" == *"<html"* || "$page" == *"<HTML"* ]]; then ok "the login page renders"; else bad "http://${SITE}:${WEB_PORT}/login is not a page"; fi
 
   loopback_check "after up"
   doctor_json "$d"
@@ -340,17 +355,19 @@ sys.exit(0 if d["state"] == "running" and d["web_ping_code"] == 200 else 1)' "$s
   if py 'import json, sys
 ids = [n["id"] for n in json.load(open(sys.argv[1])).get("notices", [])]
 sys.exit(0 if "listen-local" in ids else 1)' "$s"; then ok "status --json carries the notice listen-local"; else bad "status --json has no notice listen-local after the update"; fi
-  if "$CLI" list --json | grep -q -F "\"${BENCH}\""; then ok "list --json names ${BENCH}"; else bad "list --json does not name ${BENCH}"; fi
+  out="$("$CLI" list --json)"
+  if [[ "$out" == *"\"${BENCH}\""* ]]; then ok "list --json names ${BENCH}"; else bad "list --json does not name ${BENCH}"; fi
 
   state_dir="$("$CLI" where --json | py 'import json, sys; print(json.load(sys.stdin)["state_dir"])')"
   if grep -q '^LAST_VERSION=' "${state_dir}/state.env"; then ok "the state file records the version (LAST_VERSION)"; else bad "${state_dir}/state.env has no LAST_VERSION after a command that ended well"; fi
 
   # in a terminal the notices print once, and not again
   out="$(on_pty "$CLI" list 2>&1 || true)"
-  if grep -q 'This is shown once' <<<"$out" && grep -q 'The bench now listens on this computer only' <<<"$out"; then ok "the first command in a terminal prints the notices"; else bad "the first command in a terminal did not print the notices"; printf '%s\n' "$out"; fi
+  if [[ "$out" == *'This is shown once'* && "$out" == *'The bench now listens on this computer only'* ]]; then ok "the first command in a terminal prints the notices"; else bad "the first command in a terminal did not print the notices"; printf '%s\n' "$out"; fi
   out="$(on_pty "$CLI" list 2>&1 || true)"
-  if grep -q 'This is shown once' <<<"$out"; then bad "the second command in a terminal printed the notices again"; else ok "the second command in a terminal does not print them again"; fi
-  if "$CLI" notices --json | grep -q '"id":"listen-local"'; then ok "benchbar notices still lists them (until dismissed)"; else bad "benchbar notices --json does not list listen-local"; fi
+  if [[ "$out" == *'This is shown once'* ]]; then bad "the second command in a terminal printed the notices again"; else ok "the second command in a terminal does not print them again"; fi
+  out="$("$CLI" notices --json)"
+  if [[ "$out" == *'"id":"listen-local"'* ]]; then ok "benchbar notices still lists them (until dismissed)"; else bad "benchbar notices --json does not list listen-local"; fi
   finish upgrade-state
 }
 
@@ -378,7 +395,7 @@ cmd_upgrade_doctor() {
   if [[ "$(check_field "$d" bench_listen status)" == warn ]]; then ok "doctor: bench_listen warns ($(check_field "$d" bench_listen message))"; else bad "doctor: bench_listen does not warn about a bench that binds every interface"; fi
   if [[ -n "$(exposed)" ]]; then ok "the running bench still listens on every interface, as the notice says"; else bad "the running bench listens on loopback before any repair or restart"; fi
   out="$("$CLI" repair --dry-run --bench-dir "$BENCH" 2>&1)"; printf '%s\n' "$out"
-  if grep -q 'Procfile.lean' <<<"$out"; then ok "repair --dry-run plans Procfile.lean"; else bad "repair --dry-run does not plan Procfile.lean"; fi
+  if [[ "$out" == *Procfile.lean* ]]; then ok "repair --dry-run plans Procfile.lean"; else bad "repair --dry-run does not plan Procfile.lean"; fi
 
   # Known gap listen-restart: a bench from before 0.9.0 binds every interface at
   # each start until its Procfile.lean is the new one. A restart (and an up) has
@@ -386,9 +403,20 @@ cmd_upgrade_doctor() {
   # bench comes back on loopback, or at least it names the repair to run.
   out="$("$CLI" restart --for-agent --bench-dir "$BENCH" 2>&1 || true)"; printf '%s\n' "$out"
   wait_ping 180 || bad "the bench does not answer after restart (before repair)"
-  if [[ -z "$(exposed)" && -z "$MISSING" ]]; then
+  # warnings[] and next_actions[] of the done line only: its state_after carries the notices, which name repair
+  if [[ -z "$(exposed)" && -z "$(silent_ports)" ]]; then
     gap_closed listen-restart "after a restart the bench from before 0.9.0 listens on loopback only"
-  elif grep -q '"event":"done"' <<<"$out" && grep '"event":"done"' <<<"$out" | grep -q 'repair'; then
+  elif printf '%s\n' "$out" | py 'import json, sys
+for line in sys.stdin:
+    try:
+        d = json.loads(line)
+    except ValueError:
+        continue
+    if not isinstance(d, dict) or d.get("event") != "done":
+        continue
+    said = json.dumps(d.get("warnings", [])) + json.dumps(d.get("next_actions", []))
+    sys.exit(0 if "repair" in said else 1)
+sys.exit(1)'; then
     gap_closed listen-restart "restart on a bench from before 0.9.0 names benchbar repair"
   else
     known_gap listen-restart "restart on a bench from before 0.9.0 leaves it on every interface ($(exposed)) and names no repair"

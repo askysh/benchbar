@@ -49,9 +49,13 @@ shellcheck on the changed files, and the app build when `macos/` changed;
 macOS runs only for paths that need a Mac or with the label `test-macos`.
 Pushes to `next-release` and `main` and the nightly run the whole suite on
 macOS, Linux and bash 3.2, install a real bench on Ubuntu under
-`systemd --user` (a pull request gets that run only with the label
-`test-linux`), build the app and build and test the Windows shim and
-tray. The rules are in the next section.
+`systemd --user` for both profiles and upgrade one from release 0.8.3 (a
+pull request gets those runs only with the label `test-linux`), build the
+app and build and test the Windows shim and tray. The real install and the
+upgrade on a Mac (`real-install.yml`) run nightly, by hand and when the
+label `test-real` is added to a pull request, never on a push: they take
+two of the five macOS runners for half an hour. The rules are in the next
+section.
 
 - **Many checks show "skipped".** A job with nothing to do for your
   change is skipped as a whole, and a skipped job passes. A docs only
