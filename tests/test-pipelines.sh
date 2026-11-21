@@ -46,6 +46,28 @@ left="$(grep -nE '(^|[^|])\| *grep -[a-zA-Z]*q' "$ROOT/benchbar" "$ROOT"/lib/fra
 heads="$(grep -nE '\| *head -n' "$ROOT/benchbar" "$ROOT"/lib/frappe-local/*.sh "$ROOT"/0*.sh | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' | grep -v 'head -n 40' || true)"
 [[ -z "$heads" ]] || fail "producer | head under pipefail gets SIGPIPE (141); use awk 'NR==1' or take the first line of a captured variable:"$'\n'"$heads"
 
+# ---- no "| awk '... exit'" left in the shell sources: an awk that quits at its match closes the
+# pipe on a writer that still has lines to print (bash writes a line at a time). The writer then
+# dies of SIGPIPE (141 under pipefail) or, in a shell whose parent ignores SIGPIPE (GitHub Actions,
+# an app), fails with "printf: write error: Broken pipe": install with a team profile ended that
+# way in CI (profiles.sh, fl_profile_check_loaded). Keep a flag instead ("&& !f { print; f = 1 }"),
+# so awk reads to the end. "END { exit ... }" is fine: the input is read by then.
+awks="$(grep -nE "\\| *awk [^|]*exit" "$ROOT/benchbar" "$ROOT"/lib/frappe-local/*.sh "$ROOT"/0*.sh | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' | grep -vE 'END *\{[^}]*exit' || true)"
+[[ -z "$awks" ]] || fail "producer | awk '... exit' closes the pipe on its writer; use a flag so awk reads it all:"$'\n'"$awks"
+
+# ---- the command table is read from the variable, never through a pipe: a reader that returns at
+# its match left "printf: write error: Broken pipe" in the output of every command with --json
+# when SIGPIPE was ignored (test-homebrew and test-state-migrate in CI). With SIGPIPE ignored and
+# stderr in the output, as CI has it, nothing but the document may come out.
+left="$(grep -n '<(fl_cmd_table)' "$ROOT/benchbar" "$ROOT"/lib/frappe-local/*.sh || true)"
+[[ -z "$left" ]] || fail "a loop over <(fl_cmd_table): read <<<\"\$FL_CMD_TABLE\" instead:"$'\n'"$left"
+i=0
+while [[ "$i" -lt 15 ]]; do
+  out="$(trap '' PIPE; "$FM" commands --json 2>&1 >/dev/null; "$FM" list --json 2>&1 >/dev/null; "$FM" help list 2>&1 >/dev/null)" || true
+  assert_not_contains "$out" "Broken pipe" "(round $i)"
+  i=$((i + 1))
+done
+
 # ---- the tests themselves: the same rule, the same reason. Under
 # "set -o pipefail" (tests/lib/harness.sh) a writer that is cut off by "| head"
 # or by "| grep -q" / "| grep -m1" dies of SIGPIPE, and on the bash 3.2
