@@ -393,6 +393,21 @@ FL_LS_BENCHES=""
 FL_LS_SITE=""
 FL_LS_ALL=0
 
+# fl_lease_snapdrop_site: the SITE of "site snapshot drop ..." (ARGS: snapshot drop ...): the first word after
+# drop that is no option and no option's value, so "drop --prune SITE" and "drop SITE SNAPSHOT" name the same site
+fl_lease_snapdrop_site() {
+  local skip=0 i=0 a
+  for a in ${ARGS[@]+"${ARGS[@]}"}; do
+    i=$((i + 1)); [[ "$i" -gt 2 ]] || continue
+    if [[ "$skip" == "1" ]]; then skip=0; continue; fi
+    case "$a" in
+      --keep) skip=1 ;;
+      -*) ;;
+      *) printf '%s' "$a"; return 0 ;;
+    esac
+  done
+}
+
 # fl__lease_scope: FL_LS_* for the command being run; returns 1 for a command that no lease stops
 fl__lease_scope() {
   local a p as="" prev="" idx
@@ -407,7 +422,8 @@ fl__lease_scope() {
     "site snapshot")
       # only drop changes what exists; taking a snapshot adds one and never interrupts
       [[ "${ARGS[1]:-}" == "drop" ]] || return 1
-      FL_LS_CLASS="S"; FL_LS_SITE="${ARGS[2]:-}" ;;
+      # the site is the first word after drop that is no option: drop --prune SITE names it as well
+      FL_LS_CLASS="S"; FL_LS_SITE="$(fl_lease_snapdrop_site)" ;;
     "app install")
       if [[ -n "$OPT_SITE" ]]; then FL_LS_CLASS="S"; FL_LS_SITE="$OPT_SITE"; else FL_LS_CLASS="W"; fi ;;
     "pull "*)

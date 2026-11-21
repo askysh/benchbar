@@ -548,6 +548,8 @@ fl_srestore_execute() {
     fi
     return "$code"
   fi
+  # the verify passed: only now does the undo point move (a failed rollback leaves the earlier one in place)
+  [[ "$SR_ROLLBACK" != "1" || -z "$SR_BEFORE_SNAPSHOT" ]] || fl_snap_rollback_finished "$SR_TARGET" "$SR_BEFORE_SNAPSHOT"
   if [[ "$SR_ROLLBACK" == "1" ]]; then fl_changed site "$SR_TARGET" "rolled back to snapshot ${SR_SNAP_ID}"; else fl_changed site "$SR_TARGET" "restored from ${SR_SET_STAMP}"; fi
   [[ -z "$SR_BACKUP_STAMP" ]] || fl_changed backup "$SR_TARGET" "$SR_BACKUP_STAMP"
   return 0

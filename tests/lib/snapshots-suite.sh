@@ -30,7 +30,7 @@ snap_count() { snap_names | wc -l | tr -d ' '; }
 git_head() { git -C "$BENCH/apps/$1" rev-parse HEAD; }
 
 suite() {
-  local tag="$1" id1 id2 id3 before plan token n S SNAPS d benv r m
+  local tag="$1" id1 id2 id3 before plan token n S SNAPS d benv r m undo2 failed3 undo4 part
   BENCH="$HOME/dev/snap-$tag"
   make_fake_bench "$BENCH" macdev
   cp "$ROOT/tests/mocks/frappe-python" "$BENCH/env/bin/python"; chmod +x "$BENCH/env/bin/python"
@@ -166,6 +166,73 @@ assert [a["name"] for a in s["apps"]] == ["frappe", "erpnext"] and s["apps_match
   assert_contains "$ERR" "skipped incomplete snapshot(s): 20260930_000000-half"
   rm -f "$SNAPS/20260930_000000-half/20260930_000000-acme_localhost-files.tar"; rmdir "$SNAPS/20260930_000000-half"
 
+  # ---- an incomplete snapshot is no plan, chosen by name too: refused before any token, one part at a time
+  for part in manifest.json database.sql.gz files.tar private-files.tar site_config_backup.json; do
+    d="$SNAPS/20260930_000002-cut"; mkdir -p "$d"; cp "$SNAPS/$id1"/* "$d/"
+    rm -f "$d/20260929_100001-acme_localhost-${part}"
+    [[ "$part" != manifest.json ]] || rm -f "$d/manifest.json"
+    case "$part" in manifest.json) n="the manifest" ;; database.sql.gz) n="the database dump" ;; files.tar) n="the public files" ;; private-files.tar) n="the private files" ;; *) n="site_config" ;; esac
+    run_json site rollback acme.localhost --to 20260930_000002-cut --dry-run --json --bench-dir "$BENCH"
+    assert_eq "1" "$CODE" "(without ${part}: $OUT$ERR)"
+    assert_contains "$ERR" "is incomplete (it lacks ${n})"
+    assert_eq "" "$OUT" "(no plan, no token, without ${part})"
+    run_json site snapshots acme.localhost --json --bench-dir "$BENCH"
+    assert_eq "False" "$(printf '%s' "$OUT" | jget - 'any(x["id"] == "20260930_000002-cut" and x["complete"] for x in d["snapshots"])')" "(listed incomplete without ${part})"
+    rm -f "$d"/*; rmdir "$d"
+  done
+  # the cut short run of the review: the dump and the public files, nothing else
+  d="$SNAPS/20260930_000003-half"; mkdir -p "$d"
+  cp "$SNAPS/$id1/20260929_100001-acme_localhost-database.sql.gz" "$SNAPS/$id1/20260929_100001-acme_localhost-files.tar" "$d/"
+  reset_calls
+  run_json site rollback acme.localhost --to 20260930_000003-half --dry-run --json --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT$ERR"; assert_contains "$ERR" "is incomplete"
+  MARIADB_ROOT_PASSWORD=rootpw run_fm site rollback acme.localhost --to 20260930_000003-half --apply "$(printf '%064d' 0)" --yes --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "is incomplete"
+  assert_calls_not_contain '^(bench|python benchbar|redis-server)'
+  # a person can still remove it by name
+  run_fm site snapshot drop acme.localhost 20260930_000003-half --yes --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT"; assert_no_file "$d"
+
+  # ---- a snapshot that cannot get its manifest or its parts into place leaves nothing that is listed
+  mkdir -p "$TMP_DIR/failmv"
+  cat >"$TMP_DIR/failmv/mv" <<'MVEOF'
+#!/bin/bash
+for last; do :; done
+case "${FAIL_MV:-}:${last}" in
+  manifest:*/manifest.json) exit 1 ;;
+  move:*/snapshots/.incomplete-*/*private-files.tar) exit 1 ;;
+esac
+exec /bin/mv "$@"
+MVEOF
+  chmod +x "$TMP_DIR/failmv/mv"
+  n="$(snap_count)"
+  for part in manifest move; do
+    FAIL_MV="$part" PATH="$TMP_DIR/failmv:$PATH" run_json site snapshot acme.localhost --json --bench-dir "$BENCH"
+    assert_eq "1" "$CODE" "(${part}: $OUT$ERR)"
+    assert_eq "$n" "$(snap_count)" "(a failed ${part} adds no snapshot)"
+    assert_eq "4" "$(find "$S/private/backups" -type f | wc -l | tr -d ' ')" "(${part}: the set is back where bench wrote it)"
+    assert_eq "" "$(find "$SNAPS" -maxdepth 1 -name '.incomplete-*')" "(${part}: no folder is left behind)"
+    rm -f "$S/private/backups"/*
+  done
+  assert_contains "$ERR" "could not move"
+
+  # ---- the space check of a site with no earlier dump: the size of its database, else its files, at least 64 MB
+  mkdir -p "$BENCH/sites/dump.localhost"; printf '{"db_name":"_dumpdb","db_password":"x"}\n' >"$BENCH/sites/dump.localhost/site_config.json"
+  printf '127.0.0.1 dump.localhost\n' >>"$FL_HOSTS_FILE"
+  printf '%s' 60000 >"$MOCK_STATE/df_avail_kb"
+  run_fm site snapshot dump.localhost --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "not enough free space for a snapshot of dump.localhost"
+  assert_contains "$(cat "$MOCK_STATE/df_args")" "-Pk"
+  printf '%s' 209715200 >"$MOCK_STATE/mariadb_size._dumpdb"
+  printf '%s' 100000 >"$MOCK_STATE/df_avail_kb"
+  run_fm site snapshot dump.localhost --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "(the database in MariaDB is 200 MB: $OUT)"; assert_contains "$OUT" "not enough free space"
+  printf '%s' 1000 >"$MOCK_STATE/mariadb_size._dumpdb"
+  run_fm site snapshot dump.localhost --bench-dir "$BENCH"
+  assert_not_contains "$OUT" "not enough free space" "(a small database fits)"
+  rm -f "$MOCK_STATE/mariadb_size._dumpdb"
+  printf '%s' 52428800 >"$MOCK_STATE/df_avail_kb"
+
   # ---- the rollback plan across an app change: read only, with a token, migrate and a warning
   reset_calls
   run_json site rollback acme.localhost --to "$id1" --dry-run --json --bench-dir "$BENCH"
@@ -284,6 +351,8 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   assert_eq "False" "$(printf '%s' "$OUT" | jget - 'any(s["id"] == "migrate" for s in d["steps"])')" "(no migrate step)"
   assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["rollback"]["before_rollback"] != "'"$before"'"')" "(a new before rollback snapshot)"
   assert_eq "$(printf '%s' "$OUT" | jget - 'd["rollback"]["before_rollback"]')" "$(cat "$SNAPS/.last-rollback")"
+  undo2="$(cat "$SNAPS/.last-rollback")"
+  assert_eq "False" "$([[ -f "$SNAPS/.unfinished-rollbacks" ]] && echo True || echo False)" "(a finished rollback leaves nothing unfinished)"
   # a failed restore says where the snapshot of the current state is
   reset_calls
   run_json site rollback acme.localhost --to "$id1" --dry-run --json --bench-dir "$BENCH"
@@ -292,7 +361,51 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   assert_eq "1" "$CODE" "$OUT"
   assert_contains "$OUT" "acme.localhost was snapshotted first as"
   assert_contains "$OUT" "put that back with: benchbar site rollback acme.localhost --to"
-  assert_eq "$(cat "$SNAPS/.last-rollback")" "$(snap_names | grep 'before-rollback' | sort | tail -n 1)" "(the snapshot of the failed run is the undo point)"
+  # the failed run does not move the undo point: the one of the last rollback that finished stays, and the
+  # snapshot of the failed run is kept too (protected as an unfinished rollback)
+  assert_eq "$undo2" "$(cat "$SNAPS/.last-rollback")" "(the undo point stays where the finished rollback put it)"
+  failed3="$(snap_names | grep 'before-rollback' | sort | tail -n 1)"
+  [[ "$failed3" != "$undo2" ]] || fail "the failed run took its own before rollback snapshot"
+  assert_eq "$failed3" "$(cat "$SNAPS/.unfinished-rollbacks")"
+  # both are protected: not on the over limit list, not dropped by name without the person's word
+  run_json site snapshots acme.localhost --keep 1 --json --bench-dir "$BENCH"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - '"'"$failed3"'" not in d["over_limit"] and "'"$undo2"'" not in d["over_limit"] and "'"$before"'" in d["over_limit"]')" "(the first undo point is released by the second finished rollback)"
+  run_fm site snapshot drop acme.localhost "$failed3" --yes --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "is the undo point of a rollback"
+  assert_file "$SNAPS/$failed3/manifest.json"
+  # the retry of the same rollback (the restore works now): it takes a snapshot of the half restored site, and
+  # that becomes the undo point; the snapshot of the failed run keeps its protection
+  reset_calls
+  run_json site rollback acme.localhost --to "$id1" --dry-run --json --bench-dir "$BENCH"
+  assert_contains "$OUT" "earlier rollback of acme.localhost did not finish"
+  token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+  MARIADB_ROOT_PASSWORD=rootpw run_json site rollback acme.localhost --to "$id1" --apply "$token" --yes --json --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT$ERR"
+  undo4="$(printf '%s' "$OUT" | jget - 'd["rollback"]["before_rollback"]')"
+  assert_eq "$undo4" "$(cat "$SNAPS/.last-rollback")"
+  assert_eq "$failed3" "$(cat "$SNAPS/.unfinished-rollbacks")" "(the real data from before the failed run stays protected)"
+  run_json site snapshots acme.localhost --keep 1 --json --bench-dir "$BENCH"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - '"'"$failed3"'" not in d["over_limit"] and "'"$undo4"'" not in d["over_limit"] and "'"$undo2"'" in d["over_limit"]')" "(A ok, B failed, B retried ok: B's undo point and the failed run's snapshot stay, A's is released)"
+  run_fm site snapshot drop acme.localhost "$failed3" --yes --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_file "$SNAPS/$failed3/manifest.json"
+  # a before rollback snapshot that fails stops the run before anything is replaced, and moves nothing
+  run_json site rollback acme.localhost --to "$id1" --dry-run --json --bench-dir "$BENCH"
+  token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+  reset_calls
+  MOCK_BENCH_BACKUP_EXIT=1 MARIADB_ROOT_PASSWORD=rootpw run_fm site rollback acme.localhost --to "$id1" --apply "$token" --yes --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Nothing was replaced"
+  assert_calls_not_contain 'benchbar-frappe acme.localhost restore'
+  assert_eq "$undo4" "$(cat "$SNAPS/.last-rollback")" "(the undo point did not move)"
+  assert_eq "$failed3" "$(cat "$SNAPS/.unfinished-rollbacks")" "(and nothing was added)"
+  # the room is checked again when the token is applied, before anything is replaced
+  run_json site rollback acme.localhost --to "$id1" --dry-run --json --bench-dir "$BENCH"
+  token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+  printf '%s' 1 >"$MOCK_STATE/df_avail_kb"
+  reset_calls
+  MARIADB_ROOT_PASSWORD=rootpw run_fm site rollback acme.localhost --to "$id1" --apply "$token" --yes --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "plan changed since it was shown"
+  assert_calls_not_contain 'benchbar-frappe acme.localhost restore'
+  printf '%s' 52428800 >"$MOCK_STATE/df_avail_kb"
 
   # ---- the default site: an agent never rolls it back, a person can
   run_fm site snapshot macdev --label "default" --bench-dir "$BENCH"
@@ -309,9 +422,18 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   MARIADB_ROOT_PASSWORD=rootpw run_fm --for-agent site rollback macdev --to "$id3" --apply "$token" --yes --bench-dir "$BENCH"
   assert_eq "1" "$CODE" "$OUT"
   assert_calls_not_contain '^(bench|python benchbar|redis-server)'
-  # a person in a terminal plans it as any site
+  # no terminal and no variable is no person either: a plain shell that left out --for-agent
   run_json site rollback macdev --to "$id3" --dry-run --json --bench-dir "$BENCH"
-  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')"
+  assert_eq "0" "$CODE" "$OUT$ERR"
+  assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')"
+  assert_contains "$OUT" "no person at a terminal"
+  reset_calls
+  MARIADB_ROOT_PASSWORD=rootpw run_fm site rollback macdev --to "$id3" --apply "$token" --yes --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "(--yes with no terminal: $OUT)"
+  assert_calls_not_contain '^(bench|python benchbar|redis-server)'
+  # a person at a terminal plans it as any site
+  run_fm_tty site rollback macdev --to "$id3" --dry-run --json --bench-dir "$BENCH"
+  assert_contains "$OUT" '"can_apply":true'
 
   # ---- drop is a person's choice: refused for an agent, whatever the flags
   reset_calls
@@ -362,7 +484,7 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   assert_eq "0" "$(printf '%s' "$OUT" | jget - 'len(d["dropped"])')" "(a second prune changes nothing)"
   # one by name: the undo point of the last rollback is refused, unless a person says so
   run_fm site snapshot drop acme.localhost "$before" --yes --bench-dir "$BENCH"
-  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "is the undo point of the last rollback"; assert_contains "$OUT" "--force-undo-point"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "is the undo point of a rollback"; assert_contains "$OUT" "--force-undo-point"
   assert_file "$SNAPS/$before/manifest.json"; assert_file "$SNAPS/.last-rollback"
   run_fm --for-agent site snapshot drop acme.localhost "$before" --force-undo-point --yes --bench-dir "$BENCH"
   assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "a person at a terminal"

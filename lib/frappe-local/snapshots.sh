@@ -67,13 +67,62 @@ fl_snap_ids() {
   done | { grep -E '^[0-9]{8}_[0-9]{6}' || true; } | sort -r
 }
 
-# fl_snap_last_rollback SITE: the "before rollback" snapshot of the last rollback, when it is still there
+# fl_snap_last_rollback SITE: the "before rollback" snapshot of the last rollback that finished (its
+# verify passed), when it is still there. `.last-rollback` moves only then.
 fl_snap_last_rollback() {
   local f id=""
   f="$(fl_snap_dir "$1")/.last-rollback"
   if [[ -f "$f" ]]; then IFS= read -r id <"$f" || true; fi
   [[ "$id" =~ ^[0-9a-z_-]+$ && -d "$(fl_snap_dir "$1")/${id}" ]] && printf '%s' "$id"
   return 0
+}
+
+# fl_snap_unfinished SITE: the "before rollback" snapshots of rollbacks that did not finish, one per line,
+# the ones still there. `.unfinished-rollbacks` is appended at the snapshot step and a name leaves it only
+# when its own rollback ends with a passed verify, or when a person drops the snapshot. Each holds
+# the data from before a rollback that failed halfway, so each stays protected.
+fl_snap_unfinished() {
+  local f id
+  f="$(fl_snap_dir "$1")/.unfinished-rollbacks"
+  [[ -f "$f" ]] || return 0
+  while IFS= read -r id || [[ -n "$id" ]]; do
+    [[ "$id" =~ ^[0-9a-z_-]+$ && -d "$(fl_snap_dir "$1")/${id}" ]] && printf '%s\n' "$id"
+  done <"$f"
+  return 0
+}
+
+# fl_snap_is_protected SITE ID: the undo point of the last finished rollback, or a "before rollback"
+# snapshot of one that did not finish
+fl_snap_is_protected() {
+  local open
+  [[ "$2" == "$(fl_snap_last_rollback "$1")" ]] && return 0
+  open="$(fl_snap_unfinished "$1")"
+  case $'\n'"$open"$'\n' in *$'\n'"$2"$'\n'*) return 0 ;; esac
+  return 1
+}
+
+# fl_snap_list_remove SITE FILE ID: ID leaves a pointer file (the file goes when it empties)
+fl_snap_list_remove() {
+  local f keep="" line
+  f="$(fl_snap_dir "$1")/$2"
+  [[ -f "$f" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ -n "$line" && "$line" != "$3" ]]; then keep="${keep}${line}"$'\n'; fi
+  done <"$f"
+  if [[ -z "$keep" ]]; then rm -f "$f"; else printf '%s' "$keep" >"$f"; fi
+}
+
+# fl_snap_rollback_started SITE ID: the snapshot a rollback made before it replaces anything is protected
+# from this moment (a failed or cut short rollback leaves it, and the earlier undo point, in place)
+fl_snap_rollback_started() {
+  printf '%s\n' "$2" >>"$(fl_snap_dir "$1")/.unfinished-rollbacks"
+}
+
+# fl_snap_rollback_finished SITE ID: the rollback ended with a passed verify: ID is the undo point now (the
+# one of the rollback before it is released) and leaves the unfinished list
+fl_snap_rollback_finished() {
+  printf '%s\n' "$2" >"$(fl_snap_dir "$1")/.last-rollback"
+  fl_snap_list_remove "$1" .unfinished-rollbacks "$2"
 }
 
 # fl_snap_resolve SITE REF: FL_SNAP_ID from a name, a unique start of one (the stamp) or "latest"
@@ -197,7 +246,7 @@ fl_snap_json() {
   [[ -n "$time" || -z "$set" ]] || time="$(fl_backup_field "$set" time)"
   label="$(fl_snap_mfield "$m" label)"
   rb="$(fl_snap_mfield "$m" rollback_of)"
-  [[ -f "$m" ]] || complete=false
+  fl_snap_is_complete "$site" "$id" || complete=false
   while IFS='|' read -r name commit branch; do
     [[ -n "$name" ]] || continue
     apps="${apps}${sep}{\"name\":$(fl_json_str "$name"),\"commit\":$(fl_json_str "$commit"),\"branch\":$(fl_json_str "$branch")}"; sep=","
@@ -206,21 +255,21 @@ fl_snap_json() {
   case "$rc" in 0) match=true ;; 1) match=false ;; esac
   # shellcheck disable=SC2086  # the app names, split
   chg="$(fl_json_str_array $FL_SNAP_CHANGED)"
-  [[ "$(fl_snap_last_rollback "$site")" == "$id" ]] && before=true
+  fl_snap_is_protected "$site" "$id" && before=true
   printf '{"id":%s,"site":%s,"label":%s,"time":%s,"stamp":%s,"path":%s,"size_bytes":%s,"db_size_bytes":%s,"with_files":%s,"complete":%s,"rollback_of":%s,"before_rollback":%s,"apps":[%s],"apps_match":%s,"changed_apps":%s}' \
     "$(fl_json_str "$id")" "$(fl_json_str "$site")" "$(fl_json_str "$label")" "$(fl_json_str "$time")" "$(fl_json_str "$stamp")" "$(fl_json_str "$d")" \
     "${size:-0}" "$dbsize" "${files:-false}" "${complete:-false}" "$(fl_json_str "$rb")" "$before" "$apps" "$match" "$chg"
 }
 
 # fl_snap_over_limit SITE KEEP: the snapshots beyond the newest KEEP, one per line, never the one
-# the last rollback made to be undone with
+# the last finished rollback made to be undone with, nor one a rollback that did not finish made
 fl_snap_over_limit() {
-  local id i=0 protected
-  protected="$(fl_snap_last_rollback "$1")"
+  local id i=0
   while IFS= read -r id; do
     [[ -n "$id" ]] || continue
     i=$((i + 1))
-    [[ "$i" -gt "$2" && "$id" != "$protected" ]] || continue
+    [[ "$i" -gt "$2" ]] || continue
+    ! fl_snap_is_protected "$1" "$id" || continue
     printf '%s\n' "$id"
   done < <(fl_snap_ids "$1")
 }
@@ -250,28 +299,69 @@ fl_snap_phrase() {
   printf '; its %s snapshot(s) (%s) move into the archive with it' "$FL_SNAP_COUNT" "$(fl_fmt_bytes "$FL_SNAP_BYTES")"
 }
 
-# fl_snap_is_complete SITE ID: the folder has its manifest and a database dump that is not empty
-fl_snap_is_complete() {
-  local d f
+# fl_snap_missing_parts SITE ID: what the folder lacks of a whole snapshot (its manifest, a database dump that
+# is not empty, the public and the private files, site_config), as words; nothing when it is whole
+fl_snap_missing_parts() {
+  local d f out="" db=0 pub=0 priv=0 cfg=0
   d="$(fl_snap_dir "$1")/$2"
-  [[ -f "${d}/manifest.json" ]] || return 1
-  for f in "$d"/*-database.sql.gz; do
-    [[ -s "$f" ]] && return 0
+  [[ -f "${d}/manifest.json" ]] || out="the manifest"
+  for f in "$d"/*-database.sql.gz; do [[ -s "$f" ]] && db=1; done
+  for f in "$d"/*-private-files.tar; do [[ -f "$f" ]] && priv=1; done
+  for f in "$d"/*-files.tar; do
+    case "$f" in *-private-files.tar) ;; *) [[ -f "$f" ]] && pub=1 ;; esac
   done
-  return 1
+  for f in "$d"/*-site_config_backup.json; do [[ -f "$f" ]] && cfg=1; done
+  [[ "$db" == 1 ]] || out="${out}${out:+, }the database dump"
+  [[ "$pub" == 1 ]] || out="${out}${out:+, }the public files"
+  [[ "$priv" == 1 ]] || out="${out}${out:+, }the private files"
+  [[ "$cfg" == 1 ]] || out="${out}${out:+, }site_config"
+  printf '%s' "$out"
 }
 
-# fl_snap_free_bytes SITE: the free bytes on the volume of the site's folder, empty when df does not say
+# fl_snap_is_complete SITE ID: the folder is a snapshot with all of its parts. A rollback takes nothing
+# less, however the snapshot was named.
+fl_snap_is_complete() {
+  local d
+  d="$(fl_snap_dir "$1")/$2"
+  [[ -d "$d" && ! -L "$d" ]] || return 1
+  [[ -z "$(fl_snap_missing_parts "$1" "$2")" ]]
+}
+
+# fl_snap_free_bytes SITE: the free bytes on the volume of the site's folder, empty when df does not say.
+# -P: one line per volume (POSIX output), so a long device name never wraps the numbers to a second line
 fl_snap_free_bytes() {
   local kb
-  kb="$(df -k "${FL_BENCH_DIR}/sites/$1" 2>/dev/null | awk 'NR == 2 { print $4 }')"
+  kb="$(df -Pk "${FL_BENCH_DIR}/sites/$1" 2>/dev/null | awk 'NR == 2 { print $4 }')"
   [[ "$kb" =~ ^[0-9]+$ ]] && printf '%s' "$((kb * 1024))"
   return 0
 }
 
+# fl_snap_db_bytes SITE: the size of the site's database in MariaDB (data and indexes, uncompressed: more
+# than the gzip dump, the safe side), empty when it cannot be asked. Uses the root password the CLI itself
+# uses (the one in hand, the environment, the Keychain or the 0600 file); it is never printed or logged.
+fl_snap_db_bytes() {
+  local cfg db pw bin n
+  cfg="${FL_BENCH_DIR}/sites/$1/site_config.json"
+  [[ -r "$cfg" ]] || return 0
+  db="$(sed -n 's/.*"db_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$cfg" | awk 'NR==1')"
+  [[ "$db" =~ ^[A-Za-z0-9_]+$ ]] || return 0
+  pw="${FL_MARIADB_ROOT_PW:-${MARIADB_ROOT_PASSWORD:-}}"
+  [[ -n "$pw" ]] || pw="$(fl_keychain_get 2>/dev/null || true)"
+  [[ -n "$pw" ]] || return 0
+  bin="$(fl_mariadb_client)"
+  [[ -n "$bin" ]] || return 0
+  n="$(MYSQL_PWD="$pw" "$bin" -u root --connect-timeout=2 -sNe "SELECT COALESCE(SUM(data_length + index_length), 0) FROM information_schema.TABLES WHERE TABLE_SCHEMA='${db}'" 2>/dev/null | awk 'NR==1')" || n=""
+  [[ "$n" =~ ^[0-9]+$ ]] && printf '%s' "$n"
+  return 0
+}
+
+# the dump of a site with no earlier snapshot or backup, when MariaDB cannot be asked: 64 MB
+FL_SNAP_DUMP_FLOOR=67108864
+
 # fl_snap_need_bytes SITE: what one more snapshot writes before anything is moved: the public and private
 # files (a tar of about their size), the database dump (as big as the largest one the site has: a snapshot,
-# or a backup), and 5 percent, at least 1 MB. bench backup writes a whole set first, whatever it moves later.
+# or a backup; with none, the size of the database in MariaDB, else the files again, at least 64 MB), and
+# 5 percent, at least 1 MB. bench backup writes a whole set first, whatever it moves later.
 fl_snap_need_bytes() {
   local site="$1" files=0 dump=0 f b kb sub
   for sub in public/files private/files; do
@@ -284,20 +374,30 @@ fl_snap_need_bytes() {
     b="$(wc -c <"$f" | tr -d '[:space:]')"
     [[ "${b:-0}" -le "$dump" ]] || dump="$b"
   done
+  if [[ "$dump" == "0" ]]; then
+    dump="$(fl_snap_db_bytes "$site")"
+    if [[ ! "$dump" =~ ^[0-9]+$ || "$dump" == "0" ]]; then
+      dump="$files"
+      [[ "$dump" -ge "$FL_SNAP_DUMP_FLOOR" ]] || dump="$FL_SNAP_DUMP_FLOOR"
+    fi
+  fi
   b=$((files + dump))
   b=$((b + b / 20))
   [[ "$b" -ge 1048576 ]] || b=1048576
   printf '%s' "$b"
 }
 
-# fl_snap_space_check SITE: 0 when a snapshot fits (or df does not say), else 1 with FL_SNAP_ERR and FL_SNAP_HINT
+# fl_snap_space_check SITE [EXTRA]: 0 when a snapshot fits (or df does not say), else 1 with FL_SNAP_ERR and
+# FL_SNAP_HINT. EXTRA is what the run writes after the snapshot (a rollback: the files and the database of
+# the snapshot it puts back).
 fl_snap_space_check() {
-  local site="$1" need free
+  local site="$1" extra="${2:-0}" need free
   need="$(fl_snap_need_bytes "$site")"
+  need=$((need + extra))
   free="$(fl_snap_free_bytes "$site")"
   [[ -n "$free" && "$free" -lt "$need" ]] || return 0
-  FL_SNAP_ERR="not enough free space for a snapshot of ${site}: about $(fl_fmt_bytes "$need") are written first (its files and a database dump), and $(fl_fmt_bytes "$free") are free on the volume of ${FL_BENCH_DIR}/sites/${site}."
-  FL_SNAP_HINT="Free some space, or remove old snapshots (a person: benchbar site snapshot drop ${site} --prune). Nothing was written."
+  FL_SNAP_ERR="not enough free space for a snapshot of ${site}: about $(fl_fmt_bytes "$need") are written (its files and a database dump$([[ "$extra" -gt 0 ]] && printf ', then the snapshot put back')), and $(fl_fmt_bytes "$free") are free on the volume of ${FL_BENCH_DIR}/sites/${site}."
+  FL_SNAP_HINT="Free some space first (a full disk during the restore leaves the site half restored), or remove old snapshots (a person: benchbar site snapshot drop ${site} --prune). Nothing was written."
   return 1
 }
 
@@ -335,8 +435,10 @@ fl_snap_take() {
   slug="$(fl_snap_slug "$label")"
   root="$(fl_snap_dir "$site")"
   id="${stamp}${slug:+-${slug}}"
-  while [[ -e "${root}/${id}" ]]; do n=$((n + 1)); id="${stamp}${slug:+-${slug}}-${n}"; done
-  sdir="${root}/${id}"
+  while [[ -e "${root}/${id}" || -e "${root}/.incomplete-${id}" ]]; do n=$((n + 1)); id="${stamp}${slug:+-${slug}}-${n}"; done
+  # built under a name the list does not show; the folder takes its name last, so a run cut short at any
+  # point leaves nothing that looks like a snapshot
+  sdir="${root}/.incomplete-${id}"
   if ! mkdir -p "$sdir" 2>/dev/null; then FL_SNAP_ERR="could not make ${sdir}."; FL_SNAP_HINT="Look at the permissions of sites/${site}"; return 1; fi
   chmod 700 "$root" 2>/dev/null || true
   # a rename inside sites/SITE: no copy, no second set of bytes
@@ -357,15 +459,19 @@ fl_snap_take() {
   total="$(fl_backup_field "$set" size_bytes)"
   mtime="$(fl_backup_field "$set" time)"
   if ! fl_snap_manifest_write "${sdir}/manifest.json.tmp" "$id" "$site" "$label" "$stamp" "$mtime" "${db_bytes:-0}" "${total:-0}" "$rto" \
-    || ! mv "${sdir}/manifest.json.tmp" "${sdir}/manifest.json"; then
+    || ! mv "${sdir}/manifest.json.tmp" "${sdir}/manifest.json" \
+    || ! mv "$sdir" "${root}/${id}"; then
     # no manifest, no snapshot: the set goes back where bench wrote it (a plain backup) and the folder is
-    # taken away empty, never recursively; whatever cannot go back stays where it is and is named
-    rm -f "${sdir}/manifest.json.tmp"
+    # taken away empty, never recursively; whatever cannot go back stays where it is (as .incomplete-ID,
+    # which no list shows and no rollback reads) and is named
+    rm -f "${sdir}/manifest.json.tmp" "${sdir}/manifest.json"
     for name in ${moved[@]+"${moved[@]}"}; do mv "${sdir}/${name}" "${bdir}/${name}" 2>/dev/null || true; done
-    if ! rmdir "$sdir" 2>/dev/null; then
-      mv "$sdir" "${root}/.incomplete-${id}" 2>/dev/null || true
+    rmdir "$sdir" 2>/dev/null || true
+    if [[ -d "$sdir" ]]; then
+      FL_SNAP_ERR="could not write the manifest of ${id}; no snapshot was made, and what could not go back to ${bdir} stays in ${sdir}, which is no snapshot."
+    else
+      FL_SNAP_ERR="could not write the manifest of ${id}; no snapshot was made, and the backup ${stamp} is back in ${bdir}."
     fi
-    FL_SNAP_ERR="could not write the manifest of ${id}; no snapshot was made, and the backup ${stamp} is back in ${bdir}."
     FL_SNAP_HINT="Look at the permissions and the free space of ${root}"
     return 1
   fi
@@ -383,7 +489,9 @@ fl_pull_step_snapshot() {
     [[ -z "$FL_SNAP_HINT" ]] || fl_fix "$FL_SNAP_HINT"
     return 1
   fi
-  printf '%s\n' "$FL_SNAP_ID" >"$(fl_snap_dir "$SR_TARGET")/.last-rollback"
+  # protected now, and it becomes the undo point only when the rollback ends with a passed verify
+  # (fl_snap_rollback_finished): a retry after a failure must not move the undo point
+  fl_snap_rollback_started "$SR_TARGET" "$FL_SNAP_ID"
   SR_BEFORE_SNAPSHOT="$FL_SNAP_ID"
   SR_RESULT_EXTRA="$(printf ',"rollback":{"snapshot":%s,"before_rollback":%s,"undo":%s}' "$(fl_json_str "$SR_SNAP_ID")" "$(fl_json_str "$FL_SNAP_ID")" \
     "$(fl_json_str "benchbar site rollback ${SR_TARGET} --to ${FL_SNAP_ID}")")"
@@ -393,17 +501,31 @@ fl_pull_step_snapshot() {
 
 # fl_snap_plan_hook: what only a rollback adds to site restore's plan (called from fl_srestore_plan)
 fl_snap_plan_hook() {
-  local m="${SR_SNAP_DIR}/manifest.json" bench_default rc=0 match=null label time chg="" word
+  local m="${SR_SNAP_DIR}/manifest.json" bench_default rc=0 match=null label time chg="" word f b put=0 open
   SR_NOTES=(); SR_MIGRATE_TEXT=""; SR_IS_DEFAULT=0; SR_MIGRATE_AUTO=0; SR_PLAN_EXTRA=""
   fl_site_default_file_v bench_default
   if [[ "$SR_TARGET" == "$FL_SITE" || "$SR_TARGET" == "$bench_default" ]]; then
     SR_IS_DEFAULT=1
-    if fl_noninteractive; then
-      fl_srestore_err "${SR_TARGET} is the default site of this bench: rolling it back is a person's decision, not an agent's. Ask the person to run it in a terminal: benchbar site rollback ${SR_TARGET} --to ${SR_SNAP_ID}"
+    # a person: a terminal (or the app's own claim), not only the absence of --for-agent. --yes with no
+    # terminal is no person either
+    if ! fl_lease_person_ok; then
+      fl_srestore_err "${SR_TARGET} is the default site of this bench: rolling it back is a person's decision, not an agent's, and this run has no person at a terminal.${FL_PERSON_WHY:+ $FL_PERSON_WHY} Ask the person to run it in a terminal: benchbar site rollback ${SR_TARGET} --to ${SR_SNAP_ID}"
     fi
   fi
-  # the snapshot of the current state is written before anything is replaced: it must fit
-  if ! fl_snap_space_check "$SR_TARGET"; then fl_srestore_err "${FL_SNAP_ERR} ${FL_SNAP_HINT}"; fi
+  # the snapshot of the current state is written before anything is replaced, then the snapshot is put back
+  # (its files extracted, its database imported): both must fit
+  for f in "$SR_SNAP_DIR"/*; do
+    [[ -f "$f" ]] || continue
+    b="$(wc -c <"$f" | tr -d '[:space:]')"; put=$((put + ${b:-0}))
+  done
+  if ! fl_snap_space_check "$SR_TARGET" "$put"; then fl_srestore_err "${FL_SNAP_ERR} ${FL_SNAP_HINT}"; fi
+  # a rollback that did not finish left its snapshot of the site, and it is still the way back
+  open="$(fl_snap_unfinished "$SR_TARGET" | tr '\n' ' ')"
+  if [[ -n "$open" ]]; then
+    word="an earlier rollback of ${SR_TARGET} did not finish; its snapshot of the site before it (${open% }) stays protected, and this rollback adds its own"
+    SR_NOTES+=("$word")
+    FL_PULL_WARNINGS="${FL_PULL_WARNINGS}${FL_PULL_WARNINGS:+,}$(fl_json_str "$word")"
+  fi
   fl_snap_apps_diff "$m" || rc=$?
   case "$rc" in
     0)
@@ -565,6 +687,11 @@ fl_cmd_site_rollback() {
   fl_site_require "$name"
   fl_snap_resolve "$name" "$to" || fl_die "$FL_SNAP_ERR" "$FL_SNAP_HINT"
   [[ -z "$FL_SNAP_SKIPPED" ]] || fl_warn "--to latest skipped incomplete snapshot(s): ${FL_SNAP_SKIPPED}"
+  # an incomplete snapshot is no plan at all, chosen by name or not: before any token is given
+  if ! fl_snap_is_complete "$name" "$FL_SNAP_ID"; then
+    fl_die "snapshot ${FL_SNAP_ID} of ${name} is incomplete (it lacks $(fl_snap_missing_parts "$name" "$FL_SNAP_ID")), so it cannot be rolled back to." \
+      "benchbar site snapshots ${name} lists them; a person removes this one with: benchbar site snapshot drop ${name} ${FL_SNAP_ID}"
+  fi
   SR_ROLLBACK=1
   SR_SNAP_ID="$FL_SNAP_ID"
   SR_SNAP_DIR="$(fl_snap_dir "$name")/${FL_SNAP_ID}"
@@ -582,6 +709,7 @@ fl_snap_remove() {
   done
   rmdir "$dir" 2>/dev/null || { fl_warn "${dir} holds more than a snapshot's files; it stays"; return 1; }
   if [[ "$(cat "$(fl_snap_dir "$1")/.last-rollback" 2>/dev/null || true)" == "$2" ]]; then rm -f "$(fl_snap_dir "$1")/.last-rollback"; fi
+  fl_snap_list_remove "$1" .unfinished-rollbacks "$2"
   return 0
 }
 
@@ -616,8 +744,8 @@ fl_cmd_site_snapshot_drop() {
     [[ -n "$ref" ]] || fl_die "Name the snapshot to remove, or use --prune." "benchbar site snapshots ${name} lists them"
     fl_snap_resolve "$name" "$ref" || fl_die "$FL_SNAP_ERR" "$FL_SNAP_HINT"
     # the "before rollback" snapshot of the last rollback is what undoes it: a person says so to remove it
-    if [[ "$FL_SNAP_ID" == "$(fl_snap_last_rollback "$name")" && "$force" != "1" ]]; then
-      fl_die "${FL_SNAP_ID} is the undo point of the last rollback of ${name}: removing it leaves that rollback with no way back." \
+    if fl_snap_is_protected "$name" "$FL_SNAP_ID" && [[ "$force" != "1" ]]; then
+      fl_die "${FL_SNAP_ID} is the undo point of a rollback of ${name} (the last one that finished, or one that did not): removing it leaves that rollback with no way back." \
         "If you are sure: benchbar site snapshot drop ${name} ${FL_SNAP_ID} --force-undo-point"
     fi
     ids+=("$FL_SNAP_ID")

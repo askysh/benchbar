@@ -1510,7 +1510,7 @@ Added in 0.9.0. A snapshot is a backup with files kept in
 "free_bytes"}`, newest first. `total_bytes` is what the snapshots hold,
 `free_bytes` the free space of the volume (`null` when `df` does not say).
 `over_limit` is what retention would remove, never the undo point of the
-last rollback. Nothing is removed by either command.
+last rollback that finished nor the snapshot of one that did not. Nothing is removed by either command.
 
 `benchbar site rollback NAME --to SNAPSHOT --dry-run --json` is the plan of
 [site restore](#benchbar-site-restore---json) (the same fields and token), with

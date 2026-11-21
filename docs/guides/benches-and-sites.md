@@ -181,11 +181,21 @@ only when the snapshot's app commits differ from the bench's (the plan says
 so; `--no-migrate` stops before it), and ends with the same check as a
 restore. A rollback across an app change is allowed and warned: the
 snapshot's data goes into the bench's current code. `--to` takes the name
-from `site snapshots`, its time stamp, or `latest`.
+from `site snapshots`, its time stamp, or `latest`. A snapshot that lacks
+a part (the manifest, the database, the public or private files,
+`site_config.json`) is refused, however it is named. A rollback puts back
+the database, the files and the site's `encryption_key`; the other keys of
+`site_config.json` stay as they are now.
+
+The `before rollback` snapshot of a rollback that finished is its undo
+point, and the earlier one is released. A rollback that failed halfway
+leaves its own snapshot protected too (retention and `--prune` never take
+it), and a retry does not move the undo point until it finishes.
 
 The default site is a person's to roll back: an agent (`--for-agent`,
-`benchbar mcp`, `BENCHBAR_NONINTERACTIVE=1`) gets a plan that cannot be
-applied, and in a terminal the question names it as the default site.
+`benchbar mcp`, `BENCHBAR_NONINTERACTIVE=1`) or a run with no terminal, even
+with `--yes`, gets a plan that cannot be applied, and in a terminal the
+question names it as the default site.
 Another site is never touched.
 
 Retention keeps the newest 10 snapshots (`SNAPSHOT_KEEP` in the bench's
