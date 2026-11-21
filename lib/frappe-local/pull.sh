@@ -560,7 +560,7 @@ fl_pull_dump_frappe_version() {
       if ($0 ~ /;[ \t]*$/) on = 0
     }' 2>/dev/null | awk 'NR==1' || true)"
   if [[ -z "$v" ]]; then
-    v="$($reader "$1" 2>/dev/null | head -n 40 | awk '/^-- \[frappe\]/ { f = 1; next } /^-- \[/ { f = 0 } f && /^-- version = / { print $4; exit }' 2>/dev/null | awk 'NR==1' || true)"
+    v="$($reader "$1" 2>/dev/null | head -n 40 | awk '/^-- \[frappe\]/ { f = 1; next } /^-- \[/ { f = 0 } f && /^-- version = / && !got { print $4; got = 1 }' 2>/dev/null | awk 'NR==1' || true)"
   fi
   printf '%s' "$v"
 }

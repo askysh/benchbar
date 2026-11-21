@@ -671,8 +671,8 @@ fl_profile_ssh_resolve() {
   local out hn="" hp=""
   if [[ "$1" != -* ]]; then
     out="$(ssh -G "$1" 2>/dev/null || true)"
-    hn="$(printf '%s\n' "$out" | awk '$1 == "hostname" {print $2; exit}')"
-    hp="$(printf '%s\n' "$out" | awk '$1 == "port" {print $2; exit}')"
+    hn="$(printf '%s\n' "$out" | awk '$1 == "hostname" && !f {print $2; f = 1}')"
+    hp="$(printf '%s\n' "$out" | awk '$1 == "port" && !f {print $2; f = 1}')"
   fi
   printf '%s %s\n' "${hn:-$1}" "${hp:-22}"
 }
@@ -867,8 +867,8 @@ fl_profile_check_loaded() {
   i=0
   for spec in ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"}; do
     IFS='|' read -r n b r c <<<"$spec"
-    FL_REACH="$(printf '%s\n' "$answers" | awk -F '\t' -v i="$i" '$1 == i {print $2; exit}')"
-    FL_REACH_REASON="$(printf '%s\n' "$answers" | awk -F '\t' -v i="$i" '$1 == i {print $3; exit}')"
+    FL_REACH="$(printf '%s\n' "$answers" | awk -F '\t' -v i="$i" '$1 == i && !f {print $2; f = 1}')"
+    FL_REACH_REASON="$(printf '%s\n' "$answers" | awk -F '\t' -v i="$i" '$1 == i && !f {print $3; f = 1}')"
     CK_APPS+=("$n"); CK_REPOS+=("$r"); CK_REACH+=("$FL_REACH"); CK_REASON+=("$FL_REACH_REASON"); CK_COMMIT+=("$c")
     [[ "$FL_REACH" == "false" ]] && skip="${skip}${n} "
     i=$((i + 1))

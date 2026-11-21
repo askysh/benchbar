@@ -168,9 +168,14 @@ FL_PAR_STARTING=""
 FL_SIG_DEFERRED=""
 fl_par_group_on() { FL_PAR_STARTING=1; [[ -n "$FL_IN_JOB" ]] || set -m; }
 fl_par_group_off() {
-  local sig="$FL_SIG_DEFERRED"
+  local sig
   [[ -n "$FL_IN_JOB" ]] || set +m
+  # The order matters: a trap runs between two commands. Up to the next line a
+  # signal is held (FL_SIG_DEFERRED), after it fl_on_signal acts at once, so the
+  # held one is read only now. Read first, it was lost when the signal came
+  # between the read and this line: the run went on to its end and exited 0.
   FL_PAR_STARTING=""
+  sig="$FL_SIG_DEFERRED"
   FL_SIG_DEFERRED=""
   if [[ -n "$sig" ]]; then kill -s "$sig" "$$" 2>/dev/null || true; fi
   return 0

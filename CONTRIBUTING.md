@@ -100,10 +100,10 @@ work back.
 Each test's output is printed whole when it finishes, in list order, and
 a failing test does not stop the others: the run lists every failure at
 the end and exits 1. `TEST_TIMEOUT` (default 600 seconds) kills a hung
-test and prints its process tree. A new `tests/test-*.sh` must be added
-to the list in `tests/run-tests.sh`, or the run fails; give it a time in
-`TEST_SECS` there too, since shards are filled heaviest first from those
-times (a test without one counts as 10 seconds).
+test and prints its process tree. Every `tests/test-*.sh` is a test: a new
+one needs no entry in any list. Shards are filled heaviest first from the
+seconds in `tests/timings.tsv`; a test without a row counts as 10 seconds,
+so a row is optional.
 
 The app and its Swift tests build with `scripts/macos-build.sh --test`.
 
@@ -113,11 +113,11 @@ targets macOS `/bin/bash` 3.2 with no dependencies beyond the ones the
 installer needs, passes shellcheck, and every command stays idempotent:
 a second run changes nothing and says so.
 
-The shards are sized from the seconds per test in `tests/run-tests.sh`
-(`TEST_SECS_MAC` and `TEST_SECS_LINUX`). After many tests changed, take the
-log of a green full run (a push to `next-release`) and run
-`scripts/ci-timings.sh RUN_ID`; it prints both tables to paste in. A test
-without an entry counts as 10 seconds, so a new test needs no entry to run.
+The shards are sized from the seconds per test in `tests/timings.tsv` (one
+row per test: the name, the macOS seconds, the Linux seconds). After many
+tests changed, take a green full run (a push to `next-release`) and run
+`scripts/ci-timings.sh --write RUN_ID`; it rewrites the table. A test
+without a row counts as 10 seconds, so a new test needs no row to run.
 
 ## How the code is written
 

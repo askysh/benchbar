@@ -32,6 +32,7 @@
 #   windows/tray/fixtures/  test-tray-fixtures (the tray's recorded CLI output)
 #   scripts/X.sh            the tests that run it (script_tests below)
 #   changelog.d/            test-changelog (it checks the fragments)
+#   tests/timings.tsv       test-ci-plan and test-suite-hygiene (the seconds per test: data, not the harness)
 #   docs/, scripts/docs-reference.py   test-docs, test-docs-command
 #   any shell file          shellcheck
 #   tests/share/            test-share-gateway
@@ -70,7 +71,7 @@ done
 # test of its own name needs no entry; every other file needs one
 # (tests/test-affected.sh checks that, with --lib-coverage). LIB_CORE is the
 # set of end to end tests for code every command runs.
-LIB_CORE="test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-run-lock test-status-cost test-tray-fixtures"
+LIB_CORE="test-json-strings test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-run-lock test-status-cost test-tray-fixtures"
 lib_family() {
   case "$1" in
     checks|doctor) echo "test-doctor test-doctor-hardening test-doctor-linux test-repair test-repair-json test-json" ;;
@@ -194,6 +195,7 @@ while IFS= read -r f; do
       shell=1
       t="${f##*/}"; pick_family "$(script_tests "${t%.sh}")" ;;
     changelog.d/*) pick test-changelog ;;
+    tests/timings.tsv) pick test-ci-plan; pick test-suite-hygiene ;;
     docs/* | scripts/docs-reference.py) pick_family "test-docs test-docs-command" ;;
     # no CLI test, by design: another job runs it (the app and the tray and shim jobs, the
     # Windows installer test of release-windows.yml for install.ps1, the workflow itself
