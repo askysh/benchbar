@@ -4,7 +4,8 @@
 # lines link to /guides/doctor-and-repair/#<id>), the generated tables of
 # docs/reference/cli/ and the MCP tools are what the code says, and every markdown file
 # in docs/ has a title and a description in its frontmatter, every page
-# is in the sidebar (DOC-3) and every Lab is on the Features page.
+# is in the sidebar (DOC-3), and every Lab, every top level command and every
+# MCP tool has a row on the Features page (#170).
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
@@ -94,6 +95,40 @@ while IFS= read -r lab; do
   done < <(grep "\*\*Lab\*\* \`${lab}\`" "$ROOT/docs/features.md")
 done < <(sed -n 's/^lab~\([^~]*\)~.*/\1/p' "$ROOT/lib/frappe-local/labs.sh")
 
+# ---- every top level command and every MCP tool has a row on the Features page, and no table has
+# the same feature twice (#170). The docs reference check above reads the real page (the words that
+# need no row are FEATURES_SKIP in scripts/docs-reference.py, each with its reason). Here it really
+# fails: on a copy that lost a row, that names a tool only outside a table, and that has a row twice.
+FEAT="$COPY/docs/features.md"
+feat_check() { python3 -I "$COPY/scripts/docs-reference.py" --check 2>&1; }
+# shellcheck disable=SC2016 # the backticks are Markdown
+grep -q '^| `stats` ' "$ROOT/docs/features.md" || fail "docs/features.md has no row that starts with the command stats (the checks below use it)"
+# shellcheck disable=SC2016
+grep -v '^| `stats` ' "$ROOT/docs/features.md" >"$FEAT"
+if OUT="$(feat_check)"; then fail "a Features page without a row for the command stats passed the docs reference check"; fi
+assert_contains "$OUT" "docs/features.md has no row for the command stats. Add one line"
+# a tool named in the prose only is not in a row
+# shellcheck disable=SC2016
+sed 's/`benchbar_history`/the history tool/' "$ROOT/docs/features.md" >"$FEAT"
+# shellcheck disable=SC2016
+printf '\nAn agent reads the history with `benchbar_history`.\n' >>"$FEAT"
+if OUT="$(feat_check)"; then fail "a Features page without a row for the MCP tool benchbar_history passed the docs reference check"; fi
+assert_contains "$OUT" "docs/features.md has no row for the MCP tool benchbar_history. Add it"
+assert_not_contains "$OUT" "for the command"
+# the same feature twice in one table (what a merge of two pull requests left behind). The same
+# name in two tables, such as Doctor and repair for the CLI and for the Mac app, is fine: the real page passes
+# shellcheck disable=SC2016
+awk '{ print } /^\| `stats` / { print }' "$ROOT/docs/features.md" >"$FEAT"
+if OUT="$(feat_check)"; then fail "a Features page with the same row twice passed the docs reference check"; fi
+# shellcheck disable=SC2016
+assert_contains "$OUT" 'docs/features.md: the table of "Command line tool" has the row "`stats`" twice: keep one'
+cp "$ROOT/docs/features.md" "$FEAT"
+# a word in the skip list that is no command any more is named, so the list cannot rot
+sed_inplace 's/^FEATURES_SKIP = {$/&\n    "no-such-command": "a reason",/' "$COPY/scripts/docs-reference.py"
+if OUT="$(feat_check)"; then fail "a skip list entry that is not a command passed the docs reference check"; fi
+assert_contains "$OUT" "FEATURES_SKIP in scripts/docs-reference.py names no-such-command, which is not a command"
+cp "$ROOT/scripts/docs-reference.py" "$COPY/scripts/docs-reference.py"
+
 # ---- every image is in the manifest, and every manifest row is a file (DOC-11)
 MANIFEST="$ROOT/docs/images/manifest.tsv"
 assert_file "$MANIFEST"
@@ -105,10 +140,56 @@ while IFS=$'\t' read -r img _; do
   [[ -f "$ROOT/docs/images/$img" ]] || fail "docs/images/manifest.tsv lists $img, which is not in docs/images"
 done < "$MANIFEST"
 
-# ---- What's new has a section for the next release and every version of CHANGELOG.md from 0.8.0 on (DOC-4)
+# ---- What's new has a section for the version of the code and for every version of CHANGELOG.md
+# from 0.8.0 on (DOC-4), and "(coming)" stands only on a version that is not released yet (#170).
+# The version comes from FL_VERSION. A final one (0.9.0) is the last release: its section has a
+# date, and only a later version may say "(coming)". A candidate (0.9.0-rc.1) has not shipped
+# 0.9.0, so the last release is the newest dated section of CHANGELOG.md.
 NEW="$ROOT/docs/whats-new.md"
 assert_file "$NEW"
-grep -q '^## 0\.9\.0' "$NEW" || fail "docs/whats-new.md has no section for the next release (0.9.0)"
+# ver_later A B: A is a later version than B
+ver_later() {
+  local a b i
+  IFS=. read -r -a a <<<"$1"
+  IFS=. read -r -a b <<<"$2"
+  for i in 0 1 2; do
+    if (( ${a[i]:-0} > ${b[i]:-0} )); then return 0; fi
+    if (( ${a[i]:-0} < ${b[i]:-0} )); then return 1; fi
+  done
+  return 1
+}
+# whats_new_problems PAGE CODE_VERSION CHANGELOG: one line per problem, nothing when the page is right
+whats_new_problems() {
+  local page="$1" code="$2" base="${2%%-*}" released ver
+  if [[ "$code" == "$base" ]]; then released="$base"
+  else
+    # every dated version, then the first line: no pipe into head, which would close on the writer
+    released="$(sed -n 's/^## \([0-9][0-9.]*\) - .*/\1/p' "$3")"
+    released="${released%%$'\n'*}"
+  fi
+  grep -q "^## ${base//./\\.} " "$page" || printf 'no section for %s, the version of the code (FL_VERSION)\n' "$base"
+  while IFS= read -r ver; do
+    ver_later "$ver" "$released" || printf '"## %s (coming)" but %s is released: write its date, as docs/releasing.md says\n' "$ver" "$released"
+  done < <(sed -n 's/^## \([0-9][0-9.]*\) (coming).*/\1/p' "$page")
+  return 0
+}
+CODE_VERSION="$(sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$ROOT/benchbar")"
+[[ "$CODE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || fail "read no version from FL_VERSION in benchbar: [${CODE_VERSION}]"
+OUT="$(whats_new_problems "$NEW" "$CODE_VERSION" "$ROOT/CHANGELOG.md")"
+[[ -z "$OUT" ]] || fail "docs/whats-new.md: ${OUT}"
+# the check really fails: the release is cut and the page still says "(coming)", or has no section for it
+WN="$TMP_DIR/whats-new.md" CL="$TMP_DIR/changelog.md"
+printf '## Unreleased\n\n## 0.8.3 - 2026-11-17\n' >"$CL"
+printf '## 0.9.0 (coming)\n\n## 0.8.3 (2026-11-17)\n' >"$WN"
+assert_eq "" "$(whats_new_problems "$WN" 0.8.3 "$CL")" "(the next release may say coming)"
+assert_eq "" "$(whats_new_problems "$WN" 0.9.0-rc.1 "$CL")" "(a candidate has not shipped its release)"
+assert_contains "$(whats_new_problems "$WN" 0.9.0 "$CL")" '"## 0.9.0 (coming)" but 0.9.0 is released'
+assert_contains "$(whats_new_problems "$WN" 0.10.0 "$CL")" '"## 0.9.0 (coming)" but 0.10.0 is released'
+assert_contains "$(whats_new_problems "$WN" 0.10.0 "$CL")" "no section for 0.10.0, the version of the code"
+printf '## 0.9.1 (coming)\n\n## 0.9.0 (2026-12-01)\n\n## 0.8.3 (2026-11-17)\n' >"$WN"
+assert_eq "" "$(whats_new_problems "$WN" 0.9.0 "$CL")" "(a dated section and a later coming one)"
+printf '## 0.8.3 (coming)\n' >"$WN"
+assert_contains "$(whats_new_problems "$WN" 0.9.0-rc.1 "$CL")" '"## 0.8.3 (coming)" but 0.8.3 is released'
 while IFS= read -r ver; do
   grep -q "^## ${ver} " "$NEW" || fail "docs/whats-new.md has no section for ${ver}"
 done < <(awk '/^## [0-9]+\.[0-9]+\.[0-9]+ /{ split($2, v, "."); if (v[1] > 0 || v[2] >= 8) print $2 }' "$ROOT/CHANGELOG.md")

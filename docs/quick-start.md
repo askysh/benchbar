@@ -28,7 +28,7 @@ and the address of your site.
   [Install: Linux](install.md#linux).
 
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+  curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
   ```
 
 - The default site is `linuxdev.localhost`. Open

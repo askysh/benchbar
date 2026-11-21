@@ -68,14 +68,14 @@ in Terminal, add the CLI with Homebrew or the one line installer. Or
 build from source: `git clone`
 this repository and run `./benchbar install`; the app needs Xcode 26.
 
-**Linux.** From 0.8 the same CLI runs on Linux (Ubuntu 24.04 tested, other
-apt based systems with a doctor warning), with each bench under
+**Linux.** From 0.8 the same CLI runs on Linux (Ubuntu 24.04; `install`
+stops on another system), with each bench under
 `systemd --user`. Run the one line installer, open a new terminal and run
 `benchbar install`. See
 [Install](https://benchbar.akashmishra.com/install/#linux).
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
 ```
 
 **Windows (a beta).** The benches run in WSL, `benchbar.exe` runs the

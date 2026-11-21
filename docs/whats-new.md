@@ -14,7 +14,9 @@ came in.
 
 0.9.0 is a hardening release. It changes three defaults, so read the
 upgrade notes first. It also makes installs and commands faster, fixes
-the first run bugs of Linux and macOS, and gives agents safer tools.
+the first run bugs of Linux and macOS, and gives agents safer tools. New
+commands follow a long run, wait for a bench and run bench commands. Rooms
+come to Linux and to the Windows tray.
 
 ### Upgrade notes
 
@@ -90,6 +92,60 @@ Customer data is not scrubbed.
 - **macOS.** **Settings, Links, Ask before a link acts** asks before a
   `benchbar://` link starts or stops a bench. It is off by default.
   See [URL scheme](reference/url-scheme.md).
+- **All.** `benchbar` refuses to run as root or with `sudo`: a
+  `sudo benchbar repair` left files only root could change. It asks for
+  `sudo` itself when a step needs it.
+- **All.** Downloads are verified. `install.sh`, `install.ps1` and
+  `self-update` check the checksum of what they download, and its build
+  provenance when `gh` is signed in. See
+  [Verify a download by hand](install.md#verify-a-download-by-hand).
+
+### New commands
+
+- **macOS, Linux.** `benchbar wait` blocks until a bench can serve, and
+  says what is missing when it cannot. `status --json` has the same answer
+  as `ready`. See [running](reference/cli/running.md#wait).
+- `benchbar run -- migrate` runs `migrate`, `clear-cache`, `build`,
+  `run-tests` and a few reads in the right bench and site, with a plan
+  first for a change. See [run](reference/cli/run.md).
+- `benchbar op` follows a long run by its `op_id`. `--background` starts
+  an install, a repair, a pull or an app or site change detached. See
+  [op](reference/cli/other.md#op).
+- `benchbar history` lists every run that changed things on this computer
+  and who started it. See [history](reference/cli/other.md#history).
+- `benchbar lease take` holds a bench or a site while you or an agent
+  work, so nothing else restarts, migrates, drops or restores it. See
+  [lease](reference/cli/lease.md).
+- `benchbar stats` shows the CPU and memory of a running bench.
+- `benchbar bench forget` and `bench remove` retire a bench, with a plan
+  first. `install --scratch` makes a bench that expires and `bench gc`
+  lists the expired ones. `site hosts --prune` and `db orphans` find what
+  a removed bench left behind. See [bench](reference/cli/bench.md).
+- `site drop` and `pull` have a plan token: `--dry-run --json` prints it
+  and `--apply TOKEN` runs exactly that plan.
+
+### For agents
+
+- **All.** New MCP tools: run a bench command, install and update an app,
+  drop a site, take a lease, read the history and a long run, set the
+  ports, and more read tools. See
+  [Coding agents and MCP](guides/agents.md).
+- An apply tool takes only a token that its plan tool returned, and every
+  call is logged. `benchbar mcp --calls` prints the log.
+- Every command with a JSON mode ends with the same fields under
+  `--for-agent`: `exit`, and `error` when it failed.
+- Text that comes from a bench is labeled as data, not instructions.
+
+### Rooms on your Wi-Fi
+
+- **Linux.** Rooms work on Linux: `benchbar share`, and a LAN guard made
+  with nftables (`benchbar lan-guard install`). On WSL a room needs
+  mirrored networking. See
+  [Share a site on your network](guides/share-on-your-network.md).
+- **Windows.** The **Sharing** tab of the BenchBar window hosts a room.
+  It cannot join one yet. See [Rooms on Windows](windows.md#rooms-on-windows).
+- **All.** The copy a room serves is neutralised the same way as a pulled
+  site.
 
 ### Installs and first runs
 
@@ -109,6 +165,8 @@ Customer data is not scrubbed.
   apps. `benchbar path`, `status` and `list` start about 20 ms faster.
 - `benchbar down` and `restart` find the worker and scheduler processes
   of Homebrew Python and uv Python, so none is left running.
+- A running bench no longer lets its logs grow without end: a log over
+  20 MB is cut to its last 2000 lines.
 
 ### Backups and sites
 
@@ -125,6 +183,16 @@ Customer data is not scrubbed.
 - A sharing setup that stopped half way shows **Finish setup** on the
   Sharing tab. The room code shows as dots.
 - Notifications ask for permission once, with your first alert.
+- A site has **Restore a Backup…** and the Sites tab has **Pull…**. Both
+  show the plan first.
+- The Apps tab lists **Unfinished changes** with **Resume…**, and
+  **Add App…** takes several apps in one plan.
+- Health has **Acknowledge** on a warning. A stopped bench has
+  **Start Services Only**, and the Overview has **Start after login** and
+  **Install Service…**.
+- The bench pill says **Ready**, **Needs restart (code changed)** or
+  **Running, not ready**, and a banner shows each default the update
+  changed.
 
 ### Windows
 
@@ -132,6 +200,14 @@ Customer data is not scrubbed.
   `benchbar://` links.
 - `benchbar.exe` runs a command in the folder you are in, so
   `adopt .` and relative paths work.
+- The BenchBar window has **Open as...** on a site, **Pull...** on the
+  Sites tab, a **Sharing** tab and a banner for each default the update
+  changed. The tray menu has **Quick Switch...**.
+- The Apps tab adds several apps in one plan and finishes an update or an
+  add that stopped part way. The first run wizard has a **Profile** list.
+- `benchbar.exe doctor --json` prints one JSON document, with the Windows
+  checks inside it.
+- See [Windows](windows.md).
 
 ### Docs
 

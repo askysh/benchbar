@@ -21,7 +21,8 @@ feature works.
 ## Command line tool
 
 The `benchbar` command runs on macOS, and on Ubuntu 24.04 (Linux and
-WSL; other apt based systems work with a doctor warning). Linux and WSL first shipped in 0.8.0. A row that came in before
+WSL; `install` stops on another system unless you pass
+`--allow-unsupported-distro`). Linux and WSL first shipped in 0.8.0. A row that came in before
 that says "Linux 0.8.0": it was macOS only until then, and *Since* is the
 macOS version. A row that says "macOS" does not work on Linux.
 
@@ -31,37 +32,43 @@ macOS version. A row that says "macOS" does not work on Linux.
 | Pick a profile at install | `install --profile` takes `v15-lts`, `v16-lts` or a team profile. On Linux, Python and Node come from uv and fnm, and MariaDB from apt (10.11). | 0.1.0 | macOS; Linux 0.9.0 (v15-lts only before) | [Install](install.md#profiles-on-linux) |
 | Background service | Runs each bench under launchd or `systemd --user`: it survives a closed Terminal, restarts after a crash and comes back after a reboot. | 0.2.0 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md) |
 | Doctor and repair | `doctor` reads the state and names the fix. `repair` applies only the flagged fixes, with a backup first. | 0.2.0 | macOS; Linux 0.8.0 | [Doctor and repair](guides/doctor-and-repair.md) |
-| Shell helpers | `benchup`, `benchdown`, `benchrestart`, `benchwatch`, `benchlogs` and `benchstatus`. | 0.2.0 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md#daily-use) |
+| Shell helpers | `benchup`, `benchdown`, `benchrestart`, `benchwatch`, `benchlogs` and `benchstatus`, and `benchcd`, which goes to the folder `benchbar path` prints. | 0.2.0 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md#daily-use) |
 | `up`, `down`, `restart`, `status` | Start, stop, restart and read the state of a bench. | 0.2.0 | macOS; Linux 0.8.0 | [running](reference/cli/running.md) |
 | `wait` and `ready` | `status --json` has a `ready` object: agent, processes, site ping, socketio, Redis, a worker, and whether Python code changed since the bench started. `benchbar wait` and the MCP tool `benchbar_wait` block until it is ready and say what is missing. | 0.9.0 | macOS, Linux | [Readiness](json-schema.md#readiness), [running](reference/cli/running.md) |
+| `stats` | CPU, memory and process count of the running bench's own processes, and the speed figure the runner of the app uses. | 0.9.0 | macOS, Linux | [running](reference/cli/running.md) |
 | `list` | Every bench benchbar knows, without pinging a site. | 0.3.0 | macOS; Linux 0.8.0 | [list](reference/cli/other.md#list) |
 | `logs`, `fg`, `watch` | Tail the bench log, run the bench in the foreground, rebuild assets. | 0.2.0 | macOS; Linux 0.8.0 | [running](reference/cli/running.md#logs) |
 | `autostart`, `uninstall-service` | Let a bench come back after login or not, and remove its service. | 0.2.0 | macOS; Linux 0.8.0 | [autostart](reference/cli/other.md#autostart), [uninstall-service](reference/cli/other.md#uninstall-service) |
-| Adopt a bench | Registers a bench you already have, without touching its apps, sites or databases. | 0.3.0 | macOS; Linux 0.8.0 | [Quick start](quick-start.md) |
+| Adopt a bench | `adopt` registers a bench you already have, without touching its apps, sites or databases. | 0.3.0 | macOS; Linux 0.8.0 | [Quick start](quick-start.md), [adopt](reference/cli/install.md) |
 | Report a bug | `benchbar report` writes a diagnostics zip with secrets removed. | 0.3.0 | macOS; Linux 0.8.0 | [report](reference/cli/other.md#report) |
+| `mariadb-password` | Prints the MariaDB root password to a person at a terminal, after a question. An agent is refused. | 0.3.0 | macOS; Linux 0.8.0 | [mariadb-password](reference/cli/other.md#mariadb-password) |
 | Retire a bench | `bench forget` and `bench remove` with a plan and a token, scratch benches that expire (`install --scratch`, `bench gc`), `site hosts --prune`, `db orphans`. | 0.9.0 | macOS; Linux 0.9.0 | [bench](reference/cli/bench.md) |
 | Several benches | A bench per Frappe version, each with its own sites and scheduler. | 0.4.0 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md#several-benches) |
 | Port blocks | A new bench that clashes with another gets its own four ports. | 0.4.0 | macOS; Linux 0.8.0 | [Port blocks](concepts/port-blocks.md) |
 | Sites: add, list, default, hosts | Adds a site, lists them, sets the default and writes the hosts lines. | 0.4.0 | macOS; Linux 0.8.0 | [site](reference/cli/site.md) |
-| Apps | Adds, installs and updates apps from the app registry or any git URL, with a changelog before each update. | 0.5.0 | macOS; Linux 0.8.0 | [Apps](guides/apps.md) |
-| Team profiles and lockfile | A profile sets up a bench with your team's apps and branches. `benchbar.toml` keeps every bench the same. | 0.5.0 | macOS; Linux 0.8.0 | [Teams](guides/teams.md) |
+| Apps | `app add`, `app install` and `app update` add, install and update apps from the app registry or any git URL, with a changelog before each update. | 0.5.0 | macOS; Linux 0.8.0 | [Apps](guides/apps.md) |
+| Team profiles and lockfile | A profile (`profile import`, `profile subscribe`) sets up a bench with your team's apps and branches. `lock write` and `lock apply` keep every bench the same through `benchbar.toml`. | 0.5.0 | macOS; Linux 0.8.0 | [Teams](guides/teams.md) |
 | `pull` | Copies a production site over SSH into a new local site, with email muted and the scheduler paused. | 0.5.0 | macOS; Linux 0.8.0 | [Teams](guides/teams.md) |
 | `scan` and `register` | `scan` finds benches in a folder without changing anything. `register` remembers the ones you pick. | 0.5.7 | macOS; Linux 0.8.0 | [scan](reference/cli/scan.md) |
 | `console` and `db` | A Python console and the site's database shell. | 0.5.8 | macOS; Linux 0.8.0 | [console](reference/cli/other.md#console), [db](reference/cli/other.md#db) |
 | `ports setup` | Previews the ports of several benches, asks once, then applies. `ports check` and `ports mode` read and pin them. | 0.5.8 | macOS; Linux 0.8.0 | [ports](reference/cli/ports.md) |
 | Site backup and drop | Backs up a site, and drops one after a backup. | 0.5.8 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md#backing-up-and-dropping-a-site) |
 | Self update | `self-update` updates the CLI and the app. | 0.6.0 | macOS; Linux 0.8.0 | [Install](install.md#updating) |
+| `docs` | Opens the documentation, or the page of one topic. | 0.5.5 | macOS; Linux 0.8.0 | [docs](reference/cli/other.md#docs) |
+| `where` | Says how this CLI was installed, where its state folder is and which app it belongs to. | 0.7.0 | macOS; Linux 0.8.0 | [where](reference/cli/other.md#where) |
 | Run bench commands | `benchbar run -- migrate`, `clear-cache`, `build`, `run-tests` and more from an allow list, with a plan and token for a change. | 0.9.0 | macOS, Linux | [run](reference/cli/run.md) |
 | Site restore | Restores a backup into the same site or into a copy for QA. | 0.8.0 | macOS, Linux | [site restore](reference/cli/site.md#site-restore) |
 | Site snapshots and rollback | `site snapshot` saves a site (database, files, apps and commits) before a risky change; `site rollback` puts it back in one step, after a snapshot of the current state. The CLI and MCP tools; the Mac app and the tray follow. | 0.9.0 | macOS, Linux | [Snapshots](guides/benches-and-sites.md#snapshots-save-a-site-put-it-back), [site snapshot](reference/cli/site.md#site-snapshot) |
-| Agent mode | `--for-agent` prints JSON lines, never asks, and ends every change with one `done` line. | 0.8.0 | macOS, Linux | [Coding agents and MCP](guides/agents.md) |
-| Open as a user | `open --as USER` signs in to a development site as another user, with no password. Off until you turn it on for a site. | 0.8.1 | macOS, Linux | [open](reference/cli/other.md#open), [site open-as](reference/cli/site.md#site-open-as) |
-| Rooms on your Wi-Fi (`share`, `lan-guard`) | Lets colleagues on the same Wi-Fi use a hardened copy of a site behind a room code. **Lab** `lan-rooms`. | 0.8.2 | macOS; Linux 0.9.0 (the command line only, and not yet listed on the network without `avahi-publish`) | [share and lan-guard](reference/cli/share.md), [How sharing keeps your bench safe](concepts/sharing-safety.md) |
-| Labs | `benchbar labs` lists, turns on and turns off experiments. | 0.8.2 | macOS, Linux | [labs](reference/cli/labs.md) |
-| Leases | `benchbar lease take` holds a bench or a site for a while, so another agent or the app does not restart, migrate, drop or restore it meanwhile. `--lease ID` passes it, `status --json` lists it. | 0.9.0 | macOS, Linux | [lease](reference/cli/lease.md) |
-| Notices after an update | Every default an update changes shows a notice once, with its switch back. `benchbar notices` lists and dismisses them, and the Mac app shows a banner. | 0.9.0 | macOS, Linux | [notices](reference/cli/other.md#notices), [What's new](whats-new.md) |
-| Rooms on your Wi-Fi (`share`, `lan-guard`) | Lets colleagues on the same Wi-Fi use a hardened copy of a site behind a room code. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Share a site on your network](guides/share-on-your-network.md), [share and lan-guard](reference/cli/share.md), [How sharing keeps your bench safe](concepts/sharing-safety.md) |
+| Agent mode | `--for-agent` prints JSON lines, never asks, and ends every change with one `done` line. `commands --json` lists every command and flag. | 0.8.0 | macOS, Linux | [Coding agents and MCP](guides/agents.md) |
+| Open as a user | `open --as USER` signs in to a development site as another user, with no password. `users` lists the users of the site. Off until you turn it on for a site. | 0.8.1 | macOS, Linux | [open](reference/cli/other.md#open), [users](reference/cli/other.md#users), [site open-as](reference/cli/site.md#site-open-as) |
+| Rooms on your Wi-Fi (`share`, `lan-guard`) | Lets colleagues on the same Wi-Fi use a hardened copy of a site behind a room code. `lan-guard` keeps the bench ports off the network. **Lab** `lan-rooms`. | 0.8.2 | macOS; Linux 0.9.0 (WSL needs mirrored networking) | [Share a site on your network](guides/share-on-your-network.md), [share and lan-guard](reference/cli/share.md), [How sharing keeps your bench safe](concepts/sharing-safety.md) |
 | Labs | `benchbar labs` lists, turns on and turns off experiments. | 0.8.2 | macOS, Linux | [Labs](guides/labs.md), [labs](reference/cli/labs.md) |
+| Leases | `benchbar lease take` holds a bench or a site for a while, so another agent or the app does not restart, migrate, drop or restore it meanwhile. `--lease ID` passes it, `status --json` lists it. | 0.9.0 | macOS, Linux | [lease](reference/cli/lease.md) |
+| `op` and `--background` | Every run that changes things has an `op_id`. `op status`, `op list` and `op wait` follow it, and `--background` starts a long run detached and prints the id at once. | 0.9.0 | macOS, Linux | [op](reference/cli/other.md#op) |
+| `history` | Lists every run that changed things on this computer, newest first, with who started it: a terminal, the app, the tray, MCP or an agent. | 0.9.0 | macOS, Linux | [history](reference/cli/other.md#history) |
+| `listen` and the 127.0.0.1 default | The web server and socketio of a bench listen on this computer only. `listen all` opens a bench to the network and `listen local` goes back. | 0.9.0 | macOS, Linux | [listen](reference/cli/other.md#listen), [What's new](whats-new.md#the-bench-listens-on-this-computer-only) |
+| Verified downloads | Every release file has build provenance. `install.sh` and `self-update` check the checksum of what they download, and the provenance when `gh` is signed in. | 0.9.0 | macOS, Linux | [Verify a download by hand](install.md#verify-a-download-by-hand) |
+| Notices after an update | Every default an update changes shows a notice once, with its switch back. `benchbar notices` lists and dismisses them, and the Mac app shows a banner. | 0.9.0 | macOS, Linux | [notices](reference/cli/other.md#notices), [What's new](whats-new.md) |
 
 On Linux the default site is `linuxdev.localhost`. See
 [Install](install.md#linux).
@@ -116,19 +123,21 @@ BenchBar for Windows is a beta. The benches run in WSL 2. See
 | Window: Ports | Port Settings and Setup in a bench's Overview. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Profiles, Find Benches | Team Profiles and Find Benches in the sidebar. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Open as | **Allow Open as...** per site, then **Open as...** and Find User open the site in your browser signed in as any enabled user. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
-| Quick Switch | The tray menu opens a panel that opens a site as Administrator or a pinned user, by digit, arrows or typing. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
+| Quick Switch | **Quick Switch...** in the tray menu opens a panel that opens a site as Administrator or a pinned user, by digit, arrows or typing. It has no global keyboard shortcut yet. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: services only, autostart | **Start Services Only** (the bench's Redis, for a restore or a migrate) and **Stop Services**, and **Start again after Ubuntu restarts** (`autostart`), in the Overview. Offered when the CLI lists them. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: service, lockfile | **Install Service...** and the scheduler box use the plan of `service`; **Write Lockfile...** and **Apply Lockfile...** show the dry run first. **Watch Assets** and **Run in Foreground** open a terminal. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: acknowledge, prerequisites | **Acknowledge** on a Health warning (`doctor --ack`), and the prerequisites of `doctor --prerequisites` on the New Bench page. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: notices, readiness | A banner for each default an update changed (`notices[]`, **Dismiss** runs `notices --dismiss`), and **Ready**, **Needs restart (code changed)** or **Running, not ready** with what the bench waits on, from `status --json` `ready`. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Pull | **Pull...** on the Sites tab copies a production site over SSH, or a backup folder, into a new site: the plan of `pull --dry-run` first, then `--apply TOKEN`. The copy is neutralised unless you keep production's secrets. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Labs | Lists the experiments with a switch, a warning, the version and, for one that is not on Windows yet, why. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
+| Window: Sharing | The **Sharing** tab hosts a room: set up the copy, start, stop, extend and lock the room, the room code and the people in it. Shown while the `lan-rooms` Lab is on. The tray cannot join a room. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window), [Rooms on Windows](windows.md#rooms-on-windows) |
 | URL scheme | `benchbar://` links start, stop and open a bench from a launcher or a script. **Settings > Ask before a link acts** is off by default. | 0.9.0 | Windows | [benchbar:// links](windows.md#benchbar-links), [URL scheme](reference/url-scheme.md) |
 | Report a bug | The tray writes the diagnostics zip. | 0.8.1 | Windows | [Report a bug](windows.md#report-a-bug) |
 | Self update | `benchbar.exe self-update` and Update Now in the tray. | 0.8.3 | Windows | [Update](windows.md#update) |
+| Verified downloads | `benchbar.exe self-update` runs `install.ps1` of the release it installs, after it checks its checksum. `install.ps1` checks the provenance of the zip when `gh` is signed in. | 0.9.0 | Windows | [Update](windows.md#update) |
 
-Rooms and Quick Switch are not available on Windows yet. A Lab lists its
-platforms, and `labs on` refuses on another one. The Labs page shows why.
+The tray hosts a room and cannot join one yet. A Lab lists its platforms,
+and `labs on` refuses on another one. The Labs page shows why.
 
 ## MCP server
 
@@ -139,6 +148,7 @@ Windows (`benchbar.exe mcp`) since 0.8.0. The tools below are the ones in
 
 | Feature | What it does | Since | Platform | Guide |
 | --- | --- | --- | --- | --- |
+| `benchbar mcp` | Starts the server for a coding agent. `mcp --calls` prints the log of every call, and `mcp --print-agents-md` a snippet for the AGENTS.md of a project. | 0.5.0 | macOS; Linux, Windows 0.8.0 | [mcp](reference/cli/mcp.md) |
 | Read tools | `benchbar_list`, `benchbar_status`, `benchbar_doctor`, `benchbar_logs_tail` and `benchbar_site_list`. | 0.5.0 | macOS; Linux, Windows 0.8.0 | [Coding agents and MCP](guides/agents.md) |
 | Actions | `benchbar_up`, `benchbar_down` and `benchbar_restart`. | 0.5.0 | macOS; Linux, Windows 0.8.0 | [mcp](reference/cli/mcp.md) |
 | Profile tools | `benchbar_profile_list` and `benchbar_profile_check`. | 0.6.0 | macOS; Linux, Windows 0.8.0 | [Coding agents and MCP](guides/agents.md) |
@@ -146,12 +156,17 @@ Windows (`benchbar.exe mcp`) since 0.8.0. The tools below are the ones in
 | `benchbar_app_list` | Every app of a bench, with branch, commit and sites. | 0.7.3 | macOS; Linux, Windows 0.8.0 | [Coding agents and MCP](guides/agents.md) |
 | Run tools | `benchbar_run_plan` and `benchbar_run`, and `benchbar_run_read` for `doctor`, `list-apps` and `version`. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
 | Site plan and apply | `benchbar_site_add_plan` and `benchbar_site_add`, `benchbar_site_restore_plan` and `benchbar_site_restore`. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
+| Snapshot tools | `benchbar_site_snapshot` saves a site, `benchbar_site_snapshots` lists them, and `benchbar_site_rollback_plan` then `benchbar_site_rollback` put one back with the plan's token. No tool removes a snapshot, and the default site is never rolled back by an agent. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
 | `benchbar_site_backup` | Backs up one site. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
 | Service plan and apply | `benchbar_service_install_plan` and `benchbar_service_install`, for a bench that has no service. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
 | App install and update | `benchbar_app_install_plan` then `benchbar_app_install`, and `benchbar_app_update_plan` then `benchbar_app_update`, each with the plan's token. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
 | Lease tools | `benchbar_lease_take`, `benchbar_lease_renew`, `benchbar_lease_release` and `benchbar_lease_list`: hold a bench or a site while an agent works. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md#leases) |
+| Long runs, history and readiness | `benchbar_op_status` reads a long run by its `op_id`, `benchbar_history` what ran before the agent and who started it, and `benchbar_wait` blocks until a bench is ready. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md#long-runs-and-op_id) |
+| Site drop | `benchbar_site_drop_plan`, then `benchbar_site_drop` with the token of the plan. The default site is refused. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md#parity-with-the-command-line) |
+| Ports, autostart, scan, report | `benchbar_ports_mode`, `benchbar_ports_apply` with the token of `benchbar_ports_plan`, `benchbar_autostart`, `benchbar_doctor_ack` for a warning the person has seen, `benchbar_scan` and `benchbar_report`. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md#parity-with-the-command-line) |
 | More read tools | `benchbar_site_backups`, `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`, `benchbar_labs_list`, `benchbar_where`, `benchbar_doctor_prerequisites`, `benchbar_self_update_check`, `benchbar_app_focus_list` and `benchbar_stats` (CPU and memory of the running bench). | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
 
-A person approves each plan before the agent applies it. Rooms, Labs,
-sharing, the LAN guard, `self-update` and the repairs of `repair` are not MCP tools. A change that needs a person
+A person approves each plan before the agent applies it. Turning a Lab
+on, rooms, the LAN guard, `self-update`, `register`, `console`, `db` and
+the repairs of `repair` are not MCP tools. A change that needs a person
 stays with the person.

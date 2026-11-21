@@ -747,7 +747,8 @@ stay as they are.
   older one, or a release candidate (`0.9.0-rc.1`), which the check and a
   plain `self-update` never offer.
 - With no distro set up yet, the CLI part is skipped: the setup installs it.
-- BenchBar from the Microsoft Store is updated by the Store, and
+- BenchBar is not in the Microsoft Store. A copy that runs from an MSIX
+  package, which no release ships yet, is updated by its package, and
   `self-update` changes nothing there.
 
 Running the one line installer again does the same for `benchbar.exe` and
