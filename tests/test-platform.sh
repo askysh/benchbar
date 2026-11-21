@@ -89,32 +89,29 @@ mkdir "$fresh"
 assert_fails fl_state_guard_stale "$fresh"
 rm -rf "$STAT_DIR"
 
-# fl_ensure_service_started waits for a service launchd starts in the background:
-# on a new Mac (a hosted runner) Redis was not up two seconds after
-# "brew services start", and the install stopped with "redis did not come up"
-# although it came up (issue 139). Here it is "started" from the fourth
-# "brew services list" on, about a second and a half after the start.
-SVC_DIR="$(mktemp -d)"
-mkdir "$SVC_DIR/bin"
-cat >"$SVC_DIR/bin/brew" <<'SH'
+# fl_process_running NAME on macOS: pgrep -x compares NAME with the title a
+# process gave itself, so it never finds Redis, which runs as
+# "redis-server 127.0.0.1:6379" (issue 139). This pgrep answers as the one of
+# macOS does for that process: nothing for -x, the title for -f.
+PG_DIR="$(mktemp -d)"
+cat >"$PG_DIR/pgrep" <<'SH'
 #!/bin/sh
-if [ "$1 $2" = "services list" ]; then
-  n="$(cat "$SVC_COUNT" 2>/dev/null || echo 0)"; n=$((n + 1)); echo "$n" >"$SVC_COUNT"
-  if [ "$n" -ge "$SVC_UP_AT" ]; then echo "redis started me ~/x.plist"; else echo "redis none"; fi
-fi
-exit 0
+case "$1" in
+  -qf) printf '%s\n' "$PG_TITLE" | grep -qE -- "$2" ;;
+  *) exit 1 ;;
+esac
 SH
-printf '#!/bin/sh\nexit 1\n' >"$SVC_DIR/bin/pgrep"
-chmod +x "$SVC_DIR/bin/brew" "$SVC_DIR/bin/pgrep"
-svc_out="$(PATH="$SVC_DIR/bin:$PATH" SVC_COUNT="$SVC_DIR/count" SVC_UP_AT=4 fl_ensure_service_started redis redis-server 2>&1)" || {
-  printf 'a service that starts a moment late failed the install:\n%s\n' "$svc_out"; exit 1; }
-[[ "$svc_out" == *"redis is running"* ]] || { printf 'no "redis is running" line: %s\n' "$svc_out"; exit 1; }
-# one that never starts still fails, with the time it was given
-echo 0 >"$SVC_DIR/count"
-if svc_out="$(PATH="$SVC_DIR/bin:$PATH" SVC_COUNT="$SVC_DIR/count" SVC_UP_AT=999 FL_SERVICE_START_SECS=1 fl_ensure_service_started redis redis-server 2>&1)"; then
-  printf 'a service that never starts passed\n'; exit 1
-fi
-[[ "$svc_out" == *"redis did not come up within 1s"* ]] || { printf 'unexpected failure text: %s\n' "$svc_out"; exit 1; }
-find "$SVC_DIR" -delete
+chmod +x "$PG_DIR/pgrep"
+pg() { if PATH="$PG_DIR:$PATH" PG_TITLE="$1" fl_process_running "$2"; then echo yes; else echo no; fi; }
+assert_eq "yes" "$(pg 'redis-server 127.0.0.1:6379' redis-server)"
+assert_eq "yes" "$(pg '/opt/homebrew/opt/redis/bin/redis-server /opt/homebrew/etc/redis.conf' redis-server)"
+assert_eq "yes" "$(pg 'redis-server' redis-server)"
+# a word in the arguments, or a longer name, is not the process
+assert_eq "no" "$(pg 'tail -f /opt/homebrew/var/log/redis-server.log' redis-server)"
+assert_eq "no" "$(pg 'redis-server-wrapper 127.0.0.1:6379' redis-server)"
+assert_eq "no" "$(pg 'mariadbd-safe --datadir=/x' mariadbd)"
+# a dot in a name is a dot
+assert_eq "no" "$(pg 'pythonX11 x' python3.11)"
+find "$PG_DIR" -delete
 
 printf 'test-platform: ok\n'

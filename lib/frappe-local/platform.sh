@@ -266,8 +266,17 @@ fl_brew_formula_available() {
 # A bare name (mariadbd, redis-server) is the name of the process, so an
 # editor or a tail with that word in its arguments does not count; anything
 # else is a pattern for the whole command line.
+# macOS matches -x against the title a process gave itself, and Redis runs as
+# "redis-server 127.0.0.1:6379": no bare name equals that, so the install on a
+# Mac stopped at "redis-server is not running" (found by the real install job,
+# issue 139). A bare name is therefore also the first word of a command line,
+# with or without its folder, which still leaves out an editor or a tail.
 fl_process_running() {
-  if [[ "$1" =~ ^[A-Za-z0-9._@-]+$ ]]; then pgrep -qx "$1" 2>/dev/null; else pgrep -qf "$1" 2>/dev/null; fi
+  if [[ "$1" =~ ^[A-Za-z0-9._@-]+$ ]]; then
+    pgrep -qx "$1" 2>/dev/null || pgrep -qf "^([^ ]*/)?${1//./\\.}( |\$)" 2>/dev/null
+  else
+    pgrep -qf "$1" 2>/dev/null
+  fi
 }
 
 fl_brew_service_running() {
@@ -350,16 +359,8 @@ fl_ensure_service_started() {
     fi
   fi
   rm -f "$tmpfile"
-  # launchd starts it in the background. A fixed two seconds was too short for
-  # a first start of Redis on a new Mac (issue 139): the install stopped here
-  # and the service came up a moment later. Ask twice a second, for at most
-  # FL_SERVICE_START_SECS.
-  local tries=0 secs="${FL_SERVICE_START_SECS:-30}"
-  until fl_process_running "$proc_pattern" || fl_brew_service_running "$formula"; do
-    tries=$((tries + 1))
-    [[ "$tries" -le "$((secs * 2))" ]] || fl_die "${formula} did not come up within ${secs}s." "Look at: brew services info ${formula}, then run this again"
-    sleep 0.5
-  done
+  sleep 2
+  fl_process_running "$proc_pattern" || fl_brew_service_running "$formula" || fl_die "${formula} did not come up."
   fl_ok "${formula} is running"
 }
 
