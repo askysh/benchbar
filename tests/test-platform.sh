@@ -89,4 +89,32 @@ mkdir "$fresh"
 assert_fails fl_state_guard_stale "$fresh"
 rm -rf "$STAT_DIR"
 
+# fl_ensure_service_started waits for a service launchd starts in the background:
+# on a new Mac (a hosted runner) Redis was not up two seconds after
+# "brew services start", and the install stopped with "redis did not come up"
+# although it came up (issue 139). Here it is "started" from the fourth
+# "brew services list" on, about a second and a half after the start.
+SVC_DIR="$(mktemp -d)"
+mkdir "$SVC_DIR/bin"
+cat >"$SVC_DIR/bin/brew" <<'SH'
+#!/bin/sh
+if [ "$1 $2" = "services list" ]; then
+  n="$(cat "$SVC_COUNT" 2>/dev/null || echo 0)"; n=$((n + 1)); echo "$n" >"$SVC_COUNT"
+  if [ "$n" -ge "$SVC_UP_AT" ]; then echo "redis started me ~/x.plist"; else echo "redis none"; fi
+fi
+exit 0
+SH
+printf '#!/bin/sh\nexit 1\n' >"$SVC_DIR/bin/pgrep"
+chmod +x "$SVC_DIR/bin/brew" "$SVC_DIR/bin/pgrep"
+svc_out="$(PATH="$SVC_DIR/bin:$PATH" SVC_COUNT="$SVC_DIR/count" SVC_UP_AT=4 fl_ensure_service_started redis redis-server 2>&1)" || {
+  printf 'a service that starts a moment late failed the install:\n%s\n' "$svc_out"; exit 1; }
+[[ "$svc_out" == *"redis is running"* ]] || { printf 'no "redis is running" line: %s\n' "$svc_out"; exit 1; }
+# one that never starts still fails, with the time it was given
+echo 0 >"$SVC_DIR/count"
+if svc_out="$(PATH="$SVC_DIR/bin:$PATH" SVC_COUNT="$SVC_DIR/count" SVC_UP_AT=999 FL_SERVICE_START_SECS=1 fl_ensure_service_started redis redis-server 2>&1)"; then
+  printf 'a service that never starts passed\n'; exit 1
+fi
+[[ "$svc_out" == *"redis did not come up within 1s"* ]] || { printf 'unexpected failure text: %s\n' "$svc_out"; exit 1; }
+find "$SVC_DIR" -delete
+
 printf 'test-platform: ok\n'

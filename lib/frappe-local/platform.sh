@@ -350,8 +350,16 @@ fl_ensure_service_started() {
     fi
   fi
   rm -f "$tmpfile"
-  sleep 2
-  fl_process_running "$proc_pattern" || fl_brew_service_running "$formula" || fl_die "${formula} did not come up."
+  # launchd starts it in the background. A fixed two seconds was too short for
+  # a first start of Redis on a new Mac (issue 139): the install stopped here
+  # and the service came up a moment later. Ask twice a second, for at most
+  # FL_SERVICE_START_SECS.
+  local tries=0 secs="${FL_SERVICE_START_SECS:-30}"
+  until fl_process_running "$proc_pattern" || fl_brew_service_running "$formula"; do
+    tries=$((tries + 1))
+    [[ "$tries" -le "$((secs * 2))" ]] || fl_die "${formula} did not come up within ${secs}s." "Look at: brew services info ${formula}, then run this again"
+    sleep 0.5
+  done
   fl_ok "${formula} is running"
 }
 
