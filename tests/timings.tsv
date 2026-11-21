@@ -49,6 +49,7 @@ test-install-linux	-	185
 test-install-sh	48	41
 test-install-sh-linux	10	6
 test-json	37	33
+test-json-strings	20	15
 test-labs	22	32
 test-labs-share	17	18
 test-lan-guard	59	-
