@@ -150,6 +150,12 @@ without a row counts as 10 seconds, so a new test needs no row to run.
 - **Against `next-release`.** `main` holds the last release and moves only
   when one is cut ([docs/releasing.md](docs/releasing.md#branches)).
 - **Small, one topic.** A fix and a refactor are two pull requests.
+- **The issue.** Write `Fixes #123` when the pull request finishes the
+  issue and `Part of #123` when it does not. A pull request for a bug a
+  user reported always names the report. GitHub closes an issue only from
+  a merge into `main`, and pull requests merge into `next-release`, so
+  the issue stays open after the merge: whoever merges closes a finished
+  issue by hand, with a comment that names the pull request.
 - **User docs.** A change a user can see updates the page that tells them
   about it: the guide or the app page under [docs/](docs/), and a row in
   [docs/features.md](docs/features.md) for a new feature, Lab or
@@ -189,6 +195,36 @@ fix (a typo, a wrong sentence) may go to `main` instead of `next-release`
 when it cannot wait for a release; say so in the pull request. The site
 is built from `main` only, so it shows the last release
 ([docs/releasing.md](docs/releasing.md#the-docs-site)).
+
+## Issues
+
+Every new issue gets a first reply within two days, even if the reply is
+only "seen, confirmed" or "cannot reproduce yet, please attach the zip
+from `benchbar report`". A one line reply is enough. The reply says one
+of: confirmed, not reproduced, or fixed on `next-release` in pull request
+N, and links a workaround when there is one.
+
+- **Labels.** One of `bug`, `enhancement` or `question`, one `area:*`
+  label and the platform (`macos`, `linux`, `windows`). `needs-repro`
+  when the version, the platform or the report zip is missing.
+- **Milestone.** An issue that a planned release fixes goes in that
+  release's milestone. The milestone page is the list of what the release
+  holds.
+- **Closing.** A fixed issue is closed with the pull request that fixed
+  it and, at the release, with the version (see
+  [docs/releasing.md](docs/releasing.md#cutting-a-release)). An open
+  issue means "not fixed yet": do not leave a fixed one open.
+- **Security.** A hole that puts a user at risk is not a public issue.
+  Report it as [SECURITY.md](SECURITY.md) says. A public issue that turns
+  out to be one gets the `security` label and is never a
+  `good first issue`.
+- **`good first issue`** is only for a task that needs no special
+  hardware, no release keys and no knowledge of the whole codebase, and
+  that is still open and still wanted. Check the list when you triage.
+- **Issues filed by an agent.** An agent session that files an issue for
+  the maintainer says so in the first line ("Filed by an agent session
+  for the maintainer."), sets the labels and the milestone, and closes
+  the issue in the pull request that fixes it.
 
 ## AI assisted contributions
 
