@@ -184,6 +184,14 @@ fl_bench_require_uv() {
     "Run ./$(fl_phase00_script) --profile ${FL_PROFILE:-v15-lts} (it installs uv), or by hand: ${hint}"
 }
 
+# fl_uv_install_hint: how uv gets onto this machine, for a fix line: Homebrew on
+# a Mac; on Linux the phase 00 script, which downloads the pinned installer and
+# checks its sum before it runs (nothing else installs uv there)
+fl_uv_install_hint() {
+  if fl_is_linux; then printf '%s/%s --profile %s   (installs uv)' "$FL_SELF_DIR" "$(fl_phase00_script)" "${FL_PROFILE:-v15-lts}"
+  else printf 'brew install uv'; fi
+}
+
 fl_bench_complete() {
   local bench_dir="$1"
   [[ -d "$bench_dir/apps/frappe" && -d "$bench_dir/env" && -f "$bench_dir/sites/apps.txt" ]]
