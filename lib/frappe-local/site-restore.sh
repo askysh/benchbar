@@ -97,11 +97,14 @@ fl_srestore_pick() {
 # the answer. Anything else is a set from somewhere else, which may be a
 # production site's.
 fl_srestore_dir_is_own() {
-  local dir="$1" s root
+  local dir="$1" s root sites
+  # the list is read whole first: a loop over a pipe that returns at its match
+  # closes the pipe on a writer that may still print (the broken pipe of #282)
+  sites="$(fl_sites_list)"
   while IFS= read -r s; do
     [[ -n "$s" ]] || continue
     [[ "$dir" -ef "$(fl_site_backup_dir "$s")" ]] && return 0
-  done < <(fl_sites_list)
+  done <<<"$sites"
   root="$(cd "$FL_BACKUP_ROOT" 2>/dev/null && pwd -P)" || return 1
   [[ "$dir" == "$root"/* ]]
 }
