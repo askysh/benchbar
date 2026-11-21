@@ -1,6 +1,6 @@
 ## What and why
 
-<!-- What changes, and the problem it solves. Link the issue: Fixes #123. -->
+<!-- What changes, and the problem it solves. Link the issue: "Fixes #123" when this finishes it, "Part of #123" when it does not. -->
 
 ## Tested on
 

@@ -191,7 +191,7 @@ benchbar site backups macdev --json
 ## site restore
 
 ```
-benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--no-migrate]
+benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--neutralise] [--no-migrate]
   [--before-migrate SCRIPT] [--with-files] --dry-run [--json] | --apply TOKEN --yes [--json] | --yes
 ```
 
@@ -226,6 +226,7 @@ A plain `--yes` from a terminal shows the plan and runs it.
 | `--from-site SITE` | The site a stamp belongs to (needed with `--new`) |
 | `--new` | Create TARGET first |
 | `--with-files` | Restore the public and private files too (the set must have them) |
+| `--neutralise` | After the restore and the key, before migrate: switch the site's outbound integrations off and clear its stored secrets, the list [`pull`](pull.md#what-the-copy-loses) runs (the Administrator login is kept). For a set that is not this bench's own: the plan warns without it, and a run without a person (`--for-agent`, `benchbar mcp`, `BENCHBAR_NONINTERACTIVE=1`) is refused without it |
 | `--no-migrate` | Stop after the restore and the key, before `bench migrate` |
 | `--before-migrate SCRIPT` | Run the executable SCRIPT after the restore, before migrate, in the bench folder, with `BENCHBAR_SITE`, `BENCHBAR_BENCH` and `BENCHBAR_DB_NAME`. Variables named like a secret are removed from its environment. A failing script stops the run before migrate |
 | `--dry-run`, `--json` | The plan, with its token |
@@ -399,6 +400,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar site hosts [--prune] [--dry-run]` | yes | yes | no | yes | stream |
 | `benchbar site backup NAME [--with-files] [--json]` | no | no | no | yes | document |
 | `benchbar site backups NAME [--json]` | no | no | no | no | document |
+| `benchbar site restore NAME --from STAMP\|PATH [--from-site S] [--new] [--neutralise] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
 | `benchbar site restore NAME --from STAMP\|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
 | `benchbar site snapshot NAME [--label TEXT] [--json]` | no | no | no | yes | document |
 | `benchbar site snapshot drop NAME SNAPSHOT\|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run] [--json]` | no | no | no | yes | document |
@@ -426,6 +428,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site restore` | `--from` | `STAMP\|PATH` | The backup set: its stamp in the target's (or --from-site's) backup folder, or the database file's path. |
 | `site restore` | `--from-site` | `S` | Read the stamp from this site's backups. |
 | `site restore` | `--new` |  | Create the site (bench new-site) first. |
+| `site restore` | `--neutralise` |  | Switch the restored site's integrations off and clear its stored secrets, after the restore and before migrate (the list pull runs; the Administrator login is kept). Needed for a set from outside this bench when no person runs the restore. |
 | `site restore` | `--no-migrate` |  | Stop after the restore, before bench migrate. |
 | `site restore` | `--before-migrate` | `SCRIPT` | An executable run after the restore, before migrate. |
 | `site restore` | `--with-files` |  | Restore the uploads too. |

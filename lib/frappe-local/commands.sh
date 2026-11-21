@@ -138,7 +138,7 @@ flag~pull~--as~NAME~Local site name (default SITE.local).
 flag~pull~--from-dir~DIR~A backup set downloaded by hand, no SSH.
 flag~pull~--remote-bench~DIR~The bench folder on the server.
 flag~pull~--new-backup~~Run bench backup on the server first.
-flag~pull~--keep-secrets~~Keep the copy's integrations and stored secrets (by default they are switched off and cleared).
+flag~pull~--keep-secrets~~Keep the copy's integrations and stored secrets (by default they are switched off and cleared). A person's decision: refused under --for-agent, benchbar mcp and BENCHBAR_NONINTERACTIVE=1.
 flag~pull~--replace~~Restore over an existing local site, after backing it up.
 flag~pull~--confirm-site~SITE~With --new-backup: the site name, instead of typing it.
 flag~pull~--skip-app~APP~Restore without APP (its tables stay behind as orphans); repeat for more apps.
@@ -292,11 +292,12 @@ cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site N
 flag~site backup~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site backup~--with-files~~Include the uploads.
 cmd~site backups~benchbar site backups NAME [--json]~The site's backups, newest first.~no~no~no~no~document
-cmd~site restore~benchbar site restore NAME --from STAMP|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes~Restore a local backup set into a site (a new one with --new), after a backup of the target; a reviewed plan.~no~yes~no~yes~document
+cmd~site restore~benchbar site restore NAME --from STAMP|PATH [--from-site S] [--new] [--neutralise] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes~Restore a local backup set into a site (a new one with --new), after a backup of the target; a reviewed plan.~no~yes~no~yes~document
 flag~site restore~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site restore~--from~STAMP|PATH~The backup set: its stamp in the target's (or --from-site's) backup folder, or the database file's path.
 flag~site restore~--from-site~S~Read the stamp from this site's backups.
 flag~site restore~--new~~Create the site (bench new-site) first.
+flag~site restore~--neutralise~~Switch the restored site's integrations off and clear its stored secrets, after the restore and before migrate (the list pull runs; the Administrator login is kept). Needed for a set from outside this bench when no person runs the restore.
 flag~site restore~--no-migrate~~Stop after the restore, before bench migrate.
 flag~site restore~--before-migrate~SCRIPT~An executable run after the restore, before migrate.
 flag~site restore~--with-files~~Restore the uploads too.
@@ -439,6 +440,12 @@ flag~notices~--all~~Hide every notice.
 TABLE
 
 fl_cmd_table() { printf '%s\n' "$FL_CMD_TABLE"; }
+# The readers below loop over the variable with a here string, never over a
+# pipe from fl_cmd_table: one that returns at its match closes the pipe on a
+# writer that is still printing the table. A shell whose parent ignores
+# SIGPIPE (GitHub Actions, an app) then prints "printf: write error: Broken
+# pipe" on stderr, in the middle of a command's output, and the larger the
+# table grew the more often it did.
 
 # fl_cmd_visible_table: the table without the commands of a lab that is off
 fl_cmd_visible_table() {
@@ -450,7 +457,7 @@ fl_cmd_visible_table() {
              case " ${hidden} " in *" ${word} "*) skip=1 ;; *) skip=0 ;; esac ;;
     esac
     [[ "$skip" == 1 ]] || printf '%s\n' "$line"
-  done < <(fl_cmd_table)
+  done <<<"$FL_CMD_TABLE"
 }
 
 # Options every command takes, for the help text and `commands --json`.
@@ -481,11 +488,11 @@ fl_cmd_key_for() {
   if [[ -n "$arg" && "$arg" != -* ]]; then
     while IFS= read -r line; do
       [[ "$line" == "cmd~${cmd} ${arg}~"* ]] && { printf '%s' "${cmd} ${arg}"; return 0; }
-    done < <(fl_cmd_table)
+    done <<<"$FL_CMD_TABLE"
   fi
   while IFS= read -r line; do
     [[ "$line" == "cmd~${cmd}~"* ]] && { printf '%s' "$cmd"; return 0; }
-  done < <(fl_cmd_table)
+  done <<<"$FL_CMD_TABLE"
   return 1
 }
 
@@ -497,7 +504,7 @@ fl_cmd_attr_v() {
     IFS='~' read -r _ __k __u __s __t __sd __n __m __j <<<"$__line"
     case "$3" in tty) __r="$__t" ;; sudo) __r="$__sd" ;; network) __r="$__n" ;; mutating) __r="$__m" ;; json) __r="$__j" ;; esac
     break
-  done < <(fl_cmd_table)
+  done <<<"$FL_CMD_TABLE"
   printf -v "$1" '%s' "$__r"
 }
 
@@ -512,7 +519,7 @@ fl_cmd_help() {
       flag) flags="${flags}  $(printf '%-22s' "${a}${b:+ ${b}}") ${c}"$'\n' ;;
       env) envs="${envs}  $(printf '%-22s' "$a") ${b}"$'\n' ;;
     esac
-  done < <(fl_cmd_table)
+  done <<<"$FL_CMD_TABLE"
   printf 'benchbar %s: %s\n\nUsage: %s\n' "$key" "$summary" "$usage"
   [[ -z "$flags" ]] || printf '\nOptions:\n%s' "$flags"
   [[ -z "$envs" ]] || printf '\nEnvironment:\n%s' "$envs"
