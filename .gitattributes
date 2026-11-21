@@ -10,3 +10,8 @@
 /templates/** text eol=lf
 *.tsv text eol=lf
 *.toml text eol=lf
+
+# The seconds per test: one row per test. Two branches that each add or change a row
+# merge without a conflict (both rows are kept; scripts/ci-timings.sh --write leaves
+# one). Git on a developer machine applies this; GitHub's merge button does not.
+/tests/timings.tsv text eol=lf merge=union

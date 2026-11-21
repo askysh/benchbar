@@ -139,6 +139,12 @@ printf '### Docs\n' >"$REPO/changelog.d/1-x.md"
 aff --base main --list
 assert_contains "$OUT" "affected: test-changelog" "(changelog.d)"
 reset
+# the seconds per test are data: a new row is not a change to the harness, so it does not run every test
+printf 'test-foo\t10\t10\n' >"$REPO/tests/timings.tsv"
+aff --base main --machine
+assert_contains "$OUT" "mode=affected" "(tests/timings.tsv)"
+assert_contains "$OUT" "tests=test-ci-plan test-suite-hygiene" "(tests/timings.tsv)"
+reset
 # the harness, the mocks, run-tests.sh, the entry point, templates and the selector itself run everything
 printf '# x\n' >>"$REPO/tests/affected.sh"
 aff --base main --list

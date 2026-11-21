@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
 #
-# ci-timings.sh: print fresh TEST_SECS tables for tests/run-tests.sh from a CI run.
+# ci-timings.sh: refresh tests/timings.tsv (the seconds per test) from a CI run.
 #
-#   scripts/ci-timings.sh RUN_ID      the logs of that run (needs gh, signed in)
-#   scripts/ci-timings.sh FILE        a saved `gh run view RUN_ID --log`
-#   scripts/ci-timings.sh -           the same from stdin
+#   scripts/ci-timings.sh RUN_ID            print the new table (needs gh, signed in)
+#   scripts/ci-timings.sh --write RUN_ID    write it to tests/timings.tsv
+#   scripts/ci-timings.sh FILE              from a saved `gh run view RUN_ID --log`
+#   scripts/ci-timings.sh -                 the same from stdin
 #
 # run-tests.sh prints "--- ok: NAME (Ns)" for every test. Pick a green run of the
-# full suite (a push to next-release or the nightly), run this, and paste the two
-# blocks over TEST_SECS_MAC and TEST_SECS_LINUX in tests/run-tests.sh. The Linux
-# table averages the bash 5 and the bash 3.2 container legs; a test no leg ran
-# is left out (it counts as 10).
+# full suite (a push to next-release or the nightly). The Linux column averages
+# the bash 5 and the bash 3.2 container legs. A test the run did not time keeps
+# the seconds it had; the header lines of the file stay as they are.
+# TIMINGS_FILE names another table (the tests use it).
 
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TABLE="${TIMINGS_FILE:-$ROOT/tests/timings.tsv}"
+write=0
+if [[ "${1:-}" == "--write" ]]; then write=1; shift; fi
 [[ "$#" -eq 1 ]] || { sed -n '3,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 1; }
 src="$1"
 if [[ "$src" == "-" ]]; then
@@ -30,7 +35,10 @@ fi
 rows="$(printf '%s\n' "$log" | awk -F'\t' '
   $1 ~ /^CLI tests \(macOS/ { leg = "mac" }
   $1 ~ /^CLI tests \((Linux|bash 3\.2)/ { leg = "linux" }
-  $1 ~ /^CLI tests \(/ && match($3, /--- ok: [^ ]+ \([0-9]+s\)/) {
+  # only the line run-tests.sh prints for a real test: the time stamp, "--- ok: test-NAME (Ns)" and
+  # nothing more. A failing test prints the output of the stand in runs it started, and a line
+  # such as "--- ok: t-flaky (1s)" in there is not a test.
+  $1 ~ /^CLI tests \(/ && $3 ~ /^[^ ]+ --- ok: test-[a-z0-9-]+ \([0-9]+s\)$/ && match($3, /--- ok: [^ ]+ \([0-9]+s\)/) {
     s = substr($3, RSTART + 8, RLENGTH - 8)
     name = s; sub(/ .*/, "", name)
     secs = s; sub(/^[^(]*\(/, "", secs); sub(/s\)$/, "", secs)
@@ -38,23 +46,31 @@ rows="$(printf '%s\n' "$log" | awk -F'\t' '
   }')"
 [[ -n "$rows" ]] || { printf 'ci-timings: no "--- ok: NAME (Ns)" lines in that log\n' >&2; exit 1; }
 
-table() {
-  printf '%s\n' "$rows" | awk -v leg="$1" -v var="$2" '
-    $1 == leg { sum[$2] += $3; n[$2]++ }
+# the new table: the header lines of the old one, then one row per test, by name. A column
+# the run timed is the average of its legs; one it did not time keeps the old value.
+old=""
+[[ -f "$TABLE" ]] && old="$(cat "$TABLE")"
+new="$(
+  printf '%s\n' "$old" | grep '^#' || true
+  {
+    printf '%s\n' "$old" | awk -F'\t' '$1 != "" && $1 !~ /^#/ { print "old", $1, $2, $3 }'
+    printf '%s\n' "$rows" | awk '{ print "new", $1, $2, $3 }'
+  } | awk '
+    $1 == "old" { seen[$2] = 1; if (!($2 in mac)) mac[$2] = $3; if (!($2 in linux)) linux[$2] = $4 }
+    $1 == "new" { seen[$3] = 1; sum[$2, $3] += $4; n[$2, $3]++ }
     END {
-      for (t in sum) printf "%d %s\n", sum[t] / n[t] + 0.5, t
-    }' | sort -k1,1nr -k2,2 | awk -v var="$2" '
-    { cell[NR] = $2 "=" $1 }
-    END {
-      printf "%s=\"", var
-      for (i = 1; i <= NR; i++) {
-        if (i > 1) printf (i % 6 == 1) ? "\n" : " "
-        printf "%s", cell[i]
+      for (t in seen) {
+        m = (("mac", t) in n) ? sprintf("%d", sum["mac", t] / n["mac", t] + 0.5) : mac[t]
+        l = (("linux", t) in n) ? sprintf("%d", sum["linux", t] / n["linux", t] + 0.5) : linux[t]
+        if (m == "") m = "-"
+        if (l == "") l = "-"
+        printf "%s\t%s\t%s\n", t, m, l
       }
-      printf "\"\n"
-    }'
-}
-
-table mac TEST_SECS_MAC
-printf '\n'
-table linux TEST_SECS_LINUX
+    }' | LC_ALL=C sort
+)"
+if [[ "$write" == 1 ]]; then
+  printf '%s\n' "$new" >"$TABLE.new" && mv "$TABLE.new" "$TABLE"
+  printf 'ci-timings: wrote %s\n' "$TABLE" >&2
+else
+  printf '%s\n' "$new"
+fi
