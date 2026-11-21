@@ -566,10 +566,13 @@ fl_prereq_print_json() {
 # Schema 1 (docs/json-schema.md). "level" and "fix_command" are the contract
 # names; "status" and "fix" are the frappe-mac 0.2.0 names, kept for older readers.
 fl_doctor_print_json() {
-  local i=0 sep="" group label e_label e_msg e_fix j_fix j_act acked_s
-  printf '{"schema_version":%d,"cli_version":"%s","bench":"%s","name":"%s","site":"%s","profile":"%s","profile_source":"%s","checks":[' \
+  local i=0 sep="" group label e_label e_msg e_fix j_fix j_act acked_s j_site
+  # status's rule: a folder benchbar does not know has no site of its own to name
+  # (the one doctor would print is the default's guess)
+  if fl_bench_adopted; then fl_json_str_v j_site "$FL_SITE"; else j_site=null; fi
+  printf '{"schema_version":%d,"cli_version":"%s","bench":"%s","name":"%s","site":%s,"profile":"%s","profile_source":"%s","checks":[' \
     "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$(fl_json_escape "$FL_BENCH_DIR")" "$(fl_json_escape "$FL_BENCH_NAME")" \
-    "$(fl_json_escape "$FL_SITE")" "$(fl_json_escape "$FL_PROFILE")" "$(fl_doctor_profile_source)"
+    "$j_site" "$(fl_json_escape "$FL_PROFILE")" "$(fl_doctor_profile_source)"
   while [[ "$i" -lt "${#FL_D_IDS[@]}" ]]; do
     # the _v forms: no process for each escaped value (fifty checks, six values each)
     group="$(fl_check_group "${FL_D_IDS[$i]}")"; label="$(fl_check_label "${FL_D_IDS[$i]}")"
