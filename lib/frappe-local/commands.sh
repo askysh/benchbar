@@ -138,7 +138,7 @@ flag~pull~--as~NAME~Local site name (default SITE.local).
 flag~pull~--from-dir~DIR~A backup set downloaded by hand, no SSH.
 flag~pull~--remote-bench~DIR~The bench folder on the server.
 flag~pull~--new-backup~~Run bench backup on the server first.
-flag~pull~--keep-secrets~~Keep the copy's integrations and stored secrets (by default they are switched off and cleared).
+flag~pull~--keep-secrets~~Keep the copy's integrations and stored secrets (by default they are switched off and cleared). A person's decision: refused under --for-agent, benchbar mcp and BENCHBAR_NONINTERACTIVE=1.
 flag~pull~--replace~~Restore over an existing local site, after backing it up.
 flag~pull~--confirm-site~SITE~With --new-backup: the site name, instead of typing it.
 flag~pull~--skip-app~APP~Restore without APP (its tables stay behind as orphans); repeat for more apps.
@@ -292,11 +292,12 @@ cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site N
 flag~site backup~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site backup~--with-files~~Include the uploads.
 cmd~site backups~benchbar site backups NAME [--json]~The site's backups, newest first.~no~no~no~no~document
-cmd~site restore~benchbar site restore NAME --from STAMP|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes~Restore a local backup set into a site (a new one with --new), after a backup of the target; a reviewed plan.~no~yes~no~yes~document
+cmd~site restore~benchbar site restore NAME --from STAMP|PATH [--from-site S] [--new] [--neutralise] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes~Restore a local backup set into a site (a new one with --new), after a backup of the target; a reviewed plan.~no~yes~no~yes~document
 flag~site restore~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site restore~--from~STAMP|PATH~The backup set: its stamp in the target's (or --from-site's) backup folder, or the database file's path.
 flag~site restore~--from-site~S~Read the stamp from this site's backups.
 flag~site restore~--new~~Create the site (bench new-site) first.
+flag~site restore~--neutralise~~Switch the restored site's integrations off and clear its stored secrets, after the restore and before migrate (the list pull runs; the Administrator login is kept). Needed for a set from outside this bench when no person runs the restore.
 flag~site restore~--no-migrate~~Stop after the restore, before bench migrate.
 flag~site restore~--before-migrate~SCRIPT~An executable run after the restore, before migrate.
 flag~site restore~--with-files~~Restore the uploads too.

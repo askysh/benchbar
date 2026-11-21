@@ -3,7 +3,7 @@
 #
 # site-restore.sh: benchbar site restore, a backup set into a site of this bench.
 #
-#   benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new]
+#   benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--neutralise]
 #       [--no-migrate] [--before-migrate SCRIPT] [--with-files]
 #       --dry-run [--json] | --apply TOKEN --yes [--json] | --yes
 #
@@ -45,6 +45,10 @@ SR_DEFAULT_BEFORE=""
 SR_BACKUP_JSON="null"
 SR_BACKUP_STAMP=""
 SR_SET_COPY=""
+# --neutralise: the list pull runs (neutralise.sh), after the restore and before migrate
+SR_NEUTRALISE=0
+# 1 when --from is a path that is not in a backup folder of this bench or of benchbar
+SR_OUTSIDE=0
 SR_PLAN_BODY=""
 SR_NEEDS=""
 SR_PLAN_JSON=""
@@ -68,9 +72,10 @@ fl_srestore_parse() {
       --apply) SR_APPLY=1; SR_TOKEN_IN="${2:-}"; shift 2 || shift ;;
       --apply=*) SR_APPLY=1; SR_TOKEN_IN="${1#*=}"; shift ;;
       --new) SR_NEW=1; shift ;;
+      --neutralise) SR_NEUTRALISE=1; shift ;;
       --no-migrate) FL_PULL_NO_MIGRATE=1; shift ;;
       --with-files) SR_WITH_FILES=1; shift ;;
-      -*) fl_die "Unknown option for site restore: $1" "Use: benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run|--yes" ;;
+      -*) fl_die "Unknown option for site restore: $1" "Use: benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--neutralise] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run|--yes" ;;
       *) [[ -z "$SR_TARGET" ]] && SR_TARGET="$1"; shift ;;
     esac
   done
@@ -85,12 +90,29 @@ fl_srestore_pick() {
   fl_pull_pick_set "$names"
 }
 
+# fl_srestore_dir_is_own DIR: DIR (resolved) holds backups this bench or benchbar
+# made: the backup folder of one of the bench's sites, or a folder under
+# benchbar's own backups (the copies a restore keeps, the sets a cut short
+# backup left). Folders are compared as files (-ef), so a link does not change
+# the answer. Anything else is a set from somewhere else, which may be a
+# production site's.
+fl_srestore_dir_is_own() {
+  local dir="$1" s root
+  while IFS= read -r s; do
+    [[ -n "$s" ]] || continue
+    [[ "$dir" -ef "$(fl_site_backup_dir "$s")" ]] && return 0
+  done < <(fl_sites_list)
+  root="$(cd "$FL_BACKUP_ROOT" 2>/dev/null && pwd -P)" || return 1
+  [[ "$dir" == "$root"/* ]]
+}
+
 # fl_srestore_resolve_source: FL_PULL_FROM_DIR and the set's file names, or
 # errors. Read only.
 fl_srestore_resolve_source() {
   local path base dir prefix
   FL_PULL_NO_FILES=1; [[ "$SR_WITH_FILES" == "1" ]] && FL_PULL_NO_FILES=0
   FL_PULL_DB=""; FL_PULL_PUB=""; FL_PULL_PRIV=""; FL_PULL_CONF=""; FL_PULL_FROM_DIR=""
+  SR_OUTSIDE=0
   if [[ -z "$SR_FROM" ]]; then
     fl_srestore_err "--from STAMP|PATH names the backup set to restore (benchbar site backups ${SR_TARGET} lists the stamps)"
     return 1
@@ -124,6 +146,7 @@ fl_srestore_resolve_source() {
     fl_srestore_pick "$dir" "$prefix"
     if [[ -z "$FL_PULL_DB" ]]; then fl_srestore_err "no complete database backup (*-database.sql.gz, not a partial one) for ${SR_FROM}"; return 1; fi
     SR_SET_SITE=""
+    fl_srestore_dir_is_own "$dir" || SR_OUTSIDE=1
   fi
   FL_PULL_FROM_DIR="$dir"
   SR_SET_DIR="$dir"
@@ -180,6 +203,16 @@ fl_srestore_plan() {
   [[ "$SR_EXISTS" == "1" ]] && FL_PULL_SITE_EXISTS=1
   # the source
   fl_srestore_resolve_source || true
+  # a set from outside this bench may be a production site's: restored as it is, its integrations,
+  # webhooks and stored passwords are live here. A person is told in the plan; a run nobody watches
+  # (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1) is refused unless it neutralises (SVC-4)
+  if [[ "$SR_OUTSIDE" == "1" && "$SR_NEUTRALISE" != "1" ]]; then
+    if fl_noninteractive; then
+      fl_srestore_err "the backup set in ${SR_SET_DIR} is not one of this bench's own, so it may hold a production site's live integrations and stored passwords: pass --neutralise (they are switched off and cleared after the restore), or have the person run the restore in a terminal"
+    else
+      FL_PULL_WARNINGS="${FL_PULL_WARNINGS}${FL_PULL_WARNINGS:+,}$(fl_json_str "this backup set is not one of this bench's own (${SR_SET_DIR}): if it is a production site's, its integrations, webhooks and stored passwords are live in ${SR_TARGET} after the restore. Add --neutralise to switch them off and clear them")"
+    fi
+  fi
   # the database server and its password, judged without trying them
   if [[ "${#SR_ERRORS[@]}" == "0" || -n "$FL_PULL_DB" ]]; then
     fl_port_listening 3306 || fl_srestore_err "MariaDB is not running (nothing listens on 3306); start it: $(fl_pull_mariadb_start_hint)"
@@ -227,6 +260,8 @@ fl_srestore_plan() {
   # the run skips this step when the set has no key: the plan says so, so plan and run agree
   if [[ "$FL_PULL_HAS_KEY" == "1" ]]; then FL_PULL_STEPS+=("encryption_key|Carry the encryption key of the set over")
   else FL_PULL_STEPS+=("encryption_key|Skip the encryption key (the set has none)"); fi
+  # before anything can start a worker on the restored data: before the scheduler resumes and before migrate
+  [[ "$SR_NEUTRALISE" != "1" ]] || FL_PULL_STEPS+=("neutralise|Neutralise ${SR_TARGET}: integrations off, stored secrets cleared")
   [[ "$FL_PULL_QUIESCE" == "1" ]] && FL_PULL_STEPS+=("resume|Resume this bench's scheduler")
   [[ -n "$FL_PULL_HOOK" ]] && FL_PULL_STEPS+=("before_migrate|Run ${FL_PULL_HOOK##*/} (--before-migrate)")
   [[ "$FL_PULL_NO_MIGRATE" == "1" ]] || FL_PULL_STEPS+=("migrate|bench migrate")
@@ -270,6 +305,7 @@ fl_srestore_step_touches() {
     new_site) printf '["database","site_config"]' ;;
     restore) if [[ "$FL_PULL_NO_FILES" == "1" ]]; then printf '["database"]'; else printf '["database","files"]'; fi ;;
     encryption_key) printf '["site_config"]' ;;
+    neutralise) printf '["database"]' ;;
     quiesce|resume) printf '["common_site_config"]' ;;
     before_migrate) printf '["database"]' ;;
     migrate) printf '["database"]' ;;
@@ -287,12 +323,17 @@ fl_srestore_print_plan() {
     "from     ${SR_SET_STAMP:-?} in ${SR_SET_DIR:-?}$([[ -n "$SR_SET_SITE" ]] && printf ' (a backup of %s)' "$SR_SET_SITE")" \
     "files    $([[ "$FL_PULL_NO_FILES" == "1" ]] && printf 'database only (--with-files restores the uploads)' || printf 'database, public and private files')" \
     "key      $([[ "$FL_PULL_HAS_KEY" == "1" ]] && printf 'encryption_key of the set carried over (never shown)' || printf 'none in the set: stored passwords will not decrypt')" \
+    "secrets  $(if [[ "$SR_NEUTRALISE" == "1" ]]; then printf 'neutralised after the restore: integrations off, stored secrets cleared (the Administrator login is kept)'; elif [[ "$SR_OUTSIDE" == "1" ]]; then printf 'kept as the set has them (--neutralise switches them off)'; else printf 'kept as the backup has them'; fi)" \
     "migrate  $([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf 'not run (--no-migrate)' || printf 'after the restore')$([[ -n "$FL_PULL_HOOK" ]] && printf ', %s runs before it' "${FL_PULL_HOOK##*/}")"
   printf '\n%sSteps%s\n' "$FL_BOLD" "$FL_RESET"
   for s in "${FL_PULL_STEPS[@]}"; do
     printf '  %s %d. %s\n' "$FL_G_PEND" "$i" "${s#*|}"
     i=$((i + 1))
   done
+  if [[ "$SR_OUTSIDE" == "1" && "$SR_NEUTRALISE" != "1" ]] && ! fl_noninteractive; then
+    fl_warn "this backup set is not one of this bench's own (${SR_SET_DIR}): if it is a production site's, its integrations, webhooks and stored passwords are live in ${SR_TARGET} after the restore"
+    fl_fix "add --neutralise to switch them off and clear them (the list benchbar pull runs)"
+  fi
   for e in ${SR_ERRORS[@]+"${SR_ERRORS[@]}"}; do fl_fail "$e"; done
   return 0
 }
@@ -490,6 +531,11 @@ fl_srestore_run() {
     fi
     if [[ "$code" != "0" ]]; then
       fl_step_end failed
+      # a restore that stopped before its neutralise step holds the set's data as it was: say so
+      case "$id" in
+        restore|encryption_key)
+          [[ "$SR_NEUTRALISE" != "1" ]] || fl_warn "${SR_TARGET} was not neutralised: it may hold the set's integrations and stored passwords as they were. Do not start the scheduler or workers on it; plan the same restore again" ;;
+      esac
       i=$((i + 1))
       while [[ "$i" -lt "$n" ]]; do FL_STEP_STATUS[i]="skipped"; i=$((i + 1)); done
       fl_bench_redis_down
@@ -535,7 +581,7 @@ fl_cmd_site_restore() {
   fl_site_json_begin
   fl_require_bench
   fl_require_plain_bench
-  [[ -n "$SR_TARGET" ]] || fl_die "Usage: benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run|--yes"
+  [[ -n "$SR_TARGET" ]] || fl_die "Usage: benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--neutralise] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run|--yes"
   fl_site_valid_name "$SR_TARGET"
   if [[ "$SR_APPLY" == "1" ]]; then
     [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."

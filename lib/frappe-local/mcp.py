@@ -396,11 +396,12 @@ def site_add_args(a):
 
 SITE_RESTORE = {
     "site": {"type": "string", "description": "The site to restore into (it is backed up with its files first), or a new one with new: true."},
-    "from": {"type": "string", "description": "The backup set: a stamp from benchbar_site_backups (20261029_101500), or the path of its database file."},
+    "from": {"type": "string", "description": "The backup set: a stamp from benchbar_site_backups (20261029_101500), or the path of its database file. A path outside this bench's own backup folders is refused unless neutralise is true."},
     "from_site": {"type": "string", "description": "Read the stamp from this site's backups instead of the target's."},
     "new": {"type": "boolean", "description": "Create the site first (a copy of another site for QA)."},
     "no_migrate": {"type": "boolean", "description": "Stop after the restore, before bench migrate."},
     "with_files": {"type": "boolean", "description": "Restore the public and private files too."},
+    "neutralise": {"type": "boolean", "description": "Switch the restored site's outbound integrations off and clear its stored secrets, after the restore and before migrate (the Administrator login is kept). Required when from is a path outside this bench's own backup folders: such a set may be a production site's."},
     "bench": BENCH,
 }
 
@@ -409,7 +410,7 @@ def site_restore_args(a):
     argv = ["site", "restore", required(a, "site"), "--from", required(a, "from")]
     if a.get("from_site"):
         argv += ["--from-site", a["from_site"]]
-    for key, flag in (("new", "--new"), ("no_migrate", "--no-migrate"), ("with_files", "--with-files")):
+    for key, flag in (("new", "--new"), ("no_migrate", "--no-migrate"), ("with_files", "--with-files"), ("neutralise", "--neutralise")):
         if a.get(key) is True:
             argv += [flag]
     return argv + bench_args(a)
@@ -460,7 +461,7 @@ TOOLS["benchbar_site_restore_plan"] = (
 )
 TOOLS["benchbar_site_restore"] = (
     "Apply a plan from benchbar_site_restore_plan: back up the target with its files, restore the set (from a copy, so "
-    "the backup cannot prune it), carry the encryption key over, migrate unless no_migrate, verify. Only after the "
+    "the backup cannot prune it), carry the encryption key over, neutralise when neutralise is true (integrations off, stored secrets cleared), migrate unless no_migrate, verify. A set from a path outside this bench's own backup folders may be a production site's and is refused without neutralise: true. Only after the "
     "person saw the plan; pass the same arguments and the plan's token. The default site does not change. A token expires about an hour after its plan (60 to 70 minutes): an older one is refused as expired, plan again. Takes minutes.",
     dict(SITE_RESTORE, token=TOKEN, lease=LEASE, background=BACKGROUND),
     lambda a: site_restore_args(a) + lease_args(a) + ["--apply", a["token"], "--yes", "--json"] + background_args(a),

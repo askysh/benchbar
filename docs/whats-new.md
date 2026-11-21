@@ -72,7 +72,7 @@ Customer data is not scrubbed.
 
 - **Switch back:** `benchbar pull --keep-secrets` keeps production's
   integrations and passwords in the copy, as before. Email is still muted and
-  the scheduler paused.
+  the scheduler paused. It is a person's command: an agent run refuses it.
 - **Upgrade note:** a copy you already pulled keeps what it has until you pull
   again with `--replace`. A script that pulls and then relies on production's
   SMTP, S3 or API credentials must add `--keep-secrets`.

@@ -265,6 +265,13 @@ stamps), plan first, show it to the user, then apply with the token:
 It backs the site up first, never moves the default site and ends with a
 check. Do not run `bench restore` or `mariadb -u root` yourself.
 
+A backup set from a path outside the bench's own backup folders (a
+download, a `pull --keep-staging` folder) may be a production site's, with
+its integrations and stored passwords live. For you the plan is refused
+unless you add `--neutralise` (`neutralise: true` in the MCP tools), which
+switches them off and clears them after the restore, before migrate. Add
+it; do not copy the set into a site's backup folder to get round it.
+
 A `pull` has a token too (the CLI form only; it is not an MCP tool). Show
 the plan to the user, then run exactly it:
 
@@ -277,6 +284,10 @@ The run makes the plan again after its checks; a newer backup on the
 server or another set of apps is another plan, and it stops with "The
 plan changed since it was shown; nothing was changed" (exit 1). Without
 `--apply` the old behaviour stays: a person in a terminal is asked.
+A pull neutralises the copy. `--keep-secrets` (production's integrations
+and stored passwords stay live in it) is the person's choice, like
+`listen all`: it is refused under `--for-agent`, `benchbar mcp` and
+`BENCHBAR_NONINTERACTIVE=1`. Never pass it; give the user the command.
 
 ## Retiring a bench
 
