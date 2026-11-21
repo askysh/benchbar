@@ -9,6 +9,9 @@ nonisolated struct CLIClient: Sendable {
     let executable: URL
     var runner: any CommandRunning = SubprocessRunner()
     var locator = CLILocator()
+    /// Every command goes ahead although a lease stands (`--break-lease`, as a person: see `breakingLease()`).
+    /// Only the change a person just chose to run again after a lease refused it ever has this on.
+    var breakLease = false
     /// Where the entries of a list the CLI printed but this build could not read are named
     /// (the rest of the list still shows). Logs by default; a test replaces it.
     var onSkipped: @Sendable (_ source: String, _ entries: [String]) -> Void = { source, entries in
@@ -381,6 +384,8 @@ nonisolated struct CLIClient: Sendable {
     /// a person waits for; `.default` for everything a person asked for.
     func run(_ arguments: [String], timeout: Duration, acceptExitCodes: Set<Int32>,
              extraEnvironment: [String: String] = [:], qos: QualityOfService = .default) async throws(CLIError) -> CommandOutput {
+        let arguments = breakLease ? Self.withBreakLease(arguments) : arguments
+        let extraEnvironment = breakLease ? extraEnvironment.merging(Self.person) { _, new in new } : extraEnvironment
         var env = environment().merging(extraEnvironment) { _, new in new }
         // a run that says it is a person's click (BENCHBAR_NONINTERACTIVE=0, open --as) also says which app
         if extraEnvironment["BENCHBAR_NONINTERACTIVE"] == "0" { env.merge(Self.appCaller) { _, new in new } }

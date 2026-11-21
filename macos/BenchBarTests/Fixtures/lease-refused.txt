@@ -1,0 +1,3 @@
+  [FAIL] The site acme.localhost of /Users/you/dev/frappe-bench is leased by claude-qa until 2027-01-15T08:20:00Z (running the QA suite). Nothing was changed.
+
+Aborting. Wait until it ends or ask the holder to release it; the holder passes --lease ID. A person at a terminal can pass --break-lease.

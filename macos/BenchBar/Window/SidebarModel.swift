@@ -69,6 +69,7 @@ nonisolated enum SidebarItem: Hashable, Sendable {
     case site(bench: String, name: String)
     case profiles
     case discovery
+    case history
     case network
 }
 
