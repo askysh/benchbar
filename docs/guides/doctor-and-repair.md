@@ -279,6 +279,20 @@ formula is never removed.
 Fix: `npm install -g yarn` with the bench's npm; `benchbar repair` runs
 it (`yarn_install`), since yarn is global to one node formula.
 
+### toolchain_uv
+
+`uv` is installed (on your `PATH`, in Homebrew's `bin` or in
+`~/.local/bin`). frappe-bench 5.31 and later make the bench env with
+`uv venv` and install into it with `uv pip install`, whoever installed
+the `bench` command itself. A Mac set up before 0.9.0 with a pipx bench
+may have none: an env rebuild, `benchbar app add` and `benchbar app
+update` then stop before they change anything and name this fix.
+
+Fix: `brew install uv`; `benchbar repair` runs it (`uv_install`), before
+it rebuilds an env. On Linux the fix is the system dependencies script
+(`00-linux-system-deps.sh`), which installs the pinned `uv`; repair has
+no action for it there.
+
 ### mariadb_version
 
 A MariaDB server listens on 3306 and its version is in the range the
@@ -504,7 +518,7 @@ loopback unless the bench was set to `all` with `benchbar listen all`.
 A warning means one of four things:
 
 - the bench is set to `all` (the message says so). Fix: `benchbar listen local`, then `benchbar restart`.
-- the bench is set to `local` but `Procfile.lean` is the one of before 0.9.0 (or a file in `config/benchbar-listen` is missing). This is reported while the bench is stopped too: its next start binds every interface. Fix: `benchbar repair`, then `benchbar restart`.
+- the bench is set to `local` but `Procfile.lean` is the one of before 0.9.0 (or a file in `config/benchbar-listen` is missing). This is reported while the bench is stopped too. Fix: `benchbar restart` (or `benchbar up` for a stopped bench): both write `Procfile.lean` and the two files again before they start the bench, with a backup of the old file, and say so once. `benchbar repair` does the same without a start. A `Procfile.lean` that benchbar did not write is never replaced by `up` or `restart`.
 - a listener on the bench's web or socketio port is not on loopback although the files are current, because it was started before 0.9.0 or outside benchbar (`bench start`). Fix: `benchbar restart`.
 - the realtime server is the Python one (`socketio_backend: python`, Frappe v16). benchbar does not cover that backend yet: it listens on every interface whatever `listen` says, and a restart does not change that. Fix: switch the bench to the node socketio server (remove `socketio_backend` or set it to `node` in `sites/common_site_config.json`).
 

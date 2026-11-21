@@ -97,14 +97,15 @@ On `next-release`, then into `main`:
    one check that `auto-tag.yml`, `release.yml` and
    `tests/test-version-sources.sh` all run) fails until both name the
    version, until the changelog has the section and until no fragment is
-   left, so a gap shows on the release pull request and not after the
+   left, so a gap shows on the pull request of step 5 and not after the
    merge. The workflow uses the changelog section as the release notes
    (`scripts/release-notes.sh`).
 3. Write the section of this release in `docs/whats-new.md`: change
    `## X.Y.Z (coming)` to `## X.Y.Z (date)`, check its platform tags and
    upgrade notes against the folded `CHANGELOG.md` section, and add a
    section for a version that has none. `tests/test-docs.sh` fails when a
-   version in `CHANGELOG.md` from 0.8.0 on has no section there.
+   version in `CHANGELOG.md` from 0.8.0 on has no section there, and when
+   the section of the version in `benchbar` still says `(coming)`.
 4. Refresh the screenshots in `docs/images` for every screen the release
    changed, and add new ones where a page still has none:
    - The Mac first run wizard and the walkthrough: `WizardSnapshotTests`
@@ -182,6 +183,14 @@ On `next-release`, then into `main`:
    below). It opens a pull request on `askysh/homebrew-tap` and stops.
    Read it (the formula and cask diff) and merge it yourself; until then
    `brew install` still gives the old version.
+10. Close the release's milestone. First close every issue in it that the
+    release fixes, with a comment that names the version
+    (`gh issue close N --comment "Fixed in X.Y.Z."`), and move what is
+    not fixed to the next milestone. Issues do not close on their own:
+    pull requests merge into `next-release`, and GitHub closes an issue
+    only from a merge into `main` whose commit message holds the keyword,
+    which a squash commit here does not. Then reply on every issue a user
+    opened that the release answers, so the reporter hears it.
 
 The version comes from the tag, so the checkout is never edited by CI:
 
@@ -296,8 +305,7 @@ releases are under 48 hours, and the large 0.8.0 was followed by 0.8.1, 0.8.2
 and 0.8.3 after 44, 133 and 270 hours: users got versions that needed a
 live QA pass afterwards. A candidate is that pass, before they get the
 release. Cut one when the release has any of these (a rule of thumb, change
-it when it does not fit); a release with none may go straight to the release
-pull request:
+it when it does not fit); a release with none may go straight to the release:
 
 - [ ] a new feature area, or a command or Mac app screen that changes how
       people start, stop or install (the 0.8.0 wizard, 0.8.2 rooms);
@@ -307,7 +315,7 @@ pull request:
 - [ ] more than about 20 merged pull requests since the last release, or one
       of more than 1000 changed lines.
 
-Before the release pull request, with the candidate installed from its pinned
+Before the release, with the candidate installed from its pinned
 line on a clean Mac user (and a clean Windows 11 when Windows changed):
 
 - [ ] `benchbar doctor` is clean, and `benchbar --version` and the app's
@@ -321,7 +329,8 @@ line on a clean Mac user (and a clean Windows 11 when Windows changed):
 - [ ] Windows: the one liner of the notes with `-Version`, the tray's first
       start, and `benchbar.exe self-update --check`.
 
-The release pull request says which candidate passed this list. The release
+The pull request of step 5 of [Cutting a release](#cutting-a-release) says
+which candidate passed this list. The release
 itself is the merge of what the candidate tested plus fixes found by it.
 
 **Cut one.** On `next-release`:

@@ -54,8 +54,9 @@ flag no command has.
   and links to other files in the repo into GitHub links.
 - A new page goes into the sidebar in `site/astro.config.mjs`;
   `tests/test-docs.sh` fails for a page that is in no group. A new user
-  feature also gets a row in `features.md` (platform and version), and a
-  new Lab must be named there.
+  feature also gets a row in `features.md` (platform and version). A new
+  Lab, a new top level command and a new MCP tool must be named in a row
+  there, or `tests/test-docs.sh` fails.
 - `ROADMAP.md` and `CONTRIBUTING.md` stay at the repo root; the build
   copies them in as `/roadmap/` and `/contributing/`.
 - A new doctor check needs a `### <check_id>` heading in

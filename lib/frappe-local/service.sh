@@ -458,6 +458,47 @@ fl_daily_steps() {
   FL_STEP_QUIET=1
 }
 
+# fl_listen_files_refresh: up and restart write Procfile.lean and its two listen
+# files again when the bench's are not the current ones (issue 188). A bench set
+# up before 0.9.0 has a Procfile.lean whose web and socketio lines bind every
+# interface, and before this only repair or service replaced it: a person who
+# updated and ran benchup kept the dev server and its debugger on the network.
+# This is the write repair does (act_write_procfile: a backup first, no sudo, no
+# question), on files that are benchbar's own. Not touched: a bench set to
+# listen all (the person's choice, the lines would be the same as before 0.9.0),
+# a Procfile.lean benchbar did not write, and a bench with none. A write that
+# fails does not stop the start: the bench listens as it did before the update,
+# and the line says so with the fix.
+fl_listen_files_refresh() {
+  local old=0 pf
+  fl_listen_is_all && return 0
+  fl_listen_files_stale || return 0
+  pf="$(fl_procfile_path)"
+  # the lines of before 0.9.0 name no listen file
+  grep -q 'config/benchbar-listen' "$pf" 2>/dev/null || old=1
+  if ! act_write_procfile; then
+    fl_warn "Procfile.lean could not be written again: the web server and socketio of ${FL_BENCH_NAME} still listen on every interface"
+    fl_fix "$(fl_fix_cmd benchbar repair --bench-dir "$FL_BENCH_DIR")"
+    return 0
+  fi
+  [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
+  fl_changed service "$FL_BENCH_NAME" "Procfile.lean written again"
+  [[ "$old" == "1" ]] || return 0
+  fl_warn "Procfile.lean was the one of before 0.9.0 and is written again: the web server and socketio of ${FL_BENCH_NAME} now listen on 127.0.0.1 only (to open them to your network again: benchbar listen all)"
+}
+
+# fl_listen_running_note: up on a bench that runs changes nothing, but a bench
+# that still runs the Procfile.lean of before 0.9.0 is on every interface, and
+# the person who typed benchup should hear it (a bench that came back at login
+# never went through up)
+fl_listen_running_note() {
+  fl_listen_is_all && return 0
+  fl_listen_files_stale || return 0
+  grep -q 'config/benchbar-listen' "$(fl_procfile_path)" 2>/dev/null && return 0
+  fl_warn "the running bench was started with the Procfile.lean of before 0.9.0: its web server and socketio listen on every interface"
+  fl_fix "$(fl_fix_cmd benchbar restart --bench-dir "$FL_BENCH_DIR")   (writes Procfile.lean again and starts the bench on 127.0.0.1)"
+}
+
 fl_cmd_up() {
   local a services_only=0
   for a in "$@"; do
@@ -471,9 +512,11 @@ fl_cmd_up() {
   fl_require_service
   if fl_pm_running; then
     fl_ok "bench ${FL_BENCH_NAME} is already running at $(fl_site_url)"
+    fl_listen_running_note
     return 0
   fi
   fl_check_port_clash_or_confirm || return 1
+  fl_listen_files_refresh
   fl_daily_steps start_service:"Start the service" wait_site:"Wait for the site"
   fl_step_begin 0
   fl_arm_start
@@ -565,6 +608,7 @@ fl_cmd_restart() {
   fl_require_plain_bench
   fl_require_service
   fl_check_port_clash_or_confirm || return 1
+  fl_listen_files_refresh
   fl_daily_steps restart_service:"Restart the service" wait_site:"Wait for the site"
   fl_step_begin 0
   fl_arm_start

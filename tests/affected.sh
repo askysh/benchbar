@@ -32,6 +32,7 @@
 #   windows/tray/fixtures/  test-tray-fixtures (the tray's recorded CLI output)
 #   scripts/X.sh            the tests that run it (script_tests below)
 #   changelog.d/            test-changelog (it checks the fragments)
+#   tests/timings.tsv       test-ci-plan and test-suite-hygiene (the seconds per test: data, not the harness)
 #   docs/, scripts/docs-reference.py   test-docs, test-docs-command
 #   any shell file          shellcheck
 #   tests/share/            test-share-gateway
@@ -81,7 +82,7 @@ lib_family() {
     apps|app-plan) echo "test-apps test-app-cli test-app-batch test-app-recovery test-pull test-apps-git test-lock" ;;
     bench|benchinfo|benchstate|discovery|freshness) echo "test-bench-flow test-status-cost test-discovery test-multi-bench test-adopt test-json test-freshness test-ports test-port-management test-install-json" ;;
     bench-run) echo "test-bench-run test-bench-run-mcp test-site-backups test-docs test-agent-contracts" ;;
-    sites|site-backups|site-restore|pull) echo "test-sites test-bench-run test-site-backups test-site-restore test-pull test-install-json" ;;
+    sites|site-backups|site-restore|snapshots|pull) echo "test-sites test-bench-run test-site-backups test-site-restore test-snapshots test-snapshots-2 test-pull test-install-json" ;;
     ports|port-management) echo "test-ports test-port-management test-multi-bench test-adopt" ;;
     service|launchd|systemd|templates|shellrc|mariadb|wkhtmltopdf|platform|platform-linux) echo "test-platform test-platform-linux test-systemd test-service test-templates test-shellrc test-wsl-preflight test-install-linux test-install-failures test-install-json test-phases test-sudo-env test-windows-commands test-hygiene test-homebrew" ;;
     sudo|sudo-env) echo "test-sudo-env test-platform-linux test-install-json test-hygiene test-port-management" ;;
@@ -194,6 +195,7 @@ while IFS= read -r f; do
       shell=1
       t="${f##*/}"; pick_family "$(script_tests "${t%.sh}")" ;;
     changelog.d/*) pick test-changelog ;;
+    tests/timings.tsv) pick test-ci-plan; pick test-suite-hygiene ;;
     docs/* | scripts/docs-reference.py) pick_family "test-docs test-docs-command" ;;
     # no CLI test, by design: another job runs it (the app and the tray and shim jobs, the
     # Windows installer test of release-windows.yml for install.ps1, the workflow itself
