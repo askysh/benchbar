@@ -48,8 +48,6 @@ on:
         default: false
   pull_request:
     types: [labeled]
-  push:
-    branches: ['ci/139-real-install-upgrade']
 
 permissions:
   contents: read
