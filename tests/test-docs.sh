@@ -162,7 +162,11 @@ ver_later() {
 whats_new_problems() {
   local page="$1" code="$2" base="${2%%-*}" released ver
   if [[ "$code" == "$base" ]]; then released="$base"
-  else released="$(sed -n 's/^## \([0-9][0-9.]*\) - .*/\1/p' "$3" | head -n 1)"; fi
+  else
+    # every dated version, then the first line: no pipe into head, which would close on the writer
+    released="$(sed -n 's/^## \([0-9][0-9.]*\) - .*/\1/p' "$3")"
+    released="${released%%$'\n'*}"
+  fi
   grep -q "^## ${base//./\\.} " "$page" || printf 'no section for %s, the version of the code (FL_VERSION)\n' "$base"
   while IFS= read -r ver; do
     ver_later "$ver" "$released" || printf '"## %s (coming)" but %s is released: write its date, as docs/releasing.md says\n' "$ver" "$released"
