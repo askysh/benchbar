@@ -525,7 +525,7 @@ fl_cmd_app_focus_list() {
     state="no"; fl_is_focus_app "$app" && state="yes"
     [[ "$(fl_app_focus_pin "$app")" == "auto" ]] || state="${state} (pinned)"
     reasons="$(fl_app_focus_reasons "$app" | tr '\n' ',' | sed 's/,$//; s/,/, /g')"
-    by=""; [[ "$state" == no* ]] && by="$(printf '%s\n' "$FL_FOCUS_DEPS" | awk -v a="$app" '$1 == a {print $2; exit}')"
+    by=""; [[ "$state" == no* ]] && by="$(printf '%s\n' "$FL_FOCUS_DEPS" | awk -v a="$app" '$1 == a && !f {print $2; f = 1}')"
     b="$(fl_app_behind "$app")"; n="?"
     if [[ -n "$b" ]]; then read -r n days up <<<"$b"; [[ "$n" == "0" ]] && n="up to date" || n="${n} (${days}d) ${up}"; fi
     rows+=("${app}|${state}|${reasons:--}|${by//,/, }|${n}")

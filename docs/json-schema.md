@@ -48,8 +48,26 @@ Raycast extensions and the like can rely on it too.
 - Timestamps are ISO 8601 in UTC with a `Z` suffix, for example
   `2026-09-23T10:00:00Z`.
 - `null` means "not known" or "does not apply". Numbers are JSON numbers.
-- JSON goes to stdout on one line. Errors and warnings go to stderr as
-  text. Exit codes: 0 success, 1 failure (for `doctor`: at least one
+- Strings and numbers the CLI writes follow these rules (the shell helpers
+  `fl_json_str`, `fl_json_text` and `fl_json_num`, tested by `tests/test-json-strings.sh`):
+  - A string is valid UTF-8, always. A byte that is not part of a valid
+    character (a stray byte in a log line, a character cut in half) is written
+    as U+FFFD. The CLI cuts a long message at a character boundary, so the
+    cut never makes one. Quote and backslash are escaped; newline, tab and
+    carriage return are `\n`, `\t` and `\r`; any other control character is
+    `\u00XX`; a terminal color code (ESC `[` ... final byte) is dropped whole.
+  - An empty value is `null` for a field documented as `string or null` (the
+    usual case: `site`, `stop_reason`, `message`, `command`). A field that
+    can be an empty string on purpose is documented as a plain `string`, and
+    the CLI writes `""` for it (`fl_json_text`). A reader treats `""` and
+    `null` alike for "no value" and must not rely on either for a field the
+    document does not name.
+  - A number is a JSON integer, `-?(0|[1-9][0-9]*)`. A value that is not one
+    (`1-2`, `--`, `007`, `1.5`, empty) is written as `null`, never as the
+    text.
+- A document is one line on stdout. A stream (`--jsonl`, or `--json` of a
+  command that changes things) is many lines, one JSON object each, ending
+  in the `done` line. Errors and warnings go to stderr as text. Exit codes: 0 success, 1 failure (for `doctor`: at least one
   check is `fail`; the JSON is still printed), 2 the MariaDB root password
   is unknown, 64 a command line the CLI cannot read (see "Usage errors"
   below). A missing bench exits 1 with a message on stderr and nothing on stdout.
@@ -504,6 +522,22 @@ default` and `site drop` in their result. `site add` never moves it (it
 puts it back if `bench new-site` did); only `site default` does.
 `site add`, `site default` and `site drop` end with the [done fields](#the-done-fields-08),
 `site add` and `site default` with `site`, `default_site` and `created`.
+
+## `benchbar users --json`
+
+`benchbar users [--site S] [--search TEXT] [--limit N] --json`: the enabled
+users of a site, for `open --as` (needs `site open-as on` and a running
+bench). One document:
+
+```json
+{"schema_version":1,"cli_version":"…","site":"mysite.localhost","users":[
+  {"name":"priya@example.com","full_name":"Priya","user_type":"System User",
+   "roles":["Sales User"],"role_count":1,"last_login":"2026-11-02 09:30:00.123456"}],"truncated":false}
+```
+
+`roles` holds the user's five rarest roles, `role_count` all of them
+(without `All`, `Guest` and `Desk User`). `last_login` is Frappe's text, or
+null. `truncated` is true when more users match than `--limit` (1 to 500, default 50).
 
 ## `benchbar site add NAME --dry-run --json`
 
@@ -1789,6 +1823,34 @@ none holds a session id.
 `install_network_protection`, `allow_node_firewall`,
 `open_local_network_settings`, `rerun_setup`, `restart_sharing`, …).
 
+### `benchbar share users --json`
+
+`benchbar share users [--site S] --json`: who can take a seat in a shared
+copy, and what each would lose there.
+
+```json
+{"schema_version":1,"cli_version":"…","site":"mysite.localhost","users":[
+  {"name":"priya@example.com","full_name":"Priya","enabled":true,"user_type":"System User",
+   "roles":["Sales User"],"code_capable_roles":[],"will_demote":false,"selectable":true}],"truncated":false}
+```
+
+`code_capable_roles` are the roles that can run code or change settings: the
+copy takes them from the user (`will_demote`; never for `Administrator`).
+`selectable` is true for an enabled System User that is not `Administrator`.
+`truncated` is true past the first 500 users.
+
+### `share start`, `share extend`, `share stop`
+
+Streams that end in a done line carrying the fields shown (with `--dry-run`,
+`share start` prints one document with the plan).
+
+| Command | Fields |
+|---|---|
+| `share start` | `bench`, `share_site`, `state` (`on`), `label`, `port`, `started_epoch`, `deadline_epoch`, `started`, `deadline` (ISO 8601, UTC) |
+| `share start --dry-run` | `bench`, `share_site`, `dry_run`, `label`, `for_s`, `deadline`, `steps` (ids of what a start does) |
+| `share extend` | `bench`, `deadline_epoch`, `deadline`, `capped` (the 12 hour limit from the start was reached), `seconds_left` |
+| `share stop` | `bench`, `share_site`, `state` (`off`) |
+
 ### The room documents
 
 They share `bench`, `share_site` and `wipe`. `wipe` is null when nothing was
@@ -1799,8 +1861,8 @@ owed, else `{"retried":bool,"wiped":N|null,"wipe_failed":M|null}`.
 | `share code` | `code` (`"NNNNNN"`, a placeholder here), `new`, `budget_left` |
 | `share invite` | `url` (`benchbar://share/join?v=1&r=…&h=…&s=…&c=…&a=…&x=…`, holds the code), `text` (the message, lines apart by `\n`), `expires_at` (ISO 8601, UTC), `room` |
 | `share lock`, `share unlock` (done) | `locked`, `lock_reason` |
-| `share people` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` |
-| `share remove` (done) | `device`, `name`, `removed`, `new_code` (a bool, never the code) |
+| `share people`, `share devices` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` (`devices` is another name for `people`) |
+| `share remove`, `share revoke` (done) | `device`, `name`, `removed`, `new_code` (a bool, never the code) |
 | `share assign` (done) | `device`, `name`, `seat_id`, `seat_full_name` |
 | `share log` | `entries`: `[{ts, device, user, method, path, status}]`, `truncated` |
 | `share open-as` | `user`, `page`, `opened`: never the link or the session id, even with `--print-url` |
@@ -1816,8 +1878,11 @@ owed, else `{"retried":bool,"wiped":N|null,"wipe_failed":M|null}`.
 - `state`: `installed`, `missing` or `outdated` (the anchor's rules differ, or the daemon does not load it).
 - `active`: whether pf refuses the bench ports, by the probe alone (the files are `state`): true when no bench port answered from `lan_ip` and the control port did, false when a bench port answered, null with no LAN address or when the probe could not run.
 
-`lan-guard install` and `remove` end in a done line with the same fields;
-`allow-node`'s carries `node`, the realpath it allowed.
+`lan-guard install` and `remove` end in a done line with the same fields (after
+`remove`, `state` is `missing`; a `remove` with nothing installed changes nothing
+and prints the same document). `lan-guard allow-node` ends in a done line with
+`node`, the realpath of the node it allowed (or found allowed already, or the
+firewall is off: nothing changes then, the line is the same), and no `state`.
 
 ## Port management
 
@@ -1836,8 +1901,10 @@ shows that preview and asks before applying, without manual token copying.
 detected site/profile and reject `--site` or `--profile` overrides.
 
 `ports apply TOKEN --yes -- PATH ...` recomputes the selection under the CLI lock;
-a changed token or any blocked entry fails before adoption. It emits human
-progress, including completed paths and any failing path, and exits nonzero on
+a changed token or any blocked entry fails before adoption. With `--json` it
+streams (`plan`, `step`, `progress`, `done`, as `adopt` does; `state_after` is
+null because it touches several benches); without it, it prints human
+progress. Both name the completed paths and any failing path, and it exits nonzero on
 failure. Earlier completed entries remain configured. A new preview is required
 before retrying. With `BENCHBAR_SUDO=gui` it asks for the `/etc/hosts`
 lines of all benches in one macOS password dialog, as `adopt` does for one

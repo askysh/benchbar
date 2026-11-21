@@ -262,7 +262,15 @@ jobs:
           BASH32_IMAGE: bash:3.2.57@sha256:2556c2da19c32c1614d318645c73a7bf64d38be21cf69e98e3ca51f053983719
         run: |
           for attempt in 1 2 3; do docker pull -q "$BASH32_IMAGE" >/dev/null && break; [ "$attempt" = 3 ] && exit 1; sleep 5; done
-          docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS -e CI -e STRICT_FLAKY "$BASH32_IMAGE" sh -euc '
+          # A flaky test is an annotation and a row in the job summary here too: run-tests.sh
+          # prints the "::warning" line only when it sees GITHUB_ACTIONS, and writes the row
+          # to GITHUB_STEP_SUMMARY, so the container gets both. The summary file of the
+          # runner is not the container user's to write: the suite writes one in a mounted
+          # folder, and the step copies it over when the container ends, failed or not.
+          B32_OUT="$RUNNER_TEMP/bash32-summary"
+          mkdir -p "$B32_OUT" && chmod 777 "$B32_OUT"
+          rc=0
+          docker run --rm -v "$PWD:/w:ro" -v "$B32_OUT:/summary" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS -e CI -e STRICT_FLAKY -e GITHUB_ACTIONS -e GITHUB_STEP_SUMMARY=/summary/summary.md "$BASH32_IMAGE" sh -euc '
             for attempt in 1 2 3; do
               apk add --no-cache coreutils findutils diffutils grep sed gawk procps git python3 zip unzip curl perl-utils musl-locales >/dev/null && break
               [ "$attempt" = 3 ] && exit 1
@@ -272,7 +280,9 @@ jobs:
             adduser -D ci
             cp -R /w /home/ci/w && chown -R ci /home/ci/w
             su ci -s /bin/sh -c "cd /home/ci/w && export HOME=/home/ci && git config --global --add safe.directory \"*\" && bash --version | head -n 1 && nproc && bash tests/run-tests.sh"
-          '
+          ' || rc=$?
+          if [ -s "$B32_OUT/summary.md" ]; then cat "$B32_OUT/summary.md" >>"$GITHUB_STEP_SUMMARY"; fi
+          exit "$rc"
 
   # shellcheck once, on its own runner, for every platform's scripts: the files
   # a pull request changed (the plan lists them), every file on a full run. It
