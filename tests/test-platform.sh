@@ -89,4 +89,29 @@ mkdir "$fresh"
 assert_fails fl_state_guard_stale "$fresh"
 rm -rf "$STAT_DIR"
 
+# fl_process_running NAME on macOS: pgrep -x compares NAME with the title a
+# process gave itself, so it never finds Redis, which runs as
+# "redis-server 127.0.0.1:6379" (issue 139). This pgrep answers as the one of
+# macOS does for that process: nothing for -x, the title for -f.
+PG_DIR="$(mktemp -d)"
+cat >"$PG_DIR/pgrep" <<'SH'
+#!/bin/sh
+case "$1" in
+  -qf) printf '%s\n' "$PG_TITLE" | grep -qE -- "$2" ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$PG_DIR/pgrep"
+pg() { if PATH="$PG_DIR:$PATH" PG_TITLE="$1" fl_process_running "$2"; then echo yes; else echo no; fi; }
+assert_eq "yes" "$(pg 'redis-server 127.0.0.1:6379' redis-server)"
+assert_eq "yes" "$(pg '/opt/homebrew/opt/redis/bin/redis-server /opt/homebrew/etc/redis.conf' redis-server)"
+assert_eq "yes" "$(pg 'redis-server' redis-server)"
+# a word in the arguments, or a longer name, is not the process
+assert_eq "no" "$(pg 'tail -f /opt/homebrew/var/log/redis-server.log' redis-server)"
+assert_eq "no" "$(pg 'redis-server-wrapper 127.0.0.1:6379' redis-server)"
+assert_eq "no" "$(pg 'mariadbd-safe --datadir=/x' mariadbd)"
+# a dot in a name is a dot
+assert_eq "no" "$(pg 'pythonX11 x' python3.11)"
+find "$PG_DIR" -delete
+
 printf 'test-platform: ok\n'

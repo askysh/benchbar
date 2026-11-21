@@ -14,9 +14,10 @@
 #                  entry point, templates, config, the phases or this file
 #                  runs everything everywhere.
 #   push to main or next-release, and the nightly
-#                  everything everywhere, the real install and the Windows
-#                  jobs too (a push that changes only docs, site or *.md skips
-#                  them)
+#                  everything everywhere, the real installs on Linux (both
+#                  profiles, and the upgrade from 0.8.3) and the Windows jobs
+#                  too (a push that changes only docs, site or *.md skips
+#                  them). The real installs on macOS are real-install.yml.
 #   workflow_dispatch
 #                  the inputs "tests" and "legs" pick a subset
 # "CI result" needs every other job and is the one required check: it fails
@@ -348,94 +349,98 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: zizmor --no-progress .github
 
-  # A real install on Linux: phase 00 from apt, uv and fnm, a v15 bench and
-  # site, the bench under systemd --user, up, the site answering, status and
-  # doctor, down. Slow (a bench build), so only on pushes, the nightly, a
-  # dispatch that asks for it and pull requests labelled test-linux (the plan
-  # says; a push that changes only docs, site or *.md skips it). GitHub's
-  # Ubuntu runners boot systemd, but the runner user has no user manager until
-  # linger starts one (docs/DECISIONS.md, "Linux").
+  # A real install on Linux, once per profile: phase 00 from apt, uv and fnm,
+  # a bench and site, the bench under systemd --user, a second install that
+  # changes nothing, doctor without a FAIL, up, wait, the site answering on
+  # loopback only (0.9.0, issue 117), status, down. scripts/ci-real.sh holds
+  # the steps, the same ones real-install.yml runs on macOS. Slow (a bench
+  # build), so only on pushes, the nightly, a dispatch that asks for it and
+  # pull requests labelled test-linux (the plan says; a push that changes
+  # only docs, site or *.md skips it).
   cli-linux-real:
-    name: Real install (Linux, v15, systemd --user)
+    name: Real install (Linux, ${{ matrix.profile }}, systemd --user)
     needs: changes
     if: needs.changes.outputs.real == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [v15-lts, v16-lts]
     env:
       ADMIN_PASSWORD: admin-ci-only
-      SITE: linuxdev.localhost
+      PROFILE: ${{ matrix.profile }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
           persist-credentials: false
 
-      # The image ships MySQL (stopped) and its /etc/mysql: mariadb-server
-      # cannot install over them. A throwaway VM, so purging is safe here.
-      - name: Remove the image's MySQL
-        run: |
-          sudo systemctl stop mysql 2>/dev/null || true
-          sudo apt-get purge -y 'mysql-*' >/dev/null
-          sudo rm -rf /etc/mysql /var/lib/mysql
-
-      - name: Start a systemd user manager for the runner user
-        run: |
-          sudo loginctl enable-linger "$USER"
-          sudo systemctl start "user@$(id -u).service"
-          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >>"$GITHUB_ENV"
-          for _ in $(seq 1 20); do
-            XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-system-running 2>/dev/null && break
-            sleep 1
-          done
-          XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-system-running || true
+      - name: Remove the image's MySQL, start a systemd user manager
+        run: scripts/ci-real.sh prepare
 
       - name: benchbar install --yes
-        run: ./benchbar install --yes --site "$SITE"
+        run: scripts/ci-real.sh install
 
-      - name: A second install is unchanged
-        run: ./benchbar install --yes --site "$SITE" 2>&1 | tee "$RUNNER_TEMP/second.log"
+      - name: A second install changes nothing
+        run: scripts/ci-real.sh second-install
 
-      - name: benchbar up and wait for the site
-        run: |
-          ./benchbar up
-          for _ in $(seq 1 90); do
-            curl -fsS "http://$SITE:8000/api/method/ping" && exit 0
-            sleep 2
-          done
-          ./benchbar status --json || true
-          tail -n 100 ~/frappe-bench/logs/bench.log || true
-          exit 1
-
-      # 0.9.0: the dev web server and socketio listen on 127.0.0.1 only (issue 117)
-      - name: The web server and socketio listen on loopback only
-        run: |
-          ss -Hltn
-          rows="$(ss -Hltn '( sport = :8000 or sport = :9000 )' | awk '{print $4}')"
-          test "$(printf '%s\n' "$rows" | grep -c .)" -ge 2 || { echo "expected a listener on 8000 and 9000"; exit 1; }
-          bad="$(printf '%s\n' "$rows" | grep -v '^127\.0\.0\.1:' || true)"
-          test -z "$bad" || { echo "not on loopback: $bad"; exit 1; }
-          ./benchbar doctor --json | python3 -c 'import json,sys; d=json.load(sys.stdin); c=[x for x in d["checks"] if x["id"] == "bench_listen"][0]; assert c["status"] == "ok", c'
-
-      - name: status --json and doctor --json
-        run: |
-          ./benchbar status --json | tee "$RUNNER_TEMP/status.json"
-          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["state"] == "running" and d["web_ping_code"] == 200, d' "$RUNNER_TEMP/status.json"
-          ./benchbar doctor --json >"$RUNNER_TEMP/doctor.json"
-          ./benchbar repair --dry-run
+      - name: doctor, up, wait, a real request, loopback only, status
+        run: scripts/ci-real.sh serve
 
       - name: benchbar down
-        run: |
-          ./benchbar down
-          ! curl -fsS --max-time 3 "http://$SITE:8000/api/method/ping"
+        run: scripts/ci-real.sh down
 
       - name: Logs on failure
         if: failure()
-        run: |
-          systemctl --user status 'benchbar-*' --no-pager || true
-          journalctl --user --no-pager -n 200 || true
-          ls -la ~/.local/state/benchbar/logs || true
-          tail -n 200 ~/.local/state/benchbar/logs/*.log || true
-          cat "$RUNNER_TEMP/doctor.json" 2>/dev/null || true
+        run: scripts/ci-real.sh logs
+
+  # The upgrade a person on 0.8.3 gets: that release through its own
+  # install.sh, a bench and a site made by it and left running, then this
+  # checkout as the update (install.sh --yes pulls the managed checkout). The
+  # bench must still be known, the one time notices show once, doctor names
+  # the service files repair rewrites, and after repair and a restart the site
+  # answers and nothing listens off loopback. KNOWN_GAPS: a check that fails
+  # for a gap another pull request fixes warns instead (scripts/ci-real.sh).
+  cli-linux-upgrade:
+    name: Upgrade from 0.8.3 (Linux, systemd --user)
+    needs: changes
+    if: needs.changes.outputs.real == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      ADMIN_PASSWORD: admin-ci-only
+      KNOWN_GAPS: listen-restart
+    steps:
+      # the whole history and the tags: the old release is installed from a
+      # mirror of this checkout
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Remove the image's MySQL, start a systemd user manager
+        run: scripts/ci-real.sh prepare
+
+      - name: Release 0.8.3, its bench and site
+        run: scripts/ci-real.sh old-install v0.8.3
+
+      - name: Update to this checkout (install.sh --yes)
+        run: scripts/ci-real.sh update
+
+      - name: The bench is still known and the notices show once
+        run: scripts/ci-real.sh upgrade-state
+
+      - name: doctor names what repair must rewrite
+        run: scripts/ci-real.sh upgrade-doctor
+
+      - name: repair, restart, the site answers on loopback only
+        run: scripts/ci-real.sh upgrade-repair
+
+      - name: Logs on failure
+        if: failure()
+        run: scripts/ci-real.sh logs
 
   # The Windows shim: vet, unit tests (a fake wsl.exe, so Linux is enough)
   # and both Windows builds, uploaded as one artifact. Runs when windows/shim
@@ -775,7 +780,7 @@ jobs:
   ci-result:
     name: CI result
     if: always()
-    needs: [changes, cli-macos, cli-linux, cli-bash32, shellcheck, workflows, cli-linux-real, shim, shim-windows, shim-arm64, wsl, app]
+    needs: [changes, cli-macos, cli-linux, cli-bash32, shellcheck, workflows, cli-linux-real, cli-linux-upgrade, shim, shim-windows, shim-arm64, wsl, app]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -266,8 +266,17 @@ fl_brew_formula_available() {
 # A bare name (mariadbd, redis-server) is the name of the process, so an
 # editor or a tail with that word in its arguments does not count; anything
 # else is a pattern for the whole command line.
+# macOS matches -x against the title a process gave itself, and Redis runs as
+# "redis-server 127.0.0.1:6379": no bare name equals that, so the install on a
+# Mac stopped at "redis-server is not running" (found by the real install job,
+# issue 139). A bare name is therefore also the first word of a command line,
+# with or without its folder, which still leaves out an editor or a tail.
 fl_process_running() {
-  if [[ "$1" =~ ^[A-Za-z0-9._@-]+$ ]]; then pgrep -qx "$1" 2>/dev/null; else pgrep -qf "$1" 2>/dev/null; fi
+  if [[ "$1" =~ ^[A-Za-z0-9._@-]+$ ]]; then
+    pgrep -qx "$1" 2>/dev/null || pgrep -qf "^([^ ]*/)?${1//./\\.}( |\$)" 2>/dev/null
+  else
+    pgrep -qf "$1" 2>/dev/null
+  fi
 }
 
 fl_brew_service_running() {
