@@ -81,9 +81,12 @@ run_unit() {
   assert_eq "2" "$(fl_table 'A|B' "1|${c}" | wc -l | tr -d ' ')"
 }
 
+# the locales this host has, lower case, utf8 spelled utf-8 (a file: no pipe into grep -q under pipefail)
+locale -a 2>/dev/null | tr '[:upper:]' '[:lower:]' | sed 's/utf8/utf-8/' >"$TMP_DIR/locales" || true
 for loc in C en_US.UTF-8 C.UTF-8; do
   # a UTF-8 locale this host lacks falls back to C: the C pass is the one that matters
-  if [[ "$loc" != C ]] && ! locale -a 2>/dev/null | tr 'A-Z' 'a-z' | sed 's/utf8/utf-8/' | grep -qx "$(printf '%s' "$loc" | tr 'A-Z' 'a-z')"; then continue; fi
+  if [[ "$loc" != C ]] && ! grep -qx "$(printf '%s' "$loc" | tr '[:upper:]' '[:lower:]')" "$TMP_DIR/locales"; then continue; fi
+  # shellcheck disable=SC2030  # the locale is meant for this subshell only
   ( export LC_ALL="$loc" LANG="$loc"; run_unit ) || fail "unit checks under $loc"
 done
 
@@ -116,7 +119,9 @@ assert l[4].endswith("cr only\r"), l
   run_fm status --json --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
   printf '%s' "$OUT" | python3 -I -c 'import json,sys; json.load(sys.stdin)' || fail "status --json ($platform)"
 }
+# shellcheck disable=SC2030,SC2031  # each locale is meant for its subshell only
 ( export LC_ALL=C LANG=C; run_documents mac "$HOME/frappe-bench" ) || fail "documents, macOS mocks, C locale"
+# shellcheck disable=SC2030,SC2031
 ( export LC_ALL=C LANG=C; run_documents linux "$HOME/dev/linux-bench" ) || fail "documents, Linux mocks, C locale"
 
 # ---- CORE-23: a path directly under / has one slash; doctor's site follows status
