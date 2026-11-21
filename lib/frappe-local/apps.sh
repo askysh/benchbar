@@ -1507,6 +1507,18 @@ fl_cmd_app_update() {
     fi
   fi
 
+  # "bench setup requirements --python" installs with uv (frappe-bench 5.31 and
+  # later): without it the update would stop after the backups and the fast
+  # forward, so it stops here, before either (issue 188)
+  case " ${steps[*]:-} " in
+    *"requirements_python|"*)
+      if ! fl_uv_on_path; then
+        [[ "${FL_DRY_RUN:-0}" == "1" ]] || fl_die "uv is not installed, and bench installs the Python requirements of ${app} with it; nothing was changed." "$(fl_uv_install_hint)"
+        fl_warn "uv is not installed: the update stops before its first step until it is (bench installs the Python requirements of ${app} with it)"
+        fl_fix "$(fl_uv_install_hint)"
+      fi ;;
+  esac
+
   if [[ "$OPT_JSON" == "1" ]]; then
     if [[ "$pending" == "1" && "$pd_line" != *"}" ]]; then fl_warn "the record of ${app} looks cut short; pending is null here"; fi
     doc="$(

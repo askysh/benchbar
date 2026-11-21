@@ -16,7 +16,7 @@
 #
 # Doctor stays read only and never reads the MariaDB password file.
 
-FL_CHECK_ORDER="brew mariadb_bind mariadb_utf8 pdf_engine env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs kept_backups bench_path honcho honcho_setuptools procfile bench_listen runner agent runner_heartbeat scheduler stop_flag helpers cli_link cli_duplicate dead_agents hosts port_clash orphans ping site_not_served"
+FL_CHECK_ORDER="brew mariadb_bind mariadb_utf8 pdf_engine env_python env_setuptools bench_version toolchain_node toolchain_yarn toolchain_uv mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs kept_backups bench_path honcho honcho_setuptools procfile bench_listen runner agent runner_heartbeat scheduler stop_flag helpers cli_link cli_duplicate dead_agents hosts port_clash orphans ping site_not_served"
 
 # WSL only: the Windows host and NTP in the distro both set its clock
 if fl_is_wsl; then FL_CHECK_ORDER="${FL_CHECK_ORDER/ mariadb_bind/ wsl_time_sync mariadb_bind}"; fi
@@ -159,6 +159,16 @@ chk_toolchain_yarn() {
   fi
   ver="$("$yarn" --version 2>/dev/null || true)"
   chk__set ok "yarn ${ver:-found} at ${yarn}"
+}
+
+# As on the Mac, with the phase 00 script as the fix: it runs the pinned uv
+# installer after checking its sum, and repair has no action that downloads one.
+chk_toolchain_uv() {
+  if fl_uv_on_path; then
+    chk__set ok "uv at $(command -v uv)"
+  else
+    chk__set warn "uv is not installed: bench (frappe-bench 5.31 and later) needs it to rebuild the env, to add an app and to update one" "$(fl_uv_install_hint)"
+  fi
 }
 
 chk_toolchain_pkgconfig() {

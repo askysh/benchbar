@@ -5,7 +5,7 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate dead_agents port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry share_resume kept_backups rotate_logs redis_stop"
+FL_ACTION_ORDER="python_leaves node_install yarn_install uv_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate dead_agents port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry share_resume kept_backups rotate_logs redis_stop"
 # actions whose check may stay a warning after a run without failing it:
 # the user may decline them (or sudo) on purpose
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
@@ -30,6 +30,7 @@ fl_action_label() {
     python_leaves) printf 'mark %s as user-installed' "$FL_PYTHON_FORMULA" ;;
     node_install) printf 'brew install %s (the Node of profile %s; an older node formula is not removed)' "$FL_NODE_FORMULA" "$FL_PROFILE" ;;
     yarn_install) printf 'install yarn under %s (npm install -g yarn)' "$FL_NODE_FORMULA" ;;
+    uv_install) printf 'brew install uv (bench makes the env and installs apps with it)' ;;
     honcho_install) printf 'install honcho into the bench env' ;;
     honcho_setuptools) printf "install setuptools into honcho's venv" ;;
     env_rebuild) printf 'rebuild the bench env (old env moved aside)' ;;
@@ -132,6 +133,22 @@ act_env_rebuild() {
   [[ -x "$py" ]] || py="$(command -v "$FL_PYTHON_BIN_NAME" || true)"
   [[ -n "$py" ]] || { fl_fail "${FL_PYTHON_BIN_NAME} not found; run $(fl_is_linux && printf '00-linux-system-deps.sh' || printf '00-mac-system-deps.sh') first"; return 1; }
   fl_bench_env_exports
+  # the rebuild is "bench setup env", which runs "uv venv": with no bench
+  # command or no uv it cannot run, and the env that would move aside is the
+  # only one the bench has (issue 188). In a dry run the plan above names the
+  # uv install when uv is missing.
+  if [[ "${FL_DRY_RUN:-0}" != "1" ]]; then
+    if ! command -v bench >/dev/null 2>&1; then
+      fl_fail "refusing to rebuild env: the bench command is not on PATH, so nothing could make the new env; the env was not moved"
+      fl_fix "$(fl_bench_cli_fix install)"
+      return 1
+    fi
+    if ! fl_uv_on_path; then
+      fl_fail "refusing to rebuild env: uv is not installed, and bench makes the new env with it (uv venv); the env was not moved"
+      fl_fix "$(fl_uv_install_hint)"
+      return 1
+    fi
+  fi
   fl_move_aside "${FL_BENCH_DIR}/env" broken || return 1
   fl_run_long "bench setup env --python ${py}" fl_in_bench bench setup env --python "$py" || return 1
   fl_run_long "bench setup requirements --python" fl_in_bench bench setup requirements --python || return 1
@@ -172,6 +189,20 @@ act_yarn_install() {
   npm="$(fl_npm_bin)"
   [[ -x "$npm" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "no npm at ${npm}; install ${FL_NODE_FORMULA} first"; return 1; }
   fl_run_long "npm install -g yarn (${FL_NODE_FORMULA})" "$npm" install -g yarn || return 1
+  return 0
+}
+
+# uv with Homebrew, as phase 00 does (a Mac only: the check names no action on
+# Linux). It runs before env_rebuild, so one repair of a pipx Mac installs uv
+# and then rebuilds.
+act_uv_install() {
+  if fl_uv_on_path; then
+    fl_info "uv is already installed at $(command -v uv)"
+    FL_STEP_RESULT="unchanged"
+    return 0
+  fi
+  fl_run_long "brew install uv" brew install uv || return 1
+  fl_uv_on_path || [[ "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "brew installed uv, but no uv is on PATH or in ${FL_BREW_PREFIX}/bin"; return 1; }
   return 0
 }
 
