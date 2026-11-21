@@ -13,7 +13,7 @@ PINNED="https://raw.githubusercontent.com/askysh/benchbar/v99.0.0/install.sh"
 SUMS99="https://github.com/askysh/benchbar/releases/download/v99.0.0/SHA256SUMS"
 
 # ---- the version compare
-lt() { bash -c '. "$1/lib/frappe-local/selfupdate.sh"; fl_version_lt "$2" "$3"' _ "$ROOT" "$1" "$2"; }
+lt() { bash -c '. "$1/lib/frappe-local/ui.sh"; fl_version_lt "$2" "$3"' _ "$ROOT" "$1" "$2"; }
 lt 0.5.8 0.6.0 || fail "0.5.8 < 0.6.0"
 lt v0.5.8 0.6.0 || fail "v0.5.8 < 0.6.0"
 lt 0.9.0 0.10.0 || fail "0.9 < 0.10"

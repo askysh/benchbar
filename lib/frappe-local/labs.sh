@@ -3,7 +3,9 @@
 # labs.sh: Labs, the experiments that are off until a person turns one on.
 # One global state key, LABS (a space separated list of lab names), owned by
 # `benchbar labs`; the app and the MCP server only read it. BENCHBAR_LABS=a,b
-# in the environment replaces it (tests and CI). A lab gates the top level
+# in the environment replaces it for the tests only (a seam, read under
+# FL_TESTING=1): in a real run nothing in the environment turns a lab on,
+# because only a person does that (`labs on`). A lab gates the top level
 # commands named in its row: while it is off they do not appear in --help or
 # `commands --json`, and running one is refused with exit 2.
 #
@@ -21,7 +23,6 @@ TABLE
 # The readers loop over the variable with a here string, never over a pipe: a
 # loop that returns early would close the pipe on a writer still printing, and
 # Linux bash then prints "printf: write error: Broken pipe" into the output
-fl_lab_table() { printf '%s\n' "$FL_LAB_TABLE"; }
 
 # fl_lab_names_v VAR: every known lab name, space separated
 fl_lab_names_v() {
@@ -52,17 +53,22 @@ fl_lab_attr_v() {
   printf -v "$1" '%s' "$__r"
 }
 
+# fl_lab_env_override: true when the tests' BENCHBAR_LABS is in force. It is a
+# test seam: a production run ignores it (FL_TESTING), so an agent that sets
+# it does not get past the gate of a lab a person left off.
+fl_lab_env_override() { [[ "${FL_TESTING:-}" == "1" && -n "${BENCHBAR_LABS+x}" ]]; }
+
 # fl_lab_list_v VAR: the enabled lab names in force, space separated: the
-# BENCHBAR_LABS override when it is set, else the LABS key of the state file
+# LABS key of the state file (or the tests' BENCHBAR_LABS)
 fl_lab_list_v() {
   local __v
-  if [[ -n "${BENCHBAR_LABS+x}" ]]; then __v="${BENCHBAR_LABS//,/ }"; else __v="$(fl_state_get LABS 2>/dev/null || true)"; fi
+  if fl_lab_env_override; then __v="${BENCHBAR_LABS//,/ }"; else __v="$(fl_state_get LABS 2>/dev/null || true)"; fi
   printf -v "$1" '%s' "$__v"
 }
 
 # fl_lab_on NAME: true when the lab is known, listed for this platform and on.
-# The platform test is here, not in `labs on` alone: BENCHBAR_LABS and a
-# state file copied from a Mac must not turn on a lab whose code (pf,
+# The platform test is here, not in `labs on` alone: a state file copied from
+# a Mac (or the tests' BENCHBAR_LABS) must not turn on a lab whose code (pf,
 # launchctl) this platform lacks.
 fl_lab_on() {
   local list n
@@ -320,7 +326,7 @@ fl_cmd_labs() {
     fi
   fi
   fl_lab_on "$name" && en=true || en=false
-  if [[ -n "${BENCHBAR_LABS+x}" && "${FL_DRY_RUN:-0}" != "1" ]]; then fl_info "BENCHBAR_LABS is set and overrides the saved list."; fi
+  if fl_lab_env_override && [[ "${FL_DRY_RUN:-0}" != "1" ]]; then fl_info "BENCHBAR_LABS is set and overrides the saved list."; fi
   if [[ "${OPT_JSON:-0}" == "1" || "${FL_JSONL:-0}" == "1" ]]; then
     fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","lab":%s,"enabled":%s}' "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$(fl_json_str "$name")" "$en")"
   fi
