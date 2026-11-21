@@ -156,6 +156,11 @@ OUT="$(env -u CI -u SHARD -u ONLY_TESTS -u SKIP_TESTS TEST_PLATFORM=mac SECS_ONL
 assert_eq "80" "$OUT" "(macOS column, a dash counts as 10)"
 OUT="$(env -u CI -u SHARD -u ONLY_TESTS -u SKIP_TESTS TEST_PLATFORM=linux SECS_ONLY=1 SHELLCHECK=0 bash "$FAKE/tests/run-tests.sh" 2>&1)"
 assert_eq "35" "$OUT" "(Linux column)"
+# the runner holds no list and no table of its own any more. A merge of a branch from before this
+# change can put its ALL_TESTS words and TEST_SECS tables back next to the new code (a union of
+# both sides does): every test is then listed twice and weighed from the wrong place. Take the
+# next-release side of that section, and move a time to a row of tests/timings.tsv.
+assert_eq "" "$(grep -nE '^(ALL_TESTS="test-|TEST_SECS(_MAC|_LINUX)?=)' "$ROOT/tests/run-tests.sh" || true)" "(tests/run-tests.sh has a test list or a timing table again: drop it, the files are the list and tests/timings.tsv has the seconds)"
 # the real table: every row is NAME, two columns of seconds or a dash, and names a test that exists
 # (a row for a test that was renamed or removed would sit there for ever)
 bad="$(awk -F'\t' '
