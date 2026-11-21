@@ -125,7 +125,7 @@ On `next-release`, then into `main`:
    [release candidate](#release-candidates) first. Wait until the push run
    of CI on the new `next-release` head is green: that run is the one the
    release is built on. Then start the real installs on macOS on that
-   commit and wait for them, about 30 minutes:
+   commit and wait for them (7 and 8 minutes once two Macs are free):
    `gh workflow run real-install.yml --ref next-release`. No push starts
    them (they need two of the five macOS runners the repository gets), and
    the release gate refuses a commit that has no passed

@@ -73,7 +73,7 @@ jobs:
       (github.event_name != 'pull_request' || github.event.label.name == 'test-real') &&
       (inputs.jobs == '' || contains(inputs.jobs, 'install'))
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -105,7 +105,7 @@ jobs:
       (github.event_name != 'pull_request' || github.event.label.name == 'test-real') &&
       (inputs.jobs == '' || contains(inputs.jobs, 'upgrade'))
     runs-on: macos-26
-    timeout-minutes: 75
+    timeout-minutes: 50
     steps:
       # the whole history and the tags: the old release is installed from a
       # mirror of this checkout

@@ -54,7 +54,7 @@ pull request gets those runs only with the label `test-linux`), build the
 app and build and test the Windows shim and tray. The real install and the
 upgrade on a Mac (`real-install.yml`) run nightly, by hand and when the
 label `test-real` is added to a pull request, never on a push: they take
-two of the five macOS runners for half an hour. The rules are in the next
+two of the five macOS runners for about eight minutes. The rules are in the next
 section.
 
 - **Many checks show "skipped".** A job with nothing to do for your
