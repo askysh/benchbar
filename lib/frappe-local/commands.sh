@@ -483,7 +483,7 @@ fl_cmd_key_for() {
   if [[ -n "$arg" && "$arg" != -* && -n "$third" && "$third" != -* ]]; then
     while IFS= read -r line; do
       [[ "$line" == "cmd~${cmd} ${arg} ${third}~"* ]] && { printf '%s' "${cmd} ${arg} ${third}"; return 0; }
-    done < <(fl_cmd_table)
+    done <<<"$FL_CMD_TABLE"
   fi
   if [[ -n "$arg" && "$arg" != -* ]]; then
     while IFS= read -r line; do
