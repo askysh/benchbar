@@ -106,6 +106,11 @@ JSON. See [The menu bar app](app.md).
 | Several apps in one add | **Add App…** takes up to eight apps in one plan with one token, each with its own branch, commit pin and site. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | Acknowledge a warning | **Acknowledge** and **Undo** on a Health warning (`doctor --ack`, `--unack`); not for a failure. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | Services only, autostart | **Start Services Only** and **Stop Services** for a stopped bench, and **Start after login** (`autostart`) in the Overview. Offered when the CLI lists them. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Lockfile: write and apply | **Write Lock File…** and **Apply…** in the Overview show the CLI's plan of `lock write` and `lock apply` and run it when you confirm. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Site snapshots and rollback | **Snapshots…** on a site takes a snapshot (optional label), lists them, rolls the site back by the plan and token of `site rollback`, and removes one after asking. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| History | A **History** pane lists what ran on this Mac that changed something, who started it and how it ended (`history`). | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Leases | The Overview shows who holds a lease and until when; a refused change shows the holder, and **Break Lease…** is a person's explicit choice. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Logs since the last start | The log window has **Since last start** and reads the worker log through `logs --json`, with only the new lines each time. | 0.9.0 | macOS | [The menu bar app](app.md) |
 | Install or refresh the service | **Install Service…** or **Refresh Service…** shows the plan of `service` and runs it by its token. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 
 ## BenchBar for Windows

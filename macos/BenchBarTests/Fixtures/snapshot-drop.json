@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.8.3","bench":"/Users/you/dev/frappe-bench","site":"acme.localhost","dry_run":false,"dropped":["20261121_090000"],"freed_bytes":8316,"op_id":"op-20261121-100000-4242","exit":0,"changed":[{"kind":"snapshot","name":"acme.localhost","detail":"removed 20261121_090000"}],"warnings":[],"next_actions":[]}

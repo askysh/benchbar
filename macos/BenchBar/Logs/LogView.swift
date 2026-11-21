@@ -11,6 +11,11 @@ struct LogView: View {
             toolbar
                 .padding(.horizontal, 10).padding(.vertical, 7)
             Divider()
+            if let note = model.note {
+                Text(note).font(.caption).foregroundStyle(.orange).textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 10).padding(.vertical, 4)
+                Divider()
+            }
             LogTextView(model: model)
         }
         .frame(minWidth: 620, minHeight: 360)
@@ -43,6 +48,10 @@ struct LogView: View {
             .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
 
             Spacer()
+            Toggle("Since last start", isOn: $model.sinceRestart)
+                .toggleStyle(.checkbox)
+                .disabled(model.fetch == nil)
+                .help("Only the lines after the bench's last start (benchbar logs --since-restart)")
             Toggle("Previous log", isOn: $model.showPrevious)
                 .toggleStyle(.checkbox)
                 .help("logs/bench.previous.log: the end of the log before the last start")
