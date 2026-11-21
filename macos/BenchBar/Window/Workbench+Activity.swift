@@ -86,16 +86,27 @@ extension Workbench {
         }
     }
 
-    /// The leases on this bench, read when its Overview shows and again after a change; a CLI without `lease` shows none.
-    func showLeases(_ bench: BenchModel, now: Date = .now) async {
-        guard let client = store.cliClient, store.pageMayAsk(about: bench) else { return }
-        leases[bench.path] = (try? await client.leases(bench: bench.path).leases.filter { $0.isActive(at: now) }) ?? []
+    /// The leases on this bench, read when its Overview shows and again after a change. Only a CLI whose command list has
+    /// `lease` is asked. Returns false when the read failed, so the poll stops until the page is opened again.
+    @discardableResult
+    func showLeases(_ bench: BenchModel, now: Date = .now) async -> Bool {
+        guard commandState.catalog?.has("lease") == true, let client = store.cliClient, store.pageMayAsk(about: bench) else { return true }
+        do {
+            leases[bench.path] = try await client.leases(bench: bench.path).leases.filter { $0.isActive(at: now) }
+            return true
+        } catch {
+            leases[bench.path] = []
+            return false
+        }
     }
 
-    /// Reads the leases while the Overview is on screen: an agent takes or releases one at any time, and status has no line for them yet.
+    /// Reads the leases while the Overview is on screen: an agent takes or releases one at any time. A failed read ends the poll
+    /// (the page asks again when it is opened), so a CLI that breaks on `lease` is not run every 15 seconds.
     func pollLeases(_ bench: BenchModel) async {
+        await loadCommands()
+        guard commandState.catalog?.has("lease") == true else { return }
         while !Task.isCancelled {
-            await showLeases(bench)
+            guard await showLeases(bench) else { return }
             try? await Task.sleep(for: .seconds(15))
         }
     }

@@ -247,9 +247,16 @@ nonisolated struct LogChunk: Decodable, Sendable, Equatable {
         lines = try c.decode([String].self, forKey: .lines)
         // an older CLI sends no ts: every line is untimed, and a poll then reads the whole tail again
         let raw: [String?] = c.lenient(.times, [])
-        let parser = ISO8601DateFormatter()
-        times = (0..<lines.count).map { i in i < raw.count ? raw[i].flatMap { parser.date(from: $0) } : nil }
+        times = (0..<lines.count).map { i in i < raw.count ? raw[i].flatMap(Self.date) : nil }
         since = c.lenient(.since, nil)
+    }
+
+    /// An ISO 8601 time, with or without fractional seconds: a fractional one must not read as untimed, or every poll reads it again.
+    static func date(_ text: String) -> Date? {
+        let plain = ISO8601DateFormatter()
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return plain.date(from: text) ?? fractional.date(from: text)
     }
 
     init(lines: [String], times: [Date?] = [], file: String? = nil, since: Date? = nil) {

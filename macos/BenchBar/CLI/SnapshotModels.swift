@@ -213,6 +213,11 @@ nonisolated enum SnapshotText {
         return nil
     }
 
+    /// The site is the bench's default: the plan says so, and an older CLI without that field is compared with the status's default site.
+    static func isDefaultSite(_ plan: SiteRestorePlan, benchDefault: String?) -> Bool {
+        plan.rollback?.defaultSite == true || (benchDefault.map { !$0.isEmpty && $0 == plan.site } ?? false)
+    }
+
     /// The warning that goes with rolling the default site back (the CLI allows it to a person only).
     static let defaultSiteNote = "This is the default site of the bench. BenchBar runs the rollback as you, not as an agent. The data of the site is replaced, as for any rollback."
 }

@@ -175,6 +175,8 @@ struct ActivityTests {
         let (workbench, bench, _) = try await workbench()
         workbench.store.setWindow(WindowSight(isOpen: true, isVisible: true))
         base.cli.answer("lease", json: try Fixture.string("lease-list"))
+        base.cli.answer("commands", json: Self.catalogWithLease)
+        await workbench.loadCommands()
         let end = try #require(try BenchJSON.decode(LeaseList.self, from: Fixture.data("lease-list")).leases.first?.expiresAt)
         await workbench.showLeases(bench, now: end.addingTimeInterval(-600))
         #expect(base.cli.calls.contains(["lease", "list", "--bench", v16, "--json"]))
@@ -184,6 +186,44 @@ struct ActivityTests {
         base.cli.answer("lease", .init(exitCode: 2, stdout: "", stderr: "[FAIL] Unknown command: lease"))
         await workbench.showLeases(bench)
         #expect(workbench.leases[v16]?.isEmpty == true, "an older CLI has no leases to show")
+    }
+
+    static let catalogWithLease = #"{"schema_version":1,"commands":[{"name":"lease","flags":[]},{"name":"lock","flags":[]}]}"#
+    static let catalogWithoutLease = #"{"schema_version":1,"commands":[{"name":"lock","flags":[]}]}"#
+
+    @Test func anOlderCLIWithoutLeaseIsNeverAskedAndAFailureEndsThePoll() async throws {
+        let (workbench, bench, _) = try await workbench()
+        workbench.store.setWindow(WindowSight(isOpen: true, isVisible: true))
+        base.cli.answer("lease", json: try Fixture.string("lease-list"))
+        // no command list read yet: nothing is run
+        await workbench.showLeases(bench)
+        base.cli.answer("commands", json: Self.catalogWithoutLease)
+        await workbench.pollLeases(bench)
+        #expect(!base.cli.calls.contains { $0.first == "lease" }, "the catalog has no lease: no process is started")
+        // a CLI that lists it but fails: one call, then the poll ends
+        let fresh = Workbench(store: workbench.store)
+        base.cli.answer("commands", json: Self.catalogWithLease)
+        base.cli.answer("lease", .init(exitCode: 1, stdout: "", stderr: "[FAIL] broken"))
+        await fresh.pollLeases(bench)
+        #expect(base.cli.calls.filter { $0.first == "lease" }.count == 1 && fresh.leases[v16]?.isEmpty == true)
+    }
+
+    @Test func theDefaultSiteNoteAlsoShowsForAnOlderCLIThatSendsNoField() throws {
+        var plan = try BenchJSON.decode(SiteRestorePlan.self, from: Fixture.data("snapshot-rollback-plan"))
+        #expect(!SnapshotText.isDefaultSite(plan, benchDefault: "macdev"))
+        #expect(SnapshotText.isDefaultSite(plan, benchDefault: plan.site))
+        plan.rollback = nil
+        #expect(SnapshotText.isDefaultSite(plan, benchDefault: plan.site) && !SnapshotText.isDefaultSite(plan, benchDefault: nil))
+        let withField = try BenchJSON.decode(SiteRestorePlan.self, from: Fixture.data("snapshot-rollback-plan-default"))
+        #expect(SnapshotText.isDefaultSite(withField, benchDefault: nil))
+    }
+
+    @Test func aFractionalLogTimeIsATimeNotAnUntimedLine() throws {
+        let json = #"{"schema_version":1,"lines":["a","b","c"],"ts":["2026-11-21T04:30:01.250Z","2026-11-21T04:30:02Z",null]}"#
+        let chunk = try BenchJSON.decode(LogChunk.self, from: Data(json.utf8))
+        #expect(chunk.times[0] != nil && chunk.times[1] != nil && chunk.times[2] == nil)
+        var cursor = LogCursor()
+        #expect(cursor.take(chunk).count == 3 && cursor.take(chunk).isEmpty, "the same read again adds nothing")
     }
 
     @Test func readsWhoHoldsTheLeaseFromTheSentenceACommandEndsWith() throws {

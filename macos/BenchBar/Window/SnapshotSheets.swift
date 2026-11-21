@@ -204,7 +204,7 @@ struct SiteRollbackSheet: View {
             SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: "This plan cannot run", detail: plan.errors.joined(separator: "\n"))
         }
         if !plan.needs.isEmpty { SheetNote(RollbackText.needsText(plan.needs), tint: .orange) }
-        if plan.rollback?.defaultSite == true { SheetNote(SnapshotText.defaultSiteNote, tint: .orange) }
+        if SnapshotText.isDefaultSite(plan, benchDefault: bench.status?.site ?? bench.summary.site) { SheetNote(SnapshotText.defaultSiteNote, tint: .orange) }
         ForEach(plan.warnings, id: \.self) { SheetNote($0, tint: .orange) }
         if plan.errors.isEmpty {
             PlanFacts(facts: RollbackText.facts(plan))
