@@ -153,7 +153,8 @@ without an entry counts as 10 seconds, so a new test needs no entry to run.
 - **User docs.** A change a user can see updates the page that tells them
   about it: the guide or the app page under [docs/](docs/), and a row in
   [docs/features.md](docs/features.md) for a new feature, Lab or
-  platform. Updating only the reference page is not enough. The CLI
+  platform. `test-docs` fails when a top level command or an MCP tool is
+  named in no row there. Updating only the reference page is not enough. The CLI
   reference tables (flags, what a command needs, the MCP tools) are
   generated from the code: after you change `lib/frappe-local/commands.sh`
   or `lib/frappe-local/mcp.py`, run `python3 -I scripts/docs-reference.py

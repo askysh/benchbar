@@ -443,7 +443,8 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 - Run `bash tests/affected.sh` for the tests your change touches. CI runs
   the full suite; run it yourself only when the selector says everything.
 - A change a user can see updates its guide or app page, `docs/features.md`
-  and `CHANGELOG.md`; a new command, flag or MCP tool also needs
+  (`test-docs` fails when a top level command or an MCP tool has no row
+  there) and `CHANGELOG.md`; a new command, flag or MCP tool also needs
   `python3 scripts/docs-reference.py --write` (the reference tables are
   generated, and `test-docs` fails when they drift). The pull request
   template lists the same checks.

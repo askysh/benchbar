@@ -36,24 +36,30 @@ the [0.9.0 milestone](https://github.com/askysh/benchbar/milestone/1).
   group on cancel, polls less, and has VoiceOver labels and snapshot tests.
 - The Windows tray has a Labs page and `benchbar://` links.
 - Linux has crash notifications, `v16-lts` and team profiles.
+- Unknown options are errors, install reports a failed step as a failure,
+  and the Linux user bus is handled.
+- MCP safety (labels on every path, plan and apply apart, an audit log) and
+  more MCP tools.
+- Agent contracts: a result envelope for every command, `benchbar wait`,
+  operation handles for long jobs (`benchbar op`, `--background`),
+  `benchbar run` for bench commands, pinned and scratch benches with
+  `bench gc`, leases, and `benchbar history --json`.
+- Parity: restore and pull in the Mac app, and the same actions in the
+  Windows tray, with Open as, Quick Switch and a Sharing tab.
+- Rooms on Linux with an nftables LAN guard.
+- Verified downloads (attestations), and `benchbar.exe` and the tray can
+  run from an MSIX package.
 - Release keys live in a protected environment, CI is tiered, and the
   docs have a features page, a generated CLI reference and a what's new
   page.
 
 **Planned in the milestone, not merged yet:**
 
-- Unknown options are errors, install reports a failed step as a failure,
-  and the Linux user bus is handled.
-- MCP safety (labels on every path, plan and apply apart, an audit log) and
-  more MCP tools.
-- Agent contracts: a result envelope for every command, `benchbar wait`,
-  operation handles for long jobs, `benchbar run` for bench commands, site
-  snapshots and rollback, pinned and scratch benches with `bench gc`,
-  leases, and `benchbar history --json`.
-- Parity: restore, pull and lock in the Mac app, and the same actions in the
-  Windows tray.
-- Rooms on Linux with an nftables LAN guard.
-- Verified downloads (attestations) and a Windows MSIX package.
+- Site snapshots and rollback.
+- Writing and applying the lockfile from the Mac app (it shows the
+  differences today).
+- A Windows MSIX package that is published. The programs can run from one;
+  nothing is in the Microsoft Store.
 
 **Dropped from 0.9.0**, because each needs hardware or a third party:
 
