@@ -122,6 +122,8 @@ fl_srestore_dir_is_own() {
   while IFS= read -r s; do
     [[ -n "$s" ]] || continue
     [[ "$dir" -ef "$(fl_site_backup_dir "$s")" ]] && return 0
+    # a snapshot of a site of this bench (site snapshot, #182) is its own backup too
+    [[ "${dir%/*}" -ef "${FL_BENCH_DIR}/sites/${s}/snapshots" ]] && return 0
   done <<<"$sites"
   root="$(cd "$FL_BACKUP_ROOT" 2>/dev/null && pwd -P)" || return 1
   [[ "$dir" == "$root"/* ]]
