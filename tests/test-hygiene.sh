@@ -93,7 +93,7 @@ done
 # the files sudo reads and writes do not come from the environment either (only the tests' FL_TESTING=1)
 # shellcheck disable=SC2016  # the bash -c script is quoted on purpose
 got="$(env -u FL_TESTING FL_HOSTS_FILE=/tmp/evil-hosts FL_WKHTML_PKG_BIN=/tmp/evil-bin FL_WKHTML_DOWNLOAD_DIR=/tmp/evil-dl SCRIPT_DIR="$ROOT" bash -c '
-  . "$SCRIPT_DIR/lib/frappe-local/ui.sh"; . "$SCRIPT_DIR/lib/frappe-local/run.sh"; . "$SCRIPT_DIR/lib/frappe-local/checks.sh"; . "$SCRIPT_DIR/lib/frappe-local/wkhtmltopdf.sh"
+  . "$SCRIPT_DIR/lib/frappe-local/ui.sh"; . "$SCRIPT_DIR/lib/frappe-local/run.sh"; . "$SCRIPT_DIR/lib/frappe-local/sites.sh"; . "$SCRIPT_DIR/lib/frappe-local/wkhtmltopdf.sh"
   printf "%s %s %s" "$FL_HOSTS_FILE" "$FL_WKHTML_PKG_BIN" "$FL_WKHTML_DOWNLOAD_DIR"' 2>/dev/null || true)"
 assert_eq "/etc/hosts /usr/local/bin/wkhtmltopdf ${FL_STATE_DIR}/downloads" "$got" "(env overrides of what sudo touches are ignored)"
 # INST-6, the sudo program itself: on macOS "sudo" is a function that runs /usr/bin/sudo, so a
