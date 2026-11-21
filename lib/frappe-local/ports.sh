@@ -96,7 +96,7 @@ fl_port_block_conflicts() {
   taken="$(fl_ports_taken_by_others)"
   for p in $(fl_port_block "$n"); do
     if [[ $'\n'"$taken" == *$'\n'"${p} "* ]]; then
-      printf '%s used by %s\n' "$p" "$(printf '%s\n' "$taken" | awk -v p="$p" '$1 == p {print $2; exit}')"
+      printf '%s used by %s\n' "$p" "$(printf '%s\n' "$taken" | awk -v p="$p" '$1 == p && !f {print $2; f = 1}')"
       continue
     fi
     who="$(fl_port_listener_summary "$p")"
