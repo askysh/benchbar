@@ -20,19 +20,25 @@ shopt -u patsub_replacement 2>/dev/null || true
 # background child ends (the update check, a spinner, a timer) while a builtin
 # writes to the terminal, the write fails with EINTR: "printf: write error:
 # Interrupted system call", and under set -e the command ends there, in the
-# middle of its output. bash 4.2 and later restart the write. So on bash 3.2,
-# for a run that has a terminal, a printf to a terminal is tried once more
-# when it fails. A pipe or a file has no such failure and keeps the builtin's
-# own answer, and a run without a terminal (the app, MCP, a script) does not
-# get the function at all.
+# middle of its output. bash 4.2 and later restart the write, and no bash 4.0
+# or 4.1 is in use on a system benchbar runs on. So on bash 3.2,
+# for a run that has a terminal, a printf to a terminal whose write failed
+# is tried once more. Only a failed write: printf also returns 1 for a bad
+# argument (printf "%d" abc), after it wrote its output, and a second try
+# would print that output twice. The exit status does not tell the two
+# apart, so the failed call runs again with its output thrown away: a write
+# to /dev/null cannot be interrupted, so a failure there is the arguments',
+# and that run prints the builtin's own message and gives its status. A pipe
+# or a file has no such failure and keeps the builtin's own answer, and a
+# run without a terminal (the app, MCP, a script) does not get the function
+# at all.
 if [[ "${BASH_VERSINFO[0]:-5}" -lt 4 ]] && [[ -t 1 || -t 2 ]]; then
   # shellcheck disable=SC2059  # the caller's own format and arguments, passed on as they are
   printf() {
-    if [[ -t 1 ]]; then
-      builtin printf "$@" 2>/dev/null || builtin printf "$@"
-    else
-      builtin printf "$@"
-    fi
+    if [[ ! -t 1 ]]; then builtin printf "$@"; return; fi
+    builtin printf "$@" 2>/dev/null && return 0
+    builtin printf "$@" >/dev/null || return
+    builtin printf "$@"
   }
 fi
 
