@@ -341,7 +341,9 @@ Daily
   site backups NAME   The site's backups, newest first: time, size, with files (--json).
   site restore NAME   Restore a backup set (--from STAMP or the database file's PATH, --from-site S)
                       into a site: it is backed up first, or --new creates it. --no-migrate,
-                      --before-migrate SCRIPT, --with-files. --dry-run --json prints the plan with
+                      --before-migrate SCRIPT, --with-files. --neutralise switches the restored
+                      site's integrations off and clears its stored secrets (for a set that is
+                      not this bench's own; an agent must pass it). --dry-run --json prints the plan with
                       its token; --apply TOKEN --yes [--json] runs exactly that plan.
   site drop NAME      bench drop-site: a backup with files first, the folder moved to
                       archived/sites, the hosts line removed. Needs --confirm-site NAME;
@@ -464,7 +466,8 @@ Production copy
     --no-files        Database only; --keep-scheduler, --keep-staging
     --keep-secrets    Leave the copy as production had it. By default it is neutralised:
                       outbound integrations off, stored secrets cleared, tokens and
-                      queued mail dropped (the Administrator login is kept)
+                      queued mail dropped (the Administrator login is kept).
+                      A person's decision: refused for agents and benchbar mcp
     --no-migrate      Stop after the restore, before bench migrate
     --before-migrate S  Run the executable SCRIPT after the restore, before migrate (with
                       BENCHBAR_SITE, BENCHBAR_BENCH, BENCHBAR_DB_NAME; no secret in its

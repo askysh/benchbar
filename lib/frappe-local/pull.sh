@@ -394,6 +394,13 @@ fl_pull_parse_args() {
         src="$1"; shift ;;
     esac
   done
+  # a copy with production's integrations and stored passwords live is a person's decision, like
+  # listen all: nothing run without one (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1) can
+  # ask for it, the plan included, whatever --yes says. The Mac app and the tray do not set the mode.
+  if [[ "$FL_PULL_KEEP_SECRETS" == "1" ]] && fl_noninteractive; then
+    fl_die "benchbar pull --keep-secrets leaves production's integrations and stored passwords live in the copy, a person's decision, so nothing run without a terminal can ask for it." \
+      "Run the pull without --keep-secrets (the copy is neutralised), or have the person run it in a terminal: benchbar pull ... --keep-secrets"
+  fi
   if [[ -n "$FL_PULL_FROM_DIR" ]]; then
     [[ -z "$src" ]] || fl_die "Pass either HOST:SITE or --from-dir, not both."
     FL_PULL_FROM_DIR="$(cd "$FL_PULL_FROM_DIR" 2>/dev/null && pwd -P)" || fl_die "No folder ${FL_PULL_FROM_DIR}."
@@ -1063,13 +1070,21 @@ fl_pull_step_neutralise() {
   rm -f "$tmp"
   if [[ "$code" != "0" || -z "$FL_PULL_NEUTRALISE_ROWS" ]]; then
     fl_fail "could not neutralise ${FL_PULL_AS}: its integrations and stored passwords are still production's"
-    fl_fix "the log has the bench's message: ${FL_LOG_FILE:-}. Run the same pull with --replace once it is fixed, or with --keep-secrets to leave the copy as production had it."
+    if [[ "${SR_NEUTRALISE:-0}" == "1" ]]; then
+      fl_fix "the log has the bench's message: ${FL_LOG_FILE:-}. Plan the same restore again once it is fixed; until then do not start the scheduler or workers on ${FL_PULL_AS}."
+    else
+      fl_fix "the log has the bench's message: ${FL_LOG_FILE:-}. Run the same pull with --replace once it is fixed, or with --keep-secrets to leave the copy as production had it."
+    fi
     return 1
   fi
   fl_neutralise_summary_v summary "$FL_PULL_NEUTRALISE_ROWS"
   fl_neutralise_json_v FL_PULL_NEUTRALISE_JSON "$FL_PULL_NEUTRALISE_ROWS"
   fl_ok "neutralised ${FL_PULL_AS}: ${summary}"
-  fl_info "not touched: customer data (names, emails, phones, documents) is still in the copy; --keep-secrets would have left the integrations and passwords as production had them"
+  if [[ "${SR_NEUTRALISE:-0}" == "1" ]]; then
+    fl_info "not touched: customer data (names, emails, phones, documents) is still in ${FL_PULL_AS}"
+  else
+    fl_info "not touched: customer data (names, emails, phones, documents) is still in the copy; --keep-secrets would have left the integrations and passwords as production had them"
+  fi
 }
 
 # pause_scheduler in common_site_config.json: set by the user, or left by

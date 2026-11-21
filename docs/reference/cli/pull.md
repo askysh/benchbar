@@ -47,7 +47,7 @@ terminal is asked as before.
 | `--no-migrate` | Stop after the restore and the dev safety, before `bench migrate` |
 | `--before-migrate SCRIPT` | Run the executable SCRIPT after the restore, before migrate, in the bench folder, with `BENCHBAR_SITE`, `BENCHBAR_BENCH` and `BENCHBAR_DB_NAME`; variables named like a secret are removed from its environment, and a failing script stops the run |
 | `--keep-scheduler` | Leave the scheduler as production has it |
-| `--keep-secrets` | Do not neutralise the copy: integrations, webhooks and stored passwords stay as production had them (the 0.8 behaviour). The copy still has email muted and the scheduler paused |
+| `--keep-secrets` | Do not neutralise the copy: integrations, webhooks and stored passwords stay as production had them (the 0.8 behaviour). The copy still has email muted and the scheduler paused. A person's decision: refused under `--for-agent`, `benchbar mcp` and `BENCHBAR_NONINTERACTIVE=1`, whatever `--yes` says |
 | `--keep-staging` | Keep the downloaded backup in `<bench>/.benchbar/pulls/` after a successful run |
 | `--dry-run` | Print the plan and its token, change nothing |
 | `--apply TOKEN` | Run exactly the plan whose token `--dry-run --json` printed (with `--yes`); refused when the plan changed since, for example a newer backup on the server |
@@ -143,7 +143,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `pull` | `--from-dir` | `DIR` | A backup set downloaded by hand, no SSH. |
 | `pull` | `--remote-bench` | `DIR` | The bench folder on the server. |
 | `pull` | `--new-backup` |  | Run bench backup on the server first. |
-| `pull` | `--keep-secrets` |  | Keep the copy's integrations and stored secrets (by default they are switched off and cleared). |
+| `pull` | `--keep-secrets` |  | Keep the copy's integrations and stored secrets (by default they are switched off and cleared). A person's decision: refused under --for-agent, benchbar mcp and BENCHBAR_NONINTERACTIVE=1. |
 | `pull` | `--replace` |  | Restore over an existing local site, after backing it up. |
 | `pull` | `--confirm-site` | `SITE` | With --new-backup: the site name, instead of typing it. |
 | `pull` | `--skip-app` | `APP` | Restore without APP (its tables stay behind as orphans); repeat for more apps. |
