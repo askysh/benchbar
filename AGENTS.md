@@ -235,7 +235,10 @@ The patched wkhtmltopdf package and the `/etc/hosts` line need `sudo`;
 safe.
 
 When it finishes: tell the user to run `source ~/.zshrc` and `benchup`,
-then open `http://<site>:8000`.
+then open `http://<site>:8000`. The helper file follows the login shell
+(fish: `~/.config/fish/conf.d/benchbar.fish`, bash on a Mac:
+`~/.bash_profile`); the install's last lines and `doctor` name it. nushell
+and a few other shells get no helpers: there the user runs `benchbar up`.
 
 On Linux (Ubuntu 24.04, WSL included) the same command installs from apt,
 uv and fnm, runs each bench as a `systemd --user` unit, keeps the MariaDB
@@ -455,7 +458,9 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   rail, so keep the rule). A command of an
   experiment that is off exits 2 with "Turn it on: benchbar labs on NAME":
   tell the user, do not work around it. `status --json` and
-  `commands --json` list the `labs` that are on.
+  `commands --json` list the `labs` that are on. Nothing in the environment
+  turns one on: `BENCHBAR_LABS` is a seam of the test suite, read only under
+  `FL_TESTING=1`, and a real run ignores it. Do not set either.
 - Never print or log the MariaDB root password. It lives in the Keychain
   (a 0600 file on Linux). `benchbar mariadb-password` is the person's own
   command: it refuses under `--for-agent`, `BENCHBAR_NONINTERACTIVE`,
