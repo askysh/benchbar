@@ -183,6 +183,14 @@ On `next-release`, then into `main`:
    below). It opens a pull request on `askysh/homebrew-tap` and stops.
    Read it (the formula and cask diff) and merge it yourself; until then
    `brew install` still gives the old version.
+10. Close the release's milestone. First close every issue in it that the
+    release fixes, with a comment that names the version
+    (`gh issue close N --comment "Fixed in X.Y.Z."`), and move what is
+    not fixed to the next milestone. Issues do not close on their own:
+    pull requests merge into `next-release`, and GitHub closes an issue
+    only from a merge into `main` whose commit message holds the keyword,
+    which a squash commit here does not. Then reply on every issue a user
+    opened that the release answers, so the reporter hears it.
 
 The version comes from the tag, so the checkout is never edited by CI:
 

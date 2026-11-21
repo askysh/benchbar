@@ -41,6 +41,22 @@ assert_calls_not_contain '^bench get-app'
 assert_calls_not_contain '^bench --site macdev install-app'
 assert_eq "$snap" "$(snapshot "$BENCH" "$FL_STATE_DIR")" "(dry run writes nothing)"
 
+# ---- a Mac with no uv (issue 188): get-app installs the app with "uv pip install", so the plan stops
+# before anything is cloned, and says how to get uv
+use_mocks_without uv
+reset_calls; snap="$(snapshot "$BENCH")"
+run_fm app add acme_crm --site macdev --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "uv is not installed"
+assert_contains "$OUT" "brew install uv"
+assert_calls_not_contain '^bench get-app'
+assert_no_file "$BENCH/apps/acme_crm"
+run_fm app add acme_crm --site macdev --dry-run --json --bench-dir "$BENCH"
+assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')"
+assert_contains "$(printf '%s' "$OUT" | jget - '" | ".join(d["errors"])')" "uv is not installed"
+assert_eq "$snap" "$(snapshot "$BENCH")" "(no uv: app add writes nothing in the bench)"
+use_all_mocks
+
 # ---- add by name: preflight, get-app without --overwrite or --resolve-deps, install, build
 reset_calls
 run_fm app add acme_crm --site macdev --yes --bench-dir "$BENCH"
@@ -206,6 +222,19 @@ assert_calls_not_contain '^bench --site .* (backup|migrate)'
 run_fm app update acme_crm --dry-run --bench-dir "$BENCH"
 assert_contains "$OUT" "2 commit(s)"
 assert_contains "$OUT" "acme_crm: change 1 on main"
+# no uv: the update stops before the backups and the fast forward ("bench setup requirements" needs it)
+use_mocks_without uv
+reset_calls
+run_fm app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "uv is not installed"
+assert_contains "$OUT" "brew install uv"
+assert_eq "$old" "$(app_head "$BENCH/apps/acme_crm")" "(no uv: the code stays)"
+assert_calls_not_contain '^bench --site .* (backup|migrate)'
+run_fm app update acme_crm --dry-run --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "uv is not installed"
+use_all_mocks
 reset_calls
 run_fm app update acme_crm --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"

@@ -3,7 +3,7 @@
 #
 # site-restore.sh: benchbar site restore, a backup set into a site of this bench.
 #
-#   benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new]
+#   benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--neutralise]
 #       [--no-migrate] [--before-migrate SCRIPT] [--with-files]
 #       --dry-run [--json] | --apply TOKEN --yes [--json] | --yes
 #
@@ -45,6 +45,10 @@ SR_DEFAULT_BEFORE=""
 SR_BACKUP_JSON="null"
 SR_BACKUP_STAMP=""
 SR_SET_COPY=""
+# --neutralise: the list pull runs (neutralise.sh), after the restore and before migrate
+SR_NEUTRALISE=0
+# 1 when --from is a path that is not in a backup folder of this bench or of benchbar
+SR_OUTSIDE=0
 SR_PLAN_BODY=""
 SR_NEEDS=""
 SR_PLAN_JSON=""
@@ -53,6 +57,24 @@ SR_TOKEN_DATA=""
 SR_CAN_APPLY=0
 SR_VERIFY_JSON="null"
 SR_STEP_PARENT=""
+# benchbar site rollback (snapshots.sh) runs this same plan and run: SR_ROLLBACK=1 swaps the backup first for
+# a snapshot, picks migrate from the snapshot's apps and adds the "rollback" block to the plan and the result
+SR_ROLLBACK=0
+SR_SNAP_ID=""
+SR_SNAP_DIR=""
+SR_BEFORE_SNAPSHOT=""
+SR_PLAN_EXTRA=""
+SR_RESULT_EXTRA=""
+SR_MIGRATE_AUTO=0
+SR_IS_DEFAULT=0
+SR_MIGRATE_TEXT=""
+SR_NOTES=()
+
+# fl_srestore_hint: the command a refusal tells the person to plan again with
+fl_srestore_hint() {
+  if [[ "$SR_ROLLBACK" == "1" ]]; then printf 'benchbar site rollback %s --to %s' "$SR_TARGET" "${SR_SNAP_ID:-SNAPSHOT}"
+  else printf 'benchbar site restore %s --from ...' "$SR_TARGET"; fi
+}
 
 fl_srestore_err() { SR_ERRORS+=("$1"); }
 
@@ -68,9 +90,10 @@ fl_srestore_parse() {
       --apply) SR_APPLY=1; SR_TOKEN_IN="${2:-}"; shift 2 || shift ;;
       --apply=*) SR_APPLY=1; SR_TOKEN_IN="${1#*=}"; shift ;;
       --new) SR_NEW=1; shift ;;
+      --neutralise) SR_NEUTRALISE=1; shift ;;
       --no-migrate) FL_PULL_NO_MIGRATE=1; shift ;;
       --with-files) SR_WITH_FILES=1; shift ;;
-      -*) fl_die "Unknown option for site restore: $1" "Use: benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run|--yes" ;;
+      -*) fl_die "Unknown option for site restore: $1" "Use: benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--neutralise] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run|--yes" ;;
       *) [[ -z "$SR_TARGET" ]] && SR_TARGET="$1"; shift ;;
     esac
   done
@@ -85,12 +108,32 @@ fl_srestore_pick() {
   fl_pull_pick_set "$names"
 }
 
+# fl_srestore_dir_is_own DIR: DIR (resolved) holds backups this bench or benchbar
+# made: the backup folder of one of the bench's sites, or a folder under
+# benchbar's own backups (the copies a restore keeps, the sets a cut short
+# backup left). Folders are compared as files (-ef), so a link does not change
+# the answer. Anything else is a set from somewhere else, which may be a
+# production site's.
+fl_srestore_dir_is_own() {
+  local dir="$1" s root sites
+  # the list is read whole first: a loop over a pipe that returns at its match
+  # closes the pipe on a writer that may still print (the broken pipe of #282)
+  sites="$(fl_sites_list)"
+  while IFS= read -r s; do
+    [[ -n "$s" ]] || continue
+    [[ "$dir" -ef "$(fl_site_backup_dir "$s")" ]] && return 0
+  done <<<"$sites"
+  root="$(cd "$FL_BACKUP_ROOT" 2>/dev/null && pwd -P)" || return 1
+  [[ "$dir" == "$root"/* ]]
+}
+
 # fl_srestore_resolve_source: FL_PULL_FROM_DIR and the set's file names, or
 # errors. Read only.
 fl_srestore_resolve_source() {
   local path base dir prefix
   FL_PULL_NO_FILES=1; [[ "$SR_WITH_FILES" == "1" ]] && FL_PULL_NO_FILES=0
   FL_PULL_DB=""; FL_PULL_PUB=""; FL_PULL_PRIV=""; FL_PULL_CONF=""; FL_PULL_FROM_DIR=""
+  SR_OUTSIDE=0
   if [[ -z "$SR_FROM" ]]; then
     fl_srestore_err "--from STAMP|PATH names the backup set to restore (benchbar site backups ${SR_TARGET} lists the stamps)"
     return 1
@@ -124,6 +167,7 @@ fl_srestore_resolve_source() {
     fl_srestore_pick "$dir" "$prefix"
     if [[ -z "$FL_PULL_DB" ]]; then fl_srestore_err "no complete database backup (*-database.sql.gz, not a partial one) for ${SR_FROM}"; return 1; fi
     SR_SET_SITE=""
+    fl_srestore_dir_is_own "$dir" || SR_OUTSIDE=1
   fi
   FL_PULL_FROM_DIR="$dir"
   SR_SET_DIR="$dir"
@@ -180,6 +224,16 @@ fl_srestore_plan() {
   [[ "$SR_EXISTS" == "1" ]] && FL_PULL_SITE_EXISTS=1
   # the source
   fl_srestore_resolve_source || true
+  # a set from outside this bench may be a production site's: restored as it is, its integrations,
+  # webhooks and stored passwords are live here. A person is told in the plan; a run nobody watches
+  # (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1) is refused unless it neutralises (SVC-4)
+  if [[ "$SR_OUTSIDE" == "1" && "$SR_NEUTRALISE" != "1" ]]; then
+    if fl_noninteractive; then
+      fl_srestore_err "the backup set in ${SR_SET_DIR} is not one of this bench's own, so it may hold a production site's live integrations and stored passwords: pass --neutralise (they are switched off and cleared after the restore), or have the person run the restore in a terminal"
+    else
+      FL_PULL_WARNINGS="${FL_PULL_WARNINGS}${FL_PULL_WARNINGS:+,}$(fl_json_str "this backup set is not one of this bench's own (${SR_SET_DIR}): if it is a production site's, its integrations, webhooks and stored passwords are live in ${SR_TARGET} after the restore. Add --neutralise to switch them off and clear them")"
+    fi
+  fi
   # the database server and its password, judged without trying them
   if [[ "${#SR_ERRORS[@]}" == "0" || -n "$FL_PULL_DB" ]]; then
     fl_port_listening 3306 || fl_srestore_err "MariaDB is not running (nothing listens on 3306); start it: $(fl_pull_mariadb_start_hint)"
@@ -213,12 +267,15 @@ fl_srestore_plan() {
     why="$(fl_pull_frappe_too_new)" || why=""
     [[ -z "$why" ]] || fl_srestore_err "$why; update this bench's apps first (bench update is your call)"
   fi
+  # a rollback reads its own state: the default site, the snapshot's apps against the bench's, whether migrate runs
+  [[ "$SR_ROLLBACK" != "1" ]] || fl_snap_plan_hook
   # the apps' versions say nothing here: a restore is followed by a migrate
   FL_PULL_NEED_MIGRATE=1
 
   # the steps, in the order they run (ids are pull.sh's steps, plus verify)
   FL_PULL_STEPS=()
-  [[ "$SR_EXISTS" == "1" ]] && FL_PULL_STEPS+=("local_backup|Back up ${SR_TARGET} with its files")
+  if [[ "$SR_ROLLBACK" == "1" ]]; then FL_PULL_STEPS+=("snapshot|Snapshot ${SR_TARGET} first (label: before rollback)")
+  elif [[ "$SR_EXISTS" == "1" ]]; then FL_PULL_STEPS+=("local_backup|Back up ${SR_TARGET} with its files"); fi
   FL_PULL_QUIESCE=0
   fl_pm_running && ! fl_pull_common_paused && FL_PULL_QUIESCE=1
   [[ "$FL_PULL_QUIESCE" == "1" ]] && FL_PULL_STEPS+=("quiesce|Pause this bench's scheduler during the restore")
@@ -227,6 +284,8 @@ fl_srestore_plan() {
   # the run skips this step when the set has no key: the plan says so, so plan and run agree
   if [[ "$FL_PULL_HAS_KEY" == "1" ]]; then FL_PULL_STEPS+=("encryption_key|Carry the encryption key of the set over")
   else FL_PULL_STEPS+=("encryption_key|Skip the encryption key (the set has none)"); fi
+  # before anything can start a worker on the restored data: before the scheduler resumes and before migrate
+  [[ "$SR_NEUTRALISE" != "1" ]] || FL_PULL_STEPS+=("neutralise|Neutralise ${SR_TARGET}: integrations off, stored secrets cleared")
   [[ "$FL_PULL_QUIESCE" == "1" ]] && FL_PULL_STEPS+=("resume|Resume this bench's scheduler")
   [[ -n "$FL_PULL_HOOK" ]] && FL_PULL_STEPS+=("before_migrate|Run ${FL_PULL_HOOK##*/} (--before-migrate)")
   [[ "$FL_PULL_NO_MIGRATE" == "1" ]] || FL_PULL_STEPS+=("migrate|bench migrate")
@@ -236,7 +295,7 @@ fl_srestore_plan() {
   FL_PULL_STEPS+=("verify|Verify ${SR_TARGET}")
 
   touches=""
-  case " ${FL_PULL_STEPS[*]} " in *"|Back up "*) touches='"backup",' ;; esac
+  case " ${FL_PULL_STEPS[*]} " in *"|Back up "*|*"|Snapshot "*) touches='"backup",' ;; esac
   touches="${touches}\"database\""
   [[ "$FL_PULL_NO_FILES" == "1" ]] || touches="${touches},\"files\""
   touches="${touches},\"site_config\""
@@ -249,10 +308,11 @@ fl_srestore_plan() {
   SR_PLAN_BODY="$(printf '"bench":%s,"site":%s,"new":%s,"exists":%s,"source":{"site":%s,"set":%s,"restores_files":%s,"encryption_key":%s},"backup_first":{"will_run":%s,"with_files":true,"folder":%s},"migrate":%s,"before_migrate":%s,"before_migrate_sha256":%s,"touches":[%s],"steps":[%s],"warnings":[%s],"needs":[%s],"errors":%s' \
     "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$SR_TARGET")" "$(fl_json_bool "$SR_NEW")" "$(fl_json_bool "$SR_EXISTS")" \
     "$(fl_json_str "$SR_SET_SITE")" "$SR_SET_JSON" "$(fl_json_bool "$([[ "$FL_PULL_NO_FILES" == "1" ]] && printf 0 || printf 1)")" "$(fl_json_bool "$FL_PULL_HAS_KEY")" \
-    "$(fl_json_bool "$SR_EXISTS")" "$(fl_json_str "$(fl_site_backup_dir "$SR_TARGET")")" \
+    "$(fl_json_bool "$SR_EXISTS")" "$(fl_json_str "$(if [[ "$SR_ROLLBACK" == "1" ]]; then fl_snap_dir "$SR_TARGET"; else fl_site_backup_dir "$SR_TARGET"; fi)")" \
     "$(fl_json_bool "$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf 0 || printf 1)")" "$(fl_json_str "$FL_PULL_HOOK")" "$(fl_json_str "$SR_HOOK_SHA")" \
     "$touches" "$json_steps" "${FL_PULL_WARNINGS}" "$SR_NEEDS" "$(fl_json_str_array ${SR_ERRORS[@]+"${SR_ERRORS[@]}"})")"
   [[ "${#SR_ERRORS[@]}" == "0" ]] && SR_CAN_APPLY=1
+  [[ -z "$SR_PLAN_EXTRA" ]] || SR_PLAN_BODY="${SR_PLAN_BODY},${SR_PLAN_EXTRA}"
   SR_PLAN_BODY="${SR_PLAN_BODY},\"can_apply\":$(fl_json_bool "$SR_CAN_APPLY")"
   # the bench state the plan was made against: the site list, the default
   # site, the hook and the set's files; a change of any makes the token stale
@@ -266,10 +326,11 @@ fl_srestore_plan() {
 # fl_srestore_step_touches ID: what a step changes, as a JSON array
 fl_srestore_step_touches() {
   case "$1" in
-    local_backup) printf '["backup"]' ;;
+    local_backup|snapshot) printf '["backup"]' ;;
     new_site) printf '["database","site_config"]' ;;
     restore) if [[ "$FL_PULL_NO_FILES" == "1" ]]; then printf '["database"]'; else printf '["database","files"]'; fi ;;
     encryption_key) printf '["site_config"]' ;;
+    neutralise) printf '["database"]' ;;
     quiesce|resume) printf '["common_site_config"]' ;;
     before_migrate) printf '["database"]' ;;
     migrate) printf '["database"]' ;;
@@ -282,17 +343,23 @@ fl_srestore_step_touches() {
 fl_srestore_print_plan() {
   local s i=1 e
   printf '\n'
-  fl_box "Restore" \
-    "site     ${SR_TARGET} in ${FL_BENCH_DIR}$([[ "$SR_EXISTS" == "1" ]] && printf ' (backed up first)')$([[ "$SR_NEW" == "1" ]] && printf ' (a new site)')" \
+  fl_box "$([[ "$SR_ROLLBACK" == "1" ]] && printf Rollback || printf Restore)" \
+    "site     ${SR_TARGET} in ${FL_BENCH_DIR}$(if [[ "$SR_ROLLBACK" == "1" ]]; then printf ' (snapshotted first)'; elif [[ "$SR_EXISTS" == "1" ]]; then printf ' (backed up first)'; fi)$([[ "$SR_NEW" == "1" ]] && printf ' (a new site)')" \
     "from     ${SR_SET_STAMP:-?} in ${SR_SET_DIR:-?}$([[ -n "$SR_SET_SITE" ]] && printf ' (a backup of %s)' "$SR_SET_SITE")" \
     "files    $([[ "$FL_PULL_NO_FILES" == "1" ]] && printf 'database only (--with-files restores the uploads)' || printf 'database, public and private files')" \
     "key      $([[ "$FL_PULL_HAS_KEY" == "1" ]] && printf 'encryption_key of the set carried over (never shown)' || printf 'none in the set: stored passwords will not decrypt')" \
-    "migrate  $([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf 'not run (--no-migrate)' || printf 'after the restore')$([[ -n "$FL_PULL_HOOK" ]] && printf ', %s runs before it' "${FL_PULL_HOOK##*/}")"
+    "secrets  $(if [[ "$SR_NEUTRALISE" == "1" ]]; then printf 'neutralised after the restore: integrations off, stored secrets cleared (the Administrator login is kept)'; elif [[ "$SR_OUTSIDE" == "1" ]]; then printf 'kept as the set has them (--neutralise switches them off)'; else printf 'kept as the backup has them'; fi)" \
+    "migrate  ${SR_MIGRATE_TEXT:-$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf 'not run (--no-migrate)' || printf 'after the restore')$([[ -n "$FL_PULL_HOOK" ]] && printf ', %s runs before it' "${FL_PULL_HOOK##*/}")}"
   printf '\n%sSteps%s\n' "$FL_BOLD" "$FL_RESET"
+  for e in ${SR_NOTES[@]+"${SR_NOTES[@]}"}; do fl_warn "$e"; done
   for s in "${FL_PULL_STEPS[@]}"; do
     printf '  %s %d. %s\n' "$FL_G_PEND" "$i" "${s#*|}"
     i=$((i + 1))
   done
+  if [[ "$SR_OUTSIDE" == "1" && "$SR_NEUTRALISE" != "1" ]] && ! fl_noninteractive; then
+    fl_warn "this backup set is not one of this bench's own (${SR_SET_DIR}): if it is a production site's, its integrations, webhooks and stored passwords are live in ${SR_TARGET} after the restore"
+    fl_fix "add --neutralise to switch them off and clear them (the list benchbar pull runs)"
+  fi
   for e in ${SR_ERRORS[@]+"${SR_ERRORS[@]}"}; do fl_fail "$e"; done
   return 0
 }
@@ -340,7 +407,7 @@ fl_srestore_step_verify() {
   else
     fl_info "the bench is stopped; benchup, then open http://${SR_TARGET}:${FL_WEB_PORT}"
   fi
-  [[ "$FL_PULL_NO_MIGRATE" != "1" ]] || fl_pull_warn "migrate was skipped (--no-migrate): cd ${FL_BENCH_DIR} && bench --site ${SR_TARGET} migrate"
+  [[ "$FL_PULL_NO_MIGRATE" != "1" || "$SR_MIGRATE_AUTO" == "1" ]] || fl_pull_warn "migrate was skipped (--no-migrate): cd ${FL_BENCH_DIR} && bench --site ${SR_TARGET} migrate"
   # shellcheck disable=SC2086  # the app names, split
   SR_VERIFY_JSON="$(printf '{"apps":%s,"default_site":%s,"answers":%s}' "$(fl_json_str_array $apps)" "$(fl_json_str "$now")" "$(if [[ -z "$code" ]]; then printf null; else fl_json_bool "$([[ "$code" == "200" ]] && printf 1 || printf 0)"; fi)")"
 }
@@ -359,7 +426,7 @@ fl_srestore_result_json() {
     i=$((i + 1))
   done
   # warnings[] comes with the done fields (fl_pull_warn is a fl_warn too)
-  printf '%s],"verify":%s}\n' "$out" "$SR_VERIFY_JSON"
+  printf '%s],"verify":%s%s}\n' "$out" "$SR_VERIFY_JSON" "$SR_RESULT_EXTRA"
 }
 
 # fl_srestore_copy_set: when the set is in the target's own backup folder, its
@@ -490,6 +557,11 @@ fl_srestore_run() {
     fi
     if [[ "$code" != "0" ]]; then
       fl_step_end failed
+      # a restore that stopped before its neutralise step holds the set's data as it was: say so
+      case "$id" in
+        restore|encryption_key)
+          [[ "$SR_NEUTRALISE" != "1" ]] || fl_warn "${SR_TARGET} was not neutralised: it may hold the set's integrations and stored passwords as they were. Do not start the scheduler or workers on it; plan the same restore again" ;;
+      esac
       i=$((i + 1))
       while [[ "$i" -lt "$n" ]]; do FL_STEP_STATUS[i]="skipped"; i=$((i + 1)); done
       fl_bench_redis_down
@@ -517,6 +589,7 @@ fl_srestore_execute() {
   [[ -z "$SR_SET_COPY" ]] || fl_info "a copy of the backup set is kept in ${SR_SET_COPY}"
   if [[ "$code" != "0" ]]; then
     [[ -z "$SR_BACKUP_STAMP" ]] || fl_info "${SR_TARGET} was backed up first; put that back with: benchbar site restore ${SR_TARGET} --from ${SR_BACKUP_STAMP} --with-files --yes"
+    [[ -z "$SR_BEFORE_SNAPSHOT" ]] || fl_info "${SR_TARGET} was snapshotted first as ${SR_BEFORE_SNAPSHOT}; put that back with: benchbar site rollback ${SR_TARGET} --to ${SR_BEFORE_SNAPSHOT} --dry-run --json, then --apply TOKEN --yes"
     # share setup resumes it on its way out (fl_share_on_exit)
     if [[ "${FL_PULL_QUIESCED:-0}" == "1" && "${SH_RESUME_ON_EXIT:-0}" != 1 ]]; then
       fl_warn "the scheduler of every site on this bench stays paused (pause_scheduler in common_site_config.json)"
@@ -524,7 +597,9 @@ fl_srestore_execute() {
     fi
     return "$code"
   fi
-  fl_changed site "$SR_TARGET" "restored from ${SR_SET_STAMP}"
+  # the verify passed: only now does the undo point move (a failed rollback leaves the earlier one in place)
+  [[ "$SR_ROLLBACK" != "1" || -z "$SR_BEFORE_SNAPSHOT" ]] || fl_snap_rollback_finished "$SR_TARGET" "$SR_BEFORE_SNAPSHOT"
+  if [[ "$SR_ROLLBACK" == "1" ]]; then fl_changed site "$SR_TARGET" "rolled back to snapshot ${SR_SNAP_ID}"; else fl_changed site "$SR_TARGET" "restored from ${SR_SET_STAMP}"; fi
   [[ -z "$SR_BACKUP_STAMP" ]] || fl_changed backup "$SR_TARGET" "$SR_BACKUP_STAMP"
   return 0
 }
@@ -535,14 +610,14 @@ fl_cmd_site_restore() {
   fl_site_json_begin
   fl_require_bench
   fl_require_plain_bench
-  [[ -n "$SR_TARGET" ]] || fl_die "Usage: benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run|--yes"
+  [[ -n "$SR_TARGET" ]] || fl_die "Usage: benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--neutralise] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run|--yes"
   fl_site_valid_name "$SR_TARGET"
   if [[ "$SR_APPLY" == "1" ]]; then
     [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
-    [[ "$SR_TOKEN_IN" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar site restore ${SR_TARGET} --from ... --dry-run --json prints it"
+    [[ "$SR_TOKEN_IN" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "$(fl_srestore_hint) --dry-run --json prints it"
     [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (--dry-run --json), then pass its token with --apply TOKEN --yes."
   elif [[ "$json" == "1" && "${FL_DRY_RUN:-0}" != "1" ]]; then
-    fl_die "--json shows the plan only; add --dry-run (then --apply TOKEN --yes to run it)." "benchbar site restore ${SR_TARGET} --from ... --dry-run --json"
+    fl_die "--json shows the plan only; add --dry-run (then --apply TOKEN --yes to run it)." "$(fl_srestore_hint) --dry-run --json"
   fi
   # an applied plan never asks: the plan was shown and approved
   [[ "$SR_APPLY" != "1" ]] || exec 0</dev/null
@@ -571,19 +646,20 @@ fl_cmd_site_restore() {
     code=0; fl_plan_token_check "$SR_TOKEN_DATA" "$SR_TOKEN_IN" || code=$?
     case "$code" in
       0) code=0 ;;
-      2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: benchbar site restore ${SR_TARGET} --from ... --dry-run --json, then pass its token." ;;
-      *) fl_die "The site restore plan changed since it was shown (the backup set, the sites, the default site or the hook). Nothing was changed." \
-        "Review a fresh plan: benchbar site restore ${SR_TARGET} --from ... --dry-run --json, then pass its token." ;;
+      2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: $(fl_srestore_hint) --dry-run --json, then pass its token." ;;
+      *) fl_die "The site $([[ "$SR_ROLLBACK" == "1" ]] && printf rollback || printf restore) plan changed since it was shown (the backup set, the sites, the default site or the hook). Nothing was changed." \
+        "Review a fresh plan: $(fl_srestore_hint) --dry-run --json, then pass its token." ;;
     esac
   fi
   fl_srestore_print_plan
   if [[ "$SR_CAN_APPLY" != "1" ]]; then
     case "${SR_ERRORS[*]}" in *"MariaDB root password"*) code=2 ;; *) code=1 ;; esac
-    fl_die "The plan cannot be applied (see above). Nothing was changed." "Fix what is listed, then plan again: benchbar site restore ${SR_TARGET} --from ... --dry-run" "$code"
+    fl_die "The plan cannot be applied (see above). Nothing was changed." "Fix what is listed, then plan again: $(fl_srestore_hint) --dry-run" "$code"
   fi
   if [[ "$SR_APPLY" != "1" ]]; then
     q="Restore ${SR_SET_STAMP} into ${SR_TARGET}?"
     [[ "$SR_EXISTS" == "1" ]] && q="Back up ${SR_TARGET}, then replace its data with ${SR_SET_STAMP}?"
+    [[ "$SR_ROLLBACK" != "1" ]] || q="Snapshot ${SR_TARGET}$([[ "$SR_IS_DEFAULT" == "1" ]] && printf ' (the default site)'), then roll it back to ${SR_SNAP_ID}?"
     fl_confirm "$q" || { fl_warn "Cancelled. Nothing was changed."; return 1; }
   fi
   fl_srestore_execute || code=$?
@@ -592,6 +668,10 @@ fl_cmd_site_restore() {
     return "$code"
   fi
   [[ "$json" != "1" ]] || fl_doc_emit 0 "$(fl_srestore_result_json 0)"
+  if [[ "$SR_ROLLBACK" == "1" ]]; then
+    fl_ok "${SR_TARGET} is rolled back to ${SR_SNAP_ID}$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf ' (not migrated)'); undo it with: benchbar site rollback ${SR_TARGET} --to ${SR_BEFORE_SNAPSHOT}"
+    return 0
+  fi
   fl_ok "${SR_TARGET} is restored from ${SR_SET_STAMP}$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf ' (not migrated)'); the default site stays ${SR_DEFAULT_BEFORE:-unset}"
   return 0
 }

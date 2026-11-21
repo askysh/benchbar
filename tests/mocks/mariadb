@@ -51,6 +51,10 @@ case "$*" in
         grep -qx -- "$want" "$state/mariadb_dbs" 2>/dev/null && printf '%s\n' "$want" ;;
       # the tables of a database: $MOCK_STATE/mariadb_tables.<db> (a file: the tables are there), its tabUser
       # names in $MOCK_STATE/mariadb_users.<db> (one per line; no file: no tabUser table)
+      # SUM(data_length + index_length) of a database: $MOCK_STATE/mariadb_size.<db> (no file: nothing, like an unknown size)
+      *"data_length"*)
+        want="$(printf '%s' "$*" | sed -n "s/.*TABLE_SCHEMA='\([^']*\)'.*/\1/p")"
+        [[ -f "$state/mariadb_size.$want" ]] && cat "$state/mariadb_size.$want" ;;
       *"information_schema.TABLES"*"TABLE_NAME='tabUser'"*)
         want="$(printf '%s' "$*" | sed -n "s/.*TABLE_SCHEMA='\([^']*\)'.*/\1/p")"
         [[ -f "$state/mariadb_users.$want" ]] && printf '1\n' || printf '0\n' ;;

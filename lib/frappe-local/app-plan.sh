@@ -624,6 +624,17 @@ fl_app_add_plan() {
     AP_STEPS+=("restart||Restart|benchbar restart|only when the bench is running, so the new code is served")
   fi
 
+  # get-app and "bench setup requirements" install into the env with uv
+  # (frappe-bench 5.31 and later): without it the clone would land and its
+  # install fail, so the plan says so before anything is cloned (issue 188)
+  for st in ${AP_STEPS[@]+"${AP_STEPS[@]}"}; do
+    case "${st%%|*}" in
+      clone|clone_required|requirements_python)
+        fl_uv_on_path || fl__ap_err "uv is not installed, and bench installs an app into the env with it; install it first: $(fl_uv_install_hint)"
+        break ;;
+    esac
+  done
+
   # the targets that have work: a record is kept for these when a step fails
   all_nodes=" ${AP_ORDER[*]:-} "
   for ((i = 0; i < cnt; i++)); do

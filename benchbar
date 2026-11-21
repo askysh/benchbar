@@ -184,6 +184,8 @@ FL_OP_ID=""; FL_OP_OWNER=""; FL_OP_JSON=""; FL_OP_COMMAND=""; FL_OP_STARTED=""; 
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/pull.sh"
 # shellcheck source=lib/frappe-local/site-restore.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/site-restore.sh"
+# shellcheck source=lib/frappe-local/snapshots.sh
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/snapshots.sh"
 # shellcheck source=lib/frappe-local/lifecycle.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/lifecycle.sh"
 # shellcheck source=lib/frappe-local/bench-run.sh
@@ -339,9 +341,17 @@ Daily
   site hosts          Add a 127.0.0.1 line for every site to /etc/hosts (sudo, once).
   site backup NAME    bench --site NAME backup (--with-files for the uploads too; --json).
   site backups NAME   The site's backups, newest first: time, size, with files (--json).
+  site snapshot NAME [--label TEXT]
+                      Save the state of a site (database, files, site_config) in a folder frappe's
+                      backup pruning never touches.
+  site snapshots NAME The snapshots, newest first, and whether the bench's apps still match.
+  site rollback NAME --to SNAPSHOT
+                      Put a snapshot back (a reviewed plan; the current state is snapshotted first).
   site restore NAME   Restore a backup set (--from STAMP or the database file's PATH, --from-site S)
                       into a site: it is backed up first, or --new creates it. --no-migrate,
-                      --before-migrate SCRIPT, --with-files. --dry-run --json prints the plan with
+                      --before-migrate SCRIPT, --with-files. --neutralise switches the restored
+                      site's integrations off and clears its stored secrets (for a set that is
+                      not this bench's own; an agent must pass it). --dry-run --json prints the plan with
                       its token; --apply TOKEN --yes [--json] runs exactly that plan.
   site drop NAME      bench drop-site: a backup with files first, the folder moved to
                       archived/sites, the hosts line removed. Needs --confirm-site NAME;
@@ -464,7 +474,8 @@ Production copy
     --no-files        Database only; --keep-scheduler, --keep-staging
     --keep-secrets    Leave the copy as production had it. By default it is neutralised:
                       outbound integrations off, stored secrets cleared, tokens and
-                      queued mail dropped (the Administrator login is kept)
+                      queued mail dropped (the Administrator login is kept).
+                      A person's decision: refused for agents and benchbar mcp
     --no-migrate      Stop after the restore, before bench migrate
     --before-migrate S  Run the executable SCRIPT after the restore, before migrate (with
                       BENCHBAR_SITE, BENCHBAR_BENCH, BENCHBAR_DB_NAME; no secret in its
@@ -503,7 +514,8 @@ Options
   --break-lease       A person at a terminal goes ahead although a lease covers the command
   --jsonl             JSON lines (plan, step, done) from any command that changes things
   --for-agent         --jsonl or --json, no questions (BENCHBAR_NONINTERACTIVE=1), no colors
-  --background        install, repair, pull, app add, app update, site add, site backup, site restore:
+  --background        install, repair, pull, app add, app update, site add, site backup, site restore,
+                      site snapshot, site rollback:
                       start the run detached and print its op_id at once (needs --yes; no questions)
   benchbar COMMAND --help prints that command's flags and needs; benchbar commands --json lists them all
   --plain             No colors or spinners (also: NO_COLOR=1, or a non-TTY)
@@ -672,7 +684,7 @@ fl_json_mode_resolve() {
     up|down|restart|service|"site default"|"ports apply") FL_JSON_MODE=stream ;;
     # a dry run of these is their plan, one document with its token
     "app update"|"site add") if [[ "$FL_DRY_RUN" == "1" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
-    "site backup"|"site drop"|"site restore"|"app add"|"run"|"bench forget"|"bench remove"|"bench scratch"|"bench gc"|"db orphans") FL_JSON_MODE=doc ;;
+    "site backup"|"site drop"|"site restore"|"site snapshot"|"site snapshot drop"|"site snapshots"|"site rollback"|"app add"|"run"|"bench forget"|"bench remove"|"bench scratch"|"bench gc"|"db orphans") FL_JSON_MODE=doc ;;
     # on and off stream like site default; status only reads
     "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
     "share setup"|"share start"|"share stop"|"share extend"|"share lock"|"share unlock"|"share remove"|"share revoke"|"share assign"|"share teardown") FL_JSON_MODE=stream ;;
@@ -1606,7 +1618,7 @@ fl_site_arg_name() {
     i=$((i + 1)); [[ "$i" -gt 1 ]] || continue
     if [[ "$skip" == "1" ]]; then skip=0; continue; fi
     case "$a" in
-      --apps|--bundle|--confirm-site|--new-default|--from|--from-site|--before-migrate|--apply) skip=1 ;;
+      --apps|--bundle|--confirm-site|--new-default|--from|--from-site|--before-migrate|--apply|--to|--label|--keep) skip=1 ;;
       -*) ;;
       *) printf '%s' "$a"; return 0 ;;
     esac
@@ -1692,7 +1704,10 @@ fl_noninteractive_preflight() {
       # sudo for the pf anchor or the firewall: a person's decision, refused before anything is asked (U3)
       fl_need "a person at a terminal" "benchbar lan-guard ${ARGS[0]} runs sudo; run it in a terminal"
       ;;
-    "site restore")
+    "site snapshot")
+      # removing a snapshot is a person's decision: its plan (--dry-run) is open to agents
+      [[ "${ARGS[1]:-}" != "drop" ]] || fl_need "a person at a terminal" "removing a snapshot is a person's decision; read what would go with --dry-run, then run benchbar site snapshot drop in a terminal" ;;
+    "site restore"|"site rollback")
       # the restore needs the root password (to create or replace the database) and a yes
       [[ "$FL_ASSUME_YES" == "1" ]] || fl_need "--yes" "to confirm the restore plan (or --apply TOKEN --yes)"
       name="$(fl_site_arg_name)"
@@ -1812,7 +1827,7 @@ case "$COMMAND" in
     # and "app focus" without an app name (the focus listing, with or
     # without --fetch: its one write, FETCHED_AT, goes through the key-value
     # file's own lock); the others change things
-    if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" && "${ARGS[0]:-}" != "check" && "${ARGS[0]:-}" != "backups" \
+    if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" && "${ARGS[0]:-}" != "check" && "${ARGS[0]:-}" != "backups" && "${ARGS[0]:-}" != "snapshots" \
       && " ${ARGS[*]:-} " != *" --plan "* && ! ( "${ARGS[0]:-}" == "open-as" && "${ARGS[1]:-}" == "status" ) ]] && ! fl_app_focus_is_listing "${ARGS[@]+"${ARGS[@]}"}"; then
       fl_log_init "${FL_STATE_DIR}/logs"
       fl_lock_acquire "${FL_STATE_DIR}/lock"

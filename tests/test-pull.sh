@@ -220,6 +220,26 @@ assert_no_secrets "(keep secrets)"
 run_fm pull "$SRC" --as keepplan --skip-app hrms --keep-secrets --dry-run --bench-dir "$BENCH"
 assert_contains "$OUT" "kept as production had them (--keep-secrets)"
 assert_not_contains "$OUT" "Neutralise the copy"
+# --keep-secrets is a person's decision, like listen all (SVC-4, issue 186): a run nobody watches is
+# refused with one line, whatever --yes says, the plan included, and nothing is read or changed
+for agent in "env" "--for-agent"; do
+  reset_calls
+  if [[ "$agent" == "env" ]]; then
+    BENCHBAR_NONINTERACTIVE=1 run_fm pull "$SRC" --as keepagent --skip-app hrms --keep-secrets --yes --bench-dir "$BENCH"
+  else
+    run_fm pull "$SRC" --as keepagent --skip-app hrms --keep-secrets --yes --for-agent --bench-dir "$BENCH"
+  fi
+  assert_eq "1" "$CODE" "$OUT"
+  assert_contains "$OUT" "--keep-secrets leaves production's integrations and stored passwords live in the copy, a person's decision"
+  assert_no_file "$BENCH/sites/keepagent"
+  assert_calls_not_contain '^(ssh|scp|rsync|bench) ' "(a refused --keep-secrets reaches neither the server nor the bench)"
+done
+BENCHBAR_NONINTERACTIVE=1 run_fm pull "$SRC" --as keepagent --skip-app hrms --keep-secrets --dry-run --json --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "a person's decision"
+# without the flag the same agent run is not refused for it
+BENCHBAR_NONINTERACTIVE=1 run_fm pull "$SRC" --as keepagent --skip-app hrms --dry-run --bench-dir "$BENCH"
+assert_not_contains "$OUT" "a person's decision"
 run_fm pull "$SRC" --as neutplan --skip-app hrms --dry-run --bench-dir "$BENCH"
 assert_contains "$OUT" "Neutralise the copy"
 assert_contains "$OUT" "outbound integrations off, stored secrets cleared"
