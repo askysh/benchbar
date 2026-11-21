@@ -156,7 +156,11 @@ benchbar --version
 
 The first line is always `benchbar <version>`, which the app and scripts
 read. When BenchBar.app is installed in `~/Applications` or
-`/Applications`, a second line gives the app's version.
+`/Applications`, a second line gives the app's version. When Homebrew's or
+the installer's `benchbar` handed off to the CLI inside the app, a `via`
+line names that copy and its version: the first line is then the app's
+CLI, not the copy you started. If that copy is newer, one more line says
+that the app is what needs the update.
 
 ## list
 

@@ -1650,14 +1650,21 @@ fl_cmd_profile_update() {
 # ---- remove
 
 fl_cmd_profile_remove() {
-  local name="" f sub sname="" surl sdir what="" dest moved udir list
+  local name="" f sub sname="" surl sdir what="" dest moved udir list apply=0 token="" pr_data pr_token tcode kind=file
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
-      -*) fl_die "Unknown option for profile remove: $1" "Use: benchbar profile remove NAME" ;;
+      --apply) apply=1; token="${2:-}"; shift 2 || shift ;;
+      --apply=*) apply=1; token="${1#*=}"; shift ;;
+      -*) fl_die "Unknown option for profile remove: $1" "Use: benchbar profile remove NAME [--dry-run --json | --apply TOKEN --yes]" ;;
       *) [[ -z "$name" ]] && name="$1"; shift ;;
     esac
   done
   [[ -n "$name" ]] || fl_die "Usage: benchbar profile remove NAME"
+  if [[ "$apply" == "1" ]]; then
+    [[ "$token" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar profile remove ${name} --dry-run --json prints it"
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
+    [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (profile remove ${name} --dry-run --json), then pass its token with --apply TOKEN --yes."
+  fi
   fl_profile_json_begin
   udir="$(fl_team_profile_user_dir)"
   dest="$(fl_profile_removed_dir)/$(date +%Y%m%d-%H%M%S)"
@@ -1681,8 +1688,26 @@ fl_cmd_profile_remove() {
     fl_info "unsubscribe from ${surl}: ${sdir} goes, and with it $(fl_profile_sub_names "$sdir" | sed 's/ /, /g')"
   fi
   moved="${dest}/$(basename "$what")"
+  # the approval token: what moves aside and what it is (an import's file by its bytes, a subscription by its address)
+  [[ -z "$sname" ]] || kind=subscription
+  pr_data="$(printf 'profile remove\n%s\n%s\n%s\n%s\n%s\n' "$name" "$kind" "$what" "$surl" "$([[ -f "$what" ]] && shasum -a 256 <"$what" | awk '{print $1}'; [[ -d "$what/.git" ]] && git -C "$what" rev-parse HEAD 2>/dev/null; [[ -d "$what" ]] && { cd "$what" && find . -path ./.git -prune -o -type f -print 2>/dev/null | LC_ALL=C sort | shasum -a 256 | awk '{print $1}'; })")"
+  fl_plan_token_v pr_token "$pr_data"
+  if [[ "$apply" == "1" ]]; then
+    tcode=0; fl_plan_token_check "$pr_data" "$token" || tcode=$?
+    case "$tcode" in
+      0) ;;
+      2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: benchbar profile remove ${name} --dry-run --json, then pass its token." ;;
+      *) fl_die "The profile remove plan changed since it was shown (the file or the subscription changed). Nothing was changed." \
+        "Review a fresh plan: benchbar profile remove ${name} --dry-run --json, then pass its token." ;;
+    esac
+  fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: would move ${what} to ${moved}"
+    if [[ "${OPT_JSON:-0}" == "1" ]]; then
+      printf '{"schema_version":%d,"cli_version":"%s","name":%s,"dry_run":true,"kind":%s,"moves":%s,"to":%s,"subscription":%s,"token":"%s"}\n' \
+        "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$name")" "$(fl_json_str "$kind")" "$(fl_json_str "$what")" "$(fl_json_str "$moved")" \
+        "$(fl_json_str "$surl")" "$pr_token" >&3
+    fi
     return 0
   fi
   fl_confirm "Move ${what} aside to ${dest}/?" || { fl_warn "Cancelled. Nothing was moved."; exit 1; }

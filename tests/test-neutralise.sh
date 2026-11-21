@@ -6,7 +6,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/frappe-local-test.XXXXXX")"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-test.XXXXXX")"
 trap 'rm -rf "$TMP_DIR"' EXIT
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 assert_eq() { [[ "$1" == "$2" ]] || fail "expected [$1], got [$2] ${3:-}"; }
