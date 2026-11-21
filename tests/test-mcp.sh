@@ -52,7 +52,11 @@ assert_eq "1" "$CODE"; assert_contains "$OUT" "no previous file"
 INIT='{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}'
 mcp() { printf '%s\n' "$INIT" '{"jsonrpc":"2.0","method":"notifications/initialized"}' "$@" | "$FM" mcp 2>/dev/null | tail -n +2; }
 call() { printf '{"jsonrpc":"2.0","id":%s,"method":"tools/call","params":{"name":"%s","arguments":%s}}' "$1" "$2" "$3"; }
-TOOL_NAMES='["benchbar_list", "benchbar_status", "benchbar_wait", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_app_list", "benchbar_profile_list", "benchbar_profile_check", "benchbar_up", "benchbar_down", "benchbar_restart", "benchbar_op_status", "benchbar_history", "benchbar_app_add_plan", "benchbar_app_add", "benchbar_site_add_plan", "benchbar_site_add", "benchbar_site_backup", "benchbar_site_restore_plan", "benchbar_site_restore", "benchbar_site_snapshot", "benchbar_site_snapshots", "benchbar_site_rollback_plan", "benchbar_site_rollback", "benchbar_service_install_plan", "benchbar_service_install", "benchbar_run_plan", "benchbar_run", "benchbar_run_read", "benchbar_site_backups", "benchbar_ports_check", "benchbar_ports_plan", "benchbar_lock_check", "benchbar_labs_list", "benchbar_where", "benchbar_doctor_prerequisites", "benchbar_self_update_check", "benchbar_app_focus_list", "benchbar_lease_take", "benchbar_lease_renew", "benchbar_lease_release", "benchbar_lease_list", "benchbar_doctor_ack", "benchbar_autostart", "benchbar_ports_mode", "benchbar_ports_apply", "benchbar_scan", "benchbar_report", "benchbar_stats", "benchbar_site_drop_plan", "benchbar_site_drop", "benchbar_app_install_plan", "benchbar_app_install", "benchbar_app_update_plan", "benchbar_app_update"]'
+# every tool the server has, in its order (a new tool needs no edit here)
+TOOL_NAMES="$(python3 -I -c 'import json, os, sys
+sys.path.insert(0, os.path.join(sys.argv[1], "lib", "frappe-local"))
+import mcp as m
+print(json.dumps(list(m.TOOLS.keys())))' "$ROOT")"
 REPLIES="$(mcp \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
@@ -486,7 +490,7 @@ assert_contains "$(printf '%s' "$R" | jget - '[a["name"] for a in d["result"]["s
 assert_calls_contain "^bench get-app --skip-assets --branch main file://${REMOTES}/acme_dep.git$"
 assert_calls_contain '^bench --site macdev install-app acme_web$'
 
-# ---- app update and app install over MCP on the real CLI: the token is derived from the plan, and the apply plans again
+# ---- app update and app install over MCP on the real CLI: the token is the CLI's own, and the CLI plans again under its lock
 push_commits acme_web 2
 R="$(mcp "$(call 1 benchbar_app_update_plan '{"name":"acme_web","bench":"'"$BENCH"'"}')")"
 assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
@@ -499,7 +503,7 @@ push_commits acme_web 1
 reset_calls
 R="$(mcp "$(call 2 benchbar_app_update '{"name":"acme_web","bench":"'"$BENCH"'","token":"'"$UTOK"'"}')")"
 assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
-assert_contains "$R" "The plan changed"
+assert_contains "$R" "app update plan changed since it was shown"
 assert_calls_not_contain '^bench --site .* (backup|migrate)'
 assert_calls_not_contain 'merge --ff-only'
 # a token no plan returned, and the backup cannot be skipped
@@ -522,7 +526,7 @@ assert_contains "$(printf '%s' "$R" | jget - '[a["name"] for a in d["result"]["s
 # nothing left to do: a plan with no token
 R="$(mcp "$(call 8 benchbar_app_update_plan '{"name":"acme_web","bench":"'"$BENCH"'"}')")"
 assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["can_apply"]')" "$R"
-assert_eq "False" "$(printf '%s' "$R" | jget - '"token" in d["result"]["structuredContent"]')"
+assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["token"] is None')"
 
 make_app_remote acme_solo
 add_policy acme_solo main
@@ -532,7 +536,7 @@ R="$(mcp "$(call 2 benchbar_app_add '{"url_or_name":"file://'"$REMOTES"'/acme_so
 assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 R="$(mcp "$(call 1 benchbar_app_install_plan '{"name":"acme_solo","site":"macdev","bench":"'"$BENCH"'"}')")"
 assert_eq "False True" "$(printf '%s' "$R" | jget - '" ".join(str(x) for x in [d["result"]["isError"], d["result"]["structuredContent"]["can_apply"]])')" "$R"
-assert_contains "$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["plan_text"]')" "bench --site macdev install-app acme_solo"
+assert_contains "$(printf '%s' "$R" | jget - 'str(d["result"]["structuredContent"]["steps"])')" "bench --site macdev install-app acme_solo"
 ITOK="$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["token"]')"
 reset_calls
 R="$(mcp "$(call 2 benchbar_app_install '{"name":"acme_solo","site":"qa9.localhost","bench":"'"$BENCH"'","token":"'"$ITOK"'"}')")"
