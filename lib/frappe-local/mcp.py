@@ -960,8 +960,8 @@ def app_update_args(a):
 TOOLS["benchbar_app_install_plan"] = (
     "Plan installing an app that is already in a bench on one site (bench --site S install-app), read only: the step, "
     "and a token for benchbar_app_install. can_apply is false when the app is already installed there. Show this plan "
-    "to the person before applying it. The plan has no backup step, and the app's own install hooks write into the "
-    "site's database on apply: back the site up first with benchbar_site_backup when its data matters.",
+    "to the person before applying it. The plan has a backup step (the site is backed up first; the tool never skips "
+    "it), and the app's own install hooks then write into the site's database.",
     APP_INSTALL,
     lambda a: app_install_args(a) + ["--dry-run", "--json"],
     True,
@@ -970,8 +970,8 @@ TOOLS["benchbar_app_install_plan"] = (
 TOOLS["benchbar_app_install"] = (
     "Apply a plan from benchbar_app_install_plan: install the app on the site. Only call this after showing that plan "
     "to the person and getting their OK; pass the same arguments and the plan's token. The CLI makes the plan again "
-    "and refuses a token the bench no longer matches. There is no backup in this step and the app's install hooks write into the "
-    "site's database: take benchbar_site_backup first when the data matters. To get an app into the bench first, use "
+    "and refuses a token the bench no longer matches. The site is backed up first (the tool never skips it) and the app's "
+    "install hooks then write into the site's database. To get an app into the bench first, use "
     "benchbar_app_add_plan.",
     dict(APP_INSTALL, token=TOKEN),
     lambda a: app_install_args(a) + ["--apply", a["token"], "--yes", "--json"],
@@ -1017,7 +1017,9 @@ def lock_write_args(a):
 
 TOOLS["benchbar_lock_write"] = (
     "Write the team lockfile (benchbar.toml) from this bench: each app's repo, branch and commit, and the sites. It "
-    "writes one file in the bench (the old one is backed up first) and runs no code. A lockfile inside an app's "
+    "writes one file in the bench (the old one is backed up first) and runs no code. Without a person it writes only "
+    "inside the bench: a path from BENCHBAR_LOCK or one a person remembered with --lock outside the bench is refused "
+    "(the person's path stays as it is). A lockfile inside an app's "
     "repo is a change in that app, which then counts as local changes. Compare first with benchbar_lock_check. "
     "Refused while an app has local changes or a detached HEAD, unless allow_dirty.",
     LOCK_WRITE,

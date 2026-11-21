@@ -107,8 +107,9 @@ assert an["benchbar_app_update"] == {"readOnlyHint": False, "destructiveHint": T
 # the update plan runs git fetch (it writes .git/FETCH_HEAD): not read only
 assert an["benchbar_app_update_plan"] == {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}, an["benchbar_app_update_plan"]
 dd = {t["name"]: t["description"] for t in by[2]["result"]["tools"]}
-assert "benchbar_site_backup" in dd["benchbar_app_install"] and "benchbar_site_backup" in dd["benchbar_app_install_plan"], "the install says it has no backup"
-assert "no backup" in dd["benchbar_app_install"] and "git fetch" in dd["benchbar_app_update_plan"] and "read only" not in dd["benchbar_app_update_plan"]
+assert "backed up first" in dd["benchbar_app_install"] and "backup step" in dd["benchbar_app_install_plan"], "the install says a backup is taken"
+assert "no backup" not in dd["benchbar_app_install"] and "no backup" not in dd["benchbar_app_install_plan"]
+assert "git fetch" in dd["benchbar_app_update_plan"] and "read only" not in dd["benchbar_app_update_plan"]
 assert an["benchbar_app_add"] == {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}, an["benchbar_app_add"]
 assert an["benchbar_lease_take"] == {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False}, an["benchbar_lease_take"]
 for n in ("benchbar_lease_renew", "benchbar_lease_release"):

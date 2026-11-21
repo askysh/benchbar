@@ -296,6 +296,16 @@ fl_cmd_lock_write() {
   fl__lock_args "$@"
   fl_require_bench
   fl_lock_file_resolve "$LOCK_FLAG"
+  # no person to say where: BENCHBAR_LOCK and a path remembered from an earlier --lock name files that may be
+  # anywhere, so a write with nobody asking (an agent, benchbar mcp) refuses them; the remembered path stays for the person
+  if fl_noninteractive && [[ "$FL_LOCK_SOURCE" == "env" || "$FL_LOCK_SOURCE" == "state" ]]; then
+    case "$FL_LOCK_FILE" in
+      "${FL_BENCH_DIR}"/*/../*|"${FL_BENCH_DIR}"/../*|"${FL_BENCH_DIR}"/*/..) fl_die "lock write refuses ${FL_LOCK_FILE}: without a person it writes only inside the bench." "A person can run: benchbar lock write in a terminal" ;;
+      "${FL_BENCH_DIR}"/*) ;;
+      *) fl_die "lock write refuses ${FL_LOCK_FILE} (from the $([[ "$FL_LOCK_SOURCE" == env ]] && echo BENCHBAR_LOCK variable || echo "path remembered for this bench")): without a person it writes only inside the bench." \
+        "A person can run: benchbar lock write in a terminal" ;;
+    esac
+  fi
   fl_header "benchbar lock write" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
   fl_site_apps_refresh
   [[ -n "$FL_SITE_APPS_ERROR" ]] && fl_warn "${FL_SITE_APPS_ERROR}; the sites' apps come from the last good read"

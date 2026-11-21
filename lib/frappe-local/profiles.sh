@@ -1690,7 +1690,7 @@ fl_cmd_profile_remove() {
   moved="${dest}/$(basename "$what")"
   # the approval token: what moves aside and what it is (an import's file by its bytes, a subscription by its address)
   [[ -z "$sname" ]] || kind=subscription
-  pr_data="$(printf 'profile remove\n%s\n%s\n%s\n%s\n%s\n' "$name" "$kind" "$what" "$surl" "$([[ -f "$what" ]] && shasum -a 256 <"$what" | awk '{print $1}')")"
+  pr_data="$(printf 'profile remove\n%s\n%s\n%s\n%s\n%s\n' "$name" "$kind" "$what" "$surl" "$([[ -f "$what" ]] && shasum -a 256 <"$what" | awk '{print $1}'; [[ -d "$what/.git" ]] && git -C "$what" rev-parse HEAD 2>/dev/null; [[ -d "$what" ]] && { cd "$what" && find . -path ./.git -prune -o -type f -print 2>/dev/null | LC_ALL=C sort | shasum -a 256 | awk '{print $1}'; })")"
   fl_plan_token_v pr_token "$pr_data"
   if [[ "$apply" == "1" ]]; then
     tcode=0; fl_plan_token_check "$pr_data" "$token" || tcode=$?
