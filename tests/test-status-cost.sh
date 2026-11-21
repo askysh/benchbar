@@ -307,15 +307,16 @@ for loc in "$UTF8_LOC" C; do
     for s in "/Users/a b/[x](y).z*+?^\$|{}\\q" "/Users/akash/dev/frappe-bench" "/x/bénch/日本"; do
       [[ "$(fl_regex_escape "$s")" == "$(printf "%s" "$s" | sed -e "s/[][\\.*^\$+?(){}|\\\\]/\\\\&/g")" ]] || { echo "regex escape differs for $s"; exit 1; }
     done
+    # (tab, newline and the other control characters are escaped, not deleted: tests/test-json-strings.sh)
     # the reference: the sed | tr the bash reader replaced, with a whole terminal
     # control sequence removed first (0.7.3: the ESC no longer goes alone); the
     # byte ranges of that sed need the C locale
     esc="$(printf "\\033")"
-    for s in "a\\b\"c" $'"'"'tab\there\nnl\x1b[0m'"'"' "é日本 plain"; do
+    for s in "a\\b\"c" $'"'"'plain\x1b[0m'"'"' "é日本 plain"; do
       [[ "$(fl_json_escape "$s")" == "$(printf "%s" "$s" | sed -e "s/\\\\/\\\\\\\\/g" -e "s/\"/\\\\\"/g" | LC_ALL=C sed -e "s#${esc}\\[[0-?]*[ -/]*[@-~]##g" | tr -d "\\000-\\037")" ]] || { echo "json escape differs for $s"; exit 1; }
     done
     # a colored 20 KB log line (logs --json escapes every line): linear, not quadratic
-    long="$(printf "%0.s[x]" $(seq 1 5000))"$'"'"'\x1b[0m end\x01'"'"'
+    long="$(printf "%0.s[x]" $(seq 1 5000))"$'"'"'\x1b[0m end'"'"'
     SECONDS=0
     [[ "$(fl_json_escape "$long")" == "$(printf "%s" "$long" | LC_ALL=C sed -e "s#${esc}\\[[0-?]*[ -/]*[@-~]##g" | tr -d "\\000-\\037")" ]] || { echo "json escape differs for a long line"; exit 1; }
     [[ "$SECONDS" -le 2 ]] || { echo "json escape of a 20 KB line took ${SECONDS}s"; exit 1; }

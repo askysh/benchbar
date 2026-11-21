@@ -508,7 +508,7 @@ fl_git_remote_tip() {
 fl_git_remote_default() {
   FL_GR_DEFAULT=""
   fl_git_remote_run "${2:-${FL_GIT_TIMEOUT:-30}}" ls-remote --symref -- "$1" HEAD
-  [[ "$FL_GR_CODE" == "0" ]] && FL_GR_DEFAULT="$(printf '%s\n' "$FL_GR_OUT" | awk '$1 == "ref:" && $3 == "HEAD" {sub(/^refs\/heads\//, "", $2); print $2; exit}')"
+  [[ "$FL_GR_CODE" == "0" ]] && FL_GR_DEFAULT="$(printf '%s\n' "$FL_GR_OUT" | awk '$1 == "ref:" && $3 == "HEAD" && !f {sub(/^refs\/heads\//, "", $2); print $2; f = 1}')"
   return "$FL_GR_CODE"
 }
 
