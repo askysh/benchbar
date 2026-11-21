@@ -306,10 +306,15 @@ fl_sq() { local q="'"; printf "'%s'" "${1//$q/$q\\$q$q}"; }
 
 # ---------------------------------------------------------------- JSON
 
-# fl_json_escape_v VAR TEXT: TEXT with backslashes and quotes escaped and
-# control characters (terminal colors in logs) dropped, as a JSON string
-# needs; in bash, the same bytes `sed | tr -d '\000-\037'` gave. The control
-# characters are listed one by one: a range in bash 3.2 follows the locale.
+# fl_json_escape_v VAR TEXT: TEXT as the inside of a JSON string. Backslash
+# and quote are escaped; a newline, tab and carriage return go as \n, \t and
+# \r; a terminal color code (ESC [ ... final byte) is dropped whole, and so are
+# the internal marks \034 \036 \037 (FL_FIXQ and the row separators); any other
+# control character goes as \u00XX; a byte that is not part of a valid UTF-8
+# character becomes U+FFFD (Python's json.loads and Swift's JSONDecoder refuse
+# a document with one). The control characters are listed one by one: a range
+# in bash 3.2 follows the locale, so the whole function runs under LC_ALL=C
+# (bytes, not characters, as under launchd).
 FL_JSON_CTRL=$'\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037'
 # a whole terminal control sequence: ESC [ parameters (0x30-0x3F)
 # intermediates (0x20-0x2F) final byte (0x40-0x7E). The sets are spelled
@@ -331,9 +336,81 @@ fl__json_csi_len_v() {
   [[ -n "$__csi_c" && "$FL_JSON_CSI_FINAL" == *"$__csi_c"* ]] && __csi_k=$((__csi_k + 1))
   printf -v "$1" '%s' "$__csi_k"
 }
+# fl__json_byte_v VAR CHAR: the value 0-255 of the one byte CHAR (bash 3.2's
+# printf "'c" sign extends a byte above 127, so it is masked). Run under LC_ALL=C.
+fl__json_byte_v() {
+  local __jb
+  printf -v __jb '%d' "'$2"
+  printf -v "$1" '%s' "$((__jb & 255))"
+}
+# fl__json_utf8_v VAR TEXT: TEXT with every byte that is not part of a valid
+# UTF-8 character (overlong forms, surrogates, above U+10FFFF, a lone or cut
+# lead or continuation byte) replaced by U+FFFD. Run under LC_ALL=C. The loop
+# runs once per run of non-ASCII bytes, so a plain string costs one test.
+fl__json_utf8_v() {
+  local __u_s="$2" __u_o="" __u_p __u_b __u_n __u_lo __u_hi __u_i __u_ok __u_c
+  while [[ "$__u_s" == *[![:print:][:cntrl:]]* ]]; do
+    __u_p="${__u_s%%[![:print:][:cntrl:]]*}"
+    __u_o="${__u_o}${__u_p}"
+    __u_s="${__u_s:${#__u_p}}"
+    fl__json_byte_v __u_b "${__u_s:0:1}"
+    __u_n=0 __u_lo=128 __u_hi=191
+    if [[ "$__u_b" -ge 194 && "$__u_b" -le 223 ]]; then __u_n=1
+    elif [[ "$__u_b" -ge 224 && "$__u_b" -le 239 ]]; then
+      __u_n=2
+      [[ "$__u_b" -ne 224 ]] || __u_lo=160
+      [[ "$__u_b" -ne 237 ]] || __u_hi=159
+    elif [[ "$__u_b" -ge 240 && "$__u_b" -le 244 ]]; then
+      __u_n=3
+      [[ "$__u_b" -ne 240 ]] || __u_lo=144
+      [[ "$__u_b" -ne 244 ]] || __u_hi=143
+    fi
+    __u_ok=0
+    if [[ "$__u_n" -gt 0 && "${#__u_s}" -gt "$__u_n" ]]; then
+      __u_ok=1 __u_i=1
+      while [[ "$__u_i" -le "$__u_n" ]]; do
+        fl__json_byte_v __u_c "${__u_s:$__u_i:1}"
+        if [[ "$__u_c" -lt "$__u_lo" || "$__u_c" -gt "$__u_hi" ]]; then __u_ok=0; break; fi
+        __u_lo=128 __u_hi=191
+        __u_i=$((__u_i + 1))
+      done
+    fi
+    if [[ "$__u_ok" == 1 ]]; then
+      __u_o="${__u_o}${__u_s:0:$((__u_n + 1))}"; __u_s="${__u_s:$((__u_n + 1))}"
+    else
+      __u_o="${__u_o}"$'\357\277\275'; __u_s="${__u_s:1}"
+    fi
+  done
+  printf -v "$1" '%s' "${__u_o}${__u_s}"
+}
+# fl_json_cut_v VAR TEXT MAX: at most MAX bytes of TEXT, cut at a character
+# boundary: a UTF-8 character the cut would split is dropped whole (a slice
+# like ${msg:0:500} counts bytes under launchd's C locale and could leave half
+# a character, an invalid string)
+fl_json_cut_v() {
+  local LC_ALL=C __c_s="$2" __c_n="$3" __c_b __c_k=0 __c_l
+  if [[ "${#__c_s}" -le "$__c_n" ]]; then printf -v "$1" '%s' "$__c_s"; return 0; fi
+  __c_b="${__c_s:$__c_n:1}"
+  __c_s="${__c_s:0:$__c_n}"
+  if [[ "$__c_b" == [![:print:][:cntrl:]] ]]; then
+    fl__json_byte_v __c_b "$__c_b"
+    # the first byte cut off is a continuation: the cut is inside a character, so
+    # drop the bytes of it that were kept (its lead byte and what follows it)
+    if [[ "$__c_b" -ge 128 && "$__c_b" -le 191 ]]; then
+      while [[ "$__c_k" -lt 4 && -n "$__c_s" ]]; do
+        __c_l="${__c_s: -1}"; __c_s="${__c_s%?}"; __c_k=$((__c_k + 1))
+        [[ "$__c_l" == [![:print:][:cntrl:]] ]] || break
+        fl__json_byte_v __c_l "$__c_l"
+        [[ "$__c_l" -ge 128 && "$__c_l" -le 191 ]] || break
+      done
+    fi
+  fi
+  printf -v "$1" '%s' "$__c_s"
+}
 fl_json_escape_v() {
-  local __e="$2" __o="" __p __n
+  local LC_ALL=C __e="$2" __o="" __p __n __b
   # nothing to escape (almost every value): no substitutions, no loop
+  if [[ "$__e" == *[![:print:][:cntrl:]]* ]]; then fl__json_utf8_v __e "$__e"; fi
   if [[ "$__e" != *[\\\"$FL_JSON_CTRL]* ]]; then printf -v "$1" '%s' "$__e"; return 0; fi
   __e="${__e//\\/\\\\}"
   __e="${__e//\"/\\\"}"
@@ -346,7 +423,17 @@ fl_json_escape_v() {
     __o="${__o}${__p}"
     __e="${__e:${#__p}}"
     fl__json_csi_len_v __n "$__e"
-    if [[ "$__n" -gt 0 ]]; then __e="${__e:$__n}"; else __e="${__e:1}"; fi
+    if [[ "$__n" -gt 0 ]]; then __e="${__e:$__n}"; continue; fi
+    case "${__e:0:1}" in
+      $'\n') __o="${__o}\\n" ;;
+      $'\t') __o="${__o}\\t" ;;
+      $'\r') __o="${__o}\\r" ;;
+      # the marks the code puts in its own strings (fl_fix_cmd's, the doctor jobs' and the check rows' separators)
+      # never reach a document
+      $'\034'|$'\036'|$'\037') ;;
+      *) fl__json_byte_v __b "${__e:0:1}"; printf -v __b '\\u%04x' "$__b"; __o="${__o}${__b}" ;;
+    esac
+    __e="${__e:1}"
   done
   printf -v "$1" '%s' "${__o}${__e}"
 }
@@ -360,16 +447,27 @@ fl_json_escape() {
 # fl_json_str_v VAR VALUE, fl_json_num_v and fl_json_bool_v put the JSON
 # for VALUE into VAR without the subshell of "$(fl_json_str ...)": status and
 # list build their documents with them, dozens of values per call.
+# An empty string is null here: "no value" (docs/json-schema.md, "Strings and
+# numbers"). fl_json_text_v keeps "" for a field the schema types as a string
+# that can be empty.
 fl_json_str_v() {
   local __s="$2"
   if [[ -z "$__s" ]]; then printf -v "$1" 'null'; return 0; fi
   fl_json_escape_v __s "$__s"
   printf -v "$1" '"%s"' "$__s"
 }
+fl_json_text_v() {
+  local __s="$2"
+  fl_json_escape_v __s "$__s"
+  printf -v "$1" '"%s"' "$__s"
+}
 
+# fl_json_num_v VAR VALUE: VALUE when it is a JSON integer (-?(0|[1-9][0-9]*)),
+# else null: "1-2", "--", "007", "1.5" and "" are not numbers
 fl_json_num_v() {
-  case "$2" in
-    ''|-|*[!0-9-]*) printf -v "$1" 'null' ;;
+  local __n="${2#-}"
+  case "$__n" in
+    ''|*[!0-9]*|0?*) printf -v "$1" 'null' ;;
     *) printf -v "$1" '%s' "$2" ;;
   esac
 }
@@ -379,7 +477,10 @@ fl_json_bool_v() {
 }
 
 fl_json_str() { local j; fl_json_str_v j "$1"; printf '%s' "$j"; }
+fl_json_text() { local j; fl_json_text_v j "$1"; printf '%s' "$j"; }
 fl_json_num() { local j; fl_json_num_v j "$1"; printf '%s' "$j"; }
+# fl_json_error TEXT: an error message for the document, at most 500 bytes
+fl_json_error() { local j; fl_json_cut_v j "$1" 500; fl_json_str "$j"; }
 fl_json_bool() { local j; fl_json_bool_v j "$1"; printf '%s' "$j"; }
 
 # ---------------------------------------------------------------- JSON lines
@@ -437,11 +538,12 @@ fl_log_step_message() {
 fl_jsonl_step() {
   [[ "$FL_JSONL" == "1" ]] || return 0
   local n p f msg="${7:-}"
+  fl_json_cut_v msg "$msg" 1000
   fl_json_num_v n "$1"
   fl_json_str_v p "$3"
   f=",\"n\":${n},\"id\":$(fl_json_str "$2"),\"parent\":${p},\"name\":$(fl_json_str "$4"),\"status\":\"$5\""
   [[ -z "${6:-}" ]] || f="${f},\"secs\":$6"
-  [[ -z "$msg" ]] || f="${f},\"message\":$(fl_json_str "${msg:0:1000}")"
+  [[ -z "$msg" ]] || f="${f},\"message\":$(fl_json_str "$msg")"
   [[ -z "${8:-}" ]] || f="${f},\"command\":$(fl_json_str "$8")"
   [[ "$5" != "running" ]] || FL_JSONL_CUR="$2"
   fl_jsonl step "$f"
@@ -473,7 +575,9 @@ FL_DONE_NEXT_N=0
 fl_done_warning_add() {
   [[ "$FL_DONE_WARNINGS_N" -lt 50 ]] || return 0
   FL_DONE_WARNINGS_N=$((FL_DONE_WARNINGS_N + 1))
-  FL_DONE_WARNINGS="${FL_DONE_WARNINGS}${FL_DONE_WARNINGS:+,}$(fl_json_str "${1:0:500}")"
+  local __w
+  fl_json_cut_v __w "$1" 500
+  FL_DONE_WARNINGS="${FL_DONE_WARNINGS}${FL_DONE_WARNINGS:+,}$(fl_json_str "$__w")"
 }
 
 # A fix built by fl_fix_cmd (every word shell quoted, one plain command, an optional `cd DIR &&` before
@@ -515,10 +619,12 @@ fl_fix_quoted_json() { if fl_fix_marked "$1"; then printf true; else printf fals
 fl_next_action() {
   [[ "$FL_DONE_NEXT_N" -lt 20 ]] || return 0
   FL_DONE_NEXT_N=$((FL_DONE_NEXT_N + 1))
-  local __c __q=""
+  local __c __q="" __y
   fl_fix_plain_v __c "$1"
   if fl_fix_marked "$1" && [[ "${#__c}" -le 500 ]]; then __q=',"quoted":true'; fi
-  FL_DONE_NEXT="${FL_DONE_NEXT}${FL_DONE_NEXT:+,}{\"command\":$(fl_json_str "${__c:0:500}"),\"why\":$(fl_json_str "${2:0:500}")${__q}}"
+  fl_json_cut_v __c "$__c" 500
+  fl_json_cut_v __y "${2:-}" 500
+  FL_DONE_NEXT="${FL_DONE_NEXT}${FL_DONE_NEXT:+,}{\"command\":$(fl_json_str "$__c"),\"why\":$(fl_json_str "$__y")${__q}}"
 }
 
 # fl_done_mark_v VAR: where warnings[] and next_actions[] stand now, for fl_done_forget
@@ -670,14 +776,14 @@ fl_read_env_finish() {
     if [[ "$FL_DOC_ENVELOPED" != "1" ]]; then
       tail=",\"exit\":${code}"
       # a failing read that printed its findings (doctor, lock check) has no error of its own
-      [[ "$code" == "0" || "$doc" == *'"error":'* ]] || tail="${tail},\"error\":$(fl_json_str "${err:0:500}")"
+      [[ "$code" == "0" || "$doc" == *'"error":'* ]] || tail="${tail},\"error\":$(fl_json_error "$err")"
       doc="${doc%\}}${tail}}"
     fi
     printf '%s\n' "$doc"
   else
     # nothing was printed: the run failed (or had nothing to say) before its document
     tail="\"exit\":${code}"
-    [[ "$code" == "0" ]] || tail="${tail},\"error\":$(fl_json_str "${err:0:500}")"
+    [[ "$code" == "0" ]] || tail="${tail},\"error\":$(fl_json_error "$err")"
     printf '{"schema_version":%d,"cli_version":"%s",%s,"warnings":[%s],"next_actions":[%s]}\n' \
       "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$tail" "$FL_DONE_WARNINGS" "$FL_DONE_NEXT"
   fi
@@ -928,29 +1034,36 @@ fl_header() {
 }
 
 # fl_table ROW... where ROW is "col1|col2|col3"; first row is the heading.
+# A cell that can hold a "|" (a path) goes through fl_cell_v first, which writes
+# it as "\|": that one is text, not a column break.
+fl_cell_v() { local __c="$2"; printf -v "$1" '%s' "${__c//|/\\|}"; }
 fl_table() {
-  local row ncols=0 i w widths=() cells
+  local row ncols=0 i w widths=() cells pipe=$'\001'
   fl_spinner_pause
   for row in "$@"; do
+    row="${row//\\|/$pipe}"
     IFS='|' read -r -a cells <<<"$row"
     [[ "${#cells[@]}" -gt "$ncols" ]] && ncols="${#cells[@]}"
     i=0
     for w in "${cells[@]}"; do
+      w="${w//$pipe/|}"
       if [[ -z "${widths[$i]:-}" || "${#w}" -gt "${widths[$i]}" ]]; then widths[i]="${#w}"; fi
       i=$((i + 1))
     done
   done
   local first=1
   for row in "$@"; do
+    fl_log "  ${row//\\|/|}"
+    row="${row//\\|/$pipe}"
     IFS='|' read -r -a cells <<<"$row"
     printf '  '
     i=0
     for w in "${cells[@]}"; do
+      w="${w//$pipe/|}"
       if [[ "$first" == "1" ]]; then printf '%s%-*s%s  ' "$FL_BOLD" "${widths[$i]}" "$w" "$FL_RESET"; else printf '%-*s  ' "${widths[$i]}" "$w"; fi
       i=$((i + 1))
     done
     printf '\n'
-    fl_log "  $row"
     first=0
   done
 }

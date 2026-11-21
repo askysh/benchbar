@@ -556,7 +556,7 @@ fl_list_entry_json() {
 
 # fl_cmd_list JSON: the default bench is the one commands use without --bench-dir.
 fl_cmd_list() {
-  local json="${1:-0}" default="" d sep="" rows=() benches=() is_default
+  local json="${1:-0}" default="" d sep="" rows=() benches=() is_default cell_name cell_site cell_dir
   fl_bench_detect "${OPT_BENCH_DIR:-}"
   fl_is_bench_dir "$FL_BENCH_DIR" && default="$FL_BENCH_DIR"
   while IFS= read -r d; do
@@ -584,7 +584,8 @@ fl_cmd_list() {
   for d in "${benches[@]}"; do
     fl_bench_load "$d"
     is_default=""; [[ "$d" == "$default" ]] && is_default=" (default)"
-    rows+=("${FL_BENCH_NAME}${is_default}|${FL_SITE}|${FL_WEB_PORT}|${FL_BENCH_DIR}")
+    fl_cell_v cell_name "${FL_BENCH_NAME}${is_default}"; fl_cell_v cell_site "$FL_SITE"; fl_cell_v cell_dir "$FL_BENCH_DIR"
+    rows+=("${cell_name}|${cell_site}|${FL_WEB_PORT}|${cell_dir}")
   done
   fl_table "${rows[@]}"
 }
