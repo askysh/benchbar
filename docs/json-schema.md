@@ -1916,7 +1916,7 @@ owed, else `{"retried":bool,"wiped":N|null,"wipe_failed":M|null}`.
 | `share people`, `share devices` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` (`devices` is another name for `people`) |
 | `share remove`, `share revoke` (done) | `device`, `name`, `removed`, `new_code` (a bool, never the code) |
 | `share assign` (done) | `device`, `name`, `seat_id`, `seat_full_name` |
-| `share log` | `entries`: `[{ts, device, user, method, path, status}]`, `truncated` |
+| `share log` | `entries`: `[{ts, device, user, method, path, status}]`, `truncated`. `user` is the seat's name (its id when the room no longer has the seat); a line written by 0.8.3 holds the e-mail address of the seat's user until it is 14 days old |
 | `share open-as` | `user`, `page`, `opened`: never the link or the session id, even with `--print-url` |
 | `share teardown` (done) | `copy_dropped`, `archived_path`, `state_removed` |
 

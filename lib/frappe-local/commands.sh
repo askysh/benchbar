@@ -267,7 +267,7 @@ cmd~share log~benchbar share log [--device ID] [--since TIME] [--limit N] [--jso
 flag~share log~--device~ID~Only this Mac (an id of share people).
 flag~share log~--since~TIME~Only entries at or after it: ISO 8601, YYYY-MM-DD HH:MM:SS, a date, or HH:MM:SS today.
 flag~share log~--limit~N~The newest N entries, 1 to 5000. Default: 200.
-flag~share log~--json~~One document: entries (ts, device, user, method, path, status) and truncated.
+flag~share log~--json~~One document: entries (ts, device, user, method, path, status) and truncated. user is the seat's name (the seat's id when the room no longer has the seat), never an e-mail address but in a line written by 0.8.3.
 cmd~share open-as~benchbar share open-as USER [--print-url] [--json]~Open the shared copy in this Mac's browser signed in as a seat, the way open --as does. Needs sharing on; never a user who is not a seat or can run code. Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal (the app passes BENCHBAR_SUDO=gui).~yes~no~no~yes~document
 flag~share open-as~--print-url~~Print the sign-in link instead of opening it; it holds the session.
 flag~share open-as~--json~~One document without the link (never the session).

@@ -83,7 +83,8 @@ test("hello carries the documented fields and no secret; a new code changes the 
     const { room } = makeRoom();
     const h = room.hello();
     assert.deepStrictEqual(Object.keys(h), ["v", "room", "host", "site", "salt", "locked", "full", "people", "seats"]);
-    assert.deepStrictEqual([h.v, h.room, h.host, h.site, h.locked, h.full, h.people, h.seats], [3, "Standup", "Host Mac", "macdev", false, false, 0, 4]);
+    // SHARE-7: the hello is answered before any join, so it does not name the source site
+    assert.deepStrictEqual([h.v, h.room, h.host, h.site, h.locked, h.full, h.people, h.seats], [3, "Standup", "Host Mac", "", false, false, 0, 4]);
     assert.match(h.salt, /^[0-9a-f]{32}$/);
     assert.ok(!JSON.stringify(h).includes(room.code().code) || room.code().code.length < 6);
     room.rotate();
