@@ -37,26 +37,6 @@ FL_SELFUPDATE_CASK_CMD="brew upgrade askysh/tap/benchbar-app"
 # where a cask may have installed the app, after this Mac's own prefix (tests set it)
 FL_SELFUPDATE_CASK_PREFIXES="${FL_SELFUPDATE_CASK_PREFIXES:-/opt/homebrew /usr/local}"
 
-# fl_version_lt A B: true when version A is older than B ("v0.5.8" < "0.6.0",
-# 0.10 after 0.9, a prerelease before its release)
-fl_version_lt() {
-  local a="${1#v}" b="${2#v}" pa="" pb="" x y i
-  [[ "$a" == *-* ]] && { pa="${a#*-}"; a="${a%%-*}"; }
-  [[ "$b" == *-* ]] && { pb="${b#*-}"; b="${b%%-*}"; }
-  local -a na nb
-  IFS=. read -r -a na <<<"$a"
-  IFS=. read -r -a nb <<<"$b"
-  for ((i = 0; i < ${#na[@]} || i < ${#nb[@]}; i++)); do
-    x="${na[i]:-0}"; y="${nb[i]:-0}"
-    [[ "$x" =~ ^[0-9]+$ && "$y" =~ ^[0-9]+$ ]] || return 1
-    ((10#$x < 10#$y)) && return 0
-    ((10#$x > 10#$y)) && return 1
-  done
-  [[ -n "$pa" && -z "$pb" ]] && return 0
-  [[ -n "$pa" && -n "$pb" && "$pa" < "$pb" ]] && return 0
-  return 1
-}
-
 # fl_selfupdate_latest: "TAG<TAB>PAGE" of the latest GitHub release, or return 1
 fl_selfupdate_latest() {
   local json tag page
@@ -408,4 +388,24 @@ fl_cli_version_at() {
     if [[ "$line" =~ ^FL_VERSION=\"(.*)\"$ ]]; then printf '%s\n' "${BASH_REMATCH[1]}"; return 0; fi
   done <"$1"
   return 0
+}
+
+# fl_handoff_via_v VAR: the version of the copy that handed off to this run
+# (Homebrew's or the installer's, FL_HANDOFF_FROM), or nothing: no hand off,
+# or a copy whose version cannot be read
+fl_handoff_via_v() {
+  local __s=""
+  printf -v "$1" '%s' ""
+  [[ -n "${FL_HANDOFF_FROM:-}" ]] || return 0
+  __s="$(fl_cli_standalone_script "$FL_HANDOFF_FROM")"
+  [[ -z "$__s" || ! -f "$__s" ]] || printf -v "$1" '%s' "$(fl_cli_version_at "$__s")"
+}
+
+# fl_handoff_newer_hint VERSION: one line for --version and where when the copy
+# that handed off (at VERSION) is newer than this CLI, else nothing. The hand
+# off still happens: one CLI version works on the state, the app's, so the app
+# is what is behind (doctor's Second CLI check says the same).
+fl_handoff_newer_hint() {
+  [[ -n "${1:-}" ]] && fl_version_lt "${FL_VERSION:-0}" "$1" || return 0
+  printf 'it is newer than this CLI (%s), which runs in its place until the app updates: Check for Updates in BenchBar, or: %s\n' "${FL_VERSION:-0}" "$FL_SELFUPDATE_CASK_CMD"
 }

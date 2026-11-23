@@ -442,7 +442,6 @@ fl_ports_json_v() {
   printf -v "$1" '{"web":%s,"socketio":%s,"redis_queue":%s,"redis_socketio":%s,"redis_cache":%s}' \
     "$FL_WEB_PORT" "$FL_SOCKETIO_PORT" "$FL_REDIS_QUEUE_PORT" "${FL_REDIS_SOCKETIO_PORT:-$FL_REDIS_CACHE_PORT}" "$FL_REDIS_CACHE_PORT"
 }
-fl_ports_json() { local j; fl_ports_json_v j; printf '%s' "$j"; }
 
 # ---------------------------------------------------------------- list
 

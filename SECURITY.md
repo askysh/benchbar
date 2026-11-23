@@ -60,7 +60,8 @@ exploitable:
   states in [How sharing keeps your bench safe](docs/concepts/sharing-safety.md),
   are not bugs.
 - **Labs.** A Lab that is off must stay off: its commands refuse to run, and
-  `BENCHBAR_LABS` cannot turn on a Lab the platform does not list.
+  no environment variable turns one on (`BENCHBAR_LABS` is read by the test
+  suite only, under `FL_TESTING=1`).
 - **Open as.** A sign in as another user on a site where the person has not
   turned Open as on, turning it on without a person (`site open-as on` is
   refused under `--for-agent` and `benchbar mcp`), or a login link
