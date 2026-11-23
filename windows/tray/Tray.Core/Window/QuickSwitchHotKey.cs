@@ -158,6 +158,11 @@ public sealed class QuickSwitchHotKey(TrayConfig config, IHotKeyRegistrar regist
 {
     internal const int HotKeyId = 0x4251;
 
+    /// <summary>The second id: a change registers the new key under the id not in use, so the old key is never given up before the new one is held.</summary>
+    internal const int HotKeyIdAlt = HotKeyId + 1;
+
+    private int _id = HotKeyId;
+
     private bool _paused;
     private bool _registered;
 
@@ -177,7 +182,7 @@ public sealed class QuickSwitchHotKey(TrayConfig config, IHotKeyRegistrar regist
     /// <summary>The window procedure calls this for WM_HOTKEY; true when it was ours.</summary>
     public bool Handle(int id)
     {
-        if (id != HotKeyId) return false;
+        if (id != HotKeyId && id != HotKeyIdAlt) return false;
         Pressed?.Invoke();
         return true;
     }
@@ -205,14 +210,16 @@ public sealed class QuickSwitchHotKey(TrayConfig config, IHotKeyRegistrar regist
         var old = Chord;
         if (Enabled && !_paused && chord != old)
         {
-            Unregister();
-            if (!registrar.Register(HotKeyId, chord))
+            var next = _id == HotKeyId ? HotKeyIdAlt : HotKeyId;
+            if (!registrar.Register(next, chord))
             {
-                _registered = registrar.Register(HotKeyId, old); // the old key stays
+                // the old key was never released, so it is still held (when it was)
                 Message = UiText.Format("HotKeyTaken", chord.Text, old.Text);
                 Changed?.Invoke();
                 return false;
             }
+            Unregister();
+            _id = next;
             _registered = true;
         }
         config.QuickSwitchHotKey = chord.Text;
@@ -242,7 +249,7 @@ public sealed class QuickSwitchHotKey(TrayConfig config, IHotKeyRegistrar regist
         Unregister();
         if (Enabled && !_paused)
         {
-            _registered = registrar.Register(HotKeyId, Chord);
+            _registered = registrar.Register(_id, Chord);
             Message = _registered ? null : UiText.Format("HotKeyTakenAtStart", Chord.Text);
         }
         Changed?.Invoke();
@@ -251,7 +258,7 @@ public sealed class QuickSwitchHotKey(TrayConfig config, IHotKeyRegistrar regist
     private void Unregister()
     {
         if (!_registered) return;
-        registrar.Unregister(HotKeyId);
+        registrar.Unregister(_id);
         _registered = false;
     }
 

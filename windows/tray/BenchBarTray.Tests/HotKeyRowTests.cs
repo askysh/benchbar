@@ -16,16 +16,18 @@ public class HotKeyRowTests : IDisposable
     private sealed class Registrar : IHotKeyRegistrar
     {
         public HashSet<string> Taken { get; } = [];
-        public HotKeyChord? Held { get; private set; }
+        private readonly Dictionary<int, HotKeyChord> _held = [];
+
+        public HotKeyChord? Held => _held.Count == 0 ? null : _held.Values.Single();
 
         public bool Register(int id, HotKeyChord chord)
         {
             if (Taken.Contains(chord.Text)) return false;
-            Held = chord;
+            _held[id] = chord;
             return true;
         }
 
-        public void Unregister(int id) => Held = null;
+        public void Unregister(int id) => _held.Remove(id);
     }
 
     private (HotKeyRow Row, QuickSwitchHotKey HotKey, Registrar Registrar) Make()
@@ -109,6 +111,59 @@ public class HotKeyRowTests : IDisposable
         row.EndRecording();
         Assert.Equal(HotKeyChord.Default, registrar.Held);
         Assert.Equal("Ctrl+Alt+U", row.RecordButton.Content);
+    });
+
+    [Fact]
+    public void EscWhileRecordingKeepsTheCurrentShortcutAndRegistersItAgain() => Sta.Run(() =>
+    {
+        var (row, hotKey, registrar) = Make();
+        hotKey.SetEnabled(true);
+        row.RecordButton.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Assert.Null(registrar.Held);
+
+        row.Press(System.Windows.Input.Key.LeftCtrl, System.Windows.Input.ModifierKeys.Control); // a modifier alone is waited out
+        Assert.True(row.Recording);
+        row.Press(System.Windows.Input.Key.Escape, System.Windows.Input.ModifierKeys.None);
+        Assert.False(row.Recording);
+        Assert.Equal(HotKeyChord.Default, registrar.Held);
+        Assert.Equal("Ctrl+Alt+U", row.RecordButton.Content);
+    });
+
+    [Fact]
+    public void AKeyPressedWhileRecordingWithTheModifiersHeldIsRecorded() => Sta.Run(() =>
+    {
+        var (row, hotKey, registrar) = Make();
+        hotKey.SetEnabled(true);
+        row.RecordButton.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        row.Press(System.Windows.Input.Key.K, System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Alt);
+        Assert.Equal("Ctrl+Alt+K", row.RecordButton.Content);
+        Assert.Equal(new HotKeyChord(HotKeyModifiers.Ctrl | HotKeyModifiers.Alt, 'K'), registrar.Held);
+    });
+
+    [Fact]
+    public void ClosingTheRowWhileRecordingGivesTheKeyBack() => Sta.Run(() =>
+    {
+        var (row, hotKey, registrar) = Make();
+        hotKey.SetEnabled(true);
+        row.RecordButton.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Assert.Null(registrar.Held);
+        row.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.FrameworkElement.UnloadedEvent));
+        Assert.False(row.Recording);
+        Assert.Equal(HotKeyChord.Default, registrar.Held);
+    });
+
+    [Fact]
+    public void TheMessageWindowExistsOnlyWhileAKeyIsRegistered() => Sta.Run(() =>
+    {
+        using var host = new HotKeyHost();
+        Assert.False(host.HasWindow);
+        var chord = new HotKeyChord(HotKeyModifiers.Ctrl | HotKeyModifiers.Alt | HotKeyModifiers.Shift, 0x87); // F24: nobody has it
+        if (host.Register(1, chord))
+        {
+            Assert.True(host.HasWindow);
+            host.Unregister(1);
+        }
+        Assert.False(host.HasWindow); // a failed first register leaves none either
     });
 
     [Fact]

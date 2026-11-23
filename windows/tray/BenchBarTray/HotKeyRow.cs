@@ -92,11 +92,16 @@ internal sealed class HotKeyRow : StackPanel
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
         if (!_recording) return;
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
         e.Handled = true;
+        Press(e.Key == Key.System ? e.SystemKey : e.Key, Keyboard.Modifiers);
+    }
+
+    /// <summary>A key went down while recording, with the modifiers held: a modifier alone is waited out, Esc alone ends, anything else is the chord.</summary>
+    internal void Press(Key key, ModifierKeys held)
+    {
+        if (!_recording) return;
         if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin or Key.None or Key.DeadCharProcessed) return;
         var mods = HotKeyModifiers.None;
-        var held = Keyboard.Modifiers;
         if (held.HasFlag(ModifierKeys.Control)) mods |= HotKeyModifiers.Ctrl;
         if (held.HasFlag(ModifierKeys.Alt)) mods |= HotKeyModifiers.Alt;
         if (held.HasFlag(ModifierKeys.Shift)) mods |= HotKeyModifiers.Shift;

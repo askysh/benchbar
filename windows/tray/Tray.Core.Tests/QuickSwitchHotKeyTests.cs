@@ -7,23 +7,29 @@ public class QuickSwitchHotKeyTests
 {
     private sealed class FakeRegistrar : IHotKeyRegistrar
     {
+        private readonly Dictionary<int, HotKeyChord> _held = [];
+
         public HashSet<string> Taken { get; } = [];
-        public HotKeyChord? Held { get; private set; }
         public List<string> Log { get; } = [];
+
+        /// <summary>The one key held now (null when none); two held at once is only ever the instant of a change.</summary>
+        public HotKeyChord? Held => _held.Count == 0 ? null : _held.Values.Single();
+
+        public int HeldCount => _held.Count;
 
         public bool Register(int id, HotKeyChord chord)
         {
-            Log.Add("register " + chord.Text);
+            Log.Add($"register {id} {chord.Text}");
+            Assert.False(_held.ContainsKey(id)); // an id is never registered twice
             if (Taken.Contains(chord.Text)) return false;
-            Assert.Null(Held); // the tray holds one key at a time
-            Held = chord;
+            _held[id] = chord;
             return true;
         }
 
         public void Unregister(int id)
         {
-            Log.Add("unregister");
-            Held = null;
+            Log.Add($"unregister {id}");
+            _held.Remove(id);
         }
     }
 
@@ -84,6 +90,17 @@ public class QuickSwitchHotKeyTests
         Assert.Contains("Add Alt", HotKeyRules.Refusal(Chord(Ctrl, key)));
         Assert.Contains("Add Alt", HotKeyRules.Refusal(Chord(Ctrl | Shift, key)));
         Assert.Null(HotKeyRules.Refusal(Chord(Ctrl | Alt, key)));
+    }
+
+    [Fact]
+    public void AltF4AndAltSpaceAreRefusedWithOrWithoutShift()
+    {
+        foreach (var vk in new uint[] { 0x73, 0x20 })
+        {
+            Assert.NotNull(HotKeyRules.Refusal(new HotKeyChord(Alt, vk)));
+            Assert.NotNull(HotKeyRules.Refusal(new HotKeyChord(Alt | Shift, vk)));
+            Assert.Null(HotKeyRules.Refusal(new HotKeyChord(Ctrl | Alt, vk))); // with Ctrl it is not the system's
+        }
     }
 
     [Fact]
@@ -177,6 +194,31 @@ public class QuickSwitchHotKeyTests
 
         Assert.True(hotKey.TryChange(Chord(Ctrl | Alt, 'J')));
         Assert.Null(hotKey.Message);
+    }
+
+    [Fact]
+    public void ANewKeyIsHeldBeforeTheOldOneIsGivenUpSoNoOtherAppCanTakeItInBetween()
+    {
+        var (hotKey, registrar, _, _) = Make();
+        hotKey.SetEnabled(true);
+        registrar.Log.Clear();
+        Assert.True(hotKey.TryChange(Chord(Ctrl | Alt, 'K')));
+        Assert.Equal([$"register {QuickSwitchHotKey.HotKeyIdAlt} Ctrl+Alt+K", $"unregister {QuickSwitchHotKey.HotKeyId}"], registrar.Log);
+        Assert.Equal(1, registrar.HeldCount);
+
+        registrar.Log.Clear();
+        Assert.True(hotKey.TryChange(Chord(Ctrl | Alt, 'J'))); // the ids alternate
+        Assert.Equal([$"register {QuickSwitchHotKey.HotKeyId} Ctrl+Alt+J", $"unregister {QuickSwitchHotKey.HotKeyIdAlt}"], registrar.Log);
+        Assert.True(hotKey.Handle(QuickSwitchHotKey.HotKeyId));
+
+        // and a refused new key never lets go of the old one
+        registrar.Taken.Add("Ctrl+Alt+H");
+        registrar.Log.Clear();
+        Assert.False(hotKey.TryChange(Chord(Ctrl | Alt, 'H')));
+        Assert.Equal([$"register {QuickSwitchHotKey.HotKeyIdAlt} Ctrl+Alt+H"], registrar.Log);
+        Assert.Equal(Chord(Ctrl | Alt, 'J'), registrar.Held);
+        Assert.True(hotKey.Active);
+        Assert.Contains("Ctrl+Alt+J stays", hotKey.Message);
     }
 
     [Fact]
