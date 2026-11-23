@@ -172,7 +172,7 @@ struct WizardRunTests {
         await base.waitUntil { !run.isPolling }
         #expect(!run.isPolling)
         let count = base.cli.calls.filter { $0.first == "doctor" }.count
-        try await Task.sleep(for: .milliseconds(120))
+        await drainMainQueue()
         #expect(base.cli.calls.filter { $0.first == "doctor" }.count == count, "no more calls once the row passes")
     }
 

@@ -30,7 +30,7 @@ struct SharingTab: View {
                     if status.isOn { roomSection(status) }
                     noticesSection(status)
                     // a bench never set up fails every check by definition; the list is for after setup
-                    if SharePrimary.from(status) != .setUp && SharePrimary.from(status) != .finishSetup { checksSection(status) }
+                    if !SharePrimary.from(status).isSetUp { checksSection(status) }
                     if let copy = status.copy { copySection(copy, status: status) }
                     if status.isOn { peopleSection(status) ; activitySection }
                 }
@@ -56,20 +56,22 @@ struct SharingTab: View {
     @ViewBuilder
     private func primarySection(_ status: ShareStatus) -> some View {
         Section {
-            Text(SharePrimary.from(status) == .setUp || SharePrimary.from(status) == .finishSetup ? SharePresentation.setUpIntro : SharePresentation.liveUpdates)
+            let primary = SharePrimary.from(status)
+            Text(primary.isSetUp ? SharePresentation.setUpIntro : SharePresentation.liveUpdates)
                 .foregroundStyle(.secondary)
             HStack {
                 if status.isOn {
                     Text(SharePresentation.indicator(status))
                     Spacer()
+                    let extendOptions = SharePresentation.extendOptions(canExtendS: status.canExtendS)
                     Menu("Extend") {
-                        ForEach(SharePresentation.extendOptions(canExtendS: status.canExtendS), id: \.minutes) { option in
+                        ForEach(extendOptions, id: \.minutes) { option in
                             Button(option.label) { Task { await share.extend(minutes: option.minutes) } }
                         }
                     }
                     .fixedSize()
-                    .disabled(SharePresentation.extendOptions(canExtendS: status.canExtendS).isEmpty)
-                } else if case .start = SharePrimary.from(status) {
+                    .disabled(extendOptions.isEmpty)
+                } else if case .start = primary {
                     Picker("For", selection: $hours) {
                         ForEach(SharePresentation.durations, id: \.self) { Text("\($0) h").tag($0) }
                     }
@@ -78,7 +80,7 @@ struct SharingTab: View {
                 } else {
                     Spacer()
                 }
-                primaryButton(status)
+                primaryButton(status, primary)
             }
             if status.isOn { Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary) }
             if let busy = share.busy { Label(busy, systemImage: "hourglass").foregroundStyle(.secondary) }
@@ -86,8 +88,7 @@ struct SharingTab: View {
     }
 
     @ViewBuilder
-    private func primaryButton(_ status: ShareStatus) -> some View {
-        let primary = SharePrimary.from(status)
+    private func primaryButton(_ status: ShareStatus, _ primary: SharePrimary) -> some View {
         Button(primary.title) { Task { await act(primary, status: status) } }
             .buttonStyle(.borderedProminent)
             .disabled(share.busy != nil || primary == .start(enabled: false))

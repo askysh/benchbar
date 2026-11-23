@@ -4,13 +4,9 @@ import Testing
 
 @Suite("Directory watcher", .serialized)
 struct DirectoryWatcherTests {
-    /// Waits up to two seconds for a condition, letting the main queue run.
+    /// Waits for a condition (10 seconds at most), letting the main queue run.
     func eventually(_ condition: () -> Bool) async -> Bool {
-        for _ in 0..<40 {
-            if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(50))
-        }
-        return condition()
+        await waitForCondition(condition)
     }
 
     @Test func seesAnAtomicReplace() async throws {
@@ -65,7 +61,7 @@ struct DirectoryWatcherTests {
 
         try FileManager.default.removeItem(at: logs)
         #expect(watcher.needsRestart)
-        try? await Task.sleep(for: .milliseconds(300))
+        await drainMainQueue()
         #expect(watcher.needsRestart, "nothing left to watch")
 
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
