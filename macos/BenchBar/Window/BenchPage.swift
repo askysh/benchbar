@@ -92,6 +92,7 @@ struct BenchOverview: View {
     @State private var schedulerChange: Bool?
     @State private var portSetup: PortSetupRun?
     @State private var servicing = false
+    @State private var runningCommand = false
 
     private var controls: BenchControls { store.controls(for: bench) }
     /// What this CLI lists (`commands --json`): a button of a newer command shows only when it is there.
@@ -121,6 +122,7 @@ struct BenchOverview: View {
                 LockSection(workbench: workbench, bench: bench, store: store)
             }
             LeaseSection(workbench: workbench, bench: bench)
+            OperationsSection(workbench: workbench, bench: bench)
             Section {
                 PortConflictAction(store: store, bench: bench)
                 LabeledContent("Default site", value: bench.summary.site)
@@ -170,12 +172,14 @@ struct BenchOverview: View {
         .formStyle(.grouped)
         .sheet(item: $portSetup) { run in PortSetupSheet(run: run) { portSetup = nil } }
         .sheet(isPresented: $servicing) { ServiceSheet(workbench: workbench, bench: bench) { servicing = false } }
+        .sheet(isPresented: $runningCommand) { RunSheet(workbench: workbench, bench: bench) { runningCommand = false } }
         .task { openRequestedSetup() }
         .task(id: store.stamp(for: bench)) {
             await workbench.loadCommands()
             await workbench.showAutostart(bench)
         }
         .task { await workbench.pollLeases(bench) }
+        .task { await workbench.pollOps(bench) }
         .onChange(of: router.setupRequest) { _, _ in openRequestedSetup() }
         .alert(schedulerChange == true ? "Run the scheduler for \(bench.name)?" : "Stop the scheduler for \(bench.name)?",
                isPresented: Binding(get: { schedulerChange != nil }, set: { if !$0 { schedulerChange = nil } })) {
@@ -259,6 +263,19 @@ struct BenchOverview: View {
                     Label("Open Database", systemImage: "cylinder")
                 }
                 .help("bench --site \(bench.summary.site) mariadb, in Terminal, with the site's own database user")
+                if catalog?.has("watch") == true {
+                    Button { Workspace.openWatch(bench: bench, store: store) } label: {
+                        Label("Watch Assets in Terminal", systemImage: "eye")
+                    }
+                    .help("benchbar watch, in Terminal: rebuilds the assets while you edit JS or CSS. Close the window to stop it.")
+                }
+                if workbench.offersRun {
+                    Button { runningCommand = true } label: {
+                        Label("Run Bench Command…", systemImage: "terminal.fill")
+                    }
+                    .disabled(!store.canChange(bench))
+                    .help("One command of benchbar's allow list (migrate, build, doctor and more). A change shows its plan first.")
+                }
                 Divider()
                 Button("Show in Finder", systemImage: "folder") { Workspace.openFolder(bench) }
                 Button("Copy Path", systemImage: "doc.on.doc") { Workspace.copy(bench.path) }

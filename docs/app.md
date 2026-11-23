@@ -221,7 +221,27 @@ Every bench has a page:
   restore, the lockfile) shows the holder and until when, and offers
   nothing that breaks the lease except **Break Lease…**: it asks first
   and then runs the same change with `--break-lease`, which the CLI allows
-  only to a person. The run is in the History.
+  only to a person. The run is in the History. A **Running now** section
+  lists the runs that go on in this bench (`benchbar op list --running`):
+  the command, its step and progress, and when it started, whether a
+  terminal, an agent or the app started it, and how a run you saw going
+  ended (`op status`). It is read only, shown while there is something to
+  show, and read only while the window is open and can be seen (not
+  minimised), every 5 seconds while a run goes on and every 15 otherwise.
+  An update or a restore you start in the app keeps its progress in the
+  sheet; it is not started in the background. The ⋯ menu has
+  **Run Bench Command…** (when `benchbar` lists `run`) and **Watch Assets
+  in Terminal** (`benchbar watch`, which rebuilds the assets while you edit
+  JS or CSS; close the Terminal window to stop it). **Run Bench Command…**
+  offers the commands of the allow list of `benchbar run` (it asks the
+  CLI), a site of the bench and the flags the command takes. A read
+  (`doctor`, `list-apps`, `version`) runs at once and shows its output,
+  marked as data from the bench. `migrate`, `clear-cache`,
+  `clear-website-cache`, `build` and `run-tests` show the plan of
+  `run --dry-run --json` first (the exact command line, whether a backup
+  comes first, the deadline) and run exactly that plan by its own token
+  when you confirm; a bench that changed in between asks you to review
+  the plan again.
 - **Sites**: add a site (it asks for the Administrator password) and open
   any of them. The ⋯ menu of a site makes it the default, backs it up
   (with or without files), shows the last backup in Finder and has
