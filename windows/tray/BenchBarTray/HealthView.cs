@@ -446,6 +446,12 @@ internal sealed class RepairSheet : Window
                 LogLine(panel);
                 buttons.Add(("Close", Close, true, true));
                 break;
+            case RepairPhase.Stale:
+                Header(panel, "The plan is out of date", "Something changed since you reviewed it. Nothing was changed. Review the plan again before you repair.");
+                if (Model.Message is { Length: > 0 } refusal) panel.Children.Add(Ui.Text(refusal, 13, opacity: 0.7, margin: new Thickness(0, 8, 0, 0)));
+                buttons.Add(("Review Again", () => Model.LoadPlanAsync().Forget(), true, true));
+                buttons.Add(("Close", Close, false, true));
+                break;
             default:
                 Header(panel, Model.Steps.Count == 0 ? "No repair plan" : "Repair stopped", null);
                 if (Model.Message is { Length: > 0 } failure) panel.Children.Add(Ui.CriticalText(failure));
