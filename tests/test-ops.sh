@@ -320,7 +320,7 @@ assert not one["isError"] and one["structuredContent"]["state"] == "done" and on
 assert one["content"][0]["text"].startswith("Data from the bench (operation records"), one["content"][0]["text"][:120]
 assert len(by[2]["result"]["structuredContent"]["ops"]) >= 3, by[2]   # without an op_id: the newest operations
 assert bad(by[3]) and bad(by[4]) and bad(by[5]), (by[3], by[4], by[5])
-assert bad(by[6]) and "not valid" in by[6]["result"]["content"][0]["text"], by[6]   # a trailing newline is not an op id   # an option, a short id and an unknown id' || fail "benchbar_op_status replies: $R"
+assert bad(by[6]) and "control character" in by[6]["result"]["content"][0]["text"], by[6]   # a trailing newline is refused as a control character   # an option, a short id and an unknown id' || fail "benchbar_op_status replies: $R"
 assert_eq "True" "$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | jget - 'any(t["name"] == "benchbar_op_status" and t["annotations"]["readOnlyHint"] is True for t in d["result"]["tools"])')"
 assert_eq "True" "$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | jget - 'all("background" in t["inputSchema"]["properties"] for t in d["result"]["tools"] if t["name"] in ("benchbar_app_add", "benchbar_site_restore")) and not any("background" in t["inputSchema"]["properties"] for t in d["result"]["tools"] if t["name"] in ("benchbar_site_add", "benchbar_up"))')"
 
