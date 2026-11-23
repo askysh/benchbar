@@ -102,7 +102,7 @@ from mcpclient import Client, text
 fake, mode, tok = sys.argv[1], sys.argv[2], sys.argv[3]
 c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "FAKE_MODE": mode, "BENCHBAR_MCP_ALLOW_BENCH": "/x/acme"})
 tools = c.tools()
-assert len(tools) == 64, [t["name"] for t in tools]
+assert len(tools) == 66, [t["name"] for t in tools]
 LABEL = "Data from the bench ("
 tokens = {}                                                    # the token each plan tool returned: its apply tool takes that one
 for t in tools:
@@ -110,7 +110,7 @@ for t in tools:
     args = {}
     for key in list(required) + (["url_or_name"] if "url_or_name" in props else []):
         kind = props[key]["type"]
-        args[key] = tokens.get(t["name"] + "_plan", tok) if key == "token" else ("20261029_101500" if key == "from" else ("qa1.localhost" if key == "site" else (["/x/acme"] if kind == "array" else (props[key]["enum"][0] if "enum" in props[key] else "acme"))))
+        args[key] = tokens.get(t["name"] + "_plan", tok) if key == "token" else ("20261029_101500" if key == "from" else ("qa1.localhost" if key == "site" else ("/x/acme" if key == "to_bench" else ["/x/acme"] if kind == "array" else (props[key]["enum"][0] if "enum" in props[key] else "acme"))))
     if t["name"] == "benchbar_lease_take":
         args = {"site": "qa1.localhost"}
     for key in args:
@@ -667,6 +667,22 @@ assert m.PLAN_OF["benchbar_site_rollback"] == "benchbar_site_rollback_plan" and 
 assert m.ANNOTATIONS["benchbar_site_rollback"]["destructiveHint"] is True
 assert not any("drop" in n and "snapshot" in n for n in t), "removing a snapshot is a person's decision"
 assert "default site" in t["benchbar_site_rollback_plan"][0] and "default site" in t["benchbar_site_rollback"][0]
+PY
+# ---- the site move tools: the arguments, the plan and apply pairing, the lease, the second bench is checked like the first
+python3 - "$ROOT/lib/frappe-local/mcp.py" <<'PY' || fail "the site move tools (arguments, pairing, lease, bench check)"
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("mcp", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+t = m.TOOLS
+assert t["benchbar_site_move_plan"][2]({"site": "s", "to_bench": "/b2", "no_migrate": True, "bench": "/b1"}) == ["site", "move", "s", "--to-bench", "/b2", "--no-migrate", "--bench-dir", "/b1", "--dry-run", "--json"]
+assert t["benchbar_site_move"][2]({"site": "s", "to_bench": "/b2", "token": "T" * 10, "lease": "l-0123456789ab"}) == ["site", "move", "s", "--to-bench", "/b2", "--apply", "T" * 10, "--yes", "--json", "--lease", "l-0123456789ab"]
+assert t["benchbar_site_move_plan"][3] is True and t["benchbar_site_move"][3] is False
+assert m.PLAN_OF["benchbar_site_move"] == "benchbar_site_move_plan" and "benchbar_site_move_plan" in m.PLAN_TOOLS
+assert m.ANNOTATIONS["benchbar_site_move"]["destructiveHint"] is True
+assert m.REQUIRED["benchbar_site_move_plan"] == ["site", "to_bench"] and m.REQUIRED["benchbar_site_move"] == ["site", "to_bench", "token"]
+assert "lease" in t["benchbar_site_move"][1] and "to_bench" in t["benchbar_site_move_plan"][1]
+assert "default site" in t["benchbar_site_move_plan"][0] and "second backup" in t["benchbar_site_move_plan"][0]
+m.ALLOWED_BENCHES.clear()
+assert m.unknown_bench_error({"site": "s", "to_bench": "/nonexistent/where"}) is not None
 PY
 # ---- leases (#184): the argv of the four tools, the holder every CLI gets, and the lease argument of the changing tools
 : >"$FAKE_LOG"

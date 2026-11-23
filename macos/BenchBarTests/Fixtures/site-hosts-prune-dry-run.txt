@@ -1,0 +1,2 @@
+  .. 2 line(s) in benchbar's block of /etc/hosts name no site of any bench: gone.localhost two.localhost
+  .. dry-run: would remove them (sudo, backup first)
