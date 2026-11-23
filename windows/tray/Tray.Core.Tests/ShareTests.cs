@@ -214,6 +214,7 @@ public class ShareTests
         Assert.Equal(["share", "extend", "--by", "30m", "--json", "--bench-dir", Bench], model.ExtendArgs(30));
         Assert.Equal(["share", "unlock", "--json", "--bench-dir", Bench], model.LockArgs(false));
         Assert.Equal(["share", "remove", "d_0a1b2c3d", "--yes", "--json", "--bench-dir", Bench], model.RemoveArgs("d_0a1b2c3d"));
+        Assert.Equal(Timeout.InfiniteTimeSpan, ShareModel.RoomChangeTimeout); // assign, remove and extend are never killed part way
         // #159 SHARE-5: the host gives out the seats
         Assert.Equal(["share", "assign", "d_0a1b2c3d", "s_33333333", "--json", "--bench-dir", Bench], model.AssignArgs("d_0a1b2c3d", "s_33333333"));
         Assert.Equal(["share", "start", "--for", "2h", "--assign-seats", "--json", "--bench-dir", Bench], model.StartArgs(2, assignSeats: true));
