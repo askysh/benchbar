@@ -267,6 +267,11 @@ done
 # exit-code judging (some upstream ones print no ok line). The real run-tests.sh runs here, in a copy of
 # the repository whose tests are stand-ins under real names, so the suite never picks them up.
 RT="$TMP_DIR/rt"
+# The stand in runs below must not take the switches of the run this test is part of. A pull
+# request run names its tests in ONLY_TESTS, and the stand in root has only the six files made
+# here: since the test list is the files (PR 280), run-tests.sh refused the run with "ONLY_TESTS:
+# no such test", and this test failed in every run that picked it with another test.
+unset STRICT_FLAKY NO_SKIP ONLY_TESTS SKIP_TESTS SHARD LIST_ONLY SECS_ONLY SHELLCHECK_FILES
 mkdir -p "$RT/tests" "$RT/lib/frappe-local"
 cp "$ROOT/tests/run-tests.sh" "$RT/tests/run-tests.sh"
 for f in benchbar 00-mac-system-deps.sh 00-linux-system-deps.sh 01-install-bench-and-site.sh 02-background-service.sh lib/frappe-local/x.sh; do
