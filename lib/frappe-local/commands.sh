@@ -305,7 +305,7 @@ flag~site restore~--with-files~~Restore the uploads too.
 flag~site restore~--dry-run~~Print the plan and its token.
 flag~site restore~--apply~TOKEN~Run exactly that plan (with --yes).
 env~site restore~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
-cmd~site move~benchbar site move NAME --to-bench PATH [--no-migrate] --dry-run --json, then --apply TOKEN --yes~Move a site to another registered bench on this machine: a backup with files, the restore there under the same name, migrate, a check, then the drop here (a second backup first; the backups stay in archived/sites). Never the default site of either bench; a failed check leaves the site here as it was. A reviewed plan.~no~yes~no~yes~document
+cmd~site move~benchbar site move NAME --to-bench PATH [--no-migrate] --dry-run --json, then --apply TOKEN --yes~Move a site to another registered bench on this machine: a backup with files, the restore there under the same name, migrate, a check that it lists the same apps there, then the drop here (a second backup first; the backups stay in archived/sites). The source bench must be stopped (benchbar down), or writes made after the first backup would be lost. Never the default site of either bench; a failed step before the drop leaves the site here as it was. A reviewed plan.~no~yes~no~yes~document
 flag~site move~--to-bench~PATH~The bench the site goes to: a bench benchbar knows (benchbar register PATH), not this one.
 flag~site move~--no-migrate~~Stop after the restore, before bench migrate.
 flag~site move~--dry-run~~Print the plan and its token.

@@ -39,6 +39,31 @@ plan() {
 }
 apply() { local s="$1"; shift; run_json site move "$s" --to-bench "$TGT" --apply "$TOKEN" --yes --json --bench-dir "$SRC" "$@"; }
 
+# fails_at STEP SITE VAR=VALUE: a move of a new site that fails with VAR=VALUE set for the mocks. Asserts the exit,
+# the failed step, an error that is the message of what failed, and (before the drop) that the source site is as it was.
+# OUT holds the result afterwards.
+fails_at() {
+  local step="$1" s="$2" kv="$3" before
+  add_site "$SRC" "$s" frappe erpnext
+  plan "$s"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')" "$OUT"
+  before="$(cat "$SRC/sites/$s/site_config.json" "$SRC/sites/$s/installed_apps")"
+  reset_calls
+  export "${kv?}"
+  apply "$s"
+  unset "${kv%%=*}"
+  assert_eq "1" "$CODE" "$OUT$ERR"
+  assert_eq "False $step" "$(printf '%s' "$OUT" | jget - '"%s %s" % (d["moved"], d["failed_step"])')" "$OUT"
+  assert_not_contains "$(printf '%s' "$OUT" | jget - 'd["error"]')" "the command exited"
+  assert_eq "$before" "$(cat "$SRC/sites/$s/site_config.json" "$SRC/sites/$s/installed_apps")" "(the source site is as it was)"
+  if [[ "$step" != "drop" ]]; then
+    assert_calls_not_contain "drop-site ${s}"
+    assert_no_file "$SRC/archived/sites/$s"
+    assert_contains "$(printf '%s' "$OUT" | jget - '" ".join(c["detail"] for c in d["changed"])')" "created in $TGT/sites/$s"
+  fi
+  rm -rf "$TGT/sites/$s"
+}
+
 suite() {
   local tag="$1" UNREG snap b b1 b2 ns rs mg la dr
   SRC="$HOME/dev/move-src-$tag"; TGT="$HOME/dev/move-tgt-$tag"; UNREG="$HOME/elsewhere/move-unreg-$tag"
@@ -156,6 +181,38 @@ assert any("backups of acme.localhost" in w for w in d["stays"]), d["stays"]
   assert_contains "$OUT" "site drop gamma.localhost --confirm-site gamma.localhost --bench-dir $TGT"
   rm -rf "$TGT/sites/gamma.localhost"
 
+  # ---- a running source bench: its writes after the first backup would be lost, so the plan cannot be applied
+  add_site "$SRC" run.localhost frappe erpnext
+  add_proc 4243 "honcho start -f Procfile.lean" "$SRC"
+  run_json site move run.localhost --to-bench "$TGT" --dry-run --json --bench-dir "$SRC"
+  assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')" "$OUT"
+  assert_eq "Stop the bench first: benchbar down --bench-dir $SRC" "$(printf '%s' "$OUT" | jget - 'd["errors"][0]')"
+  assert_eq "benchbar down --bench-dir $SRC" "$(printf '%s' "$OUT" | jget - 'd["next_actions"][0]["command"]')"
+  TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+  reset_calls
+  apply run.localhost
+  assert_eq "1" "$CODE" "$OUT$ERR"; assert_contains "$ERR$OUT" "Stop the bench first"
+  assert_calls_not_contain '^(bench (--site [^ ]+ backup|drop-site|new-site)|python benchbar)'
+  : >"$MOCK_PROCS"
+  run_json site move run.localhost --to-bench "$TGT" --dry-run --json --bench-dir "$SRC"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')" "(stopped, the plan can be applied)"
+
+  # ---- every other failure point: restore, migrate and the second backup leave the source as it was; a failed
+  # drop-site says the site is in both benches and how to finish. VAR=VALUE is what the mocks are told to do.
+  fails_at restore frg.localhost MOCK_FRAPPE_FAIL=restore
+  fails_at migrate fmg.localhost MOCK_BENCH_MIGRATE_EXIT=1
+  fails_at drop fbk.localhost MOCK_BENCH_BACKUP_FAIL_AFTER="$(( $(cat "$MOCK_STATE/backup_n") + 1 ))"
+  assert_contains "$OUT" "No usable backup of fbk.localhost"
+  assert_not_contains "$(cat "$MOCK_LOG")" "drop-site fbk"
+  assert_file "$SRC/sites/fbk.localhost/site_config.json"
+  assert_no_file "$SRC/archived/sites/fbk.localhost"
+  fails_at drop fdr.localhost MOCK_DROP_SITE_EXIT=1
+  assert_calls_contain '^bench drop-site fdr.localhost '
+  assert_file "$SRC/sites/fdr.localhost/site_config.json" "(drop-site failed: the site is still here)"
+  assert_contains "$(cat "$FL_STATE_DIR"/logs/*.log)" "fdr.localhost is now in both benches"
+  assert_contains "$(cat "$FL_STATE_DIR"/logs/*.log)" "site drop fdr.localhost --confirm-site fdr.localhost --bench-dir $SRC"
+  assert_contains "$(printf '%s' "$OUT" | jget - 'd["error"]')" "bench drop-site fdr.localhost failed"
+
   # ---- the move: backup, restore, migrate, check, then the drop in the source
   plan acme.localhost
   reset_calls
@@ -169,7 +226,7 @@ assert d["op_id"].startswith("op-") and d["exit"] == 0, d
 assert [s["status"] for s in d["steps"]] == ["done"] * 5, d["steps"]
 assert d["address"].endswith(":8001") and d["verify"]["apps"] == ["erpnext", "frappe"], d
 assert d["archived_path"].endswith("/archived/sites/acme.localhost") and d["backup"]["with_files"] is True, d
-assert any(c["kind"] == "site" for c in d["changed"]), d["changed"]
+assert any(c["kind"] == "site" and "created in " in c["detail"] and "/sites/acme.localhost" in c["detail"] for c in d["changed"]), d["changed"]
 assert any("8001" in a["why"] for a in d["next_actions"]), d["next_actions"]
 ' || fail "the result"$'\n'"$OUT"
   # the order: backup, new-site, restore, migrate, list-apps check, a second backup, drop-site

@@ -337,10 +337,17 @@ knows (`benchbar register PATH`), under the same name. It is built from the
 commands above, not beside them: a [site backup](#site-backup) with files,
 the [site restore](#site-restore) of that set into a new site of the other
 bench, `bench migrate` there (not with `--no-migrate`), a check that the site
-answers `list-apps` there with the same apps, and only then the drop of
+lists the same apps there, and only then the drop of
 [site drop](#site-drop): a second backup with files, `bench drop-site`, the
 folder to `archived/sites` with its backups. The drop is the last step and
-never runs after a failed one.
+never runs after a failed one. The check shows that the site opens in the other
+bench with the same apps; it does not prove the data is whole. The restore and
+the backups protect the data.
+
+The bench the site is in must be stopped (`benchbar down`): a running bench keeps
+serving the site, and what is written after the first backup would not reach the
+copy. A running bench is an error of the plan, and is checked again when the plan
+is applied.
 
 The plan (`--dry-run --json`) lists the steps, the apps, the port the
 address changes to, what stays (the backups) and a token. It cannot be applied

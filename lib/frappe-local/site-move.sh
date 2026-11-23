@@ -10,7 +10,7 @@
 # of them: a backup with files in this bench (fl_site_backup_take), the same
 # set restored into PATH under the same name by site restore's own plan and
 # run (site-restore.sh, in a subshell that is the target bench), migrate there,
-# a check that NAME answers there, and only then the drop of the source site
+# a check that NAME lists the same apps there, and only then the drop of the source site
 # (bench remove's fl_lc_drop_sites: a second backup, bench drop-site, the
 # archive checked). The drop is the last step and never runs after a failed
 # one: the source site stays as it was and the result says what to clean up.
@@ -43,6 +43,8 @@ SM_SET_DIR=""
 SM_BACKUP_JSON="null"
 SM_ARCHIVE=""
 SM_FAILED=""
+SM_STOP_CMD=""
+SM_ERR_FILE=""
 SM_VERIFY_JSON="null"
 SM_SOURCE=""
 SM_VERIFY_FILE=""
@@ -86,7 +88,7 @@ fl_smove_has_app() {
 
 # fl_smove_plan: errors, steps, JSON and token, from reads only.
 fl_smove_plan() {
-  local a lease sites_src sites_tgt running json_steps="" sep="" s id missing_json="" touches
+  local a fix lease sites_src sites_tgt running json_steps="" sep="" s id missing_json="" touches
   SM_ERRORS=(); SM_STEPS=(); SM_CAN_APPLY=0; SM_APPS=""; SM_MISSING=""; SM_NEEDS=0
   SM_TARGET="$(fl_abs_path "$SM_TO")"
   fl_smove_default_v SM_SRC_DEFAULT "$FL_BENCH_DIR"
@@ -128,11 +130,19 @@ fl_smove_plan() {
   fi
   fl_smove_lease_v lease
   [[ -z "$lease" ]] || fl_smove_err "${lease}"
+  # a running source keeps serving the site: what is written after the first backup would not reach the copy
+  SM_STOP_CMD=""
+  if fl_pm_running; then
+    fix="$(fl_fix_cmd benchbar down --bench-dir "$FL_BENCH_DIR")"
+    fl_fix_plain_v SM_STOP_CMD "$fix"
+    fl_smove_err "Stop the bench first: ${SM_STOP_CMD}"
+    fl_next_action "$fix" "the move copies ${SM_NAME} from a backup; writes made after it would be lost"
+  fi
 
   SM_STEPS+=("backup|Back up ${SM_NAME} with its files in ${FL_BENCH_DIR}")
   SM_STEPS+=("restore|Create ${SM_NAME} in ${SM_TARGET} and restore that backup into it (new-site, restore, encryption key)")
   [[ "$SM_NO_MIGRATE" == "1" ]] || SM_STEPS+=("migrate|bench migrate for ${SM_NAME} in ${SM_TARGET}")
-  SM_STEPS+=("check|Check that ${SM_NAME} answers in ${SM_TARGET} with the same apps")
+  SM_STEPS+=("check|Check that ${SM_NAME} lists the same apps in ${SM_TARGET} (it shows the site opens there; the restore and the backups protect the data)")
   SM_STEPS+=("drop|Back ${SM_NAME} up again and drop it in ${FL_BENCH_DIR} as site drop does (database, folder to archived/sites)")
   for s in "${SM_STEPS[@]}"; do
     id="${s%%|*}"
@@ -146,13 +156,14 @@ fl_smove_plan() {
     json_steps="${json_steps}${sep}{\"id\":$(fl_json_str "$id"),\"name\":$(fl_json_str "${s#*|}"),\"touches\":${touches}}"; sep=","
   done
   # shellcheck disable=SC2086  # the app names, split
-  SM_PLAN_BODY="$(printf '"bench":%s,"site":%s,"to_bench":%s,"apps":%s,"missing_apps":%s,"default_site":%s,"target_default_site":%s,"migrate":%s,"steps":[%s],"stays":%s,"hosts":%s,"warnings":[],"needs":[%s],"errors":%s' \
+  SM_PLAN_BODY="$(printf '"bench":%s,"site":%s,"to_bench":%s,"apps":%s,"missing_apps":%s,"default_site":%s,"target_default_site":%s,"migrate":%s,"steps":[%s],"stays":%s,"hosts":%s,"warnings":[],"needs":[%s],"errors":%s,"next_actions":%s' \
     "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$SM_NAME")" "$(fl_json_str "$SM_TARGET")" "$(fl_json_str_array $SM_APPS)" \
     "$(fl_json_str_array ${SM_MISSING//,/})" "$(fl_json_str "$SM_SRC_DEFAULT")" "$(fl_json_str "$SM_TGT_DEFAULT")" \
     "$(fl_json_bool "$([[ "$SM_NO_MIGRATE" == "1" ]] && printf 0 || printf 1)")" "$json_steps" \
     "$(fl_json_str_array "the backups of ${SM_NAME} (they go with its folder to ${FL_BENCH_DIR}/archived/sites/${SM_NAME}, the second backup included)" "a copy of the first backup set in ${FL_BACKUP_ROOT}")" \
     "$(printf '{"line":"kept (same name)","url_before":%s,"url_after":%s,"port_changes":%s}' "$(fl_json_str "http://${SM_NAME}:${SM_SRC_PORT}")" "$(fl_json_str "http://${SM_NAME}:${SM_TGT_PORT:-?}")" "$(fl_json_bool "$([[ "$SM_SRC_PORT" != "${SM_TGT_PORT:-}" ]] && printf 1 || printf 0)")")" \
-    "$([[ "$SM_NEEDS" == "1" ]] && printf '"MARIADB_ROOT_PASSWORD"')" "$(fl_json_str_array ${SM_ERRORS[@]+"${SM_ERRORS[@]}"})")"
+    "$([[ "$SM_NEEDS" == "1" ]] && printf '"MARIADB_ROOT_PASSWORD"')" "$(fl_json_str_array ${SM_ERRORS[@]+"${SM_ERRORS[@]}"})" \
+    "$([[ -z "$SM_STOP_CMD" ]] && printf '[]' || printf '[{"command":%s,"why":%s}]' "$(fl_json_str "$SM_STOP_CMD")" "$(fl_json_str "the move copies ${SM_NAME} from a backup; writes made after it would be lost")")")"
   [[ "${#SM_ERRORS[@]}" == "0" ]] && SM_CAN_APPLY=1
   SM_PLAN_BODY="${SM_PLAN_BODY},\"can_apply\":$(fl_json_bool "$SM_CAN_APPLY")"
   sites_src="$(fl_sites_list)"
@@ -184,12 +195,17 @@ fl_smove_print_plan() {
 
 # ---------------------------------------------------------------- steps
 
+# the message a subshell ended with (its fl_die, else its last [FAIL]) goes out through a file: the JSON error says it
+fl_smove_save_error() { printf '%s' "${FL_DIE_MESSAGE:-${FL_LAST_PROBLEM:-}}" >"$SM_ERR_FILE" 2>/dev/null || true; }
+fl_smove_load_error() { [[ "${1:-0}" == "0" || ! -s "$SM_ERR_FILE" ]] || FL_DIE_MESSAGE="$(cat "$SM_ERR_FILE")"; }
+
 # fl_smove_in_target FUNC: FUNC in a subshell that is the target bench (its ports, its lock, its Redis);
 # what it sets is gone with it, the exit code is its answer
 fl_smove_in_target() {
   local code=0
   # the Redis a step started is stopped before the subshell ends: its record of it goes with it
-  ( c=0; fl_context_init "$SM_TARGET" "" ""; "$@" || c=$?; fl_bench_redis_down; exit "$c" ) || code=$?
+  ( c=0; trap 'fl_smove_save_error' EXIT; fl_context_init "$SM_TARGET" "" ""; "$@" || c=$?; fl_bench_redis_down; exit "$c" ) || code=$?
+  fl_smove_load_error "$code"
   return "$code"
 }
 
@@ -249,7 +265,15 @@ fl_smove_target_restore() {
   fl_srestore_execute
 }
 
-fl_smove_step_restore() { fl_smove_in_target fl_smove_target_restore; }
+fl_smove_step_restore() {
+  local code=0
+  fl_smove_in_target fl_smove_target_restore || code=$?
+  # the new site is named whether the restore finished or not: a half made one is something to clean up
+  if [[ -f "${SM_TARGET}/sites/${SM_NAME}/site_config.json" ]]; then
+    fl_changed site "$SM_NAME" "created in ${SM_TARGET}/sites/${SM_NAME}$([[ "$code" == "0" ]] || printf ' (incomplete)')"
+  fi
+  return "$code"
+}
 
 fl_smove_target_migrate() {
   FL_PULL_AS="$SM_NAME"; FL_PULL_NEED_MIGRATE=1
@@ -301,7 +325,14 @@ fl_smove_drop() {
 
 fl_smove_step_drop() {
   local code=0
-  ( fl_smove_drop ) || code=$?
+  # a bench started since the plan serves the site again: writes after the backups would be lost
+  if fl_pm_running; then
+    fl_fail "the bench ${FL_BENCH_DIR} is running; nothing was dropped"
+    fl_fix "$(fl_fix_cmd benchbar down --bench-dir "$FL_BENCH_DIR")"
+    return 1
+  fi
+  ( trap 'fl_smove_save_error' EXIT; fl_smove_drop ) || code=$?
+  fl_smove_load_error "$code"
   [[ "$code" == "0" ]] || return "$code"
   SM_ARCHIVE="$(fl_site_archive_latest "$SM_NAME")"
   fl_changed site "$SM_NAME" "dropped in ${FL_BENCH_DIR}${SM_ARCHIVE:+, archived to ${SM_ARCHIVE}}"
@@ -428,16 +459,16 @@ fl_cmd_site_move() {
   exec 0</dev/null
   SM_SOURCE="$FL_BENCH_DIR"
   SM_VERIFY_FILE="$(mktemp "${TMPDIR:-/tmp}/benchbar-move-verify.XXXXXX")"
+  SM_ERR_FILE="$(mktemp "${TMPDIR:-/tmp}/benchbar-move-error.XXXXXX")"
   fl_smove_run || code=$?
   fl_steps_summary
   if [[ -s "$SM_VERIFY_FILE" ]]; then SM_VERIFY_JSON="$(cat "$SM_VERIFY_FILE")"; fi
-  rm -f "$SM_VERIFY_FILE"
+  rm -f "$SM_VERIFY_FILE" "$SM_ERR_FILE"
   [[ "$code" == "0" ]] || fl_smove_failure_note
   if [[ "$code" != "0" ]]; then
     [[ "$json" != "1" ]] || fl_doc_emit "$code" "$(fl_smove_result_json "$code")"
     return "$code"
   fi
-  fl_changed site "$SM_NAME" "moved to ${SM_TARGET}"
   [[ "$SM_BACKUP_JSON" == "null" ]] || fl_changed backup "$SM_NAME" "$(fl_backup_field "$SM_BACKUP_JSON" path)"
   e="the site answers on port ${SM_TGT_PORT:-?} of ${SM_TARGET} now (it was ${SM_SRC_PORT}): http://${SM_NAME}:${SM_TGT_PORT:-?}"
   fl_next_action "${FL_SELF} up --bench-dir ${SM_TARGET}" "$e"

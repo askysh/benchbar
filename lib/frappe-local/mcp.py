@@ -548,11 +548,11 @@ def site_move_args(a):
 
 TOOLS["benchbar_site_move_plan"] = (
     "Plan moving a site to another bench of this machine, read only: the steps (a backup with files, the restore into the "
-    "other bench under the same name, migrate there, a check that the site answers there, then the drop in this bench as site drop "
+    "other bench under the same name, migrate there, a check that the site lists the same apps there, then the drop in this bench as site drop "
     "does it, after a second backup), what stays (the backups), the apps the site has and the other bench lacks (named), the "
     "port the address changes to, and a token for benchbar_site_move. The plan has can_apply false for the default site of either "
-    "bench, a site name that exists in the other bench, a missing app, the same bench, a bench benchbar does not know or a lease "
-    "held by someone else. Show it to the person first.",
+    "bench, a site name that exists in the other bench, a missing app, the same bench, a bench benchbar does not know, a lease "
+    "held by someone else or a bench that is running (the person stops it with benchbar down first: writes after the first backup would be lost). Show it to the person first.",
     SITE_MOVE,
     lambda a: site_move_args(a) + ["--dry-run", "--json"],
     True,
@@ -560,7 +560,7 @@ TOOLS["benchbar_site_move_plan"] = (
 )
 TOOLS["benchbar_site_move"] = (
     "Apply a plan from benchbar_site_move_plan: back the site up with its files, restore it into the other bench, migrate, check "
-    "it there, and only then back it up again and drop it in this bench (its backups stay in archived/sites). A failed step "
+    "that it lists the same apps there, and only then back it up again and drop it in this bench (its backups stay in archived/sites). A failed step "
     "before the drop leaves the site here as it was, and the result names what to clean up in the other bench. Only after the "
     "person saw the plan; pass the same arguments and the plan's token. Exit code 2 means benchbar does not know the MariaDB "
     "root password: ask the person; never look for it. A token expires about an hour after its plan (60 to 70 minutes): an older one is refused as expired, plan again. Takes minutes.",
