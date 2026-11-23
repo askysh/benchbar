@@ -88,6 +88,7 @@ install it.
    code, then pick a seat. In a room where the host gives out the seats,
    the pane says so: ask the host for your seat, then open the room.
 3. If a colleague sent you an invite link, click **Paste invite** instead.
+   The sheet shows the address the link leads to and the host's key.
 4. Click **Open** on the room in **Your rooms**. The room's site opens in
    your browser.
 
@@ -96,9 +97,9 @@ said no, the pane shows a button that opens System Settings. **Find rooms**
 looks for rooms again.
 
 In **Your rooms**, **Change Seat** picks another seat. **Forget** signs
-this Mac out of the room and deletes the host's key. When you forget your
-last room, BenchBar also deletes the key that shows this Mac to hosts, so
-the next room you join sees a new Mac. A new code or invite from
+this Mac out of the room and deletes the host's key and the key this Mac
+showed to that host. Every host sees another key of yours, so two hosts
+cannot tell that the same Mac joined both. A new code or invite from
 the host is needed to join again.
 
 ## When a room ends

@@ -125,6 +125,28 @@ nonisolated enum NetworkPanePresentation {
         "Join \(name(room)) from the invite"
     }
 
+    /// What the join sheet of an invite shows before Join (#159 SHARE-8). A link can come from a web
+    /// page or a chat, and its label is whatever the link says: the address it leads to and the
+    /// host's key are shown, so the guest can compare the key with the one the host reads out.
+    static func inviteCheck(_ invite: ShareInvite, addressAllowed: Bool) -> (note: String, address: String, key: String) {
+        let address: String
+        if let a = invite.address {
+            address = addressAllowed ? "Address: \(a.host):\(a.port)"
+                : "Address: \(a.host):\(a.port) is not on a local network, so it is not used. The room is looked for by its name."
+        } else {
+            address = "Address: none in the link. The room is looked for by its name."
+        }
+        return ("This room comes from an invite link, not from your network. Join only if the key below is the one your host reads out.",
+                address, "Host key: " + keyGroups(invite.hostPin))
+    }
+
+    /// The first 16 hex digits of a host's key in groups of four, as the host's Sharing tab and
+    /// `benchbar share status` show them.
+    static func keyGroups(_ hostPin: Data) -> String {
+        let hex = Array(ShareDeepLink.fp16(of: hostPin))
+        return stride(from: 0, to: hex.count, by: 4).map { String(hex[$0..<min($0 + 4, hex.count)]) }.joined(separator: " ")
+    }
+
     static func inviteProblem(_ problem: ShareInvite.Problem) -> String {
         switch problem {
         case .notFound: return "There's no BenchBar invite on the clipboard. Copy the whole invite message and try again."

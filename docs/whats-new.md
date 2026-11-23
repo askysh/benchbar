@@ -156,8 +156,11 @@ Customer data is not scrubbed.
   and old log files go when a room ends. A room no longer tells the name
   of the copied site to devices that have not joined.
 - **macOS.** A guest who updates sees the room's site name only after
-  they join. Forgetting your last room also deletes the key that shows
-  your Mac to hosts.
+  they join. Every room now gets a key of its own from your Mac, so two
+  hosts cannot tell that the same Mac joined both; **Forget** deletes it.
+  The rooms you joined before keep working with the key they know, and
+  nothing must be done again. The join sheet of an invite link shows the
+  address it leads to and the host's key.
 - **Windows.** The **Sharing** tab of the BenchBar window hosts a room.
   It cannot join one yet. See [Rooms on Windows](windows.md#rooms-on-windows).
 - **macOS, Linux.** Turning the Lab off can be finished: `benchbar

@@ -73,16 +73,24 @@ they are in the room.
 
 ## What the host sees of a guest
 
-The name the guest's Mac gives, its model, its address, and the key their
-BenchBar made for rooms. That key is the same for every room a Mac is in,
-so a host can tell that the same Mac joined before, also under another
-name. The key is deleted when the guest forgets their last room
-(**Forget** in **Your rooms**); the next join makes a new one. The join
+The name the guest's Mac gives, its model, its address, and a key their
+BenchBar made for that host alone. Another host sees another key, so two
+hosts cannot tell that the same Mac joined both, also not from the key.
+The same host sees the same key again, which is what makes **Remove**
+hold: a removed Mac cannot come back with the code it used. **Forget** in
+**Your rooms** deletes the room's key; a guest who forgets a room and
+joins it again is a new Mac to the host, so use `share remove ID
+--new-code` for somebody who must stay out. A room that was joined with
+BenchBar 0.8.3 keeps the one key that version showed to every room, until
+the guest forgets it. The join
 itself derives the room code's key material in arithmetic that is not
 constant time. That matters only to a program already running on the
 guest's own Mac, which can read the code on the screen anyway.
 
-An invite link names the host's address only as a hint. BenchBar dials it
+The join sheet of an invite shows the address the link leads to and the
+first 16 digits of the host's key, before anything is sent: the label of a
+link is whatever the link says, the key is not. An invite link names the
+host's address only as a hint. BenchBar dials it
 only when it is an address of a local network (10.x, 172.16 to 172.31,
 192.168.x, 169.254.x or 100.64 to 100.127); a link that names any other
 address finds its room by Bonjour or not at all.
