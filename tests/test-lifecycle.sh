@@ -100,7 +100,8 @@ assert_contains "$ERR$OUT" "--yes"
 run_json bench scratch "$B" --ttl 2 --yes --json
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "1800172800" "$(printf '%s' "$OUT" | jget - 'd["scratch_until"]')"
-run_json bench scratch "$C" --yes --json
+# the app and the tray have no terminal, but a person clicked: gc names a person, not an agent
+BENCHBAR_CALLER=tray run_json bench scratch "$C" --yes --json
 assert_eq "1800604800" "$(printf '%s' "$OUT" | jget - 'd["scratch_until"]')" "(7 days by default)"
 run_json bench scratch "$A" --ttl 1 --yes --json
 assert_eq "0" "$CODE" "$OUT$ERR"
@@ -116,6 +117,7 @@ assert_eq "$B" "$(printf '%s' "$OUT" | jget - 'd["expired"][0]["bench"]')"
 GCTOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 ISO0="$(date -u -r 1800000000 +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d @1800000000 +%Y-%m-%dT%H:%M:%SZ)"
 assert_eq "agent $ISO0" "$(printf '%s' "$OUT" | jget - '"%s %s" % (d["expired"][0]["marked_by"], d["expired"][0]["marked_at"])')" "(the plan says who marked it, and when)"
+assert_eq "person" "$(printf '%s' "$OUT" | jget - '[p["marked_by"] for p in d["pending"] if p["bench"] == "'"$C"'"][0]')" "(marked from the tray: a person)"
 # a scratch bench benchbar does not know (not registered, no service, outside the usual folders) is not collected
 run_json bench scratch "$F" --ttl 1 --yes --json
 assert_eq "0" "$CODE" "$OUT$ERR"

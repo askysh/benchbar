@@ -423,7 +423,12 @@ fl_cmd_bench_scratch() {
   # marking is what makes a later gc remove the bench: it asks (an agent must pass --yes) and gc shows who marked it
   if [[ "${FL_DRY_RUN:-0}" != "1" ]]; then
     fl_confirm "Mark ${FL_BENCH_NAME} scratch for ${days} day(s)? bench gc then removes it, with its databases." || { fl_warn "Cancelled. Nothing was changed."; return 1; }
-    if fl_noninteractive || [[ ! -t 0 ]]; then who=agent; else who=person; fi
+    # the app and the tray have no terminal, but a person clicked; BENCHBAR_CALLER is a label, which is all gc shows
+    [[ -n "${FL_CALLER:-}" ]] || fl_caller_resolve
+    case "${FL_CALLER:-}" in
+      app|tray) who=person ;;
+      *) if fl_noninteractive || [[ ! -t 0 ]]; then who=agent; else who=person; fi ;;
+    esac
     fl_lc_scratch_mark "$FL_BENCH_DIR" "$days" "$who"
   fi
   if ! fl_lc_known_bench "$FL_BENCH_DIR"; then
