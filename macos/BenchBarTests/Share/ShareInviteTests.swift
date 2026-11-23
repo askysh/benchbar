@@ -75,6 +75,21 @@ nonisolated enum InviteFixture {
         #expect(NetworkPanePresentation.inviteProblem(.newerVersion) == "This invite needs a newer BenchBar.")
     }
 
+    /// #159 SHARE-8: a link can come from a web page or a chat. A room is on the network this Mac is
+    /// on, so an address anywhere else (a server on the internet, this Mac itself) is not dialled.
+    @Test func theAddressMustBeOnALocalNetwork() throws {
+        for bad in ["203.0.113.9:8443", "8.8.8.8:8443", "127.0.0.1:8443", "0.0.0.0:8443", "172.32.0.1:8443", "172.15.0.1:8443",
+                    "100.128.0.1:8443", "100.63.0.1:8443", "192.169.1.1:8443", "169.253.1.1:8443", "224.0.0.251:8443", "255.255.255.255:8443",
+                    "10.1:8443", "192.168.1:8443", "192.168.1.999:8443"] {
+            let invite = try #require(InviteFixture.invite(InviteFixture.link(a: bad)), "\(bad)")
+            #expect(invite.address == nil, "\(bad)")
+        }
+        for good in ["10.0.0.5", "172.16.4.2", "172.31.255.254", "192.168.1.9", "169.254.10.20", "100.64.0.1", "100.127.255.1"] {
+            let invite = try #require(InviteFixture.invite(InviteFixture.link(a: "\(good):8443")), "\(good)")
+            #expect(invite.address == .init(host: good, port: 8443), "\(good)")
+        }
+    }
+
     @Test func theAddressIsOnlyAHintAndOnlyAnIPv4Literal() throws {
         for bad in ["evil.example:8443", "192.168.1.9", "192.168.1.9:0", "192.168.1.9:99999", "[::1]:8443", "192.168.1.9:84a"] {
             let invite = try #require(InviteFixture.invite(InviteFixture.link(a: bad)), "\(bad)")

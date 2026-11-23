@@ -81,6 +81,8 @@ final class GuestRoomStore {
         var model: String = GuestRoomStore.hardwareModel()
         /// The health loop's wait; tests pass one that returns at once.
         var sleep: @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0, tolerance: $0 / 5) }
+        /// Deletes this Mac's client key and certificate; the next join makes new ones.
+        var forgetIdentity: () -> Void = {}
     }
 
     static let pingInterval: Duration = .seconds(10)
@@ -522,7 +524,13 @@ final class GuestRoomStore {
         pingFailures[room.id] = nil
         pingDue[room.id] = nil
         if case .pickingSeat(let picking, _) = join, picking.id == room.id { join = .none }
-        if saved.isEmpty { stopHealthLoop() }
+        if saved.isEmpty {
+            stopHealthLoop()
+            // One key serves every room, so a host could tell that the same Mac joined before. No
+            // room is left that knows it: it goes, and the next join shows a new one. Not while a
+            // join is on its way, which already showed the key to its room.
+            if case .joining = join {} else { deps.forgetIdentity() }
+        }
     }
 
     func forgetAll() async {
@@ -601,6 +609,13 @@ final class GuestRoomStore {
             health[room.id] = .ready(deadline: Date(timeIntervalSince1970: TimeInterval(hello.deadline_epoch)))
             forwarders[room.id]?.show(nil)
             answered = true
+            // A room tells its site's name only to the people in it: kept from the first answer on.
+            let site = TXTSanitizer.clean(hello.site_label)
+            if room.site.isEmpty, !site.isEmpty, var named = deps.rooms.load().first(where: { $0.id == room.id }) {
+                named.site = site
+                deps.rooms.save(named)
+                saved = deps.rooms.load()
+            }
         } catch .removed {
             set(await sameRoom(room) ? .removed : .newRoom, for: room)
         } catch {
@@ -707,7 +722,8 @@ extension GuestRoomStore.Dependencies {
                                       makeUpstream: ShareForwarder.pinnedUpstream(to: endpoint, identity: identity, pin: pin))
             },
             openURL: openURL,
-            readPasteboard: { NSPasteboard.general.string(forType: .string) })
+            readPasteboard: { NSPasteboard.general.string(forType: .string) },
+            forgetIdentity: { try? identity.reset() })
     }
 }
 

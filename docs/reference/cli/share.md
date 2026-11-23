@@ -278,6 +278,13 @@ What people in the room opened in the last 14 days: time, Mac, seat,
 method, the first two path segments (never a document name) and the
 status. 200 entries by default, at most 5000.
 
+The log is a file per day in the share folder. It names a seat by its id,
+never by the e-mail address of the seat's user; `share log` shows the
+seat's name. A day's file stops at 16 MB (its last line is
+`/_benchbar/log-full`). Files older than 14 days are deleted when a share
+starts, when it ends and when `share log` reads them; `share teardown`
+deletes all of them.
+
 ```bash
 benchbar share log --device d_0123abcd --since 09:00:00
 ```
@@ -332,7 +339,9 @@ benchbar share status --json
 benchbar share extend --by DUR [--json]
 ```
 
-Moves the deadline, up to 12 hours from the start.
+Moves the deadline, up to 12 hours from the start. People in the room stay
+signed in: the browser's cookie has no end date of its own, and every
+session of the copy ends when the share does.
 
 ```bash
 benchbar share extend --by 1h
@@ -584,7 +593,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `share log` | `--device` | `ID` | Only this Mac (an id of share people). |
 | `share log` | `--since` | `TIME` | Only entries at or after it: ISO 8601, YYYY-MM-DD HH:MM:SS, a date, or HH:MM:SS today. |
 | `share log` | `--limit` | `N` | The newest N entries, 1 to 5000. Default: 200. |
-| `share log` | `--json` |  | One document: entries (ts, device, user, method, path, status) and truncated. |
+| `share log` | `--json` |  | One document: entries (ts, device, user, method, path, status) and truncated. user is the seat's name (the seat's id when the room no longer has the seat), never an e-mail address but in a line written by 0.8.3. |
 | `share open-as` | `--print-url` |  | Print the sign-in link instead of opening it; it holds the session. |
 | `share open-as` | `--json` |  | One document without the link (never the session). |
 | `share teardown` | `--yes` |  | Do not ask first. |
