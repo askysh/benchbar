@@ -1,3 +1,5 @@
+import AppKit
+import Carbon.HIToolbox
 import Foundation
 import Testing
 @testable import BenchBar
@@ -312,10 +314,13 @@ struct QuickSwitchTests {
         var accept = true
         var registered = false
         var registerCalls = 0
+        var choice = HotKeyChoice.standard
+        /// Keys another app holds; every other key is free while `accept` is true.
+        var taken: Set<UInt32> = []
         func register() -> Bool {
             registerCalls += 1
-            registered = accept
-            return accept
+            registered = accept && !taken.contains(choice.keyCode)
+            return registered
         }
         func unregister() { registered = false }
     }
@@ -328,14 +333,14 @@ struct QuickSwitchTests {
     }
 
     /// Labs wired to a fake CLI, and a controller on a fake key, hooked up as the app does.
-    @MainActor func wired(startsOn: Bool, accept: Bool = true) throws -> (Labs, QuickSwitchController, FakeHotKey, FakeLabsBackend) {
+    @MainActor func wired(startsOn: Bool, accept: Bool = true, keys: QuickSwitchShortcut = QuickSwitchShortcut(store: HotKeyStore(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!))) throws -> (Labs, QuickSwitchController, FakeHotKey, FakeLabsBackend) {
         let backend = FakeLabsBackend()
         backend.result = .success(try labEntries(quickSwitch: startsOn))
         let labs = Labs(loader: backend.loader)
         let key = FakeHotKey()
         key.accept = accept
         let controller = QuickSwitchController(store: BenchStore(settings: AppSettings(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!)),
-                                               labs: labs, hotKey: key)
+                                               labs: labs, keys: keys, hotKey: key)
         labs.observe(.quickSwitch) { _ in controller.sync() }
         controller.sync()
         return (labs, controller, key, backend)
@@ -365,8 +370,8 @@ struct QuickSwitchTests {
         for _ in 0..<200 where labs.errors["quick-switch"] == nil { await Task.yield() }
         #expect(labs.isOn(.quickSwitch) && !key.registered)
         #expect(backend.sets == ["quick-switch:true"], "no turn off through the CLI")
-        #expect(labs.errors["quick-switch"] == QuickSwitchController.conflictNote)
-        #expect(QuickSwitchController.conflictNote.contains("stays on"))
+        #expect(labs.errors["quick-switch"] == QuickSwitchController.conflictNote(for: .standard))
+        #expect(QuickSwitchController.conflictNote(for: .standard).contains("stays on"))
     }
 
     @MainActor @Test func aKeyThatIsFreeLaterIsRegisteredOnTheNextFlip() async throws {
@@ -382,9 +387,95 @@ struct QuickSwitchTests {
 
     /// The key is a position on the keyboard: its name is the letter it carries now.
     @Test func theShortcutIsNamedByTheLayoutsLetter() {
-        let label = HotKey.keyLabel()
-        #expect(label.count == 1 && label == label.uppercased())
-        #expect(HotKey.name == "⌃⌥" + label)
+        let name = HotKeyChoice.standard.name
+        #expect(name.hasPrefix("⌃⌥") && name.count == 3)
+        #expect(String(name.dropFirst(2)) == String(name.dropFirst(2)).uppercased())
+    }
+
+    @Test func keysWithoutALetterAreNamedAsPrinted() {
+        let cmd = UInt32(cmdKey), shift = UInt32(shiftKey)
+        #expect(HotKeyChoice(keyCode: UInt32(kVK_Space), modifiers: cmd).name == "⌘Space")
+        #expect(HotKeyChoice(keyCode: UInt32(kVK_F5), modifiers: cmd | shift).name == "⇧⌘F5")
+        #expect(HotKeyChoice(keyCode: UInt32(kVK_LeftArrow), modifiers: UInt32(controlKey | optionKey)).name == "⌃⌥←")
+    }
+
+    @Test func aRecordedKeyNeedsAModifierAndEscapeCancels() {
+        #expect(HotKeyChoice.make(keyCode: UInt16(kVK_ANSI_K), flags: []) == nil)
+        #expect(HotKeyChoice.make(keyCode: UInt16(kVK_ANSI_K), flags: [.shift]) == nil, "shift alone would take a letter everywhere")
+        #expect(HotKeyChoice.make(keyCode: UInt16(kVK_Escape), flags: [.command]) == nil)
+        let made = HotKeyChoice.make(keyCode: UInt16(kVK_ANSI_K), flags: [.control, .shift])
+        #expect(made == HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(controlKey | shiftKey)))
+    }
+
+    @Test func theChosenKeyIsKeptAndTheDefaultIsNotStored() {
+        let defaults = UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!
+        let store = HotKeyStore(defaults: defaults)
+        #expect(store.load() == .standard)
+        let mine = HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey))
+        store.save(mine)
+        #expect(HotKeyStore(defaults: defaults).load() == mine)
+        store.save(.standard)
+        #expect(defaults.data(forKey: HotKeyStore.key) == nil)
+        defaults.set(Data("nonsense".utf8), forKey: HotKeyStore.key)
+        #expect(store.load() == .standard)
+        store.save(HotKeyChoice(keyCode: 1, modifiers: UInt32(shiftKey)))
+        #expect(store.load() == .standard, "a saved value with no usable modifier is ignored")
+    }
+
+    @MainActor @Test func aNewKeyIsRegisteredStoredAndRestoredAtLaunch() async throws {
+        let defaults = UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!
+        let keys = QuickSwitchShortcut(store: HotKeyStore(defaults: defaults))
+        let (labs, _, key, _) = try wired(startsOn: true, keys: keys)
+        await labs.refresh()
+        let mine = HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey | optionKey))
+        keys.request(mine)
+        #expect(key.choice == mine && key.registered && keys.choice == mine && keys.message == nil)
+        #expect(QuickSwitchShortcut(store: HotKeyStore(defaults: defaults)).choice == mine)
+    }
+
+    @MainActor @Test func aTakenKeyShowsAMessageAndKeepsTheOldOne() async throws {
+        let keys = QuickSwitchShortcut(store: HotKeyStore(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!))
+        let (labs, _, key, _) = try wired(startsOn: true, keys: keys)
+        await labs.refresh()
+        let taken = HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey))
+        key.taken = [taken.keyCode]
+        keys.request(taken)
+        #expect(keys.choice == .standard && key.choice == .standard && key.registered)
+        #expect(keys.message?.contains("used by another app") == true && keys.message?.contains(HotKeyChoice.standard.name) == true)
+        keys.request(.standard)
+        #expect(keys.message == nil, "the next request clears it")
+    }
+
+    @MainActor @Test func resetGoesBackToTheDefault() async throws {
+        let keys = QuickSwitchShortcut(store: HotKeyStore(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!))
+        let (labs, _, key, _) = try wired(startsOn: true, keys: keys)
+        await labs.refresh()
+        keys.request(HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey)))
+        #expect(!keys.isDefault)
+        keys.reset()
+        #expect(keys.isDefault && key.choice == .standard && key.registered)
+    }
+
+    @MainActor @Test func aKeyChosenWhileTheLabIsOffIsKeptForTheNextTime() async throws {
+        let keys = QuickSwitchShortcut(store: HotKeyStore(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!))
+        let (labs, _, key, _) = try wired(startsOn: false, keys: keys)
+        await labs.refresh()
+        let mine = HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey))
+        keys.request(mine)
+        #expect(keys.choice == mine && !key.registered)
+        try await labs.set(.quickSwitch, on: true)
+        #expect(key.registered && key.choice == mine)
+    }
+
+    @MainActor @Test func aNewKeyClearsTheConflictNote() async throws {
+        let keys = QuickSwitchShortcut(store: HotKeyStore(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!))
+        let (labs, _, key, _) = try wired(startsOn: false, keys: keys)
+        await labs.refresh()
+        key.taken = [HotKeyChoice.standard.keyCode]
+        try await labs.set(.quickSwitch, on: true)
+        #expect(labs.errors["quick-switch"] != nil && !key.registered)
+        keys.request(HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey)))
+        #expect(key.registered && labs.errors["quick-switch"] == nil)
     }
 
     @MainActor @Test func thePanelDoesNotOpenWhileTheLabIsOff() throws {
@@ -410,15 +501,15 @@ struct QuickSwitchTests {
     @Test func theShortcutRowsForQuickSwitchShowOnlyWhileTheLabIsOn() {
         let off = SettingsView.shortcuts(quickSwitch: false).map(\.keys).joined(separator: " ")
         let on = SettingsView.shortcuts(quickSwitch: true).map(\.keys).joined(separator: " ")
-        #expect(!off.contains(HotKey.name) && !off.contains("⇧⌘O"))
-        #expect(on.contains(HotKey.name) && on.contains("⇧⌘O"))
+        #expect(!off.contains(HotKeyChoice.standard.name) && !off.contains("⇧⌘O"))
+        #expect(on.contains(HotKeyChoice.standard.name) && on.contains("⇧⌘O"))
     }
 
     @Test func theShortcutRowSaysWhenAnotherAppHoldsTheKey() {
         let free = SettingsView.shortcuts(quickSwitch: true).last?.keys
         let held = SettingsView.shortcuts(quickSwitch: true, keyHeld: true).last?.keys
-        #expect(free == HotKey.name)
-        #expect(held == "\(HotKey.name) is used by another app")
+        #expect(free == HotKeyChoice.standard.name)
+        #expect(held == "\(HotKeyChoice.standard.name) is used by another app")
         // with the lab off there is no row to correct
         #expect(!SettingsView.shortcuts(quickSwitch: false, keyHeld: true).map(\.keys).joined().contains("another app"))
     }

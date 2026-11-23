@@ -54,7 +54,7 @@ top chooses which bench the popover shows.
 | ⌘0 | Open as Administrator, on the default site where Open as is on |
 | ⌘1 to ⌘9 | Open as a pinned user, in menu order |
 | ⇧⌘O | Switch back to the user before |
-| ⌃⌥U | Quick Switch, from any app, once turned on in Settings > Labs |
+| ⌃⌥U | Quick Switch, from any app, once turned on in Settings > Labs (the key can be changed there) |
 
 ## Open as a user
 
@@ -118,9 +118,15 @@ only while it is on. In the list:
 Typing filters the list, and from two characters it also searches the site's
 other users. ⌃⌥U again closes it. It uses no Accessibility permission. If
 another app already holds ⌃⌥U, the Labs row says so in red and the lab stays
-on, without a key: turn it off and on again once the other app lets go. The
-key is the physical key that is U on a US keyboard; on another layout BenchBar
-names it by the letter your keyboard shows there.
+on, without a key: pick another key (below), or turn it off and on again once
+the other app lets go.
+
+**Changing the key.** While Quick Switch is on, its row in **Settings > Labs**
+shows the key. Click it, then press the new shortcut: it needs ⌃, ⌥ or ⌘ (with
+⇧ if you like), and Escape cancels. If another app holds that key, the row says
+so and the old key stays. **Reset** brings back ⌃⌥U. BenchBar remembers the
+choice. A key is the physical key; its name is the letter your keyboard shows
+there (U on a US keyboard), or its printed name such as Space or F5.
 
 After a switch the site's row reads `as {name}`: the pin's label, else the
 user's full name, else the user id. That is BenchBar's own record of its last

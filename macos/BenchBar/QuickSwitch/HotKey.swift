@@ -1,26 +1,22 @@
 import Carbon.HIToolbox
 
-/// ⌃⌥ and the key that is U on a US layout, system wide, through Carbon's `RegisterEventHotKey`. Unlike an
-/// `NSEvent` global monitor it needs no Accessibility permission, and the
+/// The Quick Switch shortcut (⌃⌥U unless the person chose another, see `HotKeyChoice`), system wide, through Carbon's
+/// `RegisterEventHotKey`. Unlike an `NSEvent` global monitor it needs no Accessibility permission, and the
 /// system keeps the key for this app alone: a second claimant fails instead
 /// of both firing.
 final class HotKey {
     private static let signature: OSType = 0x4242_5153 // 'BBQS'
-    /// The physical key (a position, not a letter), and its modifiers.
-    static let keyCode = UInt32(kVK_ANSI_U)
-    static let modifiers = UInt32(controlKey | optionKey)
 
-    /// The shortcut as the person reads it on their keyboard: ⌃⌥ and the
-    /// letter that key carries in the current layout (U on a US keyboard).
-    static var name: String { "⌃⌥" + keyLabel() }
+    /// The key and modifiers to register. Change it while unregistered.
+    var choice: HotKeyChoice
 
-    /// The character the key produces without modifiers in the current
-    /// layout, upper case. "U" when the layout cannot be read.
-    static func keyLabel(keyCode: UInt32 = HotKey.keyCode) -> String {
+    /// The character a physical key produces without modifiers in the current
+    /// layout, upper case; nil when the layout cannot be read or the key has none.
+    static func layoutLabel(keyCode: UInt32) -> String? {
         guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
-              let raw = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else { return "U" }
+              let raw = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else { return nil }
         let data = unsafeBitCast(raw, to: CFData.self)
-        guard let bytes = CFDataGetBytePtr(data) else { return "U" }
+        guard let bytes = CFDataGetBytePtr(data) else { return nil }
         var dead: UInt32 = 0
         var length = 0
         var chars = [UniChar](repeating: 0, count: 4)
@@ -28,15 +24,17 @@ final class HotKey {
             UCKeyTranslate($0, UInt16(keyCode), UInt16(kUCKeyActionDisplay), 0, UInt32(LMGetKbdType()),
                            OptionBits(kUCKeyTranslateNoDeadKeysBit), &dead, chars.count, &length, &chars)
         }
-        guard status == noErr, length > 0 else { return "U" }
-        return String(utf16CodeUnits: chars, count: length).uppercased()
+        guard status == noErr, length > 0 else { return nil }
+        let text = String(utf16CodeUnits: chars, count: length).uppercased()
+        return text.trimmingCharacters(in: .controlCharacters).isEmpty ? nil : text
     }
 
     private nonisolated(unsafe) var hotKeyRef: EventHotKeyRef?
     private nonisolated(unsafe) var handlerRef: EventHandlerRef?
     private let onPress: () -> Void
 
-    init(onPress: @escaping () -> Void) {
+    init(choice: HotKeyChoice = .standard, onPress: @escaping () -> Void) {
+        self.choice = choice
         self.onPress = onPress
     }
 
@@ -58,7 +56,7 @@ final class HotKey {
             return false
         }
         let id = EventHotKeyID(signature: Self.signature, id: 1)
-        let status = RegisterEventHotKey(Self.keyCode, Self.modifiers, id,
+        let status = RegisterEventHotKey(choice.keyCode, choice.modifiers, id,
                                          GetApplicationEventTarget(), 0, &hotKeyRef)
         guard status == noErr else {
             removeHandler()

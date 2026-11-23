@@ -52,30 +52,52 @@ final class QuickSwitchPanel: NSPanel {
 protocol HotKeyRegistering: AnyObject {
     @discardableResult func register() -> Bool
     func unregister()
+    /// The key to register; set it while unregistered.
+    var choice: HotKeyChoice { get set }
 }
 
 extension HotKey: HotKeyRegistering {}
 
-/// Owns the hot key and the panel: ⌃⌥U (the key's letter in the current layout) shows it, or hides it when it is up.
+/// Owns the hot key and the panel: the hot key (⌃⌥U unless chosen otherwise) shows it, or hides it when it is up.
 /// Settings > Labs is the one switch (`Labs.isOn(.quickSwitch)`): off, the key is
 /// not registered and the panel opens from nowhere.
 final class QuickSwitchController {
     /// The Labs row's note while another app holds the key. The lab stays on:
     /// the choice is the person's, and it works again once the other app lets go.
-    static var conflictNote: String {
-        "\(HotKey.name) is used by another app, so Quick Switch has no key for now. It stays on: turn it off and on to try again."
+    static func conflictNote(for key: HotKeyChoice) -> String {
+        "\(key.name) is used by another app, so Quick Switch has no key for now. It stays on: pick another key in Settings, or turn it off and on to try again."
     }
 
     private let store: BenchStore
     private let labs: Labs
+    private let keys: QuickSwitchShortcut
     private var hotKey: HotKeyRegistering!
     private var panel: QuickSwitchPanel?
     private var shown = 0
 
-    init(store: BenchStore, labs: Labs, hotKey: HotKeyRegistering? = nil) {
+    init(store: BenchStore, labs: Labs, keys: QuickSwitchShortcut = .shared, hotKey: HotKeyRegistering? = nil) {
         self.store = store
         self.labs = labs
-        self.hotKey = hotKey ?? HotKey { [weak self] in self?.toggle() }
+        self.keys = keys
+        self.hotKey = hotKey ?? HotKey(choice: keys.choice) { [weak self] in self?.toggle() }
+        self.hotKey.choice = keys.choice
+        keys.apply = { [weak self] wanted in self?.choose(wanted) ?? false }
+    }
+
+    /// Moves the key to another one. While the lab is on the new key must register, or the old one
+    /// stays (and is registered again); while it is off the choice is only kept for the next time.
+    private func choose(_ wanted: HotKeyChoice) -> Bool {
+        let old = hotKey.choice
+        hotKey.unregister()
+        hotKey.choice = wanted
+        guard labs.isOn(.quickSwitch) else { return true }
+        guard hotKey.register() else {
+            hotKey.choice = old
+            hotKey.register()
+            return false
+        }
+        labs.clearNote(.quickSwitch)
+        return true
     }
 
     /// Makes the hot key match the lab. A key another app holds leaves the lab
@@ -87,7 +109,7 @@ final class QuickSwitchController {
             return
         }
         guard !hotKey.register() else { return }
-        labs.note(.quickSwitch, Self.conflictNote)
+        labs.note(.quickSwitch, Self.conflictNote(for: hotKey.choice))
     }
 
     var isShowing: Bool { panel != nil }
