@@ -291,6 +291,7 @@ chk_mariadb_utf8() {
 
 # agent: the bench's systemd user unit. fl_agent_* read systemd (systemd.sh).
 chk_agent() {
+  fl_render_ensure
   local unit state pid code
   unit="$(fl_agent_plist_path)"
   chk__template "systemd unit" "$unit" "$FL_R_PLIST" write_plist

@@ -12,6 +12,8 @@ FL_R_PROCFILE=""
 FL_R_LISTEN_PY=""
 FL_R_LISTEN_JS=""
 FL_R_HELPERS=""
+# 1 once fl_render_all filled the six variables above for the current context
+FL_RENDERED=0
 FL_CRASH_MAX_STARTS="${FL_CRASH_MAX_STARTS:-3}"
 FL_CRASH_WINDOW="${FL_CRASH_WINDOW:-600}"
 FL_UP_WAIT_SECS="${FL_UP_WAIT_SECS:-45}"
@@ -85,7 +87,12 @@ fl_context_init() {
   fi
   FL_ARCH="$(uname -m)"
   fl_honcho_resolve || true
-  fl_render_all
+  # the service files are rendered when a command first reads them
+  # (fl_render_ensure): most commands never do, and the render was two thirds
+  # of what a down, a site list or an app command cost. Until then the six
+  # variables are unset, so a reader that forgot fl_render_ensure stops the
+  # run (set -u) and cannot compare or write an empty file.
+  fl_render_forget
   FL_CONTEXT_READY=1
 }
 
@@ -128,6 +135,19 @@ fl_autostart_enabled() {
   [[ "$(fl_bstate_get AUTOSTART 2>/dev/null || true)" != "off" ]]
 }
 
+# fl_render_forget: what was rendered no longer counts (a new context)
+fl_render_forget() {
+  FL_RENDERED=0
+  unset FL_R_RUNNER FL_R_PLIST FL_R_PROCFILE FL_R_LISTEN_PY FL_R_LISTEN_JS FL_R_HELPERS
+}
+
+# fl_render_ensure: FL_R_* hold the service files of this context. Every
+# function that reads one calls this first, in its own shell and not inside
+# a $( ), or each subshell would render again.
+fl_render_ensure() {
+  [[ "$FL_RENDERED" == "1" ]] || fl_render_all
+}
+
 fl_render_all() {
   local honcho="${FL_HONCHO:-${FL_BENCH_DIR}/env/bin/honcho}" run_at_load=true
   # a path or site the templates cannot carry renders escaped here (doctor
@@ -151,6 +171,7 @@ fl_render_all() {
   # the agent's plist, or the systemd unit on Linux
   fl_render_agent "$run_at_load"
   FL_R_HELPERS="$(fl_rc_helpers_render "$(fl_rc_profile)" "$(fl_helpers_cli)")"
+  FL_RENDERED=1
 }
 
 # The Procfile and, for the default "local" listen mode, the two files its web

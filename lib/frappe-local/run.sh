@@ -11,6 +11,10 @@ FL_RUN_PGID=""
 # the foreground child benchbar is waiting for (a phase script): a signal
 # to benchbar is forwarded to it, and it forwards to its own group
 FL_RUN_CHILD_PID=""
+# the wait loop of fl_run_long and fl_run_with_timeout: milliseconds of pauses
+# so far, and the second of the last look at the command's state
+FL_RUN_POLLED_MS=0
+FL_RUN_STATE_AT=0
 
 # fl_run_bg_group LOG COMMAND...: starts COMMAND in the background as the
 # leader of its own process group, output to LOG (stderr too, unless
@@ -228,6 +232,31 @@ fl_run() {
   "$@"
 }
 
+# fl_run_poll_pause: the pause between two looks at a running command, in
+# FL_RUN_POLLED_MS (the caller sets it to 0 before its loop). A command that
+# ends at once is seen within 20 ms and one of a few seconds within 100 ms; a
+# long one is polled twice a second. A fixed "sleep 1" made every command
+# cost a full second however short it was (40 percent of the mocked suite's
+# pull and app tests, and up to a second per bench command for a person).
+fl_run_poll_pause() {
+  if [[ "$FL_RUN_POLLED_MS" -lt 100 ]]; then sleep 0.02; FL_RUN_POLLED_MS=$((FL_RUN_POLLED_MS + 20))
+  elif [[ "$FL_RUN_POLLED_MS" -lt 3000 ]]; then sleep 0.1; FL_RUN_POLLED_MS=$((FL_RUN_POLLED_MS + 100))
+  else sleep 0.5; FL_RUN_POLLED_MS=$((FL_RUN_POLLED_MS + 500)); fi
+}
+
+# fl_run_stopped PID: the command waits for the terminal (state T). Asked at
+# most once a second (FL_RUN_STATE_AT holds the second of the last look, the
+# caller sets it to $SECONDS before its loop), so the quick polls above start
+# no ps, and a command that ends within its first second starts none at all.
+fl_run_stopped() {
+  local state
+  [[ "$SECONDS" != "$FL_RUN_STATE_AT" ]] || return 1
+  FL_RUN_STATE_AT="$SECONDS"
+  state="$(ps -o state= -p "$1" 2>/dev/null)" || return 1
+  state="${state#"${state%%[![:space:]]*}"}"
+  [[ "$state" == T* ]]
+}
+
 # fl_run_long LABEL COMMAND...: runs a slow command with a spinner and a
 # rolling tail of its output. On failure prints the last 40 lines and the
 # path of the full log.
@@ -249,8 +278,9 @@ fl_run_long() {
   fl_spinner_start "$label" "$log"
   # in its own group the command cannot read the terminal: one that tries
   # (a password prompt) is stopped by SIGTTIN, and would wait for ever
+  FL_RUN_POLLED_MS=0; FL_RUN_STATE_AT="$SECONDS"
   while kill -0 "$pid" 2>/dev/null; do
-    if [[ "$(ps -o state= -p "$pid" 2>/dev/null | awk '{print $1}')" == T* ]]; then
+    if fl_run_stopped "$pid"; then
       fl_run_group_kill
       fl_spinner_stop
       fl_fail "${label} stopped while waiting for input."
@@ -264,7 +294,7 @@ fl_run_long() {
       last_progress="$SECONDS"
       fl_jsonl_progress "$label" $((SECONDS - start))
     fi
-    sleep 1
+    fl_run_poll_pause
   done
   wait "$pid" || code="$?"
   FL_RUN_PGID=""
@@ -287,7 +317,7 @@ fl_run_long() {
 # (exit 124 at the deadline) and the same progress line for the JSON stream
 # every FL_PROGRESS_SECS, so a long bench init is not silent there.
 fl_run_with_timeout() {
-  local timeout_seconds="$1" label="$2" log pid start elapsed code state last_progress
+  local timeout_seconds="$1" label="$2" log pid start elapsed code last_progress
   shift 2
   fl_redact_url_v FL_LAST_COMMAND "$*"
   if [[ "$FL_DRY_RUN" == "1" ]]; then
@@ -307,9 +337,9 @@ fl_run_with_timeout() {
   last_progress="$SECONDS"
   fl_spinner_start "$label" "$log"
 
+  FL_RUN_POLLED_MS=0; FL_RUN_STATE_AT="$SECONDS"
   while kill -0 "$pid" >/dev/null 2>&1; do
-    state="$(ps -o state= -p "$pid" 2>/dev/null | awk '{print $1}')"
-    if [[ "$state" == T* ]]; then
+    if fl_run_stopped "$pid"; then
       # the whole group: the stopped process may be a grandchild's parent
       fl_run_group_kill
       fl_spinner_stop
@@ -337,7 +367,7 @@ fl_run_with_timeout() {
       last_progress="$SECONDS"
       fl_jsonl_progress "$label" "$elapsed"
     fi
-    sleep 1
+    fl_run_poll_pause
   done
 
   code=0

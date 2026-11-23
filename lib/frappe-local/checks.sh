@@ -432,6 +432,7 @@ chk_bench_path() {
 # and socketio lines start with: a Procfile that names a file that is gone
 # would stop the bench, so the files are part of this one check.
 chk_procfile() {
+  fl_render_ensure
   local f
   chk__template "Procfile.lean" "$(fl_procfile_path)" "$FL_R_PROCFILE" write_procfile
   [[ "$CHK_STATUS" == "ok" && -n "$FL_R_LISTEN_PY" ]] || return 0
@@ -458,6 +459,7 @@ chk_procfile() {
 # Procfile.lean (no service) or a foreign one is not this check's: the
 # procfile check says so, and nothing here knows how that bench starts.
 fl_listen_files_stale() {
+  fl_render_ensure
   local st
   st="$(fl_template_status "$(fl_procfile_path)" "$FL_R_PROCFILE")"
   case "$st" in
@@ -514,6 +516,7 @@ chk_bench_listen() {
   fi
 }
 chk_runner() {
+  fl_render_ensure
   chk__template "runner" "$(fl_runner_path)" "$FL_R_RUNNER" write_runner
   # frappe-mac-run.sh from before 0.3.0, left behind if a repair was interrupted
   if [[ "$CHK_STATUS" == "ok" && -f "$(fl_runner_path_legacy)" ]] && ! fl_runner_legacy_in_use; then
@@ -522,6 +525,7 @@ chk_runner() {
 }
 
 chk_agent() {
+  fl_render_ensure
   local plist state pid code
   plist="$(fl_agent_plist_path)"
   chk__template "agent plist" "$plist" "$FL_R_PLIST" write_plist
@@ -552,6 +556,7 @@ FL_HEARTBEAT_STALE_SECS="${FL_HEARTBEAT_STALE_SECS:-90}"
 # future is a clock that moved back, which a beating runner fixes in 30 s
 FL_HEARTBEAT_FUTURE_SECS=5
 chk_runner_heartbeat() {
+  fl_render_ensure
   local hb="${FL_BENCH_DIR}/logs/.benchbar/heartbeat" age fix
   fix="$(fl_fix_cmd "$FL_SELF" restart --bench-dir "$FL_BENCH_DIR")"
   if [[ "$(fl_template_status "$(fl_runner_path)" "$FL_R_RUNNER")" != "current" ]]; then
@@ -599,6 +604,7 @@ chk_stop_flag() {
 }
 
 chk_helpers() {
+  fl_render_ensure
   local rc status legacy recorded own="" sh="${SHELL:-}"
   rc="$(fl_rc_file)"
   if [[ -z "$rc" ]]; then
