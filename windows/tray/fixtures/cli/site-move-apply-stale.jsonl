@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.9.0","event":"done","op_id":"op-20261123-101600-5002","exit":1,"error":"The site move plan changed since it was shown (the sites, the default sites, the apps or a lease). Nothing was changed.","changed":[],"warnings":[],"next_actions":[]}
