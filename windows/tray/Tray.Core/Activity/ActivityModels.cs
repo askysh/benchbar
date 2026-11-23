@@ -25,7 +25,7 @@ public static class ActivityText
     /// The environment of a call that the CLI allows to a person only (removing a snapshot, rolling the default site back, <c>--break-lease</c>): the
     /// click, and for a rollback the typed site name, was that person's decision. Never set for a poll, a link or a read.
     /// </summary>
-    public static SecretEnvironment PersonEnvironment() => new SecretEnvironment().Set(SetupEnv.NonInteractive, "0");
+    public static SecretEnvironment ClickEnvironment() => new SecretEnvironment().Set(SetupEnv.NonInteractive, "0");
 }
 
 // --- leases ---

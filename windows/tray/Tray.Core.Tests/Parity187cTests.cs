@@ -272,7 +272,7 @@ public class Parity187cTests
         var entries = HistoryJson.Parse(o);
         Assert.Equal("An agent through MCP (claude-code 2.1)", HistoryText.Who(entries[0]));
         Assert.Equal("Failed (exit 2)", HistoryText.Result(entries[0]));
-        Assert.Equal("app add", HistoryText.Title(entries[0]));
+        Assert.Equal("app", HistoryText.Title(entries[0])); // no command key: the first word of argv, as on the Mac
         Assert.Equal("app hrms, 3 more", HistoryText.Changes(entries[0]));
         Assert.Equal("future-thing", HistoryText.Who(entries[1]));
         Assert.Equal("a command", HistoryText.Title(entries[1]));

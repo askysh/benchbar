@@ -187,7 +187,7 @@ internal sealed partial class SitesView
         var bench = PanelBench;
         SetBusy(true);
         Rebuild();
-        var r = await _services.Cli.RunJsonAsync(SnapshotCommands.Remove(site, snapshot.Id, bench), ActivityText.PersonEnvironment(), CliTimeouts.Apply, o => o);
+        var r = await _services.Cli.RunJsonAsync(SnapshotCommands.Remove(site, snapshot.Id, bench), ActivityText.ClickEnvironment(), CliTimeouts.Apply, o => o);
         var ok = r.Ok;
         var text = ok ? $"The snapshot {snapshot.Title} was removed." : Why(r);
         PagePanels.OnUi(this, () =>

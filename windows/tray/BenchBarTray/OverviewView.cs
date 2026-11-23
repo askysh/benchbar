@@ -489,7 +489,7 @@ internal sealed class OverviewView : UserControl
         _busy.Add(bench.Path);
         _failures.Remove(bench.Path);
         Refresh();
-        var result = await _services.Cli.RunStreamAsync([verb, "--break-lease", "--bench-dir", bench.Path], ActivityText.PersonEnvironment(), TimeSpan.FromMinutes(5), _ => { }).ConfigureAwait(true);
+        var result = await _services.Cli.RunStreamAsync([verb, "--break-lease", "--bench-dir", bench.Path], ActivityText.ClickEnvironment(), TimeSpan.FromMinutes(5), _ => { }).ConfigureAwait(true);
         _busy.Remove(bench.Path);
         if (!result.Ok) _failures[bench.Path] = (result.Problem ?? $"It did not work (exit {result.Exit}).", bench.State);
         else _services.RefreshNow();
