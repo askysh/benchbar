@@ -14,10 +14,10 @@ const lines = (dir) => fs.readFileSync(path.join(dir, "activity-2026-11-02.log")
 test("a record is one JSON line in a daily 0600 file with exactly the documented fields", () => {
     const dir = tmp();
     const log = new ActivityLog(dir, { now: () => T0 });
-    log.record({ device: "d_00000001", user: "priya.test@example.com", method: "GET", path: "/app/sales-order", status: 200 });
+    log.record({ device: "d_00000001", seat: "s_0a1b2c3d", method: "GET", path: "/app/sales-order", status: 200 });
     const [r] = lines(dir);
-    assert.deepStrictEqual(r, { ts: "2026-11-02T10:00:00.000Z", device: "d_00000001", user: "priya.test@example.com", method: "GET", path: "/app/sales-order", status: 200 });
-    assert.deepStrictEqual(Object.keys(r), ["ts", "device", "user", "method", "path", "status"]);
+    assert.deepStrictEqual(r, { ts: "2026-11-02T10:00:00.000Z", device: "d_00000001", seat: "s_0a1b2c3d", method: "GET", path: "/app/sales-order", status: 200 });
+    assert.deepStrictEqual(Object.keys(r), ["ts", "device", "seat", "method", "path", "status"]);
     assert.strictEqual(fs.statSync(path.join(dir, "activity-2026-11-02.log")).mode & 0o777, 0o600);
 });
 
@@ -64,7 +64,41 @@ test("Cookie, Authorization and any other field cannot reach a record", () => {
     log.record({ device: "d", user: "u", method: "GET", path: "/app", status: 200, cookie: "sid=SECRETSID", authorization: "token K:S", headers: { cookie: "sid=SECRETSID" } });
     const raw = fs.readFileSync(path.join(dir, "activity-2026-11-02.log"), "utf8");
     assert.ok(!raw.includes("SECRETSID") && !raw.includes("token K:S"));
-    assert.deepStrictEqual(Object.keys(lines(dir)[0]), ["ts", "device", "user", "method", "path", "status"]);
+    assert.deepStrictEqual(Object.keys(lines(dir)[0]), ["ts", "device", "seat", "method", "path", "status"]);
+});
+
+// ---- #159 SHARE-10: the seat's id, not its e-mail address; a day's file has a size limit
+test("a line names the seat by its id, and no e-mail address reaches the file", () => {
+    const dir = tmp();
+    const log = new ActivityLog(dir, { now: () => T0 });
+    log.record({ device: "d_00000001", seat: "s_0a1b2c3d", user: "priya.test@example.com", method: "GET", path: "/app/sales-order", status: 200 });
+    log.record({ device: "d_00000002", seat: null, method: "GET", path: "/_benchbar/hello", status: 200 });
+    const text = fs.readFileSync(path.join(dir, "activity-2026-11-02.log"), "utf8");
+    const lines = text.trim().split("\n").map((l) => JSON.parse(l));
+    assert.deepStrictEqual(lines[0], { ts: "2026-11-02T10:00:00.000Z", device: "d_00000001", seat: "s_0a1b2c3d", method: "GET", path: "/app/sales-order", status: 200 });
+    assert.strictEqual(lines[1].seat, "");
+    assert.ok(!text.includes("@") && !text.includes("priya"), text);
+});
+
+test("a day's file stops at its size limit with one closing line, and the next day records again", () => {
+    const dir = tmp();
+    let t = T0;
+    const log = new ActivityLog(dir, { now: () => t, maxDayBytes: 600 });
+    for (let i = 0; i < 50; i++) log.record({ device: "d_00000001", seat: "s_0a1b2c3d", method: "GET", path: "/app/sales-order", status: 200 });
+    const file = path.join(dir, "activity-2026-11-02.log");
+    const lines = fs.readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    assert.ok(fs.statSync(file).size <= 600, `the file is ${fs.statSync(file).size} bytes`);
+    assert.ok(lines.length < 50 && lines.length > 2, `${lines.length} lines`);
+    assert.strictEqual(lines.at(-1).path, "/_benchbar/log-full");
+    assert.strictEqual(lines.filter((l) => l.path === "/_benchbar/log-full").length, 1);
+    // a gateway that starts again on the same day finds the file full and adds nothing
+    const again = new ActivityLog(dir, { now: () => t, maxDayBytes: 600 });
+    const before = fs.statSync(file).size;
+    again.record({ device: "d", seat: "s", method: "GET", path: "/app", status: 200 });
+    assert.strictEqual(fs.statSync(file).size, before);
+    t = T0 + DAY;
+    log.record({ device: "d", seat: "s", method: "GET", path: "/app", status: 200 });
+    assert.strictEqual(fs.readFileSync(path.join(dir, "activity-2026-11-03.log"), "utf8").trim().split("\n").length, 1);
 });
 
 test("a new day starts a new file", () => {

@@ -106,7 +106,7 @@ render_runner() { # DNS_SD CAFFEINATE LSOF
   fl_template_render share-run.sh "SHARE_DIR=${SHARE}" "SOCK=${SHARE}/control.sock" "BENCH=${BENCH}" "SHARE_SITE=share.localhost" "WEB_PORT=8001" \
     "GATEWAY_PORT=8443" "PYTHON=${BENCH}/env/bin/python" "LIB=${LIB}" "NODE=/n/node" "BENCHBAR=${ROOT}/benchbar" "DNS_SD=$1" \
     "CAFFEINATE=$2" "LSOF=$3" "CURL=/usr/bin/curl" "WIPE_SECS=8" "LISTEN_SECS=60" "SOCK_SECS=15" "WARM_SECS=30" \
-    "SESSIONS_PY=print(1)" "CONTROL_JS=1;" "SITE_LABEL=linuxdev" "ROOM_LABEL=Lab one"
+    "SESSIONS_PY=print(1)" "CONTROL_JS=1;" "ROOM_LABEL=Lab one"
 }
 render_runner /usr/bin/avahi-publish "" /usr/bin/ss >"$TMP_DIR/runner.sh"
 bash -n "$TMP_DIR/runner.sh" || fail "the runner does not parse"
@@ -140,10 +140,12 @@ printf 'avahi-publish %s\n' "$*" >>"$MOCK_STATE/order"
 exit 0
 SH
 chmod +x "$TMP_DIR/avahi-publish"
-DNS_SD="$TMP_DIR/avahi-publish"; ROOM_LABEL="Lab one"; GATEWAY_PORT=8443; SITE_LABEL=linuxdev; polls=0; DNS_PID=""
+DNS_SD="$TMP_DIR/avahi-publish"; ROOM_LABEL="Lab one"; GATEWAY_PORT=8443; polls=0; DNS_PID=""
 start_dns
 wait "$DNS_PID" 2>/dev/null || true
-assert_contains "$(cat "$MOCK_STATE/order")" 'avahi-publish -s Lab one _benchbar-share._tcp 8443 v=3 label=Lab one site=linuxdev'
+assert_contains "$(cat "$MOCK_STATE/order")" 'avahi-publish -s Lab one _benchbar-share._tcp 8443 v=3 label=Lab one'
+# SHARE-7: the record every device on the network reads does not name the source site
+assert_not_contains "$(cat "$MOCK_STATE/order")" "site="
 assert_not_contains "$(cat "$MOCK_STATE/order")" " local "
 # no advertiser: nothing starts, it is said once and never again, and it is not a failure
 DNS_SD=""; DNS_PID=""; : >"$TMP_DIR/say.log"
