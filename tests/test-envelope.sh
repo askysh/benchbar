@@ -309,6 +309,18 @@ if [[ -z "${ENVELOPE_ONLY:-}" ]]; then
   check "site default (--json changer)" yes
   run_events --jsonl site default nosuchsite
   check "site default (--jsonl failure)" yes
+  # the plans with a token (--dry-run, one document under --json) end with the envelope as well: app install,
+  # lock apply and profile remove (parity row P15, P23, P17)
+  run_events --for-agent app install erpnext --site macdev --dry-run
+  assert_eq "0" "$CODE" "app install --dry-run: $(head -c 300 "$STREAM.err")"
+  check "app install (--dry-run plan)" yes
+  run_events --for-agent lock apply --dry-run --lock "$TMP_DIR/benchbar.toml"
+  assert_eq "0" "$CODE" "lock apply --dry-run: $(head -c 300 "$STREAM.err")"
+  check "lock apply (--dry-run plan)" yes
+  run_events --for-agent profile import "$TMP_DIR/x/acme.toml" --yes
+  run_events --for-agent profile remove acme --dry-run
+  assert_eq "0" "$CODE" "profile remove --dry-run: $(head -c 300 "$STREAM.err")"
+  check "profile remove (--dry-run plan)" yes
   [[ -z "$FAILS" ]] || fail "output modes without the envelope:$FAILS"
   # the first uninstall removes the service of the bench: the last run, nothing uses the bench after it
   again changes uninstall-service --yes --bench-dir "$BENCH"

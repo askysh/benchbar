@@ -215,11 +215,13 @@ fl_bench_cli_version() {
 
 # fl__lock_args ARGS...: --lock PATH and the flags of each command
 fl__lock_args() {
-  LOCK_FLAG=""; LOCK_NO_COMMITS=0; LOCK_ALLOW_DIRTY=0
+  LOCK_FLAG=""; LOCK_NO_COMMITS=0; LOCK_ALLOW_DIRTY=0; LOCK_APPLY=0; LOCK_TOKEN=""
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --lock) LOCK_FLAG="${2:-}"; shift 2 ;;
       --lock=*) LOCK_FLAG="${1#*=}"; shift ;;
+      --apply) LOCK_APPLY=1; LOCK_TOKEN="${2:-}"; shift 2 || shift ;;
+      --apply=*) LOCK_APPLY=1; LOCK_TOKEN="${1#*=}"; shift ;;
       --no-commits) LOCK_NO_COMMITS=1; shift ;;
       --allow-dirty) LOCK_ALLOW_DIRTY=1; shift ;;
       --json) OPT_JSON=1; shift ;;
@@ -294,6 +296,16 @@ fl_cmd_lock_write() {
   fl__lock_args "$@"
   fl_require_bench
   fl_lock_file_resolve "$LOCK_FLAG"
+  # no person to say where: BENCHBAR_LOCK and a path remembered from an earlier --lock name files that may be
+  # anywhere, so a write with nobody asking (an agent, benchbar mcp) refuses them; the remembered path stays for the person
+  if fl_noninteractive && [[ "$FL_LOCK_SOURCE" == "env" || "$FL_LOCK_SOURCE" == "state" ]]; then
+    case "$FL_LOCK_FILE" in
+      "${FL_BENCH_DIR}"/*/../*|"${FL_BENCH_DIR}"/../*|"${FL_BENCH_DIR}"/*/..) fl_die "lock write refuses ${FL_LOCK_FILE}: without a person it writes only inside the bench." "A person can run: benchbar lock write in a terminal" ;;
+      "${FL_BENCH_DIR}"/*) ;;
+      *) fl_die "lock write refuses ${FL_LOCK_FILE} (from the $([[ "$FL_LOCK_SOURCE" == env ]] && echo BENCHBAR_LOCK variable || echo "path remembered for this bench")): without a person it writes only inside the bench." \
+        "A person can run: benchbar lock write in a terminal" ;;
+    esac
+  fi
   fl_header "benchbar lock write" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
   fl_site_apps_refresh
   [[ -n "$FL_SITE_APPS_ERROR" ]] && fl_warn "${FL_SITE_APPS_ERROR}; the sites' apps come from the last good read"
@@ -406,8 +418,15 @@ fl_lock_switch_branch() {
 }
 
 fl_cmd_lock_apply() {
-  local i n name dir cur state rows=() plan=() skipped=() changed=() cloned=() a s code=0 r kind sha step new_repos=()
+  local i n name dir cur state rows=() plan=() skipped=() changed=() cloned=() a s code=0 r kind sha step new_repos=() la_data la_token="" tcode sep="" steps_json="" skipped_json="" repos_json=""
   fl__lock_args "$@"
+  if [[ "$LOCK_APPLY" == "1" ]]; then
+    [[ "$LOCK_TOKEN" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar lock apply --dry-run --json prints it"
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
+    [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (lock apply --dry-run --json), then pass its token with --apply TOKEN --yes."
+  fi
+  # a dry run with --json: the plan is the one document on fd 3, the text goes to stderr
+  [[ "$LOCK_APPLY" == "1" || "${FL_DRY_RUN:-0}" != "1" || "$OPT_JSON" != "1" ]] || fl_json_doc_begin
   fl_require_bench
   fl_lock_file_resolve "$LOCK_FLAG"
   fl__lock_require apply
@@ -445,11 +464,40 @@ fl_cmd_lock_apply() {
     fi
     i=$((i + 1))
   done
+  # the approval token: the lockfile (its bytes), the plan and what is skipped; --apply recomputes it here, under the lock
+  la_data="$(printf 'lock apply\n%s\n%s\n%s\n' "$FL_BENCH_DIR" "$FL_LOCK_FILE" "$(shasum -a 256 <"$FL_LOCK_FILE" | awk '{print $1}')"
+    printf 'plan\n'; printf '%s\n' ${plan[@]+"${plan[@]}"}; printf 'skipped\n'; printf '%s\n' ${skipped[@]+"${skipped[@]}"})"
+  [[ "${#plan[@]}" == "0" ]] || fl_plan_token_v la_token "$la_data"
+  if [[ "$LOCK_APPLY" == "1" ]]; then
+    tcode=0
+    if [[ -n "$la_token" ]]; then fl_plan_token_check "$la_data" "$LOCK_TOKEN" || tcode=$?; else tcode=1; fi
+    case "$tcode" in
+      0) ;;
+      2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: benchbar lock apply --dry-run --json, then pass its token." ;;
+      *) fl_die "The lock apply plan changed since it was shown (the lockfile, an app or its branch or commit, or nothing is left to do). Nothing was changed." \
+        "Review a fresh plan: benchbar lock apply --dry-run --json, then pass its token." ;;
+    esac
+  fi
   printf '\n%sPlan%s\n' "$FL_BOLD" "$FL_RESET"
   for s in ${skipped[@]+"${skipped[@]}"}; do fl_warn "skipped: ${s}"; done
   for i in "${!DR_KIND[@]}"; do
     [[ "${DR_KIND[$i]}" == "app_extra" ]] && fl_info "${DR_APP[$i]} is in the bench but not in the lock; it stays"
   done
+  if [[ "${FL_DRY_RUN:-0}" == "1" && "$OPT_JSON" == "1" ]]; then
+    for step in ${plan[@]+"${plan[@]}"}; do
+      IFS='|' read -r kind r name a <<<"$step"
+      steps_json="${steps_json}${sep}$(printf '{"kind":%s,"app":%s,"detail":%s}' "$(fl_json_str "$kind")" "$(fl_json_str "$name")" "$(fl_json_str "$a")")"; sep=","
+      [[ "$kind" != "clone" ]] || new_repos+=("${LK_APP_REPO[$r]}")
+    done
+    sep=""
+    for s in ${skipped[@]+"${skipped[@]}"}; do skipped_json="${skipped_json}${sep}$(fl_json_str "$s")"; sep=","; done
+    sep=""
+    for s in ${new_repos[@]+"${new_repos[@]}"}; do repos_json="${repos_json}${sep}$(fl_json_str "$s")"; sep=","; done
+    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"lock_file":%s,"dry_run":true,"can_apply":%s,"steps":[%s],"skipped":[%s],"runs_code_from":[%s],"token":%s}' \
+      "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_LOCK_FILE")" "$([[ -n "$la_token" ]] && printf true || printf false)" "$steps_json" "$skipped_json" "$repos_json" \
+      "$(if [[ -n "$la_token" ]]; then printf '"%s"' "$la_token"; else printf null; fi)")" plan
+    return 0
+  fi
   if [[ "${#plan[@]}" == "0" ]]; then
     fl_ok "unchanged: the apps match ${FL_LOCK_FILE}"
     fl_lock_site_steps

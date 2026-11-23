@@ -1078,14 +1078,24 @@ fl_app_verify() {
 # ---------------------------------------------------------------- app install
 
 fl_cmd_app_install() {
-  local app="" a missing="" dep skip_backup=0
-  for a in "$@"; do
-    case "$a" in
-      --skip-backup) skip_backup=1 ;;
-      -*) fl_die "Unknown option for app install: $a" "Use: benchbar app install NAME --site SITE [--skip-backup]" ;;
-      *) [[ -z "$app" ]] && app="$a" ;;
+  local app="" missing="" dep skip_backup=0 apply=0 token="" ai_data ai_token tcode
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --skip-backup) skip_backup=1; shift ;;
+      --json) OPT_JSON=1; shift ;;
+      --apply) apply=1; token="${2:-}"; shift 2 || shift ;;
+      --apply=*) apply=1; token="${1#*=}"; shift ;;
+      -*) fl_die "Unknown option for app install: $1" "Use: benchbar app install NAME --site SITE [--skip-backup] [--dry-run --json | --apply TOKEN --yes]" ;;
+      *) [[ -z "$app" ]] && app="$1"; shift ;;
     esac
   done
+  if [[ "$apply" == "1" ]]; then
+    [[ "$token" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar app install ${app:-NAME} --site SITE --dry-run --json prints it"
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
+    [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (app install ${app:-NAME} --site SITE --dry-run --json), then pass its token with --apply TOKEN --yes."
+  fi
+  # a dry run with --json: the plan is the one document on fd 3, the text goes to stderr
+  [[ "$apply" == "1" || "${FL_DRY_RUN:-0}" != "1" || "$OPT_JSON" != "1" ]] || fl_json_doc_begin
   fl_require_bench
   [[ -n "$app" && -n "${OPT_SITE:-}" ]] || fl_die "Usage: benchbar app install NAME --site SITE"
   fl_site_require "$OPT_SITE"
@@ -1098,8 +1108,25 @@ fl_cmd_app_install() {
   fi
   fl_header "benchbar app install" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$OPT_SITE"
   fl_site_apps_refresh "$OPT_SITE"
+  # the plan and its token: the app, the site, whether the site has it (from this read of list-apps) and the steps
+  ai_data="$(printf 'app install\n%s\n%s\n%s\n%s\n%s\n' "$FL_BENCH_DIR" "$app" "$OPT_SITE" "$skip_backup" "$(fl_site_has_app "$OPT_SITE" "$app" && printf installed || printf missing)")"
+  fl_plan_token_v ai_token "$ai_data"
+  if [[ "$apply" == "1" ]]; then
+    tcode=0
+    if fl_site_has_app "$OPT_SITE" "$app"; then tcode=1; else fl_plan_token_check "$ai_data" "$token" || tcode=$?; fi
+    case "$tcode" in
+      0) ;;
+      2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: benchbar app install ${app} --site ${OPT_SITE} --dry-run --json, then pass its token." ;;
+      *) fl_die "The app install plan changed since it was shown (the app is installed on ${OPT_SITE} already, or the bench changed). Nothing was changed." \
+        "Review a fresh plan: benchbar app install ${app} --site ${OPT_SITE} --dry-run --json, then pass its token." ;;
+    esac
+  fi
   if fl_site_has_app "$OPT_SITE" "$app"; then
     fl_ok "unchanged: ${app} is already installed on ${OPT_SITE}"
+    if [[ "${FL_DRY_RUN:-0}" == "1" && "$OPT_JSON" == "1" ]]; then
+      fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"site":%s,"dry_run":true,"installed":true,"can_apply":false,"steps":[],"token":null}' \
+        "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$OPT_SITE")")" plan
+    fi
     return 0
   fi
   [[ -n "$(fl_site_apps_meta error)" ]] && fl_warn "$(fl_site_apps_meta error)"
@@ -1110,7 +1137,16 @@ fl_cmd_app_install() {
   else
     fl_table "#|Step|Command" "1|Back up ${OPT_SITE}|bench --site ${OPT_SITE} backup" "2|Install on ${OPT_SITE}|bench --site ${OPT_SITE} install-app ${app}"
   fi
-  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then printf '\n'; fl_info "dry-run: nothing was changed"; return 0; fi
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    if [[ "$OPT_JSON" == "1" ]]; then
+      fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"site":%s,"dry_run":true,"installed":false,"can_apply":true,"skip_backup":%s,"steps":[%s{"name":%s,"command":%s}],"token":"%s"}' \
+        "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$OPT_SITE")" "$(fl_json_bool "$skip_backup")" \
+        "$([[ "$skip_backup" == "1" ]] || printf '{"name":%s,"command":%s},' "$(fl_json_str "Back up ${OPT_SITE}")" "$(fl_json_str "bench --site ${OPT_SITE} backup")")" \
+        "$(fl_json_str "Install on ${OPT_SITE}")" "$(fl_json_str "bench --site ${OPT_SITE} install-app ${app}")" "$ai_token")" plan
+      return 0
+    fi
+    printf '\n'; fl_info "dry-run: nothing was changed"; return 0
+  fi
   fl_confirm "Install ${app} on ${OPT_SITE}?" || { fl_warn "Cancelled. Nothing was changed."; return 1; }
   if [[ "$skip_backup" == "1" ]]; then fl_steps_define "Install on ${OPT_SITE}"; else fl_steps_define "Back up ${OPT_SITE}" "Install on ${OPT_SITE}"; fi
   if [[ "$skip_backup" != "1" ]]; then
@@ -1385,16 +1421,24 @@ fl__au_run() {
 fl_cmd_app_update() {
   local app="" a skip_backup=0 discard=0 branch remote old new head total=0 newer=0 from to sites=() s rows=() labels=() steps=() i code=0 running=0 sep log
   local ff_left f s pending=0 fetched=1 kind target name cmd reason fail_from
-  local pd_failed="" pd_reason="" pd_started="" pd_line="" pd_steps=() doc ids=()
-  for a in "$@"; do
-    case "$a" in
-      --skip-backup) skip_backup=1 ;;
-      --discard-pending) discard=1 ;;
-      --json) OPT_JSON=1 ;;
-      -*) fl_die "Unknown option for app update: $a" "Use: benchbar app update NAME [--skip-backup] [--discard-pending] [--dry-run --json]" ;;
-      *) [[ -z "$app" ]] && app="$a" ;;
+  local pd_failed="" pd_reason="" pd_started="" pd_line="" pd_steps=() doc ids=() apply=0 token="" au_data="" au_token="" tcode
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --skip-backup) skip_backup=1; shift ;;
+      --discard-pending) discard=1; shift ;;
+      --json) OPT_JSON=1; shift ;;
+      --apply) apply=1; token="${2:-}"; shift 2 || shift ;;
+      --apply=*) apply=1; token="${1#*=}"; shift ;;
+      -*) fl_die "Unknown option for app update: $1" "Use: benchbar app update NAME [--skip-backup] [--discard-pending] [--dry-run --json | --apply TOKEN --yes]" ;;
+      *) [[ -z "$app" ]] && app="$1"; shift ;;
     esac
   done
+  if [[ "$apply" == "1" ]]; then
+    [[ "$token" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar app update ${app:-NAME} --dry-run --json prints it"
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
+    [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (app update ${app:-NAME} --dry-run --json), then pass its token with --apply TOKEN --yes."
+    [[ "$discard" == "0" ]] || fl_die "--apply runs an update; --discard-pending does not."
+  fi
   # the document (or the stream) is on fd 3; every line of text goes to stderr
   [[ "$OPT_JSON" != "1" ]] || fl_json_doc_begin
   fl_require_bench
@@ -1519,6 +1563,23 @@ fl_cmd_app_update() {
       fi ;;
   esac
 
+  # the approval token: the plan (the remote and the pending record included) and the state it was made against,
+  # nothing when there is nothing to do; --apply recomputes it here, after its own fetch and under the lock
+  if [[ "${#steps[@]}" -gt 0 ]]; then
+    au_data="$(printf 'app update\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' "$FL_BENCH_DIR" "$app" "$remote" "$branch" "$from" "$to" "${pending}:${pd_line}" "${sites[*]:-}" "$skip_backup"; printf '%s\n' "${steps[@]}")"
+    fl_plan_token_v au_token "$au_data"
+  fi
+  if [[ "$apply" == "1" ]]; then
+    tcode=0
+    if [[ -n "$au_data" ]]; then fl_plan_token_check "$au_data" "$token" || tcode=$?; else tcode=1; fi
+    case "$tcode" in
+      0) ;;
+      2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: benchbar app update ${app} --dry-run --json, then pass its token." ;;
+      *) fl_die "The app update plan changed since it was shown (the remote has new commits, a site or the app changed, or nothing is left to do). Nothing was changed." \
+        "Review a fresh plan: benchbar app update ${app} --dry-run --json, then pass its token." ;;
+    esac
+  fi
+
   if [[ "$OPT_JSON" == "1" ]]; then
     if [[ "$pending" == "1" && "$pd_line" != *"}" ]]; then fl_warn "the record of ${app} looks cut short; pending is null here"; fi
     doc="$(
@@ -1539,7 +1600,7 @@ fl_cmd_app_update() {
         IFS='|' read -r kind target name cmd <<<"$a"
         printf '%s{"name":%s,"command":%s,"kind":%s,"target":%s}' "$sep" "$(fl_json_str "$name")" "$(fl_json_str "$cmd")" "$(fl_json_str "$kind")" "\"$(fl_json_escape "$target")\""; sep=","
       done
-      printf ']}'
+      printf '],"can_apply":%s,"token":%s}' "$([[ -n "$au_token" ]] && printf true || printf false)" "$(if [[ -n "$au_token" ]]; then printf '"%s"' "$au_token"; else printf null; fi)"
     )"
     # the plan: the one document of a dry run, the plan line of a real run's stream
     fl_doc_emit 0 "$doc" plan
