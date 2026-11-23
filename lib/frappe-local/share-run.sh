@@ -275,11 +275,11 @@ fl_share_gateway_json() {
   # on every interface: a VPN, a phone hotspot or an Ethernet port of this Mac never sees it (SHARE-7)
   fl_sp_lan_v
   [[ -n "$SP_LAN_IP" ]] || { fl_fail "this Mac has no network address for the gateway to listen on"; return 1; }
-  content="$(printf '{\n  "v": 3,\n  "protocol": 3,\n  "listen": {"host": %s, "port": %s},\n  "tls": {"key": %s, "cert": %s},\n  "share_site": %s,\n  "web_port": %s,\n  "deadline_epoch": %s,\n  "started_epoch": %s,\n  "max_total_s": %s,\n  "state_dir": %s,\n  "devices": %s,\n  "control_sock": %s,\n  "log_dir": %s,\n  "python": %s,\n  "signin_helper": %s,\n  "max_conns": {"per_device": 64, "total": 256, "unpaired_total": 16, "unpaired_per_ip": 4},\n  "max_body_mb": 50,\n  "label": %s,\n  "room_label": %s,\n  "site_label": %s,\n  "copy_made": %s,\n  "app_routes": %s,\n  "seats": [\n    %s\n  ]\n}\n' \
+  content="$(printf '{\n  "v": 3,\n  "protocol": 3,\n  "listen": {"host": %s, "port": %s},\n  "tls": {"key": %s, "cert": %s},\n  "share_site": %s,\n  "web_port": %s,\n  "deadline_epoch": %s,\n  "started_epoch": %s,\n  "max_total_s": %s,\n  "state_dir": %s,\n  "devices": %s,\n  "control_sock": %s,\n  "log_dir": %s,\n  "python": %s,\n  "signin_helper": %s,\n  "max_conns": {"per_device": 64, "total": 256, "unpaired_total": 16, "unpaired_per_ip": 4},\n  "max_body_mb": 50,\n  "label": %s,\n  "room_label": %s,\n  "site_label": %s,\n  "copy_made": %s,\n  "app_routes": %s,\n  "seat_mode": "%s",\n  "seats": [\n    %s\n  ]\n}\n' \
     "$(fl_json_str "$SP_LAN_IP")" "$FL_SHARE_GATEWAY_PORT" "$(fl_json_str "${dir}/host.key")" "$(fl_json_str "${dir}/host.crt")" "$(fl_json_str "$FL_SHARE_SITE")" "$web_port" \
     "$2" "$1" "$FL_SHARE_MAX_TOTAL_S" "$(fl_json_str "$dir")" "$(fl_json_str "${dir}/devices.json")" "$(fl_json_str "$(fl_share_sock)")" \
     "$(fl_json_str "$dir")" "$(fl_json_str "${FL_BENCH_DIR}/env/bin/python")" "$(fl_json_str "${lib}/signin.py")" \
-    "$(fl_json_str "$host")" "$3" "$(fl_json_str "$site")" "$(fl_json_str "$copy_made")" "$app_routes" "$seats")"
+    "$(fl_json_str "$host")" "$3" "$(fl_json_str "$site")" "$(fl_json_str "$copy_made")" "$app_routes" "$([[ "${SH_START_SEAT_MODE:-open}" == host ]] && printf host || printf open)" "$seats")"
   fl_share_write_private "${dir}/gateway.json" 600 "$content" || { fl_fail "could not write ${dir}/gateway.json"; return 1; }
 }
 
@@ -320,6 +320,8 @@ fl_share_stop_requested() { [[ -e "$(fl_share_dir)/stop_requested" ]]; }
 # ---------------------------------------------------------------- share start
 
 SH_START_FOR=""; SH_START_ROOM_JSON=""; SH_START_NOW=""; SH_START_DEADLINE=""; SH_START_BENCHBAR=""
+# who gives a person their seat: open (anyone in the room takes a free one) or host (share start --assign-seats)
+SH_START_SEAT_MODE=open
 
 fl_share_start_step_static_preflight() {
   fl_sp_reset
@@ -413,15 +415,24 @@ fl_share_start_doc() {
     "$1" "$2" "$(fl_json_str "$(fl_share_iso_of "$1")")" "$(fl_json_str "$(fl_share_iso_of "$2")")"
 }
 
+# fl_share_seat_mode_line: who gives a person their seat in the room that starts, for the start box. The
+# room code is what lets a person in; in an open room it also lets them take any free seat (#159 SHARE-5).
+fl_share_seat_mode_line() {
+  if [[ "$SH_START_SEAT_MODE" == host ]]; then printf 'you give them out: benchbar share assign ID SEAT_ID (benchbar share people lists both)'
+  else printf 'anyone with the code takes any free seat (--assign-seats: you give them out)'; fi
+}
+
 fl_cmd_share_start() {
   local dur=4h name="" name_given=0 label secs deadline started i id code
+  SH_START_SEAT_MODE=open
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
+      --assign-seats) SH_START_SEAT_MODE=host; shift ;;
       --for) [[ -n "${2:-}" ]] || fl_die "--for needs a duration." "Example: --for 30m, or --for 4h"; dur="$2"; shift 2 ;;
       --for=*) dur="${1#*=}"; shift ;;
       --name) [[ "$#" -ge 2 ]] || fl_die "--name needs a label." "Example: --name \"Priya's room\""; name="$2"; name_given=1; shift 2 ;;
       --name=*) name="${1#*=}"; name_given=1; shift ;;
-      *) fl_die "Unknown argument for share start: $1" "Use: benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]" ;;
+      *) fl_die "Unknown argument for share start: $1" "Use: benchbar share start [--for DUR] [--name LABEL] [--assign-seats] [--dry-run] [--json]" ;;
     esac
   done
   fl_noninteractive && fl_die "Sharing on the network is a person's decision, so nothing run without a terminal can start it." \
@@ -471,7 +482,8 @@ fl_cmd_share_start() {
   fl_box "Share start" \
     "room     $(printf '%s' "$SH_START_ROOM_JSON" | fl_share_json_unquote)" \
     "copy     ${FL_SHARE_SITE}, on port ${FL_SHARE_GATEWAY_PORT} of this Mac's network address" \
-    "until    $(fl_share_iso_of "$deadline") ($(fl_fmt_secs "$secs"))"
+    "until    $(fl_share_iso_of "$deadline") ($(fl_fmt_secs "$secs"))" \
+    "seats    $(fl_share_seat_mode_line)"
   if [[ "${FL_DRY_RUN:-0}" == 1 ]]; then
     fl_info "dry-run: nothing was started or written"
     return 0

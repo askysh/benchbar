@@ -9,5 +9,7 @@ const clockFile = process.env.FL_SHARE_TEST_CLOCK_FILE;
 main(process.argv.slice(2), {
     clock: clockFile ? () => Date.now() + (Number(fs.readFileSync(clockFile, "utf8")) || 0) : Date.now,
     tickMs: Number(process.env.FL_SHARE_TEST_TICK_MS) || 30_000,
+    unpairedIdleMs: Number(process.env.FL_SHARE_TEST_UNPAIRED_IDLE_MS) || undefined,
+    unpairedMaxMs: Number(process.env.FL_SHARE_TEST_UNPAIRED_MAX_MS) || undefined,
     peerIpOf: (req) => req.headers["x-test-peer-ip"] || req.socket.bbIp
 });

@@ -70,6 +70,13 @@ benchbar share stop                               # end the room
 `share unlock` stop and allow new joins. Every command is in the
 [share reference](../reference/cli/share.md).
 
+The room code lets a person into the room, and by default it also lets
+them take any free seat. To decide yourself who gets which seat, start
+the room in a terminal with `benchbar share start --assign-seats`, then
+give each person a seat with `benchbar share assign`
+(`benchbar share people` lists the people and the free seats). The app's
+**Start** button starts a room where guests pick their own seat.
+
 Network protection is a separate step: `benchbar lan-guard install`
 asks for your password. Run it yourself. An agent or a script cannot
 install it.
@@ -78,7 +85,8 @@ install it.
 
 1. Open **On your network** in the sidebar of the BenchBar window.
 2. Under **Nearby**, choose the room and click **Join**. Type the room
-   code, then pick a seat.
+   code, then pick a seat. In a room where the host gives out the seats,
+   the pane says so: ask the host for your seat, then open the room.
 3. If a colleague sent you an invite link, click **Paste invite** instead.
 4. Click **Open** on the room in **Your rooms**. The room's site opens in
    your browser.

@@ -199,6 +199,7 @@ nonisolated enum NetworkPanePresentation {
     static func seatRefusal(_ error: RoomAPIError, host: String) -> String {
         switch error {
         case .seatTaken: return "Someone took that seat. Pick another."
+        case .hostAssigns: return "\(host) gives out the seats in this room. Ask \(host) for yours, then open the room."
         case .rateLimited: return "Too many seat changes. Wait a minute."
         case .removed: return removedLine(host: host)
         case .ended: return "\(host) ended the room."

@@ -638,6 +638,28 @@ test("every bypass attempt is 400, 403 or 404 and upstream records zero hits", a
     });
 });
 
+test("an uploaded HTML, SVG or untyped file comes back as a sandboxed download; an image or PDF only loses sniffing; pages are untouched", async () => {
+    const c = cert("upload1");
+    await withGateway({ devices: [deviceRow(c)] }, async (gw) => {
+        for (const p of ["/files/evil.html", "/private/files/evil.svg", "/files/feed.xml", "/files/blob.bin", "/files/blob.dat"]) {
+            const r = await request(gw, { path: p, cert: c });
+            assert.strictEqual(r.status, 200, p);
+            assert.strictEqual(r.headers["content-security-policy"], "sandbox; default-src 'none'", p);
+            assert.strictEqual(r.headers["content-disposition"], "attachment", p);
+            assert.strictEqual(r.headers["x-content-type-options"], "nosniff", p);
+            assert.strictEqual(r.text, "file-body", p);
+        }
+        const png = await request(gw, { path: "/files/logo.png", cert: c });
+        assert.deepStrictEqual([png.headers["content-security-policy"], png.headers["content-disposition"], png.headers["x-content-type-options"]], [undefined, undefined, "nosniff"]);
+        const pdf = await request(gw, { path: "/private/files/report.pdf", cert: c });
+        assert.deepStrictEqual([pdf.headers["content-security-policy"], pdf.headers["content-disposition"]], [undefined, 'inline; filename="report.pdf"']);
+        const missing = await request(gw, { path: "/files/missing.html", cert: c });
+        assert.deepStrictEqual([missing.status, missing.headers["content-disposition"], missing.headers["x-content-type-options"]], [404, undefined, "nosniff"]);
+        const page = await request(gw, { path: "/app", cert: c });
+        assert.deepStrictEqual([page.headers["content-security-policy"], page.headers["content-disposition"], page.headers["x-content-type-options"]], [undefined, undefined, undefined]);
+    });
+});
+
 test("socket.io, including a WebSocket upgrade, is 404 and reaches nothing", async () => {
     const c = cert("paired4");
     await withGateway({ devices: [deviceRow(c)] }, async (gw) => {
@@ -684,6 +706,92 @@ test("the 5th unpaired connection from one IP is refused; a slot frees when one 
         assert.strictEqual(fifth.ok, false);
         held[0].destroy();
         await until(async () => { const r = await open(); if (r.ok) r.s.destroy(); return r.ok; }, 2000);
+        held.forEach((s) => s.destroy());
+    });
+});
+
+// ---- unpaired connections cannot be held open to keep new guests out (#159 SHARE-3)
+const openTls = (gw, c) => new Promise((resolve) => {
+    const s = tls.connect({ host: "127.0.0.1", port: gw.port, rejectUnauthorized: false, minVersion: "TLSv1.3", key: c && c.key, cert: c && c.cert });
+    s.on("secureConnect", () => resolve({ ok: true, s }));
+    s.on("error", () => resolve({ ok: false, s }));
+    s.on("close", () => resolve({ ok: false, s }));
+    s.resume();
+});
+// the tests all dial from 127.0.0.1, so the per address limit stays out of the pool's way
+const POOL_OF_4 = { max_conns: { per_device: 64, total: 256, unpaired_total: 4, unpaired_per_ip: 8 } };
+const POOL_OF_1 = { max_conns: { per_device: 64, total: 256, unpaired_total: 1, unpaired_per_ip: 1 } };
+
+test("idle connections that fill the unpaired pool are closed, and a new guest gets in", async () => {
+    await withGateway({ config: POOL_OF_4, unpairedIdleMs: 400 }, async (gw) => {
+        const held = [];
+        for (let i = 0; i < 4; i++) {
+            const r = await openTls(gw);
+            assert.strictEqual(r.ok, true, `connection ${i + 1}`);
+            held.push(r.s);
+        }
+        assert.strictEqual((await openTls(gw)).ok, false, "the pool is full");
+        // the handshake is done and nothing is sent: each one loses its slot without any help from the client
+        await until(() => held.every((s) => s.destroyed), 3000);
+        const guest = await joinGuest(gw, cert("idle1"), "10.50.0.1");
+        assert.strictEqual(guest.finishReply.json.status, "joined");
+    });
+});
+
+test("an unpaired connection that keeps asking is closed at its lifetime cap", async () => {
+    await withGateway({ unpairedIdleMs: 300, unpairedMaxMs: 1200 }, async (gw) => {
+        const agent = sinkAgent(null);
+        const started = Date.now();
+        const first = await request(gw, { path: "/room/hello", agent });
+        assert.strictEqual(first.status, 200);
+        // a request was sent in time, so the idle limit is spent; the cap is not
+        await sleep(500);
+        assert.strictEqual(first.socket.destroyed, false, "closed although it sent a request in time");
+        while (!first.socket.destroyed && Date.now() - started < 5000) {
+            await request(gw, { path: "/room/hello", agent }).catch(() => {});
+            await sleep(100);
+        }
+        const took = Date.now() - started;
+        assert.ok(first.socket.destroyed && took >= 1100 && took < 4000, `closed after ${took} ms`);
+        agent.destroy();
+    });
+});
+
+test("a guest that joins keeps its connection past the cap, and its unpaired slot is free at once", async () => {
+    const c = cert("cap1");
+    await withGateway({ config: POOL_OF_1, unpairedIdleMs: 300, unpairedMaxMs: 600 }, async (gw) => {
+        const guest = await joinGuest(gw, c, "10.51.0.1");
+        const sock = guest.helloReply.socket;
+        // the pool holds one connection: a newcomer gets it while the guest's connection is still open
+        const other = await openTls(gw);
+        assert.strictEqual(other.ok, true, "the joined guest still held the unpaired slot");
+        other.s.destroy();
+        await sleep(900);
+        assert.strictEqual(sock.destroyed, false, "the joined guest's connection was closed at the cap");
+        const seats = await request(gw, { path: "/_benchbar/seats", cert: c, agent: guest.agent, headers: AS_JSON });
+        assert.strictEqual(seats.status, 200);
+        assert.strictEqual(seats.socket, sock);
+    });
+});
+
+test("a known device's idle connection is not closed by the unpaired limits", async () => {
+    const c = cert("cap2");
+    await withGateway({ devices: [deviceRow(c)], unpairedIdleMs: 300, unpairedMaxMs: 600 }, async (gw) => {
+        const r = await openTls(gw, c);
+        assert.strictEqual(r.ok, true);
+        await sleep(900);
+        assert.strictEqual(r.s.destroyed, false);
+        r.s.destroy();
+    });
+});
+
+test("a pool that stays full shows as join trouble to the host", async () => {
+    await withGateway({ config: POOL_OF_4 }, async (gw) => {
+        const held = [];
+        for (let i = 0; i < 4; i++) held.push((await openTls(gw)).s);
+        assert.strictEqual((await status(gw)).join_trouble, false);
+        for (let i = 0; i < 5; i++) assert.strictEqual((await openTls(gw)).ok, false);
+        assert.strictEqual((await status(gw)).join_trouble, true);
         held.forEach((s) => s.destroy());
     });
 });
@@ -780,6 +888,64 @@ test("take a seat, switch (the old user is wiped, canonical user only), a held s
         for (const bad of ['{"seat_id":5}', '{"seat_id":"seat1","x":1}', "{}", "[]"]) {
             assert.strictEqual((await request(gw, { method: "POST", path: "/_benchbar/seat", cert: a, body: bad })).status, 400, bad);
         }
+    });
+});
+
+// ---- the host gives out the seats (#159 SHARE-5): the code lets a person in, it does not choose their seat
+test("host seats: a guest cannot take or switch a seat; the host's assign gives it and moves it", async () => {
+    const a = cert("host-a");
+    await withGateway({ config: { seat_mode: "host" } }, async (gw) => {
+        await joinGuest(gw, a, "10.60.0.1");
+        const pick = (seat_id, headers = AS_JSON) => request(gw, { method: "POST", path: "/_benchbar/seat", cert: a, headers, body: JSON.stringify({ seat_id }) });
+        const seats = await request(gw, { path: "/_benchbar/seats", cert: a });
+        assert.strictEqual(seats.status, 200);
+        assert.deepStrictEqual(seats.json[0], { seat_id: "seat1", full_name: "Seat 1", roles: ["Sales User"], taken_by: null, host_assigns: true });
+        assert.ok(seats.json.every((seat) => seat.host_assigns === true));
+
+        for (const headers of [AS_JSON, { accept: "text/html" }]) {
+            const refused = await pick("seat2", headers);
+            assert.deepStrictEqual([refused.status, refused.json], [403, { status: "host_assigns" }]);
+        }
+        assert.strictEqual((await people(gw))[0].seat_id, null, "the pick changed nothing");
+        assert.strictEqual((await request(gw, { path: "/app", cert: a, headers: AS_JSON })).status, 403, "no seat, no proxy");
+        assert.strictEqual((await request(gw, { path: "/_benchbar/signin?next=/app", cert: a, headers: AS_JSON })).status, 403);
+        assert.deepStrictEqual(gw.helper.calls(), []);
+
+        const id = (await people(gw))[0].id;
+        assert.deepStrictEqual(await gw.control({ op: "assign", device: id, seat_id: "seat2" }), { ok: true });
+        assert.strictEqual((await request(gw, { path: "/_benchbar/signin?next=/app", cert: a })).status, 302);
+        assert.deepStrictEqual(gw.helper.calls(), [["share.localhost", "seat2@example.com"]]);
+
+        // a seat the host gave is not a licence to move to another one
+        const move = await pick("seat5");
+        assert.deepStrictEqual([move.status, move.json], [403, { status: "host_assigns" }]);
+        assert.strictEqual((await people(gw))[0].seat_id, "seat2");
+        assert.deepStrictEqual(await gw.control({ op: "assign", device: id, seat_id: "seat5" }), { ok: true });
+        assert.strictEqual((await people(gw))[0].seat_id, "seat5");
+    });
+});
+
+test("host seats: a person without a seat waits 10 minutes for the host, not 2", async () => {
+    const a = cert("host-wait");
+    await withGateway({ config: { seat_mode: "host" }, devices: [seatless(a)] }, async (gw) => {
+        gw.jump(300_000);
+        await sleep(400);
+        assert.strictEqual((await people(gw)).length, 1, "removed while the host could still give a seat");
+        assert.strictEqual((await request(gw, { path: "/_benchbar/room", cert: a })).status, 200);
+        gw.jump(601_000);
+        await until(async () => (await people(gw)).length === 0, 2000);
+        assert.strictEqual((await request(gw, { path: "/_benchbar/room", cert: a, headers: AS_JSON })).json.error, "not_paired");
+    });
+});
+
+test("open seats, the 0.8 behaviour, stays what a config without seat_mode gets", async () => {
+    const a = cert("open-a");
+    await withGateway({ devices: [seatless(a)] }, async (gw) => {
+        assert.strictEqual(gw.cfg.seat_mode, undefined);
+        const seats = await request(gw, { path: "/_benchbar/seats", cert: a });
+        assert.ok(seats.json.every((seat) => !("host_assigns" in seat)));
+        const r = await request(gw, { method: "POST", path: "/_benchbar/seat", cert: a, headers: AS_JSON, body: JSON.stringify({ seat_id: "seat1" }) });
+        assert.strictEqual(r.status, 200);
     });
 });
 
@@ -1115,6 +1281,8 @@ test("a config with no deadline, a past deadline, a deadline beyond the cap, bad
         { config: { seats: [{ ...seat(1), extra: 1 }] } },
         { config: { seats: [{ ...seat(1), roles: "Sales User" }] } },
         { config: { app_routes: "/crm" } },
+        { config: { seat_mode: "anyone" } },
+        { config: { seat_mode: true } },
         { config: { app_routes: Array.from({ length: 33 }, (_, i) => `/r${i}`) } },
         { config: { max_total_s: 99999, deadline_epoch: nowS + 60 } }
     ];

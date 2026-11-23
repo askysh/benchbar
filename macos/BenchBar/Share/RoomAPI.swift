@@ -41,6 +41,8 @@ nonisolated enum RoomAPIError: Error, Equatable, Sendable {
     case removed
     case ended
     case seatTaken
+    /// 403 host_assigns: the host gives out the seats in this room, a guest's own pick changes nothing.
+    case hostAssigns
     case rateLimited
     case identityChanged
     case unreachable
@@ -90,6 +92,7 @@ nonisolated struct RoomAPI: Sendable {
             case (_, "not_paired"): throw .removed
             case (_, "ended"): throw .ended
             case (_, "seat_taken"): throw .seatTaken
+            case (_, "host_assigns"): throw .hostAssigns
             case (429, _): throw .rateLimited
             default: throw .refused
             }

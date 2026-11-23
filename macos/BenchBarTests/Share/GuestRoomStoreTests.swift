@@ -213,6 +213,25 @@ private final class Harness {
         h.store.stopHealthLoop()
     }
 
+    /// A room whose host gives out the seats (share start --assign-seats): the pick is refused
+    /// with the gateway's own reason, the room stays saved and the sheet says whom to ask.
+    @Test func aRoomWhereTheHostGivesOutSeatsSaysSo() async throws {
+        let h = Harness()
+        h.transport.set("/_benchbar/seat", 403, #"{"status":"host_assigns"}"#)
+        await h.store.submit(code: "482913", for: Harness.room)
+        guard case .pickingSeat(let room, let seats) = h.store.join else {
+            Issue.record("no seat picker")
+            return
+        }
+        await h.store.pick(seat: seats[0], in: room, seats: seats)
+        #expect(h.store.join == .seatRefused(room, seats, .hostAssigns))
+        #expect(h.opened.isEmpty)
+        #expect(h.store.saved.count == 1)
+        #expect(NetworkPanePresentation.seatRefusal(.hostAssigns, host: "Priya")
+            == "Priya gives out the seats in this room. Ask Priya for yours, then open the room.")
+        h.store.stopHealthLoop()
+    }
+
     @Test func wrongCodesAreSpacedAndLockOutAfterFive() async {
         let h = Harness()
         h.joinResult = .failure(.wrongCode)
