@@ -116,7 +116,10 @@ shapes() {
     "cli/stats.json|stats --json --bench-dir $BENCH" \
     "cli/stats-stopped.json|stats --json --bench-dir $BENCH" \
     "cli/op-list.json|op list --json" \
-    "cli/run-plan.json|run --site linuxdev.localhost --dry-run --json --bench-dir $BENCH -- migrate --skip-failing"
+    "cli/run-plan.json|run --site linuxdev.localhost --dry-run --json --bench-dir $BENCH -- migrate --skip-failing" \
+    "cli/bench-gc-plan.json|bench gc --dry-run --json" \
+    "cli/bench-remove-plan.json|bench remove $BENCH --dry-run --json" \
+    "cli/bench-forget-plan.json|bench forget $BENCH --dry-run --json"
 }
 
 # paths FILE: one line per field path of a JSON document, arrays folded into

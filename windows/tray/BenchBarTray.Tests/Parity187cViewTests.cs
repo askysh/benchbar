@@ -14,7 +14,7 @@ public class Parity187cViewTests
     private const string Lease = "The bench /home/akash/frappe-bench is leased by claude-qa until 2027-01-15T08:20:00Z (running the QA suite). Nothing was changed.";
 
     /// <summary>The recorded <c>commands --json</c> with the 0.9 commands this part reads added, so a catalogue lists exactly what a test needs.</summary>
-    private static string CommandsWith(params string[] names)
+    internal static string CommandsWith(params string[] names)
     {
         var doc = (JsonObject)JsonNode.Parse(string.Join('\n', Fixture("commands.json")))!;
         foreach (var name in names)
