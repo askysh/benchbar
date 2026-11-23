@@ -424,7 +424,7 @@ fl_cmd_bench_scratch() {
   if [[ "${FL_DRY_RUN:-0}" != "1" ]]; then
     fl_confirm "Mark ${FL_BENCH_NAME} scratch for ${days} day(s)? bench gc then removes it, with its databases." || { fl_warn "Cancelled. Nothing was changed."; return 1; }
     # the app and the tray have no terminal, but a person clicked; BENCHBAR_CALLER is a label, which is all gc shows
-    [[ -n "${FL_CALLER:-}" ]] || fl_caller_resolve
+    fl_caller_resolve
     case "${FL_CALLER:-}" in
       app|tray) who=person ;;
       *) if fl_noninteractive || [[ ! -t 0 ]]; then who=agent; else who=person; fi ;;

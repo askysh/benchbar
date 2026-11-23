@@ -156,7 +156,17 @@ internal sealed class TidyDialog : Window
         Fill(_orphans, lines);
     }
 
+    private bool _marking;
+
     private async Task MarkAsync(bool scratch)
+    {
+        if (_marking) return;   // a double click starts one mark, not two
+        _marking = true;
+        try { await MarkOnceAsync(scratch).ConfigureAwait(true); }
+        finally { _marking = false; }
+    }
+
+    private async Task MarkOnceAsync(bool scratch)
     {
         if (scratch && TidyCommands.Days(_days.Text) is null)
         {
