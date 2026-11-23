@@ -147,7 +147,7 @@ internal sealed class OverviewView : UserControl
         _services = services;
         _navigate = navigate;
         _activity = new ActivityCard(services.Cli);
-        Confirm =(title, message) =>
+        Confirm = (title, message) =>
             MessageBox.Show(services.Owner(), message, title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
     }
 

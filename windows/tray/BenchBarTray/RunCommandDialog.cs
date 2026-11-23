@@ -23,6 +23,7 @@ internal sealed class RunCommandDialog : Window
     private readonly TextBox _output = Ui.Mono("");
     private readonly UIElement _siteRow;
     private readonly Button _go;
+    private readonly CancellationTokenSource _cancel = new();
 
     public RunCommandDialog(PageServices services, BenchStatus bench, string? site, ResolvedTheme theme, Window? owner)
     {
@@ -76,6 +77,7 @@ internal sealed class RunCommandDialog : Window
         bar.Children.Add(close);
         panel.Children.Add(bar);
         Content = panel;
+        Closed += (_, _) => _cancel.Cancel(); // a read still running stops with the dialog, Close button or not
         _command.SelectedIndex = 0;
     }
 
@@ -144,7 +146,7 @@ internal sealed class RunCommandDialog : Window
     {
         try
         {
-            var r = await _services.Cli.RunJsonAsync(RunCommands.Read(input, _bench.Path), null, TimeSpan.FromMinutes(3), RunCommands.ParseRead).ConfigureAwait(true);
+            var r = await _services.Cli.RunJsonAsync(RunCommands.Read(input, _bench.Path), null, TimeSpan.FromMinutes(3), RunCommands.ParseRead, _cancel.Token).ConfigureAwait(true);
             if (r.Value is { } read)
             {
                 var text = read.Output.Length > 0 ? read.Output : "(no output)";
@@ -156,6 +158,10 @@ internal sealed class RunCommandDialog : Window
                 _problem.Text = r.Error ?? "The command did not run.";
                 _problem.Visibility = Visibility.Visible;
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // the dialog closed: nothing to show
         }
         finally
         {

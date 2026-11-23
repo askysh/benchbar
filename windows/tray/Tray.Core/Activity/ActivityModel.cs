@@ -87,3 +87,10 @@ public sealed class ActivityModel(ICliClient cli, Func<DateTimeOffset>? clock = 
         if (changed) Changed?.Invoke();
     }
 }
+
+/// <summary>When the Overview's card may poll. A minimised window keeps <c>IsVisible</c> true in WPF, so it is a rule of its own.</summary>
+public static class ActivityRules
+{
+    public static bool ShouldPoll(bool bound, bool catalogueKnown, bool visible, bool loaded, bool windowMinimized) =>
+        bound && catalogueKnown && visible && loaded && !windowMinimized;
+}

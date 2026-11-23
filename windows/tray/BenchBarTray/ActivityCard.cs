@@ -34,7 +34,11 @@ internal sealed class ActivityCard : UserControl
         _timer.Tick += (_, _) => PollAsync().Forget();
         IsVisibleChanged += (_, _) => Sync();
         Loaded += (_, _) => Sync();
-        Unloaded += (_, _) => _timer.Stop();
+        Unloaded += (_, _) =>
+        {
+            _timer.Stop();
+            Watch(null);
+        };
         Ui.Name(this, "Activity");
     }
 
@@ -70,9 +74,23 @@ internal sealed class ActivityCard : UserControl
         if (changedBench || started || catalogueArrived) PollAsync(leases: true).Forget();
     }
 
+    private Window? _window;
+
+    /// <summary>A minimised window keeps IsVisible true, so its state is watched while the card is in it: minimise stops the timer, restore starts it.</summary>
+    private void Watch(Window? window)
+    {
+        if (ReferenceEquals(window, _window)) return;
+        if (_window is not null) _window.StateChanged -= OnWindowState;
+        _window = window;
+        if (_window is not null) _window.StateChanged += OnWindowState;
+    }
+
+    private void OnWindowState(object? sender, EventArgs e) => Sync();
+
     private void Sync()
     {
-        var on = _bench is not null && _catalogue is not null && IsVisible && IsLoaded;
+        Watch(Window.GetWindow(this));
+        var on = ActivityRules.ShouldPoll(_bench is not null, _catalogue is not null, IsVisible, IsLoaded, _window?.WindowState == WindowState.Minimized);
         if (on && !_timer.IsEnabled) _timer.Start();
         else if (!on && _timer.IsEnabled) _timer.Stop();
     }

@@ -375,6 +375,7 @@ public static class RunCommands
         {
             ConfirmLabel = "Run",
             CanStop = false, // a migrate is not safe to kill part way
+            RequiresToken = true, // a plan without a token is never applied: no --apply ""
             Summary = $"Runs {what}{(input.Site is { Length: > 0 } site && RunAllowList.Find(input.Command)?.NeedsSite == true ? " on " + site : "")}. Nothing else runs.",
             Describe = Describe,
         };

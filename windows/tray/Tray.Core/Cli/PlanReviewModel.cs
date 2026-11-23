@@ -262,7 +262,7 @@ public sealed class PlanReviewModel : IDisposable
         var env = new SecretEnvironment();
         Request.ConfigureEnv?.Invoke(env);
         if (password is not null) CliSudo.Apply(env, password);
-        else if (_breakLease) env.Set(SetupEnv.NonInteractive, "0"); // --break-lease is allowed to a person only
+        if (_breakLease) env.Set(SetupEnv.NonInteractive, "0"); // --break-lease is allowed to a person only; after the sudo mode, which sets 1
         return env;
     }
 

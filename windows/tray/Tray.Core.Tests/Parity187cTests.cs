@@ -340,6 +340,16 @@ public class Parity187cTests
         Assert.Equal("CPU 112.8 percent, memory 25.4 MB, 4 processes, runner speed 5.2", ResourceHistory.Line(new ResourceSample(112.8, 26624000, 4, 12, Now), 5.2, CultureInfo.InvariantCulture));
     }
 
+    [Theory]
+    [InlineData(true, true, true, true, false, true)]
+    [InlineData(true, true, true, true, true, false)] // minimised: WPF keeps IsVisible true, the rule still says off
+    [InlineData(true, true, false, true, false, false)] // hidden to the tray
+    [InlineData(true, true, true, false, false, false)]
+    [InlineData(false, true, true, true, false, false)]
+    [InlineData(true, false, true, true, false, false)]
+    public void TheCardPollsOnlyWhileBoundVisibleAndNotMinimised(bool bound, bool catalogue, bool visible, bool loaded, bool minimised, bool expected) =>
+        Assert.Equal(expected, ActivityRules.ShouldPoll(bound, catalogue, visible, loaded, minimised));
+
     // --- row 5: operation handles ---
 
     [Fact]
