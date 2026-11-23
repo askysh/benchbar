@@ -408,13 +408,22 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   Administrator or a pinned user from the keyboard, and "switch the default bench or site" is already `benchbar default` and the sidebar.
   The tray follows the Mac: the panel, the pins (nine per site, Administrator never one), the digits, the arrows, search from two characters
   (eight results) and the "last opened" mark.
-- **It is not a Lab on Windows.** The Mac gates it by the `quick-switch` lab because the lab holds a system wide shortcut. Here the panel holds nothing: it opens from the tray menu on a click, and `labs list` says `quick-switch` is macOS only (so `labs on` would refuse it). A global shortcut would be a Labs style opt in of its own and is not in this change.
+- **It is not a Lab on Windows.** The Mac gates it by the `quick-switch` lab because the lab holds a system wide shortcut. Here the panel holds nothing: it opens from the tray menu on a click, and `labs list` says `quick-switch` is macOS only (so `labs on` would refuse it). A global shortcut is a separate opt in, below.
 - **The panel decides nothing for the person.** A site without Open as on is not a target and the panel says how to turn it on in the Sites tab; the one call is `open --site S --as USER --json`, and the answer `opened: false` or a refusal stays in the panel in the CLI's words.
 - **Pins are the tray's own record** (`tray.open_as_pins` in `config.json`, saved when pinned, replaced as one immutable map so the thread that saves never sees a half edit). The shim's keys are kept. A pinned user's row in Find User has a label field (the Mac's), saved as typed and trimmed when read.
 - **A digit opens a row only with no modifier down, and a label is saved when the person is done.** Shift+1 on an empty field is "!", not pin 1 (a
   digit is a one key sign in), and Ctrl, Alt and Win digits are not ours. The label field of Find User saves on Enter
   or leaving the field, because each save writes config.json. A blocker never says "turn it on" where Allow Open as is not offered (a name Windows
   cannot find, a CLI too old to send the fields).
+
+## Tray parity: Quick Switch shortcut (0.9.0, #174)
+
+- **The shortcut is a Settings option, not a Lab.** The Mac holds it behind the `quick-switch` lab; here that lab is "not on Windows yet", so the switch is Settings > General, off by default, saved as `tray.quick_switch_hotkey` (`enabled`, `key`). The default is Ctrl+Alt+U.
+- **`RegisterHotKey` on a message only window the tray creates when the first key is registered** (`HotKeyHost`), with `MOD_NOREPEAT`. A tray with the option off owns no extra window and no timer. The key is given back when the option is off, while recording and at exit.
+- **The rules** (`HotKeyRules`): Ctrl or Alt must be in it (the Mac's rule), so Shift or Win alone is refused; Ctrl with a letter or digit and no Alt is refused too, because that is Ctrl+C, V, X, Z of every app; Alt+F4 and Alt+Space are the system's. Keys offered: letters, digits, F1 to F24, arrows, Home, End, PageUp, PageDown, Insert, Delete, Space. A stored key that breaks the rules (a hand edit) reads as the default.
+- **A taken key keeps the old one.** A change registers the new key before it replaces the old; when Windows refuses, the old key is registered again and a line says so. A key taken at start leaves the option on and says so (as the Mac, `macos/DECISIONS.md` 0.9 Quick Switch): turning it off and on tries again. The message is not stored.
+- **The recorder pauses the key** so the current shortcut can be recorded again; leaving the button, Esc or Reset gives it back. A chord is applied after the old key is registered again, so the "taken" test is real.
+- **The registrar is an interface** (`IHotKeyRegistrar`): the rules, the store, the taken key and pause/resume are tested in `Tray.Core.Tests` with a fake; the Win32 calls are two lines in `HotKeyHost`.
 
 ## Tray parity: rooms (0.9.0, #174)
 - **The Sharing tab is the host side only (P30).** The guest side of a room (the code exchange, the pinned certificate, the local forwarder)

@@ -364,8 +364,21 @@ public partial class App
         window.Show();
     }
 
+    /// <summary>Quick Switch's global shortcut: opt in (Settings), registered here when it is on, given back when it is off and at exit.</summary>
+    private void StartQuickSwitchHotKey()
+    {
+        _hotKeyHost = new HotKeyHost();
+        var hotKey = new QuickSwitchHotKey(_config, _hotKeyHost, SaveConfig);
+        _quickSwitchHotKey = hotKey;
+        _hotKeyHost.Message = hotKey.Handle;
+        hotKey.Pressed += () => Dispatcher.BeginInvoke(ShowQuickSwitch);
+        hotKey.Start();
+    }
+
     private sealed class SettingsHost(App app) : ISettingsHost
     {
+        public IQuickSwitchHotKey? HotKey => app._quickSwitchHotKey;
+
         public bool OpenAtLogon
         {
             get => app.Logon.View.IsOn;

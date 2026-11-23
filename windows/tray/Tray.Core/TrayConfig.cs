@@ -130,6 +130,12 @@ public sealed class TrayConfig
     /// <summary>The users pinned in the Quick Switch panel, per site; saved as <c>tray.open_as_pins</c> (<c>"bench|site"</c> to a list of <c>user</c>, <c>label</c>, <c>full_name</c>).</summary>
     public OpenAsPins Pins { get; private set; } = new();
 
+    /// <summary>Quick Switch opens from a global shortcut (Settings). Off by default; saved as <c>tray.quick_switch_hotkey</c> with <c>enabled</c> and <c>key</c>.</summary>
+    public bool QuickSwitchHotKeyEnabled { get; set; }
+
+    /// <summary>The shortcut as text (<c>Ctrl+Alt+U</c>); null or unreadable means the default.</summary>
+    public string? QuickSwitchHotKey { get; set; }
+
     /// <summary>The tray version that last started (X.Y.Z), so the first start of a newer one can say "BenchBar was updated". Null before 0.8.4.</summary>
     public string? LastVersion { get; set; }
 
@@ -187,6 +193,11 @@ public sealed class TrayConfig
             if (tray["beta_banner_dismissed"] is JsonValue bb && bb.TryGetValue<bool>(out var betaDismissed)) config.BetaBannerDismissed = betaDismissed;
             if (tray["two_installs_dismissed"] is JsonValue ti && ti.TryGetValue<bool>(out var twoDismissed)) config.TwoInstallsDismissed = twoDismissed;
             config.ResumeFlow = ReadString(tray, "resume_flow") == "existing" ? "existing" : "new";
+            if (tray["quick_switch_hotkey"] is JsonObject hk)
+            {
+                if (hk["enabled"] is JsonValue he && he.TryGetValue<bool>(out var hkOn)) config.QuickSwitchHotKeyEnabled = hkOn;
+                config.QuickSwitchHotKey = ReadString(hk, "key");
+            }
             config.Pins = new OpenAsPins(ReadPins(tray["open_as_pins"] as JsonObject));
         }
         return config;
@@ -258,6 +269,11 @@ public sealed class TrayConfig
         tray["resume_flow"] = ResumeFlow == "existing" ? "existing" : "new";
         if (LastVersion is { Length: > 0 } lastVersion) tray["last_version"] = lastVersion;
         tray["running_hint_shown"] = RunningHintShown;
+        tray["quick_switch_hotkey"] = new JsonObject
+        {
+            ["enabled"] = QuickSwitchHotKeyEnabled,
+            ["key"] = (HotKeyChord.Parse(QuickSwitchHotKey) ?? HotKeyChord.Default).Text,
+        };
         tray["open_as_pins"] = WritePins(Pins.Map);
         root["tray"] = tray;
 

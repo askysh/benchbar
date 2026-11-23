@@ -77,6 +77,8 @@ internal sealed class SettingsWindow : ToolWindow
         panel.Children.Add(Ui.Text("Any web page or app can open a benchbar:// link. With this on, BenchBar asks before a link starts, stops or restarts a bench or opens a console. It is off by default so launchers and scripts keep working.",
             12, opacity: 0.7, margin: new Thickness(24, 0, 0, 12)));
 
+        if (_model.HotKey is { } hotKey) panel.Children.Add(new HotKeyRow(hotKey));
+
         _distro.SelectionChanged += (_, _) =>
         {
             if (_syncing || _distro.SelectedItem is not string chosen) return;

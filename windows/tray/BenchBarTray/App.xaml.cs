@@ -48,6 +48,8 @@ public partial class App : Application, ITrayHost
     private IDistroProbe? _probe;
     private MainWindow? _main;
     private SettingsWindow? _settingsWindow;
+    private HotKeyHost? _hotKeyHost;
+    private QuickSwitchHotKey? _quickSwitchHotKey;
     private AboutWindow? _aboutWindow;
     private WizardModel? _wizard;
     private ResumeFlag? _resumeFlagValue;
@@ -186,6 +188,7 @@ public partial class App : Application, ITrayHost
         _icon.TrayMouseDoubleClick += (_, _) => OpenMain();
         _releaseFlyout.Tick += (_, _) => ReleaseFlyout();
         _controller.Start();
+        StartQuickSwitchHotKey();
         if (startLink is not null) QueueLink(startLink); // waits for the first poll: the bench list decides which bench the link means
         // Windows stopped the keepalive with the old package: start it again (does nothing without a keepalive task or when it runs)
         KeepaliveRestart.RunAsync(restarted, new SystemProcessRunner(), () => ShimLocator.Find(), ex => _log.Write("keepalive", ex)).Forget();
@@ -276,6 +279,8 @@ public partial class App : Application, ITrayHost
         _quitWait?.Unregister(null);
         _quitEvent?.Dispose();
         _linkServer?.Dispose();
+        _quickSwitchHotKey?.Dispose(); // gives the key back to Windows
+        _hotKeyHost?.Dispose();
         if (_mutex is not null)
         {
             try { _mutex.ReleaseMutex(); } catch (ApplicationException) { }
