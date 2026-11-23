@@ -66,7 +66,7 @@ its own. Set it when two agents share a machine, so they are two holders.
 | Class | Commands | Stopped by |
 |---|---|---|
 | The whole bench | `restart`, `down`, `fg`, `repair`, `service`, `install`, `adopt`, `uninstall-service`, `app add`, `app update`, `lock apply`, `ports apply`, `ports setup` | a lease on the bench, or on any site of it |
-| One site | `site drop`, `site restore`, `pull` (the site it creates or replaces), `app install --site` | a lease on the bench, or on that site |
+| One site | `site drop`, `site restore`, `site move` (also a lease on the bench it goes to), `pull` (the site it creates or replaces), `app install --site` | a lease on the bench, or on that site |
 | The bench itself | `site add`, `site default` | a lease on the bench |
 
 These stop before the run lock is taken and before anything changes, with exit
