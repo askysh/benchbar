@@ -242,6 +242,28 @@ Every bench has a page:
   comes first, the deadline) and run exactly that plan by its own token
   when you confirm; a bench that changed in between asks you to review
   the plan again.
+- **The end of a bench's life** (each entry shows when `benchbar` lists
+  its command). The ⋯ menu has **Tidy Up…**, **Remove Service…**,
+  **Forget Bench…** and **Remove Bench…**. **Tidy Up…** marks the bench
+  scratch for 1 to 90 days after you confirm (`benchbar bench scratch`),
+  or not scratch, and lists the scratch benches that expired, the ones
+  that wait and the ones kept (`bench gc --dry-run`), the databases no
+  site refers to (`db orphans`) and the hosts lines no bench has a site for
+  (`site hosts --prune --dry-run`). **Remove Expired…** shows the plan of
+  `bench gc` and runs exactly that plan by its own token as you: it backs
+  up each site, drops its database and moves the folder aside. The
+  orphan databases are only a list: BenchBar never drops a database. The
+  stale hosts lines come with the command `benchbar site hosts --prune` to
+  copy into Terminal: BenchBar never edits `/etc/hosts`, because the
+  command does not edit it for a caller that cannot ask in a terminal
+  (even with the password dialog). **Forget Bench…** and **Remove
+  Bench…** show the plan of `bench forget` and `bench remove` and run it
+  by its token; Remove asks you to type the folder name first, as the
+  command wants it, and the plan refuses the default bench. **Remove
+  Service…** is `uninstall-service --bench-dir` for this bench (never
+  `--all`): it shows the dry run, then removes the agent, runner and
+  Procfile.lean, each backed up first. A bench that changed in between
+  asks you to review the plan again.
 - **Sites**: add a site (it asks for the Administrator password) and open
   any of them. The ⋯ menu of a site makes it the default, backs it up
   (with or without files), shows the last backup in Finder and has
