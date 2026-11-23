@@ -97,7 +97,7 @@ PG_DIR="$(mktemp -d)"
 cat >"$PG_DIR/pgrep" <<'SH'
 #!/bin/sh
 case "$1" in
-  -qf) printf '%s\n' "$PG_TITLE" | grep -qE -- "$2" ;;
+  -qf) printf '%s\n' "$PG_TITLE" >"$0.title"; grep -qE -- "$2" "$0.title" ;;
   *) exit 1 ;;
 esac
 SH
