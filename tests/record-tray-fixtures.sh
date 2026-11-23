@@ -109,7 +109,14 @@ shapes() {
     "cli/status-ready.json|status --json --bench-dir $BENCH" \
     "cli/status-ready-stale.json|status --json --bench-dir $BENCH" \
     "cli/status-pending-update.json|status --json --bench-dir $BENCH" \
-    "cli/status-pending-add.json|status --json --bench-dir $BENCH"
+    "cli/status-pending-add.json|status --json --bench-dir $BENCH" \
+    "cli/snapshots-list.json|site snapshots linuxdev.localhost --json --bench-dir $BENCH" \
+    "cli/lease-list.json|lease list --json" \
+    "cli/history.json|history --json" \
+    "cli/stats.json|stats --json --bench-dir $BENCH" \
+    "cli/stats-stopped.json|stats --json --bench-dir $BENCH" \
+    "cli/op-list.json|op list --json" \
+    "cli/run-plan.json|run --site linuxdev.localhost --dry-run --json --bench-dir $BENCH -- migrate --skip-failing"
 }
 
 # paths FILE: one line per field path of a JSON document, arrays folded into

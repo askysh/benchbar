@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.9.0","bench_dir":"/home/akash/frappe-bench","running":true,"resources":{"cpu_percent":112.8,"memory_bytes":26624000,"processes":4,"sampled_at":"2026-11-20T11:09:20Z","cpu_source":"proc_delta","window_ms":500,"speed":{"raw":12.0,"min":1,"max":12,"smoothing_alpha":0.35,"formula":"clamp(1 + cpu_percent / 10, min, max)"}}}

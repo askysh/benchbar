@@ -111,6 +111,25 @@ public sealed class PlanReviewModel : IDisposable
     /// <summary>The plan can be applied: it has no errors, it changes something, and it has a token to apply it with.</summary>
     public bool CanConfirm => Phase == PlanPhase.Review && Plan is { CanApply: true, HasChanges: true } && (!Request.RequiresToken || Plan.Token is { Length: > 0 });
 
+    /// <summary>Who holds the lease that refused the apply (nothing was changed), or null. Only <see cref="BreakLeaseAsync"/> goes past it.</summary>
+    public LeaseRefusal? LeaseRefused { get; private set; }
+
+    private bool _breakLease;
+
+    /// <summary>
+    /// Runs the same apply again with <c>--break-lease</c> after a lease refused it. It is the person's own click, after the sheet asked; the
+    /// CLI allows it to a person only and records the run in the history. Does nothing when no lease refused the last apply.
+    /// </summary>
+    public Task BreakLeaseAsync()
+    {
+        if (Phase != PlanPhase.Finished || LeaseRefused is null || Plan is null) return Task.CompletedTask;
+        _breakLease = true;
+        LeaseRefused = null;
+        Result = null;
+        Phase = PlanPhase.Review;
+        return ConfirmAsync();
+    }
+
     public bool AsksPassword => Request.UsesSudoEnv && Plan is { SudoSteps: > 0 };
 
     // --- plan ---
@@ -188,7 +207,8 @@ public sealed class PlanReviewModel : IDisposable
             Phase = PlanPhase.Running;
             Raise();
 
-            var apply = await _cli.RunStreamAsync(Request.ApplyArgs(plan), env, Request.ApplyTimeout, OnEvent, cts.Token).ConfigureAwait(true);
+            var applyArgs = _breakLease ? LeaseCommands.WithBreak(Request.ApplyArgs(plan)) : Request.ApplyArgs(plan);
+            var apply = await _cli.RunStreamAsync(applyArgs, env, Request.ApplyTimeout, OnEvent, cts.Token).ConfigureAwait(true);
             lock (_gate) _run = null;
             if (_disposed) return;
             Finish(apply);
@@ -217,6 +237,8 @@ public sealed class PlanReviewModel : IDisposable
             Result = PlanResultModel.From(apply);
             if (Request.ExplainFailure?.Invoke(apply) is { Length: > 0 } advice) Result = Result with { Error = $"{Result.Error} {advice}".Trim() };
             Outcome = new PlanOutcome(apply.Ok, apply.Cancelled, apply.Done);
+            // a lease that stands in front of the change is shown with its holder; only the person's own click goes past it (BreakLeaseAsync)
+            LeaseRefused = apply.Ok || apply.Cancelled ? null : LeaseRefusal.Parse(apply.Problem);
             Phase = PlanPhase.Finished;
         }
         Raise();
@@ -240,6 +262,7 @@ public sealed class PlanReviewModel : IDisposable
         var env = new SecretEnvironment();
         Request.ConfigureEnv?.Invoke(env);
         if (password is not null) CliSudo.Apply(env, password);
+        if (_breakLease) env.Set(SetupEnv.NonInteractive, "0"); // --break-lease is allowed to a person only; after the sudo mode, which sets 1
         return env;
     }
 

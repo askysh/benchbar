@@ -69,7 +69,7 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
     public void Bind(BenchContext context)
     {
         var key = string.Join('|', context.Bench.Path, context.Bench.State, context.Bench.WebUrl, context.Site,
-            string.Join(',', context.Bench.Sites.Select(s => s.Name + (s.IsDefault ? "*" : "") + (s.OpenAs is { } o ? $"[{o.Enabled}{o.DeveloperMode}{o.Usable}]" : ""))), PullAvailable);
+            string.Join(',', context.Bench.Sites.Select(s => s.Name + (s.IsDefault ? "*" : "") + (s.OpenAs is { } o ? $"[{o.Enabled}{o.DeveloperMode}{o.Usable}]" : ""))), PullAvailable, SnapshotsAvailable);
         // one view serves every bench: a panel opened for another bench must not outlive the switch
         if (_context is not null && _context.Bench.Path != context.Bench.Path)
         {
@@ -151,7 +151,7 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         Grid.SetColumn(action, 1);
         grid.Children.Add(action);
 
-        var entries = SiteMenu.For(row, onlySite, OpenAsFor(row).State).Select(item => new PageMenuEntry(item.Label, item.Enabled, item.Destructive, () => MenuAction(row, item.Action)));
+        var entries = SiteMenu.For(row, onlySite, OpenAsFor(row).State, SnapshotsAvailable == true).Select(item => new PageMenuEntry(item.Label, item.Enabled, item.Destructive, () => MenuAction(row, item.Action)));
         var more = PagePanels.MoreButton($"More actions for {row.Name}", entries, !_busy);
         Grid.SetColumn(more, 2);
         grid.Children.Add(more);
@@ -182,6 +182,7 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
             case SiteAction.BackUpWithFiles: Start(() => BackUpAsync(row.Name, true)); break;
             case SiteAction.Backups: Start(() => ShowBackupsAsync(row.Name, restore: false)); break;
             case SiteAction.Restore: Start(() => ShowBackupsAsync(row.Name, restore: true)); break;
+            case SiteAction.Snapshots: Start(() => ShowSnapshotsAsync(row.Name)); break;
             case SiteAction.Console: OpenShell(SiteShellKind.Console, row.Name); break;
             case SiteAction.Database: OpenShell(SiteShellKind.Database, row.Name); break;
             case SiteAction.Drop: StartDrop(row.Name); break;
@@ -245,6 +246,8 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         _pullKeep = null;
         _pullProblem = null;
         _pullKeepNote = null;
+        _snapLabel = null;
+        _snapProblem = null;
         _drop = null;
         SetPanel(null);
     }
