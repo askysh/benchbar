@@ -37,8 +37,20 @@ the apply tool with the same arguments and the token (the CLI form is
 - `benchbar_app_install_plan` / `benchbar_app_install`: an app that is
   already in the bench, on one site. `benchbar_app_update_plan` /
   `benchbar_app_update`: fast forward one app; every site that has it is
-  backed up first and the backup cannot be skipped. Both plan again at apply
-  and refuse a plan that changed (new commits, a changed site): plan again.
+  backed up first and the backup cannot be skipped. The token is the CLI's
+  own (`--dry-run --json`); `--apply TOKEN --yes` plans again under the lock
+  and refuses a plan that changed (new commits, a changed site): plan again.
+- `benchbar_lock_write` writes `benchbar.toml` from the bench;
+  `benchbar_lock_apply_plan` / `benchbar_lock_apply` clone the missing apps
+  and fast forward to it (the plan names the repos whose code will run; no
+  site is touched).
+- `benchbar_pull_plan` / `benchbar_pull`: a copy of a production site as a
+  new local site, neutralised (integrations off, secrets cleared). Never the
+  default site, never `--keep-secrets`, never `--replace`.
+- `benchbar_profile_create` writes a team profile from a bench;
+  `benchbar_profile_remove_plan` / `benchbar_profile_remove` move an import
+  or subscription aside. Adding a source of code (`profile import`,
+  `subscribe`, `update`) is the person's, in a terminal.
 - `benchbar_site_backup`, then `benchbar_site_restore_plan` /
   `benchbar_site_restore` (`new: true` for a copy of a site for QA,
   `no_migrate` to stop before migrate).
@@ -223,7 +235,10 @@ The patched wkhtmltopdf package and the `/etc/hosts` line need `sudo`;
 safe.
 
 When it finishes: tell the user to run `source ~/.zshrc` and `benchup`,
-then open `http://<site>:8000`.
+then open `http://<site>:8000`. The helper file follows the login shell
+(fish: `~/.config/fish/conf.d/benchbar.fish`, bash on a Mac:
+`~/.bash_profile`); the install's last lines and `doctor` name it. nushell
+and a few other shells get no helpers: there the user runs `benchbar up`.
 
 On Linux (Ubuntu 24.04, WSL included) the same command installs from apt,
 uv and fnm, runs each bench as a `systemd --user` unit, keeps the MariaDB
@@ -443,7 +458,9 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   rail, so keep the rule). A command of an
   experiment that is off exits 2 with "Turn it on: benchbar labs on NAME":
   tell the user, do not work around it. `status --json` and
-  `commands --json` list the `labs` that are on.
+  `commands --json` list the `labs` that are on. Nothing in the environment
+  turns one on: `BENCHBAR_LABS` is a seam of the test suite, read only under
+  `FL_TESTING=1`, and a real run ignores it. Do not set either.
 - Never print or log the MariaDB root password. It lives in the Keychain
   (a 0600 file on Linux). `benchbar mariadb-password` is the person's own
   command: it refuses under `--for-agent`, `BENCHBAR_NONINTERACTIVE`,

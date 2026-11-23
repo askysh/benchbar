@@ -45,6 +45,14 @@ fl_site_curl_code() {
   case "$code" in [0-9][0-9][0-9]) printf '%s' "$code" ;; *) printf '000' ;; esac
 }
 
+# the file sudo writes: never taken from the environment, but by the tests
+# (FL_TESTING=1, which tests/lib/harness.sh sets). Here and not in checks.sh,
+# which the lean start does not load: status --json and list --json read the
+# file for every site and stopped at "FL_HOSTS_FILE: unbound variable" on a
+# Mac (found by the real install job, issue 139; the harness sets the
+# variable for every test, which hid it).
+if [[ "${FL_TESTING:-0}" == "1" ]]; then FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"; else FL_HOSTS_FILE=/etc/hosts; fi
+
 # A "127.0.0.1 ... NAME" line in the hosts file, read in bash (list and
 # status ask this for every site).
 fl_hosts_has_name() {

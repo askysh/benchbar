@@ -213,8 +213,8 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar app list\|add\|install\|update\|focus\|unfocus ...` | no | no | no | no | none |
 | `benchbar app list [--json] [--no-sites]` | no | no | no | no | document |
 | `benchbar app add NAME\|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME\|URL ...] [--site S\|--all-sites] --dry-run --json, then --apply TOKEN --yes` | no | no | yes | yes | document |
-| `benchbar app install NAME --site S [--skip-backup]` | no | no | no | yes | stream |
-| `benchbar app update NAME [--skip-backup] [--dry-run] [--json]` | yes | no | yes | yes | stream |
+| `benchbar app install NAME --site S [--skip-backup] [--dry-run --json \| --apply TOKEN --yes]` | no | no | no | yes | stream |
+| `benchbar app update NAME [--skip-backup] [--dry-run --json \| --apply TOKEN --yes]` | yes | no | yes | yes | stream |
 | `benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]` | no | no | no | no | document |
 | `benchbar app unfocus NAME` | no | no | no | yes | document |
 
@@ -235,9 +235,12 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `app add` | `--dry-run` |  | Print the plan and its token. |
 | `app add` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
 | `app install` | `--skip-backup` |  | Install without a backup of the site first. |
+| `app install` | `--dry-run` |  | Print the plan as one JSON document with --json; it carries a token. |
+| `app install` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); refused when the plan changed since the token was made. |
 | `app update` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `app update` | `--skip-backup` |  | Migrate without a backup first. |
-| `app update` | `--dry-run` |  | Print the plan as one JSON document with --json. |
+| `app update` | `--dry-run` |  | Print the plan as one JSON document with --json; it carries a token (null when there is nothing to do). |
+| `app update` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); the plan is made again after a fetch, under the lock, and refused when it changed. |
 | `app update` | `--discard-pending` |  | Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs. |
 | `app focus` | `--list` |  | List the focus apps (the default without a name). |
 | `app focus` | `--auto` |  | With NAME: let benchbar decide again (undo a pin). |

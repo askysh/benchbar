@@ -251,13 +251,6 @@ fl_formula_disable_days_from() {
   if [[ "$now" -ge "$at" ]]; then printf '%s' "$(( -((now - at) / 86400) - 1 ))"; else printf '%s' "$(( (at - now) / 86400 ))"; fi
 }
 
-# fl_formula_disable_days FORMULA: the same, from one brew info call
-fl_formula_disable_days() {
-  local deprecated disabled dep_date dis_date
-  read -r deprecated disabled dep_date dis_date <<<"$(fl_brew_formula_dates "$1")"
-  fl_formula_disable_days_from "$deprecated" "$disabled" "$dis_date"
-}
-
 fl_brew_formula_available() {
   local formula="$1"
   brew list --formula --versions "$formula" >/dev/null 2>&1 || brew info "$formula" >/dev/null 2>&1
@@ -266,8 +259,17 @@ fl_brew_formula_available() {
 # A bare name (mariadbd, redis-server) is the name of the process, so an
 # editor or a tail with that word in its arguments does not count; anything
 # else is a pattern for the whole command line.
+# macOS matches -x against the title a process gave itself, and Redis runs as
+# "redis-server 127.0.0.1:6379": no bare name equals that, so the install on a
+# Mac stopped at "redis-server is not running" (found by the real install job,
+# issue 139). A bare name is therefore also the first word of a command line,
+# with or without its folder, which still leaves out an editor or a tail.
 fl_process_running() {
-  if [[ "$1" =~ ^[A-Za-z0-9._@-]+$ ]]; then pgrep -qx "$1" 2>/dev/null; else pgrep -qf "$1" 2>/dev/null; fi
+  if [[ "$1" =~ ^[A-Za-z0-9._@-]+$ ]]; then
+    pgrep -qx "$1" 2>/dev/null || pgrep -qf "^([^ ]*/)?${1//./\\.}( |\$)" 2>/dev/null
+  else
+    pgrep -qf "$1" 2>/dev/null
+  fi
 }
 
 fl_brew_service_running() {
@@ -335,7 +337,7 @@ fl_mariadb_safe_mode_note() {
 
 fl_ensure_service_started() {
   local formula="$1" proc_pattern="$2" tmpfile
-  tmpfile="$(mktemp "${TMPDIR:-/tmp}/frappe-local-brew.XXXXXX")"
+  tmpfile="$(mktemp "${TMPDIR:-/tmp}/benchbar-brew.XXXXXX")"
   if fl_process_running "$proc_pattern" || fl_brew_service_running "$formula"; then
     fl_ok "${formula} is running"
     rm -f "$tmpfile"

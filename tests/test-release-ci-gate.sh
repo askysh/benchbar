@@ -19,6 +19,11 @@ mkdir -p "$G/results" "$G/bin"
 cat >"$G/bin/gh" <<'SH'
 #!/usr/bin/env bash
 for a in "$@"; do case "$a" in repos/*/commits/*/check-runs*) sha="${a#*/commits/}"; sha="${sha%%/*}" ;; esac; done
+# the real installs on macOS have their own check: SHA.real, and passed when a test names none
+case "$*" in *'Real install result'*)
+  if [[ -f "$GATE_RESULTS/$sha.real" ]]; then cat "$GATE_RESULTS/$sha.real"; else echo "completed success"; fi
+  exit 0 ;;
+esac
 [[ -f "$GATE_RESULTS/$sha" ]] && cat "$GATE_RESULTS/$sha"
 exit 0
 SH
@@ -111,6 +116,26 @@ printf 'completed success\nin_progress \n' >"$G/results/$C"
 run "$C"; assert_eq 0 "$CODE" "$OUT"
 echo "queued " >"$G/results/$C"
 run "$C"; assert_eq 1 "$CODE"; assert_contains "$OUT" "running"
+
+# the real installs on macOS: their own check, on the commit or on a docs only
+# commit under it down to the code commit
+clear_res
+res "$B" "completed success"; res "$D1" "completed success"; res "$D2" "completed success"
+: >"$G/results/$D2.real"; : >"$G/results/$D1.real"; : >"$G/results/$B.real"
+run "$D2"; assert_eq 1 "$CODE"; assert_contains "$OUT" 'no passed "Real install result (macOS)"'
+assert_contains "$OUT" "gh workflow run real-install.yml"
+res "$B.real" "completed success"
+run "$D2"; assert_eq 0 "$CODE" "$OUT"; assert_contains "$OUT" "Real install result (macOS) passed on ${B:0:9}"
+# the newest finished run decides: a failure on the head is not undone by an older pass
+res "$D2.real" "completed failure"
+run "$D2"; assert_eq 1 "$CODE"; assert_contains "$OUT" "Real install result (macOS) is failure on ${D2:0:9}"
+# a run in progress is not a pass
+: >"$G/results/$B.real"; echo "in_progress " >"$G/results/$D2.real"
+run "$D2"; assert_eq 1 "$CODE"; assert_contains "$OUT" "running on ${D2:0:9}"
+# a pass on a commit below the code commit does not count (A is under B)
+clear_res
+res "$B" "completed success"; : >"$G/results/$B.real"; res "$A.real" "completed success"
+run "$B"; assert_eq 1 "$CODE"; assert_contains "$OUT" 'no passed "Real install result (macOS)"'
 
 # no repository
 set +e; OUT="$(GH_GATE_REPO="" GITHUB_REPOSITORY="" bash "$GATE" "$B" 2>&1)"; CODE=$?; set -e

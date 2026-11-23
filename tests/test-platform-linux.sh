@@ -162,7 +162,6 @@ PATH="$OLDPATH"
 read -r dep dis depd disd <<<"$(fl_brew_formula_dates python@3.11)"
 assert_eq "unknown" "$dep"
 assert_eq "" "$(fl_formula_disable_days_from "$dep" "$dis" "$disd")"
-assert_eq "" "$(fl_formula_disable_days python@3.11)"
 fl_brew_formula_available mariadb@10.11 || fail "installed apt package"
 fl_brew_formula_available redis || fail "redis maps to redis-server"
 fl_brew_formula_available zip || fail "installed"
@@ -264,12 +263,13 @@ assert_eq "$TMP_DIR/xdg-home/.local/state/benchbar" "$(state_dir linux)" "(XDG_S
 assert_eq "$TMP_DIR/xdg-home/.local/state/benchbar" "$(state_dir macos "$TMP_DIR/xdg-state")" "(the Mac ignores it)"
 assert_eq "$TMP_DIR/override" "$(env FL_STATE_DIR="$TMP_DIR/override" FL_PLATFORM=linux XDG_STATE_HOME="$TMP_DIR/xdg-state" SCRIPT_DIR="$ROOT" bash -c '. "$SCRIPT_DIR/lib/frappe-local/ui.sh"; . "$SCRIPT_DIR/lib/frappe-local/state.sh"; printf "%s" "$FL_STATE_DIR"')" "(FL_STATE_DIR wins)"
 
-# ---- shell rc file: .bashrc on Linux unless the shell is zsh
-rc_for() { env -u FL_RC_FILE SHELL="$1" FL_PLATFORM="$2" HOME="$TMP_DIR/rc-home" ZDOTDIR= SCRIPT_DIR="$ROOT" FL_STATE_DIR="$TMP_DIR/rc-state" bash -c \
+# ---- shell rc file: .bashrc on Linux unless the shell is zsh or fish
+rc_for() { env -u FL_RC_FILE -u XDG_CONFIG_HOME SHELL="$1" FL_PLATFORM="$2" HOME="$TMP_DIR/rc-home" ZDOTDIR= SCRIPT_DIR="$ROOT" FL_STATE_DIR="$TMP_DIR/rc-state" bash -c \
   '. "$SCRIPT_DIR/lib/frappe-local/ui.sh"; . "$SCRIPT_DIR/lib/frappe-local/state.sh"; . "$SCRIPT_DIR/lib/frappe-local/shellrc.sh"; fl_rc_file'; }
 mkdir -p "$TMP_DIR/rc-home" "$TMP_DIR/rc-state"
 assert_eq "$TMP_DIR/rc-home/.bashrc" "$(rc_for /bin/bash linux)"
-assert_eq "$TMP_DIR/rc-home/.bashrc" "$(rc_for /usr/bin/fish linux)" "(any shell but zsh gets .bashrc on Linux)"
+assert_eq "$TMP_DIR/rc-home/.bashrc" "$(rc_for /bin/dash linux)" "(a shell benchbar does not know gets .bashrc on Linux)"
+assert_eq "$TMP_DIR/rc-home/.config/fish/conf.d/benchbar.fish" "$(rc_for /usr/bin/fish linux)" "(fish reads its own file, not .bashrc)"
 assert_eq "$TMP_DIR/rc-home/.bashrc" "$(rc_for "" linux)"
 assert_eq "$TMP_DIR/rc-home/.zshrc" "$(rc_for /usr/bin/zsh linux)"
 assert_eq "$TMP_DIR/rc-home/.zshrc" "$(rc_for /bin/zsh macos)"

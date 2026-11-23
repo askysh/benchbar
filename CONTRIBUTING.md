@@ -49,9 +49,13 @@ shellcheck on the changed files, and the app build when `macos/` changed;
 macOS runs only for paths that need a Mac or with the label `test-macos`.
 Pushes to `next-release` and `main` and the nightly run the whole suite on
 macOS, Linux and bash 3.2, install a real bench on Ubuntu under
-`systemd --user` (a pull request gets that run only with the label
-`test-linux`), build the app and build and test the Windows shim and
-tray. The rules are in the next section.
+`systemd --user` for both profiles and upgrade one from release 0.8.3 (a
+pull request gets those runs only with the label `test-linux`), build the
+app and build and test the Windows shim and tray. The real install and the
+upgrade on a Mac (`real-install.yml`) run nightly, by hand and when the
+label `test-real` is added to a pull request, never on a push: they take
+two of the five macOS runners for about eight minutes. The rules are in the next
+section.
 
 - **Many checks show "skipped".** A job with nothing to do for your
   change is skipped as a whole, and a skipped job passes. A docs only
@@ -124,6 +128,18 @@ without a row counts as 10 seconds, so a new test needs no row to run.
 - **Shell** targets macOS `/bin/bash` 3.2: no associative arrays, no
   `mapfile`, no `${var,,}`. No dependencies beyond the ones the installer
   needs. Every script passes `shellcheck` with the repo's `.shellcheckrc`.
+- **Two older names.** The project was `frappe-mac` until 0.3.0 and its
+  library `frappe-local` before that. The internal spelling stays on
+  purpose, because a rename would touch every file for nothing a person
+  sees: the `fl_` and `FL_` prefixes and the folder `lib/frappe-local/`.
+  What an install has on disk under an old name is still read and
+  migrated: the `frappe-mac` command next to `benchbar`, `com.frappe-mac.*`
+  agents, `frappe-mac-run.sh`, the `# >>> frappe-mac >>>` rc block,
+  `frappe-mac-template:` headers, the `.frappe-local` state folder and the
+  MariaDB drop-in `frappe-mac-local-only.cnf`. None of these goes before
+  1.0.0, and one goes only after a doctor check has named what is left of
+  it. Do not add to the list: a new name, message or temp file says
+  `benchbar`.
 - **Idempotent.** Every command can run twice: a second run changes
   nothing and says `unchanged`. A test for a new step runs it twice and
   checks the second run.

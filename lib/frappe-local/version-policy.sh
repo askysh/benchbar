@@ -99,23 +99,12 @@ fl_mariadb_prefer_running() {
   FL_MARIADB_SOURCE="running"
 }
 
-# fl_version_lt A B: true when dotted version A is older than B (numbers only)
-fl_version_lt() {
-  local a="$1" b="$2" i x y
-  IFS=. read -r -a x <<<"${a%%[^0-9.]*}"
-  IFS=. read -r -a y <<<"${b%%[^0-9.]*}"
-  for i in 0 1 2; do
-    [[ "${x[$i]:-0}" -lt "${y[$i]:-0}" ]] && return 0
-    [[ "${x[$i]:-0}" -gt "${y[$i]:-0}" ]] && return 1
-  done
-  return 1
-}
-
 # fl_dep_fits SPEC VERSION: VERSION satisfies a PEP 440 style SPEC such as
-# ">=15.0.0,<16.0.0" (numbers only, pre-release tags ignored). A clause it
+# ">=15.0.0,<16.0.0" (numbers only: the pre-release tag of the version and of
+# the spec is cut off before fl_version_lt, ui.sh, sees them). A clause it
 # cannot read is skipped, so an odd spec never blocks anything.
 fl_dep_fits() {
-  local spec="$1" ver="$2" clause op want
+  local spec="$1" ver="${2%%[^0-9.]*}" clause op want
   local -a clauses=()
   IFS=, read -r -a clauses <<<"$spec"
   for clause in ${clauses[@]+"${clauses[@]}"}; do

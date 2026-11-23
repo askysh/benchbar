@@ -16,9 +16,7 @@ FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 # doctor --quick leaves these out: they start brew, python, node, bench, git
 # or ask the site, which takes seconds each; the JSON names them (skipped_checks)
 FL_QUICK_SKIP="brew formula_dates python_leaves pdf_engine app_copies env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio dependency_behind apps_behind ping"
-# the file sudo writes: never taken from the environment, but by the tests
-# (FL_TESTING=1, which tests/lib/harness.sh sets)
-if [[ "${FL_TESTING:-0}" == "1" ]]; then FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"; else FL_HOSTS_FILE=/etc/hosts; fi
+# FL_HOSTS_FILE, the file sudo writes, is set in sites.sh, which every start loads
 
 # port_block only exists while a plan moves this bench's ports
 # (FL_PORT_TARGET, set by fl_ports_plan); doctor never shows it.
@@ -599,8 +597,12 @@ chk_stop_flag() {
 }
 
 chk_helpers() {
-  local rc status legacy recorded own=""
+  local rc status legacy recorded own="" sh="${SHELL:-}"
   rc="$(fl_rc_file)"
+  if [[ -z "$rc" ]]; then
+    chk__set ok "no helper block: ${sh##*/} cannot read one (benchup and the others are for zsh, bash and fish); use ${FL_SELF} up, down, restart, status and logs"
+    return 0
+  fi
   status="$(fl_rc_block_status "$rc" "$FL_R_HELPERS")"
   legacy="$(fl_rc_legacy_blocks "$rc")"; legacy="${legacy//$'\n'/,}"
   case "$status" in

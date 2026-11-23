@@ -19,6 +19,15 @@
 # over the commits that changed only docs, and also needs a green "CI result"
 # on the nearest commit that changed code: the one whose push ran the tests.
 #
+# The real installs on macOS (real-install.yml: a real `benchbar install` and
+# the upgrade from the last release, on a hosted Mac) are not part of "CI
+# result": the repository gets five macOS jobs at a time, so no push starts
+# them. A release needs them all the same, so the gate also needs a passed
+# "Real install result (macOS)" on SHA, or on one of the docs only commits
+# under it down to the nearest commit that changed code (the code they ran is
+# the code of SHA). Start it by hand on the branch whose head is the commit:
+#   gh workflow run real-install.yml --ref next-release
+#
 # Needs gh with GH_TOKEN (checks: read) and GITHUB_REPOSITORY. GH_GATE_REPO
 # and the PATH let the tests name a repository and a fake gh.
 # Exit: 0 green, 1 red, missing or still running (the reason on stderr).
@@ -30,14 +39,15 @@ SHA="$(git rev-parse "${1:-HEAD}^{commit}")"
 REPO="${GH_GATE_REPO:-${GITHUB_REPOSITORY:-}}"
 [[ -n "$REPO" ]] || { printf '[FAIL] no repository: set GITHUB_REPOSITORY\n' >&2; exit 1; }
 CHECK_NAME="${CI_CHECK_NAME:-CI result}"
+REAL_NAME="Real install result (macOS)"
 
-# verdict COMMIT: success | <other conclusion> | running | none
+# verdict COMMIT [NAME]: success | <other conclusion> | running | none
 # The last finished run of the name decides (a re-run comes after the first);
 # a run in progress counts only when no run of it has finished.
 verdict() {
-  local out fin
+  local out fin name="${2:-$CHECK_NAME}"
   out="$(gh api --paginate "repos/${REPO}/commits/$1/check-runs?per_page=100" \
-    --jq ".check_runs[] | select(.name == \"${CHECK_NAME}\") | (.status + \" \" + (.conclusion // \"\"))" 2>/dev/null || true)"
+    --jq ".check_runs[] | select(.name == \"${name}\") | (.status + \" \" + (.conclusion // \"\"))" 2>/dev/null || true)"
   fin="$(printf '%s\n' "$out" | grep '^completed ' | tail -n 1 || true)"
   if [[ -n "$fin" ]]; then
     if [[ "$fin" == "completed success" ]]; then echo success; else echo "${fin#completed }"; fi
@@ -65,6 +75,7 @@ need "$SHA" ""
 
 # the nearest commit that is not docs only, along the first parent line
 c="$SHA"
+walked=("$SHA")
 while true; do
   rc=0
   bash "$HERE/docs-only.sh" --commit "$c" >/dev/null || rc=$?
@@ -72,5 +83,22 @@ while true; do
   [[ "$rc" == 1 ]] && break
   c="$(git rev-parse -q --verify "${c}^1" 2>/dev/null)" || {
     printf '[FAIL] every commit up to the first one changes only docs: no commit ran the tests\n' >&2; exit 1; }
+  walked+=("$c")
 done
 [[ "$c" == "$SHA" ]] || need "$c" " (the nearest commit that ran the tests; ${SHA:0:9} and the commits after it change only docs)"
+
+# the real installs on macOS: the newest of those commits that has a finished
+# run decides
+seen=""
+for x in "${walked[@]}"; do
+  v="$(verdict "$x" "$REAL_NAME")"
+  case "$v" in
+    success) printf '[OK] %s passed on %s\n' "$REAL_NAME" "${x:0:9}"; exit 0 ;;
+    none) ;;
+    running) seen="running on ${x:0:9}" ;;
+    *) printf '[FAIL] %s is %s on %s. A release is not built from a commit whose real install on macOS failed.\n' "$REAL_NAME" "$v" "${x:0:9}" >&2; exit 1 ;;
+  esac
+done
+printf '[FAIL] no passed "%s" on %s (%s). Start it on the branch whose head is this commit and wait for it: gh workflow run real-install.yml --ref next-release\n' \
+  "$REAL_NAME" "${SHA:0:9}" "${seen:-none}" >&2
+exit 1

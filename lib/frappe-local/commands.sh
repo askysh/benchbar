@@ -343,12 +343,15 @@ flag~app add~--all-sites~~Install it on every site.
 flag~app add~--skip-backup~~Install on the sites without a backup first (the plan takes one by default).
 flag~app add~--dry-run~~Print the plan and its token.
 flag~app add~--apply~TOKEN~Run exactly that plan (with --yes).
-cmd~app install~benchbar app install NAME --site S [--skip-backup]~Back up a site, then install an app of the bench on it.~no~no~no~yes~stream
+cmd~app install~benchbar app install NAME --site S [--skip-backup] [--dry-run --json | --apply TOKEN --yes]~Back up a site, then install an app of the bench on it.~no~no~no~yes~stream
 flag~app install~--skip-backup~~Install without a backup of the site first.
-cmd~app update~benchbar app update NAME [--skip-backup] [--dry-run] [--json]~Fast forward one app with a changelog first, back up its sites, migrate, build.~yes~no~yes~yes~stream
+flag~app install~--dry-run~~Print the plan as one JSON document with --json; it carries a token.
+flag~app install~--apply~TOKEN~Run exactly that plan (with --yes); refused when the plan changed since the token was made.
+cmd~app update~benchbar app update NAME [--skip-backup] [--dry-run --json | --apply TOKEN --yes]~Fast forward one app with a changelog first, back up its sites, migrate, build.~yes~no~yes~yes~stream
 flag~app update~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~app update~--skip-backup~~Migrate without a backup first.
-flag~app update~--dry-run~~Print the plan as one JSON document with --json.
+flag~app update~--dry-run~~Print the plan as one JSON document with --json; it carries a token (null when there is nothing to do).
+flag~app update~--apply~TOKEN~Run exactly that plan (with --yes); the plan is made again after a fetch, under the lock, and refused when it changed.
 flag~app update~--discard-pending~~Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs.
 cmd~app focus~benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]~Focus apps: the ones you work on.~no~no~no~no~document
 flag~app focus~--list~~List the focus apps (the default without a name).
@@ -362,8 +365,10 @@ flag~lock write~--no-commits~~Leave the commit hashes out (branches only).
 flag~lock write~--allow-dirty~~Write it although an app has local changes.
 cmd~lock check~benchbar lock check [--json]~Compare the bench with benchbar.toml. Exit 1 on any difference.~no~no~no~no~document
 flag~lock check~--lock~PATH~Compare with this lockfile, and remember it for this bench.
-cmd~lock apply~benchbar lock apply~Clone missing apps, switch branches, fast forward to pinned commits.~yes~no~yes~yes~stream
+cmd~lock apply~benchbar lock apply [--dry-run --json | --apply TOKEN --yes]~Clone missing apps, switch branches, fast forward to pinned commits.~yes~no~yes~yes~stream
 flag~lock apply~--lock~PATH~Apply this lockfile, and remember it for this bench.
+flag~lock apply~--dry-run~~Print the plan as one JSON document with --json; it carries a token (null when the apps match).
+flag~lock apply~--apply~TOKEN~Run exactly that plan (with --yes); refused when the lockfile, an app or the plan changed since the token was made.
 cmd~bench~benchbar bench forget|remove|scratch|gc ...~The end of a bench's life: forget it, remove it, mark it scratch, collect the scratch benches that expired.~no~no~no~no~none
 cmd~bench forget~benchbar bench forget PATH --dry-run --json, then --apply TOKEN --yes~Unregister a bench: its service files are backed up and moved aside, its settings are set aside, the default bench is cleared when it was this one. The folder, sites, apps, databases and hosts lines stay (only the service files benchbar made in it go, each backed up first). An agent may run it with the plan and token.~yes~no~no~yes~document
 flag~bench forget~--dry-run~~Print the plan and its token, change nothing.
@@ -403,11 +408,12 @@ cmd~profile update~benchbar profile update NAME|--all [--plan] [--json]~Fetch an
 flag~profile update~--all~~Every import and subscription.
 flag~profile update~--plan~~Print the review only, change nothing.
 flag~profile update~--expect~DIGEST~Refuse unless the fetched profile's digest is this (the one the plan showed).
-cmd~profile remove~benchbar profile remove NAME [--yes] [--json]~Move an import or subscription aside.~yes~no~no~yes~document
+cmd~profile remove~benchbar profile remove NAME [--yes] [--json] [--dry-run | --apply TOKEN --yes]~Move an import or subscription aside.~yes~no~no~yes~document
+flag~profile remove~--dry-run~~Print the plan (what moves aside) as one JSON document with --json; it carries a token.
+flag~profile remove~--apply~TOKEN~Run exactly that plan (with --yes); refused when the file or the subscription changed since the token was made.
 cmd~profile check~benchbar profile check NAME [--json]~Can git read every repo with your credentials?~no~no~yes~no~document
 cmd~labs~benchbar labs [list|on NAME|off NAME|status NAME] [--yes] [--json]~Experiments: off until a person turns one on.~no~no~no~no~document
 flag~labs~--json~~One JSON document.
-env~labs~BENCHBAR_LABS~Comma separated lab names that replace the saved list (tests and CI).
 cmd~labs list~benchbar labs list [--json]~The experiments, whether each is on, and the commands each gates.~no~no~no~no~document
 flag~labs list~--json~~One JSON document.
 cmd~labs on~benchbar labs on NAME [--yes] [--json]~Turn an experiment on after its warning. Refused without a person (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an app passes BENCHBAR_NONINTERACTIVE=0.~yes~no~no~yes~stream
