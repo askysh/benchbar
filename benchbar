@@ -1055,7 +1055,7 @@ fl_install_port_plan() {
 
 # fl_install_plan_json BUNDLE: the plan line of install --json
 fl_install_plan_json() {
-  local pdf_run=0 hosts_run=0 pl_steps="" mode=terminal web_port team="null" label i=0 id sudo n
+  local pdf_run=0 hosts_run=0 pl_steps="" mode=terminal web_port team="null" label i=0 id sudo n token token_data
   # the plan describes the --yes run that follows a dry run
   if [[ "$(fl_wkhtmltopdf_state)" != "patched" ]] && FL_ASSUME_YES=1 fl_wkhtmltopdf_will_install; then pdf_run=1; fi
   if ! fl_is_linux && ! fl_hosts_has_site && fl_site_name_ok "$FL_SITE"; then hosts_run=1; fi
@@ -1078,7 +1078,13 @@ fl_install_plan_json() {
     pl_steps="${pl_steps},{\"n\":${n},\"id\":\"${id}\",\"name\":$(fl_json_str "$label"),\"sudo\":false,\"will_run\":true}"
   done
   FL_JSONL_URL="http://${FL_SITE}:${web_port}"
-  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"team_profile\":${team},\"bundle\":$(fl_json_str "$1"),\"port_offset\":$(fl_json_num "$INSTALL_PORT_OFFSET"),\"web_url\":$(fl_json_str "$FL_JSONL_URL"),\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${pl_steps}],\"blockers\":[${blockers}],\"warnings\":[${warnings}],\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
+  # the token of the plan: its steps and the inputs that decide them (the bench, the site, the
+  # profile, the bundle, the pins, the ports, the blockers); install --apply TOKEN --yes is refused
+  # here, before any dialog or step, when the plan made now is another one
+  token_data="$(printf 'install\n'; printf '%s\n' "$FL_BENCH_DIR" "$FL_SITE" "$FL_PROFILE" "$FL_TEAM_PROFILE" "$1" "$INSTALL_PORT_OFFSET" "$web_port" "$pl_steps" "$blockers" "${OPT_FRAPPE_COMMIT:-}" "${OPT_ERPNEXT_COMMIT:-}" "${FL_MAKE_DEFAULT:-0}" "${OPT_SCRATCH:-0}" "${OPT_TTL:-}" "${OPT_REPAIR_BENCH:-0}" "${FL_SCHEDULER:-}")"
+  fl_plan_apply_check "$token_data" "install" "benchbar install --dry-run --json --bench-dir ${FL_BENCH_DIR}"
+  fl_plan_token_v token "$token_data"
+  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"team_profile\":${team},\"bundle\":$(fl_json_str "$1"),\"port_offset\":$(fl_json_num "$INSTALL_PORT_OFFSET"),\"web_url\":$(fl_json_str "$FL_JSONL_URL"),\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${pl_steps}],\"blockers\":[${blockers}],\"warnings\":[${warnings}],\"token\":\"${token}\",\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
   FL_JSONL_PLAN_SENT=1
   [[ "$FL_DRY_RUN" != "1" ]] || FL_JSONL_QUIET=1
   export FL_JSONL_QUIET
@@ -1124,6 +1130,7 @@ fl_install_rerun_hint() {
 cmd_install() {
   local code=0 args00=() args01=() bundle phase00 phase_code=0
   local profile_name
+  fl_plan_apply_parse install
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_plain_bench
   # --scratch and --ttl are checked before any prompt or step
@@ -1521,11 +1528,12 @@ cmd_repair() {
     [[ "$FL_ASSUME_YES" == "1" ]] || exec 0</dev/null
   fi
   fl_sudo_env_preflight
+  fl_plan_apply_parse repair
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
   fl_require_plain_bench
   fl_header "benchbar repair" "$(fl_mode_name)" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
-  fl_repair_engine "Repair" || code=$?
+  FL_ENGINE_TOKEN_KIND=repair fl_repair_engine "Repair" || code=$?
   return "$code"
 }
 

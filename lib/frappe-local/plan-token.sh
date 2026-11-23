@@ -129,3 +129,39 @@ fl_plan_token_check() {
 fl_plan_token_expired_text() {
   printf 'The plan token expired: a token is good for about an hour after its plan was made, and this one is older. Nothing was changed.'
 }
+
+# fl_plan_apply_parse CMD: --apply TOKEN (or --apply=TOKEN) of a command that
+# also runs without one (repair, install). Sets FL_APPLY_TOKEN, empty when the
+# flag is not there. A token needs --yes and no --dry-run; a run without a
+# token keeps the old behaviour (DECISIONS).
+FL_APPLY_TOKEN=""
+fl_plan_apply_parse() {
+  local i=0
+  FL_APPLY_TOKEN=""
+  while [[ "$i" -lt "${#ARGS[@]}" ]]; do
+    case "${ARGS[$i]}" in
+      --apply) FL_APPLY_TOKEN="${ARGS[$((i + 1))]:-}"; i=$((i + 2)) ;;
+      --apply=*) FL_APPLY_TOKEN="${ARGS[$i]#*=}"; i=$((i + 1)) ;;
+      *) i=$((i + 1)) ;;
+    esac
+  done
+  if [[ -n "$FL_APPLY_TOKEN" || " ${ARGS[*]:-} " == *" --apply "* ]]; then
+    [[ "$FL_APPLY_TOKEN" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar $1 --dry-run --json prints it"
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
+    [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan ($1 --dry-run --json), then pass its token with --apply TOKEN --yes."
+  fi
+}
+
+# fl_plan_apply_check PLAN WHAT HINT: with --apply TOKEN, the plan made again
+# now (PLAN, empty when there is nothing to do) must still be the one the
+# token was made for; else the run stops before any action, nothing changed.
+fl_plan_apply_check() {
+  local code=0
+  [[ -n "${FL_APPLY_TOKEN:-}" ]] || return 0
+  fl_plan_token_check "$1" "$FL_APPLY_TOKEN" || code=$?
+  case "$code" in
+    0) return 0 ;;
+    2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: ${3}, then pass its token." ;;
+    *) fl_die "The ${2} plan changed since it was shown. Nothing was changed." "Review a fresh plan: ${3}, then pass its token." ;;
+  esac
+}

@@ -42,7 +42,48 @@ assert_eq "plan done" "$(ev '" ".join(x["event"] for x in e)')"
 assert_eq "1" "$(ev 'e[-1]["exit_code"]')"
 assert_eq "$snap" "$(snapshot "$BENCH")" "(no --yes, nothing changed)"
 
-# --yes: running then done for each action, done 0, the log is named
+# ---- the plan's token (UI-15): the dry run prints it, --apply runs exactly that plan
+events --dry-run
+tok="$(ev 'e[0]["token"]')"
+assert_eq "64" "${#tok}" "(the dry run prints a token)"
+events --dry-run
+assert_eq "$tok" "$(ev 'e[0]["token"]')" "(the same plan, the same token)"
+# a bad or lone --apply, and --apply with --dry-run, are refused before anything changes
+events --apply nope --yes
+assert_eq "1" "$CODE" "$EV"
+assert_contains "$(ev 'e[-1]["error"]')" "needs the token of a plan"
+events --apply "$tok"
+assert_eq "1" "$CODE" "$EV"
+assert_contains "$(ev 'e[-1]["error"]')" "--apply TOKEN --yes"
+events --apply "$tok" --dry-run
+assert_eq "1" "$CODE" "$EV"
+assert_contains "$(ev 'e[-1]["error"]')" "--apply runs the plan"
+# the bench changed since the dry run (a new action): refused, nothing changed
+sed_inplace '/macdev/d' "$FL_HOSTS_FILE"
+snap2="$(snapshot "$BENCH")"; hosts2="$(cat "$FL_HOSTS_FILE")"
+events --apply "$tok" --yes
+assert_eq "1" "$CODE" "$EV"
+assert_contains "$(ev 'e[-1]["error"]')" "plan changed since it was shown"
+assert_not_contains "$EV" '"event":"step"'
+assert_eq "$snap2" "$(snapshot "$BENCH")" "(a stale token changes nothing)"
+assert_eq "$hosts2" "$(cat "$FL_HOSTS_FILE")" "(a stale token leaves the hosts file)"
+printf '127.0.0.1 macdev\n' >>"$FL_HOSTS_FILE"
+# an expired token is named as such
+FL_PLAN_NOW=$(( FL_PLAN_NOW + 7200 )) events --apply "$tok" --yes
+assert_eq "1" "$CODE" "$EV"
+assert_contains "$(ev 'e[-1]["error"]')" "expired"
+assert_eq "$snap" "$(snapshot "$BENCH")" "(an expired token changes nothing)"
+# the right token runs the plan
+events --apply "$tok" --yes
+assert_eq "0" "$CODE" "$EV"
+assert_eq "build:running build:done write_procfile:running write_procfile:done" "$(ev '" ".join(x["action"]+":"+x["status"] for x in e if x["event"]=="step")')"
+assert_eq "$tok" "$(ev 'e[0]["token"]')" "(the real run's plan carries the token)"
+assert_file "$BENCH/Procfile.lean"
+rm "$BENCH/Procfile.lean"
+rm -rf "$BENCH/apps/frappe/frappe/public/dist"
+snap="$(snapshot "$BENCH")"
+
+# --yes without a token still runs (a person, or an older app): running then done for each action, done 0, the log is named
 events --yes
 assert_eq "0" "$CODE" "$EV"
 assert_eq "plan step step step step done" "$(ev '" ".join(x["event"] for x in e)')"

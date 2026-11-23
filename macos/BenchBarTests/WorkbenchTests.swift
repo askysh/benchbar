@@ -55,6 +55,9 @@ struct WorkbenchTests {
         #expect(RepairEvent.parse(#"{"event":"step","action":"build","status":"failed","message":"[FAIL] x"}"#)
                 == .step(action: "build", status: "failed", message: "[FAIL] x"))
         #expect(RepairEvent.parse(#"{"event":"done","exit_code":0,"log":"/l"}"#) == .done(exitCode: 0, log: "/l"))
+        #expect(RepairEvent.parse(#"{"event":"done","exit_code":1,"error":"refused"}"#) == .done(exitCode: 1, log: nil, error: "refused"))
+        #expect(RepairEvent.planToken(#"{"event":"plan","actions":[],"token":"abc"}"#) == "abc")
+        #expect(RepairEvent.planToken(#"{"event":"plan","actions":[]}"#) == nil)
         #expect(RepairEvent.parse(#"{"event":"progress","pct":40}"#) == nil)
         #expect(RepairEvent.parse("[OK] human text") == nil)
     }
@@ -178,6 +181,31 @@ struct WorkbenchTests {
         #expect(run.steps.map(\.id) == ["build", "hosts_entry"])
         #expect(run.unreviewedSteps.map(\.id) == ["hosts_entry"])
         #expect(!run.steps[0].unreviewed)
+    }
+
+    /// The plan's token goes with the run (`--apply TOKEN`); the CLI refuses a plan that changed and
+    /// the sheet offers Review Again, which reads the plan once more.
+    @Test func theRepairRunPassesTheTokenAndAStaleRefusalOffersReviewAgain() async throws {
+        let (store, _) = try await store()
+        let bench = try #require(store.benches.first { $0.path == v16 })
+        base.cli.answer("doctor", json: try Fixture.string("doctor"))
+        let token = String(repeating: "d", count: 64)
+        base.cli.answer("repair", json: #"{"event":"plan","actions":[{"id":"build","label":"bench build","fixes":[],"sudo":false}],"token":"\#(token)","log":null}"#)
+        let run = RepairRun(bench: bench, store: store)
+        await run.loadPlan()
+        base.cli.answer("repair", json: #"{"event":"done","exit_code":1,"error":"The repair plan changed since it was shown. Nothing was changed.","log":null}"#)
+        await run.run()
+        #expect(base.cli.calls.contains(["repair", "--apply", token, "--yes", "--json", "--bench-dir", v16]))
+        #expect(run.isStale)
+        #expect(run.sheetPhase == .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown"))
+        let fresh = String(repeating: "e", count: 64)
+        base.cli.answer("repair", json: #"{"event":"plan","actions":[{"id":"build","label":"bench build","fixes":[],"sudo":false},{"id":"write_procfile","label":"write Procfile.lean","fixes":[],"sudo":false}],"token":"\#(fresh)","log":null}"#)
+        await run.loadPlan()
+        #expect(run.phase == .review && run.steps.map(\.id) == ["build", "write_procfile"])
+        base.cli.answer("repair", json: #"{"event":"done","exit_code":0,"log":null}"#)
+        await run.run()
+        #expect(base.cli.calls.contains(["repair", "--apply", fresh, "--yes", "--json", "--bench-dir", v16]))
+        #expect(run.phase == .finished(exitCode: 0))
     }
 
     @Test func aFailedRunIsNotOverwrittenByItsEvents() async throws {

@@ -732,7 +732,7 @@ Homebrew since 0.7.0, `.benchbar/` in a git checkout.
 
 | Event | Fields |
 |---|---|
-| `plan` | `actions[]` with `id` (a repair action), `label`, `fixes` (the doctor checks it fixes), `sudo` (needs a password: skipped without a terminal, or asked for in a macOS dialog under `BENCHBAR_SUDO=gui`, see [the privileged steps](#the-privileged-steps-and-benchbar_sudogui)); `dry_run`; `backups` (the backup root); `log` |
+| `plan` | `actions[]` with `id` (a repair action), `label`, `fixes` (the doctor checks it fixes), `sudo` (needs a password: skipped without a terminal, or asked for in a macOS dialog under `BENCHBAR_SUDO=gui`, see [the privileged steps](#the-privileged-steps-and-benchbar_sudogui)); `dry_run`; `token` (since 0.9, only when there is something to do; see below); `backups` (the backup root); `log` |
 | `step` | `action`, `status` (`running`, then `done`, `skipped` or `failed`), `message` (for `failed` and `skipped`, the CLI's `[FAIL]` or `[WARN]` line) |
 | `done` | `exit_code` (0 when every check passes afterwards), `log` |
 
@@ -740,6 +740,13 @@ Homebrew since 0.7.0, `.benchbar/` in a git checkout.
 nothing. Without `--yes` (and without `--dry-run`) nothing is applied:
 the plan is printed, then `done` with exit code 1, because the question
 cannot be answered. An empty `actions` means nothing needs repairing.
+
+Since 0.9 the `plan` line has a `token`: a keyed, timed hash of the bench, the
+site, the profile and the actions the run would take. `repair --apply TOKEN
+--yes` makes the plan again and ends with exit 1 and a `done` that says `The
+repair plan changed since it was shown` (or `The plan token expired`) before
+any step, when it is not the same. A plan with nothing to do has no token. A
+run without `--apply` is as before.
 ## `benchbar install --json`
 
 Since 0.8 the `done` line also carries `changed`, `warnings`, `next_actions` and `state_after` ([done fields](#the-done-fields-08)); `adopt` the same.
@@ -749,6 +756,14 @@ stdout as the run goes, the human text in the run's log
 (`logs/<date>-<time>-<pid>.log` in benchbar's state folder). Every line
 carries `schema_version`, `cli_version` and `event`. The BenchBar app's
 New Bench page reads it.
+
+Since 0.9 the `plan` line has a `token`, a keyed, timed hash of the plan's steps
+and of the inputs that decide them (the bench, the site, the profile, the
+bundle, the pins, the port block and the blockers). `install --apply TOKEN --yes`
+with the same flags makes the plan again and ends with exit 1 and a `done` that
+says `The install plan changed since it was shown` (or `The plan token expired`)
+before any dialog or step, when it is not the same. A run without `--apply` is
+as before.
 
 The stream is only valid with `--yes` (or with `--dry-run`): no question
 can be answered on it, so `install --json` without either prints one
