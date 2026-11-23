@@ -237,6 +237,8 @@ nonisolated enum SharePresentation {
     // MARK: Who gives out the seats (#159 SHARE-5)
 
     static let assignSeatsToggle = "I give out the seats"
+    /// On until the host turns it off: a guest waits for the host, as `share start` does by default.
+    static let assignSeatsDefault = true
     static let assignSeatsHelp = "On: a guest who joins waits until you give them a seat, and cannot take or change one. Off: anyone with the room code takes any free seat."
 
     static func seatModeLine(hostGivesSeats: Bool) -> String {

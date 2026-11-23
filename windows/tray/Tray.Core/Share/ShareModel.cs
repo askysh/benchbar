@@ -96,9 +96,10 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
 
     public string[] InviteArgs() => Bench("share", "invite", "--json");
 
-    /// <summary><paramref name="assignSeats"/>: the host gives out the seats (<c>--assign-seats</c>).</summary>
-    public string[] StartArgs(int hours, bool assignSeats = false) =>
-        Bench(["share", "start", "--for", $"{hours}h", .. assignSeats ? new[] { "--assign-seats" } : [], "--json"]);
+    /// <summary><paramref name="assignSeats"/>: the host gives out the seats (<c>--assign-seats</c>, the CLI's default since 0.9.0);
+    /// false is <c>--open-seats</c>. One of the two is always passed, so the room is what the box said.</summary>
+    public string[] StartArgs(int hours, bool assignSeats = true) =>
+        Bench("share", "start", "--for", $"{hours}h", assignSeats ? "--assign-seats" : "--open-seats", "--json");
 
     public string[] StopArgs() => Bench("share", "stop", "--json");
 
@@ -232,7 +233,7 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
 
     // --- room commands ---
 
-    public Task<bool> StartAsync(int hours, CancellationToken ct = default) => StartAsync(hours, false, ct);
+    public Task<bool> StartAsync(int hours, CancellationToken ct = default) => StartAsync(hours, true, ct);
 
     public Task<bool> StartAsync(int hours, bool assignSeats, CancellationToken ct = default) =>
         RunAsync("Starting sharing...", StartArgs(hours, assignSeats), PersonEnvironment(), CliTimeouts.Apply, ct);

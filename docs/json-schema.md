@@ -1397,7 +1397,7 @@ changing command that a lease stops.
 
 `status --json` has `notices`: the defaults an update changed, until they are
 dismissed. `[]` when there are none, and a fresh install has none. Each entry:
-`id` (`listen-local`, `unknown-flags`, `pull-neutralise`), `title`, `text`,
+`id` (`listen-local`, `unknown-flags`, `pull-neutralise`, `room-seats`), `title`, `text`,
 `switch_back` (the command or variable that goes back), `doc` (a full URL of
 the page that explains it) and `since` (the version of the change).
 `benchbar notices --json` prints `{"schema_version":1,"cli_version":"...","notices":[...]}`;
@@ -1901,7 +1901,7 @@ Streams that end in a done line carrying the fields shown (with `--dry-run`,
 
 | Command | Fields |
 |---|---|
-| `share start` | `bench`, `share_site`, `state` (`on`), `label`, `port`, `started_epoch`, `deadline_epoch`, `started`, `deadline` (ISO 8601, UTC) |
+| `share start` | `bench`, `share_site`, `state` (`on`), `label`, `port`, `started_epoch`, `deadline_epoch`, `started`, `deadline` (ISO 8601, UTC), `seat_mode` (`host`: guests wait until you give each a seat; `open`: `--open-seats`) |
 | `share start --dry-run` | `bench`, `share_site`, `dry_run`, `label`, `for_s`, `deadline`, `steps` (ids of what a start does) |
 | `share extend` | `bench`, `deadline_epoch`, `deadline`, `capped` (the 12 hour limit from the start was reached), `seconds_left` |
 | `share stop` | `bench`, `share_site`, `state` (`off`) |

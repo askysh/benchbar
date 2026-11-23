@@ -761,6 +761,19 @@ mv "$SHARE_DIR/share.json.away" "$SHARE_DIR/share.json"
 assert_eq "$snap" "$(snapshot "$SHARE_DIR")" "(a refusal writes nothing)"
 assert_calls_not_contain '^launchctl (bootstrap|kickstart)'
 # the dry run: the plan, nothing loaded or written
+# SHARE-5: the plan of a default start says who gives out the seats, and what a guest will see: nobody with
+# 0.8.3 habits starts a room where guests wait and nothing says why
+cli start --dry-run
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_contains "$OUT" "you give them out: benchbar share assign ID SEAT_ID"
+assert_contains "$OUT" "Guests wait for you"
+assert_contains "$OUT" "benchbar share start --open-seats"
+cli start --dry-run --assign-seats
+assert_eq "0" "$CODE" "$OUT$ERR"; assert_contains "$OUT" "Guests wait for you"
+cli start --dry-run --open-seats
+assert_eq "0" "$CODE" "$OUT$ERR"; assert_contains "$OUT" "anyone with the code takes any free seat"; assert_not_contains "$OUT" "Guests wait for you"
+cli start --dry-run --open-seats --assign-seats
+assert_eq "1" "$CODE" "$OUT$ERR"; assert_contains "$OUT$ERR" "--assign-seats and --open-seats"
 cli start --dry-run --json
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "$snap" "$(snapshot "$SHARE_DIR")"
@@ -799,9 +812,10 @@ assert_not_contains "$(cat "$SHARE_DIR/gateway.json")" "9000"
 # SHARE-7: the gateway listens on the address of the network the room is on, not on every interface
 assert_eq "192.168.1.20" "$(jget "$SHARE_DIR/gateway.json" 'd["listen"]["host"]')" "(the LAN address of the default route)"
 assert_not_contains "$(cat "$SHARE_DIR/gateway.json")" "0.0.0.0"
-# SHARE-5: without --assign-seats the room is as before, anyone in it takes a free seat
-assert_eq "open" "$(jget "$SHARE_DIR/gateway.json" 'd["seat_mode"]')"
-status_json; assert_eq "on open" "$(sget 'd["state"] + " " + d["seat_mode"]')"
+# SHARE-5: a room gives out its seats through the host unless --open-seats says otherwise, and the done line says so
+assert_eq "host" "$(jget "$SHARE_DIR/gateway.json" 'd["seat_mode"]')"
+assert_eq "host" "$(jget "$TMP_DIR/done.json" 'd["seat_mode"]')"
+status_json; assert_eq "on host" "$(sget 'd["state"] + " " + d["seat_mode"]')"
 assert_eq "True" "$(jget "$SHARE_DIR/devices.json" 'd["devices"] == [] and d["blocked"] == []')" "(devices are scoped to one room)"
 # the runner names node and benchbar by absolute paths, never by PATH
 runner_text="$(cat "$SHARE_DIR/share-run.sh")"
@@ -968,14 +982,15 @@ assert_eq "True" "$(sget 'd["copy"]["drifted"] and next(a["now"] != a["at_copy"]
 # ---- --for and --name with spaces and quotes; the label is cleaned, share.json is not touched
 cfg_sha="$(shasum -a 256 "$SHARE_DIR/share.json" | awk '{print $1}')"
 reset_order
-cli start --for 30m --assign-seats --name $'  Lab \xe2\x80\xae"b" $(x)  '
+cli start --for 30m --open-seats --name $'  Lab \xe2\x80\xae"b" $(x)  '
 assert_eq "0" "$CODE" "$OUT$ERR"
-# SHARE-5: --assign-seats: the host gives out the seats, and the gateway's own loader takes the file
-assert_eq "host" "$(jget "$SHARE_DIR/gateway.json" 'd["seat_mode"]')"
+# SHARE-5: --open-seats is the way back to the room of 0.8: anyone with the code takes a free seat
+assert_eq "open" "$(jget "$SHARE_DIR/gateway.json" 'd["seat_mode"]')"
 "$REAL_NODE" -e 'require(process.argv[1] + "/lib/frappe-local/share/config.js").load(process.argv[2], Date.now())' "$ROOT" "$SHARE_DIR/gateway.json" \
   || fail "gateway.json with seat_mode is what config.js validates"
-assert_contains "$OUT" "you give them out: benchbar share assign ID SEAT_ID"
-status_json; assert_eq "on host" "$(sget 'd["state"] + " " + d["seat_mode"]')"
+assert_contains "$OUT" "anyone with the code takes any free seat"
+assert_not_contains "$OUT" "Guests wait for you"
+status_json; assert_eq "on open" "$(sget 'd["state"] + " " + d["seat_mode"]')"
 assert_eq "Lab \"b\" \$(x)" "$(jget "$SHARE_DIR/gateway.json" 'd["room_label"]')"
 assert_eq "1800" "$(jget "$SHARE_DIR/gateway.json" 'd["deadline_epoch"] - d["started_epoch"]')"
 wait_for 15 has_event '^dns-sd '

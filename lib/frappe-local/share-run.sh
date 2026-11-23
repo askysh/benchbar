@@ -287,7 +287,7 @@ fl_share_gateway_json() {
     "$(fl_json_str "$SP_LAN_IP")" "$FL_SHARE_GATEWAY_PORT" "$(fl_json_str "${dir}/host.key")" "$(fl_json_str "${dir}/host.crt")" "$(fl_json_str "$FL_SHARE_SITE")" "$web_port" \
     "$2" "$1" "$FL_SHARE_MAX_TOTAL_S" "$(fl_json_str "$dir")" "$(fl_json_str "${dir}/devices.json")" "$(fl_json_str "$(fl_share_sock)")" \
     "$(fl_json_str "$dir")" "$(fl_json_str "${FL_BENCH_DIR}/env/bin/python")" "$(fl_json_str "${lib}/signin.py")" \
-    "$(fl_json_str "$host")" "$3" "$(fl_json_str "$site")" "$(fl_json_str "$copy_made")" "$app_routes" "$([[ "${SH_START_SEAT_MODE:-open}" == host ]] && printf host || printf open)" "$seats")"
+    "$(fl_json_str "$host")" "$3" "$(fl_json_str "$site")" "$(fl_json_str "$copy_made")" "$app_routes" "$([[ "${SH_START_SEAT_MODE:-host}" == open ]] && printf open || printf host)" "$seats")"
   fl_share_write_private "${dir}/gateway.json" 600 "$content" || { fl_fail "could not write ${dir}/gateway.json"; return 1; }
 }
 
@@ -328,8 +328,9 @@ fl_share_stop_requested() { [[ -e "$(fl_share_dir)/stop_requested" ]]; }
 # ---------------------------------------------------------------- share start
 
 SH_START_FOR=""; SH_START_ROOM_JSON=""; SH_START_NOW=""; SH_START_DEADLINE=""; SH_START_BENCHBAR=""
-# who gives a person their seat: open (anyone in the room takes a free one) or host (share start --assign-seats)
-SH_START_SEAT_MODE=open
+# who gives a person their seat: host (you, with share assign: the default since 0.9.0) or open (anyone in
+# the room takes a free one: share start --open-seats)
+SH_START_SEAT_MODE=host
 
 fl_share_start_step_static_preflight() {
   fl_sp_reset
@@ -418,31 +419,44 @@ fl_share_json_unquote() {
 }
 
 fl_share_start_doc() {
-  printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"share_site":%s,"state":"on","label":%s,"port":%s,"started_epoch":%s,"deadline_epoch":%s,"started":%s,"deadline":%s}' \
+  local mode
+  # the room that runs says who gives out its seats (a start that found one running reports that one's)
+  fl_share_seat_mode_json_v mode
+  printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"share_site":%s,"state":"on","label":%s,"port":%s,"started_epoch":%s,"deadline_epoch":%s,"started":%s,"deadline":%s,"seat_mode":%s}' \
     "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_SHARE_SITE")" "$SH_START_ROOM_JSON" "$FL_SHARE_GATEWAY_PORT" \
-    "$1" "$2" "$(fl_json_str "$(fl_share_iso_of "$1")")" "$(fl_json_str "$(fl_share_iso_of "$2")")"
+    "$1" "$2" "$(fl_json_str "$(fl_share_iso_of "$1")")" "$(fl_json_str "$(fl_share_iso_of "$2")")" "$mode"
 }
 
 # fl_share_seat_mode_line: who gives a person their seat in the room that starts, for the start box. The
 # room code is what lets a person in; in an open room it also lets them take any free seat (#159 SHARE-5).
 fl_share_seat_mode_line() {
   if [[ "$SH_START_SEAT_MODE" == host ]]; then printf 'you give them out: benchbar share assign ID SEAT_ID (benchbar share people lists both)'
-  else printf 'anyone with the code takes any free seat (--assign-seats: you give them out)'; fi
+  else printf 'anyone with the code takes any free seat (--open-seats)'; fi
+}
+
+# fl_share_guests_wait_note: said at every start of a room where the host gives out the seats, so that nobody
+# with the habits of 0.8 (guests picked their own seat) ends up with a room where people wait and nothing says why
+fl_share_guests_wait_note() {
+  [[ "$SH_START_SEAT_MODE" == host ]] || return 0
+  fl_info "Guests wait for you: a person who joins has no seat and sees nothing of the copy until you give them one. benchbar share people shows who waits and the free seats; benchbar share assign ID SEAT_ID gives one."
+  fl_info "To let guests take a free seat themselves, as before 0.9.0: benchbar share start --open-seats"
 }
 
 fl_cmd_share_start() {
-  local dur=4h name="" name_given=0 label secs deadline started i id code
-  SH_START_SEAT_MODE=open
+  local dur=4h name="" name_given=0 label secs deadline started i id code assign=0 open=0
+  SH_START_SEAT_MODE=host
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
-      --assign-seats) SH_START_SEAT_MODE=host; shift ;;
+      --assign-seats) assign=1; shift ;;
+      --open-seats) open=1; SH_START_SEAT_MODE=open; shift ;;
       --for) [[ -n "${2:-}" ]] || fl_die "--for needs a duration." "Example: --for 30m, or --for 4h"; dur="$2"; shift 2 ;;
       --for=*) dur="${1#*=}"; shift ;;
       --name) [[ "$#" -ge 2 ]] || fl_die "--name needs a label." "Example: --name \"Priya's room\""; name="$2"; name_given=1; shift 2 ;;
       --name=*) name="${1#*=}"; name_given=1; shift ;;
-      *) fl_die "Unknown argument for share start: $1" "Use: benchbar share start [--for DUR] [--name LABEL] [--assign-seats] [--dry-run] [--json]" ;;
+      *) fl_die "Unknown argument for share start: $1" "Use: benchbar share start [--for DUR] [--name LABEL] [--open-seats] [--dry-run] [--json]" ;;
     esac
   done
+  [[ "$assign" == 0 || "$open" == 0 ]] || fl_die "--assign-seats and --open-seats do not go together." "Use one: --assign-seats (the default: you give out the seats) or --open-seats (guests take a free seat)."
   fl_noninteractive && fl_die "Sharing on the network is a person's decision, so nothing run without a terminal can start it." \
     "Run it in a terminal: benchbar share start"
   [[ -t 0 ]] || fl_person_env_ok BENCHBAR_SUDO gui || fl_die "Sharing needs a person at a terminal, and this run has none.${FL_PERSON_WHY:+ $FL_PERSON_WHY}" \
@@ -492,6 +506,7 @@ fl_cmd_share_start() {
     "copy     ${FL_SHARE_SITE}, on port ${FL_SHARE_GATEWAY_PORT} of this Mac's network address" \
     "until    $(fl_share_iso_of "$deadline") ($(fl_fmt_secs "$secs"))" \
     "seats    $(fl_share_seat_mode_line)"
+  fl_share_guests_wait_note
   if [[ "${FL_DRY_RUN:-0}" == 1 ]]; then
     fl_info "dry-run: nothing was started or written"
     return 0
@@ -530,6 +545,7 @@ fl_cmd_share_start() {
   fl_next_action "benchbar share stop" "Stop sharing"
   [[ "${OPT_JSON:-0}" != 1 ]] || fl_doc_emit 0 "$(fl_share_start_doc "$SH_START_NOW" "$SH_START_DEADLINE")"
   fl_ok "Sharing ${FL_SHARE_SITE} on your network until $(fl_share_iso_of "$SH_START_DEADLINE")"
+  [[ "$SH_START_SEAT_MODE" != host ]] || fl_next_action "benchbar share people" "guests wait until you give each of them a seat (benchbar share assign ID SEAT_ID)"
 }
 
 # ---------------------------------------------------------------- share stop
@@ -700,7 +716,9 @@ fl_cmd_share_status() {
     return 0
   fi
   case "$state" in
-    on) fl_ok "Sharing ${FL_SHARE_SITE} until $(fl_share_iso_of "$deadline") ($(fl_fmt_secs "$left") left): ${people} in the room, ${online} online" ;;
+    on) fl_ok "Sharing ${FL_SHARE_SITE} until $(fl_share_iso_of "$deadline") ($(fl_fmt_secs "$left") left): ${people} in the room, ${online} online"
+      if [[ "$seat_mode" == '"host"' ]]; then fl_info "Seats: you give them out (benchbar share people shows who waits; benchbar share assign ID SEAT_ID gives one)."
+      else fl_info "Seats: anyone with the room code takes a free one."; fi ;;
     starting) fl_info "Sharing is starting (${runner_phase})." ;;
     expired) fl_info "Sharing has ended (the deadline passed). benchbar share stop clears it." ;;
     error) fl_warn "Sharing is not running: ${ended:-the gateway does not answer}. benchbar share stop clears it." ;;

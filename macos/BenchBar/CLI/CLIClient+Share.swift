@@ -124,10 +124,11 @@ extension CLIClient: ShareCLI {
         }
     }
 
-    /// `assignSeats`: the host gives out the seats (`--assign-seats`); a guest then waits for `share assign`.
+    /// `assignSeats`: the host gives out the seats (`--assign-seats`, the CLI's default since 0.9.0); a guest
+    /// then waits for `share assign`. Off is `--open-seats`. Both are passed, so the room is what the switch said.
     func shareStart(bench: String, forHours hours: Int, label: String?, assignSeats: Bool) async throws(CLIError) {
         let labelArgs = label.flatMap { $0.isEmpty ? nil : ["--name", $0] } ?? []
-        let seatArgs = assignSeats ? ["--assign-seats"] : []
+        let seatArgs = assignSeats ? ["--assign-seats"] : ["--open-seats"]
         _ = try await run(["share", "start", "--for", "\(hours)h"] + labelArgs + seatArgs + ["--plain", "--bench-dir", bench],
                           timeout: Timeout.action, acceptExitCodes: [0], extraEnvironment: Self.personEnvironment)
     }

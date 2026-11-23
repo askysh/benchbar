@@ -183,7 +183,7 @@ public class ShareTests
         runner.On("share", "status").Print(Lines("share-status-on.json"));
         runner.On("share", "people").Print(Lines("share-people.json"));
         Assert.True(await model.StartAsync(4, TestContext.Current.CancellationToken));
-        Assert.Equal(["share", "start", "--for", "4h", "--json", "--bench-dir", Bench], runner.Runs[0].Args);
+        Assert.Equal(["share", "start", "--for", "4h", "--assign-seats", "--json", "--bench-dir", Bench], runner.Runs[0].Args);
         Assert.Equal("0", runner.Runs[0].Env["BENCHBAR_NONINTERACTIVE"]);
         Assert.Equal("gui", runner.Runs[0].Env["BENCHBAR_SUDO"]);
         Assert.True(model.Status!.IsOn); // a run is followed by one read
@@ -217,7 +217,8 @@ public class ShareTests
         // #159 SHARE-5: the host gives out the seats
         Assert.Equal(["share", "assign", "d_0a1b2c3d", "s_33333333", "--json", "--bench-dir", Bench], model.AssignArgs("d_0a1b2c3d", "s_33333333"));
         Assert.Equal(["share", "start", "--for", "2h", "--assign-seats", "--json", "--bench-dir", Bench], model.StartArgs(2, assignSeats: true));
-        Assert.Equal(["share", "start", "--for", "2h", "--json", "--bench-dir", Bench], model.StartArgs(2));
+        Assert.Equal(["share", "start", "--for", "2h", "--assign-seats", "--json", "--bench-dir", Bench], model.StartArgs(2));
+        Assert.Equal(["share", "start", "--for", "2h", "--open-seats", "--json", "--bench-dir", Bench], model.StartArgs(2, assignSeats: false));
     }
 
     [Fact]

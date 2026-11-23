@@ -8,7 +8,7 @@ struct SharingTab: View {
     let share: ShareStore
     @State private var hours = 4
     /// Who gives out the seats of the next room; kept, so the choice is made once.
-    @AppStorage("shareAssignSeats") private var assignSeats = false
+    @AppStorage("shareAssignSeats") private var assignSeats = SharePresentation.assignSeatsDefault
     @State private var setupOpen = false
     @State private var showActivity = false
     /// The code is drawn as dots until the host asks (a shared screen, a screenshot); Start and New code show it once.

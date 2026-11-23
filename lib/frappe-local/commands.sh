@@ -225,10 +225,11 @@ flag~share preflight~--static~~Only the checks that run before anything starts: 
 flag~share preflight~--critical~~Only the fast checks a running share repeats: the pf block (probed from this Mac's LAN address with its own listener and a control), the share web process, the bench's Redis.
 flag~share preflight~--quiet~~List only the checks that are not ok.
 flag~share preflight~--json~~One document: protocol, ok, lan_ip and the checks, each with a status, a message and a fix_action.
-cmd~share start~benchbar share start [--for DUR] [--name LABEL] [--assign-seats] [--dry-run] [--json]~Start sharing on the LAN until the deadline.~yes~no~no~yes~stream
+cmd~share start~benchbar share start [--for DUR] [--name LABEL] [--open-seats] [--dry-run] [--json]~Start sharing on the LAN until the deadline. You give out the seats (benchbar share assign) unless --open-seats is passed.~yes~no~no~yes~stream
 flag~share start~--for~DUR~How long the share runs: 30m, 4h; from 5 minutes to 12 hours. Default: 4h.
 flag~share start~--name~LABEL~The room's label for this share, at most 40 printable characters. Default: the one share setup recorded.
-flag~share start~--assign-seats~~You give out the seats: a person who joins with the code waits (up to 10 minutes) until you run benchbar share assign for them, and cannot take or change a seat themselves. Without it, anyone with the code takes any free seat.
+flag~share start~--open-seats~~Guests take a free seat themselves, as before 0.9.0: anyone with the room code takes any free seat, the most privileged one included. Without it you give out the seats: a person who joins waits (up to 10 minutes) until you run benchbar share assign for them, and cannot take or change a seat themselves.
+flag~share start~--assign-seats~~The default, said out loud: you give out the seats. Not with --open-seats.
 flag~share start~--dry-run~~Print the plan and start nothing.
 flag~share start~--json~~JSON lines: plan, steps, done (with the deadline).
 cmd~share stop~benchbar share stop [--json]~Stop sharing: the gateway and the job end, the room empties, every session of the copy ends. Never refused (no dry run).~no~no~no~yes~stream

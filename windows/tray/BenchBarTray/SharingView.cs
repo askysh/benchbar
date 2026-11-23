@@ -43,8 +43,8 @@ internal sealed class SharingView : UserControl, IBenchPageView
 
     internal ShareModel? Model => _model;
 
-    /// <summary>The Start form's switch: the host gives out the seats of the room that starts.</summary>
-    internal bool AssignSeats { get; set; }
+    /// <summary>The Start form's switch: the host gives out the seats of the room that starts. On until the host unticks it.</summary>
+    internal bool AssignSeats { get; set; } = true;
 
     public BenchContext? Context { get; private set; }
 

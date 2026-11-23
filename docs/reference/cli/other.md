@@ -631,7 +631,8 @@ also in `status --json` as `notices[]`, each with `id`, `title`, `text`,
 `switch_back`, `doc` (a full URL) and `since`. `--dismiss ID` hides one and
 `--all` hides every one, in the terminal list, in `status --json` and in the
 app. An id that is hidden already is unchanged. The ids are `listen-local`,
-`unknown-flags` and `pull-neutralise`.
+`unknown-flags`, `pull-neutralise` and `room-seats` (the last one only where
+the `lan-rooms` Lab is on or sharing was set up).
 
 Exit codes: 0; 1 for an unknown id or option.
 

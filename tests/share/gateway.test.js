@@ -938,6 +938,34 @@ test("host seats: a person without a seat waits 10 minutes for the host, not 2",
     });
 });
 
+test("host seats: a full room makes way for a new guest by letting go of whoever has waited more than 2 minutes", async () => {
+    const seat = (n) => ({ seat_id: `seat${n}`, user: `seat${n}@example.com`, full_name: `Seat ${n}`, roles: [] });
+    const [a, b, c, d] = ["full-a", "full-b", "full-c", "full-d"].map(cert);
+    await withGateway({ config: { seat_mode: "host", seats: [seat(1), seat(2)] } }, async (gw) => {
+        await joinGuest(gw, a, "10.61.0.1", { name: "Asha" });
+        gw.jump(60_000);
+        await joinGuest(gw, b, "10.61.0.2", { name: "Ben" });
+        // both wait, nobody for 2 minutes yet: the room is full, as it says before any join
+        const early = new GuestSession(gw, c, { ip: "10.61.0.3", name: "Cy" });
+        assert.strictEqual((await early.hello()).json.full, true);
+        assert.strictEqual((await early.start(await roomCode(gw))).json.status, "full");
+        // Asha has waited 3 minutes, Ben 2: the next guest takes the place of the one who waited longest
+        gw.jump(180_000);
+        const late = new GuestSession(gw, c, { ip: "10.61.0.4", name: "Cy" });
+        assert.strictEqual((await late.hello()).json.full, false);
+        assert.strictEqual((await late.join(await roomCode(gw))).json.status, "joined");
+        assert.deepStrictEqual((await people(gw)).map((p) => p.name).sort(), ["Ben", "Cy"]);
+        assert.strictEqual((await request(gw, { path: "/_benchbar/room", cert: a, headers: AS_JSON })).json.error, "not_paired");
+        // a person with a seat is never let go, however long they are in the room
+        const ben = (await people(gw)).find((p) => p.name === "Ben");
+        assert.deepStrictEqual(await gw.control({ op: "assign", device: ben.id, seat_id: "seat1" }), { ok: true });
+        gw.jump(480_000);
+        const last = new GuestSession(gw, d, { ip: "10.61.0.5", name: "Di" });
+        assert.strictEqual((await last.join(await roomCode(gw))).json.status, "joined");
+        assert.deepStrictEqual((await people(gw)).map((p) => p.name).sort(), ["Ben", "Di"]);
+    });
+});
+
 test("open seats, the 0.8 behaviour, stays what a config without seat_mode gets", async () => {
     const a = cert("open-a");
     await withGateway({ devices: [seatless(a)] }, async (gw) => {

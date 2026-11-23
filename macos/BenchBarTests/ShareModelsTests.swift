@@ -550,6 +550,10 @@ struct ShareCLITests {
         let (cli, runner) = client()
         try await cli.shareStart(bench: "/b", forHours: 4, label: nil, assignSeats: true)
         #expect(runner.calls[0].arguments == ["share", "start", "--for", "4h", "--assign-seats", "--plain", "--bench-dir", "/b"])
+        // the way back is said out loud too, so the room never depends on the CLI's default
+        try await cli.shareStart(bench: "/b", forHours: 4, label: nil, assignSeats: false)
+        #expect(runner.calls[1].arguments == ["share", "start", "--for", "4h", "--open-seats", "--plain", "--bench-dir", "/b"])
+        #expect(SharePresentation.assignSeatsDefault)
     }
 
     @Test func personCallsSayTheyComeFromTheAppAndOthersDoNot() async throws {
@@ -558,7 +562,7 @@ struct ShareCLITests {
         try await cli.shareTeardown(bench: "/b")
         try await cli.shareStop(bench: "/b")
         try await cli.shareRemove(bench: "/b", person: "d_0a1b2c3d", newCode: true)
-        #expect(runner.calls[0].arguments == ["share", "start", "--for", "4h", "--plain", "--bench-dir", "/b"])
+        #expect(runner.calls[0].arguments == ["share", "start", "--for", "4h", "--open-seats", "--plain", "--bench-dir", "/b"])
         #expect(runner.calls[0].environment["BENCHBAR_SUDO"] == "gui")
         #expect(runner.calls[1].arguments.contains("--yes"))
         #expect(runner.calls[1].environment["BENCHBAR_SUDO"] == "gui")
