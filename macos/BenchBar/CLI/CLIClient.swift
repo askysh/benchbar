@@ -307,19 +307,24 @@ nonisolated struct CLIClient: Sendable {
     }
 
     /// The repair plan only (repair --dry-run --json prints one plan line).
-    func repairPlan(bench: String) async throws(CLIError) -> [RepairEvent.Action] {
+    func repairPlan(bench: String) async throws(CLIError) -> RepairPlan {
         let output = try await run(["repair", "--dry-run", "--json", "--bench-dir", bench], timeout: Timeout.doctor, acceptExitCodes: [0, 1])
         for line in output.stdout.split(separator: "\n") {
-            if case .plan(let actions, _)? = RepairEvent.parse(String(line)) { return actions }
+            if case .plan(let actions, _)? = RepairEvent.parse(String(line)) {
+                return RepairPlan(actions: actions, token: RepairEvent.planToken(String(line)))
+            }
         }
         throw .failed(command: "repair", exitCode: output.exitCode, message: Self.summarize(output))
     }
 
-    /// repair --yes --json, with every event handed over as it arrives. The
+    /// repair --yes --json, with every event handed over as it arrives. With the
+    /// token of the plan the user reviewed, `--apply TOKEN` makes the CLI refuse a
+    /// plan that changed since (nothing runs); without one it is the old run. The
     /// steps that need the Mac's password ask in macOS's dialog (BENCHBAR_SUDO=gui);
     /// a cancelled dialog comes back as a skipped step with its command.
-    func repair(bench: String, onEvent: @escaping @Sendable (RepairEvent) -> Void) async throws(CLIError) -> Int32 {
-        try await runner.stream(executable: executable, arguments: ["repair", "--yes", "--json", "--bench-dir", bench],
+    func repair(bench: String, token: String? = nil, onEvent: @escaping @Sendable (RepairEvent) -> Void) async throws(CLIError) -> Int32 {
+        let apply = token.map { ["--apply", $0] } ?? []
+        return try await runner.stream(executable: executable, arguments: ["repair"] + apply + ["--yes", "--json", "--bench-dir", bench],
                                 environment: environment().merging(Self.guiSudo) { _, new in new }, timeout: Timeout.long) { line in
             if let event = RepairEvent.parse(line) { onEvent(event) }
         }

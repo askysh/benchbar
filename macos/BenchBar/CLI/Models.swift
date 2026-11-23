@@ -718,7 +718,8 @@ nonisolated enum RepairEvent: Equatable, Sendable {
 
     case plan(actions: [Action], log: String?)
     case step(action: String, status: String, message: String)
-    case done(exitCode: Int, log: String?)
+    /// `error` is the CLI's own refusal (a stale plan token, a missing bench), when the run was refused before a step.
+    case done(exitCode: Int, log: String?, error: String? = nil)
 
     /// nil for a line that is not an event this reader knows (ignored, per the schema rules).
     static func parse(_ line: String) -> RepairEvent? {
@@ -738,11 +739,26 @@ nonisolated enum RepairEvent: Equatable, Sendable {
             guard let action = object["action"] as? String, let status = object["status"] as? String else { return nil }
             return .step(action: action, status: status, message: object["message"] as? String ?? "")
         case "done":
-            return .done(exitCode: object["exit_code"] as? Int ?? 1, log: object["log"] as? String)
+            return .done(exitCode: object["exit_code"] as? Int ?? 1, log: object["log"] as? String, error: object["error"] as? String)
         default:
             return nil
         }
     }
+
+    /// The token of a plan line (CLI 0.9): `repair --apply TOKEN --yes` runs exactly that plan.
+    /// nil for an older CLI, or a plan with nothing to do.
+    static func planToken(_ line: String) -> String? {
+        guard let data = line.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              object["event"] as? String == "plan" else { return nil }
+        return object["token"] as? String
+    }
+}
+
+/// The plan `repair --dry-run --json` printed: what the user reviews, and the token that makes the run apply exactly that.
+nonisolated struct RepairPlan: Equatable, Sendable {
+    var actions: [RepairEvent.Action]
+    var token: String?
 }
 
 /// `benchbar report --json` (CLI 0.5.5): where the zip went and how many

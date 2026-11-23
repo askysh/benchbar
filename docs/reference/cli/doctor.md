@@ -42,7 +42,7 @@ benchbar doctor --fix-hints
 ## repair
 
 ```
-benchbar repair [--dry-run] [--yes] [--json] [--bench-dir DIR] [--profile NAME]
+benchbar repair [--dry-run|--apply TOKEN] [--yes] [--json] [--bench-dir DIR] [--profile NAME]
 ```
 
 Applies only the fixes doctor flagged, in dependency order, with a
@@ -52,7 +52,8 @@ the first call.
 
 | Flag | What it does |
 |---|---|
-| `--dry-run` | Print the plan, change nothing |
+| `--dry-run` | Print the plan, change nothing. With `--json` the plan line carries a `token` |
+| `--apply TOKEN` | Run exactly the plan that token was made for, with `--yes`. Refused, with nothing changed, when the plan is another one now (`The repair plan changed since it was shown`) or the token is older than an hour. Without a token the run is as before |
 | `-y`, `--yes` | Apply without asking (a `sudo` step still asks for the password) |
 | `--json` | Events as JSON lines on stdout, the text in the run's log ([schema](../../json-schema.md#benchbar-repair---json)). Without `--yes` or `--dry-run` nothing is applied |
 | `--profile NAME` | Repair toward another release profile |
@@ -83,7 +84,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | Command | Terminal | `sudo` | Network | Changes things | JSON |
 |---|---|---|---|---|---|
 | `benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack CHECK] [--prerequisites] [--fetch]` | no | no | no | no | document |
-| `benchbar repair [--dry-run] [--yes] [--json]` | yes | yes | yes | yes | stream |
+| `benchbar repair [--dry-run\|--apply TOKEN] [--yes] [--json]` | yes | yes | yes | yes | stream |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.
@@ -98,7 +99,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `doctor` | `--prerequisites` |  | What this machine needs before an install, no bench needed. |
 | `doctor` | `--fetch` |  | git fetch the branches of the apps your focus apps need first. |
 | `repair` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
-| `repair` | `--dry-run` |  | Print the plan, change nothing. |
+| `repair` | `--dry-run` |  | Print the plan, change nothing. With --json the plan line carries its token. |
+| `repair` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before. |
 | `repair` | `--yes` |  | Do not ask. |
 
 | Command | Environment variable | What it does |

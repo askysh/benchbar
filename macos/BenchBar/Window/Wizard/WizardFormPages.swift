@@ -142,6 +142,9 @@ struct ReviewPage: View {
 
     private func phase(_ state: WizardState) -> SheetPhase {
         if state.planning { return .loading("Planning the install…") }
+        if state.planStale != nil {
+            return .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The Mac changed since this plan was shown")
+        }
         if let error = state.planError { return .failed(error, title: "No install plan") }
         return .ready
     }

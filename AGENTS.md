@@ -278,6 +278,11 @@ the bench uses the same ports as an established bench, it also moves it
 to the next free port block with `bench set-config -g` (after asking);
 the default bench never moves on its own.
 
+`repair --dry-run --json` and `install --dry-run --json` print a `token` on
+the plan line; `--apply TOKEN --yes` runs exactly that plan and is refused,
+with nothing changed, when the plan differs now. Pass the token after the
+person has seen the plan. Without a token the run is as before.
+
 `repair` only runs the fixes doctor flagged, in dependency order, with a
 backup before each change. The bench path is remembered after the first
 call, so later commands do not need `--bench-dir`.
