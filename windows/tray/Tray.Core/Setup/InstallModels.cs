@@ -6,6 +6,12 @@ namespace BenchBar.Tray.Core;
 public sealed record InstallRequest(string BenchDir, string Profile, string Bundle, string Site)
 {
     public string[] Flags => ["--bench-dir", BenchDir, "--profile", Profile, "--bundle", Bundle, "--site", Site];
+
+    /// <summary>
+    /// The token of the plan the person reviewed (CLI 0.9): <c>install --apply TOKEN --yes</c> is refused, before any change, when the plan
+    /// is not that one. Only the real run reads it (the plan call never carries it); null from an older CLI, and on a run again after a failure.
+    /// </summary>
+    public string? ApplyToken { get; init; }
 }
 
 public enum InstallStepStatus { Unknown, Running, Done, Unchanged, Skipped, Warning, Failed, Stopped }
@@ -22,7 +28,7 @@ public sealed record PlanBlocker(string Id, string Message, string? Fix)
 
 /// <summary>The <c>plan</c> line of <c>install --json</c>.</summary>
 public sealed record InstallPlan(string Bench, string Site, string? Profile, string? Bundle, string? WebUrl, string? SudoMode,
-    bool DryRun, IReadOnlyList<InstallPlanStep> Steps, string? Log, IReadOnlyList<PlanBlocker>? PlanBlockers = null)
+    bool DryRun, IReadOnlyList<InstallPlanStep> Steps, string? Log, IReadOnlyList<PlanBlocker>? PlanBlockers = null, string? Token = null)
 {
     /// <summary>What the plan found in the way; empty when nothing.</summary>
     public IReadOnlyList<PlanBlocker> Blockers => PlanBlockers ?? [];
@@ -128,7 +134,7 @@ public static class InstallJson
         }
         return new InstallPlan(
             JsonRead.Str(o, "bench") ?? "", JsonRead.Str(o, "site") ?? "", JsonRead.Str(o, "profile"), JsonRead.Str(o, "bundle"),
-            JsonRead.Str(o, "web_url"), JsonRead.Str(o, "sudo_mode"), JsonRead.Bool(o, "dry_run"), steps, JsonRead.Str(o, "log"), blockers);
+            JsonRead.Str(o, "web_url"), JsonRead.Str(o, "sudo_mode"), JsonRead.Bool(o, "dry_run"), steps, JsonRead.Str(o, "log"), blockers, JsonRead.Str(o, "token"));
     }
 
     private static InstallDone ParseDone(JsonObject o)

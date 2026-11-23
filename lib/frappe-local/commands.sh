@@ -22,7 +22,7 @@
 # The table is read into a variable with the read builtin: status and list
 # are polled and start no process, and `cat` is one.
 read -r -d '' FL_CMD_TABLE <<'TABLE' || true
-cmd~install~benchbar install [--profile NAME] [--bundle NAME] [--dry-run] [--yes] [--json]~Phase 00 (system dependencies), 01 (bench and site) and the background service, idempotent.~yes~yes~yes~yes~stream
+cmd~install~benchbar install [--profile NAME] [--bundle NAME] [--dry-run|--apply TOKEN] [--yes] [--json]~Phase 00 (system dependencies), 01 (bench and site) and the background service, idempotent.~yes~yes~yes~yes~stream
 flag~install~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~install~--profile~NAME~Release profile (default v15-lts) or a team profile.
 flag~install~--bundle~NAME~App bundle: minimal, common or extended.
@@ -36,7 +36,8 @@ flag~install~--allow-unsupported-distro~~Linux only: try a system other than Ubu
 flag~install~--offline~~Skip the remote branch checks.
 flag~install~--frappe-commit~SHA~Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile).
 flag~install~--erpnext-commit~SHA~Pin the erpnext clone to this commit.
-flag~install~--dry-run~~Print the plan, change nothing.
+flag~install~--dry-run~~Print the plan, change nothing. With --json the plan line carries its token.
+flag~install~--apply~TOKEN~Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before.
 flag~install~--yes~~Do not ask; secrets come from the environment.
 env~install~ADMIN_PASSWORD~The new site's Administrator password.
 env~install~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
@@ -69,9 +70,10 @@ flag~doctor~--ack~CHECK~Silence one named WARN for this bench until its message 
 flag~doctor~--unack~CHECK~Undo --ack.
 flag~doctor~--prerequisites~~What this machine needs before an install, no bench needed.
 flag~doctor~--fetch~~git fetch the branches of the apps your focus apps need first.
-cmd~repair~benchbar repair [--dry-run] [--yes] [--json]~Apply only the fixes doctor flagged, in dependency order.~yes~yes~yes~yes~stream
+cmd~repair~benchbar repair [--dry-run|--apply TOKEN] [--yes] [--json]~Apply only the fixes doctor flagged, in dependency order.~yes~yes~yes~yes~stream
 flag~repair~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
-flag~repair~--dry-run~~Print the plan, change nothing.
+flag~repair~--dry-run~~Print the plan, change nothing. With --json the plan line carries its token.
+flag~repair~--apply~TOKEN~Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before.
 flag~repair~--yes~~Do not ask.
 env~repair~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~repair~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
@@ -267,7 +269,7 @@ cmd~share log~benchbar share log [--device ID] [--since TIME] [--limit N] [--jso
 flag~share log~--device~ID~Only this Mac (an id of share people).
 flag~share log~--since~TIME~Only entries at or after it: ISO 8601, YYYY-MM-DD HH:MM:SS, a date, or HH:MM:SS today.
 flag~share log~--limit~N~The newest N entries, 1 to 5000. Default: 200.
-flag~share log~--json~~One document: entries (ts, device, user, method, path, status) and truncated.
+flag~share log~--json~~One document: entries (ts, device, user, method, path, status) and truncated. user is the seat's name (the seat's id when the room no longer has the seat), never an e-mail address but in a line written by 0.8.3.
 cmd~share open-as~benchbar share open-as USER [--print-url] [--json]~Open the shared copy in this Mac's browser signed in as a seat, the way open --as does. Needs sharing on; never a user who is not a seat or can run code. Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal (the app passes BENCHBAR_SUDO=gui).~yes~no~no~yes~document
 flag~share open-as~--print-url~~Print the sign-in link instead of opening it; it holds the session.
 flag~share open-as~--json~~One document without the link (never the session).
@@ -305,6 +307,12 @@ flag~site restore~--with-files~~Restore the uploads too.
 flag~site restore~--dry-run~~Print the plan and its token.
 flag~site restore~--apply~TOKEN~Run exactly that plan (with --yes).
 env~site restore~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
+cmd~site move~benchbar site move NAME --to-bench PATH [--no-migrate] --dry-run --json, then --apply TOKEN --yes~Move a site to another registered bench on this machine: a backup with files, the restore there under the same name, migrate, a check that it lists the same apps there, then the drop here (a second backup first; the backups stay in archived/sites). The source bench must be stopped (benchbar down), or writes made after the first backup would be lost. Never the default site of either bench; a failed step before the drop leaves the site here as it was. A reviewed plan.~no~yes~no~yes~document
+flag~site move~--to-bench~PATH~The bench the site goes to: a bench benchbar knows (benchbar register PATH), not this one.
+flag~site move~--no-migrate~~Stop after the restore, before bench migrate.
+flag~site move~--dry-run~~Print the plan and its token.
+flag~site move~--apply~TOKEN~Run exactly that plan (with --yes).
+env~site move~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~site snapshot~benchbar site snapshot NAME [--label TEXT] [--json]~Save the state of a site (database, files, site_config, the apps and their commits) in sites/NAME/snapshots, which frappe's backup pruning never touches. Changes nothing in the site. To remove snapshots: benchbar site snapshot drop.~no~no~no~yes~document
 flag~site snapshot~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site snapshot~--label~TEXT~What the snapshot is for (up to 120 characters, no quotes); it is part of the folder name.

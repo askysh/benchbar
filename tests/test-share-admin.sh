@@ -620,14 +620,23 @@ T1="$(ts 30)"; T2="$(ts 20)"; T3="$(ts 10)"; TOLD="$(ts $((20 * 1440)))"
   printf '{"ts":"%s","device":"d_1a2b3c4d","user":"sam@example.com","method":"POST","path":"/app/customer/CUST-0042?sid=leak","status":200,"cookie":"sid=leakcookie"}\n' "$T2"
   printf '{"ts":"%s","device":"d_0a1b2c3d","user":"priya@example.com","method":"GET","path":"/api/method","status":403}\n' "$T3"
   printf 'not json\n'
+  # what the gateway writes since 0.9.0: the seat's id, no e-mail address (#159 SHARE-10)
+  printf '{"ts":"%s","device":"d_0a1b2c3d","seat":"s_1a2b3c4d","method":"GET","path":"/app/item","status":200}\n' "$T3"
+  printf '{"ts":"%s","device":"d_0a1b2c3d","seat":"s_gone0000","method":"GET","path":"/app/gone","status":200}\n' "$T3"
   printf '{"ts":"%s","device":"d_0a1b2c3d","user":"priya@example.com","method":"GET","path":"/app/old","status":200}\n' "$TOLD"
 } >"$SHARE_DIR/activity-${DAY0}.log"
 printf '{"ts":"%sT10:00:00.000Z","device":"d_0a1b2c3d","user":"priya@example.com","method":"GET","path":"/app/ancient","status":200}\n' "$OLD_DAY" >"$SHARE_DIR/activity-${OLD_DAY}.log"
 chmod 600 "$SHARE_DIR"/activity-*.log
 cli log --json
 assert_eq "0" "$CODE" "$OUT$ERR"
-assert_eq "3 False" "$(doc '" ".join(str(x) for x in (len(d["entries"]), d["truncated"]))')"
-assert_eq "/app/sales-order /app/customer /api/method" "$(doc '" ".join(e["path"] for e in d["entries"])')"
+assert_eq "5 False" "$(doc '" ".join(str(x) for x in (len(d["entries"]), d["truncated"]))')"
+assert_eq "/app/sales-order /app/customer /api/method /app/item /app/gone" "$(doc '" ".join(e["path"] for e in d["entries"])')"
+# a seat id is shown as the seat's name from share.json (or as it is, for a seat the room no longer has);
+# a line of 0.8.3 still shows what it holds, until it is 14 days old
+assert_eq "priya@example.com|Mgr Singh|s_gone0000" "$(doc '"|".join(d["entries"][i]["user"] for i in (0, 3, 4))')"
+# reading the log is also when the files past the 14 days go (before: only at the next share start)
+assert_no_file "$SHARE_DIR/activity-${OLD_DAY}.log"
+assert_file "$SHARE_DIR/activity-${DAY0}.log"
 assert_eq "device,method,path,status,ts,user" "$(doc '",".join(sorted(d["entries"][1]))')"
 assert_not_contains "$OUT" "leak"
 assert_not_contains "$OUT" "CUST-0042"
@@ -636,9 +645,9 @@ assert_not_contains "$OUT" "/app/old"
 cli log --device d_1a2b3c4d --json
 assert_eq "d_1a2b3c4d" "$(doc '" ".join(e["device"] for e in d["entries"])')"
 cli log --since "$T2" --json
-assert_eq "2" "$(doc 'len(d["entries"])')"
+assert_eq "4" "$(doc 'len(d["entries"])')"
 cli log --limit 1 --json
-assert_eq "1 True /api/method" "$(doc '" ".join(str(x) for x in (len(d["entries"]), d["truncated"], d["entries"][0]["path"]))')"
+assert_eq "1 True /app/gone" "$(doc '" ".join(str(x) for x in (len(d["entries"]), d["truncated"], d["entries"][0]["path"]))')"
 for bad in 0 abc 5001; do
   cli log --limit "$bad"
   assert_eq "1" "$CODE" "$OUT$ERR"

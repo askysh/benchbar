@@ -93,6 +93,7 @@ struct BenchOverview: View {
     @State private var portSetup: PortSetupRun?
     @State private var servicing = false
     @State private var runningCommand = false
+    @State private var tidying: TidyRoute?
 
     private var controls: BenchControls { store.controls(for: bench) }
     /// What this CLI lists (`commands --json`): a button of a newer command shows only when it is there.
@@ -173,6 +174,12 @@ struct BenchOverview: View {
         .sheet(item: $portSetup) { run in PortSetupSheet(run: run) { portSetup = nil } }
         .sheet(isPresented: $servicing) { ServiceSheet(workbench: workbench, bench: bench) { servicing = false } }
         .sheet(isPresented: $runningCommand) { RunSheet(workbench: workbench, bench: bench) { runningCommand = false } }
+        .sheet(item: $tidying) { route in
+            switch route {
+            case .tidy: TidySheet(workbench: workbench, bench: bench, removeExpired: { tidying = .plan(.gc) }) { tidying = nil }
+            case .plan(let action): TidyPlanSheet(workbench: workbench, bench: bench, action: action) { tidying = nil }
+            }
+        }
         .task { openRequestedSetup() }
         .task(id: store.stamp(for: bench)) {
             await workbench.loadCommands()
@@ -276,10 +283,36 @@ struct BenchOverview: View {
                     .disabled(!store.canChange(bench))
                     .help("One command of benchbar's allow list (migrate, build, doctor and more). A change shows its plan first.")
                 }
+                tidyItems
                 Divider()
                 Button("Show in Finder", systemImage: "folder") { Workspace.openFolder(bench) }
                 Button("Copy Path", systemImage: "doc.on.doc") { Workspace.copy(bench.path) }
             }
+        }
+    }
+
+    /// The end of a bench's life (#183), each entry only when the CLI lists its command. A change shows its plan first.
+    @ViewBuilder private var tidyItems: some View {
+        let busy = !store.canChange(bench)
+        if workbench.offersTidy || workbench.offers(.removeService) || workbench.offers(.forget) || workbench.offers(.remove) { Divider() }
+        if workbench.offersTidy {
+            Button { tidying = .tidy } label: { Label("Tidy Up…", systemImage: "sparkles") }
+                .help("Scratch benches, the ones that expired, the databases no site refers to and the hosts lines no bench uses")
+        }
+        if workbench.offers(.removeService), !bench.needsService {
+            Button { tidying = .plan(.removeService) } label: { Label("Remove Service…", systemImage: "gearshape.slash") }
+                .disabled(busy)
+                .help("uninstall-service for this bench: stops it and removes its background service. Shows its plan first.")
+        }
+        if workbench.offers(.forget) {
+            Button { tidying = .plan(.forget) } label: { Label("Forget Bench…", systemImage: "eye.slash") }
+                .disabled(busy)
+                .help("bench forget: takes the bench out of benchbar's list. The folder, sites and databases stay.")
+        }
+        if workbench.offers(.remove) {
+            Button { tidying = .plan(.remove) } label: { Label("Remove Bench…", systemImage: "trash") }
+                .disabled(busy)
+                .help("bench remove: backs up and drops its sites, then moves the folder aside. Asks for the folder name.")
         }
     }
 
@@ -334,6 +367,7 @@ struct BenchSites: View {
     @State private var hosts: HostsRun?
     @State private var dropping: String?
     @State private var restoring: String?
+    @State private var moving: String?
     @State private var snapshotting: String?
     @State private var pulling = false
     @State private var findingUser: String?
@@ -374,7 +408,7 @@ struct BenchSites: View {
                         .disabled(!row.needsHosts && bench.state != .running)
                         SiteMenu(workbench: workbench, bench: bench, row: row, busy: busy, onlySite: rows.count == 1,
                                  openAs: { turnOpenAs(row) }, restore: { restoring = row.name },
-                                 snapshots: { snapshotting = row.name }) { dropping = row.name }
+                                 move: { moving = row.name }, snapshots: { snapshotting = row.name }) { dropping = row.name }
                     }
                 }
             } header: {
@@ -446,6 +480,9 @@ struct BenchSites: View {
         }
         .sheet(item: Binding(get: { restoring.map(DropTarget.init) }, set: { restoring = $0?.site })) { target in
             SiteRestoreSheet(workbench: workbench, bench: bench, site: target.site) { restoring = nil }
+        }
+        .sheet(item: Binding(get: { moving.map(DropTarget.init) }, set: { moving = $0?.site })) { target in
+            SiteMoveSheet(workbench: workbench, bench: bench, site: target.site) { moving = nil }
         }
         .sheet(item: Binding(get: { snapshotting.map(DropTarget.init) }, set: { snapshotting = $0?.site })) { target in
             SnapshotsSheet(workbench: workbench, bench: bench, site: target.site) { snapshotting = nil }
@@ -531,6 +568,7 @@ struct SiteMenu: View {
     let onlySite: Bool
     let openAs: () -> Void
     let restore: () -> Void
+    let move: () -> Void
     let snapshots: () -> Void
     let drop: () -> Void
 
@@ -553,6 +591,11 @@ struct SiteMenu: View {
                 .disabled(workbench.backups(of: row.name, on: bench)?.backups.isEmpty ?? true)
             Button("Snapshots…", action: snapshots)
                 .help("Take a snapshot, see the snapshots of \(row.name), roll it back to one")
+            if workbench.offersMove(from: bench) {
+                Button("Move to Another Bench…", action: move)
+                    .disabled(!SiteMoveText.canMove(row))
+                    .help(SiteMoveText.canMove(row) ? "Moves \(row.name) to another bench, under the same name" : "The default site never moves; make another site the default first")
+            }
             Divider()
             Button("Open Console") { Workspace.openShell(.console, site: row.name, bench: bench, store: workbench.store) }
             Button("Open Database") { Workspace.openShell(.db, site: row.name, bench: bench, store: workbench.store) }

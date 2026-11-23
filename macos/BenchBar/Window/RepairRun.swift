@@ -12,6 +12,8 @@ final class RepairRun {
         case running
         case finished(exitCode: Int)
         case failed(String)
+        /// The CLI refused the token: the bench changed since the plan was shown. Nothing ran.
+        case stale(String)
     }
 
     nonisolated struct StepState: Equatable, Sendable, Identifiable {
@@ -29,6 +31,8 @@ final class RepairRun {
     private(set) var log: String?
     /// The steps of the plan the user confirmed.
     private var reviewed: Set<String> = []
+    /// The token of that plan; the run passes it so the CLI refuses a plan that is not this one.
+    private var token: String?
 
     let bench: BenchModel
     private let store: BenchStore
@@ -39,6 +43,7 @@ final class RepairRun {
     }
 
     var hasSudoSteps: Bool { steps.contains(where: \.sudo) }
+    var isStale: Bool { if case .stale = phase { true } else { false } }
     var succeeded: Bool { phase == .finished(exitCode: 0) }
 
     /// The steps that run although the reviewed plan did not have them.
@@ -48,7 +53,9 @@ final class RepairRun {
         guard let client = store.cliClient else { phase = .failed("The benchbar command line tool is not available."); return }
         phase = .planning
         do {
-            let actions = try await client.repairPlan(bench: bench.path)
+            let plan = try await client.repairPlan(bench: bench.path)
+            token = plan.token
+            let actions = plan.actions
             steps = actions.map { StepState(id: $0.id, label: $0.label, sudo: $0.sudo) }
             reviewed = Set(steps.map(\.id))
             phase = .review
@@ -71,7 +78,7 @@ final class RepairRun {
         var exit: Int32 = 1
         let error = await store.runChange("Repair", on: bench) { client throws(CLIError) in
             defer { continuation.finish() }
-            exit = try await client.repair(bench: bench.path) { event in continuation.yield(event) }
+            exit = try await client.repair(bench: bench.path, token: token) { event in continuation.yield(event) }
         }
         continuation.finish()
         await consumer.value
@@ -99,9 +106,13 @@ final class RepairRun {
                 steps[i].status = status
                 if !message.isEmpty, status != "running" { steps[i].message = message }
             }
-        case .done(let exitCode, let log):
+        case .done(let exitCode, let log, let error):
             if let log { self.log = log }
-            phase = .finished(exitCode: exitCode)
+            if let error, StalePlan.isStale(error) {
+                phase = .stale(error)
+            } else {
+                phase = .finished(exitCode: exitCode)
+            }
         }
     }
 }

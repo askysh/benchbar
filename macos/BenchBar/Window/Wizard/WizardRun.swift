@@ -107,7 +107,7 @@ final class WizardRun {
         case .checkPrerequisites(let folder): check(folder: folder)
         case .loadProfiles: loadProfiles()
         case .planInstall(let request): plan(request)
-        case .startInstall(let request, let withRoot): startInstall(request, withRootPassword: withRoot)
+        case .startInstall(let request, let withRoot, let token): startInstall(request, withRootPassword: withRoot, token: token)
         case .stopInstall:
             stopBeforeStart = true
             installTask?.cancel()
@@ -177,7 +177,7 @@ final class WizardRun {
     // MARK: the install
 
     /// The Review page's Install was the confirmation: `--yes` goes with it.
-    private func startInstall(_ request: InstallRequest, withRootPassword: Bool) {
+    private func startInstall(_ request: InstallRequest, withRootPassword: Bool, token: String?) {
         guard store.cliClient != nil else {
             send(.installEnded(exitCode: 1, error: BenchStore.noCLIMessage))
             return
@@ -205,7 +205,7 @@ final class WizardRun {
                 if self.stopBeforeStart { return }
                 let work = Task { () async -> Result<Int32, CLIError> in
                     do throws(CLIError) {
-                        return .success(try await client.install(request, adminPassword: admin, rootPassword: root) { event in
+                        return .success(try await client.install(request, adminPassword: admin, rootPassword: root, token: token) { event in
                             continuation.yield(event)
                         })
                     } catch {

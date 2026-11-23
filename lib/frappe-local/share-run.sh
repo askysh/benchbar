@@ -293,15 +293,15 @@ fl_share_gateway_json() {
 
 # fl_share_render_job ROOM_LABEL BENCHBAR: the runner (0700) and the job's plist (0600) in the share folder
 fl_share_render_job() {
-  local dir runner plist web_port site
+  local dir runner plist web_port
   dir="$(fl_share_dir)"
-  fl_share_cfg_str_v web_port web_port; fl_share_cfg_str_v site site
+  fl_share_cfg_str_v web_port web_port
   runner="$(fl_template_render share-run.sh "SHARE_DIR=${dir}" "SOCK=$(fl_share_sock)" "BENCH=${FL_BENCH_DIR}" "SHARE_SITE=${FL_SHARE_SITE}" \
     "WEB_PORT=${web_port}" "GATEWAY_PORT=${FL_SHARE_GATEWAY_PORT}" "PYTHON=${FL_BENCH_DIR}/env/bin/python" "LIB=${FL_SELF_DIR}/lib/frappe-local" \
     "NODE=${SP_NODE_REAL}" "BENCHBAR=$2" "DNS_SD=$(fl_share_dns_sd_bin)" "CAFFEINATE=$(fl_share_caffeinate_bin)" \
     "LSOF=$(fl_share_lsof_bin)" "CURL=${FL_CURL:-/usr/bin/curl}" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" \
     "SOCK_SECS=${FL_SHARE_SOCK_SECS}" "WARM_SECS=${FL_SHARE_WARM_SECS}" \
-    "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "SITE_LABEL=${site}" "ROOM_LABEL=$1")" || return 1
+    "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "ROOM_LABEL=$1")" || return 1
   plist="$(fl_share_job_text "$dir")" || return 1
   if ! fl_share_write_private "${dir}/share-run.sh" 700 "$runner" || ! fl_share_write_private "${dir}/job.plist" 600 "$plist"; then
     fl_fail "could not write the share job into ${dir}"

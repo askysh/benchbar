@@ -121,6 +121,19 @@ assert_contains "$(cat "$TMP_DIR/summary")" "### Flaky tests"
 # shellcheck disable=SC2016  # the backticks are Markdown in the summary row
 
 assert_contains "$(cat "$TMP_DIR/summary")" '| t-flaky | `FAIL: the first run` |'
+# a first run that ends with no output: the log and the annotation then say how it ended, the
+# exit code and the seconds (seen in CI as "test-run first failure: no output", with nothing to go on)
+cat >"$FAKE/tests/t-silent.sh" <<'EOF'
+#!/usr/bin/env bash
+m="${FLAKY_MARK:?}"
+if [[ ! -e "$m" ]]; then : >"$m"; exit 3; fi
+printf 't-silent: ok\n'
+EOF
+rm -f "$TMP_DIR/mark" "$TMP_DIR/summary"
+OUT="$(env -u RERUN_FAILED CI=true GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="$TMP_DIR/summary" FLAKY_MARK="$TMP_DIR/mark" PARALLEL=1 SHELLCHECK=0 bash "$FAKE/tests/run-tests.sh" t-silent 2>&1)" && CODE=0 || CODE=$?
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "FLAKY: t-silent failed once and passed on the rerun (the first run: exit 3, after "
+assert_contains "$OUT" "::warning title=FLAKY::t-silent first failure: no output (exit 3, after "
 # STRICT_FLAKY=1: the rerun still runs and the other tests still report, and the run fails at its end
 rm -f "$TMP_DIR/mark"
 OUT="$(env -u RERUN_FAILED CI=true STRICT_FLAKY=1 FLAKY_MARK="$TMP_DIR/mark" PARALLEL=1 SHELLCHECK=0 bash "$FAKE/tests/run-tests.sh" t-flaky t-fine 2>&1)" && CODE=0 || CODE=$?

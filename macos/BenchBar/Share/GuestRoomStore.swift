@@ -81,6 +81,11 @@ final class GuestRoomStore {
         var model: String = GuestRoomStore.hardwareModel()
         /// The health loop's wait; tests pass one that returns at once.
         var sleep: @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0, tolerance: $0 / 5) }
+        /// Deletes this Mac's client key and certificate; the next join makes new ones.
+        var forgetIdentity: () -> Void = {}
+        /// Whether an invite's address may be dialled: only one of a local network. The interop
+        /// test, whose gateway listens on loopback, is the one caller that passes another answer.
+        var inviteAddressAllowed: (String) -> Bool = ShareInvite.isLocalNetwork
     }
 
     static let pingInterval: Duration = .seconds(10)
@@ -301,7 +306,7 @@ final class GuestRoomStore {
     /// proves nothing, so every one of them is dialled pinned to the invite's key.
     private func inviteTargets(_ invite: ShareInvite) -> [DiscoveredRoom] {
         var targets = discovered.filter { $0.display.label == invite.room && !$0.display.needsUpdate }
-        if let address = invite.address, let port = NWEndpoint.Port(rawValue: address.port) {
+        if let address = invite.address, deps.inviteAddressAllowed(address.host), let port = NWEndpoint.Port(rawValue: address.port) {
             targets.append(DiscoveredRoom(id: invite.room, endpoint: .hostPort(host: NWEndpoint.Host(address.host), port: port),
                                           display: RoomDisplay(label: invite.room, site: "", protocolV: CPace.protocolVersion)))
         }
@@ -522,7 +527,13 @@ final class GuestRoomStore {
         pingFailures[room.id] = nil
         pingDue[room.id] = nil
         if case .pickingSeat(let picking, _) = join, picking.id == room.id { join = .none }
-        if saved.isEmpty { stopHealthLoop() }
+        if saved.isEmpty {
+            stopHealthLoop()
+            // One key serves every room, so a host could tell that the same Mac joined before. No
+            // room is left that knows it: it goes, and the next join shows a new one. Not while a
+            // join is on its way, which already showed the key to its room.
+            if case .joining = join {} else { deps.forgetIdentity() }
+        }
     }
 
     func forgetAll() async {
@@ -601,6 +612,13 @@ final class GuestRoomStore {
             health[room.id] = .ready(deadline: Date(timeIntervalSince1970: TimeInterval(hello.deadline_epoch)))
             forwarders[room.id]?.show(nil)
             answered = true
+            // A room tells its site's name only to the people in it: kept from the first answer on.
+            let site = TXTSanitizer.clean(hello.site_label)
+            if room.site.isEmpty, !site.isEmpty, var named = deps.rooms.load().first(where: { $0.id == room.id }) {
+                named.site = site
+                deps.rooms.save(named)
+                saved = deps.rooms.load()
+            }
         } catch .removed {
             set(await sameRoom(room) ? .removed : .newRoom, for: room)
         } catch {
@@ -707,7 +725,8 @@ extension GuestRoomStore.Dependencies {
                                       makeUpstream: ShareForwarder.pinnedUpstream(to: endpoint, identity: identity, pin: pin))
             },
             openURL: openURL,
-            readPasteboard: { NSPasteboard.general.string(forType: .string) })
+            readPasteboard: { NSPasteboard.general.string(forType: .string) },
+            forgetIdentity: { try? identity.reset() })
     }
 }
 
