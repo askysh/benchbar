@@ -77,6 +77,14 @@ cost "doctor" 106 "0 1" doctor --bench-dir "$BENCH"
 cost "doctor --json" 119 "0 1" doctor --json --bench-dir "$BENCH"
 cost "install --dry-run --yes" 285 "0" install --dry-run --yes --bench-dir "$HOME/fresh-bench" --site freshsite
 cost "adopt --dry-run --yes" 172 "0" adopt "$THIRD" --dry-run --yes
-cost "app list --json" 54 "0" app list --json --bench-dir "$BENCH"
+cost "app list --json" 51 "0" app list --json --bench-dir "$BENCH"
+# a command that reads no service file renders none (issue 137: the render was about 230 ms of
+# every call, and each rendered file is one shasum): app list 46 programs instead of 53, and no
+# template is hashed by a site list or a down
+assert_calls_not_contain '^exec shasum' "(app list --json renders no service file)"
+cost "site list --json" 12 "0" site list --json --bench-dir "$BENCH"
+assert_calls_not_contain '^exec shasum' "(site list --json renders no service file)"
+cost "down --dry-run" 8 "0" down --dry-run --bench-dir "$BENCH"
+assert_calls_not_contain '^exec shasum' "(down --dry-run renders no service file)"
 
 printf 'test-command-cost: ok\n'
