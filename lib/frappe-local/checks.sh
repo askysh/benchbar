@@ -599,8 +599,12 @@ chk_stop_flag() {
 }
 
 chk_helpers() {
-  local rc status legacy recorded own=""
+  local rc status legacy recorded own="" sh="${SHELL:-}"
   rc="$(fl_rc_file)"
+  if [[ -z "$rc" ]]; then
+    chk__set ok "no helper block: ${sh##*/} cannot read one (benchup and the others are for zsh, bash and fish); use ${FL_SELF} up, down, restart, status and logs"
+    return 0
+  fi
   status="$(fl_rc_block_status "$rc" "$FL_R_HELPERS")"
   legacy="$(fl_rc_legacy_blocks "$rc")"; legacy="${legacy//$'\n'/,}"
   case "$status" in

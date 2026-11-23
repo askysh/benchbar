@@ -90,9 +90,8 @@ fl_notice_without_v() {
 }
 
 # fl_notices_since_lt FROM SINCE: the version FROM came from is below SINCE,
-# without the prerelease part of either (selfupdate.sh's fl_version_lt, which
-# is the one that wins in every start, orders 0.9.0-rc.1 below 0.9.0: not what
-# a SINCE test wants)
+# without the prerelease part of either (fl_version_lt, ui.sh, orders
+# 0.9.0-rc.1 below 0.9.0: not what a SINCE test wants)
 fl_notices_since_lt() {
   local a="${1#v}" b="${2#v}"
   fl_version_lt "${a%%[-+]*}" "${b%%[-+]*}"

@@ -159,4 +159,102 @@ printf 'export A=1\n' >"$rc"
 FL_DRY_RUN=1 fl_rc_block_write "$rc" "$c1" >/dev/null
 assert_eq "missing" "$(fl_rc_block_state "$rc")"
 
+# ---- per shell (CORE-15): the file and the syntax follow the login shell
+H="$TMP_DIR/home15"; mkdir -p "$H"
+rcf() { HOME="$H" FL_RC_FILE='' ZDOTDIR='' XDG_CONFIG_HOME="${XDG:-}" FL_PLATFORM="${PLAT:-macos}" SHELL="$1" fl_rc_file; }
+# shellcheck disable=SC2016,SC2329  # the block's own lines, unexpanded; called by fl_rc_helpers_render
+fl_profile_path_exports() { printf 'export PATH="/brew/opt/python@3.11/bin:$PATH"\nexport PATH="$HOME/.local/bin:$PATH"\nexport LDFLAGS="-L/brew/lib -L/brew/opt/zlib/lib"\n'; }
+
+# fish: a file of its own in conf.d, in fish syntax; nothing lands in ~/.zshrc
+fish="$H/.config/fish/conf.d/benchbar.fish"
+assert_eq "$fish" "$(rcf /opt/homebrew/bin/fish)"
+assert_eq "$fish" "$(PLAT=linux rcf /usr/bin/fish)" "(fish on Linux too, not ~/.bashrc)"
+assert_eq "$TMP_DIR/xdg/fish/conf.d/benchbar.fish" "$(XDG="$TMP_DIR/xdg" rcf /usr/local/bin/fish)"
+fb="$(SHELL=/usr/local/bin/fish fl_rc_helpers_render v15-lts "/x/my cli/benchbar")"
+# shellcheck disable=SC2016
+{
+  assert_contains "$fb" 'set -gx PATH "/brew/opt/python@3.11/bin" $PATH'
+  assert_contains "$fb" 'set -gx PATH "$HOME/.local/bin" $PATH'
+  assert_contains "$fb" 'set -gx LDFLAGS "-L/brew/lib -L/brew/opt/zlib/lib"'
+  assert_contains "$fb" 'function benchup; command $BENCHBAR up $argv; end'
+  assert_contains "$fb" 'function benchcd; cd (command $BENCHBAR path); end'
+}
+assert_not_contains "$fb" "benchup()" "(no POSIX function in a fish file)"
+assert_not_contains "$fb" "export " "(no POSIX export in a fish file)"
+got=""
+fl_rc_block_write "$fish" "$fb" >/dev/null
+assert_eq "current" "$(fl_rc_block_status "$fish" "$fb")" "(the block is written where fish reads it, folders made)"
+fl_rc_recorded_cli_v got "$fish"
+assert_eq "/x/my cli/benchbar" "$got" "(the CLI a fish block names is read back)"
+[[ ! -e "$H/.zshrc" ]] || fail "a fish user gets no stray ~/.zshrc"
+fl_rc_block_extract "$fish" >"$TMP_DIR/block.fish"
+if command -v fish >/dev/null 2>&1; then fish -n "$TMP_DIR/block.fish" || fail "the fish block must parse"; fi
+# zsh and bash keep the POSIX block, byte for byte
+pb="$(SHELL=/bin/zsh fl_rc_helpers_render v15-lts /x/benchbar)"
+assert_eq "$(fl_template_render shell-helpers "PROFILE_EXPORTS=$(fl_profile_path_exports)" "BENCHBAR=/x/benchbar")" "$pb"
+fl_rc_recorded_cli_v got "$rc"; assert_eq "" "$got"
+
+# nushell and the other shells that read neither file: no file at all
+for sh in /opt/homebrew/bin/nu /usr/bin/xonsh /usr/bin/elvish /bin/tcsh /usr/local/bin/pwsh; do
+  assert_eq "" "$(rcf "$sh")" "(no rc file for $sh)"
+  assert_eq "other" "$(SHELL="$sh" fl_rc_shell)"
+done
+assert_contains "$(SHELL=/opt/homebrew/bin/nu FL_RC_FILE='' fl_rc_source_hint)" "nu reads no helper block"
+assert_eq "source $fish" "$(HOME="$H" FL_RC_FILE='' XDG_CONFIG_HOME='' SHELL=/usr/bin/fish fl_rc_source_hint)"
+# an unknown or missing SHELL is the platform's default, as before
+assert_eq "$H/.zshrc" "$(rcf /bin/ksh)"
+assert_eq "$H/.bashrc" "$(PLAT=linux rcf /bin/dash)"
+
+# bash on a Mac: Terminal starts a login shell, which reads the first of
+# .bash_profile, .bash_login and .profile and never ~/.bashrc by itself
+assert_eq "$H/.bash_profile" "$(rcf /bin/bash)" "(no bash file yet)"
+printf 'export FROM_BASHRC=1\n' >"$H/.bashrc"
+assert_eq "$H/.bash_profile" "$(rcf /bin/bash)" "(a ~/.bashrc no login file reads is not where the block goes)"
+printf 'export X=1\n' >"$H/.profile"
+assert_eq "$H/.profile" "$(rcf /bin/bash)" "(the login file that exists, so no new .bash_profile hides it)"
+printf '[ -f ~/.bashrc ] && . ~/.bashrc\n' >"$H/.bash_profile"
+assert_eq "$H/.bashrc" "$(rcf /bin/bash)" "(a login file that reads ~/.bashrc: the block there reaches every bash)"
+printf 'export Y=1\n' >"$H/.bash_profile"
+assert_eq "$H/.bash_profile" "$(rcf /bin/bash)"
+assert_eq "$H/.bashrc" "$(PLAT=linux rcf /bin/bash)" "(Linux terminals start a shell that is no login shell)"
+
+# a symlink cycle ends in a refusal, not a hang
+ln -s "$TMP_DIR/loop-b" "$TMP_DIR/loop-a"; ln -s "$TMP_DIR/loop-a" "$TMP_DIR/loop-b"
+set +e; out="$(fl_rc_block_write "$TMP_DIR/loop-a" "$c1" 2>&1)"; code=$?; set -e
+assert_eq "1" "$code" "(a symlink cycle is a failure: $out)"
+assert_contains "$out" "symlinks that never end"
+[[ -L "$TMP_DIR/loop-a" && -L "$TMP_DIR/loop-b" ]] || fail "the links of the cycle stay as they were"
+
+# a read only rc file is the person's choice: refused, not replaced (root writes anyway)
+if [[ "$(id -u)" != "0" ]]; then
+  ro="$TMP_DIR/ro-rc"; printf 'export RO=1\n' >"$ro"; chmod 444 "$ro"
+  set +e; out="$(fl_rc_block_write "$ro" "$c1" 2>&1)"; code=$?; set -e
+  assert_eq "1" "$code" "(a read only rc file is refused: $out)"
+  assert_contains "$out" "read only"
+  assert_eq "export RO=1" "$(cat "$ro")" "(a read only rc file is as it was)"
+  assert_eq "444" "$(mode "$ro")"
+fi
+
+# ---- through the CLI: service, doctor and repair for a fish user and a
+# nushell user (FL_RC_FILE, the harness's fixed file, is cleared)
+BENCH="$HOME/work/rc/frappe-bench"
+make_fake_bench "$BENCH" macdev
+printf '127.0.0.1 macdev\n' >>"$FL_HOSTS_FILE"
+run_fm register "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+helpers_check() { printf '%s' "$OUT" | jget - "[c['$1'] for c in d['checks'] if c['id'] == 'helpers'][0]"; }
+cli_fish="$HOME/.config/fish/conf.d/benchbar.fish"
+FL_RC_FILE='' XDG_CONFIG_HOME='' SHELL=/usr/local/bin/fish run_fm service --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "(service as a fish user: $OUT)"
+grep -q '^function benchup; ' "$cli_fish" || fail "the service step writes the fish block to conf.d"
+[[ ! -e "$HOME/.zshrc" ]] || ! grep -q -F "$FL_RC_START" "$HOME/.zshrc" || fail "a fish user gets no block in ~/.zshrc"
+FL_RC_FILE='' XDG_CONFIG_HOME='' SHELL=/usr/local/bin/fish run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(helpers_check status)" "(doctor as a fish user: $(helpers_check message))"
+assert_contains "$(helpers_check message)" "$cli_fish"
+FL_RC_FILE='' SHELL=/opt/homebrew/bin/nu run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(helpers_check status)" "(doctor as a nushell user: $(helpers_check message))"
+assert_contains "$(helpers_check message)" "no helper block: nu cannot read one"
+FL_RC_FILE='' SHELL=/opt/homebrew/bin/nu run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "(repair as a nushell user: $OUT)"
+[[ ! -e "$HOME/.zshrc" ]] || ! grep -q -F "$FL_RC_START" "$HOME/.zshrc" || fail "a nushell user gets no block in ~/.zshrc"
+
 printf 'test-shellrc: ok\n'

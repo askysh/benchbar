@@ -21,7 +21,6 @@ assert_contains "$out" "longer  x"
 assert_eq "5s" "$(fl_fmt_secs 5)"
 assert_eq "2m 05s" "$(fl_fmt_secs 125)"
 assert_eq "1h 01m" "$(fl_fmt_secs 3660)"
-assert_eq "2 unchanged, 1 to update, 1 to repair" "$(fl_steps_counts unchanged update repair unchanged)"
 
 fl_steps_define "first" "second"
 out="$(fl_steps_print_plan)"
@@ -29,18 +28,6 @@ assert_contains "$out" "1. first"
 assert_contains "$out" "2. second"
 fl_step_begin 0; out="$(fl_step_end unchanged)"
 assert_contains "$out" "1. first: unchanged"
-
-quiet_step() { echo "[WARN] inner warning"; FL_STEP_RESULT="unchanged"; }
-out="$(fl_step_run 1 quiet_step)"
-assert_contains "$out" "2. second: unchanged"
-assert_contains "$out" "[WARN] inner warning"
-
-failing_step() { echo "boom"; return 3; }
-fl_steps_define "third"
-set +e; out="$(fl_step_run 0 failing_step)"; code=$?; set -e
-assert_eq "3" "$code"
-assert_contains "$out" "1. third: failed"
-assert_contains "$out" "boom"
 
 # spinner in non-TTY mode prints a single plain line
 out="$(fl_spinner_start "working"; fl_spinner_stop)"

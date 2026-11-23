@@ -19,14 +19,46 @@ FL_RC_END="# <<< benchbar <<<"
 FL_RC_LEGACY_START="# >>> frappe-mac >>>"
 FL_RC_LEGACY_END="# <<< frappe-mac <<<"
 
+# fl_rc_shell: the family of the person's login shell ($SHELL), which
+# decides the file and the syntax of the helper block:
+#   zsh | bash   the POSIX block (templates/shell-helpers.tmpl)
+#   fish         its own block (templates/shell-helpers.fish.tmpl)
+#   other        a shell that reads neither (nushell, xonsh, elvish, csh,
+#                PowerShell): no file is written, and no stray ~/.zshrc
+# An unknown or missing SHELL is the platform's default, as before 0.9.0.
+fl_rc_shell() {
+  local sh="${SHELL:-}"
+  case "${sh##*/}" in
+    zsh|bash|fish) printf '%s' "${sh##*/}" ;;
+    nu|nushell|xonsh|elvish|tcsh|csh|pwsh|powershell) printf 'other' ;;
+    *) if [[ "${FL_PLATFORM:-}" == "linux" ]]; then printf 'bash'; else printf 'zsh'; fi ;;
+  esac
+}
+
+# fl_rc_file: the file the helper block lives in, or nothing for a shell
+# that can read no block of ours (fl_rc_shell "other"): callers skip then.
 fl_rc_file() {
-  local stored
+  local stored f
   if [[ -n "${FL_RC_FILE:-}" ]]; then printf '%s' "$FL_RC_FILE"; return 0; fi
-  # Linux: bash unless the user's shell is zsh
-  if [[ "${FL_PLATFORM:-}" == "linux" && "${SHELL:-}" != *zsh ]]; then printf '%s/.bashrc' "$HOME"; return 0; fi
-  case "$(basename "${SHELL:-zsh}")" in
+  case "$(fl_rc_shell)" in
+    other) ;;
+    fish)
+      # fish reads every file of conf.d at start; a file of our own leaves config.fish alone
+      if [[ -n "${XDG_CONFIG_HOME:-}" ]]; then f="$XDG_CONFIG_HOME"; else f="$HOME/.config"; fi
+      printf '%s/fish/conf.d/benchbar.fish' "$f" ;;
     bash)
-      if [[ -f "$HOME/.bashrc" ]]; then printf '%s' "$HOME/.bashrc"; else printf '%s' "$HOME/.bash_profile"; fi ;;
+      # Linux terminals start bash as no login shell: it reads ~/.bashrc
+      if [[ "${FL_PLATFORM:-}" == "linux" ]]; then printf '%s/.bashrc' "$HOME"; return 0; fi
+      # macOS: Terminal starts a login shell. It reads the first of these
+      # that exists and ~/.bashrc only when that file says so; a new
+      # .bash_profile next to a .profile would stop bash reading the .profile
+      for f in .bash_profile .bash_login .profile; do
+        [[ -f "$HOME/$f" && -r "$HOME/$f" ]] || continue
+        if [[ -f "$HOME/.bashrc" && "$(<"$HOME/$f")" == *bashrc* ]]; then f=.bashrc; fi
+        printf '%s/%s' "$HOME" "$f"
+        return 0
+      done
+      printf '%s/.bash_profile' "$HOME" ;;
     *)
       # zsh reads $ZDOTDIR/.zshrc when ZDOTDIR is set (dotfile managers do
       # that). The app and launchd start the CLI without the terminal's
@@ -34,9 +66,46 @@ fl_rc_file() {
       # (RC_FILE in the state) and found again without ZDOTDIR.
       if [[ -n "${ZDOTDIR:-}" ]]; then printf '%s/.zshrc' "$ZDOTDIR"; return 0; fi
       stored="$(fl_state_get RC_FILE 2>/dev/null || true)"
-      if [[ -n "$stored" && -e "$stored" ]]; then printf '%s' "$stored"; return 0; fi
+      if [[ -n "$stored" && -e "$stored" && "$stored" == *zshrc ]]; then printf '%s' "$stored"; return 0; fi
       printf '%s/.zshrc' "$HOME" ;;
   esac
+}
+
+# fl_rc_source_hint [NOTE]: the line that loads the helpers into the terminal
+# that is open, with NOTE after it; for a shell that reads no block, what to
+# type in place of benchup
+fl_rc_source_hint() {
+  local rc sh="${SHELL:-}"
+  rc="$(fl_rc_file)"
+  if [[ -n "$rc" ]]; then printf 'source %s%s' "$rc" "${1:-}"
+  else printf 'benchbar up, down, restart, status, logs      (%s reads no helper block, so there is no benchup)' "${sh##*/}"; fi
+}
+
+# fl_rc_fish_exports TEXT: the profile's POSIX export lines as fish lines
+# (export PATH="X:$PATH" prepends X; any other export sets the variable)
+fl_rc_fish_exports() {
+  # shellcheck disable=SC2016  # fish expands $PATH, not this shell
+  local line name value re='^export ([A-Za-z_][A-Za-z0-9_]*)="(.*)"$' tail=':$PATH'
+  while IFS= read -r line; do
+    [[ "$line" =~ $re ]] || continue
+    name="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
+    # shellcheck disable=SC2016
+    if [[ "$name" == PATH && "$value" == *"$tail" ]]; then printf 'set -gx PATH "%s" $PATH\n' "${value%"$tail"}"
+    else printf 'set -gx %s "%s"\n' "$name" "$value"; fi
+  done <<<"$1"
+}
+
+# fl_rc_helpers_render PROFILE BENCHBAR: the helper block for the person's
+# shell: the profile's PATH and build exports, then benchup and the others
+# running BENCHBAR. zsh and bash share one template, fish has its own.
+fl_rc_helpers_render() {
+  local exports
+  exports="$(fl_profile_path_exports "$1")"
+  if [[ "$(fl_rc_shell)" == "fish" ]]; then
+    fl_template_render shell-helpers.fish "PROFILE_EXPORTS=$(fl_rc_fish_exports "$exports")" "BENCHBAR=$2"
+  else
+    fl_template_render shell-helpers "PROFILE_EXPORTS=${exports}" "BENCHBAR=$2"
+  fi
 }
 
 # fl_rc_markers_state FILE START END -> missing | present | broken. One read
@@ -78,13 +147,13 @@ fl_rc_block_extract() {
 }
 
 # fl_rc_recorded_cli_v VAR FILE: the benchbar the helper block names
-# (BENCHBAR="..."), or nothing
+# (BENCHBAR="...", or set -g BENCHBAR "..." in a fish block), or nothing
 fl_rc_recorded_cli_v() {
-  local __line __block
+  local __line __block __re='^(set -g )?BENCHBAR[= ]"(.*)"$'
   printf -v "$1" '%s' ""
   __block="$(fl_rc_block_extract "$2" 2>/dev/null)"
   while IFS= read -r __line; do
-    if [[ "$__line" =~ ^BENCHBAR=\"(.*)\"$ ]]; then printf -v "$1" '%s' "${BASH_REMATCH[1]}"; return 0; fi
+    if [[ "$__line" =~ $__re ]]; then printf -v "$1" '%s' "${BASH_REMATCH[2]}"; return 0; fi
   done <<<"$__block"
   return 0
 }
@@ -108,10 +177,13 @@ fl_template_header_of_stdin() {
 
 # fl_rc_target FILE: the file a symlinked rc file points at, resolved link by
 # link, so the write lands in the real file (a dotfiles repo) and the link
-# stays a link; FILE itself when it is no link.
+# stays a link; FILE itself when it is no link. Returns 1 after 20 links: a
+# cycle (a to b to a) has no target, and following it would never end.
 fl_rc_target() {
-  local target="$1" dir link
+  local target="$1" dir link hops=0
   while [[ -L "$target" ]]; do
+    hops=$((hops + 1))
+    [[ "$hops" -le 20 ]] || { printf '%s' "$1"; return 1; }
     dir="$(cd "$(dirname "$target")" 2>/dev/null && pwd)" || break
     link="$(readlink "$target")" || break
     case "$link" in /*) target="$link" ;; *) target="${dir}/${link}" ;; esac
@@ -123,12 +195,23 @@ fl_rc_target() {
 # is written next to the resolved target with the target's mode and renamed
 # onto it: the rename is one step (a write cut short leaves the old file),
 # and a symlink above the target stays a symlink. FILE is created when it
-# does not exist. TMP is removed. Fails without touching FILE when TMP is
-# not a complete file.
+# does not exist, with its folder (fish's conf.d). TMP is removed. Fails
+# without touching FILE when TMP is not a complete file, when FILE is a
+# chain of symlinks that never ends, and when the target is read only: the
+# rename would replace it whatever its mode says, and the person who set
+# that mode did not ask for it.
 fl_rc_replace_file() {
   local file="$1" tmp="$2" target new mode
-  target="$(fl_rc_target "$file")"
+  if ! target="$(fl_rc_target "$file")"; then
+    rm -f "$tmp"; fl_fail "${file} is a chain of symlinks that never ends; not writing it"
+    fl_fix "point ${file} at a real file, then: ${FL_SELF:-benchbar} repair"; return 1
+  fi
   [[ -s "$tmp" ]] || { rm -f "$tmp"; fl_fail "the new content for ${file} is empty; not writing it"; return 1; }
+  if [[ -e "$target" && ! -w "$target" ]]; then
+    rm -f "$tmp"; fl_fail "${target} is read only; not changing it"
+    fl_fix "chmod u+w ${target}, then: ${FL_SELF:-benchbar} repair"; return 1
+  fi
+  mkdir -p "$(dirname "$target")" 2>/dev/null || true
   new="$(mktemp "${target}.XXXXXX" 2>/dev/null)" || { rm -f "$tmp"; fl_fail "could not write next to ${target}"; return 1; }
   if ! cat "$tmp" >"$new" 2>/dev/null; then
     rm -f "$tmp" "$new"
@@ -220,7 +303,7 @@ fl_rc_block_remove() {
     rm -f "$tmp"; fl_fail "could not rewrite ${file}; the file is unchanged"; return 1
   fi
   # a file that held only the block is empty afterwards: that is a valid result
-  if [[ ! -s "$tmp" ]]; then : >"$(fl_rc_target "$file")" || { rm -f "$tmp"; return 1; }; rm -f "$tmp"
+  if [[ ! -s "$tmp" ]]; then : >"$(fl_rc_target "$file" || true)" || { rm -f "$tmp"; return 1; }; rm -f "$tmp"
   else fl_rc_replace_file "$file" "$tmp" || return 1; fi
   fl_log "removed benchbar block from ${file}"
 }

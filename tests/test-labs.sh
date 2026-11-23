@@ -126,6 +126,18 @@ BENCHBAR_LABS=lan-rooms,quick-switch fm_out status --json --bench-dir "$BENCH"
 assert_eq "['lan-rooms', 'quick-switch']" "$(printf '%s' "$OUT" | jget - 'd["labs"]')"
 run_fm labs off quick-switch
 
+# ---- BENCHBAR_LABS is a test seam (CORE-21): a production run (no
+# FL_TESTING) ignores it, so nothing in the environment lifts the gate without
+# a person, and commands --json does not offer it to an agent
+FL_TESTING=0 BENCHBAR_LABS=lan-rooms fm_out labs list --json
+assert_eq "[False, False]" "$(printf '%s' "$OUT" | jget - '[l["enabled"] for l in d["labs"]]')" "(a production run ignores BENCHBAR_LABS)"
+FL_TESTING=0 BENCHBAR_LABS=lan-rooms run_fm share --bench-dir "$BENCH"
+assert_eq "2" "$CODE" "$OUT"; assert_contains "$OUT" "is an experiment and it is off."
+FL_TESTING=0 BENCHBAR_LABS=lan-rooms run_fm labs status lan-rooms
+assert_eq "1" "$CODE" "$OUT"; assert_not_contains "$OUT" "BENCHBAR_LABS"
+BENCHBAR_LABS=lan-rooms,quick-switch fm_out commands --json
+assert_not_contains "$OUT" "BENCHBAR_LABS" "(commands --json does not list the seam)"
+
 # ---- commands --json and the help text with a gated command in the table
 # (the real table has the share and lan-guard rows)
 cat >"$TMP_DIR/gate.sh" <<'SH'
