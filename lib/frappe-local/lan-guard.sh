@@ -17,6 +17,11 @@
 # literals. The script, run as root (sudo /bin/bash -c, or fl_root_run's dialog with BENCHBAR_SUDO=gui),
 # writes them itself. The tests' sudo and osascript mocks map those absolute paths to mocks.
 #
+# allow-node adds the gateway's node to the macOS application firewall. That entry is per program, so it
+# lets every script that node runs accept connections: the paths this CLI added are kept in the state
+# folder (lan-guard/firewall.allowed), a newer node's allow takes the older entry out, and remove takes
+# them all out again with the pf anchor, in the same root step.
+#
 # install, remove and allow-node are a person's decision, like share setup
 # (U3): refused under BENCHBAR_NONINTERACTIVE (so --for-agent and mcp), and
 # without a terminal unless the app passes BENCHBAR_SUDO=gui after its own
@@ -29,6 +34,7 @@
 FL_LANGUARD_LABEL=com.benchbar.pf
 FL_LANGUARD_PF_ANCHOR_NAME=com.apple/250.benchbar
 FL_LANGUARD_PORTS="8000:8099 9000:9099 11000:11099 13000:13099 3306"
+FL_LANGUARD_FW_TOOL=/usr/libexec/ApplicationFirewall/socketfilterfw
 
 FL_LANGUARD_PF_TEXT="# BenchBar: Frappe bench ports answer this Mac only (benchbar lan-guard install).
 # Web 8000-8099 (Werkzeug debugger included), socket.io 9000-9099, Redis 11000-11099 and 13000-13099, MariaDB 3306.
@@ -221,13 +227,76 @@ for t in $pf_tokens; do "$pfctl" -X "$t" || true; done
 ROOT
 }
 
-# fl_lg_allow_node_script REALPATH
+# fl_lg_fw_state: the node paths allow-node added to the macOS firewall, one per line, in the state folder
+fl_lg_fw_state() { printf '%s/lan-guard/firewall.allowed' "$FL_STATE_DIR"; }
+
+# fl_lg_fw_allowed_v VAR: those paths, one per line. Only an absolute path without a control character is
+# ever named to root.
+fl_lg_fw_allowed_v() {
+  local __f __line __r=""
+  __f="$(fl_lg_fw_state)"
+  printf -v "$1" '%s' ""
+  [[ -f "$__f" ]] || return 0
+  while IFS= read -r __line || [[ -n "$__line" ]]; do
+    [[ "$__line" == /* && "$__line" != *[[:cntrl:]]* ]] || continue
+    __r="${__r}${__r:+$'\n'}${__line}"
+  done <"$__f"
+  printf -v "$1" '%s' "$__r"
+}
+
+# fl_lg_fw_record PATHS: keeps PATHS (one per line) as the record, or drops the record when there are none
+fl_lg_fw_record() {
+  local f dir
+  f="$(fl_lg_fw_state)"; dir="${f%/*}"
+  if [[ -z "$1" ]]; then
+    rm -f "$f"
+    return 0
+  fi
+  (umask 077; mkdir -p "$dir")
+  chmod 700 "$dir"
+  printf '%s\n' "$1" >"${f}.new"
+  mv -f "${f}.new" "$f"
+}
+
+# fl_lg_fw_remove_sh PATHS: the root lines that take PATHS (one per line) out of the firewall's list.
+# A path that is no longer listed is not an error.
+fl_lg_fw_remove_sh() {
+  local path
+  [[ -n "$1" ]] || return 0
+  printf 'fw=%s\n' "'${FL_LANGUARD_FW_TOOL}'"
+  while IFS= read -r path; do
+    # shellcheck disable=SC2016  # $fw is the root script's variable
+    [[ -z "$path" ]] || printf '"$fw" --remove %s || true\n' "$(fl_sq "$path")"
+  done <<<"$1"
+}
+
+# fl_lg_allow_node_script REALPATH [OLD_PATHS]: REALPATH is allowed, and the entries of an older node this
+# CLI added (a Homebrew upgrade moved the realpath) go, so that they do not pile up
 fl_lg_allow_node_script() {
-  printf 'set -eu\nfw=%s\nnode=%s\n' "'/usr/libexec/ApplicationFirewall/socketfilterfw'" "$(fl_sq "$1")"
+  printf 'set -eu\nfw=%s\nnode=%s\n' "'${FL_LANGUARD_FW_TOOL}'" "$(fl_sq "$1")"
   cat <<'ROOT'
 "$fw" --add "$node"
 "$fw" --unblockapp "$node"
 ROOT
+  fl_lg_fw_remove_sh "${2:-}"
+}
+
+# fl_lg_fw_legacy_hint: an allow-node of a BenchBar that kept no record (0.8.3 and older) cannot be told
+# from the person's own choice in System Settings, so it is never removed: when the firewall is on and
+# allows the gateway's node, one line names the command that takes the entry out.
+fl_lg_fw_legacy_hint() {
+  local fw problem state app real
+  fw="${FL_SOCKETFILTERFW:-$FL_LANGUARD_FW_TOOL}"
+  [[ -x "$fw" ]] || return 0
+  state="$("$fw" --getglobalstate 2>&1 | tr '[:upper:]' '[:lower:]' || true)"
+  case "$state" in *"state = 1"*) ;; *) return 0 ;; esac
+  fl_sp_node_path_problem_v problem
+  real="${SP_NODE_REAL:-}"
+  [[ -z "$problem" && -n "$real" ]] || return 0
+  app="$("$fw" --getappblocked "$real" 2>&1 || true)"
+  app="$(printf '%s' "${app//"$real"/}" | tr '[:upper:]' '[:lower:]')"
+  [[ "$app" == *"is permitted"* ]] || return 0
+  fl_info "The macOS firewall allows ${real}, and BenchBar has no record that it added the entry. If benchbar lan-guard allow-node did, take it out with: sudo ${FL_LANGUARD_FW_TOOL} --remove ${real}"
 }
 
 fl_lg_doc_v() {
@@ -318,31 +387,53 @@ fl_cmd_lan_guard_install() {
 }
 
 fl_cmd_lan_guard_remove() {
-  local a state
+  local a state fw_paths guard=1 reason path
   for a in "$@"; do fl_die "Unknown argument for lan-guard remove: $a" "Use: benchbar lan-guard remove [--yes] [--json]"; done
   [[ "${FL_DRY_RUN:-0}" != 1 ]] || fl_die "lan-guard remove has no dry run." "benchbar lan-guard status shows the guard."
   if fl_is_linux; then fl_lgl_remove; return 0; fi
   fl_lg_require_person remove
-  if [[ ! -e "$(fl_lg_anchor)" && ! -e "$(fl_lg_daemon)" ]]; then
+  fl_lg_fw_allowed_v fw_paths
+  [[ -e "$(fl_lg_anchor)" || -e "$(fl_lg_daemon)" ]] || guard=0
+  if [[ "$guard" == 0 && -z "$fw_paths" ]]; then
     fl_ok "unchanged: the guard is not installed"
+    fl_lg_fw_legacy_hint
     fl_lg_report
     return 0
   fi
-  fl_warn "Without the guard the bench ports answer the LAN, and benchbar share start refuses to run."
-  fl_confirm "Remove the LAN guard with sudo?" || fl_die "Not removed." "Run: benchbar lan-guard remove"
-  fl_lg_as_root "remove the LAN guard: its pf anchor and its launch daemon" "benchbar lan-guard remove" "$(fl_lg_remove_script)"
+  if [[ "$guard" == 1 ]]; then
+    fl_warn "Without the guard the bench ports answer the LAN, and benchbar share start refuses to run."
+    fl_confirm "Remove the LAN guard with sudo?" || fl_die "Not removed." "Run: benchbar lan-guard remove"
+    reason="remove the LAN guard: its pf anchor and its launch daemon"
+    [[ -z "$fw_paths" ]] || reason="${reason}, and the firewall entry for node"
+  else
+    fl_confirm "Take node out of the macOS firewall's allowed list with sudo (benchbar lan-guard allow-node added it)?" || fl_die "Not removed." "Run: benchbar lan-guard remove"
+    reason="take node out of the macOS firewall's allowed list (benchbar lan-guard allow-node added it)"
+  fi
+  # one root step, so one password or dialog: the guard, then the firewall entries this CLI added
+  fl_lg_as_root "$reason" "benchbar lan-guard remove" "$(fl_lg_remove_script; fl_lg_fw_remove_sh "$fw_paths")"
   fl_lg_state_v state
   [[ "$state" == missing ]] || fl_die "The guard files are still there after the root step." "See the log; run benchbar lan-guard remove again."
   rm -f "$(fl_lg_pf_state)"
-  fl_changed lan-guard "$FL_LANGUARD_PF_ANCHOR_NAME" "removed"
-  fl_ok "LAN guard removed"
+  if [[ -n "$fw_paths" ]]; then
+    fl_lg_fw_record ""
+    while IFS= read -r path; do
+      fl_changed firewall "$path" "removed"
+      fl_ok "the firewall no longer lists ${path}"
+    done <<<"$fw_paths"
+  else
+    fl_lg_fw_legacy_hint
+  fi
+  if [[ "$guard" == 1 ]]; then
+    fl_changed lan-guard "$FL_LANGUARD_PF_ANCHOR_NAME" "removed"
+    fl_ok "LAN guard removed"
+  fi
   fl_lg_report
 }
 
 # allow-node: the firewall lets incoming connections reach the node the gateway runs on. A Homebrew upgrade
 # changes that realpath, so share preflight's firewall_node check asks for this again.
 fl_cmd_lan_guard_allow_node() {
-  local a problem fw state app real doc
+  local a problem fw state app real doc mine old="" path
   for a in "$@"; do fl_die "Unknown argument for lan-guard allow-node: $a" "Use: benchbar lan-guard allow-node [--yes] [--json]"; done
   if fl_is_linux; then fl_lgl_allow_node; return 0; fi
   [[ "${FL_DRY_RUN:-0}" != 1 ]] || fl_die "lan-guard allow-node has no dry run." "benchbar share preflight --static shows the firewall_node check."
@@ -350,7 +441,7 @@ fl_cmd_lan_guard_allow_node() {
   fl_sp_node_path_problem_v problem
   [[ -z "$problem" ]] || fl_die "Node cannot be trusted to run the gateway: ${problem}." "Install Node ${FL_SHARE_MIN_NODE} or later with Homebrew, and keep it writable only by you."
   real="$SP_NODE_REAL"
-  fw="${FL_SOCKETFILTERFW:-/usr/libexec/ApplicationFirewall/socketfilterfw}"
+  fw="${FL_SOCKETFILTERFW:-$FL_LANGUARD_FW_TOOL}"
   [[ -x "$fw" ]] || fl_die "Cannot read the firewall state: ${fw} is missing." ""
   state="$("$fw" --getglobalstate 2>&1 | tr '[:upper:]' '[:lower:]' || true)"
   case "$state" in
@@ -362,10 +453,20 @@ fl_cmd_lan_guard_allow_node() {
       if [[ "$app" == *"is permitted"* ]]; then
         fl_ok "unchanged: the firewall allows ${real}"
       else
-        fl_confirm "Allow ${real} through the firewall with sudo?" || fl_die "Not allowed." "Run: benchbar lan-guard allow-node"
-        fl_lg_as_root "allow node (${real}) through the macOS firewall, for the share gateway" "benchbar lan-guard allow-node" "$(fl_lg_allow_node_script "$real")"
+        # the entries of an older node this CLI added go in the same root step
+        fl_lg_fw_allowed_v mine
+        while IFS= read -r path; do
+          [[ -z "$path" || "$path" == "$real" ]] || old="${old}${old:+$'\n'}${path}"
+        done <<<"$mine"
+        fl_confirm "Allow ${real} through the firewall with sudo? The entry is for the program: every script this node runs can then accept incoming connections, on any network. benchbar lan-guard remove takes it out again." \
+          || fl_die "Not allowed." "Run: benchbar lan-guard allow-node"
+        fl_lg_as_root "allow node (${real}) through the macOS firewall, for the share gateway" "benchbar lan-guard allow-node" "$(fl_lg_allow_node_script "$real" "$old")"
+        fl_lg_fw_record "$real"
         fl_changed firewall "$real" "allowed"
-        fl_ok "the firewall allows ${real}"
+        fl_ok "the firewall allows ${real} (benchbar lan-guard remove takes the entry out again)"
+        while IFS= read -r path; do
+          [[ -z "$path" ]] || fl_ok "the firewall no longer lists ${path} (an older node)"
+        done <<<"$old"
       fi ;;
   esac
   doc="$(printf '{"schema_version":%d,"cli_version":"%s","node":%s}' "$FL_SCHEMA_VERSION" "$FL_VERSION" "$(fl_json_str "$real")")"

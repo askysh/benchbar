@@ -65,6 +65,8 @@ function freePort() {
     });
 }
 
+const UPLOAD_TYPES = { ".html": "text/html; charset=utf-8", ".svg": "image/svg+xml", ".xml": "text/xml", ".png": "image/png", ".pdf": "application/pdf" };
+
 async function startUpstream({ port: wanted } = {}) {
     const hits = [];
     const server = http.createServer((req, res) => {
@@ -75,6 +77,15 @@ async function startUpstream({ port: wanted } = {}) {
             if (req.url === "/slow") return;
             // a live web process that drops one request: the connection is reset, the server keeps listening
             if (req.url.startsWith("/app/reset")) return req.socket.destroy();
+            // an uploaded file, served the way Frappe's static middleware does: the type follows the extension
+            if (/^\/(private\/)?files\//.test(req.url)) {
+                const ext = path.extname(req.url.split("?")[0]).toLowerCase();
+                const headers = { "Content-Type": UPLOAD_TYPES[ext] || "application/octet-stream" };
+                if (ext === ".pdf") headers["Content-Disposition"] = 'inline; filename="report.pdf"';
+                if (ext === ".bin") delete headers["Content-Type"];
+                res.writeHead(req.url.includes("missing") ? 404 : 200, headers);
+                return res.end("file-body");
+            }
             res.writeHead(200, { "Content-Type": "text/plain", "Set-Cookie": "up=1; Path=/" });
             res.end("upstream-ok");
         });
@@ -153,7 +164,10 @@ async function startGateway(opts = {}) {
     fs.writeFileSync(clockFile, "0");
 
     const child = spawn(process.execPath, [opts.production ? GATEWAY_JS : HARNESS_JS, cfgFile], {
-        env: { ...process.env, NODE_ENV: "test", FL_SHARE_TEST_CLOCK_FILE: clockFile, FL_SHARE_TEST_TICK_MS: String(opts.tickMs || 100) },
+        env: {
+            ...process.env, NODE_ENV: "test", FL_SHARE_TEST_CLOCK_FILE: clockFile, FL_SHARE_TEST_TICK_MS: String(opts.tickMs || 100),
+            FL_SHARE_TEST_UNPAIRED_IDLE_MS: String(opts.unpairedIdleMs || ""), FL_SHARE_TEST_UNPAIRED_MAX_MS: String(opts.unpairedMaxMs || "")
+        },
         stdio: ["ignore", "pipe", "pipe"]
     });
     let output = "";

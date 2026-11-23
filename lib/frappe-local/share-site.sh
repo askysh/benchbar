@@ -28,15 +28,21 @@ FL_SHARE_SITE="share.localhost"
 # The doctype list is a heuristic on top of the name floor: server scripts are
 # already off in the copy (server_script_enabled 0), so this is what is left
 # that can change what runs or who may do what.
+# ESCALATION_DOCTYPES are the second half of that: a role that may write a
+# User, a Role, a Role Profile or a User Permission can give itself (or take
+# from itself) what the demotion below just removed, System Manager included,
+# so it counts as code-capable too (#159 SHARE-6 a).
 # shellcheck disable=SC2016  # Python source: the backticks and dollar signs are not the shell's
 FL_PY_SHARE_ROLES='CODE_DOCTYPES = ("Server Script", "Client Script", "Custom Script", "Report", "System Settings", "Customize Form",
     "DocType", "Custom Field", "Property Setter", "Workflow", "Webhook", "Notification", "Email Account", "Scheduled Job Type",
     "Page", "Print Format", "Web Page", "Custom HTML Block", "System Console", "Website Script", "Module Def", "Package",
     "DocPerm", "Custom DocPerm", "Web Form", "Auto Email Report", "Data Import")
+ESCALATION_DOCTYPES = ("User", "Role", "Has Role", "Role Profile", "User Role Profile", "User Type", "User Permission", "Custom Role",
+    "Role Permission for Page and Report")
 FLOOR_ROLES = ("System Manager", "Administrator", "Script Manager", "Server Script Manager", "Developer", "Report Manager")
 AUTOMATIC_ROLES = ("All", "Guest", "Desk User")
 def code_capable_roles(frappe):
-    wanted = {"doctypes": CODE_DOCTYPES}
+    wanted = {"doctypes": CODE_DOCTYPES + ESCALATION_DOCTYPES}
     standard = frappe.db.sql("select parent, role, `write`, `create`, submit from `tabDocPerm` where parent in %(doctypes)s", wanted, as_dict=True)
     custom = frappe.db.sql("select parent, role, `write`, `create`, submit from `tabCustom DocPerm` where parent in %(doctypes)s", wanted, as_dict=True)
     replaced = {row["parent"] for row in custom}

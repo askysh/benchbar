@@ -225,9 +225,10 @@ flag~share preflight~--static~~Only the checks that run before anything starts: 
 flag~share preflight~--critical~~Only the fast checks a running share repeats: the pf block (probed from this Mac's LAN address with its own listener and a control), the share web process, the bench's Redis.
 flag~share preflight~--quiet~~List only the checks that are not ok.
 flag~share preflight~--json~~One document: protocol, ok, lan_ip and the checks, each with a status, a message and a fix_action.
-cmd~share start~benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]~Start sharing on the LAN until the deadline.~yes~no~no~yes~stream
+cmd~share start~benchbar share start [--for DUR] [--name LABEL] [--assign-seats] [--dry-run] [--json]~Start sharing on the LAN until the deadline.~yes~no~no~yes~stream
 flag~share start~--for~DUR~How long the share runs: 30m, 4h; from 5 minutes to 12 hours. Default: 4h.
 flag~share start~--name~LABEL~The room's label for this share, at most 40 printable characters. Default: the one share setup recorded.
+flag~share start~--assign-seats~~You give out the seats: a person who joins with the code waits (up to 10 minutes) until you run benchbar share assign for them, and cannot take or change a seat themselves. Without it, anyone with the code takes any free seat.
 flag~share start~--dry-run~~Print the plan and start nothing.
 flag~share start~--json~~JSON lines: plan, steps, done (with the deadline).
 cmd~share stop~benchbar share stop [--json]~Stop sharing: the gateway and the job end, the room empties, every session of the copy ends. Never refused (no dry run).~no~no~no~yes~stream
@@ -280,10 +281,10 @@ flag~lan-guard install~--yes~~Do not ask first (sudo still asks for the password
 flag~lan-guard install~--json~~JSON lines: done, with state, active, ports, anchor and lan_ip.
 cmd~lan-guard status~benchbar lan-guard status [--json]~Whether the guard is installed, missing or outdated, and whether the bench ports are refused on this machine's LAN address (a probe with its own listener). Reads only; never refused.~no~no~no~no~document
 flag~lan-guard status~--json~~One document: state, active (null with no LAN address), ports, anchor, lan_ip.
-cmd~lan-guard remove~benchbar lan-guard remove [--yes] [--json]~Unload and delete the pf anchor and its daemon (macOS), or the nftables table, its systemd unit and its rules file (Linux, nothing else in nftables), with sudo once. Sharing refuses to start without them. Asks first.~yes~yes~no~yes~stream
+cmd~lan-guard remove~benchbar lan-guard remove [--yes] [--json]~Unload and delete the pf anchor and its daemon (macOS), or the nftables table, its systemd unit and its rules file (Linux, nothing else in nftables), with sudo once. On macOS it also takes the node that lan-guard allow-node added out of the firewall's allowed apps. Sharing refuses to start without the guard. Asks first. Runs while the lan-rooms Lab is off too.~yes~yes~no~yes~stream
 flag~lan-guard remove~--yes~~Do not ask first.
 flag~lan-guard remove~--json~~JSON lines: done, with the guard's state.
-cmd~lan-guard allow-node~benchbar lan-guard allow-node [--yes] [--json]~Add the realpath of the node the share gateway runs on to the macOS firewall's allowed apps, with sudo once. Unchanged when the firewall is off or already allows it; needed again after a Homebrew upgrade of node. macOS only: refused on Linux.~yes~yes~no~yes~stream
+cmd~lan-guard allow-node~benchbar lan-guard allow-node [--yes] [--json]~Add the realpath of the node the share gateway runs on to the macOS firewall's allowed apps, with sudo once. Unchanged when the firewall is off or already allows it; needed again after a Homebrew upgrade of node (the older entry then goes). The entry is per program: every script that node runs can then accept incoming connections; lan-guard remove takes it out again. macOS only: refused on Linux.~yes~yes~no~yes~stream
 flag~lan-guard allow-node~--yes~~Do not ask first.
 flag~lan-guard allow-node~--json~~JSON lines: done, with node (the realpath).
 cmd~site hosts~benchbar site hosts [--prune] [--dry-run]~Add a 127.0.0.1 line for every site to /etc/hosts. On Linux it edits nothing: a *.localhost name already resolves, and any other name gets the sudo line to run yourself. --prune removes instead the lines in benchbar's block whose site no bench benchbar knows has (one backup, one sudo; without a terminal it prints the command).~yes~yes~no~yes~stream

@@ -458,6 +458,11 @@ assert_eq "0" "$CODE" "$OUT$ERR"
 assert_contains "$OUT" "People in the room"
 assert_contains "$OUT" "d_1a2b3c4d"
 assert_contains "$OUT" "Priya Nair"
+# SHARE-5: someone has no seat, so the free seats are listed with the ids share assign takes; a held seat is not
+assert_contains "$OUT" "s_1a2b3c4d  Mgr Singh"
+assert_contains "$OUT" "s_2a2b3c4d  Sam Rao"
+assert_not_contains "$OUT" "s_0a1b2c3d"
+assert_contains "$OUT" "benchbar share assign ID SEAT_ID"
 assert_not_contains "$OUT" "$(printf '\342\200\256')"
 
 # ================================================================ assign
