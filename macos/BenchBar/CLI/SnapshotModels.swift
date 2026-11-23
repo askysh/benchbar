@@ -183,13 +183,13 @@ nonisolated struct RollbackResult: Decodable, Sendable, Equatable {
 nonisolated enum SnapshotText {
     /// "Before upgrade, 3 hours ago, 5.2 MB, with files".
     static func line(_ snapshot: SiteSnapshot, now: Date) -> String {
-        let age = snapshot.time.map { age(of: $0, now: now) } ?? snapshot.stamp
+        let age = snapshot.time.map { relativeAge(of: $0, now: now) } ?? snapshot.stamp
         let size = ByteCountFormatter.string(fromByteCount: snapshot.sizeBytes, countStyle: .file)
         return "\(age), \(size), \(snapshot.withFiles ? "with files" : "database only")"
     }
 
     /// "2 hours ago"; a clock that is a little behind must not say "in 2 minutes".
-    static func age(of time: Date, now: Date) -> String {
+    static func relativeAge(of time: Date, now: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.dateTimeStyle = .named
         return formatter.localizedString(for: min(time, now), relativeTo: now)
