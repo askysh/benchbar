@@ -909,10 +909,10 @@ def site_drop_default_refusal(arguments, call):
     except (subprocess.TimeoutExpired, OSError, ValueError, AttributeError):
         return None
     if default and default == site:
-        return text_result("%s is the default site of this bench. Dropping the default site is a person's choice: it has to name "
+        return failed_result("%s is the default site of this bench. Dropping the default site is a person's choice: it has to name "
                            "the site that takes its place. Nothing was changed. Give the person this command to run in a terminal: "
                            "benchbar site drop %s --confirm-site %s --new-default OTHER_SITE (OTHER_SITE: another site of the bench)"
-                           % (site, shlex.quote(site), shlex.quote(site)), is_error=True)
+                           % (site, shlex.quote(site), shlex.quote(site)), 1)
     return None
 
 
@@ -926,8 +926,8 @@ def pull_default_refusal(arguments, call):
     except (subprocess.TimeoutExpired, OSError, ValueError, AttributeError):
         return None
     if default and default == site:
-        return text_result("%s is the default site of this bench: a pull makes a new site and never touches the default. "
-                           "Nothing was changed. Pick another name in as." % site, is_error=True)
+        return failed_result("%s is the default site of this bench: a pull makes a new site and never touches the default. "
+                           "Nothing was changed. Pick another name in as." % site, 1)
     return None
 
 
@@ -1894,12 +1894,12 @@ def run_cli_lines(argv, timeout, call, env, on_line):
             kill_group(p)
             raise Cancelled()
     out_lines, err_chunks = [], []
-    last_line = [time.time()]
+    last_line = [time.monotonic()]
 
     def read_out():
         for raw in iter(p.stdout.readline, b""):
             line = raw.decode("utf-8", "replace")
-            last_line[0] = time.time()
+            last_line[0] = time.monotonic()
             out_lines.append(line)
             try:
                 on_line(line)
@@ -1927,11 +1927,11 @@ def run_cli_lines(argv, timeout, call, env, on_line):
     # deadline, up to an hour). A daemon it started (a Redis) may hold stdout
     # open for good, so the done line, not the end of the pipe, says the
     # stream is complete.
-    last_line[0] = max(last_line[0], time.time())
+    last_line[0] = max(last_line[0], time.monotonic())
     while any(r.is_alive() for r in readers) and time.time() < deadline:
         if out_lines and stream_done("".join(out_lines)) is not None:
             break
-        if time.time() - last_line[0] >= QUIET_GRACE:
+        if time.monotonic() - last_line[0] >= QUIET_GRACE:
             break
         for r in readers:
             r.join(0.2)
@@ -2731,11 +2731,22 @@ class Server:
         raise RpcError(-32601, "method not found: %s" % method)
 
     def start_call(self, request_id, params):
+        name = params.get("name")
+        # the lease tools and benchbar_op_status are short and keep a long run alive or findable: eight long
+        # calls must not starve a lease renew (the lease would lapse under a run that still needs it)
+        exempt = isinstance(name, str) and (name.startswith("benchbar_lease_") or name == "benchbar_op_status")
         with self.inflight_lock:
-            busy = sum(1 for c in self.inflight.values() if not c.answered) >= MAX_INFLIGHT
+            busy = not exempt and sum(1 for c in self.inflight.values() if not c.answered) >= MAX_INFLIGHT
         if busy:
             # a thread and a CLI per call: a client in a loop must not start hundreds
             self.reply(request_id, failed_result("busy: %d calls are running already. Retry in a few seconds." % MAX_INFLIGHT, 1))
+            shown, key_names = audit_arguments(params.get("arguments"), "rejected")  # unchecked values: keys only
+            entry = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "client": self.client,
+                     "tool": name[:80] if isinstance(name, str) else None, "arguments": shown,
+                     "outcome": "busy", "exit": None, "ms": 0}
+            if key_names is not None:
+                entry["argument_keys"] = key_names
+            audit(entry)
             return
         call = Call(request_id)
         call.tool = params.get("name")[:80] if isinstance(params.get("name"), str) else None

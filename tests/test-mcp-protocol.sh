@@ -154,6 +154,24 @@ send(p, call(5, "benchbar_status", {}))                                       # 
 assert not read(p)["result"]["isError"]
 finish(p)
 
+# the lease tools and benchbar_op_status are not counted: long calls cannot starve a lease renew
+p = session({"FAKE_MODE": "slow", "BENCHBAR_MCP_MAX_INFLIGHT": "2"})
+send(p, call(1, "benchbar_status", {}))
+send(p, call(2, "benchbar_status", {}))
+send(p, call(3, "benchbar_status", {}))
+send(p, call(4, "benchbar_lease_renew", {"lease": "l-0123456789ab"}))
+send(p, call(5, "benchbar_op_status", {"op_id": "op-20260101-000000-1"}))
+got = {}
+for _ in range(5):
+    m = read(p)
+    got[m["id"]] = m
+assert "busy" in got[3]["result"]["content"][0]["text"], got[3]
+for i in (4, 5):
+    assert "busy" not in json.dumps(got[i]), got[i]
+finish(p)
+audit = subprocess.run([FM, "mcp", "--calls", "50"], capture_output=True, text=True, env=dict(os.environ, BENCHBAR_MCP_CLI=FAKE)).stdout
+assert "busy" in audit, audit                                                 # the busy reply is on the record
+
 # a line over the limit is refused and skipped; the session goes on
 p = session({"BENCHBAR_MCP_MAX_LINE": "2000"})
 send(p, '{"jsonrpc":"2.0","id":1,"method":"ping","params":{"pad":"' + "x" * 7000 + '"}}')

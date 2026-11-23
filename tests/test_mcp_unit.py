@@ -121,6 +121,19 @@ class ToolCall(unittest.TestCase):
             self.assertTrue(r["isError"], args)
         self.assertTrue(m.tool_call({"name": "benchbar_list", "arguments": ["x"]})["isError"])
 
+    def test_default_site_refusals_carry_structured_content(self):
+        old = m.run_cli
+        m.run_cli = lambda *a, **k: (0, json.dumps({"default_site": "d.localhost"}), "")
+        try:
+            for fn, args in ((m.site_drop_default_refusal, {"site": "d.localhost"}), (m.pull_default_refusal, {"as": "d.localhost"})):
+                r = fn(args, None)
+                self.assertTrue(r["isError"])
+                self.assertEqual(r["structuredContent"]["exit"], 1)
+                self.assertIn("default site", r["structuredContent"]["error"])
+                self.assertEqual(r["structuredContent"]["_notice"], m.NOTICE)
+        finally:
+            m.run_cli = old
+
     def test_control_characters(self):
         self.assertEqual(m.control_char({"a": ["ok", "b\x07"]}, ""), "a[1]")
         self.assertIsNone(m.control_char({"a": "plain text, ü"}, ""))
