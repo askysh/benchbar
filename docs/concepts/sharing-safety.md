@@ -29,9 +29,25 @@ explains the safety model behind it. For the steps, see the
   the count again) ends the share.
 - **The room code proves membership, not the host's identity.** Anyone who
   has the code can join, with no action from you; you see every join and
-  can remove people. On a first join a guest cannot tell your room from a
+  can remove people. In a room started without `--assign-seats` the code
+  also grants every seat: whoever has it can take any free seat, the most
+  privileged one included. Start the room with
+  `benchbar share start --assign-seats` to give out the seats yourself
+  (`share assign`); a guest then cannot take or change a seat. On a first join a guest cannot tell your room from a
   rogue one that also knows the code: the guest's pin of your certificate
   protects only rejoins.
+- **A device on the network can slow joins down, not hold them off in
+  silence.** The gateway keeps 16 connections for devices that are not in
+  the room yet, 4 per address. Such a connection must send a request
+  within 10 seconds and is closed 60 seconds after it opened at the
+  latest, so a device that only holds connections open loses them. A
+  device that keeps opening new ones can still crowd new guests out, as
+  it could by flooding the Wi-Fi itself: `share status` then shows
+  `join_trouble`. People already in the room are not affected.
+- **Uploaded files cannot act as pages of the copy.** A file under
+  `/files` or `/private/files` whose type a browser could run (HTML, SVG,
+  XML, anything unknown) reaches a guest as a download, with a sandbox
+  policy on it. Images, PDFs, text, audio and video show as before.
 - **Ten wrong codes lock the room** until you draw a new code. The count is
   for the room, not per guest, so anyone on the network who can reach the
   gateway can lock everyone out by guessing wrong ten times. The lock holds

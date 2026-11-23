@@ -102,6 +102,19 @@ enum Workspace {
         }
     }
 
+    /// Watch Assets in Terminal: `benchbar watch` for this bench. The error lands on the bench.
+    static func openWatch(bench: BenchModel, store: BenchStore) {
+        guard case .ready(let cli) = store.cli else {
+            bench.lastError = "The benchbar command line tool is not available."
+            return
+        }
+        do {
+            try runInTerminal(name: "watch-\(bench.name)", contents: TerminalScript.watchContents(cli: cli.path, bench: bench.path))
+        } catch {
+            bench.lastError = "Could not open Terminal: \(error.localizedDescription)"
+        }
+    }
+
     /// The bench folder in an editor (VS Code, Cursor). False when it is not installed.
     @discardableResult
     static func openInEditor(_ bench: BenchModel, editor: Editor) -> Bool {

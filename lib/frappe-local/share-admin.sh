@@ -408,7 +408,7 @@ fl_cmd_share_lock() {
 # ---------------------------------------------------------------- share people
 
 fl_cmd_share_people() {
-  local a rows line id name model ip seat full online state=on table=()
+  local a rows line id name model ip seat full online state=on table=() held="" waiting=0
   for a in "$@"; do fl_die "Unknown argument for share people: $a" "Use: benchbar share people [--json]"; done
   fl_site_json_begin
   FL_DONE_NO_STATE=1
@@ -430,11 +430,31 @@ fl_cmd_share_people() {
   table=("ID|Name|Mac|Address|Seat|Online")
   while IFS=$'\x1f' read -r id name model ip seat full online _; do
     [[ -n "$id" ]] || continue
+    if [[ -n "$seat" ]]; then held="${held} ${seat}"; else waiting=1; fi
     [[ -n "$full" ]] || full="${seat:-no seat yet}"
     table+=("${id}|${name//|/}|${model//|/}|${ip//|/}|${full//|/}|$([[ "$online" == true ]] && printf yes || printf no)")
   done <<<"$rows"
   fl_info "People in the room: $((${#table[@]} - 1))"
   [[ "${#table[@]}" == 1 ]] || fl_table "${table[@]}"
+  [[ "$waiting" == 0 ]] || fl_share_free_seats "$held"
+}
+
+# fl_share_free_seats HELD: the seats of share.json that nobody holds (HELD: the held ids, space separated),
+# with the ids share assign takes. Printed when someone in the room has no seat: in a room where the host
+# gives out the seats (share start --assign-seats) this is how a person gets one.
+fl_share_free_seats() {
+  local lines line id name re='"full_name":"(([^"\\]|\\.)*)"' any=0
+  fl_share_seats_lines_v lines
+  while IFS= read -r line; do
+    id="${line#*\"seat_id\":\"}"; id="${id%%\"*}"
+    [[ "$id" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || continue
+    case " $1 " in *" ${id} "*) continue ;; esac
+    name=""; [[ ! "$line" =~ $re ]] || name="$(printf '"%s"' "${BASH_REMATCH[1]}" | fl_share_json_unquote)"
+    [[ "$any" == 1 ]] || fl_info "Free seats (give one with: benchbar share assign ID SEAT_ID):"
+    any=1
+    fl_info "  ${id}  ${name}"
+  done <<<"$lines"
+  [[ "$any" == 1 ]] || fl_info "No seat is free."
 }
 
 # ---------------------------------------------------------------- share remove

@@ -35,6 +35,11 @@ final class Workbench {
     var loadingHistory = false
     /// `lease list --json` per bench path: who holds the bench or one of its sites.
     var leases: [String: [LeaseInfo]] = [:]
+    /// The runs of each bench that go on now (`op list --running`), and the ones seen running that have ended since (`op status`).
+    var runningOps: [String: [OpRecord]] = [:]
+    var endedOps: [String: [OpRecord]] = [:]
+    /// The commands `run` allows, from the CLI (read once per session; the documented list when the CLI's cannot be read).
+    var runCommands: [RunCommandInfo]?
     /// The last change's outcome, for the banner at the top of the pane.
     var result: ChangeResult?
     /// The change a lease refused, to run again as a person's explicit "Break lease" (never on its own).

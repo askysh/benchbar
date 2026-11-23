@@ -42,6 +42,12 @@ benchbar labs off lan-rooms      # turn it off
 stops with it, and the Quick Switch key is released. If something cannot
 be undone, the command says so as a warning, and the Lab is off anyway.
 
+The commands that undo a Lab still run while it is off. For Rooms these are
+`benchbar share stop`, `share status`, `share teardown`, `lan-guard status`
+and `lan-guard remove`. The last one needs your password, so `labs off`
+names it in a warning and does not run it: it removes the LAN guard and the
+macOS firewall entry for node that `lan-guard allow-node` added.
+
 The list of Labs is kept by BenchBar. Your benches and sites do not
 change when you turn a Lab on or off.
 

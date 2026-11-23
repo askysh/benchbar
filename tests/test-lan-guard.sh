@@ -283,6 +283,69 @@ chmod 777 "$NODE_REAL_DIR"; reset_calls
 lg_gui allow-node --yes
 chmod 755 "$NODE_REAL_DIR"
 assert_eq 1 "$CODE" "$OUT"; assert_calls_not_contain '^socketfilterfw --add'
+
+# ---------------------------------------------------------------- the firewall entry is recorded and taken back (#159 SHARE-4)
+# the allow above is on record; an entry the person made themselves (already permitted) never is
+FW_REC="$FL_STATE_DIR/lan-guard/firewall.allowed"
+assert_eq "${NODE_REAL_DIR}/node" "$(cat "$FW_REC")"
+# the question says what the entry opens and how it goes away
+reset_calls
+lg_gui allow-node --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_contains "$OUT" "every script this node runs can then accept incoming connections"
+assert_contains "$OUT" "benchbar lan-guard remove takes"
+# a Homebrew upgrade moves the realpath: the new one is allowed, the old entry goes in the same root step
+NODE_NEW_DIR="$TMP_DIR/nodes/cellar/23/bin"; mkdir -p "$NODE_NEW_DIR"
+cp "$ROOT/tests/mocks/node" "$NODE_NEW_DIR/node"; chmod 755 "$NODE_NEW_DIR/node" "$TMP_DIR/nodes/cellar/23" "$NODE_NEW_DIR"
+ln -sf "$NODE_NEW_DIR/node" "$NODE_LINK_DIR/node"
+reset_calls; rm -f "$MOCK_STATE/osa_reasons"
+lg_gui allow-node --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_calls_contain "^socketfilterfw --add ${NODE_NEW_DIR}/node\$"
+assert_calls_contain "^socketfilterfw --remove ${NODE_REAL_DIR}/node\$"
+assert_eq 1 "$(wc -l <"$MOCK_STATE/osa_reasons" | tr -d ' ')" "(one dialog)"
+assert_eq "${NODE_NEW_DIR}/node" "$(cat "$FW_REC")"
+# remove without the guard installed: the entry alone goes, with one dialog, and the record with it
+reset_calls; rm -f "$MOCK_STATE/osa_reasons"
+lg_gui remove
+assert_eq 1 "$CODE" "(no --yes and no terminal: nothing removed) $OUT"
+assert_calls_not_contain '^socketfilterfw --remove'; assert_file "$FW_REC"
+lg_gui remove --yes --json
+assert_eq 0 "$CODE" "$OUT"
+assert_calls_contain "^socketfilterfw --remove ${NODE_NEW_DIR}/node\$"
+assert_calls_not_contain "^socketfilterfw --remove ${NODE_REAL_DIR}/node\$"
+assert_eq 1 "$(wc -l <"$MOCK_STATE/osa_reasons" | tr -d ' ')" "(one dialog)"
+assert_no_file "$FW_REC"
+assert_contains "$OUT" '"kind":"firewall"'
+assert_not_contains "$OUT" "share start refuses to run"
+# remove with the guard installed: the guard and the entry in one root step
+lg_gui install --yes
+assert_eq 0 "$CODE" "$OUT"
+lg_gui allow-node --yes
+assert_eq 0 "$CODE" "$OUT"; assert_file "$FW_REC"
+reset_calls; rm -f "$MOCK_STATE/osa_reasons"
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_no_file "$FL_LANGUARD_ANCHOR"; assert_no_file "$FW_REC"
+assert_calls_contain '^pfctl -a com.apple/250.benchbar -F all$'
+assert_calls_contain "^socketfilterfw --remove ${NODE_NEW_DIR}/node\$"
+assert_eq 1 "$(wc -l <"$MOCK_STATE/osa_reasons" | tr -d ' ')" "(one dialog)"
+assert_contains "$(cat "$MOCK_STATE/osa_reasons")" "firewall entry for node"
+# a record line that is not an absolute path is never named to root
+mkdir -p "${FW_REC%/*}"; printf 'relative/node\n\n%s\n' "${NODE_NEW_DIR}/node" >"$FW_REC"
+reset_calls
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_calls_contain "^socketfilterfw --remove ${NODE_NEW_DIR}/node\$"
+assert_calls_not_contain '^socketfilterfw --remove relative'
+# no record (an allow of 0.8.3 or the person's own): nothing is removed, one line names the manual command
+rm -f "$MOCK_STATE/fw_app"
+reset_calls
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"; assert_contains "$OUT" "unchanged"
+assert_calls_not_contain '^(osascript|sudo|socketfilterfw --remove)'
+assert_contains "$OUT" "socketfilterfw --remove ${NODE_NEW_DIR}/node"
+ln -sf "$NODE_REAL_DIR/node" "$NODE_LINK_DIR/node"
 rm -f "$MOCK_STATE/fw_state" "$MOCK_STATE/fw_app"
 
 # ---------------------------------------------------------------- no LAN address: active is null

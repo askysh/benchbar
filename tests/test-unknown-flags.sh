@@ -155,4 +155,19 @@ done < <(cat "$ROOT"/lib/frappe-local/*.sh | grep -E '^\s+(-[a-zA-Z0-9-]+(=\*)?\
 for ignore in --version --help --check --stdin --short --porcelain --quiet-fail; do missing="${missing// ${ignore}/}"; done
 [[ -z "$missing" ]] || fail "flags read by the code but missing from lib/frappe-local/commands.sh:${missing}"
 
+# ---- MCP-16: per command, not only in the union: every long option pull.sh parses has a record of
+# pull itself (the five that were missing: --no-migrate --before-migrate --skip-app --confirm-site --no-files)
+PULL_RECORDS="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/commands.sh"; fl_cmd_table' "$ROOT" | awk -F'~' '$1 == "flag" && $2 == "pull" { print $3 }')"
+PULL_PARSED="$(grep -oE -- '--[a-z][a-z0-9-]+' < <(grep -E '^\s+(--[a-z][a-z0-9-]*(=\*)?\|?)+\)' "$ROOT/lib/frappe-local/pull.sh") | sort -u)"
+PULL_MISSING=""
+for flag in $PULL_PARSED; do
+  case "
+${PULL_RECORDS}
+" in *"
+${flag}
+"*) ;; *) PULL_MISSING="${PULL_MISSING} ${flag}" ;; esac
+done
+[[ -n "$PULL_PARSED" ]] || fail "test setup: no option found in pull.sh"
+[[ -z "$PULL_MISSING" ]] || fail "pull parses options its records do not list:${PULL_MISSING}"
+
 echo "ok"
