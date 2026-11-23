@@ -639,8 +639,8 @@ if [[ "$OPT_BACKGROUND" == "1" ]]; then BENCHBAR_NONINTERACTIVE=1; export BENCHB
 export -n MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 
 if [[ "$FL_WANT_HELP" == "1" ]]; then
-  # a command of a lab that is off shows the refusal, not its help
-  [[ -z "$COMMAND" ]] || fl_lab_gate "$COMMAND"
+  # a command of a lab that is off shows the refusal, not its help (but for the ones that undo the lab)
+  [[ -z "$COMMAND" ]] || fl_lab_gate "$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}" || printf '%s' "$COMMAND")"
   if [[ -n "$COMMAND" ]] && FL_HELP_KEY="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")"; then fl_cmd_help "$FL_HELP_KEY"; else usage; fi
   exit 0
 fi
