@@ -630,7 +630,7 @@ final class GuestRoomStore {
             case .hostGone(let seen)?: state = .hostGone(lastSeen: seen)
             default: state = .offline
             }
-        case .seatTaken, .rateLimited, .refused: return
+        case .seatTaken, .hostAssigns, .rateLimited, .refused: return
         }
         set(state, for: room)
     }

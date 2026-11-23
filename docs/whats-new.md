@@ -138,12 +138,29 @@ Customer data is not scrubbed.
 
 ### Rooms on your Wi-Fi
 
+- **macOS, Linux.** You can give out the seats of a room yourself:
+  `benchbar share start --assign-seats`, then `benchbar share assign` for
+  each person. A room started without the flag works as before: the room
+  code lets a person take any free seat. See
+  [share start](reference/cli/share.md#share-start).
+- **macOS, Linux.** The copy of a room now also takes away roles that may
+  change users, roles or user permissions. If `benchbar share start`
+  refuses a copy made by 0.8.3 and names such a role, run
+  `benchbar share setup --refresh` once.
 - **Linux.** Rooms work on Linux: `benchbar share`, and a LAN guard made
   with nftables (`benchbar lan-guard install`). On WSL a room needs
   mirrored networking. See
   [Share a site on your network](guides/share-on-your-network.md).
 - **Windows.** The **Sharing** tab of the BenchBar window hosts a room.
   It cannot join one yet. See [Rooms on Windows](windows.md#rooms-on-windows).
+- **macOS, Linux.** Turning the Lab off can be finished: `benchbar
+  lan-guard remove`, `lan-guard status`, `share stop`, `share status` and
+  `share teardown` run while the Lab is off.
+- **macOS.** `benchbar lan-guard remove` also takes node out of the
+  firewall's allowed apps when `lan-guard allow-node` added it. If you ran
+  `allow-node` with 0.8.3 or older, BenchBar has no record of it:
+  `lan-guard remove` prints the command that takes the entry out. See
+  [lan-guard remove](reference/cli/share.md#lan-guard-remove).
 - **All.** The copy a room serves is neutralised the same way as a pulled
   site.
 

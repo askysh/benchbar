@@ -644,13 +644,19 @@ fl_cmd_share() {
 # prompt and no JSON of its own. The pf anchor is root's: it is never removed from here, a warning
 # names the command instead.
 fl_lab_off_lan_rooms() {
-  local rc=0 state
+  local rc=0 state fw
   if [[ -d "$(fl_share_dir)" ]]; then
     ( OPT_JSON=0; FL_JSONL=0; fl_context_init "${OPT_BENCH_DIR:-}" "${OPT_SITE:-}" "${OPT_PROFILE:-}"; fl_cmd_share_stop ) || rc=1
   fi
   if declare -F fl_lg_state_v >/dev/null; then
     fl_lg_state_v state
     [[ "$state" == missing ]] || fl_warn "lan-guard is still installed and keeps the bench ports off the LAN; to remove it, run: benchbar lan-guard remove"
+  fi
+  # the firewall entry of allow-node is root's too and outlives the lab: it lets every script that node
+  # runs accept connections
+  if declare -F fl_lg_fw_allowed_v >/dev/null; then
+    fl_lg_fw_allowed_v fw
+    [[ -z "$fw" ]] || fl_warn "the macOS firewall still allows node to accept incoming connections (benchbar lan-guard allow-node added the entry); to take it out, run: benchbar lan-guard remove"
   fi
   return "$rc"
 }
