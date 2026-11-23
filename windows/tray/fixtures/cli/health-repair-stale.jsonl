@@ -1,0 +1,1 @@
+{"event":"done","exit_code":1,"error":"The repair plan changed since it was shown. Nothing was changed.","fix":"Review a fresh plan: benchbar repair --dry-run --json --bench-dir /home/akash/frappe-bench, then pass its token."}

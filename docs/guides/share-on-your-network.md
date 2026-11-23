@@ -100,7 +100,9 @@ said no, the pane shows a button that opens System Settings. **Find rooms**
 looks for rooms again.
 
 In **Your rooms**, **Change Seat** picks another seat. **Forget** signs
-this Mac out of the room and deletes its key. A new code or invite from
+this Mac out of the room and deletes the host's key. When you forget your
+last room, BenchBar also deletes the key that shows this Mac to hosts, so
+the next room you join sees a new Mac. A new code or invite from
 the host is needed to join again.
 
 ## When a room ends

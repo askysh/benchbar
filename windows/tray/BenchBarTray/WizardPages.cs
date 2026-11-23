@@ -477,7 +477,9 @@ internal sealed partial class WizardView
         panel.Children.Add(plan);
 
         var back = BackButton();
-        var install = Primary("Install", () => _model.StartInstallAsync().Forget());
+        var stale = Note(error: true);
+        panel.Children.Insert(1, stale);
+        var install = Primary("Install", () => (_model.CanReviewAgain ? _model.ReviewAgainAsync() : _model.StartInstallAsync()).Forget());
         var page = new PageParts { Title = "Review", Subtitle = "Nothing has changed yet. This is what Install will do.", Content = panel, Focus = install };
         page.Left.Add(back);
         page.Right.Add(install);
@@ -497,7 +499,10 @@ internal sealed partial class WizardView
                 FillPlanProblems(problems);
             }
             reportPlan.Visibility = _model.PlanError is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
-            install.IsEnabled = _model.CanInstall;
+            // the CLI refused the reviewed plan's token before any step: say so, and Install becomes Review Again
+            Show(stale, _model.StaleMessage is null ? null : "The plan is out of date: something changed since you reviewed it. Nothing was changed. Review it again before you install.");
+            install.Content = _model.CanReviewAgain ? "Review Again" : "Install";
+            install.IsEnabled = _model.CanInstall || _model.CanReviewAgain;
             var key = _model.Plan is null ? "-" : string.Join('|', _model.Plan.Steps.Select(s => s.Id + s.WillRun)) + _model.Plan.Site;
             if (key == lastKey) return;
             lastKey = key;

@@ -388,6 +388,17 @@ public sealed partial class WizardModel : IDisposable
 
     public string? PlanError { get; private set; }
 
+    /// <summary>
+    /// The CLI refused the reviewed plan's token: the machine changed between Review and Install. Nothing ran; the Review page says so and
+    /// offers Review Again (<see cref="ReviewAgainAsync"/>). Null otherwise.
+    /// </summary>
+    public string? StaleMessage { get; private set; }
+
+    public bool CanReviewAgain => Page == WizardPage.Review && StaleMessage is not null && !Planning;
+
+    /// <summary>Set once a run went past the plan's check: the machine is part way, so the old token must not be passed again.</summary>
+    private bool _planTokenSpent;
+
     /// <summary>The fix line of a failed plan ("In the other distro run: sudo systemctl stop mariadb"); null when none or when it only repeats the message.</summary>
     public string? PlanFix { get; private set; }
 
@@ -1147,6 +1158,8 @@ public sealed partial class WizardModel : IDisposable
         Plan = null;
         PlanError = null;
         PlanFix = null;
+        StaleMessage = null;
+        _planTokenSpent = false;
         PlanBlockers = [];
         Planning = true;
         Raise();
@@ -1175,7 +1188,15 @@ public sealed partial class WizardModel : IDisposable
         }
     }
 
-    public bool CanInstall => Page == WizardPage.Review && Plan is not null && !Planning;
+    public bool CanInstall => Page == WizardPage.Review && Plan is not null && !Planning && StaleMessage is null;
+
+    /// <summary>Review Again after a stale refusal: plans once more with the same answers.</summary>
+    public async Task ReviewAgainAsync()
+    {
+        if (!CanReviewAgain) return;
+        Page = WizardPage.NewBench;
+        await ReviewAsync().ConfigureAwait(true);
+    }
 
     // --- install ---
 
@@ -1231,6 +1252,9 @@ public sealed partial class WizardModel : IDisposable
             _linuxPassword = asked;
         }
 
+        // The token of the plan the person reviewed goes with the first run from Review only. A run again after a failure passes none: the
+        // machine is part way, and the plan would no longer be the one that was shown. Adopt has no token.
+        var token = !adopt && !retrying && !_planTokenSpent ? Plan?.Token : null;
         Page = WizardPage.Install;
         StopRequested = false;
         // the PC stays awake from here to every way out of this method: the end, a Stop, an exception, the window closing
@@ -1241,8 +1265,8 @@ public sealed partial class WizardModel : IDisposable
             var waited = TimeSpan.Zero;
             while (true)
             {
-                await AttemptInstallAsync(adopt).ConfigureAwait(true);
-                if (_disposed || !_lockHeld || Phase != InstallPhase.Failed) return;
+                await AttemptInstallAsync(adopt, token).ConfigureAwait(true);
+                if (_disposed || StaleMessage is not null || !_lockHeld || Phase != InstallPhase.Failed) return;
                 // the CLI refused at its lock before it changed anything: the run that was stopped is still ending. Wait, a bounded time.
                 if (waited >= LockWaitLimit)
                 {
@@ -1308,7 +1332,7 @@ public sealed partial class WizardModel : IDisposable
     }
 
     /// <summary>One run of install or adopt, to its end (<see cref="Conclude"/>). <see cref="_lockHeld"/> says whether the CLI refused at a lock that is held.</summary>
-    private async Task AttemptInstallAsync(bool adopt)
+    private async Task AttemptInstallAsync(bool adopt, string? token)
     {
         Phase = InstallPhase.Running;
         Failure = null;
@@ -1327,7 +1351,7 @@ public sealed partial class WizardModel : IDisposable
         {
             result = adopt
                 ? await _setup.AdoptAsync(ExistingPath, secrets, OnInstallEvent, cts.Token).ConfigureAwait(true)
-                : await _setup.InstallAsync(Request, secrets, OnInstallEvent, cts.Token).ConfigureAwait(true);
+                : await _setup.InstallAsync(token is null ? Request : Request with { ApplyToken = token }, secrets, OnInstallEvent, cts.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
@@ -1344,7 +1368,8 @@ public sealed partial class WizardModel : IDisposable
             problem = ex.Message;
         }
         if (_disposed) return;
-        Conclude(result, problem, cts.IsCancellationRequested);
+        Conclude(result, problem, cts.IsCancellationRequested, token is not null);
+        if (!adopt && StaleMessage is null) _planTokenSpent = true;
         // a killed Windows process tree leaves the Linux side running: the next run meets its lock until it ends
         if (cts.IsCancellationRequested || timedOut) _previousRunMayLinger = true;
         else if (Phase == InstallPhase.Succeeded) _previousRunMayLinger = false;
@@ -1395,7 +1420,7 @@ public sealed partial class WizardModel : IDisposable
         else _rows.Add(row);
     }
 
-    private void Conclude(InstallRunResult? result, string? problem, bool cancelled)
+    private void Conclude(InstallRunResult? result, string? problem, bool cancelled, bool usedToken = false)
     {
         var done = result?.Done;
         // a step that was running when the process ended gets no end line
@@ -1405,7 +1430,18 @@ public sealed partial class WizardModel : IDisposable
         }
         ProgressLabel = "";
 
-        if (cancelled || StopRequested)
+        var refusal = result?.Done?.Error ?? problem ?? result?.Error;
+        if (usedToken && !cancelled && !StopRequested && result is { Ok: false } && PlanStale.Looks(refusal))
+        {
+            // refused before any step: back to Review, nothing changed
+            _rows.Clear();
+            Plan = null;
+            StaleMessage = refusal;
+            Phase = InstallPhase.Idle;
+            Failure = null;
+            Page = WizardPage.Review;
+        }
+        else if (cancelled || StopRequested)
         {
             Phase = InstallPhase.Stopped;
         }
