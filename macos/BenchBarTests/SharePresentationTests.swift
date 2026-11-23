@@ -149,6 +149,16 @@ struct SharePresentationTests {
     }
 
     /// #159 SHARE-5: a host must see that a guest waits for them, and what to do about it.
+    /// Restart Sharing starts the room again as it ran. When the room did not say who gives out its
+    /// seats (the people were not read yet, or an older CLI), the stored switch decides: a room
+    /// where the host gives out the seats must never come back with open seats by itself.
+    @Test func aRestartKeepsTheRoomsSeatModeAndFallsBackToTheSwitch() {
+        #expect(SharePresentation.restartAssignsSeats(mode: .host, stored: false))
+        #expect(!SharePresentation.restartAssignsSeats(mode: .open, stored: true), "the person chose open seats for this room")
+        #expect(SharePresentation.restartAssignsSeats(mode: nil, stored: true), "an unknown mode is not open seats")
+        #expect(!SharePresentation.restartAssignsSeats(mode: nil, stored: false))
+    }
+
     @Test func aRoomWhereTheHostGivesOutSeatsSaysWhoWaits() {
         let sam = SharePerson(id: "d_1", name: "Sam", seatID: "s_a", seatFullName: "Sam Rao")
         let asha = SharePerson(id: "d_2", name: "Asha")

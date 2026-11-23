@@ -233,14 +233,21 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
 
     // --- room commands ---
 
-    public Task<bool> StartAsync(int hours, CancellationToken ct = default) => StartAsync(hours, true, ct);
+    /// <summary>
+    /// The time a change to the room may take: none is cut short. Assign and remove wait for the gateway to end the seat's sessions
+    /// (a wipe in the copy), and a kill part way leaves a seat whose sessions are owed; extend rewrites the deadline. The 3 minutes
+    /// of a plan are a kill, not a wait.
+    /// </summary>
+    public static TimeSpan RoomChangeTimeout => CliTimeouts.Apply;
+
+        public Task<bool> StartAsync(int hours, CancellationToken ct = default) => StartAsync(hours, true, ct);
 
     public Task<bool> StartAsync(int hours, bool assignSeats, CancellationToken ct = default) =>
         RunAsync("Starting sharing...", StartArgs(hours, assignSeats), PersonEnvironment(), CliTimeouts.Apply, ct);
 
     /// <summary>Gives a person a free seat, or moves them to it (<c>share assign</c>); the old seat's sessions end first.</summary>
     public Task<bool> AssignAsync(SharePerson person, ShareSeat seat, CancellationToken ct = default) =>
-        RunAsync($"Giving {person.Name} the seat {seat.Name}...", AssignArgs(person.Id, seat.Id), null, CliTimeouts.Plan, ct);
+        RunAsync($"Giving {person.Name} the seat {seat.Name}...", AssignArgs(person.Id, seat.Id), null, RoomChangeTimeout, ct);
 
     public async Task<bool> StopAsync(CancellationToken ct = default)
     {
@@ -249,13 +256,13 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
         return ok;
     }
 
-    public Task<bool> ExtendAsync(int minutes, CancellationToken ct = default) => RunAsync("Extending...", ExtendArgs(minutes), null, CliTimeouts.Plan, ct);
+    public Task<bool> ExtendAsync(int minutes, CancellationToken ct = default) => RunAsync("Extending...", ExtendArgs(minutes), null, RoomChangeTimeout, ct);
 
     public Task<bool> SetLockedAsync(bool locked, CancellationToken ct = default) => RunAsync(locked ? "Locking the room..." : "Unlocking the room...", LockArgs(locked), null, CliTimeouts.Plan, ct);
 
     public async Task<bool> RemoveAsync(SharePerson person, CancellationToken ct = default)
     {
-        var ok = await RunAsync($"Removing {person.Name}...", RemoveArgs(person.Id), null, CliTimeouts.Plan, ct).ConfigureAwait(true);
+        var ok = await RunAsync($"Removing {person.Name}...", RemoveArgs(person.Id), null, RoomChangeTimeout, ct).ConfigureAwait(true);
         if (ok)
         {
             RemovedName = person.Name;
