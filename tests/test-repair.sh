@@ -80,9 +80,46 @@ assert_contains "$OUT" "down --bench-dir ${BENCH}, then"
 assert_file "$BENCH/env/marker" "(a running bench keeps its env)"
 [[ -z "$(ls -d "$BENCH"/env.broken.* 2>/dev/null)" ]] || fail "the env of a running bench must not be moved aside"
 : >"$MOCK_PROCS"
+# a Mac whose bench came from pipx and has no uv (issue 188, SVC-5, INST-1): bench makes the env with
+# "uv venv", so without uv the rebuild cannot run. Doctor says so, repair installs uv before it rebuilds,
+# and when that install fails the env stays where it is.
+use_mocks_without uv
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[WARN] uv: uv is not installed"
+assert_contains "$OUT" "fix: brew install uv"
+run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "warn uv_install bench" "$(printf '%s' "$OUT" | jget - '" ".join([c["level"] + " " + str(c["action"]) + " " + c["group"] for c in d["checks"] if c["id"] == "toolchain_uv"])')"
+run_fm repair --dry-run --bench-dir "$BENCH"
+plan_uv="$(awk '/brew install uv/ && !f {print NR; f = 1}' <<<"$OUT")"
+plan_env="$(awk '/rebuild the bench env/ && !f {print NR; f = 1}' <<<"$OUT")"
+[[ -n "$plan_uv" && -n "$plan_env" && "$plan_uv" -lt "$plan_env" ]] || fail "the plan must install uv before it rebuilds the env"$'\n'"$OUT"
+assert_file "$BENCH/env/marker" "(a dry run moves nothing)"
+reset_calls
+MOCK_BREW_INSTALL_FAIL=uv run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_calls_contain '^brew install uv$'
+assert_contains "$OUT" "refusing to rebuild env: uv is not installed"
+assert_contains "$OUT" "brew install uv"
+assert_file "$BENCH/env/marker" "(without uv the env is not moved aside)"
+[[ -z "$(ls -d "$BENCH"/env.broken.* 2>/dev/null)" ]] || fail "the env must not be moved aside when the rebuild cannot run (no uv)"
+assert_calls_not_contain '^bench setup env'
+# the same without a bench command on PATH: nothing could rebuild the env
+use_mocks_without bench
+run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "refusing to rebuild env: the bench command is not on PATH"
+assert_file "$BENCH/env/marker" "(without bench the env is not moved aside)"
+[[ -z "$(ls -d "$BENCH"/env.broken.* 2>/dev/null)" ]] || fail "the env must not be moved aside when the rebuild cannot run (no bench)"
+# with brew able to install it, one repair installs uv and then rebuilds
+use_mocks_without uv
+# (the uv mock takes the honcho it installs from the folder above its own, also as brew's copy)
+cp "$ROOT/tests/mocks/honcho" "$MOCK_BREW_PREFIX/honcho"
 reset_calls
 MOCK_ENV_NO_PKG_RESOURCES=1 run_fm repair --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^brew install uv$'
+assert_file "$MOCK_BREW_PREFIX/bin/uv"
+use_all_mocks
 [[ -n "$(ls -d "$BENCH"/env.broken.* 2>/dev/null)" ]] || fail "broken env must be moved aside"
 grep -q 'keep me' "$BENCH"/env.broken.*/marker || fail "moved-aside env must keep its content"
 # a v15 env gets setuptools<70, so pkg_resources is there for bench and honcho

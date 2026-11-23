@@ -319,8 +319,10 @@ fl_backup_set_check() {
 
 # In JSON mode only the JSON goes to stdout (on fd 3); every line of text,
 # refusals included, goes to stderr.
+FL_SITE_JSON_ON=0
 fl_site_json_begin() {
-  if [[ "$OPT_JSON" == "1" ]]; then fl_json_doc_begin; fi
+  # once: a second begin would point the document's fd 3 at stderr (site rollback begins, then runs site restore)
+  if [[ "$OPT_JSON" == "1" && "$FL_SITE_JSON_ON" != "1" ]]; then fl_json_doc_begin; FL_SITE_JSON_ON=1; fi
   return 0
 }
 
@@ -566,7 +568,7 @@ fl_site_archive_latest() {
 # The plan (--dry-run --json) carries a token: a SHA-256 of the plan and of what it was made from (the
 # site list, the default site, the hosts line, the database name); --apply TOKEN --yes runs that plan and refuses a stale one.
 fl_cmd_site_drop() {
-  local apply=0 token="" plan_token db_name="" name="" confirm="" new_default="" json="$OPT_JSON" plan_doc="" others=() s st t c p sep="" steps=() archive_before archive="" stamp backup="null" code=0 is_default=0 hosts_place bench_default="" default_failed=0
+  local apply=0 token="" plan_token db_name="" name="" confirm="" new_default="" json="$OPT_JSON" plan_doc="" others=() s st t c p sep="" steps=() archive_before archive="" stamp backup="null" code=0 is_default=0 hosts_place bench_default="" default_failed=0 snap_count=0 snap_bytes=0 snap_json=""
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --confirm-site) confirm="${2:-}"; shift 2 ;;
@@ -616,7 +618,11 @@ fl_cmd_site_drop() {
   fl_site_file_value_v db_name "${FL_BENCH_DIR}/sites/${name}/site_config.json" db_name
 
   # the plan: the app shows it before asking, the terminal before running
-  steps+=("Back up ${name} with files, drop its database and user, move the folder to archived/sites|bench drop-site ${name}|0")
+  # the snapshots of the site are in its folder: bench drop-site moves them to archived/sites with it
+  fl_snap_summary "$FL_BENCH_DIR" "$name"
+  snap_count="$FL_SNAP_COUNT"; snap_bytes="$FL_SNAP_BYTES"
+  [[ "$snap_count" -eq 0 ]] || snap_json="$(printf ',"snapshots":{"count":%s,"size_bytes":%s}' "$snap_count" "$snap_bytes")"
+  steps+=("Back up ${name} with files, drop its database and user, move the folder to archived/sites$(fl_snap_phrase "$FL_BENCH_DIR" "$name")|bench drop-site ${name}|0")
   [[ -n "$new_default" ]] && steps+=("Make ${new_default} the default site|bench use ${new_default}|0")
   if [[ "$hosts_place" == "block" ]] && ! fl_site_name_elsewhere "$name" >/dev/null; then
     steps+=("Remove '127.0.0.1 ${name}' from ${FL_HOSTS_FILE}|sudo, backup first|1")
@@ -634,7 +640,7 @@ fl_cmd_site_drop() {
         IFS='|' read -r t c p <<<"$st"
         plan_doc="${plan_doc}${sep}$(printf '{"title":%s,"command":%s,"needs_password":%s}' "$(fl_json_str "$t")" "$(fl_json_str "$c")" "$(fl_json_bool "$p")")"; sep=","
       done
-      fl_doc_emit 0 "${plan_doc}]}" plan
+      fl_doc_emit 0 "${plan_doc}]${snap_json}}" plan
       return 0
     fi
     fl_info "dry-run: benchbar site drop ${name} would:"
@@ -702,9 +708,9 @@ fl_cmd_site_drop() {
 
   if [[ "$json" == "1" ]]; then
     fl_site_default_file_v bench_default
-    fl_doc_emit "$default_failed" "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":false,"dropped":true,"archived_path":%s,"backup":%s,"new_default":%s,"default_site":%s,"hosts_removed":%s,"manual_step":%s}' \
+    fl_doc_emit "$default_failed" "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":false,"dropped":true,"archived_path":%s,"backup":%s,"new_default":%s,"default_site":%s,"hosts_removed":%s,"manual_step":%s%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_str "$archive")" \
-      "$backup" "$(fl_json_str "$new_default")" "$(fl_json_str "${bench_default:-$FL_SITE}")" "$(fl_json_bool "$FL_HOSTS_REMOVED")" "$(fl_json_str "$FL_HOSTS_MANUAL")")"
+      "$backup" "$(fl_json_str "$new_default")" "$(fl_json_str "${bench_default:-$FL_SITE}")" "$(fl_json_bool "$FL_HOSTS_REMOVED")" "$(fl_json_str "$FL_HOSTS_MANUAL")" "$snap_json")"
     return "$default_failed"
   fi
   fl_ok "dropped ${name}"
@@ -712,5 +718,6 @@ fl_cmd_site_drop() {
     fl_note "backup: $(fl_backup_field "$backup" path)"
   fi
   [[ -n "$archive" ]] && fl_note "the site folder is in ${archive}"
+  [[ "$snap_count" -eq 0 || -z "$archive" ]] || fl_note "its ${snap_count} snapshot(s) ($(fl_fmt_bytes "$snap_bytes")) are in ${archive}/snapshots: benchbar site rollback does not reach them there"
   return "$default_failed"
 }

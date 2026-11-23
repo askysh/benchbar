@@ -231,7 +231,7 @@ package; with `--allow-unsupported-distro` you can try anyway, at your own risk.
 app shows the benches of the distro: see [Windows](windows.md).
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
 benchbar install          # in a new terminal
 ```
 
@@ -251,7 +251,7 @@ bench back after a reboot. The default site is `linuxdev.localhost`, and
 benchbar never edits `/etc/hosts` there. The `bench*` helpers go to
 `~/.bashrc`. `benchbar doctor --prerequisites` on Linux checks, without a bench and
 without sudo: the distro (Ubuntu 24.04 is tested: `--prerequisites` warns about another system, and `install` stops before it changes anything unless you pass `--allow-unsupported-distro`), the CPU
-(x86_64 is needed for the PDF package), that you are not root, sudo (your
+(x86_64 or arm64 is needed for the PDF package), that you are not root, sudo (your
 user is in the sudo group), apt, systemd, linger, the user bus (`systemctl --user` answers), memory, free disk, the
 bench folder, the default ports and the MariaDB root password state. Each
 check that is not ok names its fix.

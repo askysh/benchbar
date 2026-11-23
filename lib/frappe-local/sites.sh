@@ -474,8 +474,11 @@ fl_cmd_site() {
     backup) fl_cmd_site_backup "$@" ;;
     backups) fl_cmd_site_backups "$@" ;;
     restore) fl_cmd_site_restore "$@" ;;
+    snapshot) fl_cmd_site_snapshot "$@" ;;
+    snapshots) fl_cmd_site_snapshots "$@" ;;
+    rollback) fl_cmd_site_rollback "$@" ;;
     drop) fl_cmd_site_drop "$@" ;;
     open-as) fl_cmd_site_open_as "$@" ;;
-    *) fl_die "Unknown site command: ${sub}" "Use: benchbar site list | add NAME | default NAME | hosts [--prune] | backup NAME | backups NAME | restore NAME | drop NAME | open-as on|off|status [NAME]" ;;
+    *) fl_die "Unknown site command: ${sub}" "Use: benchbar site list | add NAME | default NAME | hosts [--prune] | backup NAME | backups NAME | restore NAME | snapshot NAME | snapshots NAME | rollback NAME | drop NAME | open-as on|off|status [NAME]" ;;
   esac
 }

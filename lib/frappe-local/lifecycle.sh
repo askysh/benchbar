@@ -169,7 +169,7 @@ fl_lc_plan() {
   [[ "$LC_RUNNING" != "1" ]] || LC_STEPS+=("stop|Stop the bench's processes")
   if [[ "$action" == "remove" ]]; then
     for s in ${LC_SITES[@]+"${LC_SITES[@]}"}; do
-      LC_STEPS+=("site|Back up ${s%%|*} with its files, drop its database ${s#*|} and move the site folder to archived/sites (bench drop-site)")
+      LC_STEPS+=("site|Back up ${s%%|*} with its files, drop its database ${s#*|} and move the site folder to archived/sites (bench drop-site)$(fl_snap_phrase "$dir" "${s%%|*}")")
     done
   fi
   [[ "$LC_SERVICE" != "1" ]] || LC_STEPS+=("service|Remove the background service: agent, runner and Procfile.lean, each backed up first")
@@ -179,7 +179,8 @@ fl_lc_plan() {
   [[ "$LC_SERVICE" != "1" ]] || LC_STEPS+=("helpers|$([[ "$others" == "0" ]] && printf 'Remove the shell helper block (no other bench has a service)' || printf 'Keep the shell helper block (%s other bench(es) still have a service)' "$others")")
   [[ "$action" != "remove" ]] || LC_STEPS+=("trash|Move the bench folder to ${trash_in}/ (nothing is deleted)")
   for s in ${LC_SITES[@]+"${LC_SITES[@]}"}; do
-    sites_json="${sites_json}${sep}{\"name\":$(fl_json_str "${s%%|*}"),\"db_name\":$(fl_json_str "${s#*|}")}"; sep=","
+    fl_snap_summary "$dir" "${s%%|*}"
+    sites_json="${sites_json}${sep}{\"name\":$(fl_json_str "${s%%|*}"),\"db_name\":$(fl_json_str "${s#*|}")$([[ "$FL_SNAP_COUNT" -eq 0 ]] || printf ',"snapshots":{"count":%s,"size_bytes":%s}' "$FL_SNAP_COUNT" "$FL_SNAP_BYTES")}"; sep=","
   done
   for st in ${LC_STEPS[@]+"${LC_STEPS[@]}"}; do
     id="${st%%|*}"; name="${st#*|}"
@@ -280,7 +281,7 @@ fl_lc_backup_first() {
 # BEFORE anything is dropped, then bench drop-site (database, folder to archived/sites), and the archive checked.
 # Stops at the first failure with nothing moved and the sites after it untouched.
 fl_lc_drop_sites() {
-  local s name archive archive_before stamp code
+  local s name archive archive_before stamp code snap_n=0 snap_b=0
   [[ "${#LC_SITES[@]}" -gt 0 ]] || return 0
   fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed to drop the databases of ${FL_BENCH_DIR}." \
     "Ask the person for it (do not look for it), then re-run with: MARIADB_ROOT_PASSWORD='...' benchbar bench remove ..." 2
@@ -288,6 +289,7 @@ fl_lc_drop_sites() {
   fl_bench_redis_up "$FL_BENCH_DIR"
   for s in "${LC_SITES[@]}"; do
     name="${s%%|*}"; code=0
+    fl_snap_summary "$FL_BENCH_DIR" "$name"; snap_n="$FL_SNAP_COUNT"; snap_b="$FL_SNAP_BYTES"
     archive_before="$(fl_site_archive_latest "$name")"
     # the backups of drop-site and of the first backup delete the site's backups older than 23 hours: keep them
     if ! fl_backups_keep_begin "$name"; then
@@ -320,6 +322,7 @@ fl_lc_drop_sites() {
     fi
     fl_changed site "$name" "dropped, backups in ${archive}/private/backups"
     fl_ok "dropped ${name} (database ${s#*|}); backups in ${archive}/private/backups"
+    [[ "$snap_n" -eq 0 ]] || fl_note "its ${snap_n} snapshot(s) ($(fl_fmt_bytes "$snap_b")) are in ${archive}/snapshots"
   done
   fl_bench_redis_down
 }

@@ -4,7 +4,7 @@
 #
 #   tests/run-tests.sh                  all tests, PARALLEL at a time
 #   PARALLEL=1 tests/run-tests.sh       one after another
-#   SHARD=2/3 tests/run-tests.sh        only the second third, balanced by TEST_SECS (CI matrix)
+#   SHARD=2/3 tests/run-tests.sh        only the second third, balanced by tests/timings.tsv (CI matrix)
 #   tests/run-tests.sh test-doctor ...  only the named tests
 #   tests/run-tests.sh shellcheck       only the lint
 #   SHELLCHECK=0 tests/run-tests.sh     the tests without the lint
@@ -33,67 +33,40 @@ SCRIPTS=("$ROOT"/benchbar "$ROOT"/00-mac-system-deps.sh "$ROOT"/00-linux-system-
 # (the plan only wants a weight: SECS_ONLY skips the syntax check)
 [[ -n "${SECS_ONLY:-}" ]] || bash -n "${SCRIPTS[@]}"
 
-# Every test file. Shards are filled from TEST_SECS below, not from this
-# order. A new test file must be added here; the check below enforces it.
-ALL_TESTS="test-doctor test-phases test-install-json test-install-json-2 test-lock test-apps test-app-recovery test-app-recovery-2 test-app-recovery-3 test-app-batch test-pull test-repair test-install-linux test-port-management
-test-profiles test-profiles-2 test-profiles-3 test-service test-homebrew test-multi-bench test-ports test-sites test-input-hygiene test-doctor-hardening
-test-cli test-open-as test-freshness test-hygiene test-mcp test-mcp-2 test-mcp-parity test-site-backups test-app-cli test-process test-process-match test-doctor-linux test-install-sh test-install-sh-linux
-test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
-test-runner test-redact test-docs-command test-status-cost test-command-cost test-bench-flow test-run test-platform-linux test-self-update
-test-site-restore test-site-restore-2 test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
-test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-suite-hygiene test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin test-lan-guard test-labs test-labs-share test-wsl-preflight test-ci-plan test-fresh-install test-tray-fixtures test-backup-safety test-changelog test-lean-load test-linux-parity test-facts test-guards test-release-workflows test-neutralise test-listen test-macos-appcast test-apps-speed test-version-sources test-person-guard test-unknown-flags test-core-reliability test-notices test-lan-guard-linux test-ready test-ops test-plan-token test-supply-chain test-install-failures test-release-ci-gate test-release-promote test-envelope test-bench-run test-bench-run-mcp test-share-linux test-lifecycle test-lifecycle-2 test-stats test-apps-git test-history test-profile-hardening test-app-partial test-lease test-json-strings"
-
-ALL_TESTS_WORDS=" $(printf '%s' "$ALL_TESTS" | tr '\n' ' ') "
+# Every test file: each tests/test-*.sh is a test. A new test needs no entry here or
+# anywhere else. Shards are filled from the seconds in tests/timings.tsv, not from
+# this order.
+ALL_TESTS=""
 for f in "$ROOT"/tests/test-*.sh; do
-  n="${f##*/}"; n="${n%.sh}"
-  case "$ALL_TESTS_WORDS" in
-    *" $n "*) ;;
-    *) printf 'FAIL: %s is not in the test list of tests/run-tests.sh\n' "$n" >&2; exit 1 ;;
-  esac
+  [[ -f "$f" ]] || continue
+  n="${f##*/}"; ALL_TESTS="$ALL_TESTS ${n%.sh}"
 done
+ALL_TESTS="${ALL_TESTS# }"
+ALL_TESTS_WORDS=" $ALL_TESTS "
 
-# Seconds each test takes in a CI shard, as the CI log reports them
-# ("--- ok: test-x (Ns)"): TEST_SECS_MAC on the macOS shards (3 CPUs), TEST_SECS_LINUX
-# on the Linux and bash 3.2 container shards (4 CPUs; the average of both). A test
-# not named counts as 10 (one new test is a rounding error; a table that is a month
-# old is not). Only the proportions matter. Shards are filled from these tables (see
-# "the jobs"), and CI-ready plans size the matrix from them (scripts/ci-plan.sh).
-# Refresh both from the log of a green full run (a push to next-release or the
-# nightly): scripts/ci-timings.sh RUN_ID prints the two blocks below, from run
-# 44055044922 (2026-11-17).
-TEST_SECS_MAC="test-services-served=297 test-doctor=270 test-port-management=232 test-share-run=232 test-repair=223 test-share=222
-test-install-json=220 test-site-restore=219 test-pull=216 test-lock=200 test-windows-commands=197 test-site-restore-2=194
-test-sudo-env=193 test-app-recovery-2=181 test-doctor-hardening=179 test-wsl-preflight=176 test-share-preflight=174 test-apps=165
-test-mcp=161 test-agent-contracts-3=159 test-app-batch=156 test-app-recovery-3=149 test-phases=137 test-agent-contracts-2=134
-test-app-recovery=128 test-install-json-2=128 test-agent-contracts=123 test-profiles-2=121 test-homebrew=116 test-freshness=115
-test-service=109 test-ports=108 test-share-admin=108 test-app-cli=104 test-input-hygiene=104 test-multi-bench=101
-test-sites=81 test-hygiene=80 test-cli=76 test-open-as=65 test-site-backups=61 test-install-sh=57
-test-pipelines=57 test-profiles-3=57 test-lan-guard=50 test-report=49 test-migrate=48 test-json=47
-test-profiles=45 test-process=43 test-adopt=42 test-profile-v16=38 test-run-lock=36 test-state-migrate=36
-test-command-cost=35 test-redact=35 test-repair-json=34 test-share-gateway=33 test-bench-flow=20 test-docs-command=20
-test-labs=20 test-prerequisites-linux=20 test-labs-share=19 test-runner=19 test-status-cost=14 test-run=13
-test-install-sh-linux=10 test-discovery=5 test-self-update=5 test-affected=4 test-shellrc=4 test-templates=4
-test-packaging=2 test-macos-appcast=2 test-docs=1 test-platform=0 test-release-notes=0 test-changelog=0 test-ui=0 test-version-policy=0 test-ci-plan=25 test-apps-speed=20 test-version-sources=1 test-suite-hygiene=6 test-release-ci-gate=1 test-release-promote=1 test-envelope=100 test-stats=8 test-mcp-parity=90 test-json-strings=20"
-
-TEST_SECS_LINUX="test-doctor=184 test-apps=176 test-pull=175 test-sudo-env=172 test-windows-commands=165 test-install-json-2=164
-test-site-restore=159 test-repair=157 test-site-restore-2=153 test-app-batch=148 test-lock=148 test-mcp=145
-test-phases=139 test-port-management=138 test-wsl-preflight=137 test-install-failures=60 test-install-linux=136 test-install-json=135 test-app-recovery-2=130
-test-app-recovery-3=122 test-agent-contracts-3=119 test-doctor-hardening=118 test-services-served=115 test-app-recovery=114 test-homebrew=106
-test-agent-contracts-2=103 test-agent-contracts=99 test-service=99 test-profiles-2=97 test-sites=96 test-input-hygiene=94
-test-freshness=92 test-multi-bench=89 test-ports=89 test-app-cli=84 test-pipelines=84 test-doctor-linux=74
-test-open-as=72 test-hygiene=69 test-site-backups=69 test-profiles-3=57 test-cli=56 test-systemd=48
-test-adopt=45 test-process=41 test-install-sh=40 test-migrate=39 test-profile-v16=37 test-json=35
-test-profiles=33 test-report=32 test-repair-json=29 test-run-lock=27 test-state-migrate=25 test-labs=24
-test-redact=22 test-command-cost=20 test-docs-command=18 test-bench-flow=17 test-runner=17 test-share-gateway=17
-test-labs-share=14 test-prerequisites-linux=12 test-run=12 test-status-cost=10 test-install-sh-linux=7 test-self-update=7
-test-discovery=4 test-templates=4 test-affected=3 test-platform-linux=3 test-docs=2 test-shellrc=2
-test-packaging=1 test-macos-appcast=1 test-release-notes=1 test-changelog=0 test-platform=0 test-ui=0 test-version-policy=0 test-ci-plan=25 test-apps-speed=20 test-version-sources=1 test-suite-hygiene=6 test-release-ci-gate=1 test-release-promote=1 test-envelope=80 test-stats=8 test-mcp-parity=80 test-json-strings=15"
-# TEST_PLATFORM=mac or linux picks the table (default: this machine)
+# Seconds each test takes in a CI shard: tests/timings.tsv, one row per test, NAME,
+# the macOS seconds and the Linux seconds (the file's header says how they are
+# measured and how to refresh them: scripts/ci-timings.sh --write RUN_ID). A test with
+# no row, or with a dash, counts as 10 (one new test is a rounding error; a table that
+# is a month old is not). Only the proportions matter. Shards are filled from this
+# table (see "the jobs"), and CI plans size the matrix from it (scripts/ci-plan.sh).
+# The table is a data file so that a new test or a new time is not a change to this
+# harness: tests/affected.sh runs the whole suite for a change here, and two branches
+# that both add a row merge without a conflict.
+# TEST_PLATFORM=mac or linux picks the column (default: this machine)
 case "${TEST_PLATFORM:-$(uname -s)}" in
-  mac|Darwin) TEST_SECS="$TEST_SECS_MAC" ;;
-  *) TEST_SECS="$TEST_SECS_LINUX" ;;
+  mac|Darwin) SECS_COL=mac ;;
+  *) SECS_COL=linux ;;
 esac
-TEST_SECS_WORDS=" $(printf '%s' "$TEST_SECS" | tr '\n' ' ') "
+TEST_SECS_WORDS=" "
+if [[ -f "$ROOT/tests/timings.tsv" ]]; then
+  while IFS=$'\t' read -r n mac linux _; do
+    case "$n" in ''|'#'*) continue ;; esac
+    if [[ "$SECS_COL" == mac ]]; then v="$mac"; else v="$linux"; fi
+    [[ "$v" =~ ^[0-9]+$ ]] || continue
+    TEST_SECS_WORDS="$TEST_SECS_WORDS$n=$v "
+  done <"$ROOT/tests/timings.tsv"
+fi
 # test_secs NAME: sets SECS (no subshell: this runs once per test, and a fork
 # costs milliseconds on a busy machine)
 test_secs() {

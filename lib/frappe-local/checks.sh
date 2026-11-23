@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs kept_backups bench_path honcho honcho_setuptools procfile bench_listen runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash share_scheduler orphans ping site_not_served"
+FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn toolchain_uv mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs kept_backups bench_path honcho honcho_setuptools procfile bench_listen runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash share_scheduler orphans ping site_not_served"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 # doctor --quick leaves these out: they start brew, python, node, bench, git
 # or ask the site, which takes seconds each; the JSON names them (skipped_checks)
@@ -89,6 +89,7 @@ fl_check_label() {
     formula_dates) printf 'Formula lifecycle' ;;
     env_setuptools) printf 'env setuptools' ;;
     toolchain_yarn) printf 'yarn' ;;
+    toolchain_uv) printf 'uv' ;;
     mariadb_version) printf 'MariaDB server' ;;
     toolchain_pkgconfig) printf 'pkg-config' ;;
     honcho_setuptools) printf 'honcho imports' ;;
@@ -1340,6 +1341,21 @@ chk_toolchain_yarn() {
   fi
   ver="$("$yarn" --version 2>/dev/null || true)"
   chk__set ok "yarn ${ver:-found} at ${yarn}"
+}
+
+# uv: frappe-bench 5.31 and later make the bench env with "uv venv" and install
+# into it with "uv pip install" (bench setup env, get-app, setup requirements),
+# whoever installed the bench command itself. Phase 00 installs uv from 0.9.0;
+# a Mac whose bench came from pipx before that has none, and found out when a
+# repair had already moved the env aside (issue 188). Looked for where the CLI
+# looks (PATH, Homebrew's bin, ~/.local/bin): the CLI runs those bench commands,
+# not the bench's processes. No program is started, so --quick keeps it.
+chk_toolchain_uv() {
+  if fl_uv_on_path; then
+    chk__set ok "uv at $(command -v uv)"
+  else
+    chk__set warn "uv is not installed: bench (frappe-bench 5.31 and later) needs it to rebuild the env, to add an app and to update one" "brew install uv" uv_install
+  fi
 }
 
 # The version of the MariaDB server listening on 3306: its own binary when

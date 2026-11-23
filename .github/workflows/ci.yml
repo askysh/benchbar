@@ -29,7 +29,7 @@
 # is the same 3.2 the CLI targets.
 #
 # Speed (docs/DECISIONS.md, "CI speed" and "CI tiering"): the shards of a leg
-# are balanced from the per test seconds in tests/run-tests.sh
+# are balanced from the per test seconds in tests/timings.tsv
 # (scripts/ci-timings.sh regenerates them from a run) and sized to about 150
 # seconds each; shellcheck is its own Linux job and checks only the changed
 # files on a pull request, in parallel; the macOS and bash 3.2 shards leave

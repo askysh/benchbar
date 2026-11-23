@@ -260,7 +260,9 @@ To keep production's integrations and stored passwords, pass
 `--keep-secrets`. The copy then keeps them (and the encryption key
 decrypts them), so keep its scheduler and workers off. A copy that was
 neutralised cannot be switched back: pull again with `--replace
---keep-secrets`.
+--keep-secrets`. The flag is yours to pass: a pull started by an agent
+(`--for-agent`, `benchbar mcp`, `BENCHBAR_NONINTERACTIVE=1`) is refused
+with it.
 
 The encryption key and the passwords never appear on a command line, in
 the output or in the log. The download is kept in

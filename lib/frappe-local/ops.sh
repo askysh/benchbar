@@ -446,7 +446,7 @@ fl_cmd_op() {
 # mariadb-password, uninstall-service) never does, under an agent or not: the unattended run can ask nothing.
 # fl_op_background_ok KEY: whether KEY may run with --background
 fl_op_background_ok() {
-  case "$1" in install|repair|pull|"app add"|"app update"|"site add"|"site backup"|"site restore") return 0 ;; esac
+  case "$1" in install|repair|pull|"app add"|"app update"|"site add"|"site backup"|"site restore"|"site snapshot"|"site rollback") return 0 ;; esac
   return 1
 }
 
@@ -490,7 +490,7 @@ fl_op_background() {
   local key id args=() a dir out err pw_sudo=0 doc
   key="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}" 2>/dev/null || true)"
   fl_op_background_ok "$key" || fl_die "benchbar ${key:-$COMMAND} cannot run with --background." \
-    "--background is for install, repair, pull, app add, app update, site add, site backup and site restore. A command that takes seconds runs in front; one only a person runs never runs unattended."
+    "--background is for install, repair, pull, app add, app update, site add, site backup, site restore, site snapshot and site rollback. A command that takes seconds runs in front; one only a person runs never runs unattended."
   [[ "$FL_DRY_RUN" != "1" ]] || fl_die "--background starts a change; a dry run prints its plan at once." "Run the plan without --background, then apply it with --background."
   [[ -z "${FL_SUDO_PW:-}" && "${FL_SUDO_PW_NEWLINE:-0}" != "1" ]] || fl_die "--background cannot carry BENCHBAR_SUDO_PASSWORD: a detached run has no pipe to read it from." \
     "Run the command in front, or cache the sudo credential first so that sudo -n works."

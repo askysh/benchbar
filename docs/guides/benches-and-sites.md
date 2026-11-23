@@ -155,6 +155,68 @@ itself when the bench is stopped and stops it again; for your own
 `benchbar down` stops it. See
 [site restore](../reference/cli/site.md#site-restore).
 
+## Snapshots: save a site, put it back
+
+A snapshot is for "save this site before I try something, and put it back
+in one step". `site snapshot` takes a backup with files (the database,
+the public and private files, `site_config.json`) and moves it out of
+`sites/NAME/private/backups`, which frappe prunes, into
+`sites/NAME/snapshots/<time>-<label>/`, next to a `manifest.json` with the
+time, the label, the size and the apps of the bench with their commits.
+Nothing in the site changes, and nothing removes a snapshot by itself.
+
+```bash
+benchbar site snapshot v16two --label "before the erpnext update"
+benchbar site snapshots v16two              # newest first: label, size, and whether the bench's apps still match
+benchbar site rollback v16two --to latest --dry-run --json
+benchbar site rollback v16two --to latest --apply TOKEN --yes
+```
+
+`site rollback` is `site restore` with a snapshot as its source: the same
+plan, token and run. It first takes a snapshot of the current state
+labelled `before rollback`, so a rollback can itself be undone
+(`site rollback NAME --to latest` right after it goes back), then restores
+the snapshot's database and files into the same site, runs `bench migrate`
+only when the snapshot's app commits differ from the bench's (the plan says
+so; `--no-migrate` stops before it), and ends with the same check as a
+restore. A rollback across an app change is allowed and warned: the
+snapshot's data goes into the bench's current code. `--to` takes the name
+from `site snapshots`, its time stamp, or `latest`. A snapshot that lacks
+a part (the manifest, the database, the public or private files,
+`site_config.json`) is refused, however it is named. A rollback puts back
+the database, the files and the site's `encryption_key`; the other keys of
+`site_config.json` stay as they are now.
+
+The `before rollback` snapshot of a rollback that finished is its undo
+point, and the earlier one is released. A rollback that failed halfway
+leaves its own snapshot protected too (retention and `--prune` never take
+it), and a retry does not move the undo point until it finishes.
+
+The default site is a person's to roll back: an agent (`--for-agent`,
+`benchbar mcp`, `BENCHBAR_NONINTERACTIVE=1`) or a run with no terminal, even
+with `--yes`, gets a plan that cannot be applied, and in a terminal the
+question names it as the default site.
+Another site is never touched.
+
+Retention keeps the newest 10 snapshots (`SNAPSHOT_KEEP` in the bench's
+state file, or `--keep N`), but only reports it: `site snapshots` lists the
+ones beyond the limit, and a person removes them with
+`benchbar site snapshot drop SITE --prune` or one by name with
+`benchbar site snapshot drop SITE SNAPSHOT`. Both ask first and are refused
+for an agent. `--prune` never removes the `before rollback` snapshot of the
+last rollback, and dropping it by name is refused too, because it is the way
+back from that rollback; a person who is sure adds `--force-undo-point`.
+
+A snapshot holds the whole database and the files, so it is as big as a
+backup with files, and `bench backup` writes that set before anything is
+moved (a rollback writes one more before it replaces anything). So both
+commands first check the free space of the volume against the site's files
+plus its largest database dump, and stop with a message when it does not fit;
+`site snapshots` shows what the snapshots hold and what is free. The snapshots
+live in the site's folder: `site drop` and `bench remove` move them into
+`archived/sites/` with it, and their plans say how many and how big. See
+[site snapshot](../reference/cli/site.md#site-snapshot).
+
 `site drop` removes a site for good: its database and database user are
 dropped, and only the backup it takes first can bring them back. Before
 you drop one, check that it is the site you mean (`benchbar site list`)
@@ -246,6 +308,7 @@ one `KEY=value` per line, then `benchbar repair` writes the agent again:
 |---|---|---|
 | `SERVICE_NICE` | `0` to `19` | `Nice` (launchd) and `Nice=` (systemd): the bench yields to other programs |
 | `SERVICE_BACKGROUND` | `on` | launchd `ProcessType` Background: low CPU and disk priority (Mac only) |
+| `SNAPSHOT_KEEP` | `1` to `9999` | how many snapshots of a site `site snapshots` and `site snapshot drop --prune` keep (default 10); no service change |
 | `SERVICE_MEMORY_HIGH` | `4G`, `512M`, `50%` | systemd `MemoryHigh=`: the unit is slowed and its memory reclaimed above it, never killed (Linux only). `0` and `0%` are refused: use `infinity` for no limit |
 
 A value that is not valid is ignored and the default stays. A runaway

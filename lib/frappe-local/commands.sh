@@ -138,7 +138,7 @@ flag~pull~--as~NAME~Local site name (default SITE.local).
 flag~pull~--from-dir~DIR~A backup set downloaded by hand, no SSH.
 flag~pull~--remote-bench~DIR~The bench folder on the server.
 flag~pull~--new-backup~~Run bench backup on the server first.
-flag~pull~--keep-secrets~~Keep the copy's integrations and stored secrets (by default they are switched off and cleared).
+flag~pull~--keep-secrets~~Keep the copy's integrations and stored secrets (by default they are switched off and cleared). A person's decision: refused under --for-agent, benchbar mcp and BENCHBAR_NONINTERACTIVE=1.
 flag~pull~--replace~~Restore over an existing local site, after backing it up.
 flag~pull~--confirm-site~SITE~With --new-backup: the site name, instead of typing it.
 flag~pull~--skip-app~APP~Restore without APP (its tables stay behind as orphans); repeat for more apps.
@@ -189,7 +189,7 @@ env~ports apply~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_
 env~ports apply~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
 cmd~ports check~benchbar ports check [--json]~Port conflicts of the bench.~no~no~no~no~document
 cmd~ports mode~benchbar ports mode automatic|fixed~Keep automatic or fixed ports for the bench.~no~no~no~yes~stream
-cmd~site~benchbar site list|add|default|hosts|backup|backups|restore|drop|open-as ...~The sites of a bench.~no~no~no~no~none
+cmd~site~benchbar site list|add|default|hosts|backup|backups|restore|snapshot|snapshots|rollback|drop|open-as ...~The sites of a bench.~no~no~no~no~none
 cmd~site list~benchbar site list [--json]~The bench's sites; the default one is what benchup waits for.~no~no~no~no~document
 cmd~site add~benchbar site add NAME [--bundle NAME|--apps "a b"] [--dry-run|--apply TOKEN] [--yes] [--json]~bench new-site, the hosts line and apps from apps/. The default site stays.~yes~yes~no~yes~stream
 flag~site add~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
@@ -292,17 +292,37 @@ cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site N
 flag~site backup~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site backup~--with-files~~Include the uploads.
 cmd~site backups~benchbar site backups NAME [--json]~The site's backups, newest first.~no~no~no~no~document
-cmd~site restore~benchbar site restore NAME --from STAMP|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes~Restore a local backup set into a site (a new one with --new), after a backup of the target; a reviewed plan.~no~yes~no~yes~document
+cmd~site restore~benchbar site restore NAME --from STAMP|PATH [--from-site S] [--new] [--neutralise] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes~Restore a local backup set into a site (a new one with --new), after a backup of the target; a reviewed plan.~no~yes~no~yes~document
 flag~site restore~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site restore~--from~STAMP|PATH~The backup set: its stamp in the target's (or --from-site's) backup folder, or the database file's path.
 flag~site restore~--from-site~S~Read the stamp from this site's backups.
 flag~site restore~--new~~Create the site (bench new-site) first.
+flag~site restore~--neutralise~~Switch the restored site's integrations off and clear its stored secrets, after the restore and before migrate (the list pull runs; the Administrator login is kept). Needed for a set from outside this bench when no person runs the restore.
 flag~site restore~--no-migrate~~Stop after the restore, before bench migrate.
 flag~site restore~--before-migrate~SCRIPT~An executable run after the restore, before migrate.
 flag~site restore~--with-files~~Restore the uploads too.
 flag~site restore~--dry-run~~Print the plan and its token.
 flag~site restore~--apply~TOKEN~Run exactly that plan (with --yes).
 env~site restore~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
+cmd~site snapshot~benchbar site snapshot NAME [--label TEXT] [--json]~Save the state of a site (database, files, site_config, the apps and their commits) in sites/NAME/snapshots, which frappe's backup pruning never touches. Changes nothing in the site. To remove snapshots: benchbar site snapshot drop.~no~no~no~yes~document
+flag~site snapshot~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
+flag~site snapshot~--label~TEXT~What the snapshot is for (up to 120 characters, no quotes); it is part of the folder name.
+flag~site snapshot~--dry-run~~Print what would happen, change nothing.
+cmd~site snapshot drop~benchbar site snapshot drop NAME SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run] [--json]~Remove one snapshot of a site, or with --prune the ones beyond the newest N. A person's choice: refused for an agent (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1); its --dry-run says what would go and is open to an agent. Never the undo point of a rollback unless --force-undo-point.~no~no~no~yes~document
+flag~site snapshot drop~--prune~~Remove the snapshots beyond the newest N (never an undo point of a rollback).
+flag~site snapshot drop~--keep~N~With --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's state file).
+flag~site snapshot drop~--force-undo-point~~With one named snapshot: also remove an undo point of a rollback (a plain drop refuses it).
+flag~site snapshot drop~--yes~~Do not ask. Refused for an agent: drop is a person's choice.
+flag~site snapshot drop~--dry-run~~Print what would be removed, change nothing.
+cmd~site snapshots~benchbar site snapshots NAME [--keep N] [--json]~The site's snapshots, newest first: label, time, size, apps with their commits, and whether the bench's apps still match.~no~no~no~no~document
+flag~site snapshots~--keep~N~Say which snapshots are beyond the newest N (default 10, or SNAPSHOT_KEEP in the bench's state file). Nothing is removed.
+cmd~site rollback~benchbar site rollback NAME --to SNAPSHOT|latest [--no-migrate] --dry-run --json, then --apply TOKEN --yes~Put a snapshot back into the site: its database and files. The current state is snapshotted first (label before rollback), so a rollback can be undone. Migrates only when the bench's apps differ from the snapshot's; a reviewed plan.~no~yes~no~yes~document
+flag~site rollback~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
+flag~site rollback~--to~SNAPSHOT~The snapshot: its name, its stamp, or latest (benchbar site snapshots NAME lists them).
+flag~site rollback~--no-migrate~~Stop after the restore, before bench migrate.
+flag~site rollback~--dry-run~~Print the plan and its token.
+flag~site rollback~--apply~TOKEN~Run exactly that plan (with --yes).
+env~site rollback~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~site drop~benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run|--apply TOKEN --yes] [--json]~bench drop-site: a backup with files first, the folder moved to archived/sites.~no~yes~no~yes~document
 flag~site drop~--confirm-site~NAME~Repeat the site name exactly.
 flag~site drop~--new-default~OTHER~Required when NAME is the default site.
@@ -458,7 +478,13 @@ FLAGS
 # fl_cmd_key_for COMMAND ARG: the table key: "COMMAND ARG" when the table has
 # that subcommand, else COMMAND; fails when the table knows neither
 fl_cmd_key_for() {
-  local cmd="$1" arg="${2:-}" line
+  local cmd="$1" arg="${2:-}" line third="${ARGS[1]:-}"
+  # three words where the table has them (site snapshot drop): the third is the global ARGS[1]
+  if [[ -n "$arg" && "$arg" != -* && -n "$third" && "$third" != -* ]]; then
+    while IFS= read -r line; do
+      [[ "$line" == "cmd~${cmd} ${arg} ${third}~"* ]] && { printf '%s' "${cmd} ${arg} ${third}"; return 0; }
+    done <<<"$FL_CMD_TABLE"
+  fi
   if [[ -n "$arg" && "$arg" != -* ]]; then
     while IFS= read -r line; do
       [[ "$line" == "cmd~${cmd} ${arg}~"* ]] && { printf '%s' "${cmd} ${arg}"; return 0; }

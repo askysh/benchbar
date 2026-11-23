@@ -5,15 +5,24 @@ description: "Open a room so colleagues on your Wi-Fi can use a copy of a dev si
 
 A room lets colleagues on the same Wi-Fi use a copy of one of your dev
 sites in their own browser. The copy is hardened. Your site, its database
-and its files stay on your Mac.
+and its files stay on your computer.
 
 Read [How sharing keeps your bench safe](../concepts/sharing-safety.md)
 before you open a room for someone else. It explains what guests can see
 and what the LAN guard does.
 
-Sharing is a Lab on macOS, so it is off until you turn it on. Use
-**Settings > Labs** in the Mac app, or run `benchbar labs on lan-rooms`.
-See [Labs](labs.md). Rooms are not available on Windows yet.
+Sharing is a Lab, so it is off until you turn it on. Use **Settings >
+Labs** in the Mac app or the **Labs** page of the BenchBar window on
+Windows, or run `benchbar labs on lan-rooms`. See [Labs](labs.md).
+
+- **macOS.** Open a room in the Mac app or on the command line, and join
+  one in the Mac app.
+- **Linux.** Open a room on the command line, since 0.9.0. The LAN guard
+  is an nftables table.
+- **Windows.** Open a room on the **Sharing** tab of the BenchBar window,
+  since 0.9.0. The bench runs in WSL, which needs mirrored networking for
+  a room. The tray cannot join a room yet. See
+  [Rooms on Windows](../windows.md#rooms-on-windows).
 
 ## Open a room in the Mac app
 

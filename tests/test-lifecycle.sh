@@ -139,8 +139,13 @@ assert_file "$B/sites/one.localhost/site_config.json"
 assert_calls_not_contain 'drop-site'
 
 # ---- remove: the plan an agent may read, the default bench refused
+# a snapshot of the site goes into the archive with it: the plan says so
+mkdir -p "$B/sites/one.localhost/snapshots/20260101_000000-seed"
+printf 'dump' >"$B/sites/one.localhost/snapshots/20260101_000000-seed/20260101_000000-one_localhost-database.sql.gz"
 noni bench remove "$B" --dry-run --json
 assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "1 4" "$(printf '%s' "$OUT" | jget - '"%s %s" % (d["sites"][0]["snapshots"]["count"], d["sites"][0]["snapshots"]["size_bytes"])')"
+assert_contains "$OUT" "its 1 snapshot(s)"
 assert_eq "remove True" "$(printf '%s' "$OUT" | jget - '"%s %s" % (d["action"], d["can_apply"])')"
 assert_eq "one.localhost _00000000000000b1" "$(printf '%s' "$OUT" | jget - '"%s %s" % (d["sites"][0]["name"], d["sites"][0]["db_name"])')"
 assert_contains "$OUT" "/dev/.benchbar-trash"
@@ -190,6 +195,9 @@ assert_calls_contain '^bench drop-site one.localhost --db-root-password @secret0
 assert_no_file "$B"
 TRASH=""; for t in "$HOME"/dev/.benchbar-trash/scratch-one-*; do TRASH="$t"; break; done
 assert_file "$TRASH/archived/sites/one.localhost/private/backups" "(the backup is in the moved folder)"
+assert_contains "$OUT" "its 1 snapshot(s)"
+assert_contains "$OUT" "/archived/sites/one.localhost/snapshots"
+assert_file "$TRASH/archived/sites/one.localhost/snapshots/20260101_000000-seed" "(the snapshot moved with the site)"
 assert_file "$TRASH/archived/sites/one.localhost/private/backups/20260101_000000-one_localhost-database.sql.gz" "(an older backup survives frappe's own prune)"
 assert_file "$TRASH/apps/frappe"
 assert_no_file "$TRASH/.benchbar.lock" "(the run's own bench lock does not travel into the trash)"
