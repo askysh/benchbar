@@ -87,11 +87,13 @@ fl_team_profile_dirs() {
 
 # fl_team_profile_file NAME: the first NAME.toml on the lookup path
 fl_team_profile_file() {
-  local kind d
+  local kind d dirs
   fl_team_profile_valid_name "$1" || return 1
+  # a here string, not a process substitution: this loop returns early, and a writer still printing would die of a broken pipe
+  dirs="$(fl_team_profile_dirs)"
   while IFS=$'\t' read -r kind d; do
     [[ -f "${d}/$1.toml" ]] && { printf '%s' "${d}/$1.toml"; return 0; }
-  done < <(fl_team_profile_dirs)
+  done <<<"$dirs"
   return 1
 }
 

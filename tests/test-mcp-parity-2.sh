@@ -264,6 +264,10 @@ mktar "$BK/20260925_020000-erp_example_com-private-files.tar"
 printf '{"db_name":"_prod","db_password":"x"}' >"$BK/20260925_020000-erp_example_com-site_config_backup.json"
 printf 'rootpw' >"$MOCK_STATE/mariadb_root_pw"
 mkdir -p "$MOCK_STATE/keychain"; printf 'rootpw\n' >"$MOCK_STATE/keychain/benchbar-mariadb--root"
+# on Linux the password is a 0600 file in the state folder, and the MariaDB client is the one the apt package installs
+mkdir -p "$TMP_DIR/xbin"; cp "$ROOT/tests/mocks/mariadb" "$TMP_DIR/xbin/mariadb"; chmod +x "$TMP_DIR/xbin/mariadb"
+export FL_MARIADB_BIN="$TMP_DIR/xbin/mariadb"
+mkdir -p "$FL_STATE_DIR/secrets"; printf 'rootpw\n' >"$FL_STATE_DIR/secrets/mariadb-root"; chmod 600 "$FL_STATE_DIR/secrets/mariadb-root"
 pull_args() { printf '{"from_dir":"%s","as":"%s","bench":"%s"%s}' "$BK" "$1" "$BENCH" "${2:+,$2}"; }
 R="$(tc benchbar_pull_plan "$(pull_args pulled.localhost)")"
 assert_eq "False" "$(printf '%s' "$R" | err_of)" "$R"
