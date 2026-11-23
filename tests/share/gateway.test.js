@@ -688,6 +688,92 @@ test("the 5th unpaired connection from one IP is refused; a slot frees when one 
     });
 });
 
+// ---- unpaired connections cannot be held open to keep new guests out (#159 SHARE-3)
+const openTls = (gw, c) => new Promise((resolve) => {
+    const s = tls.connect({ host: "127.0.0.1", port: gw.port, rejectUnauthorized: false, minVersion: "TLSv1.3", key: c && c.key, cert: c && c.cert });
+    s.on("secureConnect", () => resolve({ ok: true, s }));
+    s.on("error", () => resolve({ ok: false, s }));
+    s.on("close", () => resolve({ ok: false, s }));
+    s.resume();
+});
+// the tests all dial from 127.0.0.1, so the per address limit stays out of the pool's way
+const POOL_OF_4 = { max_conns: { per_device: 64, total: 256, unpaired_total: 4, unpaired_per_ip: 8 } };
+const POOL_OF_1 = { max_conns: { per_device: 64, total: 256, unpaired_total: 1, unpaired_per_ip: 1 } };
+
+test("idle connections that fill the unpaired pool are closed, and a new guest gets in", async () => {
+    await withGateway({ config: POOL_OF_4, unpairedIdleMs: 400 }, async (gw) => {
+        const held = [];
+        for (let i = 0; i < 4; i++) {
+            const r = await openTls(gw);
+            assert.strictEqual(r.ok, true, `connection ${i + 1}`);
+            held.push(r.s);
+        }
+        assert.strictEqual((await openTls(gw)).ok, false, "the pool is full");
+        // the handshake is done and nothing is sent: each one loses its slot without any help from the client
+        await until(() => held.every((s) => s.destroyed), 3000);
+        const guest = await joinGuest(gw, cert("idle1"), "10.50.0.1");
+        assert.strictEqual(guest.finishReply.json.status, "joined");
+    });
+});
+
+test("an unpaired connection that keeps asking is closed at its lifetime cap", async () => {
+    await withGateway({ unpairedIdleMs: 300, unpairedMaxMs: 1200 }, async (gw) => {
+        const agent = sinkAgent(null);
+        const started = Date.now();
+        const first = await request(gw, { path: "/room/hello", agent });
+        assert.strictEqual(first.status, 200);
+        // a request was sent in time, so the idle limit is spent; the cap is not
+        await sleep(500);
+        assert.strictEqual(first.socket.destroyed, false, "closed although it sent a request in time");
+        while (!first.socket.destroyed && Date.now() - started < 5000) {
+            await request(gw, { path: "/room/hello", agent }).catch(() => {});
+            await sleep(100);
+        }
+        const took = Date.now() - started;
+        assert.ok(first.socket.destroyed && took >= 1100 && took < 4000, `closed after ${took} ms`);
+        agent.destroy();
+    });
+});
+
+test("a guest that joins keeps its connection past the cap, and its unpaired slot is free at once", async () => {
+    const c = cert("cap1");
+    await withGateway({ config: POOL_OF_1, unpairedIdleMs: 300, unpairedMaxMs: 600 }, async (gw) => {
+        const guest = await joinGuest(gw, c, "10.51.0.1");
+        const sock = guest.helloReply.socket;
+        // the pool holds one connection: a newcomer gets it while the guest's connection is still open
+        const other = await openTls(gw);
+        assert.strictEqual(other.ok, true, "the joined guest still held the unpaired slot");
+        other.s.destroy();
+        await sleep(900);
+        assert.strictEqual(sock.destroyed, false, "the joined guest's connection was closed at the cap");
+        const seats = await request(gw, { path: "/_benchbar/seats", cert: c, agent: guest.agent, headers: AS_JSON });
+        assert.strictEqual(seats.status, 200);
+        assert.strictEqual(seats.socket, sock);
+    });
+});
+
+test("a known device's idle connection is not closed by the unpaired limits", async () => {
+    const c = cert("cap2");
+    await withGateway({ devices: [deviceRow(c)], unpairedIdleMs: 300, unpairedMaxMs: 600 }, async (gw) => {
+        const r = await openTls(gw, c);
+        assert.strictEqual(r.ok, true);
+        await sleep(900);
+        assert.strictEqual(r.s.destroyed, false);
+        r.s.destroy();
+    });
+});
+
+test("a pool that stays full shows as join trouble to the host", async () => {
+    await withGateway({ config: POOL_OF_4 }, async (gw) => {
+        const held = [];
+        for (let i = 0; i < 4; i++) held.push((await openTls(gw)).s);
+        assert.strictEqual((await status(gw)).join_trouble, false);
+        for (let i = 0; i < 5; i++) assert.strictEqual((await openTls(gw)).ok, false);
+        assert.strictEqual((await status(gw)).join_trouble, true);
+        held.forEach((s) => s.destroy());
+    });
+});
+
 test("session resumption is not offered", async () => {
     const c = cert("g14");
     await withGateway({ devices: [deviceRow(c)] }, async (gw) => {

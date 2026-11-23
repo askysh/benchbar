@@ -153,7 +153,10 @@ async function startGateway(opts = {}) {
     fs.writeFileSync(clockFile, "0");
 
     const child = spawn(process.execPath, [opts.production ? GATEWAY_JS : HARNESS_JS, cfgFile], {
-        env: { ...process.env, NODE_ENV: "test", FL_SHARE_TEST_CLOCK_FILE: clockFile, FL_SHARE_TEST_TICK_MS: String(opts.tickMs || 100) },
+        env: {
+            ...process.env, NODE_ENV: "test", FL_SHARE_TEST_CLOCK_FILE: clockFile, FL_SHARE_TEST_TICK_MS: String(opts.tickMs || 100),
+            FL_SHARE_TEST_UNPAIRED_IDLE_MS: String(opts.unpairedIdleMs || ""), FL_SHARE_TEST_UNPAIRED_MAX_MS: String(opts.unpairedMaxMs || "")
+        },
         stdio: ["ignore", "pipe", "pipe"]
     });
     let output = "";
