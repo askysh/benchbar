@@ -35,7 +35,9 @@ explains the safety model behind it. For the steps, see the
   0.8, where whoever has the code can take any free seat, the most
   privileged one included. On a first join a guest cannot tell your room from a
   rogue one that also knows the code: the guest's pin of your certificate
-  protects only rejoins.
+  protects only rejoins. A guest who joins from an invite link can check:
+  their join sheet shows 16 digits of the host's key, and yours are on the
+  Sharing tab and in `share status` ("Host key") for you to read out.
 - **A device on the network can slow joins down, not hold them off in
   silence.** The gateway keeps 16 connections for devices that are not in
   the room yet, 4 per address. Such a connection must send a request

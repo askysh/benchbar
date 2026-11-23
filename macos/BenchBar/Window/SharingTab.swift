@@ -130,6 +130,10 @@ struct SharingTab: View {
     @ViewBuilder
     private func roomSection(_ status: ShareStatus) -> some View {
         Section("Room code") {
+            if let key = SharePresentation.hostKeyLine(status) {
+                Text(key).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+                    .help(SharePresentation.hostKeyHelp)
+            }
             HStack(alignment: .firstTextBaseline) {
                 Text(SharePresentation.codeText(share.code, revealed: codeRevealed))
                     .font(.system(size: 40, weight: .semibold, design: .monospaced))

@@ -42,6 +42,9 @@ public sealed record ShareStatus(int Protocol, ShareState State, string? Site, s
     /// <summary>The room model (rooms, codes, seats) is protocol 3.</summary>
     public const int RoomProtocol = 3;
 
+    /// <summary>The first 16 hex digits of this host's key (<c>host_key</c>): what a guest's join sheet shows for an invite. Null from a CLI before 0.9.0.</summary>
+    public string? HostKey { get; init; }
+
     public bool IsOn => State == ShareState.On;
 
     /// <summary>On or on its way up: turning the lab off ends both.</summary>
@@ -57,7 +60,8 @@ public sealed record ShareStatus(int Protocol, ShareState State, string? Site, s
         o["locked"] is JsonValue l && l.TryGetValue<bool>(out var locked) ? locked : null, JsonRead.Str(o, "lock_reason"), JsonRead.Int(o, "budget_left"),
         JsonRead.Bool(o, "join_trouble"), JsonRead.Int(o, "wipe_failed") ?? 0, ShareJson.Guard(JsonRead.Str(o, "lan_guard")),
         o["preflight"] is JsonObject p && p["checks"] is JsonArray checks ? [.. checks.OfType<JsonObject>().Select(ShareJson.Check)] : [],
-        JsonRead.Bool(o, "setup_interrupted"), JsonRead.Str(o, "degraded"), JsonRead.Str(o, "error"));
+        JsonRead.Bool(o, "setup_interrupted"), JsonRead.Str(o, "degraded"), JsonRead.Str(o, "error"))
+    { HostKey = JsonRead.Str(o, "host_key") };
 }
 
 /// <summary>

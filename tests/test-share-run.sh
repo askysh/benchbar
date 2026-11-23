@@ -729,6 +729,17 @@ assert_eq "off None None 0 0 None" "$(sget '" ".join(str(x) for x in (d["state"]
 assert_eq "3 share.localhost 8443 8001 macdev" "$(sget '" ".join(str(x) for x in (d["protocol"], d["share_site"], d["port"], d["web_port"], d["site"]))')"
 assert_eq "installed 192.168.1.20 None" "$(sget '" ".join(str(x) for x in (d["lan_guard"], d["lan_ip"], d["preflight"]))')"
 assert_eq "None" "$(sget 'd["seat_mode"]')" "(no room, so nobody gives out seats)"
+# SHARE-8: the host's key, 16 digits a host can read out and a guest sees on the join sheet of an invite.
+# It is the start of the fingerprint share setup recorded; a record that is not one gives null.
+assert_eq "None" "$(sget 'd["host_key"]')" "(the fixture's fingerprint is not a fingerprint)"
+cp "$SHARE_DIR/share.json" "$TMP_DIR/share.json.kept"
+sed 's/"fingerprint": "sha256:00"/"fingerprint": "sha256:0123456789abcdef00112233445566778899aabbccddeeff0123456789abcdef"/' "$TMP_DIR/share.json.kept" >"$SHARE_DIR/share.json"
+status_json
+assert_eq "0123456789abcdef" "$(sget 'd["host_key"]')"
+cli status
+assert_contains "$OUT" "Host key: 0123 4567 89ab cdef"
+cp "$TMP_DIR/share.json.kept" "$SHARE_DIR/share.json"
+status_json
 assert_eq "False 2 priya@example.com,mgr@example.com" "$(sget '" ".join(str(x) for x in (d["copy"]["drifted"], d["seats"], ",".join(d["allowed_users"])))')"
 assert_eq "True" "$(sget 'd["copy"]["made"] == "2026-11-02T10:00:00Z" and d["copy"]["source_site"] == "macdev" and isinstance(d["copy"]["age_s"], int) and d["copy"]["apps"][0]["at_copy"] == d["copy"]["apps"][0]["now"]')"
 [[ -n "$OUT" && "$OUT" != *$'\n'* ]] || fail "status --json is one line of JSON: $OUT"

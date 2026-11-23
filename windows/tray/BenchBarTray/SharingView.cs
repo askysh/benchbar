@@ -195,6 +195,11 @@ internal sealed class SharingView : UserControl, IBenchPageView
     private void DrawRoom(ShareStatus status)
     {
         _root.Children.Add(Ui.Heading("Room code"));
+        if (_model!.Status is { } keyed && ShareText.HostKeyLine(keyed) is { } hostKey)
+        {
+            Line(hostKey, 0.7);
+            Line(ShareText.HostKeyHelp, 0.6);
+        }
         var code = _model!.Code;
         var shown = _revealed && code is not null ? code.Spaced : "••• •••";
         _lines.Add("Room code: " + (_revealed && code is not null ? "shown" : "hidden")); // the code itself is never in Lines
