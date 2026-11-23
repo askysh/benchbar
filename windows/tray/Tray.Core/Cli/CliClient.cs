@@ -47,8 +47,8 @@ public interface ICliClient
 /// <summary>Which commands only read: their documents of a newer schema are still shown when they have the shape the reader needs.</summary>
 internal static class CliSchema
 {
-    private static readonly HashSet<string> Reads = ["list", "status", "doctor", "logs", "where", "commands", "scan"];
-    private static readonly HashSet<string> GroupReads = ["list", "backups", "check", "scan"];
+    private static readonly HashSet<string> Reads = ["list", "status", "doctor", "logs", "where", "commands", "scan", "history", "stats"];
+    private static readonly HashSet<string> GroupReads = ["list", "backups", "check", "scan", "snapshots", "status"];
 
     public static bool IsReadOnly(IReadOnlyList<string> args)
     {
@@ -56,7 +56,7 @@ internal static class CliSchema
         if (words.Count == 0 || args.Any(a => a is "--apply" or "--yes" or "--dry-run" or "--fix" or "--ack" or "--unack")) return false;
         if (words.Count == 1) return Reads.Contains(words[0]);
         return Reads.Contains(words[0]) || (words[0] is "setup" && words[1] is "check")
-            || (words[0] is "site" or "app" or "profile" or "ports" or "labs" && GroupReads.Contains(words[1]));
+            || (words[0] is "site" or "app" or "profile" or "ports" or "labs" or "op" or "lease" && GroupReads.Contains(words[1]));
     }
 }
 

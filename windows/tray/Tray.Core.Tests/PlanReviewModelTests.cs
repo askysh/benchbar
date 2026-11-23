@@ -261,6 +261,6 @@ public class GuidanceAndConfirmTests
         Assert.Equal(BenchTab.Sites, BenchNavigation.TabFor(site));
         Assert.Equal(BenchTab.Overview, BenchNavigation.TabFor(bench));
         Assert.Equal(["Overview", "Sites", "Apps", "Health"], BenchTabs.All.Select(BenchTabs.Label));
-        Assert.Equal(["Find Benches", "Team Profiles", "Labs"], SidebarTools.All.Select(SidebarTools.Title));
+        Assert.Equal(["Find Benches", "Team Profiles", "History", "Labs"], SidebarTools.All.Select(SidebarTools.Title));
     }
 }
