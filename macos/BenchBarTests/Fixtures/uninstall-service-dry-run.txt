@@ -1,3 +1,4 @@
+  .. auto-confirmed: Uninstall the background service for bench?
   .. This removes the launchd agent, runner, Procfile.lean and, with the last service, the shell helper block.
   .. The bench, its sites, apps and databases are not touched.
   .. dry-run: would move /Users/you/Library/LaunchAgents/com.benchbar.v16-bench.plist to /Users/you/.local/state/benchbar/legacy/com.benchbar.v16-bench-20261123-101500/

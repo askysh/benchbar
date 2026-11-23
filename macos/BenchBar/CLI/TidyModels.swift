@@ -172,6 +172,8 @@ nonisolated struct TidyPlan: ReviewablePlan {
         let failures = lines.filter { $0.hasPrefix("[FAIL]") }.map { CLIText.plain($0) }
         let rows = lines.filter { !$0.hasPrefix("[FAIL]") && !$0.hasPrefix("[OK]") }
             .map { CLIText.plain($0.hasPrefix(".. ") ? String($0.dropFirst(3)) : $0) }
+            // `--yes` answers the CLI's own question; that answer is not a step of the plan
+            .filter { !$0.hasPrefix("auto-confirmed:") }
         return TidyPlan(action: .removeService, bench: bench, rows: rows, keeps: [], trashIn: nil, warnings: [], errors: failures,
                         canApply: failures.isEmpty, token: nil)
     }
