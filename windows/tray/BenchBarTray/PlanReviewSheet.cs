@@ -91,6 +91,7 @@ internal sealed class PlanReviewSheet : Window
             services.Notify(line);
             services.RefreshNow();
         });
+        sheet.AskBreak = services.Confirm;
         sheet.Closing += (_, _) => { if (sheet._leaving) services.RunStarted(); }; // the window asks before it closes while this goes on
         sheet.ShowDialog();
         var outcome = model.Outcome;
@@ -161,6 +162,11 @@ internal sealed class PlanReviewSheet : Window
             case PlanPhase.Finished when _model.Result is { } result:
                 BuildResult(panel, result);
                 if (!result.Ok && !result.Cancelled) panel.Children.Add(ReportLink($"{_model.Request.Title}: {result.Error ?? result.Headline}"));
+                if (_model.LeaseRefused is { } lease)
+                {
+                    panel.Children.Add(Ui.Text(lease.Sentence() + " Nothing was changed. BenchBar never takes or breaks a lease by itself.", 13, FontWeights.SemiBold, margin: new Thickness(0, 10, 0, 0)));
+                    buttons.Add(("Break Lease...", () => BreakLease(lease), false, true));
+                }
                 buttons.Add(("Close", Close, true, true));
                 break;
         }
@@ -184,6 +190,15 @@ internal sealed class PlanReviewSheet : Window
         }
         ButtonLabels = buttons.Select(b => b.Label).ToList();
         Ui.RestoreFocus(this, focused);
+    }
+
+    /// <summary>Asks first, with the holder named; only a yes runs the same apply again with <c>--break-lease</c>. The answer is never the default button.</summary>
+    internal Func<string, string, string, bool> AskBreak { get; set; } = (title, detail, button) => false;
+
+    private void BreakLease(LeaseRefusal lease)
+    {
+        if (!AskBreak($"Break the lease of {lease.Holder}?", lease.BreakQuestion(_model.Request.Title), "Break Lease and Run")) return;
+        _model.BreakLeaseAsync().Forget();
     }
 
     private Button ReportLink(string problem)

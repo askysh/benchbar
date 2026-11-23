@@ -78,14 +78,14 @@ assert_eq "True 1" "$(printf '%s' "$R" | jget - '" ".join(str(x) for x in (d["re
 assert_contains "$R" "No check named"
 # a check id is required and has no other characters
 R="$(tc benchbar_doctor_ack '{}')"
-assert_eq "-32602" "$(printf '%s' "$R" | jget - 'd["error"]["code"]')" "$R"
+assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 R="$(tc benchbar_doctor_ack '{"check":"cleanmymac","unack":"yes"}')"
 assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 R="$(tc benchbar_doctor_ack '{"check":"../x; touch y"}')"
 assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 assert_contains "$R" "is not valid"
 R="$(tc benchbar_doctor_ack '{"check":"--yes"}')"
-assert_eq "-32602" "$(printf '%s' "$R" | jget - 'd["error"]["code"]')" "(a value is never an option)"
+assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "(a value is never an option)"
 rm -rf "$HOME/Applications/CleanMyMac X.app"
 
 # ---- P04 autostart: the read side is status, the change is a tool
@@ -101,7 +101,7 @@ R="$(tc benchbar_autostart '{"mode":"maybe"}')"
 assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 assert_contains "$R" "must be one of on, off"
 R="$(tc benchbar_autostart '{}')"
-assert_eq "-32602" "$(printf '%s' "$R" | jget - 'd["error"]["code"]')" "$R"
+assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 NOTMINE="$HOME/dev/not-mine"
 make_fake_bench "$NOTMINE" nm
 R="$(tc benchbar_autostart '{"mode":"off","bench":"'"$NOTMINE"'"}')"
@@ -191,7 +191,7 @@ assert_contains "$R" "Data from the bench (bench folders and names under the sca
 R="$(tc benchbar_scan '{"path":"'"$HOME"'/no-such-folder"}')"
 assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 R="$(tc benchbar_scan '{"path":"-x"}')"
-assert_eq "-32602" "$(printf '%s' "$R" | jget - 'd["error"]["code"]')" "$R"
+assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 before_reg="$(cat "$FL_STATE_DIR/registered-benches.txt")"
 assert_eq "True" "$(printf '%s' "$(tc benchbar_scan '{"path":"'"$HOME"'/dev"}')" | jget - '"%s" % ("'"$NOTMINE"'" in [b["path"] for b in d["result"]["structuredContent"]["benches"]])')"
 assert_eq "$before_reg" "$(cat "$FL_STATE_DIR/registered-benches.txt")" "(a scan registers nothing)"
@@ -271,9 +271,9 @@ assert_contains "$R" "Dropping the default site is a person's choice"
 [[ -d "$SB/sites/keep.localhost" ]] || fail "the default site was dropped"
 # no tool moves the default: there is no new_default argument
 R="$(tc benchbar_site_drop_plan '{"site":"doomed.localhost","new_default":"other.localhost","bench":"'"$SB"'"}')"
-assert_eq "-32602" "$(printf '%s' "$R" | jget - 'd["error"]["code"]')" "$R"
+assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 R="$(tc benchbar_site_drop '{"site":"keep.localhost","new_default":"other.localhost","token":"'"$CLI_TOK"'","bench":"'"$SB"'"}')"
-assert_eq "-32602" "$(printf '%s' "$R" | jget - 'd["error"]["code"]')" "$R"
+assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 assert_eq "keep.localhost" "$(cat "$SB/sites/currentsite.txt")" "(the default stays)"
 # the apply: stale first (a site appeared since the plan). benchbar takes MARIADB_ROOT_PASSWORD out of the
 # environment before the server starts: its own store (the Keychain mock) is the only source over MCP

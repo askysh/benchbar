@@ -402,11 +402,13 @@ Apps
                       them). Never replaces an app.
                       --dry-run --json: the plan with its token (required apps read from
                       hooks.py); --apply TOKEN --yes runs exactly that plan, no questions.
-  app install NAME    Install an app of the bench on a site (--site S).
+  app install NAME    Install an app of the bench on a site (--site S). --dry-run --json: the
+                      plan with its token; --apply TOKEN --yes runs exactly that plan.
   app update NAME     Fast forward one app with a changelog first, back up the sites
                       that have it, then requirements, migrate and build (--skip-backup).
                       A run that stopped half way is finished by the next one (only the steps
                       left); --discard-pending drops that record and stops (nothing runs).
+                      --dry-run --json: the plan with its token; --apply TOKEN --yes runs it.
   app focus [NAME]    Focus apps (the ones you work on: local changes, another branch, a
                       commit of yours in 14 days): doctor warns when an app they need falls
                       behind. No NAME lists them (--list, --json, --fetch); NAME pins it as
@@ -420,6 +422,7 @@ Team lockfile (benchbar.toml: each app's repo, branch and commit, and the sites)
                       Exit 1 on any difference (--json).
   lock apply          Clone missing apps, switch branches, fast forward to pinned commits,
                       then requirements and build. Never touches a site or local work.
+                      --dry-run --json: the plan with its token; --apply TOKEN --yes runs it.
 
 Team profiles
   profile list        Built in and team profiles, with where each comes from (--json).
@@ -688,7 +691,7 @@ fl_json_mode_resolve() {
   case "$FL_JSON_KEY" in
     up|down|restart|service|"site default"|"ports apply") FL_JSON_MODE=stream ;;
     # a dry run of these is their plan, one document with its token
-    "app update"|"site add") if [[ "$FL_DRY_RUN" == "1" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
+    "app update"|"app install"|"lock apply"|"site add") if [[ "$FL_DRY_RUN" == "1" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
     "site backup"|"site drop"|"site restore"|"site snapshot"|"site snapshot drop"|"site snapshots"|"site rollback"|"app add"|"run"|"bench forget"|"bench remove"|"bench scratch"|"bench gc"|"db orphans") FL_JSON_MODE=doc ;;
     # on and off stream like site default; status only reads
     "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
@@ -699,7 +702,7 @@ fl_json_mode_resolve() {
     "labs on"|"labs off") FL_JSON_MODE=stream ;;
     "lease take"|"lease release"|"lease renew") FL_JSON_MODE=stream ;;
     # the commands that changed things and had no JSON before: a stream, as site default
-    autostart|listen|uninstall-service|"app install"|"lock write"|"lock apply"|"profile create"|"ports setup"|"ports mode"|"site hosts") FL_JSON_MODE=stream ;;
+    autostart|listen|uninstall-service|"lock write"|"profile create"|"ports setup"|"ports mode"|"site hosts") FL_JSON_MODE=stream ;;
     # these print a document of their own under --json, and keep it
     register|"app unfocus"|"profile export"|"profile import"|"profile subscribe"|"profile update"|"profile remove"|self-update) FL_JSON_MODE=doc ;;
   esac
@@ -834,7 +837,7 @@ fl_jsonl_begin_generic() {
   # plan of their own (once they know it); for the others the plan is the command.
   if [[ "$FL_DRY_RUN" == "1" ]]; then
     case "$FL_JSON_KEY" in
-      service|"site add"|"site backup"|"site drop"|"site restore"|"app update"|"app add"|"share setup"|run) ;;
+      service|"site add"|"site backup"|"site drop"|"site restore"|"app update"|"app install"|"lock apply"|"app add"|"share setup"|run) ;;
       *)
         fl_bench_detect "$OPT_BENCH_DIR"
         fl_jsonl plan ",\"command\":$(fl_json_str "$FL_JSON_KEY"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"dry_run\":true"
@@ -1588,21 +1591,27 @@ cmd_where() {
 }
 
 # cmd_mcp: the MCP server, on a Python 3.9+ that imports only the standard
-# library. Apple's /usr/bin/python3 comes first when the Command Line Tools
-# are installed (xcode-select -p; without them it is a stub that only offers
-# to install them), then python3 from PATH: a GUI client (Claude Desktop)
-# starts us with a PATH that may lead to a pyenv shim or a project venv.
-# -I (isolated mode) ignores PYTHON* variables, the user site and the script
+# library. A python3 from PATH of 3.10 or newer comes first (3.9, the Command
+# Line Tools' version, is past its end of life), then Apple's /usr/bin/python3
+# when the Command Line Tools are installed (xcode-select -p; without them it
+# is a stub that only offers to install them), then any python3 from PATH of
+# 3.9. A GUI client (Claude Desktop) may start us with a PATH that leads to a
+# pyenv shim or a project venv: each candidate is run and checked, and -I
+# (isolated mode) ignores PYTHON* variables, the user site and the script
 # folder, so the server sees the same Python everywhere.
 # BENCHBAR_MCP_CLI: tests only, a fake CLI stands in (a timeout, a hang).
 cmd_mcp() {
-  local py candidates=() found="" ver
-  if ! fl_is_linux && xcode-select -p >/dev/null 2>&1 && [[ -x /usr/bin/python3 ]]; then candidates+=(/usr/bin/python3); fi
+  local py candidates=() found="" ver minor
   if command -v python3 >/dev/null 2>&1; then candidates+=("$(command -v python3)"); fi
+  if ! fl_is_linux && xcode-select -p >/dev/null 2>&1 && [[ -x /usr/bin/python3 ]]; then candidates+=(/usr/bin/python3); fi
+  for minor in 10 9; do
+    for py in ${candidates[@]+"${candidates[@]}"}; do
+      if "$py" -I -c "import sys; sys.exit(0 if sys.version_info >= (3, ${minor}) else 1)" >/dev/null 2>&1; then
+        BENCHBAR="${BENCHBAR_MCP_CLI:-$FL_SELF}" BENCHBAR_VERSION="$FL_VERSION" exec "$py" -I "${SCRIPT_DIR}/lib/frappe-local/mcp.py" ${ARGS[@]+"${ARGS[@]}"}
+      fi
+    done
+  done
   for py in ${candidates[@]+"${candidates[@]}"}; do
-    if "$py" -I -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
-      BENCHBAR="${BENCHBAR_MCP_CLI:-$FL_SELF}" BENCHBAR_VERSION="$FL_VERSION" exec "$py" -I "${SCRIPT_DIR}/lib/frappe-local/mcp.py" ${ARGS[@]+"${ARGS[@]}"}
-    fi
     ver="$("$py" -I -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null || true)"
     found="${found:+${found}, }${py} (${ver:-not runnable})"
   done

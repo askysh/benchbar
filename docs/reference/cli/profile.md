@@ -209,7 +209,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar profile import FILE\|URL [--as NAME] [--plan] [--json]` | yes | no | yes | yes | document |
 | `benchbar profile subscribe GIT_URL [--plan\|--yes] [--json]` | yes | no | yes | yes | document |
 | `benchbar profile update NAME\|--all [--plan] [--json]` | yes | no | yes | yes | document |
-| `benchbar profile remove NAME [--yes] [--json]` | yes | no | no | yes | document |
+| `benchbar profile remove NAME [--yes] [--json] [--dry-run \| --apply TOKEN --yes]` | yes | no | no | yes | document |
 | `benchbar profile check NAME [--json]` | no | no | yes | no | document |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
@@ -231,4 +231,6 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `profile update` | `--all` |  | Every import and subscription. |
 | `profile update` | `--plan` |  | Print the review only, change nothing. |
 | `profile update` | `--expect` | `DIGEST` | Refuse unless the fetched profile's digest is this (the one the plan showed). |
+| `profile remove` | `--dry-run` |  | Print the plan (what moves aside) as one JSON document with --json; it carries a token. |
+| `profile remove` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); refused when the file or the subscription changed since the token was made. |
 <!-- /generated:cli-commands -->

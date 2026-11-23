@@ -286,5 +286,18 @@ ls "$TMP_DIR"/tmp14/benchbar-cmd.* >/dev/null 2>&1 || fail "test setup: the temp
 kill -TERM "$RUNNER"
 set +e; wait "$RUNNER"; set -e
 if ls "$TMP_DIR"/tmp14/benchbar-cmd.* >/dev/null 2>&1; then fail "the temp log of fl_run_long must be removed after a TERM"; fi
+# a command that ends at once is seen at once: the wait starts with 20 ms pauses, never a full
+# second (issue 137: a fixed "sleep 1" was 40 percent of the pull and app tests, and up to a second
+# on every bench command a person runs), and both runners share the pauses
+mkdir -p "$TMP_DIR/bin15"
+printf '#!/bin/bash\nprintf "%%s\\n" "$*" >>"%s"\nexec /bin/sleep "$@"\n' "$TMP_DIR/sleeps15" >"$TMP_DIR/bin15/sleep"; chmod +x "$TMP_DIR/bin15/sleep"
+QUICK="$TMP_DIR/quick15"; printf '#!/bin/bash\n/bin/sleep 0.15\n' >"$QUICK"; chmod +x "$QUICK"
+for runner in "fl_run_long quick" "fl_run_with_timeout 30 quick"; do
+  : >"$TMP_DIR/sleeps15"
+  PATH="$TMP_DIR/bin15:$PATH" TMPDIR="$TMP_DIR/tmp14" bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/run.sh"; FL_PLAIN=1; fl_ui_init
+    trap fl_tmp_cleanup EXIT; '"$runner"' "$1"' "$ROOT" "$QUICK" >/dev/null 2>&1 || fail "$runner: a quick command must succeed"
+  grep -q -x '0.02' "$TMP_DIR/sleeps15" || fail "$runner: the first pauses of the wait must be 20 ms"$'\n'"$(cat "$TMP_DIR/sleeps15")"
+  if grep -q -x -E '1|0\.5' "$TMP_DIR/sleeps15"; then fail "$runner: a command of 150 ms must not be waited on with a long pause"$'\n'"$(cat "$TMP_DIR/sleeps15")"; fi
+done
 
 echo "ok"

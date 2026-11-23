@@ -324,6 +324,7 @@ act_port_block() {
 # The two listen files go down before the Procfile that starts them: a
 # Procfile that names a file that is not there would stop the bench.
 act_write_procfile() {
+  fl_render_ensure
   if [[ -n "$FL_R_LISTEN_PY" ]]; then
     fl_template_apply "$(fl_listen_py_path)" "$FL_R_LISTEN_PY" 644 || return 1
     [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote $(fl_listen_py_path)"
@@ -337,6 +338,7 @@ act_write_procfile() {
 }
 
 act_write_runner() {
+  fl_render_ensure
   [[ "${FL_DRY_RUN:-0}" == "1" ]] || mkdir -p "${FL_BENCH_DIR}/logs" 2>/dev/null || { fl_fail "could not create ${FL_BENCH_DIR}/logs"; return 1; }
   fl_template_apply "$(fl_runner_path)" "$FL_R_RUNNER" 755 || return 1
   [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote $(fl_runner_path)"
@@ -366,6 +368,7 @@ fl_runner_legacy_retire() {
 # So does one running outside BenchBar (bench start): the runner's cleanup
 # would stop that session's processes.
 act_write_plist() {
+  fl_render_ensure
   local plist was_running=0 flag
   plist="$(fl_agent_plist_path)"
   flag="$(fl_stop_flag_path)"
@@ -407,6 +410,7 @@ act_write_plist() {
 }
 
 act_write_helpers() {
+  fl_render_ensure
   local rc recorded own="" before
   rc="$(fl_rc_file)"
   # a shell that reads no block of ours (chk_helpers says ok there)

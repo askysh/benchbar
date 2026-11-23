@@ -1,0 +1,41 @@
+
++- benchbar lock write --------------------------------------------------------+
+| mode     dry-run                                                             |
+| profile  v15-lts                                                             |
+| bench    /Users/you/frappe-bench |
+| site     macdev                                                              |
++------------------------------------------------------------------------------+
+
+New file /Users/you/frappe-bench/benchbar.toml
+    # benchbar.toml: the apps and sites of this bench, pinned for the team.
+    # Written by benchbar lock write; check with benchbar lock check, apply with benchbar lock apply.
+    schema = 1
+    
+    [bench]
+    profile = "v15-lts"
+    frappe_bench = "5.31.0"
+    
+    [[app]]
+    name = "frappe"
+    repo = "file:///Users/you/remotes/frappe.git"
+    branch = "version-15"
+    commit = "4fd8ca34b1f3949309e6c29a96d5fafe553433ed"
+    
+    [[app]]
+    name = "acme_crm"
+    repo = "file:///Users/you/remotes/acme_crm.git"
+    branch = "main"
+    commit = "f6f8b519c1d1994cbec4331f94262485b24abdb8"
+    
+    [[app]]
+    name = "acme_base"
+    repo = "file:///Users/you/remotes/acme_base.git"
+    branch = "version-15"
+    commit = "95018952f82483e0e643d5f9c1895d26256a65f5"
+    
+    [[site]]
+    name = "macdev"
+    default = true
+    apps = ["acme_crm"]
+
+  .. dry-run: nothing was written

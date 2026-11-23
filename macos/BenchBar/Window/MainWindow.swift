@@ -6,6 +6,8 @@ import SwiftUI
 /// window): the sidebar footer and ⌘, lead to them.
 nonisolated enum WindowPane: Hashable, Sendable {
     case profiles, discovery, wizard
+    /// What ran on this Mac that changed something, from `benchbar history`.
+    case history
     /// On your network: rooms joined and rooms nearby (guest side of sharing).
     case network
     case general, menuBar, about
@@ -119,6 +121,7 @@ struct MainWindowView: View {
             if router.benchTab == .sites, let site = router.sidebarSite { return .site(bench: path, name: site) }
             return .bench(path)
         case .profiles: return .profiles
+        case .history: return .history
         case .discovery: return .discovery
         case .network: return .network
         case .general, .menuBar, .about, .wizard, .none: return nil
@@ -132,6 +135,7 @@ struct MainWindowView: View {
             router.show(bench: path, tab: .sites)
             router.sidebarSite = name
         case .profiles: router.pane = .profiles
+        case .history: router.pane = .history
         case .discovery: router.pane = .discovery
         case .network: router.pane = .network
         case .none: break
@@ -198,6 +202,8 @@ struct MainWindowView: View {
             AboutPane(store: store, model: about, router: router).navigationTitle("About BenchBar")
         case .profiles:
             ProfilesPane(store: store, workbench: workbench, router: router).navigationTitle("Team Profiles")
+        case .history:
+            HistoryPane(workbench: workbench).navigationTitle("History")
         case .discovery:
             DiscoveryPane(discovery: discovery, router: router).navigationTitle("Find Benches")
         case .network:
@@ -280,6 +286,7 @@ struct MainSidebar: View {
             Section {
                 Label("Team Profiles", systemImage: "person.2").tag(SidebarItem.profiles)
                 Label("Find Benches", systemImage: "folder.badge.plus").tag(SidebarItem.discovery)
+                Label("History", systemImage: "clock.arrow.circlepath").tag(SidebarItem.history)
                 if model.showsNetwork { Label("On your network", systemImage: "wifi").tag(SidebarItem.network) }
             }
         }
@@ -391,7 +398,38 @@ struct ChangeResultBanner: View {
             PaneBanner(symbol: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
                    tint: result.succeeded ? .green : .red,
                    title: result.succeeded ? "\(result.title): done" : "\(result.title): failed",
-                   detail: result.error ?? result.note, dismiss: { workbench.result = nil })
+                   detail: result.error ?? result.note, dismiss: { workbench.result = nil }) {
+                if let lease = result.lease {
+                    LeaseBreakRow(lease: lease, title: result.title, canBreak: workbench.leaseRetry != nil) { Task { await workbench.breakLease() } }
+                }
+            }
+        }
+    }
+}
+
+/// Who holds the lease that refused a change, and a person's explicit "Break Lease". Nothing else in the app breaks a lease:
+/// the button asks first, then runs the same change with `--break-lease`, which the CLI allows only to a person.
+struct LeaseBreakRow: View {
+    let lease: LeaseRefusal
+    let title: String
+    var canBreak = true
+    let breakLease: () -> Void
+    @State private var asking = false
+
+    var body: some View {
+        HStack(spacing: WindowMetrics.rowSpacing) {
+            Text(lease.sentence).font(.caption)
+            if canBreak {
+                Button("Break Lease…") { asking = true }
+                    .controlSize(.small)
+                    .help("Run it anyway. The holder is not told, and what they are doing may break.")
+            }
+        }
+        .alert("Break the lease of \(lease.holder)?", isPresented: $asking) {
+            Button("Break Lease and Run", role: .destructive, action: breakLease)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(lease.sentence) Breaking it runs \"\(title)\" anyway, as you: whoever holds the lease may be in the middle of work on it. The run is recorded in the history.")
         }
     }
 }
