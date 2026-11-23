@@ -52,6 +52,7 @@ internal sealed class MainWindow : Window
     private readonly DiscoveryView _discovery;
     private readonly ProfilesView _profiles;
     private readonly LabsView _labs;
+    private readonly HistoryView _history;
     private readonly Dictionary<SidebarTool, Button> _toolButtons = [];
     private SidebarTool _tool = SidebarTool.None;
     private TraySnapshot _snapshot = TraySnapshot.Empty;
@@ -71,6 +72,7 @@ internal sealed class MainWindow : Window
         _discovery = new DiscoveryView(actions.Services);
         _profiles = new ProfilesView(actions.Services);
         _labs = new LabsView(actions.Services);
+        _history = new HistoryView(actions.Services);
         _labs.Model.Changed += () => _page.SetSharingVisible(_labs.Model.IsOn("lan-rooms") && _labs.Model.Entries.Any(e => e.Name == "lan-rooms" && !e.NotHere));
 
         Title = BetaText.WindowTitle;
@@ -131,6 +133,8 @@ internal sealed class MainWindow : Window
     public ProfilesView Profiles => _profiles;
 
     public LabsView Labs => _labs;
+
+    public HistoryView History => _history;
 
     /// <summary>The pane below the benches that is open now, or None.</summary>
     public SidebarTool Tool => _tool;
@@ -425,7 +429,7 @@ internal sealed class MainWindow : Window
         else if (_tool != SidebarTool.None)
         {
             var key = "tool|" + _tool;
-            var pane = _tool switch { SidebarTool.FindBenches => (UserControl)_discovery, SidebarTool.Labs => _labs, _ => _profiles };
+            var pane = _tool switch { SidebarTool.FindBenches => (UserControl)_discovery, SidebarTool.Labs => _labs, SidebarTool.History => _history, _ => _profiles };
             var changed = _contentKey != key || !ReferenceEquals(_content.Content, pane);
             _contentKey = key;
             _content.Content = pane;
@@ -433,6 +437,7 @@ internal sealed class MainWindow : Window
             {
                 if (_tool == SidebarTool.FindBenches) _discovery.OnShown();
                 else if (_tool == SidebarTool.Labs) _labs.OnShown();
+                else if (_tool == SidebarTool.History) _history.OnShown();
                 else _profiles.OnShown();
             }
         }

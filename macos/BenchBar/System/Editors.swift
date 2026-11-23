@@ -55,4 +55,16 @@ nonisolated enum TerminalScript {
 
         """
     }
+
+    /// `benchbar watch` rebuilds the assets while the person edits JS or CSS. It runs until the Terminal window is closed (or
+    /// ^C): no process of the app, nothing stops it from here. It changes no site and needs no service.
+    static func watchContents(cli: String, bench: String) -> String {
+        """
+        #!/bin/zsh
+        # Opened by BenchBar: asset rebuilds while you edit. Press ^C or close the window to stop.
+        clear
+        exec \(Shell.quote(cli)) watch --bench-dir \(Shell.quote(bench))
+
+        """
+    }
 }

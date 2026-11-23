@@ -94,13 +94,20 @@ fl_bash_dq_escape_v() {
 
 # fl_template_render NAME KEY=VALUE...  (NAME is the file under templates/, without .tmpl)
 # Prints the rendered content including the resolved header line.
+# The lines go into an array and are joined once at the end: appending each
+# line to one growing string made bash copy the whole body per line, and the
+# header went in by a substitution over that body, which bash 3.2 does
+# character by character in a UTF-8 locale (94 ms for the 288 lines of
+# bench-run.sh, 17 of which hold a token). The header now goes into its own
+# lines, and the version is read in the same pass, not by a second read in a
+# subshell.
 fl_template_render() {
-  local name="$1" file body hbody line hline pair key value hash version only_token unhashed="" quoted="" fmt=bash i n=0 e
+  local name="$1" file body hbody line hline pair key value hash version="" only_token unhashed="" quoted="" fmt=bash i n=0 e
   local keys=() vals=() evals=() dkeys=() dvals=() nd=0 given dk dv nl=$'\n' bsn='\n'
+  local lines=() hidx=() hval=() tidx=() nb=0 nh=0 nt=0 vre='^#@version[[:space:]]*([0-9][0-9]*)' IFS
   shift
   file="${FL_TEMPLATE_DIR}/${name}.tmpl"
   [[ -f "$file" ]] || { fl_fail "template not found: ${file}"; return 1; }
-  version="$(fl_template_version "$file")"
   case "$name" in *.plist) fmt=xml ;; esac
   # the values once, with their escaped form for where the template says
   # they sit inside double quotes (or everywhere, in XML)
@@ -110,10 +117,15 @@ fl_template_render() {
     evals[n]="$e"
     n=$((n + 1))
   done
-  body=""; hbody=""
   while IFS= read -r line || [[ -n "$line" ]]; do
+    # a line with no __ in it holds no token, no default and no header, and one that does not
+    # start with #@ is no directive: it goes in as it is (almost every line)
+    if [[ "$line" != *__* && "$line" != '#@'* ]]; then lines[nb]="$line"; nb=$((nb + 1)); continue; fi
     case "$line" in
-      '#@version'*) continue ;;
+      '#@version'*)
+        # the first line that names a number is the version (what fl_template_version reads)
+        if [[ -z "$version" && "$line" =~ $vre ]]; then version="${BASH_REMATCH[1]}"; fi
+        continue ;;
       '#@unhashed'*) unhashed="${unhashed} ${line#'#@unhashed'} "; continue ;;
       '#@quoted'*) quoted="${line#'#@quoted'}"; quoted=" ${quoted%%#*} "; continue ;;
       '#@default '*)
@@ -123,40 +135,47 @@ fl_template_render() {
         if [[ "$given" == "0" ]]; then dkeys[nd]="$dk"; dvals[nd]="${dv//"$bsn"/$nl}"; nd=$((nd + 1)); fi
         continue ;;
     esac
-    # a line with no __ in it holds no token, no default and no header: it goes in as it is
-    # (almost every line, and each of the others costs a substitution per key)
-    if [[ "$line" != *__* ]]; then body="${body}${line}"$'\n'; hbody="${hbody}${line}"$'\n'; continue; fi
+    if [[ "$line" != *__* ]]; then lines[nb]="$line"; nb=$((nb + 1)); continue; fi
     only_token=0
     [[ "$line" =~ ^__[A-Z_]+__$ ]] && only_token=1
+    # a default stands in first, so the tokens inside it are filled below
+    for ((i = 0; i < nd; i++)); do
+      dv="${dvals[$i]}"
+      line="${line//__${dkeys[$i]}__/$dv}"
+    done
     hline="$line"
-    # most lines hold no token: they skip both loops (126 ms a render before)
-    if [[ "$line" == *__* ]]; then
-      # a default stands in first, so the tokens inside it are filled below
-      for ((i = 0; i < nd; i++)); do
-        dv="${dvals[$i]}"
-        line="${line//__${dkeys[$i]}__/$dv}"
-      done
-      hline="$line"
-      for ((i = 0; i < n; i++)); do
-        key="${keys[$i]}"
-        value="${vals[$i]}"
-        if [[ "$fmt" == xml ]]; then value="${evals[$i]}"
-        elif [[ -n "$quoted" ]]; then case "$quoted" in *" ${key} "*) value="${evals[$i]}" ;; esac
-        fi
-        line="${line//__${key}__/$value}"
-        # the hashed copy keeps an unhashed key's token
-        if [[ -n "$unhashed" ]]; then
-          case "$unhashed" in *" ${key} "*) ;; *) hline="${hline//__${key}__/$value}" ;; esac
-        fi
-      done
-    fi
-    [[ -n "$unhashed" ]] || hline="$line"
+    for ((i = 0; i < n; i++)); do
+      key="${keys[$i]}"
+      value="${vals[$i]}"
+      if [[ "$fmt" == xml ]]; then value="${evals[$i]}"
+      elif [[ -n "$quoted" ]]; then case "$quoted" in *" ${key} "*) value="${evals[$i]}" ;; esac
+      fi
+      line="${line//__${key}__/$value}"
+      # the hashed copy keeps an unhashed key's token
+      if [[ -n "$unhashed" ]]; then
+        case "$unhashed" in *" ${key} "*) ;; *) hline="${hline//__${key}__/$value}" ;; esac
+      fi
+    done
     [[ "$only_token" == "1" && -z "$line" ]] && continue
-    body="${body}${line}"$'\n'
-    hbody="${hbody}${hline}"$'\n'
+    # the hashed copy differs from the body only in the lines noted here
+    if [[ -n "$unhashed" && "$hline" != "$line" ]]; then hidx[nh]="$nb"; hval[nh]="$hline"; nh=$((nh + 1)); fi
+    # the header goes in once the hash is known, into the lines that hold its token
+    if [[ "$line" == *__HEADER__* ]]; then tidx[nt]="$nb"; nt=$((nt + 1)); fi
+    lines[nb]="$line"; nb=$((nb + 1))
   done <"$file"
+  [[ "$nb" -gt 0 ]] || return 0
+  IFS="$nl"
+  if [[ "$nh" -gt 0 ]]; then
+    for ((i = 0; i < nh; i++)); do e="${lines[${hidx[$i]}]}"; lines[${hidx[$i]}]="${hval[$i]}"; hval[i]="$e"; done
+    hbody="${lines[*]}${nl}"
+    for ((i = 0; i < nh; i++)); do lines[${hidx[$i]}]="${hval[$i]}"; done
+  else
+    hbody="${lines[*]}${nl}"
+  fi
   hash="$(printf '%s' "$hbody" | fl_content_hash)"
-  printf '%s' "${body//__HEADER__/${FL_TEMPLATE_TOKEN}: ${name} v${version:-1} ${hash}}"
+  value="${FL_TEMPLATE_TOKEN}: ${name} v${version:-1} ${hash}"
+  for ((i = 0; i < nt; i++)); do line="${lines[${tidx[$i]}]}"; lines[${tidx[$i]}]="${line//__HEADER__/$value}"; done
+  printf '%s\n' "${lines[*]}"
 }
 
 # fl_template_header_line_v VAR LINE: "<name> vN <hash>" when LINE holds a

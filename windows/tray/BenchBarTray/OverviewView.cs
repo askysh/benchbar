@@ -57,7 +57,7 @@ internal static class TerminalLauncher
 /// BenchOverview). Rebuilt only when something it shows changed. Everything it adds costs nothing at rest: the uptime is worked out from
 /// the status the poll already reads, and <c>lock check</c> runs when the tab is shown, once per bench, and on Check Again.
 /// </summary>
-internal sealed class OverviewView : UserControl
+internal sealed partial class OverviewView : UserControl
 {
     private readonly OverviewActions _actions;
     private readonly HashSet<string> _busy = [];
@@ -65,6 +65,8 @@ internal sealed class OverviewView : UserControl
     private readonly HashSet<string> _lockRunning = [];
     private readonly Dictionary<string, (string Message, BenchState State)> _failures = [];
     private readonly Dictionary<string, string> _portConflict = [];
+    private readonly Dictionary<string, string> _lastVerb = [];
+    private ActivityCard? _activity;
     private readonly Dictionary<string, LockOutcome> _locks = [];
     private readonly Dictionary<string, bool?> _autostart = [];
     private readonly HashSet<string> _autostartAsked = [];
@@ -144,6 +146,7 @@ internal sealed class OverviewView : UserControl
     {
         _services = services;
         _navigate = navigate;
+        _activity = new ActivityCard(services.Cli);
         Confirm = (title, message) =>
             MessageBox.Show(services.Owner(), message, title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
     }
@@ -158,6 +161,7 @@ internal sealed class OverviewView : UserControl
             _autostart.GetValueOrDefault(bench.Path), _autostartBusy.Contains(bench.Path), _catalogue is not null, ReadyKey(bench.Ready));
         _bench = bench;
         _site = site;
+        _activity?.Bind(bench, _catalogue);
         if (key == _key) return;
         _key = key;
         Rebuild(bench);
@@ -234,8 +238,9 @@ internal sealed class OverviewView : UserControl
 
         var labels = new List<string>();
         var strip = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
-        StartStopButton = Add(strip, labels, buttons.StartStopLabel, () => RunAsync(bench, Guarded(_actions.StartStop, b => b.State is BenchState.Running or BenchState.Starting ? null : PortGuardAction.Start)).Forget(), canStartStop, primary: true);
-        Add(strip, labels, "Restart", () => RunAsync(bench, Guarded(_actions.Restart, _ => PortGuardAction.Restart)).Forget(), canRestart);
+        StartStopButton = Add(strip, labels, buttons.StartStopLabel, () => RunAsync(bench, Guarded(_actions.StartStop, b => b.State is BenchState.Running or BenchState.Starting ? null : PortGuardAction.Start),
+            bench.State is BenchState.Running or BenchState.Starting ? "down" : "up").Forget(), canStartStop, primary: true);
+        Add(strip, labels, "Restart", () => RunAsync(bench, Guarded(_actions.Restart, _ => PortGuardAction.Restart), "restart").Forget(), canRestart);
         Add(strip, labels, "Open Site", () => _actions.OpenSite(bench), buttons.CanOpenSite);
         Add(strip, labels, "Logs", () => _actions.ShowLogs(bench), true);
         Add(strip, labels, "Health", () => _actions.ShowHealth(bench), true);
@@ -245,7 +250,11 @@ internal sealed class OverviewView : UserControl
         root.Children.Add(strip);
         ButtonLabels = labels;
 
-        if (_failures.TryGetValue(bench.Path, out var failure)) root.Children.Add(Banner(failure.Message));
+        if (_failures.TryGetValue(bench.Path, out var failure))
+        {
+            root.Children.Add(Banner(failure.Message));
+            if (LeaseBreakRow(bench, failure.Message) is { } leaseRow) root.Children.Add(leaseRow);
+        }
         else if (bench.Problem is { } problem) root.Children.Add(Banner(problem));
         if (MessageText.Length > 0) root.Children.Add(Banner(MessageText));
 
@@ -263,6 +272,11 @@ internal sealed class OverviewView : UserControl
         details.Children.Add(PortSettingsButton);
         root.Children.Add(Ui.CardOf(details));
 
+        if (_activity is not null)
+        {
+            if (_activity.Parent is Panel old) old.Children.Remove(_activity); // the card lives on between rebuilds; it can have one parent only
+            root.Children.Add(_activity);
+        }
         if (LockSection(bench) is { } lockSection) root.Children.Add(lockSection);
         root.Children.Add(SchedulerSection(bench, needsService));
 
@@ -311,7 +325,7 @@ internal sealed class OverviewView : UserControl
         switch (action)
         {
             case GuidanceAction.Start:
-                RunAsync(bench, Guarded(_actions.StartStop, _ => PortGuardAction.Start)).Forget();
+                RunAsync(bench, Guarded(_actions.StartStop, _ => PortGuardAction.Start), "up").Forget();
                 break;
             case GuidanceAction.ViewHealth:
                 _navigate(BenchTab.Health, false);
@@ -396,6 +410,9 @@ internal sealed class OverviewView : UserControl
             if (cli.Has("lock write")) Item("Write Lockfile...", "lock write: shows what it would write first", !needs, () => ReviewLockAsync("write").Forget());
             if (cli.Has("lock apply"))
                 Item("Apply Lockfile...", "lock apply: shows the plan first", !needs && _locks.TryGetValue(bench.Path, out var known) && known.Check is not null, () => ReviewLockAsync("apply").Forget());
+            if (cli.Has("run"))
+                Item("Run Bench Command...", "benchbar run: one command of the allow list (migrate, clear-cache, build, run-tests and the reads) in this bench; a change shows its plan first", !needs, () => RunBenchCommandAsync().Forget());
+            AddTidyItems(bench, cli, needs, Item);
             if (cli.Has("watch")) Item("Watch Assets in Terminal", "benchbar watch, in Windows Terminal. Close the window to stop it.", !needs, () => OpenShell(null, _ => OverviewArgs.InTerminal("watch", bench.Path)));
             if (cli.Has("fg"))
                 Item("Run in Foreground in Terminal", "benchbar fg: stops the background bench and runs it in a terminal. Closing the window stops it.", !needs, () => OpenShell(null, _ => OverviewArgs.InTerminal("fg", bench.Path)));
@@ -435,6 +452,65 @@ internal sealed class OverviewView : UserControl
         await _services.ReviewPlan(LockArgs.Review(verb, bench.Path)).ConfigureAwait(true);
         _locks.Remove(bench.Path);
         await CheckLockAsync(bench).ConfigureAwait(true);
+    }
+
+    // --- leases and benchbar run ---
+
+    /// <summary>The leases, resource charts and running operations card (for tests); null before <see cref="Attach"/>.</summary>
+    internal ActivityCard? Activity => _activity;
+
+    /// <summary>The Break Lease row under a failure line (for tests); null when there is none.</summary>
+    internal Button? BreakLeaseButton { get; private set; }
+
+    /// <summary>
+    /// A start, stop or restart that a lease refused: the holder and until when (the CLI's own sentence), and a Break Lease button. Breaking is the
+    /// person's own choice: it asks first, then runs the same command with <c>--break-lease</c> as the person. Nothing else here breaks a lease.
+    /// </summary>
+    private UIElement? LeaseBreakRow(BenchStatus bench, string message)
+    {
+        BreakLeaseButton = null;
+        if (_services is null || LeaseRefusal.Parse(message) is not { } lease || !_lastVerb.TryGetValue(bench.Path, out var verb)) return null;
+        var row = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var button = Ui.Button("Break Lease...", () => BreakLeaseAsync(bench, verb, lease).Forget(), "Break the lease of " + lease.Holder, minWidth: 0);
+        button.ToolTip = LeaseRefusal.BreakHelp;
+        button.Margin = new Thickness(8, 0, 0, 0);
+        DockPanel.SetDock(button, Dock.Right);
+        row.Children.Add(button);
+        row.Children.Add(Ui.Text(lease.Sentence(), 13, FontWeights.SemiBold));
+        BreakLeaseButton = button;
+        return row;
+    }
+
+    /// <summary>Asks first, then runs <c>VERB --break-lease</c> as the person. A no changes nothing.</summary>
+    internal async Task BreakLeaseAsync(BenchStatus bench, string verb, LeaseRefusal lease)
+    {
+        if (_services is null) return;
+        var what = verb switch { "down" => "Stop", "restart" => "Restart", _ => "Start" };
+        if (!_services.Confirm($"Break the lease of {lease.Holder}?", lease.BreakQuestion($"{what} {bench.Name}"), "Break Lease and Run")) return;
+        _busy.Add(bench.Path);
+        _failures.Remove(bench.Path);
+        Refresh();
+        var result = await _services.Cli.RunStreamAsync([verb, "--break-lease", "--bench-dir", bench.Path], ActivityText.ClickEnvironment(), TimeSpan.FromMinutes(5), _ => { }).ConfigureAwait(true);
+        _busy.Remove(bench.Path);
+        if (!result.Ok) _failures[bench.Path] = (result.Problem ?? $"It did not work (exit {result.Exit}).", bench.State);
+        else _services.RefreshNow();
+        Refresh();
+    }
+
+    /// <summary>What the Run Bench Command dialog returns: a change to review. The default opens the dialog; tests replace it.</summary>
+    internal Func<BenchStatus, string?, RunInput?>? AskRunCommand { get; set; }
+
+    /// <summary>
+    /// Run Bench Command: one command of the allow list. A read runs in the dialog; a change comes back here and goes through the plan sheet
+    /// (<c>run --dry-run --json</c>, then <c>--apply TOKEN --yes</c>). Public so a test can await it.
+    /// </summary>
+    internal async Task RunBenchCommandAsync()
+    {
+        if (_services is null || _bench is not { } bench) return;
+        var chosen = AskRunCommand is { } ask ? ask(bench, _site) : RunCommandDialog.Ask(_services, bench, _site, _services.Theme(), _services.Owner());
+        if (chosen is null) return;
+        var outcome = await _services.ReviewPlan(RunCommands.Review(chosen, bench.Path)).ConfigureAwait(true);
+        if (outcome.Applied) _services.RefreshNow();
     }
 
     /// <summary><c>service</c> through its plan and token: install or refresh the background service, with or without the scheduler.</summary>
@@ -613,7 +689,7 @@ internal sealed class OverviewView : UserControl
             var outcome = await ReviewServiceAsync(bench, on).ConfigureAwait(true);
             _schedulerBusy.Remove(bench.Path);
             if (outcome.Applied && (_bench ?? bench).State is BenchState.Running or BenchState.Starting)
-                await RunAsync(_bench ?? bench, Guarded(_actions.Restart, _ => PortGuardAction.Restart)).ConfigureAwait(true);
+                await RunAsync(_bench ?? bench, Guarded(_actions.Restart, _ => PortGuardAction.Restart), "restart").ConfigureAwait(true);
             else
                 Refresh();
             return;
@@ -635,7 +711,7 @@ internal sealed class OverviewView : UserControl
         _services.RefreshNow();
         var current = _bench ?? bench;
         if (current.State is BenchState.Running or BenchState.Starting)
-            await RunAsync(current, Guarded(_actions.Restart, _ => PortGuardAction.Restart)).ConfigureAwait(true);
+            await RunAsync(current, Guarded(_actions.Restart, _ => PortGuardAction.Restart), "restart").ConfigureAwait(true);
         else
             Refresh();
     }
@@ -676,10 +752,12 @@ internal sealed class OverviewView : UserControl
 
     private static UIElement Banner(string text) => Ui.CardOf(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Foreground = Ui.CriticalBrush });
 
-    private async Task RunAsync(BenchStatus bench, Func<BenchStatus, Task<ActionResult>> action)
+    private async Task RunAsync(BenchStatus bench, Func<BenchStatus, Task<ActionResult>> action, string? verb = null)
     {
         _busy.Add(bench.Path);
         _failures.Remove(bench.Path);
+        if (verb is null) _lastVerb.Remove(bench.Path);
+        else _lastVerb[bench.Path] = verb;
         Refresh();
         ActionResult result;
         try

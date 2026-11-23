@@ -538,6 +538,59 @@ tray does not add a hosts line, so a name that does not end in `.localhost`
 shows a note. **Watch Assets in Terminal** and **Run in Foreground in
 Terminal** (above) are the tray's `watch` and `fg`; **Logs** follows the log.
 
+**Snapshots...** in the menu of a site (offered when the CLI has `site
+snapshots` and `site rollback`) takes a snapshot of the site, with a label if
+you like (`benchbar site snapshot`; nothing in the site changes), lists the
+snapshots with their age, size and whether the bench's apps are still the
+same, and has **Roll Back...** and **Remove...** on each. Roll Back asks you
+to type the site name, then shows the plan of `site rollback --dry-run --json`
+(a snapshot of the site as it is now is taken first, so the rollback can be
+undone; migrate runs only when the apps differ) and runs `--apply TOKEN
+--yes` with the token of that plan. The default site can be rolled back too,
+as you, and the plan says so. Remove asks first and is never offered for the
+undo point of the last rollback; that stays a Terminal command.
+
+While an agent holds a lease on the bench or one of its sites, the Overview
+says who holds it and until when (`benchbar lease list`). BenchBar never
+takes, renews or releases a lease. A start, stop or restart, and an app
+change, a restore or a rollback that a lease refuses, shows the holder and
+until when and changes nothing. **Break Lease...** is your own choice: it
+asks, then runs the same command again with `--break-lease`, which the CLI
+allows only to a person, and the run is in the History. The Overview also
+charts the CPU and memory of a running bench, with its process count and the
+runner speed (`benchbar stats`), and lists the background operations of the
+bench (`benchbar op list`). They are read every five seconds, only while
+the Overview is on screen and the CLI has the command, and nothing runs
+while the window is closed or another page is shown. **History** below the
+benches lists what ran on this computer and changed something
+(`benchbar history`), newest first: who started it (BenchBar, the tray,
+Terminal, an agent through MCP, a script), how it ended and what it changed.
+It is the CLI's record and read only; nothing there runs anything again.
+
+**Run Bench Command...** in the More menu of the Overview (offered when the CLI
+has `run`) runs one command of the allow list of `benchbar run`: `migrate`,
+`clear-cache`, `clear-website-cache`, `build`, `run-tests` and the reads
+`doctor`, `list-apps` and `version`, with the flags the command takes. A read
+runs at once and shows its output. A change shows the plan of `run --dry-run
+--json` (the exact command, what it touches, whether a backup comes first and
+the deadline) and runs `--apply TOKEN --yes` with the token of that plan. The
+output of a change is in the run's log, which the result shows.
+
+**Tidy Up...**, **Forget Bench...**, **Remove Bench...** and **Remove Service...**
+in the More menu of the Overview (each offered when the CLI lists its command)
+are the end of a bench's life. **Tidy Up...** marks the bench scratch for 1 to 90
+days (`bench scratch`) or not, lists the scratch benches that expired (`bench gc
+--dry-run`, read when it opens) and the databases that no site of any bench
+refers to (`db orphans`, which needs the MariaDB root password the CLI already
+keeps). **Remove Expired...** shows the plan of `bench gc` and runs `--apply
+TOKEN --yes` with that plan's token. **Forget Bench...** shows the plan of
+`bench forget` (the folder, sites and databases stay); **Remove Bench...** asks
+you to type the folder name, then shows the plan of `bench remove`: each site is
+backed up and its database dropped, and the folder is moved to a trash folder
+next to it, never deleted. **Remove Service...** is `uninstall-service` for that
+one bench, never `--all`, after its dry run. The tray never drops an orphan
+database: you drop one in Terminal after a backup.
+
 **Quick Switch...** in the tray menu opens a small panel over any window:
 Administrator, your pinned users and, when you type two letters or more,
 the site's other users. Up, Down and Enter choose, **0** to **9** open a row
@@ -923,7 +976,12 @@ every distro, so stop your benches first).
 
 ## What the tray does not do
 
-- It has no CPU source for the runner, so the runner runs at one speed.
+- The runner in the notification area runs at one speed. The Overview charts
+  the bench's CPU and the runner speed (`benchbar stats`) while it is on
+  screen, but sampling it for the icon would keep a timer running at rest.
+- It has no entry for `benchbar site hosts --prune`. That command is for the
+  macOS hosts file, and the tray never edits the Windows one (a `*.localhost`
+  name needs no line).
 - It never reads files inside the distro: every fact comes from
   `benchbar.exe`.
 - Quick Switch has no global keyboard shortcut yet: open it from the tray

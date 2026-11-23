@@ -3,7 +3,7 @@ title: "share and lan-guard"
 description: "benchbar share setup, start, code, invite, lock, people, remove, assign, log, open-as, stop and teardown, and benchbar lan-guard: a room on your Wi-Fi where people sign in to a hardened copy of a dev site."
 ---
 
-**share is an experiment: run `benchbar labs on lan-rooms` first.** While the lab is off, `share` and `lan-guard` are hidden from `--help` and `commands --json` (listed under `gated`) and exit 2 with that hint. `benchbar labs off lan-rooms` stops a running share and, if lan-guard is installed, warns with `run: benchbar lan-guard remove` (it never uses sudo itself).
+**share is an experiment: run `benchbar labs on lan-rooms` first.** While the lab is off, `share` and `lan-guard` are hidden from `--help` and `commands --json` (listed under `gated`) and exit 2 with that hint. The commands that stop, remove or report what the lab started still run while it is off: `share stop`, `share status`, `share teardown`, `lan-guard status` and `lan-guard remove`. `benchbar labs off lan-rooms` stops a running share and, if lan-guard is installed or `lan-guard allow-node` put node on the macOS firewall's list, warns with `run: benchbar lan-guard remove` (it never uses sudo itself).
 
 Sharing opens a **room** on this computer's network. People on the same Wi-Fi
 join it with a 6 digit **room code**, take a **seat** (one of the Frappe
@@ -500,6 +500,17 @@ A token from before a reboot is stale, and releasing it is harmless. The
 boot daemon takes a reference of its own at every boot; it ends at the next
 reboot, because remove deletes the daemon.
 
+On macOS it also takes out of the firewall's allowed apps every node that
+`lan-guard allow-node` added (`socketfilterfw --remove PATH`), in the same
+root step, so one password covers both. It does so too when the guard itself
+is not installed. An entry that you made yourself in System Settings, or
+that a BenchBar before 0.9.0 added (it kept no record), is left alone: when
+the firewall is on and still allows the gateway's node, remove prints the
+command that takes the entry out.
+
+`lan-guard remove` runs while the `lan-rooms` Lab is off, so the Lab can
+always be undone.
+
 ```bash
 benchbar lan-guard remove
 ```
@@ -513,7 +524,15 @@ benchbar lan-guard allow-node [--yes] [--json]
 Adds the realpath of the node the gateway runs on to the macOS firewall's
 allowed apps, with sudo once. "Unchanged" when the firewall is off or
 already allows it. A Homebrew upgrade of node changes the realpath, so the
-`firewall_node` check asks for it again.
+`firewall_node` check asks for it again; that run also takes the entry of
+the older node out.
+
+The firewall keeps its list by program. The entry lets every script that
+this node runs accept incoming connections, on every network, not only the
+gateway of a room: a dev server on another port is then reachable without
+the firewall's own question. The command says so before it asks.
+BenchBar records the path it added (`lan-guard/firewall.allowed` in its
+state folder), and `benchbar lan-guard remove` takes the entry out again.
 
 ```bash
 benchbar lan-guard allow-node
