@@ -176,7 +176,7 @@ struct ShareModelsTests {
         #expect(people.seats[1] == ShareSeat(id: "s_5678efab", fullName: "Mgr Singh", roles: ["Sales Manager", "Accounts User"]))
         #expect(people.seatMode == .host)
         // a CLI before 0.9.0 sends neither
-        let old = try BenchJSON.decode(SharePeople.self, from: Data(#"{"state":"on","people":[]}"#.utf8))
+        let old = try BenchJSON.decode(SharePeople.self, from: Data(#"{"schema_version":1,"cli_version":"0.8.3","state":"on","people":[]}"#.utf8))
         #expect(old.seats.isEmpty && old.seatMode == nil)
         #expect(try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status")).seatMode == .open)
         #expect(try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status-old")).seatMode == nil)
