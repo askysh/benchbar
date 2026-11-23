@@ -115,10 +115,25 @@ public sealed record PlanReviewRequest(string Title, IReadOnlyList<string> PlanA
     /// <summary>Lines about the plan the CLI made (one per app of an add), shown under the summary of the review.</summary>
     public Func<PlanDocument, IReadOnlyList<string>>? Describe { get; init; }
 
+    /// <summary>The name the person types before the apply is offered (a site that is dropped where it was); null asks for nothing. Confirm is then never the default button.</summary>
+    public string? ConfirmName { get; init; }
+
+    /// <summary>A rule the plan must also pass before it can be confirmed (what the CLI cannot say with <c>can_apply</c>: it still needs an input).</summary>
+    public Func<PlanDocument, bool>? Allows { get; init; }
+
+    /// <summary>The button that clears what blocks this plan, or null.</summary>
+    public Func<PlanDocument, PlanResolver?>? BlockedBy { get; init; }
+
+    /// <summary>The label of the button that reads the plan again after a stale token or a failure.</summary>
+    public string RefreshLabel { get; init; } = "Refresh Plan";
+
     /// <summary><c>baseArgs --dry-run --json</c> to plan, <c>baseArgs --apply TOKEN --yes --jsonl</c> to apply.</summary>
     public static PlanReviewRequest Tokened(string title, IReadOnlyList<string> baseArgs) => new(
         title, [.. baseArgs, "--dry-run", "--json"], plan => [.. baseArgs, "--apply", plan.Token ?? "", "--yes", "--jsonl"]);
 }
+
+/// <summary>What stands between a plan and its apply that a button of the sheet can clear (a running bench: Stop Bench), and what that button does. True when it worked.</summary>
+public sealed record PlanResolver(string Label, Func<Task<bool>> Resolve, string FailedText);
 
 /// <summary>The sheet's answer to its caller.</summary>
 public sealed record PlanOutcome(bool Applied, bool Cancelled, CliDone? Done)
