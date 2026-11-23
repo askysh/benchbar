@@ -32,6 +32,8 @@
 #   code         the six digits, and nothing else
 #   invite       the salt (32 hex) and the six digits, apart by a space: one reply, so no rotate between them
 #   people_json  the people as a JSON array of the documented fields only
+#   room_json    "people":[...],"seats":[...]: the people, and every seat of SHARE_JSON (a sixth argument: the
+#                path of share.json) with who holds it. A seat has its id, name and roles, never its user.
 #   people_rows  a line per person, the same fields apart by \x1f
 #   wipe         wiped=N and wipe_failed=M (counts)
 # Text fields lose control, bidirectional and zero width characters (\x1f with them), so no name can
@@ -39,7 +41,7 @@
 # shellcheck disable=SC2016  # JavaScript source
 FL_JS_SHARE_ROOM='
 const net = require("net");
-const [, sock, request, mode] = process.argv.slice(1);
+const [, sock, request, mode, shareJson] = process.argv.slice(1);
 const UNSEEN = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g;
 const shown = (v) => (typeof v === "string" ? v.replace(UNSEEN, "").trim().slice(0, 200) : "");
 const finish = (code, text) => { process.stdout.write(text); process.exit(code); };
@@ -72,6 +74,18 @@ c.on("data", (chunk) => {
   if (!Array.isArray(m.people)) return finish(1, "error=bad_reply\n");
   const people = m.people.filter((p) => p && typeof p === "object").map(person).filter((p) => p.id);
   if (mode === "people_json") return finish(0, JSON.stringify(people));
+  if (mode === "room_json") {
+    let listed = [];
+    try { listed = JSON.parse(require("fs").readFileSync(shareJson, "utf8")).seats; } catch { listed = []; }
+    const seats = (Array.isArray(listed) ? listed : []).filter((s) => s && /^[A-Za-z0-9_-]{1,64}$/.test(s.seat_id)).map((s) => {
+      const holder = people.find((p) => p.seat_id === s.seat_id);
+      return {
+        seat_id: s.seat_id, full_name: shown(s.full_name), roles: (Array.isArray(s.roles) ? s.roles : []).map(shown).filter(Boolean).slice(0, 30),
+        held_by: holder ? holder.id : null, held_by_name: holder ? holder.name : null
+      };
+    });
+    return finish(0, JSON.stringify({ people, seats }).slice(1, -1));
+  }
   const cell = (v) => (v === null ? "" : String(v));
   finish(0, people.map((p) => [p.id, p.name, p.model, p.ip, p.seat_id, p.seat_full_name, p.online, p.joined, p.last_seen].map(cell).join("\x1f") + "\n").join(""));
 });'
@@ -391,7 +405,7 @@ fl_cmd_share_lock() {
 # ---------------------------------------------------------------- share people
 
 fl_cmd_share_people() {
-  local a rows line id name model ip seat full online state=on table=() held="" waiting=0
+  local a rows line id name model ip seat full online state=on table=() held="" waiting=0 seat_mode=null
   for a in "$@"; do fl_die "Unknown argument for share people: $a" "Use: benchbar share people [--json]"; done
   fl_site_json_begin
   FL_DONE_NO_STATE=1
@@ -403,9 +417,12 @@ fl_cmd_share_people() {
     fl_share_wipe_owed
   fi
   if [[ "${OPT_JSON:-0}" == 1 ]]; then
-    rows="[]"
-    if [[ "$state" == on ]]; then fl_share_room_v rows '{"op":"people"}' people_json || fl_die "The gateway did not list the people in the room." "See benchbar share status."; fi
-    fl_doc_emit 0 "$(fl_share_room_doc "\"state\":\"${state}\",\"people\":${rows}")"
+    rows='"people":[],"seats":[]'
+    if [[ "$state" == on ]]; then
+      fl_share_control_v rows '{"op":"people"}' "$FL_JS_SHARE_ROOM" room_json "$(fl_share_dir)/share.json" || fl_die "The gateway did not list the people in the room." "See benchbar share status."
+      fl_share_seat_mode_json_v seat_mode
+    fi
+    fl_doc_emit 0 "$(fl_share_room_doc "\"state\":\"${state}\",${rows},\"seat_mode\":${seat_mode}")"
     return 0
   fi
   if [[ "$state" == off ]]; then fl_info "Sharing is off: nobody is in the room."; return 0; fi

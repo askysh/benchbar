@@ -135,7 +135,7 @@ fl_share_control_v() {
   [[ -S "$__sock" ]] || return 1
   fl_sp_node_path_problem_v __problem
   if [[ -n "$__problem" ]]; then fl_log "the control socket is not asked: ${__problem}"; return 1; fi
-  __out="$("$SP_NODE_REAL" -e "${3:-$FL_JS_SHARE_CONTROL}" control "$__sock" "$2" ${4:+"$4"} </dev/null 2>/dev/null 3>&-)" || __code=$?
+  __out="$("$SP_NODE_REAL" -e "${3:-$FL_JS_SHARE_CONTROL}" control "$__sock" "$2" ${4:+"$4"} ${5:+"$5"} </dev/null 2>/dev/null 3>&-)" || __code=$?
   printf -v "$1" '%s' "$__out"
   return "$__code"
 }
@@ -161,6 +161,14 @@ fl_share_gw_str_raw_v() {
   local __text="" __re="\"$2\"[[:space:]]*:[[:space:]]*(\"([^\"\\\\]|\\\\.)*\")"
   [[ ! -f "$(fl_share_dir)/gateway.json" ]] || __text="$(<"$(fl_share_dir)/gateway.json")"
   if [[ "$__text" =~ $__re ]]; then printf -v "$1" '%s' "${BASH_REMATCH[1]}"; else printf -v "$1" '%s' ""; fi
+}
+
+# fl_share_seat_mode_json_v VAR: "host" or "open" (with the quotes), from the gateway.json of the room that
+# runs: who gives a person their seat. A file without the key is an open room.
+fl_share_seat_mode_json_v() {
+  local __m
+  fl_share_gw_str_raw_v __m seat_mode
+  if [[ "$__m" == '"host"' ]]; then printf -v "$1" '"host"'; else printf -v "$1" '"open"'; fi
 }
 
 fl_share_write_private() { # FILE MODE CONTENT: written whole (temp file, then mv), never wider than MODE
@@ -618,7 +626,7 @@ fl_share_preflight_json_v() {
 
 fl_cmd_share_status() {
   local want_pre=0 a dir sock now state=off loaded=0 reply="" started="" deadline="" ended="" degraded="null" error="null"
-  local site web_port label users seats copy lan_guard pre="null" started_json=null deadline_json=null left=0 can=0
+  local site web_port label users seats copy lan_guard pre="null" started_json=null deadline_json=null left=0 can=0 seat_mode=null
   local total=0 online=0 locked=null lock_reason=null budget=null people=0 trouble=false wipe=0 v runner_pid runner_phase phase_json=null web_up_json=null interrupted
   for a in "$@"; do
     case "$a" in
@@ -674,6 +682,8 @@ fl_cmd_share_status() {
   fi
 
   fl_share_copy_json_v copy
+  # who gives out the seats of the room that is on (null without one)
+  [[ "$state" != on ]] || fl_share_seat_mode_json_v seat_mode
   interrupted=false
   ! fl_share_setup_interrupted || interrupted=true
   fl_lg_state_v lan_guard
@@ -682,11 +692,11 @@ fl_cmd_share_status() {
 
   if [[ "${OPT_JSON:-0}" == 1 ]]; then
     FL_DONE_NO_STATE=1
-    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","protocol":%d,"bench":%s,"site":%s,"share_site":%s,"state":"%s","phase":%s,"web_up":%s,"degraded":%s,"error":%s,"label":%s,"port":%s,"web_port":%s,"lan_ip":%s,"started":%s,"deadline":%s,"seconds_left":%s,"can_extend_s":%s,"copy":%s,"allowed_users":%s,"seats":%s,"people":%s,"devices_total":%s,"devices_online":%s,"pending":0,"locked":%s,"lock_reason":%s,"budget_left":%s,"join_trouble":%s,"wipe_failed":%s,"lan_guard":"%s","preflight":%s,"setup_interrupted":%s}' \
+    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","protocol":%d,"bench":%s,"site":%s,"share_site":%s,"state":"%s","phase":%s,"web_up":%s,"degraded":%s,"error":%s,"label":%s,"port":%s,"web_port":%s,"lan_ip":%s,"started":%s,"deadline":%s,"seconds_left":%s,"can_extend_s":%s,"copy":%s,"allowed_users":%s,"seats":%s,"people":%s,"devices_total":%s,"devices_online":%s,"pending":0,"locked":%s,"lock_reason":%s,"budget_left":%s,"join_trouble":%s,"wipe_failed":%s,"lan_guard":"%s","preflight":%s,"setup_interrupted":%s,"seat_mode":%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$FL_SHARE_PROTOCOL" "$(fl_json_str "$FL_BENCH_DIR")" "$( [[ -n "$site" ]] && fl_json_str "$site" || printf 'null')" \
       "$(fl_json_str "$FL_SHARE_SITE")" "$state" "$phase_json" "$web_up_json" "$degraded" "$error" "${label:-null}" "$FL_SHARE_GATEWAY_PORT" "$web_port" \
       "$( [[ -n "$SP_LAN_IP" ]] && fl_json_str "$SP_LAN_IP" || printf 'null')" "$started_json" "$deadline_json" "$left" "$can" "$copy" "${users:-[]}" \
-      "$seats" "$people" "$total" "$online" "$locked" "$lock_reason" "$budget" "$trouble" "$wipe" "$lan_guard" "$pre" "$interrupted")"
+      "$seats" "$people" "$total" "$online" "$locked" "$lock_reason" "$budget" "$trouble" "$wipe" "$lan_guard" "$pre" "$interrupted" "$seat_mode")"
     return 0
   fi
   case "$state" in

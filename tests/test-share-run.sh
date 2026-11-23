@@ -728,6 +728,7 @@ assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "off None None 0 0 None" "$(sget '" ".join(str(x) for x in (d["state"], d["started"], d["deadline"], d["seconds_left"], d["can_extend_s"], d["web_up"]))')"
 assert_eq "3 share.localhost 8443 8001 macdev" "$(sget '" ".join(str(x) for x in (d["protocol"], d["share_site"], d["port"], d["web_port"], d["site"]))')"
 assert_eq "installed 192.168.1.20 None" "$(sget '" ".join(str(x) for x in (d["lan_guard"], d["lan_ip"], d["preflight"]))')"
+assert_eq "None" "$(sget 'd["seat_mode"]')" "(no room, so nobody gives out seats)"
 assert_eq "False 2 priya@example.com,mgr@example.com" "$(sget '" ".join(str(x) for x in (d["copy"]["drifted"], d["seats"], ",".join(d["allowed_users"])))')"
 assert_eq "True" "$(sget 'd["copy"]["made"] == "2026-11-02T10:00:00Z" and d["copy"]["source_site"] == "macdev" and isinstance(d["copy"]["age_s"], int) and d["copy"]["apps"][0]["at_copy"] == d["copy"]["apps"][0]["now"]')"
 [[ -n "$OUT" && "$OUT" != *$'\n'* ]] || fail "status --json is one line of JSON: $OUT"
@@ -800,6 +801,7 @@ assert_eq "192.168.1.20" "$(jget "$SHARE_DIR/gateway.json" 'd["listen"]["host"]'
 assert_not_contains "$(cat "$SHARE_DIR/gateway.json")" "0.0.0.0"
 # SHARE-5: without --assign-seats the room is as before, anyone in it takes a free seat
 assert_eq "open" "$(jget "$SHARE_DIR/gateway.json" 'd["seat_mode"]')"
+status_json; assert_eq "on open" "$(sget 'd["state"] + " " + d["seat_mode"]')"
 assert_eq "True" "$(jget "$SHARE_DIR/devices.json" 'd["devices"] == [] and d["blocked"] == []')" "(devices are scoped to one room)"
 # the runner names node and benchbar by absolute paths, never by PATH
 runner_text="$(cat "$SHARE_DIR/share-run.sh")"
@@ -973,6 +975,7 @@ assert_eq "host" "$(jget "$SHARE_DIR/gateway.json" 'd["seat_mode"]')"
 "$REAL_NODE" -e 'require(process.argv[1] + "/lib/frappe-local/share/config.js").load(process.argv[2], Date.now())' "$ROOT" "$SHARE_DIR/gateway.json" \
   || fail "gateway.json with seat_mode is what config.js validates"
 assert_contains "$OUT" "you give them out: benchbar share assign ID SEAT_ID"
+status_json; assert_eq "on host" "$(sget 'd["state"] + " " + d["seat_mode"]')"
 assert_eq "Lab \"b\" \$(x)" "$(jget "$SHARE_DIR/gateway.json" 'd["room_label"]')"
 assert_eq "1800" "$(jget "$SHARE_DIR/gateway.json" 'd["deadline_epoch"] - d["started_epoch"]')"
 wait_for 15 has_event '^dns-sd '
