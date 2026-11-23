@@ -116,6 +116,7 @@ site snapshot drop|site snapshot drop macdev --prune --dry-run|site snapshot dro
 site snapshots|site snapshots macdev|site snapshots nosuchsite
 site rollback|site rollback macdev --to latest --dry-run|site rollback --dry-run
 site restore|site restore macdev --from nonexist --dry-run|site restore --dry-run
+site move|site move macdev --to-bench $BENCH --dry-run|site move --dry-run
 site drop|site drop newsite --confirm-site newsite --dry-run|site drop nosuchsite --confirm-site nosuchsite --dry-run
 app list|app list|app list --bench-dir $NOBENCH
 app add|app add frappe --dry-run|app add --dry-run

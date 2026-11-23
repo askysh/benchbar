@@ -305,6 +305,12 @@ flag~site restore~--with-files~~Restore the uploads too.
 flag~site restore~--dry-run~~Print the plan and its token.
 flag~site restore~--apply~TOKEN~Run exactly that plan (with --yes).
 env~site restore~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
+cmd~site move~benchbar site move NAME --to-bench PATH [--no-migrate] --dry-run --json, then --apply TOKEN --yes~Move a site to another registered bench on this machine: a backup with files, the restore there under the same name, migrate, a check that it lists the same apps there, then the drop here (a second backup first; the backups stay in archived/sites). The source bench must be stopped (benchbar down), or writes made after the first backup would be lost. Never the default site of either bench; a failed step before the drop leaves the site here as it was. A reviewed plan.~no~yes~no~yes~document
+flag~site move~--to-bench~PATH~The bench the site goes to: a bench benchbar knows (benchbar register PATH), not this one.
+flag~site move~--no-migrate~~Stop after the restore, before bench migrate.
+flag~site move~--dry-run~~Print the plan and its token.
+flag~site move~--apply~TOKEN~Run exactly that plan (with --yes).
+env~site move~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~site snapshot~benchbar site snapshot NAME [--label TEXT] [--json]~Save the state of a site (database, files, site_config, the apps and their commits) in sites/NAME/snapshots, which frappe's backup pruning never touches. Changes nothing in the site. To remove snapshots: benchbar site snapshot drop.~no~no~no~yes~document
 flag~site snapshot~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site snapshot~--label~TEXT~What the snapshot is for (up to 120 characters, no quotes); it is part of the folder name.
