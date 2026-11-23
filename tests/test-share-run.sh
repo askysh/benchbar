@@ -407,7 +407,7 @@ render_runner() {
     "GATEWAY_PORT=8443" "PYTHON=${BENCH}/env/bin/python" "LIB=${ROOT}/lib/frappe-local" "NODE=${SB}/node" "BENCHBAR=${SB}/benchbar" \
     "DNS_SD=${SB}/dns-sd" "CAFFEINATE=${SB}/caffeinate" "LSOF=${SB}/lsof" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" \
     "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" "SOCK_SECS=${FL_SHARE_SOCK_SECS}" "WARM_SECS=${FL_SHARE_WARM_SECS}" "CURL=${SB}/curl" \
-    "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "SITE_LABEL=macdev" "ROOM_LABEL=${NASTY_ROOM}" >"$SHARE_DIR/share-run.sh"
+    "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "ROOM_LABEL=${NASTY_ROOM}" >"$SHARE_DIR/share-run.sh"
   chmod 700 "$SHARE_DIR/share-run.sh"
   printf '<plist/>\n' >"$SHARE_DIR/job.plist"
 }
@@ -451,7 +451,7 @@ assert_contains "$(order)" "wipe share.localhost keep=[]" "(the whole copy, at s
 assert_contains "$(order)" "web ${ROOT}/lib/frappe-local/share/share_web.py --site share.localhost --port 8001 CI=1 DEV_SERVER=unset cwd=${BENCH}/sites"
 assert_contains "$(order)" "preflight share preflight --json --critical --quiet --bench-dir ${BENCH} sock=${SOCK} node=${SB}/node state=${FL_STATE_DIR}"
 assert_contains "$(order)" "gateway ${SHARE_DIR}/gateway.json"
-assert_contains "$(order)" "dns-sd -R ${NASTY_ROOM} _benchbar-share._tcp local 8443 v=3 label=${NASTY_ROOM} site=macdev"
+assert_contains "$(order)" "dns-sd -R ${NASTY_ROOM} _benchbar-share._tcp local 8443 v=3 label=${NASTY_ROOM}"
 assert_contains "$(order)" "caffeinate -i -w ${RUNNER_PID}"
 assert_not_contains "$(order)" "fingerprint"
 assert_eq "${RUNNER_PID} running" "$(cat "$SHARE_DIR/phase")"
@@ -976,7 +976,7 @@ assert_contains "$OUT" "you give them out: benchbar share assign ID SEAT_ID"
 assert_eq "Lab \"b\" \$(x)" "$(jget "$SHARE_DIR/gateway.json" 'd["room_label"]')"
 assert_eq "1800" "$(jget "$SHARE_DIR/gateway.json" 'd["deadline_epoch"] - d["started_epoch"]')"
 wait_for 15 has_event '^dns-sd '
-assert_contains "$(order)" "dns-sd -R Lab \"b\" \$(x) _benchbar-share._tcp local 8443 v=3 label=Lab \"b\" \$(x) site=macdev"
+assert_contains "$(order)" "dns-sd -R Lab \"b\" \$(x) _benchbar-share._tcp local 8443 v=3 label=Lab \"b\" \$(x)"
 assert_eq "$cfg_sha" "$(shasum -a 256 "$SHARE_DIR/share.json" | awk '{print $1}')"
 cli stop
 assert_eq "0" "$CODE"

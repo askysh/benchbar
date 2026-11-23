@@ -429,6 +429,17 @@ fl__lease_scope() {
     "adopt "*) FL_LS_CLASS="W" ;;
     "site add"|"site default") FL_LS_CLASS="B" ;;
     "site drop"|"site restore") FL_LS_CLASS="S"; FL_LS_SITE="$(fl_site_arg_name)" ;;
+    "site move")
+      # the site, and both benches: the one it leaves and the one it goes to
+      FL_LS_CLASS="S"; FL_LS_SITE="$(fl_site_arg_name)"
+      fl_bench_detect "$OPT_BENCH_DIR"
+      FL_LS_BENCHES="${FL_BENCH_DIR}"$'\n'
+      for a in ${ARGS[@]+"${ARGS[@]}"}; do
+        if [[ "$prev" == "--to-bench" ]]; then FL_LS_BENCHES="${FL_LS_BENCHES}$(fl_abs_path "$a")"$'\n'; fi
+        case "$a" in --to-bench=*) FL_LS_BENCHES="${FL_LS_BENCHES}$(fl_abs_path "${a#*=}")"$'\n' ;; esac
+        prev="$a"
+      done
+      return 0 ;;
     "site rollback") FL_LS_CLASS="S"; FL_LS_SITE="$(fl_site_arg_name)" ;;
     "site snapshot")
       # only drop changes what exists; taking a snapshot adds one and never interrupts
@@ -484,22 +495,30 @@ fl__lease_covers() {
   esac
 }
 
-# fl_lease_gate: refuses, before the run lock and any change, a command that a lease stands in front of,
-# naming the holder and the end of the lease. --lease ID (repeatable) lets it through for the lease with
-# that id; --break-lease lets a person through. With no leases it reads nothing.
-fl_lease_gate() {
-  local f="${FL_STATE_DIR}/leases.tsv" line refused="" what given id unknown=""
-  [[ "${FL_DRY_RUN:-0}" != "1" && -s "$f" ]] || return 0
-  for given in $OPT_LEASES; do fl__lease_id_check "$given"; done
-  fl__lease_scope || return 0
+# fl__lease_refusal_v VAR: one sentence per active lease that stands in front of the command FL_LS_* describes
+# (not those whose id was passed with --lease), "" for none. The gate dies with it; a plan (site move) reports it.
+fl__lease_refusal_v() {
+  local __r="" line what
   fl__lease_load
   for line in ${FL_LEASE_LINES[@]+"${FL_LEASE_LINES[@]}"}; do
     fl__lease_split "$line"
     fl__lease_covers || continue
     [[ " ${OPT_LEASES} " != *" ${L_ID} "* ]] || continue
     fl__lease_what_v what
-    refused="${refused}${refused:+ }The ${what} is leased by ${L_HOLDER} until ${L_EXP}${L_NOTE:+ (${L_NOTE})}."
+    __r="${__r}${__r:+ }The ${what} is leased by ${L_HOLDER} until ${L_EXP}${L_NOTE:+ (${L_NOTE})}."
   done
+  printf -v "$1" '%s' "$__r"
+}
+
+# fl_lease_gate: refuses, before the run lock and any change, a command that a lease stands in front of,
+# naming the holder and the end of the lease. --lease ID (repeatable) lets it through for the lease with
+# that id; --break-lease lets a person through. With no leases it reads nothing.
+fl_lease_gate() {
+  local f="${FL_STATE_DIR}/leases.tsv" refused="" given id unknown=""
+  [[ "${FL_DRY_RUN:-0}" != "1" && -s "$f" ]] || return 0
+  for given in $OPT_LEASES; do fl__lease_id_check "$given"; done
+  fl__lease_scope || return 0
+  fl__lease_refusal_v refused
   [[ -n "$refused" ]] || return 0
   if [[ "${OPT_BREAK_LEASE:-0}" == "1" ]]; then
     if fl_lease_person_ok; then

@@ -235,6 +235,33 @@ assert_eq 0 "$CODE" "$OUT"
 assert_calls_not_contain '^pfctl -X'
 clean
 
+# ---------------------------------------------------------------- a root step that fails after pfctl -E keeps the token (#159 SHARE-12)
+# launchd refuses the daemon after pf was enabled: the install fails, and the token it took is on record,
+# so that remove can give the reference back (before, pf stayed enabled until the next reboot)
+clean; : >"$MOCK_STATE/agents/com.benchbar.pf.disabled"
+lg_gui install --yes
+assert_eq 1 "$CODE" "$OUT"; assert_contains "$OUT" "The root step failed"
+assert_eq "was_enabled=0 token=4242" "$(tr '\n' ' ' <"$FL_STATE_DIR/lan-guard/pf.state" | sed 's/ $//')"
+# the same on a terminal, where sudo runs the step
+clean
+lg_tty install --yes
+assert_eq 1 "$CODE" "$OUT"; assert_contains "$OUT" "The root step failed"
+assert_eq "was_enabled=0 token=4242" "$(tr '\n' ' ' <"$FL_STATE_DIR/lan-guard/pf.state" | sed 's/ $//')"
+assert_not_contains "$OUT" "benchbar-pf-" "(the markers are not for the person)"
+# the half installed guard is removed, and the token goes back
+rm -f "$MOCK_STATE/agents/com.benchbar.pf.disabled"
+reset_calls
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_calls_contain '^pfctl -X 4242$'
+assert_no_file "$FL_STATE_DIR/lan-guard/pf.state"
+# a step that fails before pf is touched records nothing
+clean; touch "$MOCK_STATE/osa_fail"
+lg_gui install --yes
+rm -f "$MOCK_STATE/osa_fail"
+assert_eq 1 "$CODE" "$OUT"; assert_no_file "$FL_STATE_DIR/lan-guard/pf.state"
+clean
+
 # ---------------------------------------------------------------- allow-node: the realpath, unchanged when allowed or off
 clean; rm -f "$MOCK_STATE/osa_reasons"
 lg_gui allow-node --yes
