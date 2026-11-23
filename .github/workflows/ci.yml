@@ -395,13 +395,24 @@ jobs:
         if: failure()
         run: scripts/ci-real.sh logs
 
+      - name: Upload the logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: real-install-logs-linux-${{ matrix.profile }}-${{ github.run_attempt }}
+          path: |
+            ~/.local/state/benchbar/logs
+            ~/frappe-bench/logs
+          if-no-files-found: ignore
+          retention-days: 14
+
   # The upgrade a person on 0.8.3 gets: that release through its own
   # install.sh, a bench and a site made by it and left running, then this
   # checkout as the update (install.sh --yes pulls the managed checkout). The
   # bench must still be known, the one time notices show once, doctor names
   # the service files repair rewrites, and after repair and a restart the site
-  # answers and nothing listens off loopback. KNOWN_GAPS: a check that fails
-  # for a gap another pull request fixes warns instead (scripts/ci-real.sh).
+  # answers, nothing listens off loopback and doctor has no WARN left. No
+  # check is excused (KNOWN_GAPS of scripts/ci-real.sh is not set).
   cli-linux-upgrade:
     name: Upgrade from 0.8.3 (Linux, systemd --user)
     needs: changes
@@ -410,7 +421,6 @@ jobs:
     timeout-minutes: 60
     env:
       ADMIN_PASSWORD: admin-ci-only
-      KNOWN_GAPS: listen-restart
     steps:
       # the whole history and the tags: the old release is installed from a
       # mirror of this checkout
@@ -438,9 +448,23 @@ jobs:
       - name: repair, restart, the site answers on loopback only
         run: scripts/ci-real.sh upgrade-repair
 
+      - name: doctor has no WARN left after the upgrade
+        run: scripts/ci-real.sh upgrade-clean
+
       - name: Logs on failure
         if: failure()
         run: scripts/ci-real.sh logs
+
+      - name: Upload the logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: real-upgrade-logs-linux-${{ github.run_attempt }}
+          path: |
+            ~/.local/state/benchbar/logs
+            ~/frappe-bench/logs
+          if-no-files-found: ignore
+          retention-days: 14
 
   # The Windows shim: vet, unit tests (a fake wsl.exe, so Linux is enough)
   # and both Windows builds, uploaded as one artifact. Runs when windows/shim

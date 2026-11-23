@@ -20,11 +20,13 @@
 #   scripts/ci-real.sh upgrade-doctor     doctor names what repair must rewrite
 #   scripts/ci-real.sh upgrade-repair     repair, restart, the site answers, loopback only
 #   scripts/ci-real.sh upgrade-no-uv      macOS: a bench whose Mac has no uv
+#   scripts/ci-real.sh upgrade-clean      doctor after the upgrade has no WARN but the listed ones
 #   scripts/ci-real.sh logs               what helps after a failure
 #
 # Environment: ADMIN_PASSWORD (the site's Administrator login, a throwaway
 # value of the workflow), SITE (default: the platform's default site),
-# PROFILE (default: the CLI's), KNOWN_GAPS (see known_gap below).
+# PROFILE (default: the CLI's), KNOWN_GAPS (see known_gap below; no workflow
+# sets it today, so every check fails the job).
 #
 # A check prints "[OK]" or "[FAIL]" and the job goes on, so one run shows
 # every broken check; the subcommand exits 1 at its end when one failed.
@@ -48,6 +50,15 @@ WEB_PORT=8000
 SOCKETIO_PORT=9000
 MIRROR="${RUNNER_TEMP}/benchbar-mirror.git"
 MANAGED="$HOME/.local/share/benchbar"
+# The bench command of the 0.8.3 baseline on macOS, from pipx: the version the
+# first green run installed, so the baseline does not move with PyPI. pipx and
+# uv themselves come from Homebrew, which has no old versions to name.
+BASELINE_BENCH="frappe-bench==5.31.1"
+# The doctor checks that may warn after the upgrade, per platform, each with
+# its reason. Anything else that is not ok fails upgrade-clean.
+#   (none yet)
+UPGRADE_WARN_OK_DARWIN=""
+UPGRADE_WARN_OK_LINUX=""
 # the CLI under test: the checkout's for a fresh install, the installed one
 # (the managed checkout the one line installer made) in the upgrade jobs
 if [[ -e "${RUNNER_TEMP}/ci-real-installed" ]]; then CLI="$HOME/.local/bin/benchbar"; else CLI="$ROOT/benchbar"; fi
@@ -312,7 +323,7 @@ cmd_old_install() {
     local bindir
     command -v pipx >/dev/null 2>&1 || HOMEBREW_NO_AUTO_UPDATE=1 brew install pipx
     HOMEBREW_NO_AUTO_UPDATE=1 brew install uv
-    pipx install frappe-bench
+    pipx install "$BASELINE_BENCH"
     bindir="$(pipx environment --value PIPX_BIN_DIR)"
     export PATH="${bindir}:$PATH"
     printf '%s\n' "$bindir" >>"$GITHUB_PATH"
@@ -444,7 +455,28 @@ cmd_upgrade_repair() {
   doctor_json "$d"
   doctor_no_fail "$d" "after the upgrade"
   if [[ "$(check_field "$d" bench_listen status)" == ok ]]; then ok "doctor: bench_listen is ok"; else bad "doctor: bench_listen is '$(check_field "$d" bench_listen status)' ($(check_field "$d" bench_listen message))"; fi
+  cp "$d" "${RUNNER_TEMP}/doctor-after-upgrade.json"
   finish upgrade-repair
+}
+
+# After repair and a restart the upgraded bench is as good as a new one: no
+# check of doctor is left at WARN or FAIL, but the ones listed above for the
+# platform. Read from the doctor run upgrade-repair ended with.
+cmd_upgrade_clean() {
+  local d="${RUNNER_TEMP}/doctor-after-upgrade.json" allowed left
+  if [[ "$OS" == Darwin ]]; then allowed="$UPGRADE_WARN_OK_DARWIN"; else allowed="$UPGRADE_WARN_OK_LINUX"; fi
+  [[ -s "$d" ]] || die "no doctor run of upgrade-repair to read (${d})"
+  left="$(py 'import json, sys
+allowed = sys.argv[2].split()
+for c in json.load(open(sys.argv[1]))["checks"]:
+    if c["status"] != "ok" and c["id"] not in allowed:
+        print("%s (%s): %s" % (c["id"], c["status"], c["message"]))' "$d" "$allowed")"
+  if [[ -z "$left" ]]; then
+    ok "doctor after the upgrade: every check is ok${allowed:+, but the allowed ${allowed}}"
+  else
+    while IFS= read -r line; do bad "doctor after the upgrade: ${line}"; done <<<"$left"
+  fi
+  finish upgrade-clean
 }
 
 # Known gap uv-missing (macOS). A Mac whose bench was made before
@@ -515,6 +547,7 @@ case "${1:-}" in
   upgrade-doctor) cmd_upgrade_doctor ;;
   upgrade-repair) cmd_upgrade_repair ;;
   upgrade-no-uv) cmd_upgrade_no_uv ;;
+  upgrade-clean) cmd_upgrade_clean ;;
   logs) cmd_logs ;;
-  *) die "usage: ci-real.sh prepare|install|second-install|serve|down|old-install TAG|update|upgrade-state|upgrade-doctor|upgrade-repair|upgrade-no-uv|logs" ;;
+  *) die "usage: ci-real.sh prepare|install|second-install|serve|down|old-install TAG|update|upgrade-state|upgrade-doctor|upgrade-repair|upgrade-no-uv|upgrade-clean|logs" ;;
 esac

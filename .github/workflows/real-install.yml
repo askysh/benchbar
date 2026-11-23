@@ -25,9 +25,10 @@
 #                        gate (scripts/release-ci-gate.sh) needs a passed
 #                        "Real install result (macOS)" on it
 #
-# KNOWN_GAPS names the checks that fail for a product gap another pull request
-# fixes: they warn instead of failing. A run by hand with `strict` on fails on
-# them, and a check that passes although it is listed says so in a notice.
+# No check is excused: the result job is what the release gate reads, so a
+# check that fails for a known product gap fails the run (scripts/ci-real.sh
+# has KNOWN_GAPS for a gap someone is fixing; nothing sets it here). A failed
+# job uploads benchbar's run logs and the bench's logs as an artifact.
 name: Real install (macOS)
 
 on:
@@ -41,11 +42,6 @@ on:
         description: 'Jobs to run, space separated, from: install upgrade (empty: both, and only then is there a result for the release gate)'
         required: false
         default: ''
-      strict:
-        description: Fail on the known gaps too (KNOWN_GAPS is empty)
-        type: boolean
-        required: false
-        default: false
   pull_request:
     types: [labeled]
 
@@ -62,7 +58,6 @@ concurrency:
 env:
   # the Administrator login of a site that lives for one job on a throwaway runner
   ADMIN_PASSWORD: admin-ci-only
-  KNOWN_GAPS: ${{ inputs.strict != true && 'listen-restart uv-missing' || '' }}
   HOMEBREW_NO_ANALYTICS: "1"
   HOMEBREW_NO_ENV_HINTS: "1"
 
@@ -98,6 +93,17 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: scripts/ci-real.sh logs
+
+      - name: Upload the logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: real-install-logs-macos-${{ github.run_attempt }}
+          path: |
+            ~/.local/state/benchbar/logs
+            ~/frappe-bench/logs
+          if-no-files-found: ignore
+          retention-days: 14
 
   upgrade:
     name: Upgrade from 0.8.3 (macOS, launchd)
@@ -136,9 +142,23 @@ jobs:
       - name: A Mac with no uv (env rebuild)
         run: scripts/ci-real.sh upgrade-no-uv
 
+      - name: doctor has no WARN left after the upgrade
+        run: scripts/ci-real.sh upgrade-clean
+
       - name: Logs on failure
         if: failure()
         run: scripts/ci-real.sh logs
+
+      - name: Upload the logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: real-upgrade-logs-macos-${{ github.run_attempt }}
+          path: |
+            ~/.local/state/benchbar/logs
+            ~/frappe-bench/logs
+          if-no-files-found: ignore
+          retention-days: 14
 
   # The verdict the release gate reads. Only a run of both jobs has one: a run
   # by hand that names jobs, and a label that is not test-real, skip it.
