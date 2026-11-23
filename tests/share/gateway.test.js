@@ -638,6 +638,28 @@ test("every bypass attempt is 400, 403 or 404 and upstream records zero hits", a
     });
 });
 
+test("an uploaded HTML, SVG or untyped file comes back as a sandboxed download; an image or PDF only loses sniffing; pages are untouched", async () => {
+    const c = cert("upload1");
+    await withGateway({ devices: [deviceRow(c)] }, async (gw) => {
+        for (const p of ["/files/evil.html", "/private/files/evil.svg", "/files/feed.xml", "/files/blob.bin", "/files/blob.dat"]) {
+            const r = await request(gw, { path: p, cert: c });
+            assert.strictEqual(r.status, 200, p);
+            assert.strictEqual(r.headers["content-security-policy"], "sandbox; default-src 'none'", p);
+            assert.strictEqual(r.headers["content-disposition"], "attachment", p);
+            assert.strictEqual(r.headers["x-content-type-options"], "nosniff", p);
+            assert.strictEqual(r.text, "file-body", p);
+        }
+        const png = await request(gw, { path: "/files/logo.png", cert: c });
+        assert.deepStrictEqual([png.headers["content-security-policy"], png.headers["content-disposition"], png.headers["x-content-type-options"]], [undefined, undefined, "nosniff"]);
+        const pdf = await request(gw, { path: "/private/files/report.pdf", cert: c });
+        assert.deepStrictEqual([pdf.headers["content-security-policy"], pdf.headers["content-disposition"]], [undefined, 'inline; filename="report.pdf"']);
+        const missing = await request(gw, { path: "/files/missing.html", cert: c });
+        assert.deepStrictEqual([missing.status, missing.headers["content-disposition"], missing.headers["x-content-type-options"]], [404, undefined, "nosniff"]);
+        const page = await request(gw, { path: "/app", cert: c });
+        assert.deepStrictEqual([page.headers["content-security-policy"], page.headers["content-disposition"], page.headers["x-content-type-options"]], [undefined, undefined, undefined]);
+    });
+});
+
 test("socket.io, including a WebSocket upgrade, is 404 and reaches nothing", async () => {
     const c = cert("paired4");
     await withGateway({ devices: [deviceRow(c)] }, async (gw) => {
@@ -866,6 +888,64 @@ test("take a seat, switch (the old user is wiped, canonical user only), a held s
         for (const bad of ['{"seat_id":5}', '{"seat_id":"seat1","x":1}', "{}", "[]"]) {
             assert.strictEqual((await request(gw, { method: "POST", path: "/_benchbar/seat", cert: a, body: bad })).status, 400, bad);
         }
+    });
+});
+
+// ---- the host gives out the seats (#159 SHARE-5): the code lets a person in, it does not choose their seat
+test("host seats: a guest cannot take or switch a seat; the host's assign gives it and moves it", async () => {
+    const a = cert("host-a");
+    await withGateway({ config: { seat_mode: "host" } }, async (gw) => {
+        await joinGuest(gw, a, "10.60.0.1");
+        const pick = (seat_id, headers = AS_JSON) => request(gw, { method: "POST", path: "/_benchbar/seat", cert: a, headers, body: JSON.stringify({ seat_id }) });
+        const seats = await request(gw, { path: "/_benchbar/seats", cert: a });
+        assert.strictEqual(seats.status, 200);
+        assert.deepStrictEqual(seats.json[0], { seat_id: "seat1", full_name: "Seat 1", roles: ["Sales User"], taken_by: null, host_assigns: true });
+        assert.ok(seats.json.every((seat) => seat.host_assigns === true));
+
+        for (const headers of [AS_JSON, { accept: "text/html" }]) {
+            const refused = await pick("seat2", headers);
+            assert.deepStrictEqual([refused.status, refused.json], [403, { status: "host_assigns" }]);
+        }
+        assert.strictEqual((await people(gw))[0].seat_id, null, "the pick changed nothing");
+        assert.strictEqual((await request(gw, { path: "/app", cert: a, headers: AS_JSON })).status, 403, "no seat, no proxy");
+        assert.strictEqual((await request(gw, { path: "/_benchbar/signin?next=/app", cert: a, headers: AS_JSON })).status, 403);
+        assert.deepStrictEqual(gw.helper.calls(), []);
+
+        const id = (await people(gw))[0].id;
+        assert.deepStrictEqual(await gw.control({ op: "assign", device: id, seat_id: "seat2" }), { ok: true });
+        assert.strictEqual((await request(gw, { path: "/_benchbar/signin?next=/app", cert: a })).status, 302);
+        assert.deepStrictEqual(gw.helper.calls(), [["share.localhost", "seat2@example.com"]]);
+
+        // a seat the host gave is not a licence to move to another one
+        const move = await pick("seat5");
+        assert.deepStrictEqual([move.status, move.json], [403, { status: "host_assigns" }]);
+        assert.strictEqual((await people(gw))[0].seat_id, "seat2");
+        assert.deepStrictEqual(await gw.control({ op: "assign", device: id, seat_id: "seat5" }), { ok: true });
+        assert.strictEqual((await people(gw))[0].seat_id, "seat5");
+    });
+});
+
+test("host seats: a person without a seat waits 10 minutes for the host, not 2", async () => {
+    const a = cert("host-wait");
+    await withGateway({ config: { seat_mode: "host" }, devices: [seatless(a)] }, async (gw) => {
+        gw.jump(300_000);
+        await sleep(400);
+        assert.strictEqual((await people(gw)).length, 1, "removed while the host could still give a seat");
+        assert.strictEqual((await request(gw, { path: "/_benchbar/room", cert: a })).status, 200);
+        gw.jump(601_000);
+        await until(async () => (await people(gw)).length === 0, 2000);
+        assert.strictEqual((await request(gw, { path: "/_benchbar/room", cert: a, headers: AS_JSON })).json.error, "not_paired");
+    });
+});
+
+test("open seats, the 0.8 behaviour, stays what a config without seat_mode gets", async () => {
+    const a = cert("open-a");
+    await withGateway({ devices: [seatless(a)] }, async (gw) => {
+        assert.strictEqual(gw.cfg.seat_mode, undefined);
+        const seats = await request(gw, { path: "/_benchbar/seats", cert: a });
+        assert.ok(seats.json.every((seat) => !("host_assigns" in seat)));
+        const r = await request(gw, { method: "POST", path: "/_benchbar/seat", cert: a, headers: AS_JSON, body: JSON.stringify({ seat_id: "seat1" }) });
+        assert.strictEqual(r.status, 200);
     });
 });
 
@@ -1201,6 +1281,8 @@ test("a config with no deadline, a past deadline, a deadline beyond the cap, bad
         { config: { seats: [{ ...seat(1), extra: 1 }] } },
         { config: { seats: [{ ...seat(1), roles: "Sales User" }] } },
         { config: { app_routes: "/crm" } },
+        { config: { seat_mode: "anyone" } },
+        { config: { seat_mode: true } },
         { config: { app_routes: Array.from({ length: 33 }, (_, i) => `/r${i}`) } },
         { config: { max_total_s: 99999, deadline_epoch: nowS + 60 } }
     ];

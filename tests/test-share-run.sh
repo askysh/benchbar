@@ -798,6 +798,8 @@ assert_not_contains "$(cat "$SHARE_DIR/gateway.json")" "9000"
 # SHARE-7: the gateway listens on the address of the network the room is on, not on every interface
 assert_eq "192.168.1.20" "$(jget "$SHARE_DIR/gateway.json" 'd["listen"]["host"]')" "(the LAN address of the default route)"
 assert_not_contains "$(cat "$SHARE_DIR/gateway.json")" "0.0.0.0"
+# SHARE-5: without --assign-seats the room is as before, anyone in it takes a free seat
+assert_eq "open" "$(jget "$SHARE_DIR/gateway.json" 'd["seat_mode"]')"
 assert_eq "True" "$(jget "$SHARE_DIR/devices.json" 'd["devices"] == [] and d["blocked"] == []')" "(devices are scoped to one room)"
 # the runner names node and benchbar by absolute paths, never by PATH
 runner_text="$(cat "$SHARE_DIR/share-run.sh")"
@@ -964,8 +966,13 @@ assert_eq "True" "$(sget 'd["copy"]["drifted"] and next(a["now"] != a["at_copy"]
 # ---- --for and --name with spaces and quotes; the label is cleaned, share.json is not touched
 cfg_sha="$(shasum -a 256 "$SHARE_DIR/share.json" | awk '{print $1}')"
 reset_order
-cli start --for 30m --name $'  Lab \xe2\x80\xae"b" $(x)  '
+cli start --for 30m --assign-seats --name $'  Lab \xe2\x80\xae"b" $(x)  '
 assert_eq "0" "$CODE" "$OUT$ERR"
+# SHARE-5: --assign-seats: the host gives out the seats, and the gateway's own loader takes the file
+assert_eq "host" "$(jget "$SHARE_DIR/gateway.json" 'd["seat_mode"]')"
+"$REAL_NODE" -e 'require(process.argv[1] + "/lib/frappe-local/share/config.js").load(process.argv[2], Date.now())' "$ROOT" "$SHARE_DIR/gateway.json" \
+  || fail "gateway.json with seat_mode is what config.js validates"
+assert_contains "$OUT" "you give them out: benchbar share assign ID SEAT_ID"
 assert_eq "Lab \"b\" \$(x)" "$(jget "$SHARE_DIR/gateway.json" 'd["room_label"]')"
 assert_eq "1800" "$(jget "$SHARE_DIR/gateway.json" 'd["deadline_epoch"] - d["started_epoch"]')"
 wait_for 15 has_event '^dns-sd '

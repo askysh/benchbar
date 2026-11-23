@@ -187,6 +187,42 @@ test("a __debugger__ query key is rejected in any case or encoding, on any path"
     assert.strictEqual(policy.normalizePath("/app?debugger=1&_debugger_=2").ok, true);
 });
 
+// ---- uploaded files (#159 SHARE-6 b): what a guest can upload must not open as a page of the copy
+test("isUploadPath: /files and /private/files in any case, nothing else", () => {
+    for (const p of ["/files/a.html", "/FILES/a.svg", "/private/files/a.html", "/Private/Files/x"]) assert.strictEqual(policy.isUploadPath(p), true, p);
+    for (const p of ["/app", "/assets/frappe/a.html", "/api/method/files", "/private", "/filesx/a", "/"]) assert.strictEqual(policy.isUploadPath(p), false, p);
+});
+
+test("uploadResponseHeaders: a type that can run script becomes a sandboxed download, a passive one only loses sniffing", () => {
+    const SANDBOX = "sandbox; default-src 'none'";
+    for (const type of ["text/html", "TEXT/HTML; charset=utf-8", "image/svg+xml", "text/xml", "application/xhtml+xml", "application/javascript",
+        "application/octet-stream", "text/html-sandboxed", undefined, ""]) {
+        const out = policy.uploadResponseHeaders(200, type === undefined ? {} : { "content-type": type });
+        assert.strictEqual(out["content-security-policy"], SANDBOX, String(type));
+        assert.strictEqual(out["content-disposition"], "attachment", String(type));
+        assert.strictEqual(out["x-content-type-options"], "nosniff", String(type));
+    }
+    for (const type of ["image/png", "image/jpeg", "IMAGE/GIF", "image/webp", "application/pdf", "text/plain; charset=utf-8", "text/csv", "video/mp4", "audio/mpeg", "font/woff2"]) {
+        const out = policy.uploadResponseHeaders(200, { "content-type": type, "content-disposition": 'inline; filename="a"' });
+        assert.strictEqual(out["content-security-policy"], undefined, type);
+        assert.strictEqual(out["content-disposition"], 'inline; filename="a"', type);
+        assert.strictEqual(out["x-content-type-options"], "nosniff", type);
+    }
+    // the file name upstream gave is kept, inline is not; upstream's own CSP never wins
+    assert.strictEqual(policy.uploadResponseHeaders(200, { "content-type": "text/html", "content-disposition": 'inline; filename="x.html"' })["content-disposition"],
+        'attachment; filename="x.html"');
+    assert.strictEqual(policy.uploadResponseHeaders(206, { "content-type": "image/svg+xml", "content-disposition": 'attachment; filename="x.svg"' })["content-disposition"],
+        'attachment; filename="x.svg"');
+    assert.strictEqual(policy.uploadResponseHeaders(200, { "content-type": "text/html", "content-security-policy": "script-src *" })["content-security-policy"], SANDBOX);
+    // no body of the file: only nosniff (a 304 would rewrite the headers of a cached image)
+    for (const status of [301, 304, 404, 500]) {
+        assert.deepStrictEqual(policy.uploadResponseHeaders(status, { "content-type": "text/html" }), { "content-type": "text/html", "x-content-type-options": "nosniff" });
+    }
+    const input = { "content-type": "text/html" };
+    policy.uploadResponseHeaders(200, input);
+    assert.deepStrictEqual(input, { "content-type": "text/html" }, "the input is not changed");
+});
+
 test("redactPath drops file names", () => {
     assert.strictEqual(policy.redactPath("/files/Secret Customer.pdf"), "/files");
     assert.strictEqual(policy.redactPath("/files"), "/files");

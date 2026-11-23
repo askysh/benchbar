@@ -127,12 +127,24 @@ benchbar share preflight --critical
 ## share start
 
 ```
-benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]
+benchbar share start [--for DUR] [--name LABEL] [--assign-seats] [--dry-run] [--json]
 ```
 
 Starts the room until the deadline (`--for 30m`, `4h`; 5 minutes to 12
 hours; 4 hours by default). The bench must be running. Refused like
-`share setup`. A second start says "unchanged". On WSL with NAT networking it
+`share setup`. A second start says "unchanged".
+
+**Who gives a person their seat.** The room code lets a person into the
+room. Without `--assign-seats` it also lets them take any free seat, the
+most privileged one included, with no action from you: give the code only
+to people who may use every seat of the room, or use `--assign-seats`.
+With `--assign-seats` you give out the seats. A person who joins has no
+seat and sees nothing of the copy until you run
+[`share assign`](#share-assign) for them. They cannot take a seat or
+change to another one themselves, and they keep their place in the room
+for 10 minutes while they wait (2 minutes in a room without the flag).
+[`share people`](#share-people) lists who waits and which seats are free.
+The start box says which of the two the room is. On WSL with NAT networking it
 is refused before anything is written, even with `--dry-run`; with mirrored
 networking it warns what the Hyper-V firewall needs (see
 [Sharing on Linux](#sharing-on-linux)).
@@ -232,7 +244,8 @@ benchbar share people [--json]
 
 The people in the room: id (`d_` and 8 hex digits), name, Mac model,
 address, seat, online, joined, last seen. `share devices` is another name
-for it.
+for it. When someone in the room has no seat, the free seats follow with
+their ids (`s_` and 8 hex digits), ready for `share assign`.
 
 ```bash
 benchbar share people
@@ -262,7 +275,10 @@ benchbar share remove d_0123abcd --new-code
 benchbar share assign ID SEAT_ID [--json]
 ```
 
-Moves a person to another free seat; the old seat's sessions end first.
+Gives a person a free seat, or moves them to another one; the old seat's
+sessions end first. In a room started with `--assign-seats` this is the
+only way a person gets or changes a seat. `share people` shows the ids of
+the people and of the free seats.
 
 ```bash
 benchbar share assign d_0123abcd s_0a1b2c3d
@@ -516,7 +532,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar share setup [--site S] [--from STAMP\|latest] [--backup-now] [--users A,B] [--name LABEL] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | stream |
 | `benchbar share users [--site S] [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
 | `benchbar share preflight [--static\|--critical] [--quiet] [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
-| `benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | stream |
+| `benchbar share start [--for DUR] [--name LABEL] [--assign-seats] [--dry-run] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | stream |
 | `benchbar share stop [--json]` (Lab `lan-rooms`) | no | no | no | yes | stream |
 | `benchbar share extend --by DUR [--json]` (Lab `lan-rooms`) | no | no | no | yes | stream |
 | `benchbar share status [--preflight] [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
@@ -559,6 +575,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `share preflight` | `--json` |  | One document: protocol, ok, lan_ip and the checks, each with a status, a message and a fix_action. |
 | `share start` | `--for` | `DUR` | How long the share runs: 30m, 4h; from 5 minutes to 12 hours. Default: 4h. |
 | `share start` | `--name` | `LABEL` | The room's label for this share, at most 40 printable characters. Default: the one share setup recorded. |
+| `share start` | `--assign-seats` |  | You give out the seats: a person who joins with the code waits (up to 10 minutes) until you run benchbar share assign for them, and cannot take or change a seat themselves. Without it, anyone with the code takes any free seat. |
 | `share start` | `--dry-run` |  | Print the plan and start nothing. |
 | `share start` | `--json` |  | JSON lines: plan, steps, done (with the deadline). |
 | `share stop` | `--json` |  | JSON lines: steps, done. |
