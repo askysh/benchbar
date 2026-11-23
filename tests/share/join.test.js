@@ -351,6 +351,16 @@ test("J18/J11: the roster shows the name without control, bidi or zero-width cha
     assert.strictEqual(store.list()[0].name, "Priya");
 });
 
+test("a seat move whose person left while their old seat was wiped answers not_found, it does not throw", async () => {
+    const { room, store } = makeRoom();
+    joined(room, { ip: "10.17.0.1" });
+    const [d] = store.list();
+    assert.strictEqual((await room.moveToSeat(d, "seat_a", async () => {})).ok, true);
+    // the person is gone (removed, or gave their place away) by the time the wipe of the old seat ends
+    const out = await room.moveToSeat(store.list()[0], "seat_b", async () => { store.remove(d.id); });
+    assert.deepStrictEqual(out, { ok: false, status: 404, error: "not_found" });
+});
+
 test("seats: take, switch (wipe the old user), a taken seat is 409, an unknown id is 404, a failed wipe moves nothing", async () => {
     const { room, store } = makeRoom();
     const g1 = joined(room, { ip: "10.16.0.1" }), g2 = joined(room, { ip: "10.16.0.2" });

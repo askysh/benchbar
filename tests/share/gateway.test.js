@@ -953,9 +953,20 @@ test("host seats: a full room makes way for a new guest by letting go of whoever
         gw.jump(180_000);
         const late = new GuestSession(gw, c, { ip: "10.61.0.4", name: "Cy" });
         assert.strictEqual((await late.hello()).json.full, false);
+        // Asha's app holds a connection open: it is closed as she gives way, so her app learns it at once
+        const held = await request(gw, { path: "/_benchbar/room", cert: a, agent: sinkAgent(a), headers: AS_JSON });
+        assert.strictEqual(held.status, 200);
+        const asha = (await people(gw)).find((p) => p.name === "Asha");
         assert.strictEqual((await late.join(await roomCode(gw))).json.status, "joined");
         assert.deepStrictEqual((await people(gw)).map((p) => p.name).sort(), ["Ben", "Cy"]);
+        await until(() => held.socket.destroyed, 2000);
         assert.strictEqual((await request(gw, { path: "/_benchbar/room", cert: a, headers: AS_JSON })).json.error, "not_paired");
+        // and the host can read in the activity log who gave way
+        const logFile = await until(() => fs.existsSync(gw.logDir) && fs.readdirSync(gw.logDir).find((f) => f.startsWith("activity-")));
+        const logged = fs.readFileSync(path.join(gw.logDir, logFile), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+        assert.deepStrictEqual(logged.filter((l) => l.path === "/_benchbar/gave-way").map((l) => l.device), [asha.id]);
+        // a host who assigns to her a moment later gets a plain answer
+        assert.deepStrictEqual(await gw.control({ op: "assign", device: asha.id, seat_id: "seat1" }), { ok: false, error: "not_found" });
         // a person with a seat is never let go, however long they are in the room
         const ben = (await people(gw)).find((p) => p.name === "Ben");
         assert.deepStrictEqual(await gw.control({ op: "assign", device: ben.id, seat_id: "seat1" }), { ok: true });
