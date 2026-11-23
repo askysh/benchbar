@@ -239,6 +239,8 @@ nonisolated struct BenchStatus: Codable, Sendable, Equatable {
     var pendingOperations: [PendingOperation]?
     /// Whether the bench's own Redis answers (CLI 0.8); nil from an older CLI.
     var redis: RedisServices?
+    /// Added in 0.9: the bench may come back after a login (`benchbar autostart`); nil from an older CLI.
+    var autostart: Bool?
     /// Added in 0.9: whether the bench can serve, and the parts that say so.
     var ready: ReadyInfo?
     /// Added in 0.9.0: the defaults an update changed, until dismissed. nil from an older CLI.
@@ -248,7 +250,7 @@ nonisolated struct BenchStatus: Codable, Sendable, Equatable {
     var source: String?
 
     enum CodingKeys: String, CodingKey {
-        case bench, name, site, label, state, pid, ports, log, source, sites, scheduler, redis, ready, notices
+        case bench, name, site, label, state, pid, ports, log, source, sites, scheduler, redis, autostart, ready, notices
         case schemaVersion = "schema_version"
         case cliVersion = "cli_version"
         case stopReason = "stop_reason"

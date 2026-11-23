@@ -145,4 +145,17 @@ run_fm path --bench-dir "$BENCH"
 assert_eq "$BENCH" "$OUT"
 assert_calls_not_contain '^(brew|pipx|uname) ' "(path starts no brew, pipx or uname)"
 
+# The harness exports FL_HOSTS_FILE, which hid that the lean start never set
+# it: on a Mac status --json and list --json stopped at "FL_HOSTS_FILE: unbound
+# variable" (issue 139). Without the harness's value both print their document.
+for cmd in "status --json --bench-dir $BENCH" "list --json"; do
+  set +e
+  # shellcheck disable=SC2086  # the words of the command
+  LEAN_OUT="$(env -u FL_HOSTS_FILE "$FM" $cmd 2>&1)"; LEAN_CODE="$?"
+  set -e
+  assert_eq 0 "$LEAN_CODE" "($cmd without FL_HOSTS_FILE: $LEAN_OUT)"
+  assert_not_contains "$LEAN_OUT" "unbound variable" "($cmd without FL_HOSTS_FILE)"
+  assert_contains "$LEAN_OUT" '"schema_version":1' "($cmd without FL_HOSTS_FILE prints its document)"
+done
+
 echo "test-lean-load: ok"

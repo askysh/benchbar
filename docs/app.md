@@ -47,7 +47,7 @@ top chooses which bench the popover shows.
 | ⌘D | Stop |
 | ⌘R | Restart |
 | ⌘O | Open the site |
-| ⌘L | Logs: a log window with search and a filter per process |
+| ⌘L | Logs: a log window with search, a filter per process and **Since last start** (`benchbar logs --json --since-restart`, then only the new lines). The worker filter reads `logs/worker.log` through the CLI |
 | ⌘F | Open the bench folder |
 | ⌘K | Health in the BenchBar window |
 | ⌘M | The BenchBar window |
@@ -170,7 +170,7 @@ Open it with ⌘M, **Manage Bench…** in the popover, or by
 opening BenchBar again from Finder or Spotlight. The sidebar lists your
 benches first, each with its state dot and its sites beneath it (a site
 opens the bench's Sites tab), then **Team Profiles**, **Find
-Benches** and, while the `lan-rooms` Lab is on, **On your network**. A bench that is not running has one line under its name that
+Benches**, **History** and, while the `lan-rooms` Lab is on, **On your network**. A bench that is not running has one line under its name that
 says why and offers the next step: Start, View Health, Review Port
 Conflict…, Repair… or Set Up Management….
 
@@ -194,21 +194,49 @@ Every bench has a page:
   Code** (or Cursor, chosen in Settings, General) opens the bench folder.
   The ⋯ menu beside Open Site has **Open Console** and **Open Database**
   (Terminal with `benchbar console` and `benchbar db` for the default
-  site), Show in Finder and Copy Path. On a stopped bench the same menu
-  has **Start Services Only** (`benchbar up --services-only`: the bench's
-  Redis and nothing else, for a restore or a migrate) and **Stop
-  Services** (`benchbar down`); no plan, your click is the decision. The
+  site), Show in Finder and Copy Path. On a bench that is not running the
+  same menu has **Start Services Only** (`benchbar up --services-only`:
+  the bench's Redis and nothing else, for a restore or a migrate) and
+  **Stop Services** (`benchbar down`); no plan, your click is the
+  decision. The CLI needs no installed service for it, so a bench that has
+  none gets them too. The
   ⋯ menu of each site on the Sites tab has both for that site. **Port Settings & Setup…** sits in
   the header of the Site and ports section. While the bench runs, two small charts show its CPU
   and memory for the last ten minutes (hover for the value at a moment);
   the popover shows the current values under the bench name. They count
   the bench's own processes, not the shared MariaDB, and are kept in
-  memory only. A bench with a lockfile (`benchbar.toml`) shows **In
-  sync** or **N differences** with the list, from `benchbar lock check`
-  (read only); bring it in line with `benchbar lock apply` in Terminal.
+  memory only. The **Lockfile** section shows **In sync** or **N
+  differences** with the list, from `benchbar lock check` (read only).
+  **Write Lock File…** shows what `benchbar lock write` would write (or
+  change) from this bench and writes it when you confirm; an existing file
+  is backed up first. **Apply…** shows what `benchbar lock apply` would do
+  to the apps (clone, switch a branch, fast forward, then build) and runs
+  it when you confirm; no site is touched. Both plans are the CLI's own
+  text. `lock apply` has no plan token yet, so Apply runs `lock apply
+  --yes` after your OK and the CLI reads the lock file again then; a
+  `benchbar` that gives a token has Apply use it. While an agent holds a
+  lease on the bench or one of its sites, a **Leases** section says who
+  holds it and until when. BenchBar never takes or renews a lease. A
+  change a lease refuses (restart, stop, an app change, a drop or a
+  restore, the lockfile) shows the holder and until when, and offers
+  nothing that breaks the lease except **Break Lease…**: it asks first
+  and then runs the same change with `--break-lease`, which the CLI allows
+  only to a person. The run is in the History.
 - **Sites**: add a site (it asks for the Administrator password) and open
   any of them. The ⋯ menu of a site makes it the default, backs it up
-  (with or without files) and shows the last backup in Finder. **Drop
+  (with or without files), shows the last backup in Finder and has
+  **Snapshots…**: a snapshot is a backup with its files and the apps it
+  was taken with (`benchbar site snapshot`), kept where frappe's pruning
+  never reaches. The sheet takes one (with a label if you like, nothing in
+  the site changes), lists them (`site snapshots`) with their age, size
+  and whether the bench's apps are still the same, and has **Roll Back…**
+  and **Remove…** on each. Roll Back shows the plan of `benchbar site
+  rollback --dry-run --json` (a snapshot of the site as it is now is taken
+  first, so the rollback can be undone; migrate runs only when the apps
+  differ) and runs exactly that plan by its token after you type the site
+  name; the default site can be rolled back too, as you, and the plan says
+  so. Remove asks first and never offers the undo point of the last
+  rollback. A refused plan or a changed bench shows **Review Again**. **Drop
   Site…** deletes the site's database and database user for good; only
   the backup bench takes first (with files) can bring it back. The sheet
   shows that plan, asks you to type the site name, and reports where the
@@ -259,6 +287,11 @@ Every bench has a page:
   `benchbar app update NAME --discard-pending` after asking: none of the
   steps run and the app stays where it is.
   Right click a bench in the sidebar for its actions.
+- **History** (in the sidebar, not on a bench page): everything that ran
+  on this Mac and changed something (`benchbar history --json`), newest
+  first, with who started it (the app, Terminal, an agent through MCP, a
+  script), how it ended and what it changed, and **Show Log** for its log
+  file. It is the CLI's record; nothing here runs anything again.
 - **Health**: doctor's checks, and Repair with its plan shown before
   anything changes and each step as it runs. **Acknowledge** on a warning
   (`benchbar doctor --ack`) silences it for this bench until its message
@@ -280,8 +313,8 @@ Mac's password asks in macOS's own dialog; BenchBar never sees it, and a
 cancelled dialog skips that step. The window offers a button of a newer
 command only when `benchbar commands --json` lists it, so an older
 `benchbar` never gets a button that would fail. **Start after login** is
-read from the text `benchbar autostart` prints, because the command has no
-JSON.
+read from `autostart` of `benchbar status --json`; a `benchbar` whose status
+has no such field is asked in words (`benchbar autostart`).
 
 ![The BenchBar window: a bench's overview with Start, Stop, Restart, Open as and Open Site, its resources, site and ports](images/window-overview.png)
 

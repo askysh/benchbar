@@ -125,7 +125,14 @@ On `next-release`, then into `main`:
    always). For a release with a big change, cut a
    [release candidate](#release-candidates) first. Wait until the push run
    of CI on the new `next-release` head is green: that run is the one the
-   release is built on. Merge nothing else until the tag exists.
+   release is built on. Then start the real installs on macOS on that
+   commit and wait for them (7 and 8 minutes once two Macs are free):
+   `gh workflow run real-install.yml --ref next-release`. The nightly run
+   does not count: GitHub runs a schedule from `main`, so its result
+   attaches to the head of `main`, not to the commit you release. No push starts
+   them (they need two of the five macOS runners the repository gets), and
+   the release gate refuses a commit that has no passed
+   "Real install result (macOS)". Merge nothing else until the tag exists.
 6. Fast forward `main` to that commit with `scripts/release-promote.sh`. You
    need gh signed in, and to be a repository admin who can bypass the `main`
    ruleset. Run it with `--dry-run` first: it prints the plan and pushes
@@ -139,7 +146,10 @@ On `next-release`, then into `main`:
    - the tag `vX.Y.Z` does not exist yet;
    - "CI result" is green on the commit, and on the nearest commit that
      changed code (`scripts/release-ci-gate.sh`: a push that changed only
-     docs runs no tests, so its green says nothing about the code).
+     docs runs no tests, so its green says nothing about the code);
+   - "Real install result (macOS)" is green on the commit, or on a docs
+     only commit under it down to that code commit (the same script; the
+     workflow is `real-install.yml`, started by hand in step 5).
 
    Then it asks, and pushes with `git push origin <sha>:refs/heads/main`
    (`--yes` skips the question).
@@ -339,18 +349,22 @@ itself is the merge of what the candidate tested plus fixes found by it.
    candidate needs no changelog section, no README or ROADMAP paragraph and
    no folded fragments; its notes are `## Unreleased` with the fragments
    folded in. Merge that change into `next-release` by pull request.
-2. Tag the merged commit by hand and push the tag:
+2. Start the real installs on macOS on the merged commit and wait for
+   them: `gh workflow run real-install.yml --ref next-release`. The release
+   job refuses a candidate whose commit has no passed
+   "Real install result (macOS)", as it does for a release.
+3. Tag the merged commit by hand and push the tag:
    `git tag v0.9.0-rc.1 COMMIT && git push origin v0.9.0-rc.1`. The tag
    starts `release.yml` and `release-windows.yml`. The `release` environment
    accepts it (its `v*` rule) and waits for you as for a release. The build
    refuses a tag whose commit is not on `main` or `next-release`.
-3. When both workflows are done, open the draft: it is marked **pre-release**
+4. When both workflows are done, open the draft: it is marked **pre-release**
    and not latest. Check the files as for a release, then publish. Publishing
    a pre-release does not move "latest".
-4. Do the QA from the install line in the release notes, on a clean user or
+5. Do the QA from the install line in the release notes, on a clean user or
    Mac: `curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.9.0-rc.1/install.sh | bash -s -- --version v0.9.0-rc.1`,
    and on Windows the one liner of the notes with `-Version 0.9.0-rc.1`.
-5. Fix what it shows with ordinary pull requests, and cut `rc.2` if the
+6. Fix what it shows with ordinary pull requests, and cut `rc.2` if the
    changes need another pass. Then run `scripts/bump-version.sh 0.9.0` and
    release as above. Do not delete a published candidate; releases are
    immutable.
