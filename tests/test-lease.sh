@@ -426,11 +426,18 @@ for n in 1 2 3 4 5 6; do
   mkdir -p "$BENCH/sites/s${n}.localhost"
   printf '{}\n' >"$BENCH/sites/s${n}.localhost/site_config.json"
 done
+# each take's output and exit code are kept: a take that is lost here (seen once in CI, run
+# 44933354251 of 21 November: five leases, nothing else known) must say which one and why
+takes_log() {
+  local n
+  for n in 1 2 3 4 5 6; do printf '\n  take %s: %s' "$n" "$(tr '\n' '|' <"$TMP_DIR/take.$1.$n" 2>/dev/null)"; done
+  printf '\n  leases.tsv: %s' "$(tr '\n' '|' <"$LEASES" 2>/dev/null)"
+}
 for n in 1 2 3 4 5 6; do
-  (BENCHBAR_NONINTERACTIVE=1 BENCHBAR_CALLER="par-${n}" "$FM" lease take --site "s${n}.localhost" --bench-dir "$BENCH" --for 5 >/dev/null 2>&1) &
+  (BENCHBAR_NONINTERACTIVE=1 BENCHBAR_CALLER="par-${n}" "$FM" lease take --site "s${n}.localhost" --bench-dir "$BENCH" --for 5 >"$TMP_DIR/take.par.$n" 2>&1; printf 'exit=%s\n' "$?" >>"$TMP_DIR/take.par.$n") &
 done
 wait
-assert_eq "6" "$(lease_count)" "(six takes at once, six leases) $(cat "$LEASES")"
+assert_eq "6" "$(lease_count)" "(six takes at once, six leases)$(takes_log par)"
 assert_eq "6" "$(cut -f1 "$LEASES" | sort -u | grep -c .)" "(six different ids)"
 assert_no_file "$FL_STATE_DIR/leases.lock"
 # a lock left by a run that died is taken over after 30 seconds, not before
@@ -444,10 +451,10 @@ python3 -c 'import os, sys; os.remove(sys.argv[1])' "$LEASES"
 mkdir "$FL_STATE_DIR/leases.lock"
 touch -t 202001010000 "$FL_STATE_DIR/leases.lock"
 for n in 1 2 3 4 5 6; do
-  (BENCHBAR_NONINTERACTIVE=1 BENCHBAR_CALLER="stale-${n}" "$FM" lease take --site "s${n}.localhost" --bench-dir "$BENCH" --for 5 >/dev/null 2>&1) &
+  (BENCHBAR_NONINTERACTIVE=1 BENCHBAR_CALLER="stale-${n}" "$FM" lease take --site "s${n}.localhost" --bench-dir "$BENCH" --for 5 >"$TMP_DIR/take.stale.$n" 2>&1; printf 'exit=%s\n' "$?" >>"$TMP_DIR/take.stale.$n") &
 done
 wait
-assert_eq "6" "$(lease_count)" "(six takes over one stale lock) $(cat "$LEASES")"
+assert_eq "6" "$(lease_count)" "(six takes over one stale lock)$(takes_log stale)"
 assert_no_file "$FL_STATE_DIR/leases.lock"
 assert_eq "0" "$(find "$FL_STATE_DIR" -maxdepth 1 -name 'leases.lock.stale*' | grep -c . || true)" "(no renamed lock is left behind)"
 # the cap
