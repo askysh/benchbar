@@ -78,8 +78,9 @@ give each person a seat with `benchbar share assign`
 app, turn on **I give out the seats** on the **Sharing** tab before you
 click **Start**. A guest who joins then shows as "Waits for a seat from
 you": choose **Give a Seat** next to their name and pick the seat. The
-menu lists every free seat with its roles. The Windows tray starts a room
-where guests pick their own seat.
+menu lists every free seat with its roles. The Windows tray has the same
+switch, a box under **Start sharing**, and a **Give NAME this seat**
+button under each person.
 
 Network protection is a separate step: `benchbar lan-guard install`
 asks for your password. Run it yourself. An agent or a script cannot

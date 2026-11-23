@@ -21,6 +21,13 @@ public sealed record ShareCopy(string? SourceSite, int? AgeSeconds, bool Drifted
 
 public sealed record SharePerson(string Id, string Name, string? Model, string? Ip, string? SeatId, string? SeatName, bool Online, string? LastSeen);
 
+/// <summary>A seat of the room (<c>seats</c> of <c>share people --json</c>): held by the person <see cref="HeldBy"/> names, or free.</summary>
+public sealed record ShareSeat(string Id, string Name, IReadOnlyList<string> Roles, string? HeldBy);
+
+/// <summary><c>share people --json</c>: the people, every seat of the room, and whether the host gives out the seats
+/// (<c>seat_mode</c> is <c>host</c>). A CLI before 0.9.0 sends no seats and no mode: an open room with nothing to give.</summary>
+public sealed record ShareRoom(IReadOnlyList<SharePerson> People, IReadOnlyList<ShareSeat> Seats, bool HostGivesSeats);
+
 public sealed record ShareUser(string Name, string FullName, IReadOnlyList<string> Roles, IReadOnlyList<string> CodeCapableRoles, bool Selectable);
 
 /// <summary><c>share setup --dry-run --json</c>: what the copy will be, shown before anything is made.</summary>
@@ -119,6 +126,14 @@ public static class ShareJson
                 JsonRead.Str(p, "name") ?? JsonRead.Str(p, "id")!, JsonRead.Str(p, "model"), JsonRead.Str(p, "ip"), JsonRead.Str(p, "seat_id"),
                 JsonRead.Str(p, "seat_full_name"), JsonRead.Bool(p, "online"), JsonRead.Str(p, "last_seen")))]
             : [];
+
+    public static IReadOnlyList<ShareSeat> Seats(JsonObject o) =>
+        o["seats"] is JsonArray a
+            ? [.. a.OfType<JsonObject>().Where(s => JsonRead.Str(s, "seat_id") is { Length: > 0 }).Select(s => new ShareSeat(JsonRead.Str(s, "seat_id")!,
+                JsonRead.Str(s, "full_name") ?? JsonRead.Str(s, "seat_id")!, JsonRead.Strings(s, "roles"), JsonRead.Str(s, "held_by")))]
+            : [];
+
+    public static ShareRoom Room(JsonObject o) => new(People(o), Seats(o), JsonRead.Str(o, "seat_mode") == "host");
 
     public static IReadOnlyList<ShareUser> Users(JsonObject o) =>
         o["users"] is JsonArray a
