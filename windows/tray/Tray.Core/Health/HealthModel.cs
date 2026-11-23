@@ -10,7 +10,12 @@ public static class HealthArgs
 
     public static string[] RepairPlan(string benchPath) => ["repair", "--dry-run", "--json", "--bench-dir", benchPath];
 
-    public static string[] Repair(string benchPath) => ["repair", "--yes", "--json", "--bench-dir", benchPath];
+    /// <summary>
+    /// The real run. With the token of the plan the person reviewed (<c>--apply TOKEN</c>) the CLI refuses a plan that changed since, before any
+    /// step; without one (an older CLI printed none) it is the old call.
+    /// </summary>
+    public static string[] Repair(string benchPath, string? token = null) =>
+        token is { Length: > 0 } ? ["repair", "--apply", token, "--yes", "--json", "--bench-dir", benchPath] : ["repair", "--yes", "--json", "--bench-dir", benchPath];
 
     /// <summary>Acknowledges one warning of this bench until its message changes (<c>doctor --ack</c>), or takes it back.</summary>
     public static string[] Ack(string id, bool on, string benchPath) => ["doctor", on ? "--ack" : "--unack", id, "--json", "--bench-dir", benchPath];
