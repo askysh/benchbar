@@ -71,19 +71,30 @@ fl__lease_write() {
 }
 
 # fl__lease_lock, fl__lease_unlock: the short lock around a read, change and write of the file. A
-# lock folder older than 30 seconds belongs to a run that died inside its few file operations. It is
-# renamed to a name of this run's own first, and only the run that wins the rename removes it: two
-# waiters cannot both remove it, and one that renamed a lock a third run had just made puts it back.
+# lock folder older than 30 seconds belongs to a run that died inside its few file operations, and
+# a waiter takes it away. One waiter at a time does that, under a guard folder (leases.lock.reclaim),
+# and it reads the age again under the guard, right before it removes the folder.
+# The lock is never renamed away and put back. That was the first design, and it lost leases (seen
+# in CI, six takes over one stale lock): a waiter judged the old folder stale, a second waiter
+# removed it and a third took the lock, and then the first one renamed that live lock away. While
+# it was away a fourth run took the lock too, so two runs wrote the file and one lease was lost
+# although its take said ok; and the put back landed inside the new folder, which no rmdir could
+# remove any more, so every later take ended with "busy".
 fl__lease_lock() {
-  local dir="${FL_STATE_DIR}/leases.lock" i=0 stale
+  local dir="${FL_STATE_DIR}/leases.lock" guard i=0
+  guard="${dir}.reclaim"
   mkdir -p "$FL_STATE_DIR" 2>/dev/null || true
   while ! mkdir "$dir" 2>/dev/null; do
     if [[ -d "$dir" && "$(fl__lock_age "$dir")" -ge 30 ]]; then
-      stale="${dir}.stale.$$.${RANDOM}"
-      if mv "$dir" "$stale" 2>/dev/null; then
-        if [[ "$(fl__lock_age "$stale")" -ge 30 ]]; then rmdir "$stale" 2>/dev/null || true
-        else mv "$stale" "$dir" 2>/dev/null || rmdir "$stale" 2>/dev/null || true; fi
+      if mkdir "$guard" 2>/dev/null; then
+        # judged again: since the look above another waiter may have removed the stale folder and a
+        # third run taken the lock, and that one is not this run's to remove
+        if [[ -d "$dir" && "$(fl__lock_age "$dir")" -ge 30 ]]; then rmdir "$dir" 2>/dev/null || true; fi
+        rmdir "$guard" 2>/dev/null || true
+        continue
       fi
+      # a waiter that died with the guard
+      if [[ -d "$guard" && "$(fl__lock_age "$guard")" -ge 30 ]]; then rmdir "$guard" 2>/dev/null || true; fi
     fi
     i=$((i + 1))
     [[ "$i" -le 50 ]] || return 1

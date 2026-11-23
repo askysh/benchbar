@@ -457,6 +457,37 @@ wait
 assert_eq "6" "$(lease_count)" "(six takes over one stale lock)$(takes_log stale)"
 assert_no_file "$FL_STATE_DIR/leases.lock"
 assert_eq "0" "$(find "$FL_STATE_DIR" -maxdepth 1 -name 'leases.lock.stale*' | grep -c . || true)" "(no renamed lock is left behind)"
+assert_no_file "$FL_STATE_DIR/leases.lock.reclaim"
+# The race behind the lost lease, step by step (CI run 45156540716: a take said ok and its lease was
+# not in the file, four takes ended with "busy"). A waiter judges the lock stale. Before it acts,
+# another waiter removes the stale folder and a third run takes the lock: a live lock under the
+# same name. The waiter must not move or remove that one. The age reads stand in for the other
+# runs: the first one says "stale" and swaps the folder for a live holder's, the third lets the
+# holder go.
+RACE_DIR="$TMP_DIR/race"; mkdir -p "$RACE_DIR/state/leases.lock"
+race_out="$(FL_STATE_DIR="$RACE_DIR/state" RACE="$RACE_DIR" bash -c '
+  set -euo pipefail
+  . "$1/lib/frappe-local/lock.sh"; . "$1/lib/frappe-local/lease.sh"
+  dir="$FL_STATE_DIR/leases.lock"; n=0
+  # the age is asked for inside $( ): the count is kept in a file
+  fl__lock_age() {
+    local c; c="$(cat "$RACE/n" 2>/dev/null || printf 0)"; c=$((c + 1)); printf "%s" "$c" >"$RACE/n"
+    if [[ "$1" != "$dir" ]]; then printf 0; return 0; fi
+    case "$c" in
+      1) command rmdir "$dir"; command mkdir "$dir"; : >"$RACE/holder"; printf 31 ;;
+      2) printf 0 ;;
+      *) if [[ -e "$RACE/holder" ]]; then command rm -f "$RACE/holder"; command rmdir "$dir"; fi; printf 0 ;;
+    esac
+  }
+  mv() { if [[ "$1" == "$dir" && -e "$RACE/holder" ]]; then printf "moved a live lock\n"; fi; command mv "$@"; }
+  rmdir() { if [[ "$1" == "$dir" && -e "$RACE/holder" ]]; then printf "removed a live lock\n"; fi; command rmdir "$@"; }
+  fl__lease_lock && printf "locked\n"
+  fl__lease_unlock
+' _ "$ROOT" 2>&1)" || fail "the lock was not taken once the live holder let go: $race_out"
+assert_not_contains "$race_out" "a live lock" "(a waiter that judged an older folder stale touched the lock a third run had just taken)"
+assert_contains "$race_out" "locked"
+assert_no_file "$RACE_DIR/state/leases.lock"
+assert_no_file "$RACE_DIR/state/leases.lock.reclaim"
 # the cap
 python3 - "$LEASES" "$BENCH" "$((T0 + 600))" <<'PY'
 import sys
