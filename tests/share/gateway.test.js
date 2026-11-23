@@ -165,8 +165,8 @@ test("sign-in: 302 to safeNext with the sid cookie; the user comes from the seat
         const r = await request(gw, { path: "/_benchbar/signin?next=/app/home&user=Administrator", cert: c, headers: { "x-user": "Administrator" } });
         assert.strictEqual(r.status, 302);
         assert.strictEqual(r.headers.location, "/app/home");
-        const expires = new Date(gw.cfg.deadline_epoch * 1000).toUTCString();
-        assert.strictEqual(r.headers["set-cookie"][0], `sid=${H.SID}; Path=/; HttpOnly; SameSite=Lax; Expires=${expires}`);
+        // a session cookie: its end is the share's end (every session is wiped), not a date of its own (SHARE-11)
+        assert.strictEqual(r.headers["set-cookie"][0], `sid=${H.SID}; Path=/; HttpOnly; SameSite=Lax`);
         assert.deepStrictEqual(gw.helper.calls(), [["share.localhost", "mapped@example.com"]]);
 
         for (const [next, want] of [["//evil.example", "/app"], ["/api/method/x", "/app"], [undefined, "/app"], ["/app/a%20b?x=1", "/app/a%20b?x=1"]]) {
@@ -235,7 +235,8 @@ test("hello: the documented fields, no names, the code never; a new code changes
         assert.strictEqual(r.status, 200);
         assert.deepStrictEqual(Object.keys(r.json), ["v", "room", "host", "site", "salt", "locked", "full", "people", "seats"]);
         assert.deepStrictEqual([r.json.v, r.json.room, r.json.host, r.json.site, r.json.locked, r.json.full, r.json.people, r.json.seats],
-            [3, "Test Room", "Test Host", "macdev", false, false, 0, 6]);
+            [3, "Test Room", "Test Host", "", false, false, 0, 6]);
+        assert.ok(!r.text.includes("macdev"), "the source site's name is not told before a join (SHARE-7)");
         assert.ok(!r.text.includes(code));
         assert.ok([403, 405].includes((await request(gw, { method: "POST", path: "/room/hello", ip: "10.31.0.1", body: "" })).status));
         await gw.control({ op: "rotate" });
@@ -1450,7 +1451,40 @@ test("the activity log keeps two path segments, nothing from the query, no names
         assert.strictEqual(fs.statSync(full).mode & 0o777, 0o600);
         for (const banned of ["secret", "SO-1", "cookievalue123", "x="]) assert.ok(!text.includes(banned), banned);
         const line = JSON.parse(text.trim().split("\n")[0]);
-        assert.deepStrictEqual([line.user, line.method, line.path, line.status], ["seat1@example.com", "GET", "/app/sales-order", 200]);
+        assert.deepStrictEqual([line.seat, line.method, line.path, line.status], ["seat1", "GET", "/app/sales-order", 200]);
+        assert.ok(!("user" in line) && !text.includes("@"), "the seat's e-mail address is not logged (SHARE-10)");
+    });
+});
+
+test("stopping the share prunes activity files older than 14 days", async () => {
+    await withGateway({}, async (gw) => {
+        fs.mkdirSync(gw.logDir, { recursive: true });
+        const old = path.join(gw.logDir, "activity-2020-01-01.log");
+        const today = path.join(gw.logDir, `activity-${new Date().toISOString().slice(0, 10)}.log`);
+        fs.writeFileSync(old, "{}\n");
+        fs.writeFileSync(today, "{}\n");
+        await gw.control({ op: "stop" });
+        await gw.exited;
+        assert.strictEqual(fs.existsSync(old), false, "the old file is still there after stop");
+        assert.strictEqual(fs.existsSync(today), true);
+    });
+});
+
+test("a guest stays signed in after share extend: the cookie has no expiry of its own", async () => {
+    const c = cert("extend1");
+    const nowS = Math.floor(Date.now() / 1000);
+    await withGateway({ devices: [deviceRow(c)], config: { deadline_epoch: nowS + 600 } }, async (gw) => {
+        const si = await request(gw, { path: "/_benchbar/signin?next=/app", cert: c });
+        assert.strictEqual(si.status, 302);
+        const cookie = si.headers["set-cookie"][0];
+        assert.ok(!/expires|max-age/i.test(cookie), cookie);
+        const ext = await gw.control({ op: "extend", seconds: 3600 });
+        assert.strictEqual(ext.deadline_epoch, nowS + 600 + 3600);
+        // past the deadline the cookie was issued under: a browser still sends it, and the page still comes
+        gw.jump(900_000);
+        const page = await request(gw, { path: "/app", cert: c, headers: { cookie: cookie.split(";")[0] } });
+        assert.strictEqual(page.status, 200);
+        assert.strictEqual(gw.upstream.hits.at(-1).headers.cookie, `sid=${H.SID}`);
     });
 });
 

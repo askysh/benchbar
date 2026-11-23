@@ -336,7 +336,9 @@ struct ShareInteropTests {
             clientFingerprint: { (try? identity.spkiDER()).map(Fingerprint.raw(spki:)) },
             makeForwarder: { _ in FakeForwarder() },
             openURL: { _ in },
-            readPasteboard: { message }), guestName: "Asha")
+            readPasteboard: { message },
+            // the Node gateway of this test listens on loopback, which no invite may name outside it
+            inviteAddressAllowed: { $0 == "127.0.0.1" }), guestName: "Asha")
 
         store.pasteInvite()
         guard case .enteringCode(let room) = store.join, let invite = store.invite else {

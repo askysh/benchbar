@@ -127,7 +127,7 @@ private struct JoinedRoomRow: View {
         let health = store.health[room.id] ?? .unknown
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("\(room.room) · \(room.host) · \(room.site)").font(.headline)
+                Text(NetworkPanePresentation.savedTitle(room)).font(.headline)
                 Spacer()
                 Button("Open") { Task { await store.open(room) } }
                     .disabled(!NetworkPanePresentation.canOpen(health))

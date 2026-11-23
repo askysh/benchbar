@@ -1,0 +1,10 @@
+{"schema_version":1,"event":"plan","bench":"/Users/you/dev/move-src","site":"acme.localhost","steps":[{"id":"backup","name":"Back up acme.localhost with its files"},{"id":"restore","name":"Restore it in the other bench"},{"id":"migrate","name":"bench migrate"},{"id":"check","name":"Check the apps"},{"id":"drop","name":"Drop it here"}]}
+{"schema_version":1,"event":"step","n":1,"id":"backup","name":"Back up acme.localhost with its files","status":"running"}
+{"schema_version":1,"event":"step","n":1,"id":"backup","name":"Back up acme.localhost with its files","status":"done","secs":4}
+{"schema_version":1,"event":"step","n":2,"id":"restore","name":"Restore it in the other bench","status":"running"}
+{"schema_version":1,"event":"step","n":2,"id":"restore","parent":"restore","name":"Create acme.localhost in the other bench","status":"running"}
+{"schema_version":1,"event":"step","n":2,"id":"restore","parent":"restore","name":"Create acme.localhost in the other bench","status":"done","message":"new-site done","secs":3}
+{"schema_version":1,"event":"progress","step":"restore","label":"Restore it in the other bench","elapsed":10}
+{"schema_version":1,"event":"step","n":2,"id":"restore","name":"Restore it in the other bench","status":"done","secs":12}
+{"schema_version":1,"event":"step","n":5,"id":"drop","name":"Drop it here","status":"done","secs":6}
+{"schema_version":1,"cli_version":"0.9.0","event":"done","op_id":"op-20261123-101500-5001","exit":0,"changed":[{"kind":"site","name":"acme.localhost","detail":"created in /Users/you/dev/move-tgt/sites/acme.localhost"}],"warnings":[],"next_actions":[{"command":"benchbar up --bench-dir /Users/you/dev/move-tgt","why":"the site answers on port 8001 of /Users/you/dev/move-tgt now (it was 8000): http://acme.localhost:8001","quoted":false}]}

@@ -172,6 +172,13 @@ privileged one included, with no action from you.
   with nftables (`benchbar lan-guard install`). On WSL a room needs
   mirrored networking. See
   [Share a site on your network](guides/share-on-your-network.md).
+- **macOS, Linux.** `benchbar share extend` no longer signs people out at
+  the old deadline. The activity log names seats, not e-mail addresses,
+  and old log files go when a room ends. A room no longer tells the name
+  of the copied site to devices that have not joined.
+- **macOS.** A guest who updates sees the room's site name only after
+  they join. Forgetting your last room also deletes the key that shows
+  your Mac to hosts.
 - **Windows.** The **Sharing** tab of the BenchBar window hosts a room.
   It cannot join one yet. See [Rooms on Windows](windows.md#rooms-on-windows).
 - **macOS, Linux.** Turning the Lab off can be finished: `benchbar

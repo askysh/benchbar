@@ -131,6 +131,7 @@ private final class Harness {
     var invitesSeen: [RoomJoin.InviteCheck?] = []
     var pasteboard: String?
     var pasteboardReads = 0
+    var identityResets = 0
     var now = Date(timeIntervalSince1970: 1_800_000_000)
     let defaults = UserDefaults(suiteName: "guest-store-\(UUID().uuidString)")!
     lazy var store: GuestRoomStore = makeStore()
@@ -175,7 +176,8 @@ private final class Harness {
                 return pasteboard
             },
             now: { [unowned self] in now },
-            model: "Mac14,2"), guestName: "Asha")
+            model: "Mac14,2",
+            forgetIdentity: { [unowned self] in identityResets += 1 }), guestName: "Asha")
     }
 }
 
@@ -439,6 +441,41 @@ private final class Harness {
         #expect(SavedRoomsStore(defaults: h.defaults).load().isEmpty)
     }
 
+    /// #159 SHARE-13: this Mac's key is the same for every room, so a host could tell it is the
+    /// same Mac that joined before. Once no room is left that knows the key, it is deleted: the
+    /// next join makes a new one.
+    @Test func forgettingTheLastRoomForgetsThisMacsKey() async {
+        let h = Harness()
+        await h.store.submit(code: "482913", for: Harness.room)
+        var other = h.store.saved[0]
+        other.hostFingerprint = Fingerprint.prefix + String(repeating: "cd", count: 32)
+        SavedRoomsStore(defaults: h.defaults).save(other)
+        await h.store.forget(h.store.saved[0])
+        #expect(h.identityResets == 0, "another room still knows the key")
+        let last = SavedRoomsStore(defaults: h.defaults).load()
+        #expect(last.count == 1)
+        await h.store.forget(last[0])
+        #expect(h.store.saved.isEmpty)
+        #expect(h.identityResets == 1)
+    }
+
+    /// #159 SHARE-7: a room no longer names its site before the join, so the saved room takes
+    /// the name from the first answer it gets as a member.
+    @Test func theSiteNameComesFromTheRoomOnceJoined() async {
+        let h = Harness()
+        let unnamed = RoomHello(v: 3, room: "Standup", host: "Priya", site: "", salt: String(repeating: "00", count: 16),
+                                locked: false, full: false, people: 1, seats: 2)
+        h.joinResult = .success(JoinedRoom(deviceId: "d_1", hostPin: Data(repeating: 0xab, count: 32), hello: unnamed))
+        await h.store.submit(code: "482913", for: Harness.room)
+        #expect(h.store.saved[0].site == "")
+        #expect(NetworkPanePresentation.savedTitle(h.store.saved[0]) == "Standup · Priya")
+        h.store.stopHealthLoop()
+        await h.store.pingAll()
+        #expect(h.store.saved[0].site == "macdev")
+        #expect(SavedRoomsStore(defaults: h.defaults).load()[0].site == "macdev")
+        #expect(NetworkPanePresentation.savedTitle(h.store.saved[0]) == "Standup · Priya · macdev")
+    }
+
     // MARK: the health loop (UI-1)
 
     @Test func theHealthLoopEndsWhenNobodyLooksAndNoRoomIsOpen() async {
@@ -638,6 +675,24 @@ private final class Harness {
         #expect(saved.hostPin == invite.hostPin)
         #expect(h.store.invite == nil)
         #expect(!"\(h.defaults.dictionaryRepresentation())".contains("482913"))
+    }
+
+    /// #159 SHARE-8: a link whose address is not one of a local network opens the sheet, and Join
+    /// never dials that address: the room is looked for by its Bonjour name only.
+    @Test func anInviteThatNamesAnAddressOnTheInternetIsNotDialledThere() async throws {
+        let far = try #require(InviteFixture.invite(InviteFixture.link(a: "203.0.113.9:8443")))
+        #expect(far.address == .init(host: "203.0.113.9", port: 8443))
+        let h = Harness()
+        h.store.open(invite: .success(far))
+        guard case .enteringCode(let target) = h.store.join else {
+            Issue.record("expected the invite's join sheet, got \(h.store.join)")
+            return
+        }
+        #expect(target.endpoint == .service(name: "Standup", type: LanRoomBrowser.serviceType, domain: "local.", interface: nil))
+        // the same link with an address of the local network is dialled at it
+        h.store.cancelJoin()
+        h.store.open(invite: .success(invite))
+        #expect(h.store.join == .enteringCode(addressed))
     }
 
     /// `x` is advisory: the host may have extended the share, and a matching key and salt

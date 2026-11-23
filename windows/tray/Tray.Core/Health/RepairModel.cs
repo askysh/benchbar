@@ -2,13 +2,13 @@ using System.Text.Json.Nodes;
 
 namespace BenchBar.Tray.Core;
 
-public enum RepairPhase { Planning, Review, Running, Finished, Failed }
+public enum RepairPhase { Planning, Review, Running, Finished, Failed, Stale }
 
 /// <summary>One step of a repair: from the plan's <c>actions[]</c>, then the <c>step</c> lines of the run.</summary>
 public sealed record RepairStep(string Id, string Label, bool Sudo, InstallStepStatus Status = InstallStepStatus.Unknown, string Message = "");
 
-/// <summary>The <c>plan</c> line of <c>repair --json</c>: <c>actions[]</c> and the run's log.</summary>
-public sealed record RepairPlan(IReadOnlyList<RepairStep> Steps, string? Log)
+/// <summary>The <c>plan</c> line of <c>repair --json</c>: <c>actions[]</c>, the run's log and (CLI 0.9) the token that makes <c>--apply</c> run exactly this plan.</summary>
+public sealed record RepairPlan(IReadOnlyList<RepairStep> Steps, string? Log, string? Token = null)
 {
     public static RepairPlan FromJson(JsonObject o)
     {
@@ -20,7 +20,7 @@ public sealed record RepairPlan(IReadOnlyList<RepairStep> Steps, string? Log)
             if (string.IsNullOrEmpty(id)) continue;
             steps.Add(new RepairStep(id, JsonRead.Str(a, "label") ?? id, JsonRead.Bool(a, "sudo")));
         }
-        return new RepairPlan(steps, JsonRead.Str(o, "log"));
+        return new RepairPlan(steps, JsonRead.Str(o, "log"), JsonRead.Str(o, "token"));
     }
 }
 
@@ -36,6 +36,7 @@ public sealed class RepairModel : IDisposable
     private readonly SynchronizationContext? _context = SynchronizationContext.Current;
     private List<RepairStep> _steps = [];
     private CancellationTokenSource? _run;
+    private string? _token;
     private bool _disposed;
 
     public RepairModel(ICliClient cli, string benchPath, string benchName)
@@ -86,6 +87,9 @@ public sealed class RepairModel : IDisposable
 
     public bool HasSudoSteps => SudoSteps > 0;
 
+    /// <summary>The CLI refused the plan token: the bench changed since the plan was shown. Nothing ran; <see cref="LoadPlanAsync"/> reads a new plan (Review Again).</summary>
+    public bool IsStale => Phase == RepairPhase.Stale;
+
     public bool CanRepair => Phase == RepairPhase.Review && Steps.Count > 0;
 
     // --- plan ---
@@ -101,6 +105,7 @@ public sealed class RepairModel : IDisposable
         {
             lock (_gate) _steps = [.. plan.Steps];
             Log = plan.Log;
+            _token = plan.Token;
             Phase = RepairPhase.Review;
         }
         else
@@ -136,7 +141,7 @@ public sealed class RepairModel : IDisposable
             Phase = RepairPhase.Running;
             Raise();
 
-            var result = await _cli.RunStreamAsync(HealthArgs.Repair(BenchPath), env, CliTimeouts.Apply, OnEvent, cts.Token).ConfigureAwait(true);
+            var result = await _cli.RunStreamAsync(HealthArgs.Repair(BenchPath, _token), env, CliTimeouts.Apply, OnEvent, cts.Token).ConfigureAwait(true);
             lock (_gate) _run = null;
             if (_disposed) return;
             Finish(result);
@@ -158,6 +163,13 @@ public sealed class RepairModel : IDisposable
             lock (_gate) _steps = [.. _steps.Select(s => s with { Status = InstallStepStatus.Unknown, Message = "" })];
             Ran = false;
             Phase = RepairPhase.Review;
+        }
+        else if (!result.Ok && !result.Cancelled && _token is not null && PlanStale.Looks(result.Problem))
+        {
+            // refused before any step: nothing changed, so the page need not ask doctor again
+            Message = result.Problem;
+            Ran = false;
+            Phase = RepairPhase.Stale;
         }
         else if (result.Done is null && !result.Ok)
         {

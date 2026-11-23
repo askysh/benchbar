@@ -86,6 +86,21 @@ nonisolated struct ShareInvite: Equatable, Sendable {
         return Address(host: String(parts[0]), port: port)
     }
 
+    /// A room is on the network this Mac is on, and a link can come from anywhere (a web page, a
+    /// chat, an email). So the address of a link is dialled only when it is one of a local network:
+    /// private (10/8, 172.16/12, 192.168/16), link-local (169.254/16) or carrier NAT (100.64/10, a
+    /// phone hotspot or a mesh VPN). The guest store asks this before it dials (its
+    /// `inviteAddressAllowed`); for any other address the room is found by Bonjour or not at all.
+    /// Four plain octets only: no short or hexadecimal form.
+    static func isLocalNetwork(_ host: String) -> Bool {
+        let octets = host.split(separator: ".", omittingEmptySubsequences: false).map { UInt8($0) }
+        guard octets.count == 4, let a = octets[0], let b = octets[1], octets[2] != nil, octets[3] != nil else { return false }
+        switch (a, b) {
+        case (10, _), (192, 168), (169, 254), (172, 16...31), (100, 64...127): return true
+        default: return false
+        }
+    }
+
     /// What the join compares before any code material leaves this Mac.
     var check: RoomJoin.InviteCheck {
         RoomJoin.InviteCheck(hostPin: hostPin, salt: salt)

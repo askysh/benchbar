@@ -745,7 +745,7 @@ fl_action_changed_kind() {
 }
 
 fl_event_plan() {
-  local actions="$1" a sep="" fixes f fsep
+  local actions="$1" a sep="" fixes f fsep tok=""
   [[ "$FL_JSON_EVENTS" == "1" ]] || return 0
   local body=""
   for a in $actions; do
@@ -757,7 +757,8 @@ fl_event_plan() {
     body="${body}${sep}{\"id\":\"${a}\",\"label\":$(fl_json_str "$(fl_action_label "$a")"),\"fixes\":[${fixes}],\"sudo\":$(fl_json_bool "$(fl_action_needs_sudo "$a" && printf 1 || printf 0)")}"
     sep=","
   done
-  fl_event "{\"event\":\"plan\",\"schema_version\":${FL_SCHEMA_VERSION:-1},\"cli_version\":\"${FL_VERSION:-0}\",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}"),\"actions\":[${body}],\"backups\":$(fl_json_str "${FL_BACKUP_ROOT}"),\"log\":$(fl_json_str "${FL_LOG_FILE:-}")}"
+  [[ -z "${FL_ENGINE_PLAN_TOKEN:-}" ]] || tok=",\"token\":\"${FL_ENGINE_PLAN_TOKEN}\""
+  fl_event "{\"event\":\"plan\",\"schema_version\":${FL_SCHEMA_VERSION:-1},\"cli_version\":\"${FL_VERSION:-0}\",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}"),\"actions\":[${body}]${tok},\"backups\":$(fl_json_str "${FL_BACKUP_ROOT}"),\"log\":$(fl_json_str "${FL_LOG_FILE:-}")}"
 }
 
 fl_event_step() {
@@ -775,7 +776,7 @@ FL_ENGINE_ACTION_FAILED=0
 fl_repair_engine() {
   shift
   FL_ENGINE_ACTION_FAILED=0
-  local actions action i n=0 last_sudo rows=() unchanged remaining status labels step_from optional_left="" ids plan_from plan_to
+  local actions action i n=0 last_sudo rows=() unchanged remaining status labels step_from optional_left="" ids plan_from plan_to token_actions=""
   fl_doctor_run "$@"
   actions=""
   for action in $(fl_doctor_actions); do
@@ -789,7 +790,19 @@ fl_repair_engine() {
       continue
     fi
     actions="${actions}${actions:+ }${action}"
+    # the token covers the actions a --yes run would take: a question is left out of both, so
+    # the dry run (which lists it) and the real run (which does not) make the same token
+    fl_action_is_question "$action" || token_actions="${token_actions}${token_actions:+ }${action}"
   done
+  # repair --apply TOKEN: the plan of this run must be the plan the token was made for, checked
+  # before anything is asked or run; an empty plan has no token and so never matches one
+  FL_ENGINE_PLAN_TOKEN=""
+  if [[ "${FL_ENGINE_TOKEN_KIND:-}" == "repair" ]]; then
+    local token_data=""
+    [[ -z "$token_actions" ]] || token_data="$(printf 'repair\n%s\n%s\n%s\n%s\n' "$FL_BENCH_DIR" "$FL_SITE" "$FL_PROFILE" "$token_actions")"
+    fl_plan_apply_check "$token_data" "repair" "benchbar repair --dry-run --json --bench-dir ${FL_BENCH_DIR}"
+    [[ -z "$token_data" ]] || fl_plan_token_v FL_ENGINE_PLAN_TOKEN "$token_data"
+  fi
   unchanged=$(( ${#FL_D_IDS[@]} - $(fl_doctor_count warn) - $(fl_doctor_count fail) ))
   # the MariaDB labels name the running benches: one scan, before the labels' subshells
   case " $actions " in *" mariadb_"*) fl_mariadb_running_benches_prime ;; esac
