@@ -127,7 +127,9 @@ On `next-release`, then into `main`:
    of CI on the new `next-release` head is green: that run is the one the
    release is built on. Then start the real installs on macOS on that
    commit and wait for them (7 and 8 minutes once two Macs are free):
-   `gh workflow run real-install.yml --ref next-release`. No push starts
+   `gh workflow run real-install.yml --ref next-release`. The nightly run
+   does not count: GitHub runs a schedule from `main`, so its result
+   attaches to the head of `main`, not to the commit you release. No push starts
    them (they need two of the five macOS runners the repository gets), and
    the release gate refuses a commit that has no passed
    "Real install result (macOS)". Merge nothing else until the tag exists.
