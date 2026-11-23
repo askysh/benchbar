@@ -299,7 +299,7 @@ fl_run_with_timeout() {
     return $?
   fi
 
-  fl_tmp_new_v log frappe-local-command
+  fl_tmp_new_v log benchbar-cmd
   fl_log "run: $* (timeout ${timeout_seconds}s)"
   fl_run_bg_group "$log" "$@"
   pid="$FL_RUN_PID"
@@ -517,23 +517,6 @@ fl_git_remote_heads() {
   fl_git_remote_run "${2:-${FL_GIT_TIMEOUT:-30}}" ls-remote --heads -- "$1"
   [[ "$FL_GR_CODE" == "0" ]] && printf '%s\n' "$FL_GR_OUT" | sed 's#.*refs/heads/##' | awk 'NR<=20 && NF'
   return 0
-}
-
-fl_capture() {
-  fl_redact_url_v FL_LAST_COMMAND "$*"
-  "$@"
-}
-
-fl_retry() {
-  local attempts="$1" delay="$2"; shift 2
-  local i=1
-  while true; do
-    "$@" && return 0
-    [[ "$i" -ge "$attempts" ]] && return 1
-    fl_warn "command failed; retry ${i}/${attempts}: $(fl_redact_url "$*")"
-    sleep "$delay"
-    i=$((i + 1))
-  done
 }
 
 # fl_on_error [COMMAND]: the ERR trap. benchbar sets it with errtrace (set -E), as

@@ -1,0 +1,17 @@
+#@version 1
+#@quoted BENCHBAR
+# __HEADER__
+# Managed by benchbar (https://github.com/askysh/benchbar).
+# Do not edit inside the markers: run "benchbar repair" to regenerate.
+__PROFILE_EXPORTS__
+contains -- "$HOME/.local/bin" $PATH; or set -gx PATH "$HOME/.local/bin" $PATH
+set -g BENCHBAR "__BENCHBAR__"
+function benchup; command $BENCHBAR up $argv; end
+function benchdown; command $BENCHBAR down $argv; end
+function benchrestart; command $BENCHBAR restart $argv; end
+function benchstatus; command $BENCHBAR status $argv; end
+function benchlogs; command $BENCHBAR logs $argv; end
+function benchfg; command $BENCHBAR fg $argv; end
+function benchwatch; command $BENCHBAR watch $argv; end
+function benchdoctor; command $BENCHBAR doctor $argv; end
+function benchcd; cd (command $BENCHBAR path); end

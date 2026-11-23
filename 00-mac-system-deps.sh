@@ -319,8 +319,14 @@ done
 
 fl_section "SHELL CONFIG"
 ZSHRC="$(fl_rc_file)"
-HELPER_BLOCK="$(fl_template_render shell-helpers "PROFILE_EXPORTS=$(fl_profile_path_exports "$FL_PROFILE")" "BENCHBAR=${FL_SELF}")"
-case "$(fl_rc_block_status "$ZSHRC" "$HELPER_BLOCK")" in
+HELPER_BLOCK="$(fl_rc_helpers_render "$FL_PROFILE" "$FL_SELF")"
+# a shell that reads no block of ours (nushell and the like) gets no file
+RC_STATUS=none
+[[ -z "$ZSHRC" ]] || RC_STATUS="$(fl_rc_block_status "$ZSHRC" "$HELPER_BLOCK")"
+case "$RC_STATUS" in
+  none)
+    fl_ok "no shell helper block: ${SHELL##*/} cannot read one; use ${FL_SELF} up, down, restart, status and logs"
+    ;;
   current)
     fl_ok "${ZSHRC} has the benchbar block (profile exports and bench helpers)"
     ;;

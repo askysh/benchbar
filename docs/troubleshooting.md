@@ -20,7 +20,10 @@ page: [First run problems](first-run-problems.md). On Linux, see also
 ## Common stumbles
 
 **`benchup: command not found`.** Run `source ~/.zshrc` once, or open a
-new Terminal tab.
+new Terminal tab. The helpers follow your login shell: fish has them in
+`~/.config/fish/conf.d/benchbar.fish`, bash on a Mac in `~/.bash_profile`.
+After a change of shell, `benchbar repair` writes them for the new one.
+nushell and a few other shells get none: use `benchbar up` there.
 
 **"Cannot write ...: ... is not writable" or "is not a folder".** A state file's
 folder cannot be written: it belongs to root (an earlier `sudo benchbar`), is on a
