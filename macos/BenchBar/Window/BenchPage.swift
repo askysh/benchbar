@@ -367,6 +367,7 @@ struct BenchSites: View {
     @State private var hosts: HostsRun?
     @State private var dropping: String?
     @State private var restoring: String?
+    @State private var moving: String?
     @State private var snapshotting: String?
     @State private var pulling = false
     @State private var findingUser: String?
@@ -407,7 +408,7 @@ struct BenchSites: View {
                         .disabled(!row.needsHosts && bench.state != .running)
                         SiteMenu(workbench: workbench, bench: bench, row: row, busy: busy, onlySite: rows.count == 1,
                                  openAs: { turnOpenAs(row) }, restore: { restoring = row.name },
-                                 snapshots: { snapshotting = row.name }) { dropping = row.name }
+                                 move: { moving = row.name }, snapshots: { snapshotting = row.name }) { dropping = row.name }
                     }
                 }
             } header: {
@@ -479,6 +480,9 @@ struct BenchSites: View {
         }
         .sheet(item: Binding(get: { restoring.map(DropTarget.init) }, set: { restoring = $0?.site })) { target in
             SiteRestoreSheet(workbench: workbench, bench: bench, site: target.site) { restoring = nil }
+        }
+        .sheet(item: Binding(get: { moving.map(DropTarget.init) }, set: { moving = $0?.site })) { target in
+            SiteMoveSheet(workbench: workbench, bench: bench, site: target.site) { moving = nil }
         }
         .sheet(item: Binding(get: { snapshotting.map(DropTarget.init) }, set: { snapshotting = $0?.site })) { target in
             SnapshotsSheet(workbench: workbench, bench: bench, site: target.site) { snapshotting = nil }
@@ -564,6 +568,7 @@ struct SiteMenu: View {
     let onlySite: Bool
     let openAs: () -> Void
     let restore: () -> Void
+    let move: () -> Void
     let snapshots: () -> Void
     let drop: () -> Void
 
@@ -586,6 +591,11 @@ struct SiteMenu: View {
                 .disabled(workbench.backups(of: row.name, on: bench)?.backups.isEmpty ?? true)
             Button("Snapshots…", action: snapshots)
                 .help("Take a snapshot, see the snapshots of \(row.name), roll it back to one")
+            if workbench.offersMove(from: bench) {
+                Button("Move to Another Bench…", action: move)
+                    .disabled(!SiteMoveText.canMove(row))
+                    .help(SiteMoveText.canMove(row) ? "Moves \(row.name) to another bench, under the same name" : "The default site never moves; make another site the default first")
+            }
             Divider()
             Button("Open Console") { Workspace.openShell(.console, site: row.name, bench: bench, store: workbench.store) }
             Button("Open Database") { Workspace.openShell(.db, site: row.name, bench: bench, store: workbench.store) }

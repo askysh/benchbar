@@ -286,6 +286,17 @@ Every bench has a page:
   bench. The default site can be dropped only by naming the site that
   takes its place, and the only site of a bench cannot be dropped. Removing the site's `/etc/hosts` line needs
   your password, so the sheet shows that command to run in Terminal.
+  **Move to Another Bench…** (the same menu, when `benchbar` lists `site
+  move` and another bench is registered; never for the default site)
+  picks the bench the site goes to and shows the plan of `benchbar site
+  move --dry-run --json`: the steps, the apps, the new address (the name
+  stays, the port is the other bench's) and what stays (the backups). A
+  running bench is answered with **Stop Bench**, which stops it and reads
+  the plan again. **Move** needs the site name typed and runs exactly that
+  plan by its own token, with the progress of each step; the site is
+  dropped in this bench only after the copy checks out. The end shows the
+  CLI's next steps, and a plan that changed in between shows **Review
+  Again**.
   **Restore a Backup…** (the same menu) puts one of the site's backups
   back, either into the site itself or into a copy under a new name. It
   shows the CLI's plan first (`benchbar site restore --dry-run --json`)

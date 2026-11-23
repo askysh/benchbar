@@ -290,6 +290,86 @@ public class HealthTests
         Assert.Contains("bench build exited 1", model.Steps[0].Message);
     }
 
+    private const string RepairToken = "abababababababababababababababababababababababababababababababab";
+
+    [Fact]
+    public void TheRepairArgumentsCarryTheTokenOnlyWhenThereIsOne()
+    {
+        Assert.Equal(["repair", "--apply", RepairToken, "--yes", "--json", "--bench-dir", Bench], HealthArgs.Repair(Bench, RepairToken));
+        Assert.Equal(HealthArgs.Repair(Bench), HealthArgs.Repair(Bench, null));
+        Assert.Equal(HealthArgs.Repair(Bench), HealthArgs.Repair(Bench, ""));
+    }
+
+    [Fact]
+    public async Task TheRealRunPassesTheTokenOfThePlanThePersonSaw()
+    {
+        var (client, runner) = CliFixture.Scripted();
+        runner.On("repair", "--dry-run").Print(CliFixture.Lines("health-repair-plan-plain-token.json"));
+        runner.On(a => a[0] == "repair" && a.Contains("--yes")).Print(CliFixture.Lines("health-repair-run.jsonl"));
+        var model = new RepairModel(client, Bench, "b");
+        await model.LoadPlanAsync(TestContext.Current.CancellationToken);
+        await model.RunAsync();
+        Assert.Equal(HealthArgs.Repair(Bench, RepairToken), runner.Runs.Last().Args);
+        Assert.DoesNotContain("--apply", runner.Runs.First().Args);
+        Assert.Equal(RepairPhase.Finished, model.Phase);
+    }
+
+    [Fact]
+    public async Task AnOlderCliThatPrintsNoTokenKeepsTheOldCall()
+    {
+        var (client, runner) = CliFixture.Scripted();
+        runner.On("repair", "--dry-run").Print(CliFixture.Lines("health-repair-plan-plain.json"));
+        runner.On(a => a[0] == "repair" && a.Contains("--yes")).Print(CliFixture.Lines("health-repair-run.jsonl"));
+        var model = new RepairModel(client, Bench, "b");
+        await model.LoadPlanAsync(TestContext.Current.CancellationToken);
+        await model.RunAsync();
+        Assert.Equal(HealthArgs.Repair(Bench), runner.Runs.Last().Args);
+    }
+
+    [Theory]
+    [InlineData("health-repair-stale.jsonl", "plan changed since it was shown")]
+    [InlineData("health-repair-expired.jsonl", "token expired")]
+    public async Task AStaleRefusalChangesNothingAndOffersReviewAgain(string refusal, string words)
+    {
+        var (client, runner) = CliFixture.Scripted();
+        runner.On("repair", "--dry-run").Print(CliFixture.Lines("health-repair-plan-plain-token.json"));
+        runner.On(a => a[0] == "repair" && a.Contains("--yes")).Print(CliFixture.Lines(refusal)).Fail(1);
+        var model = new RepairModel(client, Bench, "b");
+        await model.LoadPlanAsync(TestContext.Current.CancellationToken);
+        await model.RunAsync();
+
+        Assert.Equal(RepairPhase.Stale, model.Phase);
+        Assert.Contains(words, model.Message);
+        Assert.Contains("Nothing was changed", model.Message);
+        Assert.False(model.Ran); // no change: the page does not ask doctor again
+        Assert.False(model.CanRepair);
+        Assert.True(model.IsDismissible);
+        Assert.All(model.Steps, s => Assert.Equal(InstallStepStatus.Unknown, s.Status));
+    }
+
+    [Fact]
+    public async Task ReviewAgainReadsANewPlanAndRunsItWithItsOwnToken()
+    {
+        var (client, runner) = CliFixture.Scripted();
+        const string fresh = "1111111111111111111111111111111111111111111111111111111111111111";
+        int plansRead = 0, runsStarted = 0;
+        runner.On(a => a.Contains("--dry-run") && plansRead++ == 0).Print(CliFixture.Lines("health-repair-plan-plain-token.json"));
+        runner.On("repair", "--dry-run").Print(CliFixture.Lines("health-repair-plan-plain-token.json")[0].Replace(RepairToken, fresh));
+        runner.On(a => a.Contains("--yes") && runsStarted++ == 0).Print(CliFixture.Lines("health-repair-stale.jsonl")).Fail(1);
+        runner.On(a => a[0] == "repair" && a.Contains("--yes")).Print(CliFixture.Lines("health-repair-run.jsonl"));
+        var model = new RepairModel(client, Bench, "b");
+        await model.LoadPlanAsync(TestContext.Current.CancellationToken);
+        await model.RunAsync();
+        Assert.Equal(RepairPhase.Stale, model.Phase);
+
+        await model.LoadPlanAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(RepairPhase.Review, model.Phase);
+        Assert.Null(model.Message);
+        await model.RunAsync();
+        Assert.Equal(HealthArgs.Repair(Bench, fresh), runner.Runs.Last().Args);
+        Assert.Equal(RepairPhase.Finished, model.Phase);
+    }
+
     [Fact]
     public async Task ARepairThatPrintsNoDoneLineFails()
     {
