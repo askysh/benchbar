@@ -348,6 +348,16 @@ FL_SHARE_ADMIN_GROUP="$(id -gn)" pre --static; assert_check node_ok fail "world"
 # special bits on the platform the suite runs on (BSD stat's %Lp alone drops them)
 chmod 1757 "$TMP_DIR/nodes/cellar"
 FL_SHARE_ADMIN_GROUP="$(id -gn)" pre --static; assert_check node_ok ok "" ""
+# /tmp itself is 1777: group-writable too, by a group that is not admin. The sticky bit covers both
+# kinds of write (#159: the check saw the group write first, so the exemption never applied to a real /tmp)
+chmod 1777 "$TMP_DIR/nodes/cellar"
+FL_SHARE_ADMIN_GROUP=benchbar-no-such-group pre --static; assert_check node_ok ok "" ""
+# without the sticky bit the same folder is refused, and a sticky bit on the file itself excuses nothing
+chmod 775 "$TMP_DIR/nodes/cellar"
+FL_SHARE_ADMIN_GROUP=benchbar-no-such-group pre --static; assert_check node_ok fail "group" none
+chmod 755 "$TMP_DIR/nodes/cellar"; chmod 1775 "$NODE_REAL_DIR/node"
+FL_SHARE_ADMIN_GROUP=benchbar-no-such-group pre --static; assert_check node_ok fail "group" none
+chmod 755 "$NODE_REAL_DIR/node"
 chmod 755 "$TMP_DIR/nodes/cellar"; chmod 757 "$NODE_REAL_DIR/node"
 pre --static; assert_check node_ok fail "world"
 chmod 755 "$NODE_REAL_DIR/node"
