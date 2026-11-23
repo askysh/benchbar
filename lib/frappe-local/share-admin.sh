@@ -108,6 +108,23 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 const cutoff = Math.max(Number(nowMs) - 14 * 86400000, Number(sinceMs));
 let names = [];
 try { names = fs.readdirSync(dir).filter((n) => /^activity-\d{4}-\d{2}-\d{2}\.log$/.test(n)); } catch { names = []; }
+// the gateway prunes when a share starts and when it ends; a host who reads the log of a share that is
+// long over prunes here, so a file never outlives its 14 days by more than the next look at it
+const oldestKept = new Date(Number(nowMs) - 14 * 86400000).toISOString().slice(0, 10);
+names = names.filter((name) => {
+  if (name.slice(9, 19) >= oldestKept) return true;
+  try { fs.unlinkSync(path.join(dir, name)); } catch { /* read only, or gone: it is skipped all the same */ }
+  return false;
+});
+// the gateway logs a seat by its id; the name shown is the one share.json has for it (the id, for a seat that is gone)
+const seatNames = new Map();
+try {
+  for (const s of JSON.parse(fs.readFileSync(path.join(dir, "share.json"), "utf8")).seats) {
+    if (s && typeof s.seat_id === "string" && typeof s.full_name === "string") seatNames.set(s.seat_id, s.full_name);
+  }
+} catch { /* no share.json: the ids are shown */ }
+// a line of 0.8.3 holds "user" (an e-mail address) and no "seat": shown as it is until it is pruned
+const who = (e) => (typeof e.seat === "string" ? clean(seatNames.get(e.seat) ?? e.seat) : clean(e.user));
 const entries = [];
 for (const name of names) {
   let text = "";
@@ -120,7 +137,7 @@ for (const name of names) {
     if (!(ms >= cutoff) || ms > Number(nowMs) + 86400000) continue;
     if (device && e.device !== device) continue;
     entries.push({
-      ms, ts: e.ts, device: clean(e.device), user: clean(e.user), method: /^[A-Z]{1,16}$/.test(e.method) ? e.method : "",
+      ms, ts: e.ts, device: clean(e.device), user: who(e), method: /^[A-Z]{1,16}$/.test(e.method) ? e.method : "",
       path: redactPath(clean(e.path)), status: Number.isInteger(e.status) ? e.status : 0
     });
   }

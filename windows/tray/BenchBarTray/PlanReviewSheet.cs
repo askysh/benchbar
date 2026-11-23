@@ -19,6 +19,7 @@ internal sealed class PlanReviewSheet : Window
     private readonly Action<string>? _onDetachedFinish;
     private readonly TextBlock _live = Ui.Live(Ui.Text("", 12, opacity: 0.7, margin: new Thickness(0, 8, 0, 0)));
     private TextBlock? _elapsedText;
+    private Button? _confirmButton;
     private bool _leaving;
     private readonly ContentControl _body = new() { IsTabStop = false };
     private readonly System.Windows.Threading.DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -139,18 +140,20 @@ internal sealed class PlanReviewSheet : Window
                 panel.Children.Add(Ui.Text("There is no plan", 18, FontWeights.SemiBold));
                 panel.Children.Add(Ui.CriticalText(_model.Message ?? "The plan could not be made."));
                 panel.Children.Add(ReportLink(_model.Message ?? "The plan could not be made."));
-                buttons.Add(("Refresh Plan", () => _model.RefreshPlanAsync().Forget(), true, true));
+                buttons.Add((_model.Request.RefreshLabel, () => _model.RefreshPlanAsync().Forget(), true, true));
                 buttons.Add(("Close", Close, false, true));
                 break;
             case PlanPhase.Stale:
                 panel.Children.Add(Ui.Text("The plan is out of date", 18, FontWeights.SemiBold));
                 panel.Children.Add(Ui.Text("Something changed since you reviewed it. Nothing was changed. Read the plan again before you apply it.", 14, opacity: 0.85, margin: new Thickness(0, 8, 0, 0)));
-                buttons.Add(("Refresh Plan", () => _model.RefreshPlanAsync().Forget(), true, true));
+                buttons.Add((_model.Request.RefreshLabel, () => _model.RefreshPlanAsync().Forget(), true, true));
                 buttons.Add(("Close", Close, false, true));
                 break;
             case PlanPhase.Review when plan is not null:
                 BuildReview(panel, plan);
-                buttons.Add((_model.Request.ConfirmLabel, () => _model.ConfirmAsync().Forget(), true, _model.CanConfirm));
+                if (_model.Blocker is { } blocker) buttons.Add((blocker.Label, () => _model.ResolveBlockerAsync().Forget(), true, true));
+                // a plan that waits for a typed name is not confirmed by Enter: the button is never the accent one
+                buttons.Add((_model.Request.ConfirmLabel, () => _model.ConfirmAsync().Forget(), _model.Request.ConfirmName is null && _model.Blocker is null, _model.CanConfirm));
                 buttons.Add(("Cancel", Close, false, true));
                 break;
             case PlanPhase.Running:
@@ -181,10 +184,12 @@ internal sealed class PlanReviewSheet : Window
         else if (_model.Phase != PlanPhase.Running) _clock.Stop();
 
         _bar.Children.Clear();
+        _confirmButton = null;
         foreach (var (label, click, primary, enabled) in buttons)
         {
             var button = Ui.Button(label, click, label, primary);
             button.IsEnabled = enabled;
+            if (_model.Phase == PlanPhase.Review && label == _model.Request.ConfirmLabel) _confirmButton = button;
             if (label is "Cancel" or "Close") button.IsCancel = _model.IsDismissible;
             _bar.Children.Add(button);
         }
@@ -242,6 +247,16 @@ internal sealed class PlanReviewSheet : Window
             panel.Children.Add(Ui.Text($"{plan.SudoSteps} {(plan.SudoSteps == 1 ? "step uses" : "steps use")} sudo. BenchBar asks for your Linux password when you confirm; it is used for this run only.", 13, margin: new Thickness(0, 10, 0, 0)));
         foreach (var warning in plan.Warnings) panel.Children.Add(Ui.Text("Warning: " + warning, 13, margin: new Thickness(0, 6, 0, 0)));
         foreach (var need in plan.Needs) panel.Children.Add(Ui.Text("Needs: " + need, 13, margin: new Thickness(0, 6, 0, 0)));
+        if (_model.Request.ConfirmName is { } name)
+        {
+            var label = $"Type {name} to confirm";
+            var box = Ui.Field(label, _model.Typed, text =>
+            {
+                _model.Typed = text;
+                if (_confirmButton is not null) _confirmButton.IsEnabled = _model.CanConfirm; // no rebuild: it would take the focus off the box
+            }, 400);
+            panel.Children.Add(new StackPanel { Margin = new Thickness(0, 14, 0, 0), Children = { Ui.Text(label, 13, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 4)), box } });
+        }
     }
 
     private void BuildRunning(StackPanel panel)

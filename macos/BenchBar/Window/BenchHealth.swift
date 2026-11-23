@@ -119,6 +119,7 @@ extension RepairRun {
             .done(code == 0 ? .success("Repair finished; every check passes.")
                   : .warning("Repair finished with problems left", "See the steps below and the log."))
         case .failed(let message): .failed(message, title: steps.isEmpty ? "No repair plan" : "Repair stopped")
+        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown")
         }
     }
 }
@@ -132,7 +133,7 @@ struct RepairSheet: View {
         SheetScaffold("Repair \(run.bench.name)",
                       explanation: "Runs the fixes doctor found, in order, with a backup before each change.",
                       phase: run.sheetPhase) {
-            if run.phase != .planning {
+            if run.phase != .planning, !run.isStale {
                 if run.steps.isEmpty {
                     if run.phase == .review {
                         SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: "Nothing to repair.")
@@ -166,6 +167,9 @@ struct RepairSheet: View {
                 CancelButton(action: close)
             case .running:
                 EmptyView()
+            case .stale:
+                CancelButton(action: close)
+                Button("Review Again") { Task { await run.loadPlan() } }.keyboardShortcut(.defaultAction)
             case .finished, .failed:
                 DoneButton(action: close)
             }

@@ -101,11 +101,14 @@ fl_lg_as_root() {
   local reason="$1" manual="$2" script="$3" code=0 last
   FL_LG_ROOT_OUT=""
   if fl_sudo_gui; then
-    fl_root_run "$reason" "$script" || code=$?
+    # a dialog's failure shows only what the step wrote to stderr: the load half repeats its pf lines there
+    fl_root_run "$reason" "pf_marks_on_stderr=1"$'\n'"$script" || code=$?
     case "$code" in
       0) FL_LG_ROOT_OUT="$FL_ROOT_OUTPUT"; return 0 ;;
       2) fl_die "The password dialog was cancelled; nothing was changed." "Run: ${manual}" ;;
     esac
+    # the step may have enabled pf before it failed: that reference is kept, so that remove can give it back
+    fl_lg_pf_record "$FL_ROOT_OUTPUT"
     last="$(printf '%s\n' "$FL_ROOT_OUTPUT" | grep -v '^[[:space:]]*$' | tail -n 1 || true)"
     fl_die "The root step failed${last:+: ${last}}." "Run: ${manual}"
   fi
@@ -113,7 +116,10 @@ fl_lg_as_root() {
   FL_LG_ROOT_OUT="$(sudo /bin/bash -c "$script" benchbar-root)" || code=$?
   if fl_is_linux; then fl_sudo_phase_done; else fl_sudo_drop; fi
   printf '%s\n' "$FL_LG_ROOT_OUT" | grep -v '^benchbar-pf-' || true
-  [[ "$code" == 0 ]] || fl_die "The root step failed (exit ${code}); see the log." "Run: ${manual}"
+  if [[ "$code" != 0 ]]; then
+    fl_lg_pf_record "$FL_LG_ROOT_OUT"
+    fl_die "The root step failed (exit ${code}); see the log." "Run: ${manual}"
+  fi
 }
 
 # fl_lg_tools_sh: the tool and file paths every root script names, as shell assignments, one per line
@@ -150,8 +156,20 @@ ROOT
 # pfctl -E takes a reference on pf and prints its token; lan-guard remove gives that reference back with
 # pfctl -X. So the root side says, on stdout, whether pf was enabled before and which token it got
 # ("benchbar-pf-was-enabled 0|1", "benchbar-pf-token N"); fl_lg_pf_record keeps them in the state folder.
+# A step that fails after pfctl -E (launchd refuses the daemon) has taken the reference all the same, so
+# the caller records what a failed step printed too. Behind the password dialog a failure shows stderr
+# only, so there the two lines are said again on stderr as the step ends in failure.
 fl_lg_load_sh() {
   cat <<'ROOT'
+pf_token=""
+pf_marks() {
+  rc=$?
+  if [ "$rc" != 0 ] && [ "${pf_marks_on_stderr:-0}" = 1 ] && [ -n "${pf_was:-}" ]; then
+    printf 'benchbar-pf-was-enabled %s\n' "$pf_was" >&2
+    if [ -n "$pf_token" ]; then printf 'benchbar-pf-token %s\n' "$pf_token" >&2; fi
+  fi
+}
+trap pf_marks EXIT
 pf_was=0
 case "$("$pfctl" -s info 2>/dev/null || true)" in *"Status: Enabled"*) pf_was=1 ;; esac
 pf_out="$("$pfctl" -E -a "$pf_anchor" -f "$anchor" 2>&1)" || { printf '%s\n' "$pf_out" >&2; exit 1; }
@@ -190,7 +208,9 @@ fl_lg_pf_record() {
   while IFS= read -r line; do
     case "$line" in
       "benchbar-pf-was-enabled "[01]) [[ -n "$was" ]] || was="${line##* }" ;;
-      "benchbar-pf-token "[0-9]*) tokens="${tokens}${tokens:+$'\n'}${line##* }" ;;
+      "benchbar-pf-token "[0-9]*)
+        # a failed step may say its token twice (stdout and stderr)
+        case $'\n'"${tokens}"$'\n' in *$'\n'"${line##* }"$'\n'*) ;; *) tokens="${tokens}${tokens:+$'\n'}${line##* }" ;; esac ;;
     esac
   done <<<"$1"
   [[ -n "$was" ]] || return 0

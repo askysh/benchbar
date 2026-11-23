@@ -70,9 +70,12 @@ nonisolated struct InstallPlan: Codable, Sendable, Equatable {
     var sudoMode: String?
     var steps: [InstallPlanStep]
     var log: String?
+    /// CLI 0.9: `install --apply TOKEN --yes` runs exactly this plan and is refused when it changed.
+    /// nil from an older CLI.
+    var token: String?
 
     enum CodingKeys: String, CodingKey {
-        case bench, site, profile, bundle, steps, log
+        case bench, site, profile, bundle, steps, log, token
         case teamProfile = "team_profile"
         case portOffset = "port_offset"
         case portsMove = "ports_move"
@@ -95,11 +98,12 @@ nonisolated struct InstallPlan: Codable, Sendable, Equatable {
         sudoMode = try c.decodeIfPresent(String.self, forKey: .sudoMode)
         steps = try c.decodeIfPresent([InstallPlanStep].self, forKey: .steps) ?? []
         log = try c.decodeIfPresent(String.self, forKey: .log)
+        token = try c.decodeIfPresent(String.self, forKey: .token)
     }
 
     init(bench: String, site: String, profile: String? = nil, teamProfile: String? = nil, bundle: String? = nil,
          portOffset: Int? = nil, portsMove: Bool? = nil, webURL: String? = nil, dryRun: Bool = false,
-         sudoMode: String? = nil, steps: [InstallPlanStep] = [], log: String? = nil) {
+         sudoMode: String? = nil, steps: [InstallPlanStep] = [], log: String? = nil, token: String? = nil) {
         self.bench = bench
         self.site = site
         self.profile = profile
@@ -112,6 +116,7 @@ nonisolated struct InstallPlan: Codable, Sendable, Equatable {
         self.sudoMode = sudoMode
         self.steps = steps
         self.log = log
+        self.token = token
     }
 
     /// The steps that ask for the Mac's password, and that will run.
