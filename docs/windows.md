@@ -576,6 +576,21 @@ runs at once and shows its output. A change shows the plan of `run --dry-run
 the deadline) and runs `--apply TOKEN --yes` with the token of that plan. The
 output of a change is in the run's log, which the result shows.
 
+**Tidy Up...**, **Forget Bench...**, **Remove Bench...** and **Remove Service...**
+in the More menu of the Overview (each offered when the CLI lists its command)
+are the end of a bench's life. **Tidy Up...** marks the bench scratch for 1 to 90
+days (`bench scratch`) or not, lists the scratch benches that expired (`bench gc
+--dry-run`, read when it opens) and the databases that no site of any bench
+refers to (`db orphans`, which needs the MariaDB root password the CLI already
+keeps). **Remove Expired...** shows the plan of `bench gc` and runs `--apply
+TOKEN --yes` with that plan's token. **Forget Bench...** shows the plan of
+`bench forget` (the folder, sites and databases stay); **Remove Bench...** asks
+you to type the folder name, then shows the plan of `bench remove`: each site is
+backed up and its database dropped, and the folder is moved to a trash folder
+next to it, never deleted. **Remove Service...** is `uninstall-service` for that
+one bench, never `--all`, after its dry run. The tray never drops an orphan
+database: you drop one in Terminal after a backup.
+
 **Quick Switch...** in the tray menu opens a small panel over any window:
 Administrator, your pinned users and, when you type two letters or more,
 the site's other users. Up, Down and Enter choose, **0** to **9** open a row
@@ -964,6 +979,9 @@ every distro, so stop your benches first).
 - The runner in the notification area runs at one speed. The Overview charts
   the bench's CPU and the runner speed (`benchbar stats`) while it is on
   screen, but sampling it for the icon would keep a timer running at rest.
+- It has no entry for `benchbar site hosts --prune`. That command is for the
+  macOS hosts file, and the tray never edits the Windows one (a `*.localhost`
+  name needs no line).
 - It never reads files inside the distro: every fact comes from
   `benchbar.exe`.
 - Quick Switch has no global keyboard shortcut yet: open it from the tray

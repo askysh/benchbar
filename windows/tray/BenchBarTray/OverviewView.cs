@@ -57,7 +57,7 @@ internal static class TerminalLauncher
 /// BenchOverview). Rebuilt only when something it shows changed. Everything it adds costs nothing at rest: the uptime is worked out from
 /// the status the poll already reads, and <c>lock check</c> runs when the tab is shown, once per bench, and on Check Again.
 /// </summary>
-internal sealed class OverviewView : UserControl
+internal sealed partial class OverviewView : UserControl
 {
     private readonly OverviewActions _actions;
     private readonly HashSet<string> _busy = [];
@@ -412,6 +412,7 @@ internal sealed class OverviewView : UserControl
                 Item("Apply Lockfile...", "lock apply: shows the plan first", !needs && _locks.TryGetValue(bench.Path, out var known) && known.Check is not null, () => ReviewLockAsync("apply").Forget());
             if (cli.Has("run"))
                 Item("Run Bench Command...", "benchbar run: one command of the allow list (migrate, clear-cache, build, run-tests and the reads) in this bench; a change shows its plan first", !needs, () => RunBenchCommandAsync().Forget());
+            AddTidyItems(bench, cli, needs, Item);
             if (cli.Has("watch")) Item("Watch Assets in Terminal", "benchbar watch, in Windows Terminal. Close the window to stop it.", !needs, () => OpenShell(null, _ => OverviewArgs.InTerminal("watch", bench.Path)));
             if (cli.Has("fg"))
                 Item("Run in Foreground in Terminal", "benchbar fg: stops the background bench and runs it in a terminal. Closing the window stops it.", !needs, () => OpenShell(null, _ => OverviewArgs.InTerminal("fg", bench.Path)));
