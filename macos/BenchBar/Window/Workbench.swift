@@ -27,8 +27,18 @@ final class Workbench {
     private(set) var autostartOn: [String: Bool] = [:]
     /// Why the last acknowledge, services only or autostart call failed, per bench path, for the page it came from.
     private(set) var parityError: [String: String] = [:]
+    /// Each site's snapshots, keyed by `backupKey(bench, site)`; read when the Snapshots sheet opens and after a change to them.
+    var snapshotLists: [String: SiteSnapshotList] = [:]
+    /// `benchbar history --json`, newest first, and why it could not be read.
+    var history: [HistoryEntry] = []
+    var historyError: String?
+    var loadingHistory = false
+    /// `lease list --json` per bench path: who holds the bench or one of its sites.
+    var leases: [String: [LeaseInfo]] = [:]
     /// The last change's outcome, for the banner at the top of the pane.
     var result: ChangeResult?
+    /// The change a lease refused, to run again as a person's explicit "Break lease" (never on its own).
+    var leaseRetry: LeaseRetry?
     @ObservationIgnored private let appCalls = OnDemandCalls()
     @ObservationIgnored private let autostartCalls = OnDemandCalls()
     /// The live read of site lists that were never read, once per stamp.
@@ -41,7 +51,16 @@ final class Workbench {
         var scope: String = ""
         /// What a change that worked has to say (what a pull neutralised); the banner shows it under the title.
         var note: String?
+        /// The change was refused because a lease holds the bench or site: who holds it and until when.
+        var lease: LeaseRefusal?
         var succeeded: Bool { error == nil }
+    }
+
+    /// What a lease refused, kept so the person can run the same change again with `--break-lease`.
+    struct LeaseRetry {
+        var title: String
+        var bench: BenchModel
+        var work: (CLIClient) async throws(CLIError) -> Void
     }
 
     static let profilesScope = "profiles"
@@ -361,9 +380,13 @@ final class Workbench {
         }
     }
 
-    /// `autostart` of this bench, read when the Overview shows it and again after a change to the bench.
+    /// Whether the bench comes back after a login: `autostart` of `status --json` (CLI 0.9), which the window reads anyway.
+    /// A CLI whose status has no such field is asked in words (`benchbar autostart`) once the Overview shows it.
+    func autostartSetting(for bench: BenchModel) -> Bool? { bench.status?.autostart ?? autostartOn[bench.path] }
+
+    /// The fallback read for a CLI older than 0.9, whose status has no `autostart` and whose command prints text only.
     func showAutostart(_ bench: BenchModel) async {
-        guard commandState.catalog?.has("autostart") == true, !bench.needsService, store.pageMayAsk(about: bench),
+        guard bench.status?.autostart == nil, commandState.catalog?.has("autostart") == true, !bench.needsService, store.pageMayAsk(about: bench),
               let client = store.cliClient else { return }
         await autostartCalls.ask(bench.path, force: false, stamp: { store.stamp(for: bench) }) {
             self.autostartOn[bench.path] = (try? await client.autostart(bench: bench.path)) ?? nil
@@ -376,6 +399,7 @@ final class Workbench {
         let error = await change(on ? "Start \(bench.name) after login" : "Do not start \(bench.name) after login", on: bench) { client throws(CLIError) in
             try await client.setAutostart(on, bench: bench.path)
         }
+        // the status is read again after the change and says it; the remembered value serves a CLI without the field
         if error == nil { autostartOn[bench.path] = on } else { autostartOn[bench.path] = nil }
     }
 
@@ -443,11 +467,29 @@ final class Workbench {
     }
 
     @discardableResult
-    private func change(_ title: String, on bench: BenchModel, scope: String? = nil,
-                        _ work: (CLIClient) async throws(CLIError) -> Void) async -> String? {
+    func change(_ title: String, on bench: BenchModel, scope: String? = nil,
+                _ work: @escaping (CLIClient) async throws(CLIError) -> Void) async -> String? {
         let error = await store.runChange(title, on: bench, work)
-        result = ChangeResult(title: title, error: error, scope: scope ?? bench.path)
+        var outcome = ChangeResult(title: title, error: error, scope: scope ?? bench.path)
+        leaseRetry = nil
+        if let error, let refusal = LeaseRefusal.parse(error) {
+            outcome.lease = refusal
+            leaseRetry = LeaseRetry(title: title, bench: bench, work: work)
+        }
+        result = outcome
         return error
+    }
+
+    /// Runs the change a lease refused again with `--break-lease`. Only a click on "Break Lease" after the app's own
+    /// alert calls this: the CLI allows it to a person, and the holder is named in the alert and in the history.
+    func breakLease() async {
+        guard let retry = leaseRetry else { return }
+        leaseRetry = nil
+        let work = retry.work
+        let error = await store.runChange(retry.title, on: retry.bench) { client throws(CLIError) in
+            try await work(client.breakingLease())
+        }
+        result = ChangeResult(title: retry.title, error: error, scope: retry.bench.path)
     }
 }
 

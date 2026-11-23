@@ -7,8 +7,11 @@ import SwiftUI
 final class LogWindowController: NSObject, NSWindowDelegate {
     private var windows: [String: (NSWindow, LogViewModel)] = [:]
     private let openInTerminal: (String) -> Void
+    /// The CLI for the reads that need it (since the last start, the worker log); nil until it is found.
+    private let client: () -> CLIClient?
 
-    init(openInTerminal: @escaping (String) -> Void) {
+    init(client: @escaping () -> CLIClient? = { nil }, openInTerminal: @escaping (String) -> Void) {
+        self.client = client
         self.openInTerminal = openInTerminal
     }
 
@@ -18,6 +21,11 @@ final class LogWindowController: NSObject, NSWindowDelegate {
             return
         }
         let model = LogViewModel(benchName: benchName, benchPath: benchPath)
+        let client = client
+        model.fetch = { request in
+            guard let cli = client() else { throw CLIError.failed(command: "logs", exitCode: 1, message: "The benchbar command line tool is not available.") }
+            return try await cli.logs(request, bench: benchPath)
+        }
         let view = LogView(model: model) { [weak self] in self?.openInTerminal(benchPath) }
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
         window.title = "\(benchName): bench.log"

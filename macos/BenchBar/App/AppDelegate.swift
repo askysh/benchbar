@@ -175,7 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindow.onKey = { Task { await Labs.shared.refresh() } }
         mainWindow.onSight = { [weak self] sight in self?.store.setWindow(sight) }
 
-        logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
+        logWindows = LogWindowController(client: { [weak self] in self?.store.cliClient }) { [weak self] path in self?.openLogsInTerminal(path) }
 
         if Updater.isAvailable { updater = Updater() }
         updateOffer.checkWithSparkle = { [weak self] in self?.updater?.checkForUpdates() }

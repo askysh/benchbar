@@ -156,3 +156,45 @@ nonisolated enum SearchText {
         return forward ? (current + 1) % total : (current - 1 + total) % total
     }
 }
+
+/// Which lines of a `logs --json --since` read are new. The CLI keeps the lines at or after the time, so the newest second
+/// comes back again: this remembers what was taken at that second (counted, so two equal lines in one second are two lines),
+/// and the untimed lines under a line it skipped (a traceback) go with it.
+nonisolated struct LogCursor: Equatable, Sendable {
+    /// The time of the newest line taken: the next read starts here. nil before the first line with a time.
+    private(set) var time: Date?
+    private var atTime: [String: Int] = [:]
+    /// A log whose lines carry no time at all: how many were taken, since nothing says which are new.
+    private var untimedSeen = 0
+
+    init(time: Date? = nil) { self.time = time }
+
+    mutating func take(_ chunk: LogChunk) -> [String] {
+        var taken: [String] = []
+        var seen: [String: Int] = [:]
+        var skipping = false
+        let skipped = time == nil ? untimedSeen : 0
+        defer { if time == nil { untimedSeen = chunk.lines.count } }
+        for (index, line) in chunk.lines.enumerated() where index >= skipped {
+            guard let at = chunk.times[index] else {
+                if !skipping { taken.append(line) }
+                continue
+            }
+            if let time, at < time { skipping = true; continue }
+            if at == time {
+                seen[line, default: 0] += 1
+                if seen[line, default: 0] <= atTime[line, default: 0] { skipping = true; continue }
+            }
+            skipping = false
+            taken.append(line)
+            if time == nil || at > time! {
+                time = at
+                atTime = [line: 1]
+                seen = [line: 1]
+            } else {
+                atTime[line, default: 0] += 1
+            }
+        }
+        return taken
+    }
+}

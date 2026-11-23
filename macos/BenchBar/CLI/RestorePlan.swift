@@ -54,9 +54,11 @@ nonisolated struct SiteRestorePlan: ReviewablePlan, Codable {
     var errors: [String]
     var canApply: Bool
     var token: String
+    /// `site rollback`: what the snapshot is and what is taken first (CLI 0.9.0); nil for a restore.
+    var rollback: RollbackInfo? = nil
 
     enum CodingKeys: String, CodingKey {
-        case bench, site, new, exists, source, migrate, touches, steps, warnings, needs, errors, token
+        case bench, site, new, exists, source, migrate, touches, steps, warnings, needs, errors, token, rollback
         case schemaVersion = "schema_version"
         case backupFirst = "backup_first"
         case canApply = "can_apply"
@@ -90,7 +92,8 @@ nonisolated extension SiteRestorePlan {
                   backupFirst: c.lenient(.backupFirst, BackupFirst(willRun: false, withFiles: false, folder: nil)),
                   migrate: c.lenient(.migrate, true), touches: c.lenient(.touches, []), steps: c.lenient(.steps, []),
                   warnings: c.lenient(.warnings, []), needs: c.lenient(.needs, []), errors: c.lenient(.errors, []),
-                  canApply: c.lenient(.canApply, false), token: try c.decode(String.self, forKey: .token))
+                  canApply: c.lenient(.canApply, false), token: try c.decode(String.self, forKey: .token),
+                  rollback: c.lenient(.rollback, nil))
     }
 }
 

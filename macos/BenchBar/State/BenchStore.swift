@@ -9,6 +9,8 @@ final class BenchModel: Identifiable {
     var machine = BenchStateMachine()
     /// The last failed action or refresh, shown once in the popover.
     var lastError: String?
+    /// The action a lease refused (`restart`, `down`): the window offers "Break Lease" for it, as a person's choice.
+    var leaseRefusedAction: CLIClient.Action?
     var portConflict: PortCheck?
     /// Why the last background status refresh failed; cleared by the next
     /// one that works, so a single slow call does not leave a banner behind.
@@ -501,18 +503,21 @@ final class BenchStore {
     /// "busy" when another change holds the slot. `fromLink` is a
     /// `benchbar://` link: it skips the room confirm (see DECISIONS.md).
     @discardableResult
-    func perform(_ action: CLIClient.Action, on bench: BenchModel, fromLink: Bool = false) async -> String? {
+    func perform(_ action: CLIClient.Action, on bench: BenchModel, fromLink: Bool = false, breakLease: Bool = false) async -> String? {
         guard canChange(bench) else { return Self.busyMessage }
         if action != .up, !fromLink, let confirm = confirmWhileSharing, !confirm(action, bench) { return nil }
-        return await run(action, on: bench)
+        return await run(action, on: bench, breakLease: breakLease)
     }
 
     /// The action itself, for callers that already hold the one change slot
     /// (the restart after a scheduler change).
     @discardableResult
-    private func run(_ action: CLIClient.Action, on bench: BenchModel) async -> String? {
-        guard let client else { return Self.noCLIMessage }
+    private func run(_ action: CLIClient.Action, on bench: BenchModel, breakLease: Bool = false) async -> String? {
+        guard let base = client else { return Self.noCLIMessage }
+        // `breakLease` is only ever true for the click on "Break Lease" after the app's own alert
+        let client = breakLease ? base.breakingLease() : base
         bench.lastError = nil
+        bench.leaseRefusedAction = nil
         apply(.actionStarted(action), to: bench)
         defer { bench.markChanged() }
         do {
@@ -530,6 +535,7 @@ final class BenchStore {
             return nil
         } catch {
             bench.lastError = error.localizedDescription
+            if LeaseRefusal.parse(error.localizedDescription) != nil { bench.leaseRefusedAction = action }
             apply(.actionFinished(action, succeeded: false), to: bench)
             return bench.lastError
         }
