@@ -61,7 +61,8 @@ struct DirectoryWatcherTests {
 
         try FileManager.default.removeItem(at: logs)
         #expect(watcher.needsRestart)
-        await drainMainQueue()
+        // a negative check has nothing to wait for, so it gets a short bounded wait: events that were going to arrive have had time to
+        try await Task.sleep(for: .milliseconds(300))
         #expect(watcher.needsRestart, "nothing left to watch")
 
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

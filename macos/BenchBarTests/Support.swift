@@ -14,16 +14,6 @@ func waitForCondition(timeout: Duration = .seconds(10), _ condition: () -> Bool)
     return true
 }
 
-/// Lets the main queue (where the file watchers deliver) and the main actor run what is already queued.
-func drainMainQueue() async {
-    for _ in 0..<2 {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            DispatchQueue.main.async { continuation.resume() }
-        }
-        await Task.yield()
-    }
-}
-
 /// Loads a JSON file from BenchBarTests/Fixtures (copied into the test bundle).
 nonisolated enum Fixture {
     private final class Token {}
