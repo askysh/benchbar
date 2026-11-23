@@ -63,6 +63,11 @@ run_fm lan-guard remove --help
 assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "benchbar lan-guard remove"; assert_not_contains "$OUT" "is an experiment"
 run_fm share setup --help
 assert_eq "2" "$CODE" "$OUT"
+# a flag before the subcommand does not hide it from the gate or from the help (review note 5)
+run_fm share --json stop --help
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "benchbar share stop"; assert_not_contains "$OUT" "is an experiment"
+run_fm share --json setup --help
+assert_eq "2" "$CODE" "$OUT"
 
 # ---- on: listed, not gated, runs
 BENCHBAR_LABS=lan-rooms fm_out commands --json
