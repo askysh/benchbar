@@ -531,6 +531,44 @@ TOOLS["benchbar_site_rollback"] = (
     False,
     (0,),
 )
+SITE_MOVE = {
+    "site": {"type": "string", "description": "The site to move. Never the default site of either bench: that is the person's, in a terminal."},
+    "to_bench": {"type": "string", "description": "The bench the site goes to: the path of a bench benchbar knows (benchbar_list), not the bench the site is in."},
+    "no_migrate": {"type": "boolean", "description": "Stop after the restore, before bench migrate."},
+    "bench": BENCH,
+}
+
+
+def site_move_args(a):
+    argv = ["site", "move", required(a, "site"), "--to-bench", required(a, "to_bench")]
+    if a.get("no_migrate") is True:
+        argv += ["--no-migrate"]
+    return argv + bench_args(a)
+
+
+TOOLS["benchbar_site_move_plan"] = (
+    "Plan moving a site to another bench of this machine, read only: the steps (a backup with files, the restore into the "
+    "other bench under the same name, migrate there, a check that the site answers there, then the drop in this bench as site drop "
+    "does it, after a second backup), what stays (the backups), the apps the site has and the other bench lacks (named), the "
+    "port the address changes to, and a token for benchbar_site_move. The plan has can_apply false for the default site of either "
+    "bench, a site name that exists in the other bench, a missing app, the same bench, a bench benchbar does not know or a lease "
+    "held by someone else. Show it to the person first.",
+    SITE_MOVE,
+    lambda a: site_move_args(a) + ["--dry-run", "--json"],
+    True,
+    (0,),
+)
+TOOLS["benchbar_site_move"] = (
+    "Apply a plan from benchbar_site_move_plan: back the site up with its files, restore it into the other bench, migrate, check "
+    "it there, and only then back it up again and drop it in this bench (its backups stay in archived/sites). A failed step "
+    "before the drop leaves the site here as it was, and the result names what to clean up in the other bench. Only after the "
+    "person saw the plan; pass the same arguments and the plan's token. Exit code 2 means benchbar does not know the MariaDB "
+    "root password: ask the person; never look for it. A token expires about an hour after its plan (60 to 70 minutes): an older one is refused as expired, plan again. Takes minutes.",
+    dict(SITE_MOVE, token=TOKEN),
+    lambda a: site_move_args(a) + ["--apply", a["token"], "--yes", "--json"],
+    False,
+    (0,),
+)
 SCHEDULE = {
     "type": "boolean",
     "description": "true puts the scheduler (bench schedule) in the bench's Procfile.lean (service --with-schedule), false takes it out "
@@ -1152,7 +1190,7 @@ def with_lease(build):
 
 
 for _name in ("benchbar_site_drop", "benchbar_app_install", "benchbar_app_update", "benchbar_run", "benchbar_ports_apply",
-              "benchbar_site_rollback", "benchbar_lock_write", "benchbar_lock_apply", "benchbar_pull"):
+              "benchbar_site_rollback", "benchbar_site_move", "benchbar_lock_write", "benchbar_lock_apply", "benchbar_pull"):
     _d, _schema, _build, _ro, _codes = TOOLS[_name]
     TOOLS[_name] = (_d, dict(_schema, lease=LEASE), with_lease(_build), _ro, _codes)
 # the five facts of a tool, by name (the tuples above stay as written; the side tables below are keyed by tool name)
@@ -1189,6 +1227,8 @@ REQUIRED = {
     "benchbar_site_snapshots": ["site"],
     "benchbar_site_rollback_plan": ["site", "to"],
     "benchbar_site_rollback": ["site", "to", "token"],
+    "benchbar_site_move_plan": ["site", "to_bench"],
+    "benchbar_site_move": ["site", "to_bench", "token"],
     "benchbar_service_install": ["token"],
     "benchbar_lock_apply": ["token"],
     "benchbar_pull_plan": ["as"],
@@ -1273,6 +1313,7 @@ ANNOTATIONS = {
     "benchbar_site_snapshot": {"idempotentHint": False},
     "benchbar_site_rollback": {"destructiveHint": True, "idempotentHint": False},
     "benchbar_site_restore": {"destructiveHint": True, "idempotentHint": False},
+    "benchbar_site_move": {"destructiveHint": True, "idempotentHint": False},
     "benchbar_service_install": {"destructiveHint": True, "idempotentHint": True},
     "benchbar_lease_take": {"idempotentHint": False},
     "benchbar_ports_apply": {"destructiveHint": True, "idempotentHint": True},
@@ -1300,6 +1341,7 @@ UNTRUSTED = {
     "benchbar_app_add_plan": "git output, hooks.py",
     "benchbar_site_restore_plan": "backup and bench file names",
     "benchbar_site_rollback_plan": "snapshot labels, app names and bench file names",
+    "benchbar_site_move_plan": "site and app names, bench folders and file names",
     "benchbar_site_snapshots": "snapshot labels, app names and commits",
     "benchbar_site_add_plan": "backup and bench file names",
     "benchbar_service_install_plan": "backup and bench file names",
@@ -1348,6 +1390,7 @@ TIMEOUTS = {
     "benchbar_site_snapshot": 1800,
     "benchbar_site_rollback_plan": 300, "benchbar_site_rollback": 3600,
     "benchbar_site_restore_plan": 300, "benchbar_site_restore": 3600,
+    "benchbar_site_move_plan": 300, "benchbar_site_move": 7200,
     "benchbar_service_install_plan": 300, "benchbar_service_install": 900,
     "benchbar_ports_plan": 300, "benchbar_ports_apply": 3600,
     "benchbar_scan": 300, "benchbar_report": 300,
@@ -1410,6 +1453,7 @@ AFTER = {
     "benchbar_app_update": ("apps", lambda a: ["app", "list", "--json"] + bench_args(a)),
     "benchbar_site_restore": ("sites", lambda a: ["site", "list", "--json"] + bench_args(a)),
     "benchbar_site_drop": ("sites", lambda a: ["site", "list", "--json"] + bench_args(a)),
+    "benchbar_site_move": ("sites", lambda a: ["site", "list", "--json"] + bench_args(a)),
     "benchbar_doctor_ack": ("doctor", lambda a: ["doctor", "--json"] + bench_args(a)),
     "benchbar_ports_apply": ("benches", lambda a: ["list", "--json"]),
     "benchbar_site_rollback": ("sites", lambda a: ["site", "list", "--json"] + bench_args(a)),
@@ -1473,6 +1517,9 @@ def unknown_bench_error(arguments):
     benches = [arguments["bench"]] if arguments.get("bench") else []
     if isinstance(arguments.get("paths"), list):
         benches += [p for p in arguments["paths"] if isinstance(p, str) and p]
+    # the bench a site is moved to is written to as much as the one it leaves
+    if isinstance(arguments.get("to_bench"), str) and arguments["to_bench"]:
+        benches.append(arguments["to_bench"])
     known = None
     for bench in benches:
         if os.path.realpath(bench) in ALLOWED_BENCHES:
@@ -1524,6 +1571,7 @@ PLAN_OF = {
     "benchbar_site_add": "benchbar_site_add_plan",
     "benchbar_site_restore": "benchbar_site_restore_plan",
     "benchbar_site_rollback": "benchbar_site_rollback_plan",
+    "benchbar_site_move": "benchbar_site_move_plan",
     "benchbar_service_install": "benchbar_service_install_plan",
     "benchbar_ports_apply": "benchbar_ports_plan",
     "benchbar_site_drop": "benchbar_site_drop_plan",
@@ -2585,11 +2633,11 @@ INSTRUCTIONS = (
     "(the stamps benchbar_site_restore_plan takes), benchbar_site_snapshots (the snapshots benchbar_site_rollback_plan takes), benchbar_app_list, benchbar_app_focus_list, benchbar_stats, benchbar_ports_check, "
     "benchbar_ports_plan, benchbar_lock_check, benchbar_labs_list, benchbar_where, benchbar_self_update_check, "
     "benchbar_scan (benches under a folder), benchbar_report (redacted diagnostics as text), "
-    "benchbar_profile_list, benchbar_profile_check, benchbar_op_status (the long runs by op_id), benchbar_history (what ran on this machine and who started it), and the plans benchbar_app_add_plan, benchbar_site_add_plan, benchbar_site_restore_plan, benchbar_site_rollback_plan, "
+    "benchbar_profile_list, benchbar_profile_check, benchbar_op_status (the long runs by op_id), benchbar_history (what ran on this machine and who started it), and the plans benchbar_app_add_plan, benchbar_site_add_plan, benchbar_site_restore_plan, benchbar_site_rollback_plan, benchbar_site_move_plan, "
     "benchbar_service_install_plan (schedule true or false for the scheduler), benchbar_ports_plan, benchbar_site_drop_plan, benchbar_app_install_plan, benchbar_app_update_plan (it runs git fetch on the app), benchbar_lock_apply_plan, benchbar_pull_plan, benchbar_profile_remove_plan, benchbar_run_plan, and benchbar_run_read (doctor, list-apps, version of a site). Actions: benchbar_up (services_only for Redis alone), benchbar_down, "
     "benchbar_restart, benchbar_site_backup, benchbar_site_snapshot (save a site before a risky change: no plan, it only adds a snapshot), benchbar_doctor_ack (silence or show a doctor warning), benchbar_autostart (on or off), "
     "benchbar_ports_mode (automatic or fixed), benchbar_lock_write (benchbar.toml from the bench), benchbar_profile_create (a team profile from a bench), and the plan appliers benchbar_app_add, benchbar_site_add, "
-    "benchbar_site_restore, benchbar_site_rollback (put a snapshot back; never the default site), benchbar_service_install, benchbar_ports_apply, benchbar_site_drop, benchbar_app_install, benchbar_app_update, benchbar_lock_apply, benchbar_pull (a neutralised copy of a production site as a new site), benchbar_profile_remove, benchbar_run (migrate, clear-cache, clear-website-cache, build, run-tests: "
+    "benchbar_site_restore, benchbar_site_rollback (put a snapshot back; never the default site), benchbar_site_move (a site to another bench; never the default site), benchbar_service_install, benchbar_ports_apply, benchbar_site_drop, benchbar_app_install, benchbar_app_update, benchbar_lock_apply, benchbar_pull (a neutralised copy of a production site as a new site), benchbar_profile_remove, benchbar_run (migrate, clear-cache, clear-website-cache, build, run-tests: "
     "plan with benchbar_run_plan; use them before raw commands of the bench). "
     "Before long work on a bench or a site (tests, a migration you watch) take a lease with benchbar_lease_take, renew it while you need it (benchbar_lease_renew) and release it when done (benchbar_lease_release); other agents and the app are then refused a restart, drop or restore of it, and your own changes pass the lease as lease. benchbar_lease_list shows who holds what. An action that a lease refuses is not an error to work around: wait, or ask the person (only a person can break a lease). For every change with a plan: call the *_plan tool, show the plan "
     "to the person, and only after their OK call the apply tool with the same arguments and its token; the token "
@@ -2650,6 +2698,10 @@ in a terminal, before raw `bench` commands.
   `benchbar_site_snapshots`, then `benchbar_site_rollback_plan` and
   `benchbar_site_rollback`; never for the default site (that is the person's, in
   a terminal), and removing a snapshot is the person's too.
+- To move a site to another bench of this machine, `benchbar_site_move_plan`
+  then `benchbar_site_move` (the plan names a missing app and the new port; the
+  site is dropped in the first bench only after the copy checked out, and its
+  backups stay). Never the default site of either bench.
 - `benchbar_site_backups` lists the stamps `benchbar_site_restore_plan` takes;
   `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`,
   `benchbar_doctor_prerequisites`, `benchbar_labs_list`, `benchbar_where`,

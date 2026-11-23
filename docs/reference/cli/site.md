@@ -325,6 +325,46 @@ benchbar site rollback acme.localhost --to latest --dry-run --json
 benchbar site rollback acme.localhost --to latest --apply TOKEN --yes
 ```
 
+## site move
+
+```
+benchbar site move NAME --to-bench PATH [--no-migrate]
+  --dry-run --json | --apply TOKEN --yes [--json]
+```
+
+Moves a site from this bench to another bench of this machine that benchbar
+knows (`benchbar register PATH`), under the same name. It is built from the
+commands above, not beside them: a [site backup](#site-backup) with files,
+the [site restore](#site-restore) of that set into a new site of the other
+bench, `bench migrate` there (not with `--no-migrate`), a check that the site
+answers `list-apps` there with the same apps, and only then the drop of
+[site drop](#site-drop): a second backup with files, `bench drop-site`, the
+folder to `archived/sites` with its backups. The drop is the last step and
+never runs after a failed one.
+
+The plan (`--dry-run --json`) lists the steps, the apps, the port the
+address changes to, what stays (the backups) and a token. It cannot be applied
+(`can_apply` false, each reason in `errors`) for the default site of either
+bench, a site that already exists in the other bench, an app the site has that
+the other bench lacks (the plan names them), the same bench, a bench benchbar
+does not know, or a [lease](lease.md) on either bench or the site that someone
+else holds. `--apply TOKEN --yes` plans again under the lock and refuses a
+stale token. The MariaDB root password is needed, as for `site restore`.
+
+When a step before the drop fails, the site in this bench is as it was. A
+partial copy may be in the other bench: the result and the log name it and the
+`site drop` plan that removes it (it is backed up first). If the drop itself
+fails, the site is in both benches and the output says how to finish.
+
+On macOS the site's `/etc/hosts` line stays valid: the name is the same. The
+address changes to the port of the other bench, which the plan and the result
+say (`http://NAME:PORT`). Linux has no hosts line to keep.
+
+```bash
+benchbar site move acme.localhost --to-bench ~/dev/bench-two --dry-run --json
+benchbar site move acme.localhost --to-bench ~/dev/bench-two --apply TOKEN --yes
+```
+
 ## site drop
 
 ```
@@ -401,6 +441,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar site backup NAME [--with-files] [--json]` | no | no | no | yes | document |
 | `benchbar site backups NAME [--json]` | no | no | no | no | document |
 | `benchbar site restore NAME --from STAMP\|PATH [--from-site S] [--new] [--neutralise] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
+| `benchbar site move NAME --to-bench PATH [--no-migrate] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
 | `benchbar site snapshot NAME [--label TEXT] [--json]` | no | no | no | yes | document |
 | `benchbar site snapshot drop NAME SNAPSHOT\|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run] [--json]` | no | no | no | yes | document |
 | `benchbar site snapshots NAME [--keep N] [--json]` | no | no | no | no | document |
@@ -433,6 +474,10 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site restore` | `--with-files` |  | Restore the uploads too. |
 | `site restore` | `--dry-run` |  | Print the plan and its token. |
 | `site restore` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
+| `site move` | `--to-bench` | `PATH` | The bench the site goes to: a bench benchbar knows (benchbar register PATH), not this one. |
+| `site move` | `--no-migrate` |  | Stop after the restore, before bench migrate. |
+| `site move` | `--dry-run` |  | Print the plan and its token. |
+| `site move` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
 | `site snapshot` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `site snapshot` | `--label` | `TEXT` | What the snapshot is for (up to 120 characters, no quotes); it is part of the folder name. |
 | `site snapshot` | `--dry-run` |  | Print what would happen, change nothing. |
@@ -459,6 +504,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site add` | `BENCHBAR_SUDO` | Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change). |
 | `site add` | `BENCHBAR_SUDO_PASSWORD` | The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child. |
 | `site restore` | `MARIADB_ROOT_PASSWORD` | Only when MariaDB has a password benchbar does not know. |
+| `site move` | `MARIADB_ROOT_PASSWORD` | Only when MariaDB has a password benchbar does not know. |
 | `site rollback` | `MARIADB_ROOT_PASSWORD` | Only when MariaDB has a password benchbar does not know. |
 | `site drop` | `MARIADB_ROOT_PASSWORD` | Only when MariaDB has a password benchbar does not know. |
 <!-- /generated:cli-commands -->
