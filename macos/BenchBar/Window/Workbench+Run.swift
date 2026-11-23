@@ -67,7 +67,8 @@ extension Workbench {
             }
             return true
         } catch {
-            runningOps[bench.path] = []
+            // a cancelled task (the page closed or the bench changed) keeps the list it has; only a failed read clears it
+            if !Task.isCancelled { runningOps[bench.path] = [] }
             return false
         }
     }

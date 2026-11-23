@@ -12,7 +12,7 @@ struct RunSheet: View {
     @State private var commandName: String
     @State private var site: String
     @State private var options = ""
-    @State private var flow = PlanReviewFlow<RunPlan>()
+    @State private var review = RunReviewState()
     @State private var reading = false
     @State private var outcome: RunOutcome?
     @State private var readFailure: String?
@@ -23,6 +23,11 @@ struct RunSheet: View {
         self.close = close
         _commandName = State(initialValue: (workbench.runCommands ?? RunAllowList.known).first?.name ?? "")
         _site = State(initialValue: bench.summary.site)
+    }
+
+    private var flow: PlanReviewFlow<RunPlan> {
+        get { review.flow }
+        nonmutating set { review.flow = newValue }
     }
 
     private var commands: [RunCommandInfo] { workbench.runCommands ?? RunAllowList.known }
@@ -74,7 +79,7 @@ struct RunSheet: View {
                 EmptyView()
             case .stale:
                 CancelButton(action: close)
-                Button("Review Again") { review() }.keyboardShortcut(.defaultAction)
+                Button("Review Again") { readPlan() }.keyboardShortcut(.defaultAction)
             }
         }
         .task { await workbench.loadRunCommands(on: bench) }
@@ -143,7 +148,7 @@ struct RunSheet: View {
     }
 
     private func go() {
-        if command.changes { review() } else { read() }
+        if command.changes { readPlan() } else { read() }
     }
 
     private func read() {
@@ -161,15 +166,14 @@ struct RunSheet: View {
         }
     }
 
-    private func review() {
-        guard flow.review() else { return }
+    private func readPlan() {
         let asked = request
+        guard review.begin(asked) else { return }
         Task { flow.read(await workbench.runPlan(asked, on: bench)) }
     }
 
     private func apply() {
-        guard let plan = flow.apply(), let token = plan.token else { return }
-        let asked = request
+        guard let (asked, plan) = review.apply(), let token = plan.token else { return }
         Task {
             let error = await workbench.runChange(asked, token: token, on: bench)
             // a stale token is answered here, with Review Again, not in the banner
