@@ -10,7 +10,7 @@ nonisolated protocol ShareCLI: Sendable {
     func shareLog(bench: String, device: String?, since: String?, limit: Int) async throws(CLIError) -> ShareLog
     func shareSetupPlan(bench: String, request: ShareSetupRequest) async throws(CLIError) -> ShareSetupPlan
     func shareSetup(bench: String, request: ShareSetupRequest, onStep: @escaping @Sendable (String) -> Void) async throws(CLIError)
-    func shareStart(bench: String, forHours hours: Int, label: String?) async throws(CLIError)
+    func shareStart(bench: String, forHours hours: Int, label: String?, assignSeats: Bool) async throws(CLIError)
     func shareStop(bench: String) async throws(CLIError)
     func shareExtend(bench: String, byMinutes minutes: Int) async throws(CLIError)
     func shareLock(bench: String, locked: Bool) async throws(CLIError)
@@ -124,9 +124,11 @@ extension CLIClient: ShareCLI {
         }
     }
 
-    func shareStart(bench: String, forHours hours: Int, label: String?) async throws(CLIError) {
+    /// `assignSeats`: the host gives out the seats (`--assign-seats`); a guest then waits for `share assign`.
+    func shareStart(bench: String, forHours hours: Int, label: String?, assignSeats: Bool) async throws(CLIError) {
         let labelArgs = label.flatMap { $0.isEmpty ? nil : ["--name", $0] } ?? []
-        _ = try await run(["share", "start", "--for", "\(hours)h"] + labelArgs + ["--plain", "--bench-dir", bench],
+        let seatArgs = assignSeats ? ["--assign-seats"] : []
+        _ = try await run(["share", "start", "--for", "\(hours)h"] + labelArgs + seatArgs + ["--plain", "--bench-dir", bench],
                           timeout: Timeout.action, acceptExitCodes: [0], extraEnvironment: Self.personEnvironment)
     }
 

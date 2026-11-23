@@ -7,6 +7,8 @@ struct SharingTab: View {
     let bench: BenchModel
     let share: ShareStore
     @State private var hours = 4
+    /// Who gives out the seats of the next room; kept, so the choice is made once.
+    @AppStorage("shareAssignSeats") private var assignSeats = false
     @State private var setupOpen = false
     @State private var showActivity = false
     /// The code is drawn as dots until the host asks (a shared screen, a screenshot); Start and New code show it once.
@@ -80,7 +82,14 @@ struct SharingTab: View {
                 }
                 primaryButton(status)
             }
-            if status.isOn { Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary) }
+            if status.isOn {
+                Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
+                Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
+            } else if case .start = SharePrimary.from(status) {
+                Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                    .help(SharePresentation.assignSeatsHelp)
+                Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+            }
             if let busy = share.busy { Label(busy, systemImage: "hourglass").foregroundStyle(.secondary) }
         }
     }
@@ -99,9 +108,9 @@ struct SharingTab: View {
         case .turnOnProtection: await turnOnProtection()
         case .start:
             guard ShareConfirm.ask("Start sharing \(site) on this network?",
-                                   detail: "People on this Wi-Fi who have the room code can join a copy of \(site) until you stop.",
+                                   detail: SharePresentation.startDetail(site: site, assignSeats: assignSeats),
                                    button: "Start sharing") else { return }
-            await share.start(hours: hours, label: nil)
+            await share.start(hours: hours, label: nil, assignSeats: assignSeats)
             await share.loadCode()
             codeRevealed = true
         case .stop:
@@ -227,8 +236,10 @@ struct SharingTab: View {
         case .restartSharing:
             let confirm = SharePresentation.restartConfirm(online: status.devicesOnline)
             guard ShareConfirm.ask(confirm.message, detail: confirm.detail, button: "Restart") else { return }
+            // the room that starts again gives out its seats the way the one that ran did
+            let assign = share.hostGivesSeats
             await share.stop()
-            await share.start(hours: hours, label: nil)
+            await share.start(hours: hours, label: nil, assignSeats: assign)
         }
     }
 
@@ -261,24 +272,28 @@ struct SharingTab: View {
     private func peopleSection(_ status: ShareStatus) -> some View {
         Section(SharePresentation.peopleTitle) {
             if share.people.isEmpty { Text("Nobody has joined yet.").foregroundStyle(.secondary) }
+            if let waiting = SharePresentation.waitingNotice(people: share.people, hostGivesSeats: share.hostGivesSeats) {
+                Label(waiting, systemImage: "person.crop.circle.badge.clock").foregroundStyle(.orange)
+            }
             ForEach(SharePresentation.sorted(share.people)) { person in
                 HStack {
                     Circle().fill(person.online ? Color.green : Color.secondary).frame(width: 8, height: 8)
                         .accessibilityLabel(SharePresentation.presenceText(online: person.online))
                     VStack(alignment: .leading) {
                         Text(SharePresentation.personLine(person))
-                        Text(person.seatFullName ?? "No seat yet").font(.caption).foregroundStyle(.secondary)
+                        Text(SharePresentation.seatCaption(person, hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    let targets = SharePresentation.moveTargets(for: person, people: share.people, known: share.knownSeats)
-                    Menu("Move to") {
+                    let targets = SharePresentation.moveTargets(for: person, people: share.people, known: share.knownSeats, seats: share.seats)
+                    Menu(SharePresentation.seatMenuTitle(person)) {
                         ForEach(targets, id: \.id) { seat in
                             Button(seat.name) { Task { await share.assign(person, seat: seat.id) } }
                         }
                     }
                     .fixedSize()
                     .disabled(targets.isEmpty || share.busy != nil)
-                    .help(targets.isEmpty ? "No free seat this room has shown yet." : "Signs them out of their seat and into the one you pick.")
+                    .help(targets.isEmpty ? "No seat of this room is free." : person.seatID == nil ? "Gives them the seat you pick."
+                        : "Signs them out of their seat and into the one you pick.")
                     Button("Remove") { Task { await remove(person) } }
                 }
             }

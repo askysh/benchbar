@@ -171,6 +171,8 @@ nonisolated struct ShareStatus: Codable, Sendable, Equatable {
     var preflight: SharePreflight?
     /// A setup stopped halfway: `share start` refuses until `share setup --refresh` (Refresh copy) finishes it.
     var setupInterrupted: Bool
+    /// Who gives out the seats of the room that is on; nil with no room, or from a CLI before 0.9.0.
+    var seatMode: ShareSeatMode?
 
     enum CodingKeys: String, CodingKey {
         case state, phase, degraded, error, site, label, port, started, deadline, copy, seats, people, locked, preflight
@@ -188,6 +190,7 @@ nonisolated struct ShareStatus: Codable, Sendable, Equatable {
         case wipeFailed = "wipe_failed"
         case lanGuard = "lan_guard"
         case setupInterrupted = "setup_interrupted"
+        case seatMode = "seat_mode"
     }
 
     var isOn: Bool { state == .on }
@@ -199,7 +202,8 @@ nonisolated struct ShareStatus: Codable, Sendable, Equatable {
          site: String? = "site1.localhost", label: String? = "Room", secondsLeft: Int = 0, canExtendS: Int = 0,
          copy: ShareCopy? = nil, allowedUsers: [String] = [], seats: Int = 0, people: Int = 0, devicesOnline: Int = 0,
          locked: Bool? = nil, lockReason: ShareLockReason? = nil, budgetLeft: Int? = nil, joinTrouble: Bool = false,
-         wipeFailed: Int = 0, lanGuard: LanGuardState = .installed, preflight: SharePreflight? = nil, setupInterrupted: Bool = false) {
+         wipeFailed: Int = 0, lanGuard: LanGuardState = .installed, preflight: SharePreflight? = nil, setupInterrupted: Bool = false,
+         seatMode: ShareSeatMode? = nil) {
         self.protocolVersion = protocolVersion
         self.state = state
         self.shareSite = shareSite
@@ -220,6 +224,7 @@ nonisolated struct ShareStatus: Codable, Sendable, Equatable {
         self.lanGuard = lanGuard
         self.preflight = preflight
         self.setupInterrupted = setupInterrupted
+        self.seatMode = seatMode
     }
 
     init(from decoder: any Decoder) throws {
@@ -252,6 +257,7 @@ nonisolated struct ShareStatus: Codable, Sendable, Equatable {
         lanGuard = try c.decodeIfPresent(LanGuardState.self, forKey: .lanGuard) ?? .missing
         preflight = try c.decodeIfPresent(SharePreflight.self, forKey: .preflight)
         setupInterrupted = (try? c.decodeIfPresent(Bool.self, forKey: .setupInterrupted)) ?? false
+        seatMode = try? c.decodeIfPresent(ShareSeatMode.self, forKey: .seatMode)
     }
 }
 
@@ -369,22 +375,71 @@ nonisolated struct SharePerson: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+/// Who gives a person their seat (`seat_mode`): the host, with `share assign`, or the guest.
+nonisolated enum ShareSeatMode: String, Codable, Sendable, Equatable {
+    case host, open
+}
+
+/// A seat of the room (`seats` of `share people --json`): held by a person in the room, or free.
+nonisolated struct ShareSeat: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var fullName: String
+    var roles: [String]
+    var heldBy: String?
+    var heldByName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case roles
+        case id = "seat_id"
+        case fullName = "full_name"
+        case heldBy = "held_by"
+        case heldByName = "held_by_name"
+    }
+
+    init(id: String, fullName: String, roles: [String] = [], heldBy: String? = nil, heldByName: String? = nil) {
+        self.id = id
+        self.fullName = fullName
+        self.roles = roles
+        self.heldBy = heldBy
+        self.heldByName = heldByName
+    }
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        fullName = try c.decodeIfPresent(String.self, forKey: .fullName) ?? id
+        roles = (try? c.decodeIfPresent([String].self, forKey: .roles)) ?? []
+        heldBy = try? c.decodeIfPresent(String.self, forKey: .heldBy)
+        heldByName = try? c.decodeIfPresent(String.self, forKey: .heldByName)
+    }
+}
+
 nonisolated struct SharePeople: Codable, Sendable, Equatable {
     var state: ShareState
     var people: [SharePerson]
+    /// Every seat of the room; empty from a CLI before 0.9.0.
+    var seats: [ShareSeat]
+    var seatMode: ShareSeatMode?
 
-    init(state: ShareState, people: [SharePerson]) {
+    init(state: ShareState, people: [SharePerson], seats: [ShareSeat] = [], seatMode: ShareSeatMode? = nil) {
         self.state = state
         self.people = people
+        self.seats = seats
+        self.seatMode = seatMode
     }
 
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         state = try c.decodeIfPresent(ShareState.self, forKey: .state) ?? .off
         people = try c.decodeIfPresent([SharePerson].self, forKey: .people) ?? []
+        seats = (try? c.decodeIfPresent([ShareSeat].self, forKey: .seats)) ?? []
+        seatMode = try? c.decodeIfPresent(ShareSeatMode.self, forKey: .seatMode)
     }
 
-    enum CodingKeys: String, CodingKey { case state, people }
+    enum CodingKeys: String, CodingKey {
+        case state, people, seats
+        case seatMode = "seat_mode"
+    }
 }
 
 /// A user of the site who could take a seat (`share users --json`).
