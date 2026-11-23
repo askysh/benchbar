@@ -22,24 +22,24 @@ internal sealed class SettingsWindow : ToolWindow
     public Func<string, bool> ConfirmSwitch { get; set; }
 
     public SettingsWindow(SettingsModel model, Func<RunnerSet> runners, Action<string> copy, ResolvedTheme theme)
-        : base("BenchBar Settings", 620, 560, theme)
+        : base(UiText.Get("SettingsTitle"), 620, 560, theme)
     {
         _model = model;
         _theme = theme;
-        ConfirmSwitch = name => ConfirmDialog.Ask($"Use {name}?",
-            $"BenchBar will use {name} for its benches from now on. Benches in the other distro stay where they are, and the list updates at once.", "Switch", _theme, this);
+        ConfirmSwitch = name => ConfirmDialog.Ask(UiText.Format("SettingsUseDistro", name),
+            UiText.Format("SettingsUseDistroBody", name), UiText.Get("SettingsSwitch"), _theme, this);
         _runners = runners;
         _copy = copy;
-        _logonSettings = Ui.Button(LogonView.SettingsButton, () => _model.OpenStartupSettings(), "Open Windows startup settings", minWidth: 160);
+        _logonSettings = Ui.Button(LogonView.SettingsButton, () => _model.OpenStartupSettings(), UiText.Get("SettingsOpenStartup"), minWidth: 160);
         _logonSettings.HorizontalAlignment = HorizontalAlignment.Left;
         _logonSettings.Margin = new Thickness(0, 0, 0, 12);
         Ui.ApplyMica(this);
-        Ui.Name(this, "BenchBar Settings");
+        Ui.Name(this, UiText.Get("SettingsTitle"));
 
         var tabs = new TabControl { Margin = new Thickness(16) };
-        Ui.Name(tabs, "Settings sections");
-        tabs.Items.Add(new TabItem { Header = "General", Content = General() });
-        tabs.Items.Add(new TabItem { Header = "Tray", Content = TrayTab() });
+        Ui.Name(tabs, UiText.Get("SettingsSections"));
+        tabs.Items.Add(new TabItem { Header = UiText.Get("SettingsGeneral"), Content = General() });
+        tabs.Items.Add(new TabItem { Header = UiText.Get("SettingsTray"), Content = TrayTab() });
         Content = tabs;
 
         _model.Changed += Sync;
@@ -61,8 +61,8 @@ internal sealed class SettingsWindow : ToolWindow
         var panel = new StackPanel { Margin = new Thickness(16) };
 
         panel.Children.Add(LogonRow());
-        panel.Children.Add(Check("Show notifications when a bench stops or crashes", () => _model.Notifications, v => _model.Notifications = v));
-        var updates = Check("Check for updates when the BenchBar window opens", () => _model.CheckForUpdates, v => _model.CheckForUpdates = v);
+        panel.Children.Add(Check(UiText.Get("SettingsNotifications"), () => _model.Notifications, v => _model.Notifications = v));
+        var updates = Check(UiText.Get("SettingsCheckUpdates"), () => _model.CheckForUpdates, v => _model.CheckForUpdates = v);
         if (!_model.ShowsUpdateCheck)
         {
             // packaged: the Store updates the programs, so the switch is gone and one line says where updates come from
@@ -71,10 +71,10 @@ internal sealed class SettingsWindow : ToolWindow
         }
         panel.Children.Add(updates);
 
-        var askBox = Check("Ask before a link acts", () => _model.ConfirmLinkActions, v => _model.ConfirmLinkActions = v);
+        var askBox = Check(UiText.Get("SettingsAskLink"), () => _model.ConfirmLinkActions, v => _model.ConfirmLinkActions = v);
         askBox.Margin = new Thickness(0, 0, 0, 2);
         panel.Children.Add(askBox);
-        panel.Children.Add(Ui.Text("Any web page or app can open a benchbar:// link. With this on, BenchBar asks before a link starts, stops or restarts a bench or opens a console. It is off by default so launchers and scripts keep working.",
+        panel.Children.Add(Ui.Text(UiText.Get("SettingsAskLinkHint"),
             12, opacity: 0.7, margin: new Thickness(24, 0, 0, 12)));
 
         if (_model.HotKey is { } hotKey) panel.Children.Add(new HotKeyRow(hotKey));
@@ -91,11 +91,11 @@ internal sealed class SettingsWindow : ToolWindow
             }
             _model.UseDistroAsync(name).Forget();
         };
-        Ui.Name(_distro, "WSL distro");
+        Ui.Name(_distro, UiText.Get("SettingsDistro"));
         var distroBox = new StackPanel();
         distroBox.Children.Add(_distro);
         distroBox.Children.Add(_distroNote);
-        panel.Children.Add(Ui.Labeled("WSL distro", distroBox, "The Linux distribution BenchBar runs benches in."));
+        panel.Children.Add(Ui.Labeled(UiText.Get("SettingsDistro"), distroBox, UiText.Get("SettingsDistroHint")));
 
         var editor = new ComboBox { Width = 220, HorizontalAlignment = HorizontalAlignment.Left, ItemsSource = EditorKind.Ids.Select(EditorKind.DisplayName).ToList() };
         editor.SelectedItem = EditorKind.DisplayName(_model.Editor);
@@ -103,19 +103,19 @@ internal sealed class SettingsWindow : ToolWindow
         {
             if (editor.SelectedIndex >= 0) _model.Editor = EditorKind.Ids[editor.SelectedIndex];
         };
-        Ui.Name(editor, "Editor for Open in editor");
-        panel.Children.Add(Ui.Labeled("Editor", editor, "Used by Open in editor on a bench. It needs the editor's WSL extension."));
+        Ui.Name(editor, UiText.Get("SettingsEditorName"));
+        panel.Children.Add(Ui.Labeled(UiText.Get("SettingsEditor"), editor, UiText.Get("SettingsEditorHint")));
 
         var cli = new DockPanel();
-        var copy = Ui.Button("Copy", () => _copy(_model.CliPathText), "Copy the CLI path", minWidth: 64);
+        var copy = Ui.Button(UiText.Get("Copy"), () => _copy(_model.CliPathText), UiText.Get("SettingsCopyCliPath"), minWidth: 64);
         copy.Margin = new Thickness(8, 0, 0, 0);
         DockPanel.SetDock(copy, Dock.Right);
         var path = new TextBox { Text = _model.CliPathText, IsReadOnly = true, Padding = new Thickness(8, 6, 8, 6), Width = 420 };
-        Ui.Name(path, "Command line tool path");
+        Ui.Name(path, UiText.Get("SettingsCliPathName"));
         cli.Children.Add(copy);
         cli.Children.Add(path);
         cli.HorizontalAlignment = HorizontalAlignment.Left;
-        panel.Children.Add(Ui.Labeled("Command line tool", cli, "benchbar.exe, which calls the Linux command line tool inside the distro."));
+        panel.Children.Add(Ui.Labeled(UiText.Get("SettingsCli"), cli, UiText.Get("SettingsCliHint")));
         return new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     }
 
@@ -124,27 +124,27 @@ internal sealed class SettingsWindow : ToolWindow
         var panel = new StackPanel { Margin = new Thickness(16) };
 
         var appearance = new StackPanel();
-        foreach (var (mode, label) in new[] { (AppearanceMode.System, "Follow Windows"), (AppearanceMode.Light, "Light"), (AppearanceMode.Dark, "Dark") })
+        foreach (var (mode, label) in new[] { (AppearanceMode.System, UiText.Get("SettingsAppearanceSystem")), (AppearanceMode.Light, UiText.Get("SettingsAppearanceLight")), (AppearanceMode.Dark, UiText.Get("SettingsAppearanceDark")) })
         {
             var radio = new RadioButton { Content = label, GroupName = "appearance", IsChecked = _model.Appearance == mode, Margin = new Thickness(0, 0, 0, 4) };
             radio.Checked += (_, _) => { if (!_syncing) _model.Appearance = mode; };
-            Ui.Name(radio, "Appearance: " + label);
+            Ui.Name(radio, UiText.Format("SettingsAppearanceNamed", label));
             appearance.Children.Add(radio);
         }
-        panel.Children.Add(Ui.Labeled("Appearance", appearance, "The runner follows the taskbar's theme; the windows follow this choice."));
+        panel.Children.Add(Ui.Labeled(UiText.Get("SettingsAppearance"), appearance, UiText.Get("SettingsAppearanceHint")));
 
         var set = _runners();
         var runner = new ComboBox { Width = 260, HorizontalAlignment = HorizontalAlignment.Left, DisplayMemberPath = nameof(RunnerInfo.DisplayName) };
         foreach (var info in set.Runners.Where(r => r.IsUsable)) runner.Items.Add(info);
         runner.SelectedItem = runner.Items.OfType<RunnerInfo>().FirstOrDefault(r => string.Equals(r.Id, _model.RunnerId, StringComparison.OrdinalIgnoreCase));
         runner.SelectionChanged += (_, _) => { if (runner.SelectedItem is RunnerInfo info) _model.RunnerId = info.Id; };
-        Ui.Name(runner, "Runner in the notification area");
-        panel.Children.Add(Ui.Labeled("Runner", runner, "The little figure in the notification area. The right click menu on the icon previews each one."));
+        Ui.Name(runner, UiText.Get("SettingsRunnerName"));
+        panel.Children.Add(Ui.Labeled(UiText.Get("SettingsRunner"), runner, UiText.Get("SettingsRunnerHint")));
         return new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     }
 
     private readonly List<(CheckBox Box, Func<bool> Get)> _checks = [];
-    private readonly CheckBox _logon = new() { Content = "Open BenchBar at logon", Margin = new Thickness(0, 0, 0, 12) };
+    private readonly CheckBox _logon = new() { Content = UiText.Get("MenuLogon"), Margin = new Thickness(0, 0, 0, 12) };
     private readonly TextBlock _logonNote = Ui.Text("", 12, opacity: 0.85, margin: new Thickness(0, -6, 0, 6));
     private readonly Button _logonSettings;
 
@@ -159,7 +159,7 @@ internal sealed class SettingsWindow : ToolWindow
         // to what the model says at once; the answer of Windows publishes the real state and Sync shows it.
         _logon.Checked += (_, _) => OnLogonToggled();
         _logon.Unchecked += (_, _) => OnLogonToggled();
-        Ui.Name(_logon, "Open BenchBar at logon");
+        Ui.Name(_logon, UiText.Get("MenuLogon"));
         row.Children.Add(_logon);
         _logonNote.TextWrapping = TextWrapping.Wrap;
         row.Children.Add(_logonNote);
@@ -210,7 +210,7 @@ internal sealed class SettingsWindow : ToolWindow
             var current = _model.CurrentDistro;
             _distro.SelectedItem = names.FirstOrDefault(n => n.Replace(" (default)", "").Equals(current, StringComparison.OrdinalIgnoreCase));
             _distro.IsEnabled = !_model.LoadingDistros && !_model.SwitchingDistro && names.Count > 0;
-            _distroNote.Text = _model.LoadingDistros ? "Reading the list..." : _model.DistroMessage ?? "";
+            _distroNote.Text = _model.LoadingDistros ? UiText.Get("SettingsReadingList") : _model.DistroMessage ?? "";
             _distroNote.Visibility = _distroNote.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         }
         finally

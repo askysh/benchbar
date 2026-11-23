@@ -51,7 +51,7 @@ internal sealed class QuickSwitchWindow : Window
         _host = host;
         _benches = host.Benches();
         _targets = QuickSwitchTargets.From(_benches);
-        Title = "Quick Switch";
+        Title = UiText.Get("QuickSwitchTitle");
         Width = 460;
         SizeToContent = SizeToContent.Height;
         MaxHeight = 560;
@@ -60,10 +60,10 @@ internal sealed class QuickSwitchWindow : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Ui.ApplyTheme(this, theme);
-        Ui.Name(this, "Quick Switch");
+        Ui.Name(this, UiText.Get("QuickSwitchTitle"));
 
         var root = new StackPanel { Margin = new Thickness(16) };
-        root.Children.Add(Ui.Text("Open as", 16, FontWeights.SemiBold));
+        root.Children.Add(Ui.Text(UiText.Get("QuickSwitchOpenAs"), 16, FontWeights.SemiBold));
         if (QuickSwitchTargets.Blocker(_benches, _targets) is { } blocker)
         {
             root.Children.Add(PagePanels.Line(blocker));
@@ -82,15 +82,15 @@ internal sealed class QuickSwitchWindow : Window
             foreach (var t in _targets) combo.Items.Add(t.Title);
             combo.SelectedIndex = _targets.ToList().IndexOf(start);
             combo.SelectionChanged += (_, _) => { if (combo.SelectedIndex >= 0) Select(_targets[combo.SelectedIndex]); };
-            Ui.Name(combo, "Site to open");
+            Ui.Name(combo, UiText.Get("QuickSwitchSiteName"));
             root.Children.Add(combo);
         }
         else
         {
             root.Children.Add(Ui.Text(start.Title, 13, opacity: 0.75, margin: new Thickness(0, 4, 0, 0)));
         }
-        Ui.Name(_search, "Search users");
-        Ui.Name(_list, "Users");
+        Ui.Name(_search, UiText.Get("QuickSwitchSearchName"));
+        Ui.Name(_list, UiText.Get("QuickSwitchUsersName"));
         _search.TextChanged += (_, _) => OnTyped();
         root.Children.Add(_search);
         root.Children.Add(_list);
@@ -137,7 +137,7 @@ internal sealed class QuickSwitchWindow : Window
     {
         if (_model is null) return;
         _model.SetQuery(_search.Text);
-        if (!_opening) SetStatus(""); // the line belongs to the last text: "No users match" and an old error go with it
+        if (!_opening) SetStatus(""); // the line belongs to the last text: UiText.Get("QuickSwitchNoMatch") and an old error go with it
         Draw();
         // two characters or more ask the CLI: until it answers, an empty list is not yet "no match"
         if (_model.WantsSearch && !_opening) SetStatus("");
@@ -160,7 +160,7 @@ internal sealed class QuickSwitchWindow : Window
             _list.Items.Add(item);
         }
         if (_list.Items.Count > 0) _list.SelectedIndex = Math.Clamp(_model.Selection, 0, _list.Items.Count - 1);
-        else SetStatus("No users match");
+        else SetStatus(UiText.Get("QuickSwitchNoMatch"));
     }
 
     internal async Task SearchAsync()
@@ -168,7 +168,7 @@ internal sealed class QuickSwitchWindow : Window
         if (_model is not { WantsSearch: true } model) return;
         _searching?.Cancel();
         var cts = _searching = new CancellationTokenSource();
-        SetStatus("Searching...");
+        SetStatus(UiText.Get("QuickSwitchSearching"));
         var args = OpenAsCommands.Users(model.Target.Site, model.Query, model.Target.Bench, QuickSwitchModel.SearchLimit);
         CliResult<SiteUserList> result;
         try
@@ -188,7 +188,7 @@ internal sealed class QuickSwitchWindow : Window
         }
         else
         {
-            SetStatus("Could not search users: " + (OpenAsRules.CliSentence(result.Error) ?? "no answer"), error: true);
+            SetStatus(UiText.Format("QuickSwitchSearchFailed", OpenAsRules.CliSentence(result.Error) ?? UiText.Get("QuickSwitchNoAnswer")), error: true);
         }
     }
 
@@ -227,11 +227,11 @@ internal sealed class QuickSwitchWindow : Window
         if (row is null || _model is not { } model) return;
         if (_opening)
         {
-            SetStatus("Already opening...");
+            SetStatus(UiText.Get("QuickSwitchAlreadyOpening"));
             return;
         }
         _opening = true;
-        SetStatus($"Opening as {row.Title}...");
+        SetStatus(UiText.Format("QuickSwitchOpeningAs", row.Title));
         try
         {
             var target = model.Target;
@@ -243,7 +243,7 @@ internal sealed class QuickSwitchWindow : Window
                 Close();
                 return;
             }
-            SetStatus(OpenAsRules.CliSentence(result.Error) ?? $"{target.Site} could not be opened as {row.Title}.", error: true);
+            SetStatus(OpenAsRules.CliSentence(result.Error) ?? UiText.Format("QuickSwitchCouldNotOpen", target.Site, row.Title), error: true);
         }
         finally
         {

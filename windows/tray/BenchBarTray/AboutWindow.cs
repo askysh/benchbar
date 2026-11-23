@@ -40,29 +40,29 @@ internal sealed class AboutWindow : ToolWindow
     public const string RepositoryUrl = "https://github.com/askysh/benchbar";
 
     private readonly AboutActions _actions;
-    private readonly TextBlock _shim = Ui.Text("reading...", 14);
-    private readonly TextBlock _cli = Ui.Text("reading...", 14);
+    private readonly TextBlock _shim = Ui.Text(UiText.Get("AboutReading"), 14);
+    private readonly TextBlock _cli = Ui.Text(UiText.Get("AboutReading"), 14);
     private readonly TextBlock _update = Ui.Text("", 13, opacity: 0.85);
     private readonly StackPanel _updateButtons = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
 
-    public AboutWindow(AboutActions actions, ResolvedTheme theme) : base("About BenchBar", 560, 640, theme)
+    public AboutWindow(AboutActions actions, ResolvedTheme theme) : base(UiText.Get("AboutTitle"), 560, 640, theme)
     {
         _actions = actions;
         Ui.ApplyMica(this);
-        Ui.Name(this, "About BenchBar");
+        Ui.Name(this, UiText.Get("AboutTitle"));
 
         var panel = new StackPanel { Margin = new Thickness(28, 24, 28, 24) };
         var name = new StackPanel { Orientation = Orientation.Horizontal };
         name.Children.Add(Ui.Text("BenchBar", 28, FontWeights.SemiBold));
         name.Children.Add(Ui.Pill());
         panel.Children.Add(name);
-        panel.Children.Add(Ui.Text("Frappe benches in WSL, from the notification area.", 14, opacity: 0.75, margin: new Thickness(0, 2, 0, 8)));
+        panel.Children.Add(Ui.Text(UiText.Get("AboutTagline"), 14, opacity: 0.75, margin: new Thickness(0, 2, 0, 8)));
         panel.Children.Add(Ui.Text(BetaText.AboutText, 13, opacity: 0.9, margin: new Thickness(0, 0, 0, 16)));
 
         var versions = new StackPanel();
         versions.Children.Add(Row("BenchBar", Ui.Text(actions.AppVersion.Split('+')[0], 14)));
         versions.Children.Add(Row("benchbar.exe", _shim));
-        versions.Children.Add(Row("Linux command line tool", _cli));
+        versions.Children.Add(Row(UiText.Get("AboutLinuxCli"), _cli));
         var update = new StackPanel();
         if (actions.UpdatesFromStore)
         {
@@ -70,55 +70,55 @@ internal sealed class AboutWindow : ToolWindow
         }
         else
         {
-            var check = Ui.Button("Check for Updates", () => CheckAsync().Forget(), "Check for updates");
+            var check = Ui.Button(UiText.Get("AboutCheckUpdates"), () => CheckAsync().Forget(), UiText.Get("AboutCheckUpdatesName"));
             update.Children.Add(check);
             update.Children.Add(_update);
             update.Children.Add(_updateButtons);
         }
-        versions.Children.Add(Row("Updates", update));
-        panel.Children.Add(Section("Versions", Ui.CardOf(versions)));
+        versions.Children.Add(Row(UiText.Get("AboutUpdates"), update));
+        panel.Children.Add(Section(UiText.Get("AboutVersions"), Ui.CardOf(versions)));
 
         var links = new StackPanel();
-        links.Children.Add(Ui.Link("Documentation", () => _actions.OpenUrl(DocsUrl)));
-        links.Children.Add(Ui.Link("What's new", () => _actions.OpenUrl(WhatsNewUrl)));
-        links.Children.Add(Ui.Link("Source code (github.com/askysh/benchbar)", () => _actions.OpenUrl(RepositoryUrl), "Source code on GitHub"));
-        var bug = Ui.Button("Report a Bug", () => _actions.ReportBug(), "Report a bug", minWidth: 120);
+        links.Children.Add(Ui.Link(UiText.Get("AboutDocs"), () => _actions.OpenUrl(DocsUrl)));
+        links.Children.Add(Ui.Link(UiText.Get("AboutWhatsNew"), () => _actions.OpenUrl(WhatsNewUrl)));
+        links.Children.Add(Ui.Link(UiText.Get("AboutSource"), () => _actions.OpenUrl(RepositoryUrl), UiText.Get("AboutSourceName")));
+        var bug = Ui.Button(UiText.Get("MenuReportBug"), () => _actions.ReportBug(), UiText.Get("AboutReportBugName"), minWidth: 120);
         bug.Margin = new Thickness(0, 10, 0, 0);
         links.Children.Add(bug);
-        links.Children.Add(Ui.Caption("Writes a redacted report zip, opens its folder and opens a GitHub issue to attach it to."));
-        panel.Children.Add(Section("Help", Ui.CardOf(links)));
+        links.Children.Add(Ui.Caption(UiText.Get("AboutReportHint")));
+        panel.Children.Add(Section(UiText.Get("AboutHelp"), Ui.CardOf(links)));
 
         var mcp = new StackPanel();
-        mcp.Children.Add(Ui.Text("benchbar mcp lets Claude Code, Cursor and other agents list your benches, read status, doctor and logs, and start, stop or restart them. Add it once:", 13, margin: new Thickness(0, 0, 0, 8)));
+        mcp.Children.Add(Ui.Text(UiText.Get("AboutMcpIntro"), 13, margin: new Thickness(0, 0, 0, 8)));
         var line = new DockPanel();
-        var copy = Ui.Button("Copy", () => _actions.CopyText(WizardModel.McpLine), "Copy the command that adds benchbar mcp", minWidth: 64);
+        var copy = Ui.Button(UiText.Get("Copy"), () => _actions.CopyText(WizardModel.McpLine), UiText.Get("AboutCopyMcp"), minWidth: 64);
         copy.Margin = new Thickness(8, 0, 0, 0);
         DockPanel.SetDock(copy, Dock.Right);
         var box = new TextBox { Text = WizardModel.McpLine, IsReadOnly = true, FontFamily = new System.Windows.Media.FontFamily("Cascadia Mono, Consolas"), FontSize = 12, Padding = new Thickness(8, 6, 8, 6) };
-        Ui.Name(box, "MCP command");
+        Ui.Name(box, UiText.Get("AboutMcpCommand"));
         line.Children.Add(copy);
         line.Children.Add(box);
         mcp.Children.Add(line);
-        mcp.Children.Add(Ui.Text("For another client, add this stdio server to its settings:", 13, margin: new Thickness(0, 10, 0, 8)));
+        mcp.Children.Add(Ui.Text(UiText.Get("AboutMcpOther"), 13, margin: new Thickness(0, 10, 0, 8)));
         var jsonLine = new DockPanel();
-        var copyJson = Ui.Button("Copy", () => _actions.CopyText(WizardModel.McpJson), "Copy the JSON entry for the benchbar mcp server", minWidth: 64);
+        var copyJson = Ui.Button(UiText.Get("Copy"), () => _actions.CopyText(WizardModel.McpJson), UiText.Get("AboutCopyJson"), minWidth: 64);
         copyJson.Margin = new Thickness(8, 0, 0, 0);
         DockPanel.SetDock(copyJson, Dock.Right);
         var jsonBox = new TextBox { Text = WizardModel.McpJson, IsReadOnly = true, FontFamily = new System.Windows.Media.FontFamily("Cascadia Mono, Consolas"), FontSize = 12, Padding = new Thickness(8, 6, 8, 6) };
-        Ui.Name(jsonBox, "MCP JSON");
+        Ui.Name(jsonBox, UiText.Get("AboutMcpJson"));
         jsonLine.Children.Add(copyJson);
         jsonLine.Children.Add(jsonBox);
         mcp.Children.Add(jsonLine);
-        panel.Children.Add(Section("For coding agents", Ui.CardOf(mcp)));
+        panel.Children.Add(Section(UiText.Get("AboutAgents"), Ui.CardOf(mcp)));
 
-        panel.Children.Add(Ui.Text("BenchBar is free software under the MIT License.", 12, opacity: 0.7, margin: new Thickness(0, 8, 0, 2)));
-        panel.Children.Add(Ui.Text("Frappe and ERPNext are trademarks of Frappe Technologies; BenchBar is not affiliated with or endorsed by them.", 12, opacity: 0.7));
+        panel.Children.Add(Ui.Text(UiText.Get("AboutLicense"), 12, opacity: 0.7, margin: new Thickness(0, 8, 0, 2)));
+        panel.Children.Add(Ui.Text(UiText.Get("AboutTrademark"), 12, opacity: 0.7));
 
         Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Loaded += (_, _) => LoadVersionsAsync().Forget();
         if (actions.KnownOffer() is { } known)
         {
-            _update.Text = $"BenchBar {known.Version} is out.";
+            _update.Text = UiText.Format("AboutIsOut", known.Version);
             ShowOffer(known);
         }
     }
@@ -148,13 +148,13 @@ internal sealed class AboutWindow : ToolWindow
 
     private async Task LoadVersionsAsync()
     {
-        _shim.Text = await _actions.ShimVersion() ?? "not found";
+        _shim.Text = await _actions.ShimVersion() ?? UiText.Get("AboutNotFound");
         _cli.Text = (await _actions.CliVersion()).Text;
     }
 
     internal async Task CheckAsync()
     {
-        _update.Text = "Checking...";
+        _update.Text = UiText.Get("AboutChecking");
         ShowOffer(null);
         var check = await _actions.CheckForUpdates();
         _update.Text = UpdatePlanner.CheckText(check);
@@ -173,20 +173,20 @@ internal sealed class AboutWindow : ToolWindow
         if (offer.CanUpdateNow)
         {
             var running = _actions.UpdateRunning();
-            var now = Ui.Button(running ? "Updating..." : "Update Now", () =>
+            var now = Ui.Button(running ? UiText.Get("AboutUpdating") : UiText.Get("AboutUpdateNow"), () =>
             {
                 _actions.UpdateNow();
                 ShowOffer(offer);
-            }, "Update BenchBar now", primary: true);
+            }, UiText.Get("AboutUpdateNowName"), primary: true);
             now.IsEnabled = !running;
             _updateButtons.Children.Add(now);
         }
         Button? copy = null;
-        copy = Ui.Button("Copy Update Line", () =>
+        copy = Ui.Button(UiText.Get("AboutCopyUpdateLine"), () =>
         {
             _actions.CopyText(offer.Command);
-            if (copy is not null) copy.Content = "Copied";
-        }, "Copy the update line for PowerShell");
+            if (copy is not null) copy.Content = UiText.Get("AboutCopied");
+        }, UiText.Get("AboutCopyUpdateLineName"));
         _updateButtons.Children.Add(copy);
     }
 }
