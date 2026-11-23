@@ -181,6 +181,8 @@ PY
         # MOCK_BENCH_BACKUP_SLEEP=N: a backup that takes N seconds (a detached run that is seen running)
         [[ -n "${MOCK_BENCH_BACKUP_SLEEP:-}" ]] && sleep "$MOCK_BENCH_BACKUP_SLEEP"
         [[ -n "${MOCK_BENCH_BACKUP_EXIT:-}" ]] && exit "$MOCK_BENCH_BACKUP_EXIT"
+        # MOCK_BENCH_BACKUP_FAIL_AFTER=N: the backups fail once N have been taken in this test (the second backup of a move)
+        [[ -n "${MOCK_BENCH_BACKUP_FAIL_AFTER:-}" && "$(cat "${MOCK_STATE:?}/backup_n" 2>/dev/null || printf 0)" -ge "$MOCK_BENCH_BACKUP_FAIL_AFTER" ]] && exit 1
         n="$(cat "${MOCK_STATE:?}/backup_n" 2>/dev/null || printf 0)"; n=$((n + 1)); printf '%s' "$n" >"${MOCK_STATE}/backup_n"
         base="sites/$2/private/backups/${MOCK_BENCH_BACKUP_STAMP:-20260929_1000$(printf '%02d' "$n")}-${2//./_}"
         mkdir -p "sites/$2/private/backups"

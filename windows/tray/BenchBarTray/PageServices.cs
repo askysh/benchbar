@@ -21,6 +21,12 @@ internal sealed class PageServices
         set => _commands = value;
     }
 
+    /// <summary>Every bench the tray knows (the last poll), for a page that offers another bench as a target.</summary>
+    public Func<IReadOnlyList<BenchStatus>> Benches { get; set; } = () => [];
+
+    /// <summary>Asks which bench a site moves to and whether to skip migrate (site, its bench, the other benches); null when cancelled.</summary>
+    public Func<string, string, IReadOnlyList<BenchStatus>, SiteMoveRequest?> AskMove { get; set; } = (_, _, _) => null;
+
     public Func<ResolvedTheme> Theme { get; set; } = () => new ResolvedTheme(true, true);
 
     /// <summary>The window sheets and dialogs belong to (the main window).</summary>
@@ -95,6 +101,7 @@ internal sealed class PageServices
             AskLinuxPassword = Ask,
             Confirm = (title, detail, button) => ConfirmDialog.Ask(title, detail, button, theme(), owner()),
             ConfirmTyped = request => TypedConfirmDialog.Ask(request, theme(), owner()),
+            AskMove = (site, bench, targets) => SiteMoveDialog.Ask(site, bench, targets, theme(), owner()),
             ReviewPlan = request => PlanReviewSheet.ReviewAsync(request, services!),
         };
         return services;
