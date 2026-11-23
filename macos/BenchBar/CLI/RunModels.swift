@@ -122,6 +122,26 @@ nonisolated struct RunRequest: Equatable, Sendable {
     }
 }
 
+/// Where the Run sheet is in reading a plan, and the request that plan was read for. Run applies that request, never what the
+/// form says now, so the plan the person saw and the command that runs cannot differ.
+nonisolated struct RunReviewState: Equatable, Sendable {
+    var flow = PlanReviewFlow<RunPlan>()
+    private(set) var request: RunRequest?
+
+    /// Review (or Review Again): the dry run for `asked` starts.
+    mutating func begin(_ asked: RunRequest) -> Bool {
+        guard flow.review() else { return false }
+        request = asked
+        return true
+    }
+
+    /// The plan on screen with the request it was read for, only for a plan that can run.
+    mutating func apply() -> (request: RunRequest, plan: RunPlan)? {
+        guard let request, let plan = flow.apply() else { return nil }
+        return (request, plan)
+    }
+}
+
 /// The plan of `run --dry-run --json`: the exact command line, what it touches, whether a backup comes first and the deadline. Its
 /// token is a hash of the plan and of the sites, the default site, `apps.txt` and `site_config.json`: `--apply TOKEN --yes` runs
 /// exactly that plan and refuses a different one.
@@ -337,7 +357,8 @@ nonisolated struct OpList: Decodable, Equatable, Sendable {
 
     static func samePath(_ a: String?, _ b: String) -> Bool {
         guard let a else { return false }
-        return URL(fileURLWithPath: a).standardizedFileURL.path == URL(fileURLWithPath: b).standardizedFileURL.path
+        // a bench reached through a symlink (/tmp, a linked dev folder) is the same bench
+        return URL(fileURLWithPath: a).resolvingSymlinksInPath().path == URL(fileURLWithPath: b).resolvingSymlinksInPath().path
     }
 }
 

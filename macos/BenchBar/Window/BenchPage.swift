@@ -93,6 +93,7 @@ struct BenchOverview: View {
     @State private var portSetup: PortSetupRun?
     @State private var servicing = false
     @State private var runningCommand = false
+    @State private var tidying: TidyRoute?
 
     private var controls: BenchControls { store.controls(for: bench) }
     /// What this CLI lists (`commands --json`): a button of a newer command shows only when it is there.
@@ -173,6 +174,12 @@ struct BenchOverview: View {
         .sheet(item: $portSetup) { run in PortSetupSheet(run: run) { portSetup = nil } }
         .sheet(isPresented: $servicing) { ServiceSheet(workbench: workbench, bench: bench) { servicing = false } }
         .sheet(isPresented: $runningCommand) { RunSheet(workbench: workbench, bench: bench) { runningCommand = false } }
+        .sheet(item: $tidying) { route in
+            switch route {
+            case .tidy: TidySheet(workbench: workbench, bench: bench, removeExpired: { tidying = .plan(.gc) }) { tidying = nil }
+            case .plan(let action): TidyPlanSheet(workbench: workbench, bench: bench, action: action) { tidying = nil }
+            }
+        }
         .task { openRequestedSetup() }
         .task(id: store.stamp(for: bench)) {
             await workbench.loadCommands()
@@ -276,10 +283,36 @@ struct BenchOverview: View {
                     .disabled(!store.canChange(bench))
                     .help("One command of benchbar's allow list (migrate, build, doctor and more). A change shows its plan first.")
                 }
+                tidyItems
                 Divider()
                 Button("Show in Finder", systemImage: "folder") { Workspace.openFolder(bench) }
                 Button("Copy Path", systemImage: "doc.on.doc") { Workspace.copy(bench.path) }
             }
+        }
+    }
+
+    /// The end of a bench's life (#183), each entry only when the CLI lists its command. A change shows its plan first.
+    @ViewBuilder private var tidyItems: some View {
+        let busy = !store.canChange(bench)
+        if workbench.offersTidy || workbench.offers(.removeService) || workbench.offers(.forget) || workbench.offers(.remove) { Divider() }
+        if workbench.offersTidy {
+            Button { tidying = .tidy } label: { Label("Tidy Up…", systemImage: "sparkles") }
+                .help("Scratch benches, the ones that expired, the databases no site refers to and the hosts lines no bench uses")
+        }
+        if workbench.offers(.removeService), !bench.needsService {
+            Button { tidying = .plan(.removeService) } label: { Label("Remove Service…", systemImage: "gearshape.slash") }
+                .disabled(busy)
+                .help("uninstall-service for this bench: stops it and removes its background service. Shows its plan first.")
+        }
+        if workbench.offers(.forget) {
+            Button { tidying = .plan(.forget) } label: { Label("Forget Bench…", systemImage: "eye.slash") }
+                .disabled(busy)
+                .help("bench forget: takes the bench out of benchbar's list. The folder, sites and databases stay.")
+        }
+        if workbench.offers(.remove) {
+            Button { tidying = .plan(.remove) } label: { Label("Remove Bench…", systemImage: "trash") }
+                .disabled(busy)
+                .help("bench remove: backs up and drops its sites, then moves the folder aside. Asks for the folder name.")
         }
     }
 

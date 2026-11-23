@@ -693,6 +693,17 @@ assert_calls_not_contain 'restore'
 # a snapshot is never removed through MCP
 assert_not_contains "$TOOL_NAMES" "snapshot_drop"
 
+# ---- site move: the plan is the CLI's own, and the bench it goes to is checked like the one it leaves
+R="$(mcp "$(call 7 benchbar_site_move_plan '{"site":"qa1.localhost","to_bench":"'"$BENCH"'","bench":"'"$BENCH"'"}')")"
+assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
+assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["can_apply"]')" "$R"
+assert_contains "$R" "the target is the bench the site is in"
+reset_calls
+R="$(mcp "$(call 8 benchbar_site_move '{"site":"qa1.localhost","to_bench":"'"$TMP_DIR"'/not-a-bench","token":"'"$(printf '0%.0s' $(seq 64))"'","bench":"'"$BENCH"'"}')")"
+assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
+assert_contains "$R" "is not a bench benchbar knows"
+assert_calls_not_contain 'backup|restore|drop-site'
+
 # ---- no output names where the MariaDB root password lives
 R="$(mcp "$(call 1 benchbar_site_add_plan '{"site":"qa3.localhost","bench":"'"$BENCH"'"}')" "$(call 2 benchbar_doctor '{"bench":"'"$BENCH"'"}')")"
 assert_not_contains "$R" "mariadb-password"
