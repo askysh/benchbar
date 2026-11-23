@@ -258,14 +258,18 @@ start_job() {
       # flake, and the log says so with the first failure, so it is fixed and not hidden
       if [[ "$c" != 0 && "$c" != 124 && "${RERUN_FAILED:-${CI:+1}}" == 1 ]]; then
         mv "$OUT_DIR/$idx.log" "$OUT_DIR/$idx.first"
+        # how the first run ended: a test that a signal killed prints nothing, and then the exit
+        # code is all there is to go on (above 128 it is 128 plus the signal: 143 is TERM, 137 KILL)
+        first="exit ${c}"; [[ "$c" -le 128 ]] || first="${first}, signal $((c - 128))"
+        first="${first}, after $((SECONDS - started))s"
         if run_one_test "$name" "$OUT_DIR/$idx.log"; then c=0; else c=$?; fi
         if [[ "$c" == 0 ]]; then
-          { printf 'FLAKY: %s failed once and passed on the rerun. The first failure:\n' "$name"; sed 's/^/  | /' "$OUT_DIR/$idx.first"; } >>"$OUT_DIR/$idx.log"
+          { printf 'FLAKY: %s failed once and passed on the rerun (the first run: %s). The first failure:\n' "$name" "$first"; sed 's/^/  | /' "$OUT_DIR/$idx.first"; } >>"$OUT_DIR/$idx.log"
           # the line the run's summary and the GitHub annotation show (the main loop reads it)
           { sed -n '/^FAIL/{p;q;}' "$OUT_DIR/$idx.first"; sed -n 1p "$OUT_DIR/$idx.first"; } 2>/dev/null | sed -n 1p >"$OUT_DIR/$idx.flaky"
-          [[ -s "$OUT_DIR/$idx.flaky" ]] || printf 'no output\n' >"$OUT_DIR/$idx.flaky"
+          [[ -s "$OUT_DIR/$idx.flaky" ]] || printf 'no output (%s)\n' "$first" >"$OUT_DIR/$idx.flaky"
         else
-          { printf 'FAILED TWICE: %s. The first failure:\n' "$name"; sed 's/^/  | /' "$OUT_DIR/$idx.first"; } >>"$OUT_DIR/$idx.log"
+          { printf 'FAILED TWICE: %s (the first run: %s). The first failure:\n' "$name" "$first"; sed 's/^/  | /' "$OUT_DIR/$idx.first"; } >>"$OUT_DIR/$idx.log"
         fi
       fi
     fi
