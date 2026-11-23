@@ -245,7 +245,9 @@ benchbar share people [--json]
 The people in the room: id (`d_` and 8 hex digits), name, Mac model,
 address, seat, online, joined, last seen. `share devices` is another name
 for it. When someone in the room has no seat, the free seats follow with
-their ids (`s_` and 8 hex digits), ready for `share assign`.
+their ids (`s_` and 8 hex digits), ready for `share assign`. `--json` always
+carries `seats`, every seat of the room with its roles and who holds it,
+and `seat_mode` (`host` or `open`).
 
 ```bash
 benchbar share people
@@ -617,7 +619,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `share invite` | `--json` |  | One document with the invite text and its link: the code is in it, never logged, never stored. |
 | `share lock` | `--json` |  | JSON lines: done, with locked and lock_reason. |
 | `share unlock` | `--json` |  | JSON lines: done, with locked and lock_reason. |
-| `share people` | `--json` |  | One document: state and people, each with id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen. |
+| `share people` | `--json` |  | One document: state; people, each with id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen; seats, every seat of the room with seat_id, full_name, roles, held_by and held_by_name (null for a free seat); seat_mode (host or open). |
 | `share devices` | `--json` |  | As share people --json. |
 | `share remove` | `--new-code` |  | Also draw a new room code, for when the person is not known: a fresh Mac could join again with the old one. The new code also lets the removed Mac back, if they get it. |
 | `share remove` | `--yes` |  | Do not ask first. |
