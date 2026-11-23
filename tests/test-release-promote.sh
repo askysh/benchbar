@@ -18,6 +18,11 @@ mkdir -p "$G/bin" "$G/results"
 cat >"$G/bin/gh" <<'SH'
 #!/usr/bin/env bash
 for a in "$@"; do case "$a" in repos/*/commits/*/check-runs*) sha="${a#*/commits/}"; sha="${sha%%/*}" ;; esac; done
+# the real installs on macOS have their own check: SHA.real, and passed when a test names none
+case "$*" in *'Real install result'*)
+  if [[ -f "$GATE_RESULTS/$sha.real" ]]; then cat "$GATE_RESULTS/$sha.real"; else echo "completed success"; fi
+  exit 0 ;;
+esac
 if [[ -f "$GATE_RESULTS/$sha" ]]; then cat "$GATE_RESULTS/$sha"
 elif [[ -f "$GATE_RESULTS/default" ]]; then cat "$GATE_RESULTS/default"; fi
 exit 0
