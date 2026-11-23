@@ -137,7 +137,7 @@ internal sealed class QuickSwitchWindow : Window
     {
         if (_model is null) return;
         _model.SetQuery(_search.Text);
-        if (!_opening) SetStatus(""); // the line belongs to the last text: UiText.Get("QuickSwitchNoMatch") and an old error go with it
+        if (!_opening) SetStatus(""); // the line belongs to the last text: "No users match" and an old error go with it
         Draw();
         // two characters or more ask the CLI: until it answers, an empty list is not yet "no match"
         if (_model.WantsSearch && !_opening) SetStatus("");
