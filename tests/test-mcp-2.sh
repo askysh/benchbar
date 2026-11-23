@@ -315,8 +315,8 @@ for tool, args, name in (
     ("benchbar_logs_tail", {"since": "-1h"}, "since"),
 ):
     r = c.call(tool, args)
-    err = r.get("error")
-    assert err and err["code"] == -32602 and name in err["message"], (tool, r)
+    res = r.get("result")
+    assert res and res["isError"] is True and name in text(r), (tool, r)         # a tool error, not -32602 (MCP-12)
 r = c.call("benchbar_app_add", {"url_or_name": "x", "token": "b" * 64})      # a token no plan of this server returned
 assert r["result"]["isError"], r
 c.close()
@@ -632,9 +632,9 @@ for tool, args in (
     ("benchbar_where", {"bench": "/b"}),
 ):
     r = c.call(tool, args)
-    assert "error" in r and r["error"]["code"] == -32602, (tool, args, r)
+    assert r.get("result", {}).get("isError") is True, (tool, args, r)
 r = c.call("benchbar_ports_plan", {"paths": []})
-assert r["error"]["code"] == -32602 and "paths" in r["error"]["message"], r
+assert r["result"]["isError"] is True and "paths" in text(r), r
 for args in ({"paths": "/b"}, {"paths": [1]}):
     r = c.call("benchbar_ports_plan", args)
     refused = r["error"]["message"] if "error" in r else (text(r) if r["result"]["isError"] else "")
@@ -730,7 +730,7 @@ for tool, args in (
     ("benchbar_down", {"break_lease": True}),
 ):
     r = c.call(tool, args)
-    assert "error" in r and r["error"]["code"] == -32602, (tool, args, r)
+    assert r.get("result", {}).get("isError") is True, (tool, args, r)
 for minutes in (0, 481, "5", True):
     r = c.call("benchbar_lease_take", {"site": "qa1.localhost", "bench": "/b", "minutes": minutes})
     assert "result" in r and r["result"]["isError"], (minutes, r)

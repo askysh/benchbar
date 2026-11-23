@@ -1591,21 +1591,27 @@ cmd_where() {
 }
 
 # cmd_mcp: the MCP server, on a Python 3.9+ that imports only the standard
-# library. Apple's /usr/bin/python3 comes first when the Command Line Tools
-# are installed (xcode-select -p; without them it is a stub that only offers
-# to install them), then python3 from PATH: a GUI client (Claude Desktop)
-# starts us with a PATH that may lead to a pyenv shim or a project venv.
-# -I (isolated mode) ignores PYTHON* variables, the user site and the script
+# library. A python3 from PATH of 3.10 or newer comes first (3.9, the Command
+# Line Tools' version, is past its end of life), then Apple's /usr/bin/python3
+# when the Command Line Tools are installed (xcode-select -p; without them it
+# is a stub that only offers to install them), then any python3 from PATH of
+# 3.9. A GUI client (Claude Desktop) may start us with a PATH that leads to a
+# pyenv shim or a project venv: each candidate is run and checked, and -I
+# (isolated mode) ignores PYTHON* variables, the user site and the script
 # folder, so the server sees the same Python everywhere.
 # BENCHBAR_MCP_CLI: tests only, a fake CLI stands in (a timeout, a hang).
 cmd_mcp() {
-  local py candidates=() found="" ver
-  if ! fl_is_linux && xcode-select -p >/dev/null 2>&1 && [[ -x /usr/bin/python3 ]]; then candidates+=(/usr/bin/python3); fi
+  local py candidates=() found="" ver minor
   if command -v python3 >/dev/null 2>&1; then candidates+=("$(command -v python3)"); fi
+  if ! fl_is_linux && xcode-select -p >/dev/null 2>&1 && [[ -x /usr/bin/python3 ]]; then candidates+=(/usr/bin/python3); fi
+  for minor in 10 9; do
+    for py in ${candidates[@]+"${candidates[@]}"}; do
+      if "$py" -I -c "import sys; sys.exit(0 if sys.version_info >= (3, ${minor}) else 1)" >/dev/null 2>&1; then
+        BENCHBAR="${BENCHBAR_MCP_CLI:-$FL_SELF}" BENCHBAR_VERSION="$FL_VERSION" exec "$py" -I "${SCRIPT_DIR}/lib/frappe-local/mcp.py" ${ARGS[@]+"${ARGS[@]}"}
+      fi
+    done
+  done
   for py in ${candidates[@]+"${candidates[@]}"}; do
-    if "$py" -I -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
-      BENCHBAR="${BENCHBAR_MCP_CLI:-$FL_SELF}" BENCHBAR_VERSION="$FL_VERSION" exec "$py" -I "${SCRIPT_DIR}/lib/frappe-local/mcp.py" ${ARGS[@]+"${ARGS[@]}"}
-    fi
     ver="$("$py" -I -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null || true)"
     found="${found:+${found}, }${py} (${ver:-not runnable})"
   done
