@@ -177,10 +177,21 @@ fl_lab_require() {
   fl_die "benchbar ${2:-${COMMAND:-this command}} is an experiment and it is off." "$hint" 2
 }
 
+# fl_lab_undo_key KEY: the commands of a lab that only stop, remove or report what it started. They run
+# while the lab is off too: an experiment that is off must still be undoable, and `labs off` names one of
+# them (lan-guard remove) for the root files it cannot remove itself.
+fl_lab_undo_key() {
+  case "$1" in
+    "share stop"|"share status"|"share teardown"|"lan-guard status"|"lan-guard remove") return 0 ;;
+  esac
+  return 1
+}
+
 # fl_lab_gate KEY: the dispatcher's one check; KEY is a command or a table key
 fl_lab_gate() {
   local cmd="${1%% *}" lab
   [[ -n "$cmd" ]] || return 0
+  ! fl_lab_undo_key "$1" || return 0
   lab="$(fl_lab_of_cmd "$cmd")"
   [[ -z "$lab" ]] || fl_lab_require "$lab" "$cmd"
 }
