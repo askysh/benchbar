@@ -77,16 +77,13 @@ nonisolated enum InviteFixture {
 
     /// #159 SHARE-8: a link can come from a web page or a chat. A room is on the network this Mac is
     /// on, so an address anywhere else (a server on the internet, this Mac itself) is not dialled.
-    @Test func theAddressMustBeOnALocalNetwork() throws {
-        for bad in ["203.0.113.9:8443", "8.8.8.8:8443", "127.0.0.1:8443", "0.0.0.0:8443", "172.32.0.1:8443", "172.15.0.1:8443",
-                    "100.128.0.1:8443", "100.63.0.1:8443", "192.169.1.1:8443", "169.253.1.1:8443", "224.0.0.251:8443", "255.255.255.255:8443",
-                    "10.1:8443", "192.168.1:8443", "192.168.1.999:8443"] {
-            let invite = try #require(InviteFixture.invite(InviteFixture.link(a: bad)), "\(bad)")
-            #expect(invite.address == nil, "\(bad)")
+    @Test func onlyAnAddressOfALocalNetworkCounts() {
+        for bad in ["203.0.113.9", "8.8.8.8", "127.0.0.1", "0.0.0.0", "172.32.0.1", "172.15.0.1", "100.128.0.1", "100.63.0.1", "192.169.1.1",
+                    "169.253.1.1", "224.0.0.251", "255.255.255.255", "10.1", "192.168.1", "192.168.1.999", "192.168.1.9.1", "", "0x0a.0.0.1", "evil.example"] {
+            #expect(!ShareInvite.isLocalNetwork(bad), "\(bad)")
         }
         for good in ["10.0.0.5", "172.16.4.2", "172.31.255.254", "192.168.1.9", "169.254.10.20", "100.64.0.1", "100.127.255.1"] {
-            let invite = try #require(InviteFixture.invite(InviteFixture.link(a: "\(good):8443")), "\(good)")
-            #expect(invite.address == .init(host: good, port: 8443), "\(good)")
+            #expect(ShareInvite.isLocalNetwork(good), "\(good)")
         }
     }
 

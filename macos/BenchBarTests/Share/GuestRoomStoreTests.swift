@@ -658,6 +658,24 @@ private final class Harness {
         #expect(!"\(h.defaults.dictionaryRepresentation())".contains("482913"))
     }
 
+    /// #159 SHARE-8: a link whose address is not one of a local network opens the sheet, and Join
+    /// never dials that address: the room is looked for by its Bonjour name only.
+    @Test func anInviteThatNamesAnAddressOnTheInternetIsNotDialledThere() async throws {
+        let far = try #require(InviteFixture.invite(InviteFixture.link(a: "203.0.113.9:8443")))
+        #expect(far.address == .init(host: "203.0.113.9", port: 8443))
+        let h = Harness()
+        h.store.open(invite: .success(far))
+        guard case .enteringCode(let target) = h.store.join else {
+            Issue.record("expected the invite's join sheet, got \(h.store.join)")
+            return
+        }
+        #expect(target.endpoint == .service(name: "Standup", type: LanRoomBrowser.serviceType, domain: "local.", interface: nil))
+        // the same link with an address of the local network is dialled at it
+        h.store.cancelJoin()
+        h.store.open(invite: .success(invite))
+        #expect(h.store.join == .enteringCode(addressed))
+    }
+
     /// `x` is advisory: the host may have extended the share, and a matching key and salt
     /// prove the code is current.
     @Test func aPastDeadlineStillJoinsALiveMatchingRoom() async {

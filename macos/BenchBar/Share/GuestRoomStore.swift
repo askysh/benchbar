@@ -83,6 +83,9 @@ final class GuestRoomStore {
         var sleep: @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0, tolerance: $0 / 5) }
         /// Deletes this Mac's client key and certificate; the next join makes new ones.
         var forgetIdentity: () -> Void = {}
+        /// Whether an invite's address may be dialled: only one of a local network. The interop
+        /// test, whose gateway listens on loopback, is the one caller that passes another answer.
+        var inviteAddressAllowed: (String) -> Bool = ShareInvite.isLocalNetwork
     }
 
     static let pingInterval: Duration = .seconds(10)
@@ -303,7 +306,7 @@ final class GuestRoomStore {
     /// proves nothing, so every one of them is dialled pinned to the invite's key.
     private func inviteTargets(_ invite: ShareInvite) -> [DiscoveredRoom] {
         var targets = discovered.filter { $0.display.label == invite.room && !$0.display.needsUpdate }
-        if let address = invite.address, let port = NWEndpoint.Port(rawValue: address.port) {
+        if let address = invite.address, deps.inviteAddressAllowed(address.host), let port = NWEndpoint.Port(rawValue: address.port) {
             targets.append(DiscoveredRoom(id: invite.room, endpoint: .hostPort(host: NWEndpoint.Host(address.host), port: port),
                                           display: RoomDisplay(label: invite.room, site: "", protocolV: CPace.protocolVersion)))
         }
