@@ -1652,7 +1652,8 @@ fl_cmd_profile_update() {
 # ---- remove
 
 fl_cmd_profile_remove() {
-  local name="" f sub sname="" surl sdir what="" dest moved udir list apply=0 token="" pr_data pr_token tcode kind=file
+  # surl and sdir start empty: bash 5 treats a declared but unset name as unset under set -u (bash 3.2 does not)
+  local name="" f sub sname="" surl="" sdir="" what="" dest moved udir list apply=0 token="" pr_data pr_token tcode kind=file
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --apply) apply=1; token="${2:-}"; shift 2 || shift ;;
