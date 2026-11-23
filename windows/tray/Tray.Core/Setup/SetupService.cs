@@ -208,7 +208,7 @@ public sealed class ShimSetupService : ISetupService
     }
 
     public Task<InstallRunResult> InstallAsync(InstallRequest request, InstallSecrets secrets, Action<InstallEvent> onEvent, CancellationToken ct) =>
-        StreamInstallAsync(["install", "--yes", "--json", .. request.Flags], secrets, onEvent, ct);
+        StreamInstallAsync(["install", "--yes", "--json", .. (request.ApplyToken is { Length: > 0 } token ? (string[])["--apply", token] : []), .. request.Flags], secrets, onEvent, ct);
 
     public Task<InstallRunResult> AdoptAsync(string benchPath, InstallSecrets secrets, Action<InstallEvent> onEvent, CancellationToken ct) =>
         StreamInstallAsync(["adopt", benchPath, "--yes", "--json"], secrets, onEvent, ct);
