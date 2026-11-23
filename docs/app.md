@@ -122,8 +122,8 @@ on, without a key: pick another key (below), or turn it off and on again once
 the other app lets go.
 
 **Changing the key.** While Quick Switch is on, its row in **Settings > Labs**
-shows the key. Click it, then press the new shortcut: it needs ⌃, ⌥ or ⌘ (with
-⇧ if you like), and Escape cancels. If another app holds that key, the row says
+shows the key. Click it, then press the new shortcut: it needs ⌃ or ⌥ (with
+⇧ or ⌘ if you like), and Escape cancels. If another app holds that key, the row says
 so and the old key stays. **Reset** brings back ⌃⌥U. BenchBar remembers the
 choice. A key is the physical key; its name is the letter your keyboard shows
 there (U on a US keyboard), or its printed name such as Space or F5.

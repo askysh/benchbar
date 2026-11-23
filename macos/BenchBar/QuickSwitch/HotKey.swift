@@ -66,6 +66,24 @@ final class HotKey {
         return true
     }
 
+    /// Registers `new` while the current key is still held, and lets go of the current one only when
+    /// that worked: a refused key leaves the old one in place. Not registered: only sets the choice.
+    func change(to new: HotKeyChoice) -> Bool {
+        guard let old = hotKeyRef else {
+            choice = new
+            return true
+        }
+        var fresh: EventHotKeyRef?
+        let id = EventHotKeyID(signature: Self.signature, id: 2)
+        guard RegisterEventHotKey(new.keyCode, new.modifiers, id, GetApplicationEventTarget(), 0, &fresh) == noErr else {
+            return false
+        }
+        UnregisterEventHotKey(old)
+        hotKeyRef = fresh
+        choice = new
+        return true
+    }
+
     func unregister() {
         if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
         hotKeyRef = nil

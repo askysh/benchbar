@@ -52,6 +52,10 @@ final class QuickSwitchPanel: NSPanel {
 protocol HotKeyRegistering: AnyObject {
     @discardableResult func register() -> Bool
     func unregister()
+    var isRegistered: Bool { get }
+    /// Registers the new key first and drops the old one only if that worked (false: the old key stays).
+    /// While unregistered it only sets `choice`.
+    func change(to new: HotKeyChoice) -> Bool
     /// The key to register; set it while unregistered.
     var choice: HotKeyChoice { get set }
 }
@@ -82,19 +86,45 @@ final class QuickSwitchController {
         self.hotKey = hotKey ?? HotKey(choice: keys.choice) { [weak self] in self?.toggle() }
         self.hotKey.choice = keys.choice
         keys.apply = { [weak self] wanted in self?.choose(wanted) ?? false }
+        keys.pause = { [weak self] in self?.pause() }
+        keys.resume = { [weak self] in self?.resume() }
     }
 
-    /// Moves the key to another one. While the lab is on the new key must register, or the old one
-    /// stays (and is registered again); while it is off the choice is only kept for the next time.
-    private func choose(_ wanted: HotKeyChoice) -> Bool {
-        let old = hotKey.choice
+    private var paused = false
+
+    /// The recorder is listening: the current key is let go, so pressing it is a key to record and
+    /// does not open the panel.
+    private func pause() {
+        paused = true
         hotKey.unregister()
-        hotKey.choice = wanted
-        guard labs.isOn(.quickSwitch) else { return true }
-        guard hotKey.register() else {
-            hotKey.choice = old
-            hotKey.register()
-            return false
+    }
+
+    /// Back from recording (every way out of it): the key is registered again if the lab is on.
+    private func resume() {
+        guard paused else { return }
+        paused = false
+        sync()
+    }
+
+    /// Moves the key to another one. While the lab is on the new key must register (it is registered
+    /// before the old one is let go, so a refusal leaves the old key as it was); while the lab is off
+    /// the choice is only kept for the next time.
+    private func choose(_ wanted: HotKeyChoice) -> Bool {
+        guard labs.isOn(.quickSwitch) else {
+            hotKey.choice = wanted
+            return true
+        }
+        if hotKey.isRegistered {
+            guard hotKey.change(to: wanted) else { return false }
+        } else {
+            // not registered: a conflict note is up, or the recorder paused the key
+            let old = hotKey.choice
+            hotKey.choice = wanted
+            guard hotKey.register() else {
+                hotKey.choice = old
+                return false
+            }
+            if paused { hotKey.unregister() }
         }
         labs.clearNote(.quickSwitch)
         return true

@@ -24,20 +24,21 @@ struct HotKeyChoice: Equatable, Codable, Sendable {
     static let cancelKey = UInt32(kVK_Escape)
 
     /// The choice a key press makes, or nil when it cannot be a system wide shortcut:
-    /// it needs ⌃, ⌥ or ⌘ (⇧ alone would take a letter from every app), and Escape cancels.
+    /// it needs ⌃ or ⌥ (⇧ alone would take a letter from every app, and ⌘ with ⇧ would take ⌘C, ⌘V, ⌘Q,
+    /// ⌘Space and the like from every app), and Escape cancels.
     static func make(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> HotKeyChoice? {
         guard UInt32(keyCode) != cancelKey else { return nil }
         var bits: UInt32 = 0
         if flags.contains(.control) { bits |= UInt32(controlKey) }
         if flags.contains(.option) { bits |= UInt32(optionKey) }
-        if flags.contains(.command) { bits |= UInt32(cmdKey) }
         guard bits != 0 else { return nil }
+        if flags.contains(.command) { bits |= UInt32(cmdKey) }
         if flags.contains(.shift) { bits |= UInt32(shiftKey) }
         return HotKeyChoice(keyCode: UInt32(keyCode), modifiers: bits)
     }
 
-    /// Whether the bits hold a modifier a system wide key may rest on.
-    var isUsable: Bool { modifiers & UInt32(controlKey | optionKey | cmdKey) != 0 }
+    /// Whether the bits hold ⌃ or ⌥, which a system wide key must rest on.
+    var isUsable: Bool { modifiers & UInt32(controlKey | optionKey) != 0 }
 
     /// The shortcut as the person reads it: modifiers, then the key by the letter the current
     /// layout shows on it (U on a US keyboard) or its printed name.
@@ -90,6 +91,28 @@ final class QuickSwitchShortcut {
     @ObservationIgnored private let store: HotKeyStore
     /// Set by the controller: tries the key and answers whether it holds.
     @ObservationIgnored var apply: ((HotKeyChoice) -> Bool)?
+    /// Set by the controller: let go of the key while the recorder listens, and take it back.
+    @ObservationIgnored var pause: (() -> Void)?
+    @ObservationIgnored var resume: (() -> Void)?
+    private(set) var isRecording = false
+
+    /// The recorder starts listening: the current key is not registered until `endRecording`.
+    func beginRecording() {
+        guard !isRecording else { return }
+        isRecording = true
+        message = nil
+        pause?()
+    }
+
+    /// Every way out of recording ends here (a key, Escape, the window losing focus, the lab turned off).
+    func endRecording() {
+        guard isRecording else { return }
+        isRecording = false
+        resume?()
+    }
+
+    /// A press the recorder refused, with the reason.
+    func refuse(_ text: String) { message = text }
 
     init(store: HotKeyStore = HotKeyStore()) {
         self.store = store

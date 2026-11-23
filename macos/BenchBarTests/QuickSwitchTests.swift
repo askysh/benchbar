@@ -323,6 +323,16 @@ struct QuickSwitchTests {
             return registered
         }
         func unregister() { registered = false }
+        var isRegistered: Bool { registered }
+        var changeCalls = 0
+        /// The new key first: a taken key leaves the old one registered.
+        func change(to new: HotKeyChoice) -> Bool {
+            changeCalls += 1
+            guard registered else { choice = new; return true }
+            guard accept, !taken.contains(new.keyCode) else { return false }
+            choice = new
+            return true
+        }
     }
 
     func labEntries(quickSwitch: Bool) throws -> [LabEntry] {
@@ -403,6 +413,13 @@ struct QuickSwitchTests {
         #expect(HotKeyChoice.make(keyCode: UInt16(kVK_ANSI_K), flags: []) == nil)
         #expect(HotKeyChoice.make(keyCode: UInt16(kVK_ANSI_K), flags: [.shift]) == nil, "shift alone would take a letter everywhere")
         #expect(HotKeyChoice.make(keyCode: UInt16(kVK_Escape), flags: [.command]) == nil)
+        // ⌘ on its own (or with ⇧) would take copy, paste and quit from every app
+        for key in [kVK_ANSI_C, kVK_ANSI_V, kVK_ANSI_Q, kVK_ANSI_W, kVK_Space] {
+            #expect(HotKeyChoice.make(keyCode: UInt16(key), flags: [.command]) == nil)
+            #expect(HotKeyChoice.make(keyCode: UInt16(key), flags: [.command, .shift]) == nil)
+        }
+        #expect(HotKeyChoice.make(keyCode: UInt16(kVK_Space), flags: [.control, .command]) != nil)
+        #expect(!HotKeyChoice(keyCode: UInt32(kVK_ANSI_C), modifiers: UInt32(cmdKey | shiftKey)).isUsable)
         let made = HotKeyChoice.make(keyCode: UInt16(kVK_ANSI_K), flags: [.control, .shift])
         #expect(made == HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(controlKey | shiftKey)))
     }
@@ -411,7 +428,7 @@ struct QuickSwitchTests {
         let defaults = UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!
         let store = HotKeyStore(defaults: defaults)
         #expect(store.load() == .standard)
-        let mine = HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey))
+        let mine = HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(controlKey))
         store.save(mine)
         #expect(HotKeyStore(defaults: defaults).load() == mine)
         store.save(.standard)
@@ -437,7 +454,7 @@ struct QuickSwitchTests {
         let keys = QuickSwitchShortcut(store: HotKeyStore(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!))
         let (labs, _, key, _) = try wired(startsOn: true, keys: keys)
         await labs.refresh()
-        let taken = HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey))
+        let taken = HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(controlKey))
         key.taken = [taken.keyCode]
         keys.request(taken)
         #expect(keys.choice == .standard && key.choice == .standard && key.registered)
@@ -446,11 +463,63 @@ struct QuickSwitchTests {
         #expect(keys.message == nil, "the next request clears it")
     }
 
+    /// While the recorder listens the current key is let go, so pressing it records it; every way out brings it back.
+    @MainActor @Test func theKeyIsLetGoWhileRecordingAndComesBackOnEveryExit() async throws {
+        let keys = QuickSwitchShortcut(store: HotKeyStore(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!))
+        let (labs, _, key, _) = try wired(startsOn: true, keys: keys)
+        await labs.refresh()
+        #expect(key.registered)
+        keys.beginRecording()
+        #expect(!key.registered && keys.isRecording)
+        keys.endRecording()
+        #expect(key.registered && !keys.isRecording)
+        keys.endRecording()
+        #expect(key.registered, "ending twice changes nothing")
+        // the same key can be recorded again: the request arrives while the key is let go
+        keys.beginRecording()
+        keys.request(HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(controlKey)))
+        #expect(!key.registered, "still let go until the recording ends")
+        keys.endRecording()
+        #expect(key.registered && key.choice.keyCode == UInt32(kVK_ANSI_K))
+    }
+
+    @MainActor @Test func aTakenKeyWhileRecordingKeepsTheOldOneForAfterwards() async throws {
+        let keys = QuickSwitchShortcut(store: HotKeyStore(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!))
+        let (labs, _, key, _) = try wired(startsOn: true, keys: keys)
+        await labs.refresh()
+        let taken = HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(controlKey))
+        key.taken = [taken.keyCode]
+        keys.beginRecording()
+        keys.request(taken)
+        keys.endRecording()
+        #expect(key.registered && key.choice == .standard && keys.choice == .standard)
+        #expect(keys.message?.contains("used by another app") == true)
+    }
+
+    /// The lab turned off while recording: the key stays off, and the recorder going away ends the recording.
+    @MainActor @Test func theLabGoingOffWhileRecordingLeavesNoKey() async throws {
+        let keys = QuickSwitchShortcut(store: HotKeyStore(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!))
+        let (labs, _, key, _) = try wired(startsOn: true, keys: keys)
+        await labs.refresh()
+        keys.beginRecording()
+        try await labs.set(.quickSwitch, on: false)
+        keys.endRecording()
+        #expect(!key.registered)
+    }
+
+    @MainActor @Test func theNewKeyIsRegisteredBeforeTheOldOneIsLetGo() async throws {
+        let keys = QuickSwitchShortcut(store: HotKeyStore(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!))
+        let (labs, _, key, _) = try wired(startsOn: true, keys: keys)
+        await labs.refresh()
+        keys.request(HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(controlKey)))
+        #expect(key.changeCalls == 1 && key.registered, "one change, no unregister in between")
+    }
+
     @MainActor @Test func resetGoesBackToTheDefault() async throws {
         let keys = QuickSwitchShortcut(store: HotKeyStore(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!))
         let (labs, _, key, _) = try wired(startsOn: true, keys: keys)
         await labs.refresh()
-        keys.request(HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey)))
+        keys.request(HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(controlKey)))
         #expect(!keys.isDefault)
         keys.reset()
         #expect(keys.isDefault && key.choice == .standard && key.registered)
@@ -460,7 +529,7 @@ struct QuickSwitchTests {
         let keys = QuickSwitchShortcut(store: HotKeyStore(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!))
         let (labs, _, key, _) = try wired(startsOn: false, keys: keys)
         await labs.refresh()
-        let mine = HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey))
+        let mine = HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(controlKey))
         keys.request(mine)
         #expect(keys.choice == mine && !key.registered)
         try await labs.set(.quickSwitch, on: true)
@@ -474,7 +543,7 @@ struct QuickSwitchTests {
         key.taken = [HotKeyChoice.standard.keyCode]
         try await labs.set(.quickSwitch, on: true)
         #expect(labs.errors["quick-switch"] != nil && !key.registered)
-        keys.request(HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey)))
+        keys.request(HotKeyChoice(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(controlKey)))
         #expect(key.registered && labs.errors["quick-switch"] == nil)
     }
 
