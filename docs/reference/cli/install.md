@@ -36,7 +36,7 @@ environment variables and what each needs, as one document.
 ## install
 
 ```
-benchbar install [--profile NAME] [--bundle NAME] [--make-default] [--repair-bench] [--port-offset N] [--frappe-commit SHA] [--erpnext-commit SHA] [--offline] [--dry-run] [--yes] [--json]
+benchbar install [--profile NAME] [--bundle NAME] [--make-default] [--repair-bench] [--port-offset N] [--frappe-commit SHA] [--erpnext-commit SHA] [--offline] [--dry-run|--apply TOKEN] [--yes] [--json]
 ```
 
 Runs phase 00 (system dependencies), phase 01 (bench and site) and the
@@ -62,7 +62,8 @@ phase scripts: no other program started by the install sees them.
 | `--repair-bench` | Move a bench folder that is incomplete aside (to `<folder>.incomplete.<time>`) and start over. A folder that holds only empty folders is moved without it. Never a bench that holds a site or an app of yours. With `--dry-run` it shows the `mv` |
 | `--port-offset N` | Use port block N (web 8000+N, socketio 9000+N, redis 11000+N and 13000+N). Default: keep the ports, or the next free block when another bench already uses them |
 | `--with-schedule`, `--without-schedule` | Add the scheduler to `Procfile.lean`, or leave it out (the default) |
-| `--dry-run` | Print the plan of every phase, change nothing |
+| `--dry-run` | Print the plan of every phase, change nothing. With `--json` the plan line carries a `token` |
+| `--apply TOKEN` | Run exactly the plan that token was made for, with `--yes`. Refused before any dialog or step, with nothing changed, when the plan is another one now (`The install plan changed since it was shown`) or the token is older than an hour. Without a token the run is as before |
 | `--frappe-commit SHA`, `--erpnext-commit SHA` | Pin frappe or erpnext to a commit (7 to 40 hex characters; a team profile can say `frappe_commit` and `erpnext_commit`). The flag wins over the profile. A pinned clone is fetched without its first build, the commit is checked out, and one build follows. A commit the clone does not reach stops the install before anything is built or created |
 | `--offline` | Skip the remote branch checks of both phase scripts (also `OFFLINE=1` or `BENCHBAR_OFFLINE=1`) |
 | `--allow-unsupported-distro` | Linux only: try a system other than Ubuntu 24.04, the one the install is tested on and supports. Without it the install stops before it installs any package (also `BENCHBAR_ALLOW_UNSUPPORTED_DISTRO=1`, for `00-linux-system-deps.sh`) |
@@ -175,7 +176,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 
 | Command | Terminal | `sudo` | Network | Changes things | JSON |
 |---|---|---|---|---|---|
-| `benchbar install [--profile NAME] [--bundle NAME] [--dry-run] [--yes] [--json]` | yes | yes | yes | yes | stream |
+| `benchbar install [--profile NAME] [--bundle NAME] [--dry-run\|--apply TOKEN] [--yes] [--json]` | yes | yes | yes | yes | stream |
 | `benchbar adopt PATH [--dry-run] [--yes] [--json]` | yes | yes | no | yes | stream |
 | `benchbar service [--with-schedule\|--without-schedule] [--port-offset N] [--dry-run\|--apply TOKEN --yes] [--json]` | yes | no | no | yes | stream |
 
@@ -197,7 +198,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `install` | `--offline` |  | Skip the remote branch checks. |
 | `install` | `--frappe-commit` | `SHA` | Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile). |
 | `install` | `--erpnext-commit` | `SHA` | Pin the erpnext clone to this commit. |
-| `install` | `--dry-run` |  | Print the plan, change nothing. |
+| `install` | `--dry-run` |  | Print the plan, change nothing. With --json the plan line carries its token. |
+| `install` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before. |
 | `install` | `--yes` |  | Do not ask; secrets come from the environment. |
 | `adopt` | `--port-offset` | `N` | Move the bench to port block N. |
 | `adopt` | `--make-default` |  | Make this the default bench. |

@@ -109,7 +109,31 @@ public sealed class PlanReviewModel : IDisposable
     }
 
     /// <summary>The plan can be applied: it has no errors, it changes something, and it has a token to apply it with.</summary>
-    public bool CanConfirm => Phase == PlanPhase.Review && Plan is { CanApply: true, HasChanges: true } && (!Request.RequiresToken || Plan.Token is { Length: > 0 });
+    public bool CanConfirm => Phase == PlanPhase.Review && Plan is { CanApply: true, HasChanges: true } && (!Request.RequiresToken || Plan.Token is { Length: > 0 })
+        && NameMatches && (Request.Allows?.Invoke(Plan) ?? true);
+
+    /// <summary>What the person typed for <see cref="PlanReviewRequest.ConfirmName"/>. Reading a new plan clears it: the name is typed again for the plan that is shown.</summary>
+    public string Typed { get; set; } = "";
+
+    public bool NameMatches => Request.ConfirmName is not { } name || TypedConfirm.Matches(name, Typed);
+
+    /// <summary>The button that clears what blocks the plan in review, or null.</summary>
+    public PlanResolver? Blocker => Phase == PlanPhase.Review && Plan is { } plan ? Request.BlockedBy?.Invoke(plan) : null;
+
+    /// <summary>Runs the blocker's button, then reads the plan again. A refusal is said and the plan stays.</summary>
+    public async Task ResolveBlockerAsync(CancellationToken ct = default)
+    {
+        if (Blocker is not { } blocker) return;
+        var ok = await blocker.Resolve().ConfigureAwait(true);
+        if (_disposed) return;
+        if (ok)
+        {
+            await LoadAsync(ct).ConfigureAwait(true);
+            return;
+        }
+        Message = blocker.FailedText;
+        Raise();
+    }
 
     /// <summary>Who holds the lease that refused the apply (nothing was changed), or null. Only <see cref="BreakLeaseAsync"/> goes past it.</summary>
     public LeaseRefusal? LeaseRefused { get; private set; }
@@ -140,6 +164,7 @@ public sealed class PlanReviewModel : IDisposable
         Plan = null;
         Message = null;
         Result = null;
+        Typed = "";
         Raise();
         var env = BuildEnv(null);
         if (Request.PlanIsText)
@@ -270,6 +295,9 @@ public sealed class PlanReviewModel : IDisposable
     {
         switch (e)
         {
+            case CliEvent.Step { Value: { IsSubStep: true } sub }:
+                ProgressLabel = sub.Name; // a sub step shares its parent's id: it says what the parent is doing, it is not the parent's status
+                break;
             case CliEvent.Step { Value: var step }:
                 lock (_gate)
                 {
