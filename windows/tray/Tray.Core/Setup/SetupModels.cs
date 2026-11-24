@@ -192,7 +192,7 @@ public static class SetupJson
 }
 
 /// <summary>The schema is newer than this tray reads.</summary>
-public sealed class UnsupportedSchemaException(int found) : SourceProblemException($"benchbar.exe speaks schema {found}, which this BenchBar does not read. Update BenchBar.");
+public sealed class UnsupportedSchemaException(int found) : SourceProblemException(UiText.Format("SetupSchemaNewer", found));
 
 /// <summary>Small readers over <see cref="JsonObject"/>: a missing or wrongly typed member is null or false, never an exception.</summary>
 internal static class JsonRead

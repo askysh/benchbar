@@ -89,11 +89,11 @@ public sealed class WslHost(IProcessRunner runner, Func<string?> distro) : IWslH
             var result = await runner.RunAsync("wsl.exe", Args("wslpath", "-a", "-u", text), ct, Timeout).ConfigureAwait(false);
             var line = result.ExitCode == 0 ? ShimBenchSource.FirstLine(result.Output) : null;
             if (line is { Length: > 0 } && line.StartsWith('/')) return new PathConversion(line.Trim(), null);
-            return new PathConversion(null, ShimBenchSource.FirstLine(result.Error) ?? $"WSL could not convert {text} to a Linux path.");
+            return new PathConversion(null, ShimBenchSource.FirstLine(result.Error) ?? UiText.Format("DiscoveryWslNoConvert", text));
         }
         catch (Exception ex) when (ex is Win32Exception or OperationCanceledException or TimeoutException)
         {
-            return new PathConversion(null, "WSL could not be started to convert " + text + ".");
+            return new PathConversion(null, UiText.Format("DiscoveryWslNoStart", text));
         }
     }
 

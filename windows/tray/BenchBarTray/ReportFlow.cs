@@ -75,7 +75,7 @@ internal sealed class ReportFlow(IBugReporter reporter, ReportSeams seams)
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
                 {
                     seams.Log("report", ex);
-                    seams.ShowFailure("The report could not be written: " + ex.Message);
+                    seams.ShowFailure(UiText.Format("ReportNotWritten", ex.Message));
                     return true;
                 }
             }
@@ -170,15 +170,15 @@ internal sealed class ReportReadyDialog : Window
         path.Margin = new Thickness(0, 10, 0, 0);
         panel.Children.Add(path);
         if (outcome.Note is { Length: > 0 } note)
-            panel.Children.Add(Ui.Text("benchbar.exe could not run, so this zip holds the tray's details only. " + note, 12, opacity: 0.8, margin: new Thickness(0, 8, 0, 0)));
+            panel.Children.Add(Ui.Text(UiText.Format("ReportTrayOnly", note), 12, opacity: 0.8, margin: new Thickness(0, 8, 0, 0)));
         // a wrap panel: the buttons go to a second line before any of them is clipped; in the order of the steps
         var bar = new WrapPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
-        var issue = Ui.Button("Open GitHub Issue", () => openUrl(outcome.IssueUrl), "Open the GitHub issue", primary: true, minWidth: 140);
+        var issue = Ui.Button(UiText.Get("ReportOpenIssue"), () => openUrl(outcome.IssueUrl), UiText.Get("ReportOpenIssueName"), primary: true, minWidth: 140);
         issue.IsDefault = true;
         bar.Children.Add(issue);
-        bar.Children.Add(Ui.Button("Show Zip in Explorer", () => reveal(outcome.ZipPath), "Show the report zip in Explorer", primary: true, minWidth: 140));
-        bar.Children.Add(Ui.Button("Copy Path", () => copy(outcome.ZipPath), "Copy the path of the report zip"));
-        var close = Ui.Button("Close", Close, "Close");
+        bar.Children.Add(Ui.Button(UiText.Get("ReportShowZip"), () => reveal(outcome.ZipPath), UiText.Get("ReportShowZipName"), primary: true, minWidth: 140));
+        bar.Children.Add(Ui.Button(UiText.Get("ReportCopyPath"), () => copy(outcome.ZipPath), UiText.Get("ReportCopyPathName")));
+        var close = Ui.Button(UiText.Get("CommonClose"), Close, UiText.Get("CommonClose"));
         close.IsCancel = true;
         close.Margin = new Thickness(0);
         bar.Children.Add(close);

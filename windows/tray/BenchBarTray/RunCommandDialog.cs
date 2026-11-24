@@ -29,7 +29,7 @@ internal sealed class RunCommandDialog : Window
     {
         _services = services;
         _bench = bench;
-        Title = "Run a bench command";
+        Title = UiText.Get("RunCmdTitle");
         Width = 520;
         SizeToContent = SizeToContent.Height;
         MaxHeight = 760;
@@ -38,25 +38,25 @@ internal sealed class RunCommandDialog : Window
         Owner = owner;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         Ui.ApplyTheme(this, theme);
-        Ui.Name(this, "Run a bench command");
+        Ui.Name(this, UiText.Get("RunCmdTitle"));
 
         var panel = new StackPanel { Margin = new Thickness(24) };
-        panel.Children.Add(Ui.Text("Run a bench command", 18, FontWeights.SemiBold));
-        panel.Children.Add(Ui.Text($"Runs one command of benchbar's allow list in {bench.Name}, under a deadline. A read runs at once; a change shows its plan first.", 13, opacity: 0.85, margin: new Thickness(0, 6, 0, 12)));
+        panel.Children.Add(Ui.Text(UiText.Get("RunCmdTitle"), 18, FontWeights.SemiBold));
+        panel.Children.Add(Ui.Text(UiText.Format("RunCmdIntro", bench.Name), 13, opacity: 0.85, margin: new Thickness(0, 6, 0, 12)));
 
         _command.ItemsSource = RunAllowList.All.Select(c => c.Name).ToList();
-        Ui.Name(_command, "Command");
+        Ui.Name(_command, UiText.Get("RunCmdCommand"));
         _command.SelectionChanged += (_, _) => CommandChanged();
-        panel.Children.Add(Ui.Labeled("Command", _command));
+        panel.Children.Add(Ui.Labeled(UiText.Get("RunCmdCommand"), _command));
 
         _site.ItemsSource = bench.Sites.Select(s => s.Name).ToList();
         _site.SelectedItem = site ?? bench.Site ?? bench.Sites.FirstOrDefault()?.Name;
-        Ui.Name(_site, "Site");
-        _siteRow = Ui.Labeled("Site", _site);
+        Ui.Name(_site, UiText.Get("RunCmdSite"));
+        _siteRow = Ui.Labeled(UiText.Get("RunCmdSite"), _site);
         panel.Children.Add(_siteRow);
 
-        _options = Ui.Field("Flags", "", _ => _problem.Visibility = Visibility.Collapsed, 400);
-        panel.Children.Add(Ui.Labeled("Flags (optional)", _options, "Only the flags of the command, such as --skip-failing. Each value is one plain word."));
+        _options = Ui.Field(UiText.Get("RunCmdFlags"), "", _ => _problem.Visibility = Visibility.Collapsed, 400);
+        panel.Children.Add(Ui.Labeled(UiText.Get("RunCmdFlagsOptional"), _options, UiText.Get("RunCmdFlagsHint")));
         _help = Ui.Text("", 12, opacity: 0.75, margin: new Thickness(0, 0, 0, 8));
         panel.Children.Add(_help);
         _problem.Visibility = Visibility.Collapsed;
@@ -65,12 +65,12 @@ internal sealed class RunCommandDialog : Window
         _output.Visibility = Visibility.Collapsed;
         _output.MaxHeight = 220;
         _output.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
-        Ui.Name(_output, "Output");
+        Ui.Name(_output, UiText.Get("RunCmdOutput"));
         panel.Children.Add(_output);
 
         var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
-        _go = Ui.Button("Run", () => Go().Forget(), "Run", primary: true);
-        var close = Ui.Button("Close", () => DialogResult = false, "Close");
+        _go = Ui.Button(UiText.Get("RunCmdRun"), () => Go().Forget(), UiText.Get("RunCmdRun"), primary: true);
+        var close = Ui.Button(UiText.Get("RunCmdClose"), () => DialogResult = false, UiText.Get("RunCmdClose"));
         close.IsCancel = true;
         close.Margin = new Thickness(0);
         bar.Children.Add(_go);
@@ -111,9 +111,9 @@ internal sealed class RunCommandDialog : Window
     private void CommandChanged()
     {
         var c = Current;
-        _help.Text = c.Help + (c.Switches.Count + c.Valued.Count > 0 ? " Flags: " + string.Join(", ", c.Switches.Concat(c.Valued)) + "." : " It takes no flags.");
+        _help.Text = c.Switches.Count + c.Valued.Count > 0 ? UiText.Format("RunCmdHelpFlags", c.Help, string.Join(", ", c.Switches.Concat(c.Valued))) : UiText.Format("RunCmdHelpNoFlags", c.Help);
         _siteRow.Visibility = c.NeedsSite ? Visibility.Visible : Visibility.Collapsed;
-        _go.Content = c.Changes ? "Review Plan..." : "Run";
+        _go.Content = c.Changes ? UiText.Get("RunCmdReviewPlan") : UiText.Get("RunCmdRun");
         _problem.Visibility = Visibility.Collapsed;
         _output.Visibility = Visibility.Collapsed;
     }
@@ -136,7 +136,7 @@ internal sealed class RunCommandDialog : Window
         }
         _go.IsEnabled = false;
         _problem.Visibility = Visibility.Collapsed;
-        _output.Text = "Running " + input.Command + "...";
+        _output.Text = UiText.Format("RunCmdRunning", input.Command);
         _output.Visibility = Visibility.Visible;
         Pending = ReadAsync(input);
         await Pending;
@@ -149,13 +149,13 @@ internal sealed class RunCommandDialog : Window
             var r = await _services.Cli.RunJsonAsync(RunCommands.Read(input, _bench.Path), null, TimeSpan.FromMinutes(3), RunCommands.ParseRead, _cancel.Token).ConfigureAwait(true);
             if (r.Value is { } read)
             {
-                var text = read.Output.Length > 0 ? read.Output : "(no output)";
-                _output.Text = (read.TimedOut ? "The deadline stopped it.\n" : read.Ok ? "" : $"It ended with exit {read.CommandExit}.\n") + text;
+                var text = read.Output.Length > 0 ? read.Output : UiText.Get("RunCmdNoOutput");
+                _output.Text = (read.TimedOut ? UiText.Get("RunCmdDeadline") + "\n" : read.Ok ? "" : UiText.Format("RunCmdExit", read.CommandExit) + "\n") + text;
             }
             else
             {
                 _output.Visibility = Visibility.Collapsed;
-                _problem.Text = r.Error ?? "The command did not run.";
+                _problem.Text = r.Error ?? UiText.Get("RunCmdDidNotRun");
                 _problem.Visibility = Visibility.Visible;
             }
         }

@@ -35,13 +35,13 @@ public static class Observe
 /// <summary>The beta words, in one place so the sidebar, About, the banner, the wizard and the tests say the same thing.</summary>
 public static class BetaText
 {
-    public const string Pill = "Beta";
-    public const string WindowTitle = "BenchBar (Beta)";
+    public static string Pill => UiText.Get("CommonBetaPill");
+    public static string WindowTitle => UiText.Get("CommonBetaWindowTitle");
     public const string TooltipSuffix = " (Beta)";
-    public const string AboutText = "BenchBar for Windows is in beta. It works, and you may find rough edges. Report a Bug writes a redacted report and opens a GitHub issue for it, in about a minute.";
-    public const string Banner = "BenchBar for Windows is in beta. If something breaks or confuses you, tell us.";
-    public const string WizardLine = "This is a beta. If a step fails, Report This Problem sends us what we need.";
-    public const string ReportThisProblem = "Report This Problem";
-    public const string ReportABug = "Report a Bug";
+    public static string AboutText => UiText.Get("CommonBetaAbout");
+    public static string Banner => UiText.Get("CommonBetaBanner");
+    public static string WizardLine => UiText.Get("CommonBetaWizardLine");
+    public static string ReportThisProblem => UiText.Get("CommonReportThisProblem");
+    public static string ReportABug => UiText.Get("MenuReportBug");
     public const string HowToFixUrl = "https://askysh.github.io/benchbar/windows/#first-run";
 }

@@ -32,7 +32,8 @@ internal sealed class TypedConfirmDialog : Window
         panel.Children.Add(Ui.Labeled(UiText.Format("TypeToConfirm", request.Expected), Box));
 
         var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
-        Confirm = Ui.Button(request.ConfirmLabel, () => DialogResult = true, request.ConfirmLabel);
+        var confirmLabel = request.ConfirmLabel ?? UiText.Get("SitesConfirmDrop");
+        Confirm = Ui.Button(confirmLabel, () => DialogResult = true, confirmLabel);
         Confirm.IsEnabled = false;
         var cancel = Ui.Button(UiText.Get("Cancel"), () => DialogResult = false, UiText.Get("Cancel"));
         cancel.IsDefault = true;

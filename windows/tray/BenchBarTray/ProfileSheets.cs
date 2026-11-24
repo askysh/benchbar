@@ -138,7 +138,7 @@ internal abstract class SheetWindow : Window
         var row = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
         var mark = Ui.Text(check?.Mark ?? "?", 15, FontWeights.SemiBold, margin: new Thickness(0, 0, 10, 0));
         mark.Foreground = brush;
-        Ui.Name(mark, $"{app}: {check?.Accessibility ?? "not checked"}");
+        Ui.Name(mark, UiText.Format("ProfileRepoName", app, check?.Accessibility ?? UiText.Get("ProfileNotChecked")));
         DockPanel.SetDock(mark, Dock.Left);
         row.Children.Add(mark);
         var text = new StackPanel();
@@ -196,17 +196,17 @@ internal sealed class CreateProfileSheet : SheetWindow
     private readonly IReadOnlyList<FoundBench> _benches;
 
     public CreateProfileSheet(IReadOnlyList<FoundBench> benches, ResolvedTheme theme, Window? owner)
-        : base("Create a Team Profile", "Writes a profile from one bench's apps, branches and Frappe version.", theme, owner)
+        : base(UiText.Get("ProfileCreateTitle"), UiText.Get("ProfileCreateLine"), theme, owner)
     {
         _benches = benches;
-        _name = Ui.Field("Profile name", "", _ => Draw(), 360);
+        _name = Ui.Field(UiText.Get("ProfileNameField"), "", _ => Draw(), 360);
         _bench = new ComboBox { Width = 360, HorizontalAlignment = HorizontalAlignment.Left };
         foreach (var b in benches) _bench.Items.Add(b.Name + "  (" + b.Path + ")");
         if (benches.Count > 0) _bench.SelectedIndex = 0;
-        Ui.Name(_bench, "From bench");
+        Ui.Name(_bench, UiText.Get("ProfileFromBench"));
         _bench.SelectionChanged += (_, _) => Draw();
-        Fixed.Children.Add(Ui.Labeled("Profile name", _name, "For example acme"));
-        Fixed.Children.Add(Ui.Labeled("From bench", _bench));
+        Fixed.Children.Add(Ui.Labeled(UiText.Get("ProfileNameField"), _name, UiText.Get("ProfileNameHint")));
+        Fixed.Children.Add(Ui.Labeled(UiText.Get("ProfileFromBench"), _bench));
         Draw();
     }
 
@@ -220,10 +220,10 @@ internal sealed class CreateProfileSheet : SheetWindow
     {
         var name = _name.Text.Trim();
         if (name.Length > 0 && !ProfileName.IsValid(name))
-            Failure("Lower case letters, digits, '.', '_' or '-', starting with a letter or digit.");
-        Note("BenchBar reads the bench (its apps, their repositories and branches, and its Frappe version) and writes ~/.config/benchbar/profiles/NAME.toml. The bench is not changed; no site data or password goes into the file.");
-        Bar("Create", () => End(true), primary: true, enabled: CanCreate);
-        Bar("Cancel", () => End(false), cancel: true);
+            Failure(UiText.Get("ProfileNameRule"));
+        Note(UiText.Get("ProfileCreateNote"));
+        Bar(UiText.Get("ProfileCreate"), () => End(true), primary: true, enabled: CanCreate);
+        Bar(UiText.Get("Cancel"), () => End(false), cancel: true);
     });
 }
 
@@ -239,21 +239,21 @@ internal sealed class ImportProfileSheet : SheetWindow
     private readonly TextBox _saveAs;
 
     public ImportProfileSheet(ProfileImportRun run, ResolvedTheme theme, Window? owner, Func<string?> pickFile, Action<string> reveal, bool autoReview = false)
-        : base("Import a Profile", "Adds a profile from a .toml file or an https link, after you review it.", theme, owner, 640)
+        : base(UiText.Get("ProfileImportTitle"), UiText.Get("ProfileImportLine"), theme, owner, 640)
     {
         _run = run;
         _pickFile = pickFile;
         _reveal = reveal;
         BusyWhen(() => run.IsBusy);
-        _source = Ui.Field("File or https URL", run.Source, text => { run.Source = text; Draw(); }, 420);
-        var choose = Ui.Button("Choose File...", Choose, "Choose File", minWidth: 0);
+        _source = Ui.Field(UiText.Get("ProfileSourceField"), run.Source, text => { run.Source = text; Draw(); }, 420);
+        var choose = Ui.Button(UiText.Get("ProfileChooseFile"), Choose, UiText.Get("ProfileChooseFileName"), minWidth: 0);
         choose.Margin = new Thickness(8, 0, 0, 0);
         var sourceRow = new StackPanel { Orientation = Orientation.Horizontal };
         sourceRow.Children.Add(_source);
         sourceRow.Children.Add(choose);
-        _saveAs = Ui.Field("Save as", run.SaveAs, text => { run.SaveAs = text; Draw(); }, 420);
-        Fixed.Children.Add(Ui.Labeled("File or https URL", sourceRow, @"A .toml file on this PC (C:\Users\you\acme.toml) or in Linux (/home/you/acme.toml), or an https link."));
-        Fixed.Children.Add(Ui.Labeled("Save as", _saveAs, "Optional: the name in the file."));
+        _saveAs = Ui.Field(UiText.Get("ProfileSaveAs"), run.SaveAs, text => { run.SaveAs = text; Draw(); }, 420);
+        Fixed.Children.Add(Ui.Labeled(UiText.Get("ProfileSourceField"), sourceRow, UiText.Get("ProfileSourceHint")));
+        Fixed.Children.Add(Ui.Labeled(UiText.Get("ProfileSaveAs"), _saveAs, UiText.Get("ProfileSaveAsHint")));
         run.Changed += Draw;
         Draw();
         if (autoReview) Loaded += (_, _) => run.ReviewAsync().Forget();
@@ -276,39 +276,39 @@ internal sealed class ImportProfileSheet : SheetWindow
         {
             if (_run.Phase == ProfileRunPhase.Done && _run.Result is { } done)
             {
-                Headline($"Added {done.Name}", $"Set up a bench from it with benchbar install --profile {done.Name}.");
-                Bar("Show in Explorer", () => _reveal(done.Path), left: true);
-                Bar("Done", () => End(true), primary: true);
+                Headline(UiText.Format("ProfileAddedTitle", done.Name), UiText.Format("ProfileAddedLine", done.Name));
+                Bar(UiText.Get("ProfileShowInExplorer"), () => _reveal(done.Path), left: true);
+                Bar(UiText.Get("ProfileDone"), () => End(true), primary: true);
                 return;
             }
-            if (_run.TrimmedSource.Length > 0 && !_run.SourceValid) Failure("Use a .toml file on this PC or in Linux, or an https URL.");
-            if (!_run.NameValid) Failure("Lower case letters, digits, '.', '_' or '-', starting with a letter or digit.");
-            if (_run.Phase == ProfileRunPhase.Loading) Busy("Reading the profile and checking its repositories...");
-            if (_run.Phase == ProfileRunPhase.Running) Busy("Adding the profile...");
-            if (_run.Phase == ProfileRunPhase.Failed && _run.Error is { } error) Failure("The profile was not imported. " + error);
+            if (_run.TrimmedSource.Length > 0 && !_run.SourceValid) Failure(UiText.Get("ProfileBadSource"));
+            if (!_run.NameValid) Failure(UiText.Get("ProfileNameRule"));
+            if (_run.Phase == ProfileRunPhase.Loading) Busy(UiText.Get("ProfileReadingBusy"));
+            if (_run.Phase == ProfileRunPhase.Running) Busy(UiText.Get("ProfileAdding"));
+            if (_run.Phase == ProfileRunPhase.Failed && _run.Error is { } error) Failure(UiText.Format("ProfileImportFailed", error));
             if (_run.Plan is { } plan) Review(plan);
-            Note("BenchBar reads the file, checks that it parses and whether this machine can reach each repository, and shows it before anything is saved. Nothing is installed from here.");
-            Bar("Review", () => _run.ReviewAsync().Forget(), enabled: _run.CanReview, left: true);
-            Bar("Cancel", () => End(false), cancel: true, enabled: _run.Phase != ProfileRunPhase.Running);
-            Bar(_run.Plan?.Exists == true ? "Replace Profile" : "Add Profile", () => _run.AddAsync().Forget(), primary: true, enabled: _run.CanAdd);
+            Note(UiText.Get("ProfileImportNote"));
+            Bar(UiText.Get("ProfileReview"), () => _run.ReviewAsync().Forget(), enabled: _run.CanReview, left: true);
+            Bar(UiText.Get("Cancel"), () => End(false), cancel: true, enabled: _run.Phase != ProfileRunPhase.Running);
+            Bar(_run.Plan?.Exists == true ? UiText.Get("ProfileReplace") : UiText.Get("ProfileAdd"), () => _run.AddAsync().Forget(), primary: true, enabled: _run.CanAdd);
         });
     }
 
     private void Review(ProfileImportPlan plan)
     {
-        Line($"Profile: {plan.Name}", 14);
-        if (plan.Base is { } b) Line($"Based on: {b}");
-        Line($"From: {plan.Source}", 12, 0.8);
-        foreach (var app in plan.Apps) RepoRow(app.Name + (app.Branch is { } br ? " @ " + br : ""), app.Repo, plan.CheckFor(app.Name));
+        Line(UiText.Format("ProfileLineName", plan.Name), 14);
+        if (plan.Base is { } b) Line(UiText.Format("ProfileLineBase", b));
+        Line(UiText.Format("ProfileLineFrom", plan.Source), 12, 0.8);
+        foreach (var app in plan.Apps) RepoRow(app.Branch is { } br ? UiText.Format("ProfileAppAtBranch", app.Name, br) : app.Name, app.Repo, plan.CheckFor(app.Name));
         if (plan.SkippedApps.Count > 0)
         {
-            Line("Left out when a bench is set up from it, because this machine cannot read their repository or they require an app that is left out: " + string.Join(", ", plan.SkippedApps) + ".",
+            Line(UiText.Format("ProfileLeftOut", string.Join(", ", plan.SkippedApps)),
                 12, brush: Ui.StepBrush(InstallStepStatus.Warning));
         }
         if (plan.Exists)
         {
-            Line($"A profile named {plan.Name} exists. Adding this one replaces it:", 13);
-            DiffView(plan.Diff ?? "(no difference)");
+            Line(UiText.Format("ProfileExists", plan.Name), 13);
+            DiffView(plan.Diff ?? UiText.Get("ProfileNoDiff"));
         }
     }
 }
@@ -323,13 +323,13 @@ internal sealed class SubscribeProfilesSheet : SheetWindow
     private readonly TextBox _repo;
 
     public SubscribeProfilesSheet(ProfileSubscribeRun run, ResolvedTheme theme, Window? owner, Action<string> reveal)
-        : base("Subscribe to a Team's Profiles", "Adds the profiles in a team's git repository to this machine.", theme, owner)
+        : base(UiText.Get("ProfileSubscribeTitle"), UiText.Get("ProfileSubscribeLine"), theme, owner)
     {
         _run = run;
         _reveal = reveal;
         BusyWhen(() => run.IsBusy);
-        _repo = Ui.Field("Git repository", run.Repo, text => { run.Repo = text; Draw(); }, 480);
-        Fixed.Children.Add(Ui.Labeled("Git repository", _repo, "For example git@github.com:acme/benchbar-profiles.git"));
+        _repo = Ui.Field(UiText.Get("ProfileGitField"), run.Repo, text => { run.Repo = text; Draw(); }, 480);
+        Fixed.Children.Add(Ui.Labeled(UiText.Get("ProfileGitField"), _repo, UiText.Get("ProfileGitHint")));
         run.Changed += Draw;
         Draw();
     }
@@ -343,18 +343,18 @@ internal sealed class SubscribeProfilesSheet : SheetWindow
         {
             if (_run.Phase == ProfileRunPhase.Done && _run.Result is { } done)
             {
-                Headline($"Subscribed to {ProfileInfo.ShortRepo(done.Repo)}",
-                    done.Profiles.Count == 0 ? "The repository has no profile yet." : "Profiles: " + string.Join(", ", done.Profiles) + ".");
-                Bar("Show in Explorer", () => _reveal(done.Dir), left: true);
-                Bar("Done", () => End(true), primary: true);
+                Headline(UiText.Format("ProfileSubscribedTitle", ProfileInfo.ShortRepo(done.Repo)),
+                    done.Profiles.Count == 0 ? UiText.Get("ProfileNoProfilesYet") : UiText.Format("ProfileProfilesList", string.Join(", ", done.Profiles)));
+                Bar(UiText.Get("ProfileShowInExplorer"), () => _reveal(done.Dir), left: true);
+                Bar(UiText.Get("ProfileDone"), () => End(true), primary: true);
                 return;
             }
-            if (_run.TrimmedRepo.Length > 0 && !ProfileSourceRule.IsGitUrl(_run.TrimmedRepo)) Failure("Use an https, ssh or git@host:owner/repo URL.");
-            if (_run.Phase == ProfileRunPhase.Running) Busy("Cloning...");
-            if (_run.Phase == ProfileRunPhase.Failed && _run.Error is { } error) Failure("The repository was not added. " + error);
-            Note("BenchBar clones the repository into ~/.config/benchbar/sources with your own git credentials and reads only its .toml files; no code from it runs. It never updates on its own: the list shows when it is behind, and Update shows the changes first.");
-            Bar("Cancel", () => End(false), cancel: true, enabled: _run.Phase != ProfileRunPhase.Running);
-            Bar("Subscribe", () => _run.SubscribeAsync().Forget(), primary: true, enabled: _run.CanSubscribe);
+            if (_run.TrimmedRepo.Length > 0 && !ProfileSourceRule.IsGitUrl(_run.TrimmedRepo)) Failure(UiText.Get("ProfileBadGit"));
+            if (_run.Phase == ProfileRunPhase.Running) Busy(UiText.Get("ProfileCloning"));
+            if (_run.Phase == ProfileRunPhase.Failed && _run.Error is { } error) Failure(UiText.Format("ProfileSubscribeFailed", error));
+            Note(UiText.Get("ProfileSubscribeNote"));
+            Bar(UiText.Get("Cancel"), () => End(false), cancel: true, enabled: _run.Phase != ProfileRunPhase.Running);
+            Bar(UiText.Get("ProfileSubscribe"), () => _run.SubscribeAsync().Forget(), primary: true, enabled: _run.CanSubscribe);
         });
     }
 }
@@ -376,7 +376,7 @@ internal sealed class ExportProfileSheet : SheetWindow
     private bool _copied;
 
     public ExportProfileSheet(ProfileExportRun run, ResolvedTheme theme, Window? owner, Func<string, string?> pickSave, Action<string> reveal, Action<string> copy)
-        : base($"Export {run.Name}", "Writes a profile file your team can import, with the branch each app is shared on.", theme, owner, 680)
+        : base(UiText.Format("ProfileExportTitle", run.Name), UiText.Get("ProfileExportLine"), theme, owner, 680)
     {
         _run = run;
         _pickSave = pickSave;
@@ -404,14 +404,14 @@ internal sealed class ExportProfileSheet : SheetWindow
     private void BuildRows(ProfileExportPlan plan, ProfileExportChoices choices)
     {
         _rowsBuilt = true;
-        _rows.Children.Add(Ui.Text("Pick the branch each teammate gets, and which apps go into the file.", 13, opacity: 0.85, margin: new Thickness(0, 0, 0, 8)));
+        _rows.Children.Add(Ui.Text(UiText.Get("ProfileExportPick"), 13, opacity: 0.85, margin: new Thickness(0, 0, 0, 8)));
         foreach (var app in plan.Apps)
         {
             var row = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
             var keep = new CheckBox { IsChecked = choices.Keeps(app.Name), Margin = new Thickness(0, 4, 10, 0), VerticalAlignment = VerticalAlignment.Top };
-            Ui.Name(keep, $"Keep {app.Name}", $"Put {app.Name} in the file");
+            Ui.Name(keep, UiText.Format("ProfileKeepName", app.Name), UiText.Format("ProfileKeepHelp", app.Name));
             DockPanel.SetDock(keep, Dock.Left);
-            var branch = Ui.Field($"Branch for {app.Name}", choices.Branch(app), text => { choices.SetBranch(app.Name, text); _run.Touched(); }, 140);
+            var branch = Ui.Field(UiText.Format("ProfileBranchFor", app.Name), choices.Branch(app), text => { choices.SetBranch(app.Name, text); _run.Touched(); }, 140);
             branch.FontFamily = new FontFamily("Cascadia Mono, Consolas");
             branch.IsEnabled = choices.Keeps(app.Name);
             keep.Click += (_, _) =>
@@ -421,13 +421,13 @@ internal sealed class ExportProfileSheet : SheetWindow
                 _run.Touched();
             };
             DockPanel.SetDock(branch, Dock.Right);
-            var current = Ui.Text(app.CurrentBranch ?? "detached", 12, opacity: 0.7, margin: new Thickness(8, 6, 8, 0));
+            var current = Ui.Text(app.CurrentBranch ?? UiText.Get("ProfileDetached"), 12, opacity: 0.7, margin: new Thickness(8, 6, 8, 0));
             DockPanel.SetDock(current, Dock.Right);
             var text = new StackPanel();
-            text.Children.Add(Ui.Text($"{app.Name}  ·  {RepoAccess.Label(app.Access)}", 13, FontWeights.SemiBold));
+            text.Children.Add(Ui.Text(UiText.Format("ProfileAppAccess", app.Name, RepoAccess.Label(app.Access)), 13, FontWeights.SemiBold));
             text.Children.Add(Ui.Caption(app.ExportedRepo));
-            if (app.Requires.Count > 0) text.Children.Add(Ui.Caption("requires " + string.Join(", ", app.Requires)));
-            if (!app.BranchVerified) text.Children.Add(Ui.Caption("Not verified on the remote"));
+            if (app.Requires.Count > 0) text.Children.Add(Ui.Caption(UiText.Format("ProfileRequires", string.Join(", ", app.Requires))));
+            if (!app.BranchVerified) text.Children.Add(Ui.Caption(UiText.Get("ProfileNotVerified")));
             row.Children.Add(keep);
             row.Children.Add(branch);
             row.Children.Add(current);
@@ -436,7 +436,7 @@ internal sealed class ExportProfileSheet : SheetWindow
         }
         foreach (var w in plan.Warnings)
             _rows.Children.Add(Ui.Text(w, 12, margin: new Thickness(0, 0, 0, 4)));
-        _rows.Children.Add(Ui.Text("Repository addresses are written without your SSH host aliases or any login.", 12, opacity: 0.7, margin: new Thickness(0, 8, 0, 0)));
+        _rows.Children.Add(Ui.Text(UiText.Get("ProfileAddressNote"), 12, opacity: 0.7, margin: new Thickness(0, 8, 0, 0)));
     }
 
     private void Draw()
@@ -450,35 +450,35 @@ internal sealed class ExportProfileSheet : SheetWindow
             {
                 case ProfileRunPhase.Idle:
                 case ProfileRunPhase.Loading:
-                    Busy("Asking each repository for its default branch and access...");
-                    Bar("Cancel", () => End(false), cancel: true);
+                    Busy(UiText.Get("ProfileExportBusy"));
+                    Bar(UiText.Get("Cancel"), () => End(false), cancel: true);
                     return;
                 case ProfileRunPhase.Failed:
-                    Failure($"{_run.Name} was not exported. {_run.Error}");
-                    Bar("Close", () => End(false), primary: true);
+                    Failure(UiText.Format("ProfileExportFailed", _run.Name, _run.Error ?? ""));
+                    Bar(UiText.Get("ProfileClose"), () => End(false), primary: true);
                     return;
                 case ProfileRunPhase.Done when _run.Result is { } result:
-                    Headline($"Exported {result.Apps} app{(result.Apps == 1 ? "" : "s")}", _run.ChosenFile ?? result.Path);
-                    if (result.Dropped.Count > 0) Line("Left out: " + string.Join(", ", result.Dropped));
-                    Bar("Show in Explorer", () => _reveal(_run.ChosenFile ?? result.Path), left: true);
-                    Bar("Done", () => End(true), primary: true);
+                    Headline(result.Apps == 1 ? UiText.Get("ProfileExportedOne") : UiText.Format("ProfileExportedMany", result.Apps), _run.ChosenFile ?? result.Path);
+                    if (result.Dropped.Count > 0) Line(UiText.Format("ProfileLeftOutList", string.Join(", ", result.Dropped)));
+                    Bar(UiText.Get("ProfileShowInExplorer"), () => _reveal(_run.ChosenFile ?? result.Path), left: true);
+                    Bar(UiText.Get("ProfileDone"), () => End(true), primary: true);
                     return;
             }
-            if (_run.Phase == ProfileRunPhase.Running) Busy("Exporting...");
+            if (_run.Phase == ProfileRunPhase.Running) Busy(UiText.Get("ProfileExporting"));
             if (_run.Problem is { } problem) Failure(problem);
             else if (_run.Error is { } error) Failure(error);
-            Bar("Cancel", () => End(false), cancel: true, enabled: _run.Phase != ProfileRunPhase.Running);
-            Bar("Export...", Save, primary: true, enabled: _run.CanExport);
+            Bar(UiText.Get("Cancel"), () => End(false), cancel: true, enabled: _run.Phase != ProfileRunPhase.Running);
+            Bar(UiText.Get("ProfileExport"), Save, primary: true, enabled: _run.CanExport);
         });
     }
 
     private void BuildShare()
     {
-        _share.Children.Add(Ui.Text("Share an import link", 14, FontWeights.SemiBold, margin: new Thickness(0, 12, 0, 2)));
-        _share.Children.Add(Ui.Text("Put the file where your team can read it over https (a repository, a gist), then paste its address here. Teammates click the link and review the profile before BenchBar adds it.", 12, opacity: 0.75, margin: new Thickness(0, 0, 0, 6)));
+        _share.Children.Add(Ui.Text(UiText.Get("ProfileShareTitle"), 14, FontWeights.SemiBold, margin: new Thickness(0, 12, 0, 2)));
+        _share.Children.Add(Ui.Text(UiText.Get("ProfileShareLine"), 12, opacity: 0.75, margin: new Thickness(0, 0, 0, 6)));
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        _hostedBox = Ui.Field("Hosted file", "", text => { _copied = false; SyncShare(); }, 400);
-        _copyButton = Ui.Button("Copy Import Link", CopyLink, "Copy Import Link", minWidth: 0);
+        _hostedBox = Ui.Field(UiText.Get("ProfileHosted"), "", text => { _copied = false; SyncShare(); }, 400);
+        _copyButton = Ui.Button(UiText.Get("ProfileCopyLink"), CopyLink, UiText.Get("ProfileCopyLink"), minWidth: 0);
         _copyButton.Margin = new Thickness(8, 0, 0, 0);
         _copyButton.IsEnabled = false;
         row.Children.Add(_hostedBox);
@@ -491,7 +491,7 @@ internal sealed class ExportProfileSheet : SheetWindow
 
     private void SyncShare()
     {
-        _copyButton.Content = _copied ? "Copied" : "Copy Import Link";
+        _copyButton.Content = (_copied ? UiText.Get("ProfileCopied") : UiText.Get("ProfileCopyLink"));
         _copyButton.IsEnabled = CurrentLink is not null;
     }
 
@@ -519,7 +519,7 @@ internal sealed class UpdateProfileSheet : SheetWindow
     private readonly ProfileUpdateRun _run;
 
     public UpdateProfileSheet(ProfileUpdateRun run, ResolvedTheme theme, Window? owner)
-        : base($"Update {run.Name}", "Shows what changed in the profile's source, then applies it.", theme, owner, 680)
+        : base(UiText.Format("ProfileUpdateTitle", run.Name), UiText.Get("ProfileUpdateLine"), theme, owner, 680)
     {
         _run = run;
         BusyWhen(() => run.IsBusy);
@@ -535,33 +535,35 @@ internal sealed class UpdateProfileSheet : SheetWindow
         {
             case ProfileRunPhase.Idle:
             case ProfileRunPhase.Loading:
-                Busy("Fetching the source...");
-                Bar("Cancel", () => End(false), cancel: true);
+                Busy(UiText.Get("ProfileFetching"));
+                Bar(UiText.Get("Cancel"), () => End(false), cancel: true);
                 return;
             case ProfileRunPhase.Failed:
-                Failure($"{_run.Name} was not updated. {_run.Error}");
-                Bar("Close", () => End(false), primary: true);
+                Failure(UiText.Format("ProfileUpdateFailed", _run.Name, _run.Error ?? ""));
+                Bar(UiText.Get("ProfileClose"), () => End(false), primary: true);
                 return;
             case ProfileRunPhase.Done:
-                Headline($"Updated {_run.Name}");
-                Bar("Done", () => End(true), primary: true);
+                Headline(UiText.Format("ProfileUpdatedTitle", _run.Name));
+                Bar(UiText.Get("ProfileDone"), () => End(true), primary: true);
                 return;
         }
         if (_run.Plan is { HasChanges: false })
         {
-            Headline($"{_run.Name} is up to date", "Nothing to change.");
-            Bar("Close", () => End(false), primary: true);
+            Headline(UiText.Format("ProfileUpToDate", _run.Name), UiText.Get("ProfileNothingToChange"));
+            Bar(UiText.Get("ProfileClose"), () => End(false), primary: true);
             return;
         }
-        if (_run.Phase == ProfileRunPhase.Running) Busy("Updating...");
+        if (_run.Phase == ProfileRunPhase.Running) Busy(UiText.Get("ProfileUpdating"));
         foreach (var update in _run.Plan?.Updates ?? [])
         {
-            var title = $"{update.Name}  ·  {update.Kind}" + (update.Behind is > 0 ? $"  ·  {update.Behind} commit{(update.Behind == 1 ? "" : "s")} behind" : "");
+            var title = update.Behind is > 0
+                ? update.Behind == 1 ? UiText.Format("ProfileUpdateBehindOne", update.Name, update.Kind) : UiText.Format("ProfileUpdateBehindMany", update.Name, update.Kind, update.Behind)
+                : UiText.Format("ProfileUpdateKind", update.Name, update.Kind);
             Line(title, 14, margin: new Thickness(0, 0, 0, 4)).FontWeight = FontWeights.SemiBold;
             if (update.Diff is { Length: > 0 } diff) DiffView(diff);
         }
-        Bar("Cancel", () => End(false), cancel: true, enabled: _run.Phase != ProfileRunPhase.Running);
-        Bar("Update", () => _run.ApplyAsync().Forget(), primary: true, enabled: _run.CanApply);
+        Bar(UiText.Get("Cancel"), () => End(false), cancel: true, enabled: _run.Phase != ProfileRunPhase.Running);
+        Bar(UiText.Get("ProfileUpdate"), () => _run.ApplyAsync().Forget(), primary: true, enabled: _run.CanApply);
     });
 }
 
@@ -573,7 +575,7 @@ internal sealed class CheckAccessSheet : SheetWindow
     private readonly ProfileCheckRun _run;
 
     public CheckAccessSheet(ProfileCheckRun run, ResolvedTheme theme, Window? owner)
-        : base($"Check Access to {run.Name}", "Tries each repository of the profile with your git credentials.", theme, owner)
+        : base(UiText.Format("ProfileCheckTitle", run.Name), UiText.Get("ProfileCheckLine"), theme, owner)
     {
         _run = run;
         BusyWhen(() => run.IsBusy);
@@ -589,10 +591,10 @@ internal sealed class CheckAccessSheet : SheetWindow
         {
             case ProfileRunPhase.Idle:
             case ProfileRunPhase.Loading:
-                Busy("Trying each repository with your git credentials...");
+                Busy(UiText.Get("ProfileCheckBusy"));
                 break;
             case ProfileRunPhase.Failed:
-                Failure("Access was not checked. " + _run.Error);
+                Failure(UiText.Format("ProfileCheckFailed", _run.Error ?? ""));
                 break;
             default:
                 if (_run.Check is { } check)
@@ -603,7 +605,7 @@ internal sealed class CheckAccessSheet : SheetWindow
                 }
                 break;
         }
-        Bar("Check Again", () => _run.LoadAsync().Forget(), enabled: !_run.IsBusy, left: true);
-        Bar("Done", () => End(true), primary: true);
+        Bar(UiText.Get("ProfileCheckAgain"), () => _run.LoadAsync().Forget(), enabled: !_run.IsBusy, left: true);
+        Bar(UiText.Get("ProfileDone"), () => End(true), primary: true);
     });
 }

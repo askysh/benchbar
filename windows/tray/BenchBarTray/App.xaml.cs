@@ -195,9 +195,9 @@ public partial class App : Application, ITrayHost
         CheckShimVersionAsync().Forget();
         if (crashedLastTime)
         {
-            const string text = "BenchBar closed unexpectedly last time.";
-            _notices.Set(new Notice("crashed", text, "Report a Bug", () => ReportBugAsync("Closed unexpectedly").Forget()));
-            ShowNotice(text + " Click for details.");
+            var text = UiText.Get("MainCrashed");
+            _notices.Set(new Notice("crashed", text, UiText.Get("MenuReportBug"), () => ReportBugAsync("Closed unexpectedly").Forget()));
+            ShowNotice(UiText.Format("MainClickDetails", text));
         }
         // read before NoteVersion saves the file: a config with no tray object means no tray ran here before (an unreadable one is not that)
         var firstRun = !_config.HadTraySection && !_config.Unreadable;
@@ -410,7 +410,7 @@ public partial class App : Application, ITrayHost
         var text = VersionMismatch.Notice(line, UpdateCheck.CurrentVersion(), DisplayShimPath());
         if (text is null) _notices.Remove("shim-version");
         else if (_package.IsPackaged) _notices.Set(new Notice("shim-version", text, Dismissible: false)); // one package: the install line is not its fix
-        else _notices.Set(new Notice("shim-version", text, "Copy Install Line", () => CopyText(UpdateLinks.InstallCommand), Dismissible: false));
+        else _notices.Set(new Notice("shim-version", text, UiText.Get("MainCopyInstall"), () => CopyText(UpdateLinks.InstallCommand), Dismissible: false));
     }
 
     /// <summary>The shim's path as shown to the person: packaged, the alias in WindowsApps, never the versioned package folder.</summary>
@@ -447,7 +447,7 @@ public partial class App : Application, ITrayHost
                 _releaseFlyout.Start();
             };
             view.SetSnapshot(_controller.Snapshot, TrayController.UpText(_controller.Snapshot, _controller.Benches.Select(b => b.State).ToList()));
-            view.SetFooter("BenchBar " + UpdateCheck.CurrentVersion().Split('+')[0]);
+            view.SetFooter(UiText.Format("MainFooterVersion", UpdateCheck.CurrentVersion().Split('+')[0]));
             view.SetNotices(_notices.All, DismissNotice);
             view.SetUpdate(_updateOffer, UpdateRunning);
             view.SetSetupPending(_setupPending);

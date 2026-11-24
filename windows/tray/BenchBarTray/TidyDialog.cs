@@ -30,7 +30,7 @@ internal sealed class TidyDialog : Window
         _bench = bench;
         _commands = commands;
         _now = now ?? (() => DateTimeOffset.UtcNow);
-        Title = "Tidy up";
+        Title = UiText.Get("TidyTitle");
         Width = 560;
         SizeToContent = SizeToContent.Height;
         MaxHeight = 760;
@@ -39,37 +39,37 @@ internal sealed class TidyDialog : Window
         Owner = owner;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         Ui.ApplyTheme(this, theme);
-        Ui.Name(this, "Tidy up");
+        Ui.Name(this, UiText.Get("TidyTitle"));
 
         var panel = new StackPanel { Margin = new Thickness(24) };
-        panel.Children.Add(Ui.Text("Tidy up", 18, FontWeights.SemiBold));
-        _days = Ui.Field("Days until it expires", "7", _ => { }, 80);
-        _removeExpired = Ui.Button("Remove Expired...", () => Choose(), "Remove the expired scratch benches", primary: true);
+        panel.Children.Add(Ui.Text(UiText.Get("TidyTitle"), 18, FontWeights.SemiBold));
+        _days = Ui.Field(UiText.Get("TidyDays"), "7", _ => { }, 80);
+        _removeExpired = Ui.Button(UiText.Get("TidyRemoveExpired"), () => Choose(), UiText.Get("TidyRemoveExpiredName"), primary: true);
         _removeExpired.IsEnabled = false;
         if (commands.Has("bench scratch"))
         {
-            panel.Children.Add(Ui.Text($"{bench.Name}", 14, FontWeights.SemiBold, margin: new Thickness(0, 12, 0, 2)));
-            panel.Children.Add(Ui.Text("A scratch bench expires after the days you give. Then Remove Expired backs up its sites, drops their databases and moves its folder aside. The default bench is never removed.", 12, opacity: 0.8));
+            panel.Children.Add(Ui.Text(bench.Name, 14, FontWeights.SemiBold, margin: new Thickness(0, 12, 0, 2)));
+            panel.Children.Add(Ui.Text(UiText.Get("TidyScratchIntro"), 12, opacity: 0.8));
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 4) };
             row.Children.Add(_days);
-            row.Children.Add(Ui.Button("Mark Scratch", () => MarkAsync(true).Forget(), $"Mark {bench.Name} scratch", minWidth: 100));
-            row.Children.Add(Ui.Button("Not Scratch", () => MarkAsync(false).Forget(), $"Keep {bench.Name}, not scratch", minWidth: 100));
+            row.Children.Add(Ui.Button(UiText.Get("TidyMarkScratch"), () => MarkAsync(true).Forget(), UiText.Format("TidyMarkScratchName", bench.Name), minWidth: 100));
+            row.Children.Add(Ui.Button(UiText.Get("TidyNotScratch"), () => MarkAsync(false).Forget(), UiText.Format("TidyNotScratchName", bench.Name), minWidth: 100));
             _days.Margin = new Thickness(0, 0, 8, 0);
             panel.Children.Add(row);
             panel.Children.Add(_scratchLine);
         }
         if (commands.Has("bench gc"))
         {
-            panel.Children.Add(Ui.Text("Scratch benches", 14, FontWeights.SemiBold, margin: new Thickness(0, 14, 0, 4)));
+            panel.Children.Add(Ui.Text(UiText.Get("TidyScratchBenches"), 14, FontWeights.SemiBold, margin: new Thickness(0, 14, 0, 4)));
             panel.Children.Add(_gc);
             panel.Children.Add(_removeExpired);
         }
         if (commands.Has("db orphans"))
         {
-            panel.Children.Add(Ui.Text("Databases no site refers to", 14, FontWeights.SemiBold, margin: new Thickness(0, 14, 0, 4)));
+            panel.Children.Add(Ui.Text(UiText.Get("TidyOrphanDatabases"), 14, FontWeights.SemiBold, margin: new Thickness(0, 14, 0, 4)));
             panel.Children.Add(_orphans);
         }
-        var close = Ui.Button("Close", () => DialogResult = false, "Close");
+        var close = Ui.Button(UiText.Get("TidyClose"), () => DialogResult = false, UiText.Get("TidyClose"));
         close.IsCancel = true;
         close.HorizontalAlignment = HorizontalAlignment.Right;
         close.Margin = new Thickness(0, 12, 0, 0);
@@ -131,14 +131,14 @@ internal sealed class TidyDialog : Window
     {
         if (r.Value is not { } gc)
         {
-            Fill(_gc, [(r.Error ?? "The scratch benches could not be read.", true)]);
+            Fill(_gc, [(r.Error ?? UiText.Get("TidyScratchNotRead"), true)]);
             return;
         }
         var now = _now();
-        var lines = gc.Expired.Select(b => ($"{b.Bench}: {TidyText.Sites(b.Sites)}, {TidyText.Expiry(b, now)}, marked by {b.MarkedBy}", false))
-            .Concat(gc.Pending.Select(b => ($"{b.Bench}: {TidyText.Expiry(b, now)}", false)))
-            .Concat(gc.Skipped.Select(b => ($"{b.Bench}: kept, {b.Why}", false))).ToList();
-        if (gc.Expired.Count == 0) lines.Insert(0, ("No scratch bench has expired.", false));
+        var lines = gc.Expired.Select(b => (UiText.Format("TidyExpiredLine", b.Bench, TidyText.Sites(b.Sites), TidyText.Expiry(b, now), b.MarkedBy), false))
+            .Concat(gc.Pending.Select(b => (UiText.Format("TidyPendingLine", b.Bench, TidyText.Expiry(b, now)), false)))
+            .Concat(gc.Skipped.Select(b => (UiText.Format("TidyKeptLine", b.Bench, b.Why), false))).ToList();
+        if (gc.Expired.Count == 0) lines.Insert(0, (UiText.Get("TidyNoneExpired"), false));
         Fill(_gc, lines);
         _removeExpired.IsEnabled = gc.Expired.Count > 0;
     }
@@ -147,7 +147,7 @@ internal sealed class TidyDialog : Window
     {
         if (r.Value is not { } list)
         {
-            Fill(_orphans, [(r.Error ?? "The databases could not be read.", true)]);
+            Fill(_orphans, [(r.Error ?? UiText.Get("TidyDatabasesNotRead"), true)]);
             return;
         }
         var lines = new List<(string, bool)> { (TidyText.OrphanSummary(list), false) };
@@ -174,10 +174,10 @@ internal sealed class TidyDialog : Window
             return;
         }
         var count = TidyCommands.Days(_days.Text) ?? 7;
-        if (scratch && !_services.Confirm($"Mark {_bench.Name} scratch for {count} day(s)?",
-                "Once the time is up, Remove Expired backs up its sites, drops their databases and moves its folder aside. The default bench is never removed.", "Mark Scratch")) return;
+        if (scratch && !_services.Confirm(UiText.Format("TidyMarkTitle", _bench.Name, count),
+                UiText.Get("TidyMarkBody"), UiText.Get("TidyMarkScratch"))) return;
         var r = await _services.Cli.RunJsonAsync(scratch ? TidyCommands.Scratch(_bench.Path, count) : TidyCommands.ClearScratch(_bench.Path), null, CliTimeouts.Read, o => o, _cancel.Token).ConfigureAwait(true);
-        _scratchLine.Text = !r.Ok ? r.Error ?? "It did not work." : scratch ? $"{_bench.Name} is a scratch bench for {count} day(s)." : $"{_bench.Name} is not a scratch bench.";
+        _scratchLine.Text = !r.Ok ? r.Error ?? UiText.Get("TidyDidNotWork") : scratch ? UiText.Format("TidyIsScratch", _bench.Name, count) : UiText.Format("TidyIsNotScratch", _bench.Name);
         if (r.Ok && _commands.Has("bench gc")) ShowGc(await _services.Cli.RunJsonAsync(TidyCommands.GcRead, null, CliTimeouts.Plan, TidyJson.ParseGc, _cancel.Token).ConfigureAwait(true));
     }
 

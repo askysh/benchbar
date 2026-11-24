@@ -44,19 +44,19 @@ public static class BuiltInRunners
     public const string BenchId = "bench";
     public const string CupId = "cup";
 
-    public static IRunnerArt Bench { get; } = new BuiltInRunner(BenchId, "Bench", BenchRunnerArt.FrameCount, BenchRunnerArt.Render);
+    public static IRunnerArt Bench { get; } = new BuiltInRunner(BenchId, UiText.Get("CommonRunnerBench"), BenchRunnerArt.FrameCount, BenchRunnerArt.Render);
 
-    public static IRunnerArt Cup { get; } = new BuiltInRunner(CupId, "Coffee cup", CupRunnerArt.FrameCount, CupRunnerArt.Render);
+    public static IRunnerArt Cup { get; } = new BuiltInRunner(CupId, UiText.Get("CommonRunnerCup"), CupRunnerArt.FrameCount, CupRunnerArt.Render);
 
-    public static IRunnerArt Kettle { get; } = new BuiltInRunner("kettle", "Kettle", KettleRunnerArt.FrameCount, KettleRunnerArt.Render);
+    public static IRunnerArt Kettle { get; } = new BuiltInRunner("kettle", UiText.Get("CommonRunnerKettle"), KettleRunnerArt.FrameCount, KettleRunnerArt.Render);
 
-    public static IRunnerArt Server { get; } = new BuiltInRunner("server", "Server rack", ServerRunnerArt.FrameCount, ServerRunnerArt.Render);
+    public static IRunnerArt Server { get; } = new BuiltInRunner("server", UiText.Get("CommonRunnerServer"), ServerRunnerArt.FrameCount, ServerRunnerArt.Render);
 
-    public static IRunnerArt Plane { get; } = new BuiltInRunner("plane", "Paper plane", PlaneRunnerArt.FrameCount, PlaneRunnerArt.Render);
+    public static IRunnerArt Plane { get; } = new BuiltInRunner("plane", UiText.Get("CommonRunnerPlane"), PlaneRunnerArt.FrameCount, PlaneRunnerArt.Render);
 
-    public static IRunnerArt Snail { get; } = new BuiltInRunner("snail", "Snail", SnailRunnerArt.FrameCount, SnailRunnerArt.Render);
+    public static IRunnerArt Snail { get; } = new BuiltInRunner("snail", UiText.Get("CommonRunnerSnail"), SnailRunnerArt.FrameCount, SnailRunnerArt.Render);
 
-    public static IRunnerArt Rocket { get; } = new BuiltInRunner("rocket", "Rocket", RocketRunnerArt.FrameCount, RocketRunnerArt.Render);
+    public static IRunnerArt Rocket { get; } = new BuiltInRunner("rocket", UiText.Get("CommonRunnerRocket"), RocketRunnerArt.FrameCount, RocketRunnerArt.Render);
 
     public static IReadOnlyList<IRunnerArt> All { get; } = [Bench, Cup, Kettle, Server, Plane, Snail, Rocket];
 

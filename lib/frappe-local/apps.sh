@@ -977,6 +977,16 @@ fl__apps_dirs() {
   for d in "${FL_BENCH_DIR}"/apps/*/; do [[ -d "$d" ]] && basename "$d"; done | LC_ALL=C sort
 }
 
+# One line "dir sha" for each git app in apps/, sorted: the code that is in
+# the bench now. An approval token covers it (APP-13), so a plan approved
+# before someone moved a checkout is refused as stale.
+fl__apps_heads() {
+  local d
+  for d in $(fl__apps_dirs); do
+    printf '%s %s\n' "$d" "$(git -C "${FL_BENCH_DIR}/apps/${d}" rev-parse HEAD 2>/dev/null || true)"
+  done
+}
+
 # A get-app that failed half way. A folder bench did not list yet moves to
 # the backups (nothing refers to it). A folder bench already put in
 # sites/apps.txt stays, and so does the line: benchbar never edits sites/
