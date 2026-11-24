@@ -152,4 +152,316 @@
   <data name="HotKeyResetName" xml:space="preserve">
     <value>Reset the Quick Switch shortcut</value>
   </data>
+  <data name="SettingsTitle" xml:space="preserve">
+    <value>BenchBar Settings</value>
+  </data>
+  <data name="SettingsSections" xml:space="preserve">
+    <value>Settings sections</value>
+  </data>
+  <data name="SettingsGeneral" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="SettingsTray" xml:space="preserve">
+    <value>Tray</value>
+  </data>
+  <data name="SettingsNotifications" xml:space="preserve">
+    <value>Show notifications when a bench stops or crashes</value>
+  </data>
+  <data name="SettingsCheckUpdates" xml:space="preserve">
+    <value>Check for updates when the BenchBar window opens</value>
+  </data>
+  <data name="SettingsAskLink" xml:space="preserve">
+    <value>Ask before a link acts</value>
+  </data>
+  <data name="SettingsAskLinkHint" xml:space="preserve">
+    <value>Any web page or app can open a benchbar:// link. With this on, BenchBar asks before a link starts, stops or restarts a bench or opens a console. It is off by default so launchers and scripts keep working.</value>
+  </data>
+  <data name="SettingsDistro" xml:space="preserve">
+    <value>WSL distro</value>
+  </data>
+  <data name="SettingsDistroHint" xml:space="preserve">
+    <value>The Linux distribution BenchBar runs benches in.</value>
+  </data>
+  <data name="SettingsEditor" xml:space="preserve">
+    <value>Editor</value>
+  </data>
+  <data name="SettingsEditorName" xml:space="preserve">
+    <value>Editor for Open in editor</value>
+  </data>
+  <data name="SettingsEditorHint" xml:space="preserve">
+    <value>Used by Open in editor on a bench. It needs the editor's WSL extension.</value>
+  </data>
+  <data name="Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="SettingsCopyCliPath" xml:space="preserve">
+    <value>Copy the CLI path</value>
+  </data>
+  <data name="SettingsCli" xml:space="preserve">
+    <value>Command line tool</value>
+  </data>
+  <data name="SettingsCliPathName" xml:space="preserve">
+    <value>Command line tool path</value>
+  </data>
+  <data name="SettingsCliHint" xml:space="preserve">
+    <value>benchbar.exe, which calls the Linux command line tool inside the distro.</value>
+  </data>
+  <data name="SettingsOpenStartup" xml:space="preserve">
+    <value>Open Windows startup settings</value>
+  </data>
+  <data name="SettingsAppearanceSystem" xml:space="preserve">
+    <value>Follow Windows</value>
+  </data>
+  <data name="SettingsAppearanceLight" xml:space="preserve">
+    <value>Light</value>
+  </data>
+  <data name="SettingsAppearanceDark" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="SettingsAppearance" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="SettingsAppearanceHint" xml:space="preserve">
+    <value>The runner follows the taskbar's theme; the windows follow this choice.</value>
+  </data>
+  <data name="SettingsRunner" xml:space="preserve">
+    <value>Runner</value>
+  </data>
+  <data name="SettingsRunnerName" xml:space="preserve">
+    <value>Runner in the notification area</value>
+  </data>
+  <data name="SettingsRunnerHint" xml:space="preserve">
+    <value>The little figure in the notification area. The right click menu on the icon previews each one.</value>
+  </data>
+  <data name="SettingsReadingList" xml:space="preserve">
+    <value>Reading the list...</value>
+  </data>
+  <data name="SettingsSwitch" xml:space="preserve">
+    <value>Switch</value>
+  </data>
+  <data name="SettingsUseDistro" xml:space="preserve">
+    <value>Use {0}?</value>
+  </data>
+  <data name="SettingsUseDistroBody" xml:space="preserve">
+    <value>BenchBar will use {0} for its benches from now on. Benches in the other distro stay where they are, and the list updates at once.</value>
+  </data>
+  <data name="SettingsAppearanceNamed" xml:space="preserve">
+    <value>Appearance: {0}</value>
+  </data>
+  <data name="LabsTitle" xml:space="preserve">
+    <value>Labs</value>
+  </data>
+  <data name="LabsIntro" xml:space="preserve">
+    <value>Experiments are off until you turn one on. Each one has a warning, and the CLI keeps the switch, so benchbar.exe labs shows the same state.</value>
+  </data>
+  <data name="LabsNoCli" xml:space="preserve">
+    <value>BenchBar cannot find benchbar.exe</value>
+  </data>
+  <data name="LabsReading" xml:space="preserve">
+    <value>Reading the experiments...</value>
+  </data>
+  <data name="LabsNone" xml:space="preserve">
+    <value>This version of BenchBar has no experiments.</value>
+  </data>
+  <data name="LabsTurningOff" xml:space="preserve">
+    <value>Turning it off...</value>
+  </data>
+  <data name="LabsTurningOn" xml:space="preserve">
+    <value>Turning it on...</value>
+  </data>
+  <data name="LabsWarning" xml:space="preserve">
+    <value>Warning: {0}</value>
+  </data>
+  <data name="LabsSince" xml:space="preserve">
+    <value>since {0}</value>
+  </data>
+  <data name="AboutTitle" xml:space="preserve">
+    <value>About BenchBar</value>
+  </data>
+  <data name="AboutReading" xml:space="preserve">
+    <value>reading...</value>
+  </data>
+  <data name="AboutTagline" xml:space="preserve">
+    <value>Frappe benches in WSL, from the notification area.</value>
+  </data>
+  <data name="AboutLinuxCli" xml:space="preserve">
+    <value>Linux command line tool</value>
+  </data>
+  <data name="AboutUpdates" xml:space="preserve">
+    <value>Updates</value>
+  </data>
+  <data name="AboutVersions" xml:space="preserve">
+    <value>Versions</value>
+  </data>
+  <data name="AboutDocs" xml:space="preserve">
+    <value>Documentation</value>
+  </data>
+  <data name="AboutWhatsNew" xml:space="preserve">
+    <value>What's new</value>
+  </data>
+  <data name="AboutSource" xml:space="preserve">
+    <value>Source code (github.com/askysh/benchbar)</value>
+  </data>
+  <data name="AboutSourceName" xml:space="preserve">
+    <value>Source code on GitHub</value>
+  </data>
+  <data name="AboutReportBugName" xml:space="preserve">
+    <value>Report a bug</value>
+  </data>
+  <data name="AboutReportHint" xml:space="preserve">
+    <value>Writes a redacted report zip, opens its folder and opens a GitHub issue to attach it to.</value>
+  </data>
+  <data name="AboutHelp" xml:space="preserve">
+    <value>Help</value>
+  </data>
+  <data name="AboutMcpIntro" xml:space="preserve">
+    <value>benchbar mcp lets Claude Code, Cursor and other agents list your benches, read status, doctor and logs, and start, stop or restart them. Add it once:</value>
+  </data>
+  <data name="AboutCopyMcp" xml:space="preserve">
+    <value>Copy the command that adds benchbar mcp</value>
+  </data>
+  <data name="AboutMcpCommand" xml:space="preserve">
+    <value>MCP command</value>
+  </data>
+  <data name="AboutMcpOther" xml:space="preserve">
+    <value>For another client, add this stdio server to its settings:</value>
+  </data>
+  <data name="AboutCopyJson" xml:space="preserve">
+    <value>Copy the JSON entry for the benchbar mcp server</value>
+  </data>
+  <data name="AboutMcpJson" xml:space="preserve">
+    <value>MCP JSON</value>
+  </data>
+  <data name="AboutAgents" xml:space="preserve">
+    <value>For coding agents</value>
+  </data>
+  <data name="AboutLicense" xml:space="preserve">
+    <value>BenchBar is free software under the MIT License.</value>
+  </data>
+  <data name="AboutTrademark" xml:space="preserve">
+    <value>Frappe and ERPNext are trademarks of Frappe Technologies; BenchBar is not affiliated with or endorsed by them.</value>
+  </data>
+  <data name="AboutNotFound" xml:space="preserve">
+    <value>not found</value>
+  </data>
+  <data name="AboutChecking" xml:space="preserve">
+    <value>Checking...</value>
+  </data>
+  <data name="AboutUpdating" xml:space="preserve">
+    <value>Updating...</value>
+  </data>
+  <data name="AboutUpdateNow" xml:space="preserve">
+    <value>Update Now</value>
+  </data>
+  <data name="AboutUpdateNowName" xml:space="preserve">
+    <value>Update BenchBar now</value>
+  </data>
+  <data name="AboutCopyUpdateLine" xml:space="preserve">
+    <value>Copy Update Line</value>
+  </data>
+  <data name="AboutCopied" xml:space="preserve">
+    <value>Copied</value>
+  </data>
+  <data name="AboutCopyUpdateLineName" xml:space="preserve">
+    <value>Copy the update line for PowerShell</value>
+  </data>
+  <data name="AboutCheckUpdates" xml:space="preserve">
+    <value>Check for Updates</value>
+  </data>
+  <data name="AboutCheckUpdatesName" xml:space="preserve">
+    <value>Check for updates</value>
+  </data>
+  <data name="AboutIsOut" xml:space="preserve">
+    <value>BenchBar {0} is out.</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="TypeToConfirm" xml:space="preserve">
+    <value>Type {0} to confirm</value>
+  </data>
+  <data name="QuickSwitchTitle" xml:space="preserve">
+    <value>Quick Switch</value>
+  </data>
+  <data name="QuickSwitchOpenAs" xml:space="preserve">
+    <value>Open as</value>
+  </data>
+  <data name="QuickSwitchSiteName" xml:space="preserve">
+    <value>Site to open</value>
+  </data>
+  <data name="QuickSwitchSearchName" xml:space="preserve">
+    <value>Search users</value>
+  </data>
+  <data name="QuickSwitchUsersName" xml:space="preserve">
+    <value>Users</value>
+  </data>
+  <data name="QuickSwitchNoMatch" xml:space="preserve">
+    <value>No users match</value>
+  </data>
+  <data name="QuickSwitchSearching" xml:space="preserve">
+    <value>Searching...</value>
+  </data>
+  <data name="QuickSwitchNoAnswer" xml:space="preserve">
+    <value>no answer</value>
+  </data>
+  <data name="QuickSwitchAlreadyOpening" xml:space="preserve">
+    <value>Already opening...</value>
+  </data>
+  <data name="QuickSwitchSearchFailed" xml:space="preserve">
+    <value>Could not search users: {0}</value>
+  </data>
+  <data name="QuickSwitchOpeningAs" xml:space="preserve">
+    <value>Opening as {0}...</value>
+  </data>
+  <data name="QuickSwitchCouldNotOpen" xml:space="preserve">
+    <value>{0} could not be opened as {1}.</value>
+  </data>
+  <data name="LinuxPasswordTitle" xml:space="preserve">
+    <value>Linux password</value>
+  </data>
+  <data name="LinuxPasswordHint" xml:space="preserve">
+    <value>It is the password of your user inside Ubuntu. It is used for this run only and never saved.</value>
+  </data>
+  <data name="LinuxPasswordExisting" xml:space="preserve">
+    <value>That Linux user already existed, so BenchBar did not change its password. Enter the password it already has.</value>
+  </data>
+  <data name="LinuxPasswordWrong" xml:space="preserve">
+    <value>Linux did not accept that password. Try again.</value>
+  </data>
+  <data name="LinuxPasswordContinue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="LinuxPasswordContinueName" xml:space="preserve">
+    <value>Continue with this password</value>
+  </data>
+  <data name="LinuxPasswordStep" xml:space="preserve">
+    <value>step</value>
+  </data>
+  <data name="LinuxPasswordSteps" xml:space="preserve">
+    <value>steps</value>
+  </data>
+  <data name="LinuxPasswordNeeds" xml:space="preserve">
+    <value>BenchBar needs your Linux password for {0} {1} that use sudo.</value>
+  </data>
+  <data name="SiteMoveSkip" xml:space="preserve">
+    <value>Skip migrate</value>
+  </data>
+  <data name="SiteMoveTargetName" xml:space="preserve">
+    <value>Target bench</value>
+  </data>
+  <data name="SiteMoveTo" xml:space="preserve">
+    <value>Move to</value>
+  </data>
+  <data name="SiteMoveSkipHint" xml:space="preserve">
+    <value>The site arrives on the schema it had. Run bench migrate yourself afterwards.</value>
+  </data>
+  <data name="ReviewPlan" xml:space="preserve">
+    <value>Review Plan</value>
+  </data>
+  <data name="SiteMoveTitle" xml:space="preserve">
+    <value>Move {0}</value>
+  </data>
+  <data name="SiteMoveBody" xml:space="preserve">
+    <value>Moves {0} to another bench on this machine. Nothing changes yet: the next step shows the plan.</value>
+  </data>
 </root>

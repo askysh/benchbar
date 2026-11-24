@@ -385,6 +385,11 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   a fatal one ends the process so the next start reports it from the run marker.
 - **Dates for display use the current culture (`UiText.Date`), user text lives in `Strings.resx`.** The tray menu, crash toasts, tooltip and WSL messages are moved;
   `UiTextTests` fails when code asks for a missing name or an entry is unused. The pages of the BenchBar window still hold inline text.
+- **Window text moves page by page (TRAY-14, #174), English only, same words.** Done: Settings, Labs, About, Quick Switch, the Linux password
+  dialog, the move site dialog and the two confirm dialogs (and the hot key row). A string with a value in it is a `{0}` format
+  (`UiText.Format`), never a concatenation, so a translation can reorder it. Still inline: Overview, Sites, Apps, Health, Discovery,
+  Profiles, Sharing, History, Logs, Ports, the wizard, the flyout, plan review sheets, the pending banner, and the models' own lines in
+  `Tray.Core` (`LabsText`, `LogonView`, `UpdatePolicy`).
 
 ## Tray parity: Open as (0.9.0, #174)
 
