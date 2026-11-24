@@ -112,6 +112,7 @@ public static class ShareText
     // --- who gives out the seats (#159 SHARE-5) ---
 
     public const string AssignSeatsToggle = "I give out the seats";
+    public const string SeatsNeedNewerCli = "Guests pick their own seat: the BenchBar command line tool in WSL is older than 0.9.0 and cannot start a room where you give out the seats.";
 
     public static string StartConfirm(string site, bool assignSeats) =>
         StartConfirm(site) + (assignSeats ? " They wait until you give each of them a seat." : " Each of them can take any free seat.");

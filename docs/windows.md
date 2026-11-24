@@ -538,6 +538,17 @@ tray does not add a hosts line, so a name that does not end in `.localhost`
 shows a note. **Watch Assets in Terminal** and **Run in Foreground in
 Terminal** (above) are the tray's `watch` and `fg`; **Logs** follows the log.
 
+**Move to Another Bench...** in the menu of a site (offered when the CLI has
+`site move` and another bench is registered; off for the default site) asks
+which bench the site goes to, with **Skip migrate** as the one option, then
+shows the plan of `site move --dry-run --json`: the steps, the apps, the new
+address (the name stays, the port is the other bench's), what stays and any
+error. A running bench shows **Stop Bench**, which stops it and reads the plan
+again. **Move** stays off until you type the site name, and runs `--apply
+TOKEN --yes` with the token of that plan, with the progress of each step and
+the CLI's next steps at the end. A plan that changed in between asks you to
+**Review Again**.
+
 **Snapshots...** in the menu of a site (offered when the CLI has `site
 snapshots` and `site rollback`) takes a snapshot of the site, with a label if
 you like (`benchbar site snapshot`; nothing in the site changes), lists the

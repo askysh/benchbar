@@ -497,9 +497,10 @@ fl_sp_stat_v() {
 }
 
 # fl_sp_path_problem_v VAR PATH IS_DIR: what makes PATH unsafe to run code from (empty: nothing).
-# Owner: this user or root. World-writable: never, but a sticky directory (like /tmp) lets nobody replace an
-# entry that is not theirs, so it is not held against what lies below it. Group-writable: only for the group
-# that owns Homebrew's folders on every Mac (admin, whose members can sudo anyway).
+# Owner: this user or root. World-writable: never. Group-writable: only for the group that owns Homebrew's
+# folders on every Mac (admin, whose members can sudo anyway). A sticky directory (like /tmp, 1777: writable
+# by its group and by everyone) lets nobody replace an entry that is not theirs, so neither kind of write is
+# held against what lies below it.
 fl_sp_path_problem_v() {
   local __var="$1" __info __uid __group __mode __me __admin="${FL_SHARE_ADMIN_GROUP:-admin}"
   printf -v "$__var" '%s' ""
@@ -509,9 +510,8 @@ fl_sp_path_problem_v() {
   # on Linux the group that may write a system folder (/tmp is root's, sticky) is root, not the Mac's admin
   [[ "${FL_PLATFORM:-macos}" != linux || -n "${FL_SHARE_ADMIN_GROUP:-}" ]] || __admin=root
   if [[ "$__uid" != 0 && "$__uid" != "$__me" ]]; then printf -v "$__var" '%s is owned by another user (uid %s)' "$2" "$__uid"; return 0; fi
-  if (( (${__mode:3:1} & 2) != 0 )); then
-    if [[ "$3" == 1 ]] && (( (${__mode:0:1} & 1) != 0 )); then :; else printf -v "$__var" '%s is world-writable' "$2"; return 0; fi
-  fi
+  if [[ "$3" == 1 ]] && (( (${__mode:0:1} & 1) != 0 )); then return 0; fi
+  if (( (${__mode:3:1} & 2) != 0 )); then printf -v "$__var" '%s is world-writable' "$2"; return 0; fi
   if (( (${__mode:2:1} & 2) != 0 )) && [[ "$__group" != "$__admin" ]]; then
     printf -v "$__var" '%s is group-writable by %s' "$2" "$__group"
   fi

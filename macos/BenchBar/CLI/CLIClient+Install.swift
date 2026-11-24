@@ -54,15 +54,18 @@ extension CLIClient {
     /// user started it from the Review page, which is the confirmation, so
     /// `--yes` is passed here and nowhere else. The two privileged steps ask in
     /// macOS's password dialog (BENCHBAR_SUDO=gui). `rootPassword` is the MariaDB
-    /// root password, only after the CLI answered exit 2.
+    /// root password, only after the CLI answered exit 2. `token` is the plan the
+    /// user reviewed: with it the CLI refuses a plan that changed since, before any
+    /// dialog or step; a run again after a failure passes none.
     /// Returns the process's exit code; cancelling the task stops the process
     /// (SIGTERM, which the CLI forwards to its process group).
-    func install(_ request: InstallRequest, adminPassword: String, rootPassword: String? = nil,
+    func install(_ request: InstallRequest, adminPassword: String, rootPassword: String? = nil, token: String? = nil,
                  onEvent: @escaping @Sendable (InstallEvent) -> Void) async throws(CLIError) -> Int32 {
         var env = environment().merging(Self.guiSudo) { _, new in new }
         env["ADMIN_PASSWORD"] = adminPassword
         if let rootPassword, !rootPassword.isEmpty { env["MARIADB_ROOT_PASSWORD"] = rootPassword }
-        return try await stream(["install", "--yes", "--json"] + request.flags, environment: env,
+        let apply = token.map { ["--apply", $0] } ?? []
+        return try await stream(["install", "--yes", "--json"] + apply + request.flags, environment: env,
                                 timeout: Timeout.install, onEvent: onEvent)
     }
 

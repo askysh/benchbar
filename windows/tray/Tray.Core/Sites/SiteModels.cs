@@ -51,7 +51,7 @@ public static class SiteRows
     }
 }
 
-public enum SiteAction { MakeDefault, OpenAs, AllowOpenAs, TurnOffOpenAs, BackUp, BackUpWithFiles, Backups, Restore, Snapshots, Console, Database, Drop }
+public enum SiteAction { MakeDefault, OpenAs, AllowOpenAs, TurnOffOpenAs, BackUp, BackUpWithFiles, Backups, Restore, Snapshots, Move, Console, Database, Drop }
 
 public sealed record SiteMenuItem(SiteAction Action, string Label, bool Enabled, bool Destructive = false);
 
@@ -63,7 +63,7 @@ public static class SiteMenu
     /// on for a name Windows can reach (disabled when it cannot be used now), and the opt in itself ("Allow Open as...", "Turn Off Open as")
     /// whenever the CLI reports it and Windows can reach the name.
     /// </summary>
-    public static IReadOnlyList<SiteMenuItem> For(SiteRowInfo row, bool onlySite, OpenAsRules.Availability openAs = OpenAsRules.Availability.Hidden, bool snapshots = false)
+    public static IReadOnlyList<SiteMenuItem> For(SiteRowInfo row, bool onlySite, OpenAsRules.Availability openAs = OpenAsRules.Availability.Hidden, bool snapshots = false, bool move = false)
     {
         var items = new List<SiteMenuItem>();
         if (!row.IsDefault) items.Add(new(SiteAction.MakeDefault, "Make Default", true));
@@ -74,6 +74,7 @@ public static class SiteMenu
         items.Add(new(SiteAction.Backups, "Backups...", true));
         items.Add(new(SiteAction.Restore, "Restore...", true));
         if (snapshots) items.Add(new(SiteAction.Snapshots, "Snapshots...", true)); // only when the CLI lists site snapshots and site rollback
+        if (move) items.Add(new(SiteAction.Move, "Move to Another Bench...", !row.IsDefault)); // the default site never moves, the CLI refuses it too
         items.Add(new(SiteAction.Console, "Open Console", true));
         items.Add(new(SiteAction.Database, "Open Database", true));
         items.Add(new(SiteAction.Drop, "Drop Site...", !onlySite, Destructive: true));

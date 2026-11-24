@@ -68,8 +68,26 @@ explains the safety model behind it. For the steps, see the
 The pages of the copy that their seat's user can open, and the room's
 roster (`In this room`: each person's name, Mac model, seat and whether
 they are online). Not your site, not other benches, not the code. Before
-they join, a guest sees only the room's label, your Mac's name, the site's
-name and the people and seat counts.
+they join, a guest sees only the room's label, your Mac's name and the
+people and seat counts. Every device on the network can read those, so the
+name of the site you copied is not among them: a person learns it once
+they are in the room.
+
+## What the host sees of a guest
+
+The name the guest's Mac gives, its model, its address, and the key their
+BenchBar made for rooms. That key is the same for every room a Mac is in,
+so a host can tell that the same Mac joined before, also under another
+name. The key is deleted when the guest forgets their last room
+(**Forget** in **Your rooms**); the next join makes a new one. The join
+itself derives the room code's key material in arithmetic that is not
+constant time. That matters only to a program already running on the
+guest's own Mac, which can read the code on the screen anyway.
+
+An invite link names the host's address only as a hint. BenchBar dials it
+only when it is an address of a local network (10.x, 172.16 to 172.31,
+192.168.x, 169.254.x or 100.64 to 100.127); a link that names any other
+address finds its room by Bonjour or not at all.
 
 ## What the copy holds, and what is taken out
 

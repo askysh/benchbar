@@ -97,9 +97,13 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
     public string[] InviteArgs() => Bench("share", "invite", "--json");
 
     /// <summary><paramref name="assignSeats"/>: the host gives out the seats (<c>--assign-seats</c>, the CLI's default since 0.9.0);
-    /// false is <c>--open-seats</c>. One of the two is always passed, so the room is what the box said.</summary>
-    public string[] StartArgs(int hours, bool assignSeats = true) =>
-        Bench("share", "start", "--for", $"{hours}h", assignSeats ? "--assign-seats" : "--open-seats", "--json");
+    /// false is <c>--open-seats</c>, so the room is what the box said. null passes neither: a CLI from before the flags refuses
+    /// them ("Unknown argument for share start") and starts the open room it always did.</summary>
+    public string[] StartArgs(int hours, bool? assignSeats = true) =>
+        Bench(["share", "start", "--for", $"{hours}h", .. assignSeats is { } assign ? new[] { assign ? "--assign-seats" : "--open-seats" } : [], "--json"]);
+
+    /// <summary>The CLI's last status said it knows seat modes. Unknown (no status yet) counts as no: no flag is sent.</summary>
+    public bool CliKnowsSeatMode => Status?.KnowsSeatMode == true;
 
     public string[] StopArgs() => Bench("share", "stop", "--json");
 
@@ -233,14 +237,21 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
 
     // --- room commands ---
 
-    public Task<bool> StartAsync(int hours, CancellationToken ct = default) => StartAsync(hours, true, ct);
+    /// <summary>
+    /// The time a change to the room may take: none is cut short. Assign and remove wait for the gateway to end the seat's sessions
+    /// (a wipe in the copy), and a kill part way leaves a seat whose sessions are owed; extend rewrites the deadline. The 3 minutes
+    /// of a plan are a kill, not a wait.
+    /// </summary>
+    public static TimeSpan RoomChangeTimeout => CliTimeouts.Apply;
+
+        public Task<bool> StartAsync(int hours, CancellationToken ct = default) => StartAsync(hours, true, ct);
 
     public Task<bool> StartAsync(int hours, bool assignSeats, CancellationToken ct = default) =>
-        RunAsync("Starting sharing...", StartArgs(hours, assignSeats), PersonEnvironment(), CliTimeouts.Apply, ct);
+        RunAsync("Starting sharing...", StartArgs(hours, CliKnowsSeatMode ? assignSeats : null), PersonEnvironment(), CliTimeouts.Apply, ct);
 
     /// <summary>Gives a person a free seat, or moves them to it (<c>share assign</c>); the old seat's sessions end first.</summary>
     public Task<bool> AssignAsync(SharePerson person, ShareSeat seat, CancellationToken ct = default) =>
-        RunAsync($"Giving {person.Name} the seat {seat.Name}...", AssignArgs(person.Id, seat.Id), null, CliTimeouts.Plan, ct);
+        RunAsync($"Giving {person.Name} the seat {seat.Name}...", AssignArgs(person.Id, seat.Id), null, RoomChangeTimeout, ct);
 
     public async Task<bool> StopAsync(CancellationToken ct = default)
     {
@@ -249,13 +260,13 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
         return ok;
     }
 
-    public Task<bool> ExtendAsync(int minutes, CancellationToken ct = default) => RunAsync("Extending...", ExtendArgs(minutes), null, CliTimeouts.Plan, ct);
+    public Task<bool> ExtendAsync(int minutes, CancellationToken ct = default) => RunAsync("Extending...", ExtendArgs(minutes), null, RoomChangeTimeout, ct);
 
     public Task<bool> SetLockedAsync(bool locked, CancellationToken ct = default) => RunAsync(locked ? "Locking the room..." : "Unlocking the room...", LockArgs(locked), null, CliTimeouts.Plan, ct);
 
     public async Task<bool> RemoveAsync(SharePerson person, CancellationToken ct = default)
     {
-        var ok = await RunAsync($"Removing {person.Name}...", RemoveArgs(person.Id), null, CliTimeouts.Plan, ct).ConfigureAwait(true);
+        var ok = await RunAsync($"Removing {person.Name}...", RemoveArgs(person.Id), null, RoomChangeTimeout, ct).ConfigureAwait(true);
         if (ok)
         {
             RemovedName = person.Name;

@@ -175,6 +175,9 @@ nonisolated struct ShareStatus: Codable, Sendable, Equatable {
     var seatMode: ShareSeatMode?
     /// The first 16 hex digits of this host's key: what a guest's join sheet shows for an invite.
     var hostKey: String?
+    /// The CLI's status carries `seat_mode` (null with no room): it knows `--assign-seats` and
+    /// `--open-seats`. A CLI before 0.9.0 has neither the key nor the flags.
+    var knowsSeatMode: Bool
 
     enum CodingKeys: String, CodingKey {
         case state, phase, degraded, error, site, label, port, started, deadline, copy, seats, people, locked, preflight
@@ -206,7 +209,7 @@ nonisolated struct ShareStatus: Codable, Sendable, Equatable {
          copy: ShareCopy? = nil, allowedUsers: [String] = [], seats: Int = 0, people: Int = 0, devicesOnline: Int = 0,
          locked: Bool? = nil, lockReason: ShareLockReason? = nil, budgetLeft: Int? = nil, joinTrouble: Bool = false,
          wipeFailed: Int = 0, lanGuard: LanGuardState = .installed, preflight: SharePreflight? = nil, setupInterrupted: Bool = false,
-         seatMode: ShareSeatMode? = nil, hostKey: String? = nil) {
+         seatMode: ShareSeatMode? = nil, knowsSeatMode: Bool = true, hostKey: String? = nil) {
         self.protocolVersion = protocolVersion
         self.state = state
         self.shareSite = shareSite
@@ -229,6 +232,7 @@ nonisolated struct ShareStatus: Codable, Sendable, Equatable {
         self.setupInterrupted = setupInterrupted
         self.seatMode = seatMode
         self.hostKey = hostKey
+        self.knowsSeatMode = knowsSeatMode
     }
 
     init(from decoder: any Decoder) throws {
@@ -263,6 +267,7 @@ nonisolated struct ShareStatus: Codable, Sendable, Equatable {
         setupInterrupted = (try? c.decodeIfPresent(Bool.self, forKey: .setupInterrupted)) ?? false
         seatMode = try? c.decodeIfPresent(ShareSeatMode.self, forKey: .seatMode)
         hostKey = try? c.decodeIfPresent(String.self, forKey: .hostKey)
+        knowsSeatMode = c.contains(.seatMode)
     }
 }
 

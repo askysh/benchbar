@@ -190,6 +190,11 @@ nonisolated enum NetworkPanePresentation {
         return minutes >= 60 ? "\(minutes / 60) h \(minutes % 60) min left" : "\(minutes) min left"
     }
 
+    /// A saved room's headline. The site's name is there once the room told it (after the join).
+    static func savedTitle(_ room: SavedRoom) -> String {
+        [room.room, room.host, room.site].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
     static func seatRow(_ seat: RoomSeat) -> (title: String, detail: String) {
         let roles = seat.roles.joined(separator: ", ")
         let title = roles.isEmpty ? seat.full_name : "\(seat.full_name) · \(roles)"

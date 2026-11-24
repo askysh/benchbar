@@ -86,9 +86,13 @@ struct SharingTab: View {
                 Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
                 Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
             } else if case .start = SharePrimary.from(status) {
-                Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
-                    .help(SharePresentation.assignSeatsHelp)
-                Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+                if status.knowsSeatMode {
+                    Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                        .help(SharePresentation.assignSeatsHelp)
+                    Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(SharePresentation.seatsNeedNewerCLI).font(.caption).foregroundStyle(.secondary)
+                }
             }
             if let busy = share.busy { Label(busy, systemImage: "hourglass").foregroundStyle(.secondary) }
         }
@@ -108,7 +112,7 @@ struct SharingTab: View {
         case .turnOnProtection: await turnOnProtection()
         case .start:
             guard ShareConfirm.ask("Start sharing \(site) on this network?",
-                                   detail: SharePresentation.startDetail(site: site, assignSeats: assignSeats),
+                                   detail: SharePresentation.startDetail(site: site, assignSeats: assignSeats && status.knowsSeatMode),
                                    button: "Start sharing") else { return }
             await share.start(hours: hours, label: nil, assignSeats: assignSeats)
             await share.loadCode()
@@ -240,8 +244,9 @@ struct SharingTab: View {
         case .restartSharing:
             let confirm = SharePresentation.restartConfirm(online: status.devicesOnline)
             guard ShareConfirm.ask(confirm.message, detail: confirm.detail, button: "Restart") else { return }
-            // the room that starts again gives out its seats the way the one that ran did
-            let assign = share.hostGivesSeats
+            // the room that starts again gives out its seats the way the one that ran did; a room that
+            // did not say falls back to the switch, never to open seats
+            let assign = SharePresentation.restartAssignsSeats(mode: share.seatMode ?? status.seatMode, stored: assignSeats)
             await share.stop()
             await share.start(hours: hours, label: nil, assignSeats: assign)
         }
