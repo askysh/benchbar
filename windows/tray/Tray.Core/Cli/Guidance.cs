@@ -1,7 +1,7 @@
 namespace BenchBar.Tray.Core;
 
 /// <summary>What a typed confirmation asks: the dialog's text and the exact text the person must type (a site name to drop).</summary>
-public sealed record TypedConfirmRequest(string Title, string Message, string Expected, string ConfirmLabel = "Drop");
+public sealed record TypedConfirmRequest(string Title, string Message, string Expected, string? ConfirmLabel = null);
 
 /// <summary>The rule of the typed confirmation, apart from the dialog. The CLI checks the name again (<c>--confirm-site</c>).</summary>
 public static class TypedConfirm
@@ -23,11 +23,11 @@ public sealed record BenchGuidance(string Reason, GuidanceAction? Action)
 
     public static string Title(GuidanceAction action) => action switch
     {
-        GuidanceAction.Start => "Start",
-        GuidanceAction.ViewHealth => "View Health...",
-        GuidanceAction.ReviewPortConflict => "Review Port Conflict...",
-        GuidanceAction.Repair => "Repair...",
-        _ => "Set Up Management...",
+        GuidanceAction.Start => UiText.Get("CommonStart"),
+        GuidanceAction.ViewHealth => UiText.Get("CommonGuideViewHealth"),
+        GuidanceAction.ReviewPortConflict => UiText.Get("CommonGuideReviewPort"),
+        GuidanceAction.Repair => UiText.Get("HealthRepair"),
+        _ => UiText.Get("CommonGuideSetUpManagement"),
     };
 
     /// <summary>The same reason without <paramref name="shown"/> as its action: a button next to the line already offers it.</summary>
@@ -37,28 +37,28 @@ public sealed record BenchGuidance(string Reason, GuidanceAction? Action)
     public static BenchGuidance? Make(BenchState state, string? stopReason, bool needsService = false, bool portConflict = false, bool pending = false)
     {
         if (pending) return null;
-        if (needsService) return new("BenchBar does not manage this bench yet, so it cannot start it.", GuidanceAction.SetUpManagement);
-        if (portConflict) return new("Another program holds one of its ports.", GuidanceAction.ReviewPortConflict);
+        if (needsService) return new(UiText.Get("CommonGuideNotManaged"), GuidanceAction.SetUpManagement);
+        if (portConflict) return new(UiText.Get("CommonGuidePortHeld"), GuidanceAction.ReviewPortConflict);
         var reason = stopReason?.Trim().ToLowerInvariant();
         switch (state)
         {
             case BenchState.Crashed:
-                return new("It crashed and is being restarted.", GuidanceAction.ViewHealth);
+                return new(UiText.Get("CommonGuideCrashed"), GuidanceAction.ViewHealth);
             case BenchState.Paused:
                 return reason switch
                 {
-                    "broken" => new("Its environment is broken, so automatic restarts are paused.", GuidanceAction.Repair),
-                    "port_conflict" => new("Another program holds one of its ports.", GuidanceAction.ReviewPortConflict),
-                    "manual" => new("You stopped it.", GuidanceAction.Start),
-                    _ => new("It crashed three times in ten minutes, so restarts are paused.", GuidanceAction.ViewHealth),
+                    "broken" => new(UiText.Get("CommonGuideBrokenPaused"), GuidanceAction.Repair),
+                    "port_conflict" => new(UiText.Get("CommonGuidePortHeld"), GuidanceAction.ReviewPortConflict),
+                    "manual" => new(UiText.Get("CommonGuideYouStopped"), GuidanceAction.Start),
+                    _ => new(UiText.Get("CommonGuideCrashLoop"), GuidanceAction.ViewHealth),
                 };
             case BenchState.Stopped:
                 return reason switch
                 {
-                    "broken" => new("Its environment is broken, so it cannot start.", GuidanceAction.Repair),
-                    "port_conflict" => new("Another program held one of its ports when it started.", GuidanceAction.ReviewPortConflict),
-                    "manual" => new("You stopped it.", GuidanceAction.Start),
-                    _ => new("It has not been started yet.", GuidanceAction.Start),
+                    "broken" => new(UiText.Get("CommonGuideBrokenStopped"), GuidanceAction.Repair),
+                    "port_conflict" => new(UiText.Get("CommonGuidePortHeldStart"), GuidanceAction.ReviewPortConflict),
+                    "manual" => new(UiText.Get("CommonGuideYouStopped"), GuidanceAction.Start),
+                    _ => new(UiText.Get("CommonGuideNotStarted"), GuidanceAction.Start),
                 };
             default:
                 return null;

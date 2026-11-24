@@ -33,10 +33,11 @@ public sealed record PendingOperation(string Op, string App, string? Branch, str
         get
         {
             var kinds = string.Join(", ", Steps.Select(s => s.Kind));
-            return $"{Command} of {App} did not finish"
-                + (FailedStep is { Length: > 0 } failed ? $": stopped at {failed}" : "")
-                + (Reason is { Length: > 0 } reason ? $" ({reason})" : "")
-                + $"; {Steps.Count} step(s) left" + (kinds.Length > 0 ? $" ({kinds})" : "");
+            var text = UiText.Format("PendingDidNotFinish", Command, App);
+            if (FailedStep is { Length: > 0 } failed) text = UiText.Format("PendingStoppedAt", text, failed);
+            if (Reason is { Length: > 0 } reason) text = UiText.Format("PendingReason", text, reason);
+            text = UiText.Format("PendingStepsLeft", text, Steps.Count);
+            return kinds.Length > 0 ? UiText.Format("PendingKinds", text, kinds) : text;
         }
     }
 
@@ -46,7 +47,7 @@ public sealed record PendingOperation(string Op, string App, string? Branch, str
     /// <summary>The command that drops the record and stops; nothing it lists runs.</summary>
     public string DiscardLine(string bench) => $"benchbar app update {App} --discard-pending --bench-dir {bench}";
 
-    public string ResumeLabel => IsAdd ? "Finish Add" : "Finish Update";
+    public string ResumeLabel => IsAdd ? UiText.Get("PendingFinishAdd") : UiText.Get("PendingFinishUpdate");
 
     /// <summary>The same app has one record, so op and app identify it.</summary>
     public string Key => Op + "\t" + App;

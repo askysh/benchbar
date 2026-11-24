@@ -151,13 +151,13 @@ internal sealed class MainWindow : Window
         // one slim line: it must not take the room the wizard rows need
         var line = new DockPanel();
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        var report = Ui.Button(BetaText.ReportABug, () => _actions.ReportBug("Beta banner", null), "Report a bug", primary: true);
-        var dismiss = Ui.Button("Dismiss", () =>
+        var report = Ui.Button(BetaText.ReportABug, () => _actions.ReportBug("Beta banner", null), UiText.Get("MainReportBugName"), primary: true);
+        var dismiss = Ui.Button(UiText.Get("NoticeDismiss"), () =>
         {
             _betaWanted = false;
             SyncBetaBanner();
             _actions.DismissBetaBanner();
-        }, "Dismiss the beta notice");
+        }, UiText.Get("MainDismissBetaName"));
         dismiss.Margin = new Thickness(0);
         foreach (var b in new[] { report, dismiss })
         {
@@ -184,7 +184,7 @@ internal sealed class MainWindow : Window
         _beta.Padding = new Thickness(12, 3, 8, 3);
         _beta.Margin = new Thickness(24, 8, 24, 0);
         _beta.Child = line;
-        Ui.Name(_beta, "Beta notice: " + BetaText.Banner);
+        Ui.Name(_beta, UiText.Format("MainBetaNoticeName", BetaText.Banner));
         _betaWanted = _actions.BetaBannerVisible();
         SyncBetaBanner();
     }
@@ -212,18 +212,18 @@ internal sealed class MainWindow : Window
     private UIElement BuildSidebar()
     {
         var head = new DockPanel { Margin = new Thickness(16, 16, 12, 8) };
-        var add = Ui.Button("+", () => { }, "Add a bench", minWidth: 36);
-        add.ToolTip = "Add a Bench";
+        var add = Ui.Button("+", () => { }, UiText.Get("MainAddBenchName"), minWidth: 36);
+        add.ToolTip = UiText.Get("MainAddBenchTip");
         add.Margin = new Thickness(0);
         add.Padding = new Thickness(8, 2, 8, 2);
         add.FontSize = 16;
         var menu = new ContextMenu();
-        var fresh = new MenuItem { Header = "New Bench..." };
+        var fresh = new MenuItem { Header = UiText.Get("MainNewBenchItem") };
         fresh.Click += (_, _) => _actions.NewBench();
-        var existing = new MenuItem { Header = "I Already Have a Bench..." };
+        var existing = new MenuItem { Header = UiText.Get("MainExistingBenchItem") };
         existing.Click += (_, _) => _actions.ExistingBench();
-        Ui.Name(fresh, "New Bench");
-        Ui.Name(existing, "I Already Have a Bench");
+        Ui.Name(fresh, UiText.Get("WizardNewBenchTitle"));
+        Ui.Name(existing, UiText.Get("WizardWelcomeExistingTitle"));
         menu.Items.Add(fresh);
         menu.Items.Add(existing);
         add.ContextMenu = menu;
@@ -235,7 +235,7 @@ internal sealed class MainWindow : Window
         };
         DockPanel.SetDock(add, Dock.Right);
         head.Children.Add(add);
-        head.Children.Add(Ui.Text("Benches", 18, FontWeights.SemiBold));
+        head.Children.Add(Ui.Text(UiText.Get("MainBenches"), 18, FontWeights.SemiBold));
 
         var app = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(16, 16, 12, 0) };
         app.Children.Add(Ui.Text("BenchBar", 13, FontWeights.SemiBold, 0.8));
@@ -243,8 +243,8 @@ internal sealed class MainWindow : Window
         head.Margin = new Thickness(16, 8, 12, 8);
 
         var foot = new StackPanel { Margin = new Thickness(12, 8, 12, 16) };
-        var settings = FootButton("Settings", "", _actions.ShowSettings);
-        var about = FootButton("About", "", _actions.ShowAbout);
+        var settings = FootButton(UiText.Get("MainSettings"), "", _actions.ShowSettings);
+        var about = FootButton(UiText.Get("MainAbout"), "", _actions.ShowAbout);
         foot.Children.Add(settings);
         foot.Children.Add(about);
 
@@ -256,7 +256,7 @@ internal sealed class MainWindow : Window
             tools.Children.Add(button);
         }
 
-        Ui.Name(_list, "Benches");
+        Ui.Name(_list, UiText.Get("MainBenches"));
         var panel = new DockPanel();
         DockPanel.SetDock(app, Dock.Top);
         DockPanel.SetDock(head, Dock.Top);
@@ -307,7 +307,7 @@ internal sealed class MainWindow : Window
         grid.Children.Add(dot);
         grid.Children.Add(text);
         var entry = new ListBoxItem { Content = grid, Tag = item, Padding = new Thickness(6, 2, 6, 2) };
-        Ui.Name(entry, item.Kind == SidebarKind.Bench ? $"{item.Title}, {item.Detail}" : $"Site {item.Title}, {(item.Detail.Length > 0 ? item.Detail : "of " + item.BenchPath)}");
+        Ui.Name(entry, item.Kind == SidebarKind.Bench ? UiText.Format("MainItemName", item.Title, item.Detail) : item.Detail.Length > 0 ? UiText.Format("MainSiteItemName", item.Title, item.Detail) : UiText.Format("MainSiteItemOfName", item.Title, item.BenchPath));
         return entry;
     }
 
@@ -386,7 +386,7 @@ internal sealed class MainWindow : Window
         foreach (var (tool, button) in _toolButtons) button.Background = tool == _tool ? Ui.Card : Brushes.Transparent;
     }
 
-    public const string ToolsOffWhileSetupTip = "Finish or close the setup first.";
+    public static string ToolsOffWhileSetupTip => UiText.Get("MainToolsOffTip");
 
     /// <summary>Find Benches, Team Profiles and Labs do nothing while the wizard covers the window, so they are off, with the reason.</summary>
     private void UpdateToolButtons()
@@ -416,15 +416,15 @@ internal sealed class MainWindow : Window
         var selected = _items.FirstOrDefault(i => i.Key == _selectedKey);
         if (_snapshot.Problem is { } problem)
         {
-            SetContent("problem", () => CardPage("BenchBar needs attention", problem, "Copy", () => _actions.CopyText(problem), "Set Up BenchBar", _actions.NewBench));
+            SetContent("problem", () => CardPage(UiText.Get("MainNeedsAttention"), problem, UiText.Get("Copy"), () => _actions.CopyText(problem), UiText.Get("CommonSetUpApp"), _actions.NewBench));
         }
         else if (_snapshot.DistroStopped)
         {
-            var distro = _snapshot.Distro ?? "The WSL distro";
+            var distro = _snapshot.Distro ?? UiText.Get("CommonTheDistro");
             if (_snapshot.DistroMissing)
-                SetContent("missing|" + distro, () => CardPage($"{distro} is not installed", FlyoutView.MissingDistroHint, "Open Settings", _actions.ShowSettings, "Set Up BenchBar", _actions.NewBench));
+                SetContent("missing|" + distro, () => CardPage(UiText.Format("CommonDistroMissing", distro), FlyoutView.MissingDistroHint, UiText.Get("MainOpenSettings"), _actions.ShowSettings, UiText.Get("CommonSetUpApp"), _actions.NewBench));
             else
-                SetContent("stopped|" + distro, () => CardPage($"{distro} is stopped", FlyoutView.DistroHint, "Start", _actions.StartDistro));
+                SetContent("stopped|" + distro, () => CardPage(UiText.Format("CommonDistroStopped", distro), FlyoutView.DistroHint, UiText.Get("CommonStart"), _actions.StartDistro));
         }
         else if (_tool != SidebarTool.None)
         {
@@ -443,7 +443,7 @@ internal sealed class MainWindow : Window
         }
         else if (_snapshot.Benches.Count == 0)
         {
-            SetContent("empty", () => CardPage("No benches yet", "Set up Frappe in WSL with a few clicks, or point BenchBar at a bench you already have.", "Set Up a New Bench", _actions.NewBench));
+            SetContent("empty", () => CardPage(UiText.Get("MainNoBenches"), UiText.Get("MainNoBenchesBody"), UiText.Get("MainSetUpNewBench"), _actions.NewBench));
         }
         else if (selected is not null && _snapshot.Benches.FirstOrDefault(b => b.Path == selected.BenchPath) is { } bench)
         {
@@ -514,7 +514,7 @@ internal sealed class MainWindow : Window
                 buttons.Children.Add(Ui.Button(label, action, label, primary: true));
             if (notice.Dismissible)
             {
-                var close = Ui.Button("Dismiss", () => dismiss(notice.Key), "Dismiss: " + notice.Text);
+                var close = Ui.Button(UiText.Get("NoticeDismiss"), () => dismiss(notice.Key), UiText.Format("MainDismissName", notice.Text));
                 close.Margin = new Thickness(0);
                 buttons.Children.Add(close);
             }
@@ -530,7 +530,7 @@ internal sealed class MainWindow : Window
             if (notice.Critical) words.Foreground = Ui.CriticalBrush;
             line.Children.Add(words);
             var card = new Border { Child = line, Tag = notice.Text, Background = Ui.Card, CornerRadius = new CornerRadius(6), Padding = new Thickness(12, 4, 8, 4), Margin = new Thickness(0, 0, 0, 4) };
-            Ui.Name(card, "Notice: " + notice.Text);
+            Ui.Name(card, UiText.Format("MainNoticeName", notice.Text));
             _notices.Children.Add(card);
         }
         _notices.Visibility = notices.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
@@ -561,33 +561,33 @@ internal sealed class MainWindow : Window
         void CopyLine()
         {
             _actions.CopyText(offer.Command);
-            if (copy is not null) copy.Content = "Copied";
+            if (copy is not null) copy.Content = UiText.Get("CommonCopied");
         }
         string headline, detail;
         if (offer.CanUpdateNow)
         {
-            var update = Ui.Button(running ? "Updating..." : "Update Now", _actions.UpdateNow, "Update BenchBar now", primary: true);
+            var update = Ui.Button(running ? UiText.Get("AboutUpdating") : UiText.Get("AboutUpdateNow"), _actions.UpdateNow, UiText.Get("CommonUpdateNowName"), primary: true);
             update.IsEnabled = !running;
             buttons.Children.Add(update);
             buttons.Children.Add(OtherWays(offer, () => _actions.CopyText(offer.Command)));
-            headline = running ? $"Updating to BenchBar {offer.Version}." : $"BenchBar {offer.Version} is out.";
+            headline = running ? UiText.Format("CommonUpdating", offer.Version) : UiText.Format("CommonUpdateOut", offer.Version);
             detail = running ? UpdateLinks.UpdatingExplanation : UpdateLinks.UpdateNowExplanation;
         }
         else
         {
-            copy = Ui.Button("Copy Update Line", CopyLine, "Copy the update line for PowerShell", primary: true);
+            copy = Ui.Button(UiText.Get("CommonCopyUpdate"), CopyLine, UiText.Get("CommonCopyUpdateName"), primary: true);
             buttons.Children.Add(copy);
-            buttons.Children.Add(Ui.Button("Release Page", () => _actions.OpenUrl(offer.Url), "Open the release page"));
-            headline = $"BenchBar {offer.Version} is out.";
+            buttons.Children.Add(Ui.Button(UiText.Get("MainReleasePage"), () => _actions.OpenUrl(offer.Url), UiText.Get("MainReleasePageName")));
+            headline = UiText.Format("CommonUpdateOut", offer.Version);
             detail = UpdateLinks.InstallExplanation;
         }
         if (!running)
         {
-            var later = Ui.Button("Not Now", () =>
+            var later = Ui.Button(UiText.Get("MainNotNow"), () =>
             {
                 dismiss();
                 SetUpdate(null, dismiss);
-            }, "Dismiss the update notice");
+            }, UiText.Get("MainDismissUpdateName"));
             later.Margin = new Thickness(0);
             buttons.Children.Add(later);
         }
@@ -609,13 +609,13 @@ internal sealed class MainWindow : Window
     private Button OtherWays(UpdateOffer offer, Action copy)
     {
         var menu = new ContextMenu();
-        var copyItem = new MenuItem { Header = "Copy Update Line" };
+        var copyItem = new MenuItem { Header = UiText.Get("CommonCopyUpdate") };
         copyItem.Click += (_, _) => copy();
-        var page = new MenuItem { Header = "Release Page" };
+        var page = new MenuItem { Header = UiText.Get("MainReleasePage") };
         page.Click += (_, _) => _actions.OpenUrl(offer.Url);
         menu.Items.Add(copyItem);
         menu.Items.Add(page);
-        var button = Ui.Button("Other Ways", () => { }, "Other ways to update");
+        var button = Ui.Button(UiText.Get("MainOtherWays"), () => { }, UiText.Get("MainOtherWaysName"));
         button.ContextMenu = menu;
         button.Click += (_, _) =>
         {
@@ -623,7 +623,7 @@ internal sealed class MainWindow : Window
             menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
             menu.IsOpen = true;
         };
-        button.ToolTip = "Copy the update line for PowerShell, or open the release page";
+        button.ToolTip = UiText.Get("MainOtherWaysTip");
         return button;
     }
 

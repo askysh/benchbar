@@ -61,16 +61,16 @@ internal sealed class DoctorWindow : ToolWindow
     private DoctorReport? _report;
 
     public DoctorWindow(IBenchSource source, BenchStatus bench, ResolvedTheme theme, Action<string> copy)
-        : base($"{bench.Name} doctor", 640, 480, theme)
+        : base(UiText.Format("ToolDoctorTitle", bench.Name), 640, 480, theme)
     {
         _source = source;
         _bench = bench;
         _copy = copy;
 
-        _copyAll = Button("Copy all", () => { if (_report is not null) _copy(TextFormats.Doctor(_report)); });
+        _copyAll = Button(UiText.Get("ToolCopyAll"), () => { if (_report is not null) _copy(TextFormats.Doctor(_report)); });
         _copyAll.IsEnabled = false;
         var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-        bar.Children.Add(Button("Check again", () => RunAsync().Forget()));
+        bar.Children.Add(Button(UiText.Get("ToolCheckAgain"), () => RunAsync().Forget()));
         bar.Children.Add(_copyAll);
 
         var head = new StackPanel { Margin = new Thickness(16, 14, 16, 8) };
@@ -91,7 +91,7 @@ internal sealed class DoctorWindow : ToolWindow
     {
         var ct = BeginLoad();
         _summary.Text = _bench.Name;
-        _progress.Text = "Running checks...";
+        _progress.Text = UiText.Get("ToolRunning");
         _progress.Visibility = Visibility.Visible;
         _copyAll.IsEnabled = false;
         try
@@ -107,7 +107,7 @@ internal sealed class DoctorWindow : ToolWindow
         catch (Exception ex)
         {
             _list.Children.Clear();
-            _summary.Text = "Doctor could not run";
+            _summary.Text = UiText.Get("ToolCouldNotRun");
             _progress.Text = ex.Message;
         }
     }
@@ -127,7 +127,7 @@ internal sealed class DoctorWindow : ToolWindow
                 var count = report.Checks.Count(c => c.Level == check.Level);
                 _list.Children.Add(new TextBlock
                 {
-                    Text = $"{LevelWord(check.Level)} ({count})",
+                    Text = UiText.Format("ToolLevelCount", LevelWord(check.Level), count),
                     FontWeight = FontWeights.SemiBold,
                     Margin = new Thickness(8, 12, 8, 4),
                 });
@@ -146,7 +146,7 @@ internal sealed class DoctorWindow : ToolWindow
         if (check.FixCommand is { Length: > 0 } fix)
         {
             var line = new DockPanel { Margin = new Thickness(0, 4, 0, 0), LastChildFill = true };
-            var copy = new Button { Content = "Copy", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(8, 0, 0, 0) };
+            var copy = new Button { Content = UiText.Get("Copy"), Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(8, 0, 0, 0) };
             copy.Click += (_, _) => _copy(fix);
             DockPanel.SetDock(copy, Dock.Right);
             line.Children.Add(copy);
@@ -161,6 +161,6 @@ internal sealed class DoctorWindow : ToolWindow
         CheckLevel.Fail => "FAIL",
         CheckLevel.Warn => "WARN",
         CheckLevel.Ok => "OK",
-        _ => "Other",
+        _ => UiText.Get("ToolLevelOther"),
     };
 }

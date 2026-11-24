@@ -342,7 +342,7 @@ public sealed class BenchPoller : IDisposable
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
                 // this bench's own line, shown under its row; the snapshot's Problem stays for the shim, list and probe
-                result.Add(UnknownStatus(entry) with { Problem = ex is SourceProblemException ? ex.Message : "benchbar.exe status gave no usable answer." });
+                result.Add(UnknownStatus(entry) with { Problem = ex is SourceProblemException ? ex.Message : UiText.Get("CommonStatusNoAnswer") });
             }
             catch (OperationCanceledException)
             {
@@ -367,7 +367,7 @@ public sealed class BenchPoller : IDisposable
 
     private static string ProblemText(Exception ex) => ex is SourceProblemException
         ? ex.Message
-        : "benchbar.exe gave no usable answer. Run benchbar.exe doctor.";
+        : UiText.Get("CommonNoUsableAnswer");
 
     private void RaiseUpdated(TraySnapshot snapshot)
     {

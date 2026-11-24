@@ -308,8 +308,8 @@ public sealed class TrayController : IDisposable
     /// <summary>The refusal of the port check as the one line a flyout row shows, with where the fix is.</summary>
     public static string PortRefusalLine(PortGuardResult guard)
     {
-        var text = (guard.Refusal ?? "The ports could not be checked.").Replace("\r", "").Replace('\n', ' ');
-        return guard.Conflict ? text + " Open BenchBar, then Health, to review the ports." : text;
+        var text = (guard.Refusal ?? UiText.Get("CommonPortsNotChecked")).Replace("\r", "").Replace('\n', ' ');
+        return guard.Conflict ? UiText.Format("CommonPortsReview", text) : text;
     }
 
     /// <summary>Boots the distro (<c>keepalive run</c>, detached) and polls every 2 s until it is up, for at most a minute.</summary>
@@ -332,7 +332,7 @@ public sealed class TrayController : IDisposable
     /// <summary>How long Start waits before it checks that the distro is up. The keepalive can refuse (another one holds the mutex) and then nothing starts.</summary>
     public TimeSpan StartCheckAfter { get; set; } = TimeSpan.FromSeconds(30);
 
-    public static string StartFailedText(string? distro) => $"{distro ?? "The distro"} did not start. Open the log or try again.";
+    public static string StartFailedText(string? distro) => UiText.Format("CommonDistroNotStarted", distro ?? UiText.Get("CommonTheDistroShort"));
 
     private async Task CheckStartedAfterWaitAsync()
     {
@@ -394,9 +394,9 @@ public sealed class TrayController : IDisposable
 
     /// <summary>The short summary beside the title: "2 of 3 up", "none up", "distro stopped" or "needs attention".</summary>
     public static string UpText(TraySnapshot snapshot, IReadOnlyList<BenchState> states) =>
-        snapshot.Problem is not null ? "needs attention"
-        : snapshot.DistroMissing ? "distro not installed"
-        : snapshot.DistroStopped ? "distro stopped"
+        snapshot.Problem is not null ? UiText.Get("CommonNeedsAttention")
+        : snapshot.DistroMissing ? UiText.Get("CommonDistroNotInstalledShort")
+        : snapshot.DistroStopped ? UiText.Get("CommonDistroStoppedShort")
         : BenchAggregate.UpText(states);
 
     /// <summary>The name at the start of every tooltip: BenchBar for Windows is a beta.</summary>

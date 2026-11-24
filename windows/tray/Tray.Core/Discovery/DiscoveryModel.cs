@@ -81,12 +81,12 @@ public sealed class DiscoveryModel
     /// the Linux password in the environment when a step uses sudo. The adopt plan has no token, so the sheet has to confirm a plan without one.
     /// </summary>
     public static PlanReviewRequest AdoptRequest(string path, string name) =>
-        new($"Set Up Management for {name}", AdoptPlanArgs(path), _ => AdoptApplyArgs(path))
+        new(UiText.Format("DiscoveryAdoptTitle", name), AdoptPlanArgs(path), _ => AdoptApplyArgs(path))
         {
-            ConfirmLabel = "Set Up",
+            ConfirmLabel = UiText.Get("DiscoverySetUp"),
             UsesSudoEnv = true,
             RequiresToken = false,
-            Summary = "Writes the bench's service files and helpers. It never runs migrate, build or update.",
+            Summary = UiText.Get("DiscoveryAdoptSummary"),
         };
 
     // --- states ---
@@ -166,7 +166,7 @@ public sealed class DiscoveryModel
         var text = typed.Trim();
         if (text.Length == 0)
         {
-            Error = "Type the Linux folder to search, for example /home/you/projects.";
+            Error = UiText.Get("DiscoveryTypeFolder");
             return null;
         }
         if (text.StartsWith('~'))
@@ -174,7 +174,7 @@ public sealed class DiscoveryModel
             await EnsureHomeAsync(ct).ConfigureAwait(true);
             if (_home is null)
             {
-                Error = "WSL did not say where your home folder is. Type the full path, for example /home/you/projects.";
+                Error = UiText.Get("DiscoveryNoHome");
                 return null;
             }
             text = WslPaths.ExpandHome(text, _home);
@@ -191,7 +191,7 @@ public sealed class DiscoveryModel
         }
         if (!text.StartsWith('/'))
         {
-            Error = "Use a folder inside Linux, starting with /, for example /home/you/projects.";
+            Error = UiText.Get("DiscoveryNotLinux");
             return null;
         }
         return text.Length > 1 ? text.TrimEnd('/') : text;
@@ -225,7 +225,7 @@ public sealed class DiscoveryModel
         {
             var result = await _cli.RunJsonAsync(ScanArgs(folder), null, ScanTimeout, ScanJson.ParseScan, cts.Token).ConfigureAwait(true);
             if (result.Value is { } value) found = value;
-            else problem = result.Error ?? "The scan did not finish.";
+            else problem = result.Error ?? UiText.Get("DiscoveryScanUnfinished");
             if (found is not null && cts.IsCancellationRequested == false) await RefreshKnownAsync(cts.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
@@ -257,7 +257,7 @@ public sealed class DiscoveryModel
         try { _scan?.Cancel(); } catch (ObjectDisposedException) { }
         _scan = null;
         IsScanning = false;
-        Message = "Scan cancelled.";
+        Message = UiText.Get("DiscoveryScanCancelled");
         Raise();
     }
 
@@ -286,11 +286,11 @@ public sealed class DiscoveryModel
             {
                 _known = result.Value!;
                 _selected.ExceptWith(paths);
-                Message = $"Added {paths.Count} {(paths.Count == 1 ? "bench" : "benches")} to BenchBar.";
+                Message = paths.Count == 1 ? UiText.Get("DiscoveryAddedOne") : UiText.Format("DiscoveryAddedMany", paths.Count);
             }
             else
             {
-                Error = result.Error ?? "The benches could not be added.";
+                Error = result.Error ?? UiText.Get("DiscoveryNotAdded");
             }
         }
         finally
@@ -311,19 +311,19 @@ public sealed class DiscoveryModel
         var result = await _cli.RunJsonAsync(PortsPlanArgs(paths), null, CliTimeouts.Plan, SetupPlan.Parse, ct).ConfigureAwait(true);
         if (result.Value is not { } plan)
         {
-            Error = result.Error ?? "The port plan could not be read.";
+            Error = result.Error ?? UiText.Get("DiscoveryPlanUnread");
             Raise();
             return new PortSetupPrep(null, Error);
         }
         if (!plan.CanApply)
         {
-            Error = plan.FirstBlock is { } block ? "Setup is blocked. " + block : "Setup is blocked, so nothing can be applied.";
+            Error = plan.FirstBlock is { } block ? UiText.Format("DiscoveryBlockedBy", block) : UiText.Get("DiscoveryBlocked");
             Raise();
             return new PortSetupPrep(null, Error);
         }
-        var request = new PlanReviewRequest(paths.Count == 1 ? "Set Up Management" : $"Set Up {paths.Count} Benches", PortsPlanArgs(paths), p => PortsApplyArgs(p.Token ?? "", paths))
+        var request = new PlanReviewRequest(paths.Count == 1 ? UiText.Get("DiscoverySetUpOne") : UiText.Format("DiscoverySetUpMany", paths.Count), PortsPlanArgs(paths), p => PortsApplyArgs(p.Token ?? "", paths))
         {
-            ConfirmLabel = "Set Up",
+            ConfirmLabel = UiText.Get("DiscoverySetUp"),
             Summary = plan.Summary(),
         };
         return new PortSetupPrep(request, null);
@@ -339,7 +339,7 @@ public sealed class DiscoveryModel
         {
             await RefreshKnownAsync(ct).ConfigureAwait(true);
             _selected.ExceptWith(ManagedPaths);
-            if (outcome.Applied) Message = "Management is set up. Start the benches from the sidebar.";
+            if (outcome.Applied) Message = UiText.Get("DiscoveryIsSetUp");
         }
         Raise();
     }

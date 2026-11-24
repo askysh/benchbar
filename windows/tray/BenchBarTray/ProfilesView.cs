@@ -33,15 +33,15 @@ internal sealed class ProfilesView : UserControl
         _model = new ProfilesModel(services.Cli);
         Confirm = (title, message) => MessageBox.Show(services.Owner(), message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
         var root = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
-        root.Children.Add(Ui.Title("Team Profiles"));
-        root.Children.Add(Ui.Text("Pin a base profile and your team's apps, then set up a bench from it.", 14, opacity: 0.75, margin: new Thickness(0, 6, 0, 12)));
-        _addButton = Ui.Button("Add Profile", ShowAddMenu, "Add Profile", primary: false, minWidth: 0);
+        root.Children.Add(Ui.Title(UiText.Get("ProfileTitle")));
+        root.Children.Add(Ui.Text(UiText.Get("ProfileIntro"), 14, opacity: 0.75, margin: new Thickness(0, 6, 0, 12)));
+        _addButton = Ui.Button(UiText.Get("ProfileAdd"), ShowAddMenu, UiText.Get("ProfileAdd"), primary: false, minWidth: 0);
         _addButton.HorizontalAlignment = HorizontalAlignment.Left;
         _addButton.Margin = new Thickness(0, 0, 0, 12);
         root.Children.Add(_addButton);
         root.Children.Add(_body);
         Content = root;
-        Ui.Name(this, "Team Profiles");
+        Ui.Name(this, UiText.Get("ProfileTitle"));
 
         AllowDrop = true;
         Drop += (_, e) =>
@@ -65,13 +65,13 @@ internal sealed class ProfilesView : UserControl
 
     internal Func<string?> PickImportFile { get; set; } = () =>
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Choose a BenchBar profile", Filter = "BenchBar profile (*.toml)|*.toml|All files (*.*)|*.*" };
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = UiText.Get("ProfileChooseTitle"), Filter = UiText.Get("ProfileOpenFilter") };
         return dialog.ShowDialog() == true ? dialog.FileName : null;
     };
 
     internal Func<string, string?> PickExportFile { get; set; } = suggested =>
     {
-        var dialog = new Microsoft.Win32.SaveFileDialog { Title = "Save the profile to share", FileName = suggested, DefaultExt = ".toml", Filter = "BenchBar profile (*.toml)|*.toml" };
+        var dialog = new Microsoft.Win32.SaveFileDialog { Title = UiText.Get("ProfileSaveTitle"), FileName = suggested, DefaultExt = ".toml", Filter = UiText.Get("ProfileSaveFilter") };
         return dialog.ShowDialog() == true ? dialog.FileName : null;
     };
 
@@ -104,12 +104,12 @@ internal sealed class ProfilesView : UserControl
     internal ContextMenu BuildAddMenu()
     {
         var menu = new ContextMenu { PlacementTarget = _addButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
-        Ui.Name(menu, "Add Profile");
-        var create = new MenuItem { Header = "Create from Bench...", IsEnabled = _model.Benches.Count > 0 };
+        Ui.Name(menu, UiText.Get("ProfileAdd"));
+        var create = new MenuItem { Header = UiText.Get("ProfileCreateMenu"), IsEnabled = _model.Benches.Count > 0 };
         create.Click += (_, _) => CreateFromBench();
-        var import = new MenuItem { Header = "Import..." };
+        var import = new MenuItem { Header = UiText.Get("ProfileImportMenu") };
         import.Click += (_, _) => Import();
-        var subscribe = new MenuItem { Header = "Subscribe to a Repository..." };
+        var subscribe = new MenuItem { Header = UiText.Get("ProfileSubscribeMenu") };
         subscribe.Click += (_, _) => Subscribe();
         menu.Items.Add(create);
         menu.Items.Add(import);
@@ -193,7 +193,7 @@ internal sealed class ProfilesView : UserControl
     {
         if (Distro() is not { Length: > 0 } distro)
         {
-            _notice = "BenchBar could not tell which Linux distro to open. Set one in Settings, then try again.";
+            _notice = UiText.Get("ProfileNoDistro");
             Render();
             return;
         }
@@ -243,27 +243,28 @@ internal sealed class ProfilesView : UserControl
 
         if (!_model.HasLoaded && _model.IsLoading)
         {
-            Line("Reading profiles...", 14, 0.8);
+            Line(UiText.Get("ProfileReading"), 14, 0.8);
         }
         else if (_model.Profiles.Count == 0 && _model.Error is { } error)
         {
-            AddEmpty("The profiles could not be read", error, "Try Again", () => _model.LoadAsync().Forget(), lines, buttons);
+            AddEmpty(UiText.Get("ProfileReadFailedTitle"), error, UiText.Get("ProfileTryAgain"), () => _model.LoadAsync().Forget(), lines, buttons);
         }
         else
         {
-            _body.Children.Add(Ui.Text("Profiles", 16, FontWeights.SemiBold, margin: new Thickness(0, 4, 0, 6)));
-            lines.Add("Profiles");
+            var listTitle = UiText.Get("ProfileList");
+            _body.Children.Add(Ui.Text(listTitle, 16, FontWeights.SemiBold, margin: new Thickness(0, 4, 0, 6)));
+            lines.Add(listTitle);
             foreach (var profile in _model.Profiles) _body.Children.Add(Row(profile, lines, buttons));
             if (_model.HasLoaded && _model.Profiles.Count > 0 && !_model.HasTeamProfile)
             {
-                AddEmpty("Only the built in profiles",
-                    "A team profile pins your team's apps and branches, so everyone sets up the same bench.",
-                    "Import...", () => Import(), lines, buttons);
+                AddEmpty(UiText.Get("ProfileOnlyBuiltIn"),
+                    UiText.Get("ProfileOnlyBuiltInLine"),
+                    UiText.Get("ProfileImportMenu"), () => Import(), lines, buttons);
             }
             if (_model.Error is { } listError) Line(listError, 12, brush: Ui.CriticalBrush);
         }
 
-        Line("Set up a bench from one with benchbar install --profile NAME. Team profiles are files in ~/.config/benchbar/profiles inside Linux, a subscribed repository or a folder in BENCHBAR_PROFILE_PATH, never inside BenchBar. Drop a .toml file here to import it.",
+        Line(UiText.Get("ProfileFooter"),
             12, 0.7, margin: new Thickness(0, 14, 0, 0));
         Lines = lines;
         ButtonLabels = buttons;
@@ -292,7 +293,7 @@ internal sealed class ProfilesView : UserControl
 
         var icon = Ui.Text(profile.IsTeam ? "◆" : "▢", 14, margin: new Thickness(2, 2, 12, 0));
         icon.Foreground = profile.Valid ? Ui.StepBrush(InstallStepStatus.Running) : Ui.StepBrush(InstallStepStatus.Failed);
-        Ui.Name(icon, profile.IsTeam ? "Team profile" : "Built in profile");
+        Ui.Name(icon, (profile.IsTeam ? UiText.Get("ProfileTeamName") : UiText.Get("ProfileBuiltInName")));
         grid.Children.Add(icon);
 
         var text = new StackPanel();
@@ -309,7 +310,7 @@ internal sealed class ProfilesView : UserControl
             lines.Add(tag);
         }
         Tag(profile.OriginText);
-        if (profile.Base is { } b) Tag("based on " + b);
+        if (profile.Base is { } b) Tag(UiText.Format("ProfileBasedOn", b));
         if (profile.Subscription?.OutdatedText is { } outdated) Tag(outdated, warn: true);
         text.Children.Add(head);
         void Sub(string value, Brush? brush = null)
@@ -322,13 +323,14 @@ internal sealed class ProfilesView : UserControl
         if (profile.Label is { Length: > 0 } label) Sub(label);
         if (profile.Error is { Length: > 0 } error) Sub(error, Ui.StepBrush(InstallStepStatus.Failed));
         if (profile.ShadowedBy is { Length: > 0 } winner)
-            Sub($"Not used: {winner} has the same name and comes first", Ui.StepBrush(InstallStepStatus.Warning));
+            Sub(UiText.Format("ProfileNotUsed", winner), Ui.StepBrush(InstallStepStatus.Warning));
         if (profile.IsTeam) Sub(profile.SourceUrl ?? profile.File);
         grid.Children.Add(text);
 
         if (profile.IsTeam)
         {
-            var more = Ui.Button("Actions", () => { }, $"Actions for {profile.Name}", minWidth: 0);
+            var actions = UiText.Get("ProfileActions");
+            var more = Ui.Button(actions, () => { }, UiText.Format("ProfileActionsName", profile.Name), minWidth: 0);
             more.Margin = new Thickness(12, 0, 0, 0);
             more.VerticalAlignment = VerticalAlignment.Top;
             more.Click += (_, _) =>
@@ -339,7 +341,7 @@ internal sealed class ProfilesView : UserControl
             };
             Grid.SetColumn(more, 2);
             grid.Children.Add(more);
-            buttons.Add("Actions");
+            buttons.Add(actions);
         }
         return Ui.CardOf(grid, new Thickness(0, 0, 0, 6));
     }
@@ -348,7 +350,7 @@ internal sealed class ProfilesView : UserControl
     internal ContextMenu BuildProfileMenu(ProfileInfo profile)
     {
         var menu = new ContextMenu { Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
-        Ui.Name(menu, $"Actions for {profile.Name}");
+        Ui.Name(menu, UiText.Format("ProfileActionsName", profile.Name));
         MenuItem Item(string header, Action click, bool enabled = true)
         {
             var item = new MenuItem { Header = header, IsEnabled = enabled };
@@ -356,14 +358,14 @@ internal sealed class ProfilesView : UserControl
             menu.Items.Add(item);
             return item;
         }
-        Item("Export...", () => Export(profile), profile.CanExport);
-        if (profile.CanUpdate) Item("Update...", () => Update(profile));
-        Item("Check Access", () => CheckAccess(profile), profile.CanCheck);
-        Item("Show in Explorer", () => ShowInExplorer(profile));
+        Item(UiText.Get("ProfileExport"), () => Export(profile), profile.CanExport);
+        if (profile.CanUpdate) Item(UiText.Get("ProfileUpdateMenu"), () => Update(profile));
+        Item(UiText.Get("ProfileCheckAccess"), () => CheckAccess(profile), profile.CanCheck);
+        Item(UiText.Get("ProfileShowInExplorer"), () => ShowInExplorer(profile));
         if (profile.CanRemove)
         {
             menu.Items.Add(new Separator());
-            Item(profile.Origin == ProfileOrigin.Subscribed ? "Remove Subscription..." : "Remove...", () => RemoveAsync(profile).Forget(), !_model.IsRemoving);
+            Item((profile.Origin == ProfileOrigin.Subscribed ? UiText.Get("ProfileRemoveSubscription") : UiText.Get("ProfileRemove")), () => RemoveAsync(profile).Forget(), !_model.IsRemoving);
         }
         return menu;
     }

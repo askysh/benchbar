@@ -39,7 +39,7 @@ internal sealed class AppsView : UserControl, IBenchPageView
     {
         _services = services;
         Content = _root;
-        Ui.Name(this, "Apps");
+        Ui.Name(this, UiText.Get("BenchTabApps"));
     }
 
     public PageServices Services => _services;
@@ -97,13 +97,13 @@ internal sealed class AppsView : UserControl, IBenchPageView
 
         var head = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        var refresh = Ui.Button("Refresh", () => Start(() => ReloadAsync(live: true)), "Refresh the site lists", minWidth: 72);
+        var refresh = Ui.Button(UiText.Get("HistoryRefresh"), () => Start(() => ReloadAsync(live: true)), UiText.Get("AppsRefreshName"), minWidth: 72);
         refresh.IsEnabled = !_loading && !_busy;
-        refresh.ToolTip = "Ask bench which sites have which app (needs MariaDB)";
-        var remotes = Ui.Button("Check Remotes", () => Start(CheckRemotesAsync), minWidth: 72);
+        refresh.ToolTip = UiText.Get("AppsRefreshTip");
+        var remotes = Ui.Button(UiText.Get("AppsCheckRemotes"), () => Start(CheckRemotesAsync), minWidth: 72);
         remotes.IsEnabled = !_checking && !_busy;
-        remotes.ToolTip = "git fetch the apps your focus apps need, to see how far behind they are (only .git changes)";
-        var add = Ui.Button("Add App...", () => OpenAdd(), primary: true);
+        remotes.ToolTip = UiText.Get("AppsCheckTip");
+        var add = Ui.Button(UiText.Get("AppsAdd"), () => OpenAdd(), primary: true);
         add.IsEnabled = !_busy;
         add.Margin = new Thickness(0);
         buttons.Children.Add(refresh);
@@ -111,24 +111,24 @@ internal sealed class AppsView : UserControl, IBenchPageView
         if (_list is not { OnlyFrappe: true }) buttons.Children.Add(add); // with only Frappe the empty state below has the one action
         DockPanel.SetDock(buttons, Dock.Right);
         head.Children.Add(buttons);
-        head.Children.Add(Ui.Title("Apps"));
+        head.Children.Add(Ui.Title(UiText.Get("BenchTabApps")));
         _root.Children.Add(head);
-        _root.Children.Add(Ui.Text("Apps come from the app registry or any git repository, including private ones your SSH key can read. BenchBar never runs bench update.", 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 12)));
+        _root.Children.Add(Ui.Text(UiText.Get("AppsNote"), 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 12)));
 
         if (_message is not null) _root.Children.Add(PagePanels.Banner(_message, _messageIsError));
         if (_listError is not null) _root.Children.Add(PagePanels.Banner(_listError, true));
         if (_list is { SitesError: { Length: > 0 } siteError })
-            _root.Children.Add(Ui.Text($"Site lists are from the last successful read: {siteError}", 12, margin: new Thickness(0, 0, 0, 8)));
+            _root.Children.Add(Ui.Text(UiText.Format("AppsSiteListStale", siteError), 12, margin: new Thickness(0, 0, 0, 8)));
         _panelHost.IsEnabled = !_busy;
         _root.Children.Add(_panelHost);
 
         if (_list is null)
         {
-            if (_loading) _root.Children.Add(Ui.Text("Reading apps...", 14, opacity: 0.8));
+            if (_loading) _root.Children.Add(Ui.Text(UiText.Get("AppsReading"), 14, opacity: 0.8));
             return;
         }
         if (_list.OnlyFrappe)
-            _root.Children.Add(PagePanels.EmptyState("Only Frappe so far. Add ERPNext or any app from the registry or a git repository.", "Add App...", () => OpenAdd(), !_busy));
+            _root.Children.Add(PagePanels.EmptyState(UiText.Get("AppsOnlyFrappe"), UiText.Get("AppsAdd"), () => OpenAdd(), !_busy));
         foreach (var app in _list.Apps) _root.Children.Add(RowView(app, _list.SitesKnown));
     }
 
@@ -155,12 +155,12 @@ internal sealed class AppsView : UserControl, IBenchPageView
         var nameLine = new WrapPanel();
         nameLine.Children.Add(Ui.Text(app.Name, 15, FontWeights.SemiBold));
         if (app.Version is { } version) nameLine.Children.Add(Ui.Text(version, 12, opacity: 0.7, margin: new Thickness(8, 3, 0, 0)));
-        if (app.Dirty) nameLine.Children.Add(Pill("local changes", Orange));
-        if (!app.InAppsTxt) nameLine.Children.Add(Pill("not in apps.txt", Ui.CriticalBrush));
-        if (app.Branch is { } branch && app.PolicyBranch is { } policy && branch != policy) nameLine.Children.Add(Pill($"expected {policy}", Orange));
-        if (app.IsFocus) nameLine.Children.Add(Pill("focus", PagePanels.SelectedBrush));
-        if (app.Pin == FocusPin.Ignore) nameLine.Children.Add(Pill("ignored"));
-        if (app.IsStaleDependency) nameLine.Children.Add(Pill("behind", Orange));
+        if (app.Dirty) nameLine.Children.Add(Pill(UiText.Get("AppsLocalChanges"), Orange));
+        if (!app.InAppsTxt) nameLine.Children.Add(Pill(UiText.Get("AppsNotInAppsTxt"), Ui.CriticalBrush));
+        if (app.Branch is { } branch && app.PolicyBranch is { } policy && branch != policy) nameLine.Children.Add(Pill(UiText.Format("AppsExpected", policy), Orange));
+        if (app.IsFocus) nameLine.Children.Add(Pill(UiText.Get("AppsFocus"), PagePanels.SelectedBrush));
+        if (app.Pin == FocusPin.Ignore) nameLine.Children.Add(Pill(UiText.Get("AppsIgnored")));
+        if (app.IsStaleDependency) nameLine.Children.Add(Pill(UiText.Get("AppsBehind"), Orange));
         text.Children.Add(nameLine);
         if ((app.FocusSummary ?? app.DependencySummary) is { } words)
         {
@@ -169,29 +169,29 @@ internal sealed class AppsView : UserControl, IBenchPageView
             text.Children.Add(line);
         }
         text.Children.Add(Ui.Text(app.SourceLine, 12, opacity: 0.7));
-        if (sitesKnown) text.Children.Add(Ui.Text(app.Sites.Count == 0 ? "on no site yet" : "on " + string.Join(", ", app.Sites), 12, opacity: 0.7));
+        if (sitesKnown) text.Children.Add(Ui.Text(app.Sites.Count == 0 ? UiText.Get("AppsOnNoSite") : UiText.Format("OverviewDriftOnSite", string.Join(", ", app.Sites)), 12, opacity: 0.7));
         var blocker = app.UpdateBlocker;
         if (blocker is not null)
         {
-            var why = Ui.Text("Update is off: " + blocker, 12, margin: new Thickness(0, 2, 0, 0));
+            var why = Ui.Text(UiText.Format("AppsUpdateOff", blocker), 12, margin: new Thickness(0, 2, 0, 0));
             why.Foreground = Orange;
             why.TextWrapping = TextWrapping.Wrap;
             text.Children.Add(why);
         }
         grid.Children.Add(text);
 
-        var update = Ui.Button("Update...", () => Start(() => UpdateAsync(app)), $"Update {app.Name}", minWidth: 84);
+        var update = Ui.Button(UiText.Get("ProfileUpdateMenu"), () => Start(() => UpdateAsync(app)), UiText.Format("ProfileUpdateTitle", app.Name), minWidth: 84);
         update.Margin = new Thickness(8, 0, 6, 0);
         update.IsEnabled = !_busy && blocker is null;
         Grid.SetColumn(update, 1);
         grid.Children.Add(update);
 
-        var more = PagePanels.MoreButton($"More actions for {app.Name}", MenuEntries(app, sitesKnown), !_busy);
+        var more = PagePanels.MoreButton(UiText.Format("SitesMoreActions", app.Name), MenuEntries(app, sitesKnown), !_busy);
         Grid.SetColumn(more, 2);
         grid.Children.Add(more);
 
         var card = Ui.CardOf(grid, new Thickness(0, 0, 0, 6));
-        Ui.Name(card, $"App {app.Name}");
+        Ui.Name(card, UiText.Format("AppsCardName", app.Name));
         return card;
     }
 
@@ -201,13 +201,13 @@ internal sealed class AppsView : UserControl, IBenchPageView
         foreach (var site in missing)
         {
             var target = site;
-            yield return new PageMenuEntry($"Install on {target}", true, false, () => Start(() => InstallAsync(app.Name, target)));
+            yield return new PageMenuEntry(UiText.Format("AppsInstallOn", target), true, false, () => Start(() => InstallAsync(app.Name, target)));
         }
         if (missing.Count > 0) yield return PageMenuEntry.Divider;
         foreach (var pin in FocusPins.All)
         {
             var chosen = pin;
-            yield return new PageMenuEntry($"Focus pin: {FocusPins.Title(pin)}", app.Focus is not null, false,
+            yield return new PageMenuEntry(UiText.Format("AppsFocusPin", FocusPins.Title(pin)), app.Focus is not null, false,
                 () => Start(() => SetFocusAsync(app.Name, chosen)), Checked: app.Pin == pin);
         }
     }
@@ -265,9 +265,9 @@ internal sealed class AppsView : UserControl, IBenchPageView
         SetPanel(null);
     }
 
-    private static string Why(CliStreamResult r) => r.Problem ?? $"The command failed (exit {r.Exit}).";
+    private static string Why(CliStreamResult r) => r.Problem ?? UiText.Format("PendingFailed", r.Exit);
 
-    private static string Why<T>(CliResult<T> r) => r.Error ?? r.Done?.Problem ?? $"The command failed (exit {r.Exit}).";
+    private static string Why<T>(CliResult<T> r) => r.Error ?? r.Done?.Problem ?? UiText.Format("PendingFailed", r.Exit);
 
     // --- the list ---
 
@@ -299,7 +299,7 @@ internal sealed class AppsView : UserControl, IBenchPageView
     internal async Task CheckRemotesAsync()
     {
         _checking = true;
-        Say("Checking the remotes of the apps your focus apps need...", false);
+        Say(UiText.Get("AppsChecking"), false);
         Rebuild();
         var r = await _services.Cli.RunJsonAsync(AppCommands.CheckRemotes(Bench.Path), null, CliTimeouts.Plan, AppJson.ParseFocusReport);
         PagePanels.OnUi(this, () =>
@@ -308,7 +308,7 @@ internal sealed class AppsView : UserControl, IBenchPageView
             if (r.Value is { } report)
             {
                 var behind = report.Apps.Count(a => a.IsStaleDependency);
-                Say(behind == 0 ? "Checked the remotes. Nothing your focus apps need is behind." : $"Checked the remotes. {behind} app{(behind == 1 ? "" : "s")} your focus apps need {(behind == 1 ? "is" : "are")} behind.", false);
+                Say(behind == 0 ? UiText.Get("AppsChecked") : behind == 1 ? UiText.Format("AppsBehindOne", behind) : UiText.Format("AppsBehindMany", behind), false);
             }
             else
             {
@@ -345,16 +345,16 @@ internal sealed class AppsView : UserControl, IBenchPageView
         if (result.Ok) await ReloadAsync(live: false);
     }
 
-    internal Task InstallAsync(string app, string site) => RunBusy($"Installing {app} on {site}... this migrates the site's database.", async () =>
+    internal Task InstallAsync(string app, string site) => RunBusy(UiText.Format("AppsInstalling", app, site), async () =>
     {
         var r = await _services.Cli.RunStreamAsync(AppCommands.Install(app, site, Bench.Path), null, CliTimeouts.Apply, _ => { });
-        return r.Ok ? (true, $"{app} is installed on {site}.") : (false, Why(r));
+        return r.Ok ? (true, UiText.Format("AppsInstalled", app, site)) : (false, Why(r));
     });
 
-    internal Task SetFocusAsync(string app, FocusPin pin) => RunBusy($"Setting the focus pin of {app} to {FocusPins.Title(pin)}...", async () =>
+    internal Task SetFocusAsync(string app, FocusPin pin) => RunBusy(UiText.Format("AppsSettingPin", app, FocusPins.Title(pin)), async () =>
     {
         var r = await _services.Cli.RunJsonAsync(AppCommands.SetFocus(app, pin, Bench.Path), null, CliTimeouts.Read);
-        return r.Ok ? (true, $"The focus pin of {app} is {FocusPins.Title(pin)}.") : (false, Why(r));
+        return r.Ok ? (true, UiText.Format("AppsPinSet", app, FocusPins.Title(pin))) : (false, Why(r));
     });
 
     // --- Add App ---
@@ -366,12 +366,12 @@ internal sealed class AppsView : UserControl, IBenchPageView
         _addRows = [];
         _addRowsHost = new StackPanel();
         AddAnotherRow();
-        _addAnother = Ui.Button("Add Another App", () => { AddAnotherRow(); _addRows[^1].Source.Focus(); }, "Add another app to this plan");
+        _addAnother = Ui.Button(UiText.Get("AppsAddAnother"), () => { AddAnotherRow(); _addRows[^1].Source.Focus(); }, UiText.Get("AppsAddAnotherName"));
         UpdateAddAnother();
         var body = new List<UIElement> { _addRowsHost, _addAnother, _addProblem };
-        SetPanel(PagePanels.Panel($"Add apps to {Bench.Name}",
-            "Clones apps from the app registry or git repositories and installs them. You see one plan for all of them first.",
-            body, [Ui.Button("Review Plan...", () => Start(AddAppAsync), primary: true), Ui.Button("Cancel", ClosePanel)]));
+        SetPanel(PagePanels.Panel(UiText.Format("AppsAddTitle", Bench.Name),
+            UiText.Get("AppsAddExplain"),
+            body, [Ui.Button(UiText.Get("RunCmdReviewPlan"), () => Start(AddAppAsync), primary: true), Ui.Button(UiText.Get("Cancel"), ClosePanel)]));
         _addRows[0].Source.Focus();
     }
 
@@ -380,29 +380,28 @@ internal sealed class AppsView : UserControl, IBenchPageView
     {
         if (_addRowsHost is null || _addRows.Count >= AppAddBatch.MaxApps) return;
         var n = _addRows.Count + 1;
-        var tag = n == 1 ? "" : $"App {n} ";
-        var source = Ui.Field(n == 1 ? "App or repository" : $"App {n} repository", "", _ => HideAddProblem(), 420);
-        var branch = Ui.Field(n == 1 ? "Branch" : $"App {n} branch", "", _ => HideAddProblem(), 220);
-        var commit = Ui.Field(n == 1 ? "Commit" : $"App {n} commit", "", _ => HideAddProblem(), 220);
+        var source = Ui.Field(n == 1 ? UiText.Get("AppsFieldSource") : UiText.Format("AppsFieldSourceN", n), "", _ => HideAddProblem(), 420);
+        var branch = Ui.Field(n == 1 ? UiText.Get("AppsFieldBranch") : UiText.Format("AppsFieldBranchN", n), "", _ => HideAddProblem(), 220);
+        var commit = Ui.Field(n == 1 ? UiText.Get("AppsFieldCommit") : UiText.Format("AppsFieldCommitN", n), "", _ => HideAddProblem(), 220);
         var sites = new List<CheckBox>();
         var sitePanel = new StackPanel();
         foreach (var name in SiteList)
         {
             var box = new CheckBox { Content = name, Margin = new Thickness(0, 2, 0, 2) };
-            Ui.Name(box, $"{tag}Install on {name}");
+            Ui.Name(box, n == 1 ? UiText.Format("AppsInstallOn", name) : UiText.Format("AppsInstallOnApp", n, name));
             sites.Add(box);
             sitePanel.Children.Add(box);
         }
         var view = new StackPanel { Margin = new Thickness(0, n == 1 ? 0 : 14, 0, 0) };
-        if (n > 1) view.Children.Add(Ui.Text($"App {n}", 14, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 4)));
-        view.Children.Add(Ui.Labeled("App or repository", source, "erpnext, or a git URL such as https://github.com/org/app. Private repositories work when your SSH key can read them."));
-        view.Children.Add(Ui.Labeled("Branch (optional)", branch, "Empty: the profile's branch for a registry name, the repository's default for a URL."));
-        view.Children.Add(Ui.Labeled("Commit (optional)", commit, "Pins the app to this commit (7 to 40 hex characters)."));
-        if (sites.Count > 0) view.Children.Add(Ui.Labeled("Install on", sitePanel, "None ticked: the app is cloned and built, and installed on no site yet."));
+        if (n > 1) view.Children.Add(Ui.Text(UiText.Format("AppsCardName", n), 14, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 4)));
+        view.Children.Add(Ui.Labeled(UiText.Get("AppsFieldSource"), source, UiText.Get("AppsSourceHelp")));
+        view.Children.Add(Ui.Labeled(UiText.Get("AppsBranchLabel"), branch, UiText.Get("AppsBranchHelp")));
+        view.Children.Add(Ui.Labeled(UiText.Get("AppsCommitLabel"), commit, UiText.Get("AppsCommitHelp")));
+        if (sites.Count > 0) view.Children.Add(Ui.Labeled(UiText.Get("AppsInstallOnLabel"), sitePanel, UiText.Get("AppsInstallOnHelp")));
         var row = new AddRow(source, branch, commit, sites, view);
         if (n > 1)
         {
-            var remove = Ui.Button("Remove", () => RemoveRow(row), $"Remove app {n}");
+            var remove = Ui.Button(UiText.Get("AppsRemove"), () => RemoveRow(row), UiText.Format("AppsRemoveName", n));
             view.Children.Add(remove);
         }
         _addRows.Add(row);
@@ -460,11 +459,11 @@ internal sealed class AppsView : UserControl, IBenchPageView
         var title = AppAddBatch.Title(inputs);
         var request = PlanReviewRequest.Tokened(title, AppCommands.AddMany(inputs, benchPath)) with
         {
-            ConfirmLabel = inputs.Count == 1 ? "Add App" : "Add Apps",
+            ConfirmLabel = inputs.Count == 1 ? UiText.Get("AppsConfirmAdd") : UiText.Get("AppsConfirmAddMany"),
             Describe = AppAddBatch.PlanLines,
             CanStop = false,
             UsesSudoEnv = false,
-            Summary = "Clones the app, installs its requirements and builds its assets, which can take several minutes. The bench keeps running.",
+            Summary = UiText.Get("AppsAddSummary"),
         };
         SetBusy(true);
         Rebuild();
@@ -489,7 +488,7 @@ internal sealed class AppsView : UserControl, IBenchPageView
             if (outcome.Applied)
             {
                 ClosePanel();
-                Say(inputs.Count == 1 ? $"{inputs[0].DisplayName} was added." : $"{string.Join(", ", inputs.Select(i => i.DisplayName))} were added.", false);
+                Say(inputs.Count == 1 ? UiText.Format("SitesAdded", inputs[0].DisplayName) : UiText.Format("AppsAddedMany", string.Join(", ", inputs.Select(i => i.DisplayName))), false);
                 _services.RefreshNow();
             }
             Rebuild();
@@ -539,7 +538,7 @@ internal sealed class AppsView : UserControl, IBenchPageView
             else
             {
                 state.Phase = UpdatePhase.Failed;
-                state.Text = $"No changelog for {app.Name}: {Why(r)}";
+                state.Text = UiText.Format("AppsNoChangelog", app.Name, Why(r));
             }
             RenderUpdate(state);
         });
@@ -549,21 +548,21 @@ internal sealed class AppsView : UserControl, IBenchPageView
     {
         var body = new List<UIElement>();
         var buttons = new List<Button>();
-        string? explanation = "Shows the new commits and the steps before anything changes.";
+        string? explanation = UiText.Get("AppsUpdateExplain");
         switch (s.Phase)
         {
             case UpdatePhase.Loading:
-                body.Add(PagePanels.Line("Fetching the changes..."));
-                buttons.Add(Ui.Button("Cancel", ClosePanel));
+                body.Add(PagePanels.Line(UiText.Get("AppsFetching")));
+                buttons.Add(Ui.Button(UiText.Get("Cancel"), ClosePanel));
                 break;
             case UpdatePhase.UpToDate:
                 explanation = null;
-                body.Add(PagePanels.Line($"{s.App} is up to date on {s.Plan?.Branch ?? "its branch"}."));
-                buttons.Add(Ui.Button("Done", ClosePanel, primary: true));
+                body.Add(PagePanels.Line(UiText.Format("AppsUpToDate", s.App, s.Plan?.Branch ?? UiText.Get("AppsItsBranch"))));
+                buttons.Add(Ui.Button(UiText.Get("ProfileDone"), ClosePanel, primary: true));
                 break;
             case UpdatePhase.Review when s.Plan is { } plan:
-                if (plan.HasPending) body.Add(PagePanels.Line("An earlier update of this app stopped part way. This run finishes it."));
-                body.Add(PagePanels.Line($"{plan.CommitsTotal} new commit{(plan.CommitsTotal == 1 ? "" : "s")} on {plan.Branch ?? "the branch"}:"));
+                if (plan.HasPending) body.Add(PagePanels.Line(UiText.Get("AppsPendingEarlier")));
+                body.Add(PagePanels.Line(plan.CommitsTotal == 1 ? UiText.Format("AppsCommitsOne", plan.CommitsTotal, plan.Branch ?? UiText.Get("AppsTheBranch")) : UiText.Format("AppsCommitsMany", plan.CommitsTotal, plan.Branch ?? UiText.Get("AppsTheBranch"))));
                 foreach (var commit in plan.Commits)
                 {
                     var row = new StackPanel { Orientation = Orientation.Horizontal };
@@ -571,32 +570,32 @@ internal sealed class AppsView : UserControl, IBenchPageView
                     row.Children.Add(Ui.Text(commit.Subject, 12));
                     body.Add(row);
                 }
-                if (plan.CommitsTotal > plan.Commits.Count) body.Add(Ui.Text($"and {plan.CommitsTotal - plan.Commits.Count} more", 12, opacity: 0.6));
-                body.Add(Ui.Text("Then, in order:", 13, margin: new Thickness(0, 8, 0, 2)));
+                if (plan.CommitsTotal > plan.Commits.Count) body.Add(Ui.Text(UiText.Format("AppsAndMore", plan.CommitsTotal - plan.Commits.Count), 12, opacity: 0.6));
+                body.Add(Ui.Text(UiText.Get("AppsThenInOrder"), 13, margin: new Thickness(0, 8, 0, 2)));
                 var n = 1;
-                foreach (var step in plan.Steps) body.Add(PagePanels.Line($"{n++}. {step.Name}"));
+                foreach (var step in plan.Steps) body.Add(PagePanels.Line(UiText.Format("SitesStepLine", n++, step.Name)));
                 if (plan.Sites.Count > 0)
-                    body.Add(Ui.Text(plan.SkipBackup ? $"Sites that are migrated: {string.Join(", ", plan.Sites)}." : $"Each site is backed up before it is migrated: {string.Join(", ", plan.Sites)}.", 12, opacity: 0.7, margin: new Thickness(0, 6, 0, 0)));
-                buttons.Add(Ui.Button("Cancel", ClosePanel));
-                buttons.Add(Ui.Button("Update", () => Start(() => RunUpdateAsync(s)), $"Run the update of {s.App}", primary: true));
+                    body.Add(Ui.Text(plan.SkipBackup ? UiText.Format("AppsSitesMigrated", string.Join(", ", plan.Sites)) : UiText.Format("AppsSitesBackedUp", string.Join(", ", plan.Sites)), 12, opacity: 0.7, margin: new Thickness(0, 6, 0, 0)));
+                buttons.Add(Ui.Button(UiText.Get("Cancel"), ClosePanel));
+                buttons.Add(Ui.Button(UiText.Get("ProfileUpdate"), () => Start(() => RunUpdateAsync(s)), UiText.Format("AppsRunUpdate", s.App), primary: true));
                 break;
             case UpdatePhase.Running:
                 explanation = null;
-                body.Add(PagePanels.Line($"Updating {s.App}... Do not close BenchBar until it finishes."));
-                foreach (var (name, status) in s.Steps) body.Add(PagePanels.Line($"{name}: {status}"));
+                body.Add(PagePanels.Line(UiText.Format("AppsUpdating", s.App)));
+                foreach (var (name, status) in s.Steps) body.Add(PagePanels.Line(UiText.Format("OverviewDriftLine", name, status)));
                 break;
             case UpdatePhase.Done:
                 explanation = null;
-                body.Add(PagePanels.Line(s.Text ?? $"{s.App} was updated."));
-                buttons.Add(Ui.Button("Done", ClosePanel, primary: true));
+                body.Add(PagePanels.Line(s.Text ?? UiText.Format("AppsUpdated", s.App)));
+                buttons.Add(Ui.Button(UiText.Get("ProfileDone"), ClosePanel, primary: true));
                 break;
             default:
                 explanation = null;
-                body.Add(PagePanels.Line(s.Text ?? $"{s.App} was not updated.", error: true));
-                buttons.Add(Ui.Button("Close", ClosePanel));
+                body.Add(PagePanels.Line(s.Text ?? UiText.Format("AppsNotUpdated", s.App), error: true));
+                buttons.Add(Ui.Button(UiText.Get("TidyClose"), ClosePanel));
                 break;
         }
-        SetPanel(PagePanels.Panel($"Update {s.App}", explanation, body, buttons));
+        SetPanel(PagePanels.Panel(UiText.Format("ProfileUpdateTitle", s.App), explanation, body, buttons));
     }
 
     private async Task RunUpdateAsync(UpdateState state)
@@ -624,7 +623,7 @@ internal sealed class AppsView : UserControl, IBenchPageView
             if (r.Ok)
             {
                 state.Phase = UpdatePhase.Done;
-                state.Text = r.Done is { Changed.Count: > 0 } done ? $"{state.App} was updated. Changed: {string.Join(", ", done.Changed.Select(c => c.Name))}." : $"{state.App} was updated.";
+                state.Text = r.Done is { Changed.Count: > 0 } done ? UiText.Format("AppsUpdatedChanged", state.App, string.Join(", ", done.Changed.Select(c => c.Name))) : UiText.Format("AppsUpdated", state.App);
             }
             else
             {

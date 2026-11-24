@@ -11,7 +11,7 @@ public sealed record RunnerInfo(string Id, string Name, string? Author, bool IsB
     public bool IsUsable => Art is not null;
 
     /// <summary>"Name (by author)", as the Mac's Settings shows it.</summary>
-    public string DisplayName => string.IsNullOrWhiteSpace(Author) || IsBuiltIn ? Name : $"{Name} (by {Author})";
+    public string DisplayName => string.IsNullOrWhiteSpace(Author) || IsBuiltIn ? Name : UiText.Format("CommonRunnerBy", Name, Author);
 }
 
 /// <summary>
@@ -53,7 +53,7 @@ public sealed class RunnerSet
             try
             {
                 var runner = RunnerLoader.Load(dir, id);
-                if (!seen.Add(id)) throw new RunnerException($"Another runner already has the id \"{id}\".");
+                if (!seen.Add(id)) throw new RunnerException(UiText.Format("CommonRunnerIdTaken", id));
                 list.Add(new RunnerInfo(id, runner.Name, runner.Author, false, runner, null, dir));
             }
             catch (Exception ex) when (ex is RunnerException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)

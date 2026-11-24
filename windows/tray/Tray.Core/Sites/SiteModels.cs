@@ -5,7 +5,7 @@ namespace BenchBar.Tray.Core;
 /// <summary>The rule for a site name (the CLI's <c>fl_site_valid_name</c>) and what Windows can resolve.</summary>
 public static class SiteNames
 {
-    public const string Rule = "Lowercase letters, digits, '-' and '.' only.";
+    public static string Rule => UiText.Get("SitesNameRule");
 
     public static bool IsValid(string? name)
     {
@@ -26,7 +26,7 @@ public static class SiteNames
 public sealed record SiteRowInfo(string Name, bool IsDefault, string? Url, bool CanOpen, bool NeedsSetUp, SiteOpenAs? OpenAs = null)
 {
     /// <summary>"Open" for a site Windows can reach, "Set Up..." for one it cannot.</summary>
-    public string ActionLabel => NeedsSetUp ? "Set Up..." : "Open";
+    public string ActionLabel => NeedsSetUp ? UiText.Get("SitesSetUp") : UiText.Get("SitesOpen");
 }
 
 public static class SiteRows
@@ -66,18 +66,18 @@ public static class SiteMenu
     public static IReadOnlyList<SiteMenuItem> For(SiteRowInfo row, bool onlySite, OpenAsRules.Availability openAs = OpenAsRules.Availability.Hidden, bool snapshots = false, bool move = false)
     {
         var items = new List<SiteMenuItem>();
-        if (!row.IsDefault) items.Add(new(SiteAction.MakeDefault, "Make Default", true));
-        if (openAs != OpenAsRules.Availability.Hidden) items.Add(new(SiteAction.OpenAs, "Open as...", openAs == OpenAsRules.Availability.Available));
-        if (row.OpenAs is { } state && !row.NeedsSetUp) items.Add(new(state.Enabled ? SiteAction.TurnOffOpenAs : SiteAction.AllowOpenAs, state.Enabled ? "Turn Off Open as" : "Allow Open as...", true));
-        items.Add(new(SiteAction.BackUp, "Back Up", true));
-        items.Add(new(SiteAction.BackUpWithFiles, "Back Up with Files", true));
-        items.Add(new(SiteAction.Backups, "Backups...", true));
-        items.Add(new(SiteAction.Restore, "Restore...", true));
-        if (snapshots) items.Add(new(SiteAction.Snapshots, "Snapshots...", true)); // only when the CLI lists site snapshots and site rollback
-        if (move) items.Add(new(SiteAction.Move, "Move to Another Bench...", !row.IsDefault)); // the default site never moves, the CLI refuses it too
-        items.Add(new(SiteAction.Console, "Open Console", true));
-        items.Add(new(SiteAction.Database, "Open Database", true));
-        items.Add(new(SiteAction.Drop, "Drop Site...", !onlySite, Destructive: true));
+        if (!row.IsDefault) items.Add(new(SiteAction.MakeDefault, UiText.Get("SitesMenuMakeDefault"), true));
+        if (openAs != OpenAsRules.Availability.Hidden) items.Add(new(SiteAction.OpenAs, UiText.Get("SitesMenuOpenAs"), openAs == OpenAsRules.Availability.Available));
+        if (row.OpenAs is { } state && !row.NeedsSetUp) items.Add(new(state.Enabled ? SiteAction.TurnOffOpenAs : SiteAction.AllowOpenAs, state.Enabled ? UiText.Get("SitesMenuTurnOffOpenAs") : UiText.Get("SitesMenuAllowOpenAs"), true));
+        items.Add(new(SiteAction.BackUp, UiText.Get("SitesBackUp"), true));
+        items.Add(new(SiteAction.BackUpWithFiles, UiText.Get("SitesMenuBackUpFiles"), true));
+        items.Add(new(SiteAction.Backups, UiText.Get("SitesMenuBackups"), true));
+        items.Add(new(SiteAction.Restore, UiText.Get("SitesRestore"), true));
+        if (snapshots) items.Add(new(SiteAction.Snapshots, UiText.Get("SitesMenuSnapshots"), true)); // only when the CLI lists site snapshots and site rollback
+        if (move) items.Add(new(SiteAction.Move, UiText.Get("SitesMenuMove"), !row.IsDefault)); // the default site never moves, the CLI refuses it too
+        items.Add(new(SiteAction.Console, UiText.Get("OverviewMoreConsole"), true));
+        items.Add(new(SiteAction.Database, UiText.Get("OverviewMoreDatabase"), true));
+        items.Add(new(SiteAction.Drop, UiText.Get("SitesDropButton"), !onlySite, Destructive: true));
         return items;
     }
 }
@@ -116,9 +116,9 @@ public sealed record SiteBackup(string Stamp, DateTimeOffset? Time, string? Path
     /// <summary>The restore reads a plain set with its database; an encrypted or partial one is refused by the CLI.</summary>
     public bool CanRestore => !Encrypted && !Partial && (Database ?? Path) is not null;
 
-    public string WhyNotRestorable => Encrypted ? "This backup is encrypted; site restore takes a plain set."
-        : Partial ? "This is a partial backup; site restore takes a full set."
-        : "This backup has no database file.";
+    public string WhyNotRestorable => Encrypted ? UiText.Get("SitesWhyEncrypted")
+        : Partial ? UiText.Get("SitesWhyPartial")
+        : UiText.Get("SitesWhyNoDatabase");
 
     /// <summary>"09/29/2026 10:15, 5.0 MB, with files" (the date, the time and the decimal sign follow <paramref name="culture"/>, by default the current one).</summary>
     public string Summary(TimeZoneInfo? zone = null, System.Globalization.CultureInfo? culture = null)
@@ -205,7 +205,7 @@ public static class SiteDropRules
         rows.Select(r => r.Name).Where(n => n != site).ToList();
 
     public static string? Blocker(IReadOnlyList<SiteRowInfo> rows, string site) =>
-        rows.Count(r => r.Name != site) == 0 ? $"{site} is the only site of this bench. Add another site before dropping it." : null;
+        rows.Count(r => r.Name != site) == 0 ? UiText.Format("SitesOnlySite", site) : null;
 }
 
 public enum SiteShellKind { Console, Database }

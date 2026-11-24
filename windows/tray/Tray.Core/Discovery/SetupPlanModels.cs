@@ -36,7 +36,7 @@ public sealed record SetupPlan(string? Token, bool CanApply, IReadOnlyList<Setup
         : new SetupPortSet(JsonRead.Int(o, "web") ?? 0, JsonRead.Int(o, "socketio") ?? 0, JsonRead.Int(o, "redis_queue") ?? 0, JsonRead.Int(o, "redis_cache") ?? 0);
 
     /// <summary>The first reason a bench is blocked, for the line under the buttons; null when nothing is.</summary>
-    public string? FirstBlock => Entries.FirstOrDefault(e => e.Blocked is not null) is { } blocked ? $"{blocked.Name}: {blocked.Blocked}" : null;
+    public string? FirstBlock => Entries.FirstOrDefault(e => e.Blocked is not null) is { } blocked ? UiText.Format("DiscoveryBlockedEntry", blocked.Name, blocked.Blocked!) : null;
 
     /// <summary>What the sheet shows above the plan: one line per bench, with its port move and its conflicts.</summary>
     public string Summary()
@@ -44,11 +44,11 @@ public sealed record SetupPlan(string? Token, bool CanApply, IReadOnlyList<Setup
         var lines = new List<string>();
         foreach (var e in Entries)
         {
-            if (e.Moves) lines.Add($"{e.Name}: web port {e.Current!.Web} moves to {e.Proposed!.Web} (mode {e.Mode}).");
-            else if (e.Proposed is not null) lines.Add($"{e.Name}: web port {e.Proposed.Web} stays.");
-            else lines.Add($"{e.Name}: ports are set when it is set up.");
-            foreach (var c in e.Conflicts) lines.Add("   Conflict: " + c);
-            if (e.Blocked is not null) lines.Add("   Blocked: " + e.Blocked);
+            if (e.Moves) lines.Add(UiText.Format("DiscoveryPlanMoves", e.Name, e.Current!.Web, e.Proposed!.Web, e.Mode));
+            else if (e.Proposed is not null) lines.Add(UiText.Format("DiscoveryPlanStays", e.Name, e.Proposed.Web));
+            else lines.Add(UiText.Format("DiscoveryPlanLater", e.Name));
+            foreach (var c in e.Conflicts) lines.Add(UiText.Format("DiscoveryPlanConflict", c));
+            if (e.Blocked is not null) lines.Add(UiText.Format("DiscoveryPlanBlocked", e.Blocked));
         }
         return string.Join('\n', lines);
     }

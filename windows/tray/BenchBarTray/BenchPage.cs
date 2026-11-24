@@ -42,12 +42,12 @@ internal sealed class BenchPage : UserControl
         {
             var item = new TabItem { Header = BenchTabs.Label(tab), Tag = tab, Padding = new Thickness(14, 6, 14, 6) };
             if (tab == BenchTab.Overview) item.Content = overview;
-            Ui.Name(item, BenchTabs.Label(tab) + " tab");
+            Ui.Name(item, UiText.Format("BenchTabName", BenchTabs.Label(tab)));
             _items[tab] = item;
             _tabs.Items.Add(item);
         }
         _tabs.SelectionChanged += OnTabChanged;
-        Ui.Name(_tabs, "Bench tabs");
+        Ui.Name(_tabs, UiText.Get("BenchTabs"));
         _banner = new PendingBanner(services);
         DockPanel.SetDock(_banner, Dock.Top);
         _notices = new NoticesBanner(services);
@@ -93,7 +93,7 @@ internal sealed class BenchPage : UserControl
         if (visible)
         {
             var item = new TabItem { Header = BenchTabs.Label(BenchTab.Sharing), Tag = BenchTab.Sharing, Padding = new Thickness(14, 6, 14, 6) };
-            Ui.Name(item, "Sharing tab");
+            Ui.Name(item, UiText.Format("BenchTabName", BenchTabs.Label(BenchTab.Sharing)));
             _items[BenchTab.Sharing] = item;
             _tabs.Items.Add(item);
             return;
