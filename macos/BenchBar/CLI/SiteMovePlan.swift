@@ -179,6 +179,12 @@ nonisolated enum SiteMoveText {
         return out
     }
 
+    /// Stop Bench is clickable when the store allows a change and its own stop is not already running.
+    static func canStop(canChange: Bool, stopping: Bool) -> Bool { canChange && !stopping }
+
+    /// The progress line while Stop Bench runs.
+    static func stopping(_ bench: String) -> String { "Stopping \(bench)…" }
+
     /// What a stream's step line says while it runs.
     static func progress(_ step: InstallStep) -> String {
         step.status == .running ? step.name : "\(step.name): \(step.status.rawValue)"
