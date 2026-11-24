@@ -32,13 +32,23 @@ HIST="$BENCH/logs/.bench-starts"
 LOG="$BENCH/logs/bench.log"
 STATE_DIR="$BENCH/logs/.benchbar"
 STATE="$STATE_DIR/state.json"
-PING_TRIES="${BENCHBAR_PING_TRIES:-120}"
-PING_EVERY="${BENCHBAR_PING_EVERY:-2}"
+# timing and log seams: read from the environment only by the tests (FL_TESTING=1), fixed otherwise (CORE-25)
+PING_TRIES=120
+PING_EVERY=2
 HEARTBEAT="$STATE_DIR/heartbeat"
-HEARTBEAT_EVERY="${BENCHBAR_HEARTBEAT_EVERY:-30}"
+HEARTBEAT_EVERY=30
 # log size cap (SVC-14): every LOG_CHECK_EVERY beats, a log over LOG_MAX_KB is cut to its last lines
-LOG_MAX_KB="${BENCHBAR_LOG_MAX_KB:-20480}"
-LOG_CHECK_EVERY="${BENCHBAR_LOG_CHECK_EVERY:-10}"
+LOG_MAX_KB=20480
+LOG_CHECK_EVERY=10
+STATE_LOG=""
+if [ "${FL_TESTING:-}" = 1 ]; then
+  PING_TRIES="${BENCHBAR_PING_TRIES:-$PING_TRIES}"
+  PING_EVERY="${BENCHBAR_PING_EVERY:-$PING_EVERY}"
+  HEARTBEAT_EVERY="${BENCHBAR_HEARTBEAT_EVERY:-$HEARTBEAT_EVERY}"
+  LOG_MAX_KB="${BENCHBAR_LOG_MAX_KB:-$LOG_MAX_KB}"
+  LOG_CHECK_EVERY="${BENCHBAR_LOG_CHECK_EVERY:-$LOG_CHECK_EVERY}"
+  STATE_LOG="${BENCHBAR_STATE_LOG:-}"
+fi
 LOG_KEEP_LINES=2000
 # the stop command: always kill, except in the tests (FL_TESTING=1 and BENCHBAR_KILL_CMD)
 KILLER=kill
@@ -57,8 +67,8 @@ write_state() {
   printf '{"schema_version":1,"cli_version":"__CLI_VERSION__","bench":"%s","name":"__BENCH_NAME__","site":"%s","label":"__LABEL__","state":"%s","stop_reason":%s,"pid":%s,"started_at":%s,"last_exit_code":%s,"web_url":"http://%s:%s","web_ping_code":%s,"updated_at":"%s","source":"runner"}\n' \
     "$BENCH" "$SITE" "$1" "$(jstr "$2")" "$(jnum "$3")" "$(jstr "$4")" "$(jnum "$5")" "$SITE" "$WEB_PORT" "$(jnum "$6")" \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$tmp" 2>/dev/null || return 0
-  # BENCHBAR_STATE_LOG keeps every transition (tests and debugging only)
-  [ -n "${BENCHBAR_STATE_LOG:-}" ] && cat "$tmp" >>"$BENCHBAR_STATE_LOG" 2>/dev/null
+  # BENCHBAR_STATE_LOG keeps every transition (tests only: STATE_LOG is set under FL_TESTING=1)
+  [ -n "$STATE_LOG" ] && cat "$tmp" >>"$STATE_LOG" 2>/dev/null
   mv -f "$tmp" "$STATE" 2>/dev/null
 }
 
