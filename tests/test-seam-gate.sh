@@ -29,9 +29,13 @@ export BENCHBAR_STATE_LOG="$TMP_DIR/transitions.log" BENCHBAR_PING_EVERY=0 BENCH
 FL_TESTING=1 "$runner" >/dev/null 2>&1 || true
 [[ -s "$BENCHBAR_STATE_LOG" ]] || fail "under FL_TESTING=1 the runner did not write BENCHBAR_STATE_LOG"
 : >"$BENCHBAR_STATE_LOG"
+: >"$RB/logs/.benchbar/state.json"
 env -u FL_TESTING "$runner" >/dev/null 2>&1 &
 RPID=$!
-sleep 6
+# the runner's own state file is the first write: wait for it (20 s at most), then look at the log
+n=0
+while [[ ! -s "$RB/logs/.benchbar/state.json" && "$n" -lt 100 ]]; do sleep 0.2; n=$((n + 1)); done
+[[ -s "$RB/logs/.benchbar/state.json" ]] || fail "the runner wrote no state file within 20 seconds"
 kill "$RPID" 2>/dev/null || true
 wait "$RPID" 2>/dev/null || true
 [[ ! -s "$BENCHBAR_STATE_LOG" ]] || fail "without FL_TESTING=1 the runner wrote BENCHBAR_STATE_LOG"

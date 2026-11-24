@@ -1,5 +1,5 @@
 #!/bin/bash
-#@version 10
+#@version 11
 #@unhashed CLI_VERSION
 #@default NOTIFY_BODY pgrep -xq BenchBar 2>/dev/null && return 0\n  osascript -e "display notification \"$1\" with title \"BenchBar: __BENCH_NAME__\"" >/dev/null 2>&1
 #@default CWD_OF lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
