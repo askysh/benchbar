@@ -3,11 +3,11 @@ namespace BenchBar.Tray.Core;
 /// <summary>What About says for the Linux command line tool: its version, or the reason there is none.</summary>
 public sealed record AboutCli(string? Version, string Text)
 {
-    public static AboutCli Unknown { get; } = new(null, "unknown");
+    public static AboutCli Unknown { get; } = new(null, UiText.Get("CommonStateUnknown"));
 
-    public static AboutCli Stopped { get; } = new(null, "unknown (the distro may be stopped)");
+    public static AboutCli Stopped { get; } = new(null, UiText.Get("UpdateAboutStopped"));
 
-    public static AboutCli NotInstalled { get; } = new(null, "not installed yet");
+    public static AboutCli NotInstalled { get; } = new(null, UiText.Get("UpdateAboutNotInstalled"));
 
     /// <summary>From the read only setup check: the version when the CLI answers; "not installed yet" when WSL, the distro or the CLI is missing; the stopped words when the check skipped the distro.</summary>
     public static AboutCli From(SetupReport report)

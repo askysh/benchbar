@@ -26,10 +26,10 @@ public static class SidebarTools
 
     public static string Title(SidebarTool tool) => tool switch
     {
-        SidebarTool.FindBenches => "Find Benches",
-        SidebarTool.TeamProfiles => "Team Profiles",
-        SidebarTool.Labs => "Labs",
-        SidebarTool.History => "History",
+        SidebarTool.FindBenches => UiText.Get("DiscoveryTitle"),
+        SidebarTool.TeamProfiles => UiText.Get("ProfileTitle"),
+        SidebarTool.Labs => UiText.Get("LabsTitle"),
+        SidebarTool.History => UiText.Get("HistoryTitle"),
         _ => "",
     };
 }

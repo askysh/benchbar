@@ -84,9 +84,9 @@ public static class CliOutput
     public static CliProblemException Unreadable(string output, string what)
     {
         var first = FirstLine(output);
-        var quote = first.Length == 0 ? "It printed nothing." : $"The first line was: {first}";
+        var quote = first.Length == 0 ? UiText.Get("CommonPrintedNothing") : UiText.Format("CommonFirstLine", first);
         return new CliProblemException(
-            $"benchbar.exe {what} gave an answer BenchBar cannot read. {quote} A benchbar.exe of another version than BenchBar is the likely cause: run the installer again so both match.");
+            UiText.Format("CommonUnreadable", what, quote));
     }
 
     private static bool HasMember(string json, string name)

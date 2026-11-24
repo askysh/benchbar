@@ -60,7 +60,7 @@ internal sealed partial class WizardView : UserControl
         var header = new StackPanel { Margin = new Thickness(40, 32, 40, 16) };
         header.Children.Add(_title);
         header.Children.Add(_subtitle);
-        Ui.Name(_title, "Page title");
+        Ui.Name(_title, UiText.Get("WizardPageTitleName"));
         // no focus rectangle around the page or its parts: only the controls inside it take the focus
         FocusVisualStyle = null;
         Focusable = false;
@@ -92,7 +92,7 @@ internal sealed partial class WizardView : UserControl
         Grid.SetRow(scroll, 1);
         Grid.SetRow(bar, 2);
         // on every page: a way to tell us, before anything has gone wrong
-        var footer = Ui.Link(BetaText.ReportABug, () => _actions.ReportBug("Setup wizard footer", null), "Report a Bug");
+        var footer = Ui.Link(BetaText.ReportABug, () => _actions.ReportBug("Setup wizard footer", null), UiText.Get("WizardReportBugName"));
         footer.Margin = new Thickness(36, 0, 40, 16);
         Grid.SetRow(footer, 3);
         // tab order: the page content, then its buttons, then the Report a Bug link last
@@ -221,9 +221,10 @@ internal sealed partial class WizardView : UserControl
     /// Back is the Esc button on pages that hold nothing typed. A page with a password box passes <c>escapes: false</c>: Esc must not
     /// walk away from a half typed password (Back on the Linux user page forgets it).
     /// </summary>
-    private Button BackButton(string label = "Back", bool escapes = true)
+    private Button BackButton(string? label = null, bool escapes = true)
     {
-        var back = Ui.Button(label, _model.Back, label + " to the previous page");
+        label ??= UiText.Get("WizardBack");
+        var back = Ui.Button(label, _model.Back, UiText.Format("WizardBackName", label));
         back.IsCancel = escapes;
         return back;
     }
@@ -231,7 +232,7 @@ internal sealed partial class WizardView : UserControl
     /// <summary>A link that sends a bug report with this failure as its context.</summary>
     private Button ReportProblemLink(string problem)
     {
-        var link = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, problem), "Report this problem");
+        var link = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, problem), UiText.Get("CommonReportProblemName"));
         link.Margin = new Thickness(0, 4, 0, 0);
         return link;
     }
@@ -262,7 +263,7 @@ internal sealed partial class WizardView : UserControl
     private static Button CopyRow(string label, string text, Action<string> copy, StackPanel into)
     {
         var line = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-        var button = Ui.Button("Copy", () => copy(text), "Copy " + label, minWidth: 64);
+        var button = Ui.Button(UiText.Get("Copy"), () => copy(text), UiText.Format("CommonCopyName", label), minWidth: 64);
         button.Margin = new Thickness(8, 0, 0, 0);
         DockPanel.SetDock(button, Dock.Right);
         var box = new TextBox { Text = text, IsReadOnly = true, FontFamily = new System.Windows.Media.FontFamily("Cascadia Mono, Consolas"), FontSize = 12, Padding = new Thickness(8, 6, 8, 6), TextWrapping = TextWrapping.Wrap };

@@ -76,17 +76,17 @@ public static class BenchPresentation
     /// </summary>
     public static string StateWord(BenchStatus bench) => bench.State switch
     {
-        BenchState.Running => "running",
-        BenchState.Starting => "starting",
-        BenchState.Stopped => "stopped",
-        BenchState.Crashed => "crashed",
+        BenchState.Running => UiText.Get("CommonStateRunning"),
+        BenchState.Starting => UiText.Get("TooltipStarting"),
+        BenchState.Stopped => UiText.Get("CommonStateStopped"),
+        BenchState.Crashed => UiText.Get("CommonStateCrashed"),
         BenchState.Paused => bench.StopReason?.Trim().ToLowerInvariant() switch
         {
-            "port_conflict" => "port conflict",
-            "broken" => "paused, needs repair",
-            _ => "paused",
+            "port_conflict" => UiText.Get("CommonStatePortConflict"),
+            "broken" => UiText.Get("CommonStateNeedsRepair"),
+            _ => UiText.Get("CommonStatePaused"),
         },
-        _ => string.IsNullOrWhiteSpace(bench.RawState) ? "unknown" : $"unknown ({bench.RawState})",
+        _ => string.IsNullOrWhiteSpace(bench.RawState) ? UiText.Get("CommonStateUnknown") : UiText.Format("CommonStateUnknownRaw", bench.RawState),
     };
 }
 
@@ -116,7 +116,7 @@ public static class BenchAggregate
     public static string UpText(IReadOnlyList<BenchState> states)
     {
         var up = UpCount(states);
-        return up == 0 ? "none up" : $"{up} of {states.Count} up";
+        return up == 0 ? UiText.Get("CommonNoneUp") : UiText.Format("CommonSomeUp", up, states.Count);
     }
 }
 

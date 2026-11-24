@@ -50,10 +50,10 @@ public sealed record PlanDocument(IReadOnlyList<PlanStepInfo> Steps, IReadOnlyLi
             var entries = PortsJson.ParsePlan(o).Entries;
             foreach (var e in entries)
             {
-                var what = e.ChangesPorts ? $"web port {e.Current.Web} to {e.Proposed.Web}" : e.ServiceInstalled ? "no change" : "set up the service files";
-                steps.Add(new PlanStepInfo(e.Path, $"{e.Name}: {what}", null, e.Conflicts.Count > 0 ? string.Join("; ", e.Conflicts) : null,
+                var what = e.ChangesPorts ? UiText.Format("PlanPortsChange", e.Current.Web, e.Proposed.Web) : e.ServiceInstalled ? UiText.Get("PlanPortsNoChange") : UiText.Get("PlanPortsSetUp");
+                steps.Add(new PlanStepInfo(e.Path, UiText.Format("PlanEntryLine", e.Name, what), null, e.Conflicts.Count > 0 ? string.Join("; ", e.Conflicts) : null,
                     false, e.NeedsSetup)); // ports apply runs nothing as root on Linux
-                if (e.Blocked is { } blocked) errors.Add($"{e.Name}: {blocked}");
+                if (e.Blocked is { } blocked) errors.Add(UiText.Format("PlanEntryLine", e.Name, blocked));
             }
             changes = entries.Any(e => e.NeedsSetup);
         }
@@ -82,7 +82,7 @@ public static partial class PlanStale
 /// </summary>
 public sealed record PlanReviewRequest(string Title, IReadOnlyList<string> PlanArgs, Func<PlanDocument, IReadOnlyList<string>> ApplyArgs)
 {
-    public string ConfirmLabel { get; init; } = "Apply";
+    public string ConfirmLabel { get; init; } = UiText.Get("PlanApply");
 
     /// <summary>Whether Stop is offered while the apply runs. Only for a run that is safe to kill part way (a clone, not a restore).</summary>
     public bool CanStop { get; init; }
@@ -125,7 +125,7 @@ public sealed record PlanReviewRequest(string Title, IReadOnlyList<string> PlanA
     public Func<PlanDocument, PlanResolver?>? BlockedBy { get; init; }
 
     /// <summary>The label of the button that reads the plan again after a stale token or a failure.</summary>
-    public string RefreshLabel { get; init; } = "Refresh Plan";
+    public string RefreshLabel { get; init; } = UiText.Get("PlanRefresh");
 
     /// <summary><c>baseArgs --dry-run --json</c> to plan, <c>baseArgs --apply TOKEN --yes --jsonl</c> to apply.</summary>
     public static PlanReviewRequest Tokened(string title, IReadOnlyList<string> baseArgs) => new(

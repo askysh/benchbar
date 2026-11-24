@@ -3561,4 +3561,1522 @@ Use it on development sites only.</value>
   <data name="OpenAsQuickLast" xml:space="preserve">
     <value>last opened</value>
   </data>
+  <data name="WizardBack" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="WizardBackName" xml:space="preserve">
+    <value>{0} to the previous page</value>
+  </data>
+  <data name="WizardPageTitleName" xml:space="preserve">
+    <value>Page title</value>
+  </data>
+  <data name="WizardReportBugName" xml:space="preserve">
+    <value>Report a Bug</value>
+  </data>
+  <data name="CommonReportProblemName" xml:space="preserve">
+    <value>Report this problem</value>
+  </data>
+  <data name="CommonCopyName" xml:space="preserve">
+    <value>Copy {0}</value>
+  </data>
+  <data name="WizardWelcomeNewTitle" xml:space="preserve">
+    <value>Set Up a New Bench</value>
+  </data>
+  <data name="WizardWelcomeNewDetail" xml:space="preserve">
+    <value>Check this PC, turn on WSL and Ubuntu if they are missing, then install Frappe.</value>
+  </data>
+  <data name="WizardWelcomeExistingTitle" xml:space="preserve">
+    <value>I Already Have a Bench</value>
+  </data>
+  <data name="WizardWelcomeExistingDetail" xml:space="preserve">
+    <value>Use a bench inside WSL that BenchBar did not create.</value>
+  </data>
+  <data name="WizardCliOnlyTitle" xml:space="preserve">
+    <value>Just the Command Line Tool</value>
+  </data>
+  <data name="WizardWelcomeCliDetail" xml:space="preserve">
+    <value>Only use benchbar from a terminal.</value>
+  </data>
+  <data name="WizardWelcomeTitle" xml:space="preserve">
+    <value>Welcome to BenchBar</value>
+  </data>
+  <data name="WizardWelcomeSubtitle" xml:space="preserve">
+    <value>Frappe development on this PC, inside Windows Subsystem for Linux.</value>
+  </data>
+  <data name="WizardCliOnlyIntro" xml:space="preserve">
+    <value>benchbar.exe is already on this PC. It calls the Linux command line tool inside Ubuntu. If that is missing, run this inside Ubuntu:</value>
+  </data>
+  <data name="WizardLinuxInstallLine" xml:space="preserve">
+    <value>Linux install line</value>
+  </data>
+  <data name="WizardCliOnlyMcp" xml:space="preserve">
+    <value>To let an AI assistant use it, run this in a terminal:</value>
+  </data>
+  <data name="WizardMcpLine" xml:space="preserve">
+    <value>MCP line</value>
+  </data>
+  <data name="WizardDone" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="WizardCliOnlySubtitle" xml:space="preserve">
+    <value>No setup wizard needed.</value>
+  </data>
+  <data name="WizardLogName" xml:space="preserve">
+    <value>Output of the running step</value>
+  </data>
+  <data name="WizardCheckAgain" xml:space="preserve">
+    <value>Check Again</value>
+  </data>
+  <data name="WizardCheckAgainName" xml:space="preserve">
+    <value>Check this PC again</value>
+  </data>
+  <data name="WizardCancelStepName" xml:space="preserve">
+    <value>Cancel the running step</value>
+  </data>
+  <data name="WizardSetUpAll" xml:space="preserve">
+    <value>Set Up Everything</value>
+  </data>
+  <data name="WizardSetUpAllName" xml:space="preserve">
+    <value>Set up everything that is missing</value>
+  </data>
+  <data name="WizardContinue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="WizardCheckTitle" xml:space="preserve">
+    <value>Check Your PC</value>
+  </data>
+  <data name="WizardCheckSubtitle" xml:space="preserve">
+    <value>BenchBar needs WSL and Ubuntu 24.04. Each row says what is missing and how to fix it.</value>
+  </data>
+  <data name="WizardReportProblemStepName" xml:space="preserve">
+    <value>Report this problem: {0}</value>
+  </data>
+  <data name="WizardChecking" xml:space="preserve">
+    <value>Checking this PC...</value>
+  </data>
+  <data name="WizardSettingUp" xml:space="preserve">
+    <value>Setting things up...</value>
+  </data>
+  <data name="WizardAdviceOnly" xml:space="preserve">
+    <value>Advice only. You can continue without it.</value>
+  </data>
+  <data name="CommonWorking" xml:space="preserve">
+    <value>Working...</value>
+  </data>
+  <data name="WizardRowButtonName" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="WizardCopyFixName" xml:space="preserve">
+    <value>Copy the fix: {0}</value>
+  </data>
+  <data name="WizardHowToFixName" xml:space="preserve">
+    <value>How to fix: {0}</value>
+  </data>
+  <data name="WizardHowToFix" xml:space="preserve">
+    <value>How to fix</value>
+  </data>
+  <data name="WizardRestartTitle" xml:space="preserve">
+    <value>Windows needs to restart</value>
+  </data>
+  <data name="WizardRestarting" xml:space="preserve">
+    <value>Restarting...</value>
+  </data>
+  <data name="WizardRestartNow" xml:space="preserve">
+    <value>Restart Now</value>
+  </data>
+  <data name="WizardRestartNowName" xml:space="preserve">
+    <value>Restart Windows now</value>
+  </data>
+  <data name="WizardLinuxUserName" xml:space="preserve">
+    <value>Linux user name</value>
+  </data>
+  <data name="WizardLinuxPassword" xml:space="preserve">
+    <value>Linux password</value>
+  </data>
+  <data name="WizardConfirmLinuxPassword" xml:space="preserve">
+    <value>Confirm Linux password</value>
+  </data>
+  <data name="WizardUserNameLabel" xml:space="preserve">
+    <value>User name</value>
+  </data>
+  <data name="WizardUserNameHelp" xml:space="preserve">
+    <value>Lowercase letters, digits, '-' and '_'.</value>
+  </data>
+  <data name="WizardPasswordLabel" xml:space="preserve">
+    <value>Password</value>
+  </data>
+  <data name="WizardPasswordHelp" xml:space="preserve">
+    <value>This is what sudo asks for later. BenchBar keeps it in memory while this window is open and never saves it.</value>
+  </data>
+  <data name="WizardConfirmPasswordLabel" xml:space="preserve">
+    <value>Confirm password</value>
+  </data>
+  <data name="WizardCreateUser" xml:space="preserve">
+    <value>Create User</value>
+  </data>
+  <data name="WizardLinuxUserTitle" xml:space="preserve">
+    <value>Create Your Linux User</value>
+  </data>
+  <data name="WizardLinuxUserSubtitle" xml:space="preserve">
+    <value>Ubuntu has no user yet. BenchBar creates one and adds it to the sudo group.</value>
+  </data>
+  <data name="WizardCreatingUser" xml:space="preserve">
+    <value>Creating the user...</value>
+  </data>
+  <data name="WizardCreateUserOff" xml:space="preserve">
+    <value>Create User is off. {0}</value>
+  </data>
+  <data name="WizardBenchFolder" xml:space="preserve">
+    <value>Bench folder</value>
+  </data>
+  <data name="WizardBenchFolderInUbuntu" xml:space="preserve">
+    <value>Bench folder in Ubuntu</value>
+  </data>
+  <data name="WizardExistingHelp" xml:space="preserve">
+    <value>BenchBar adds its service files and does not change your sites, apps or database.</value>
+  </data>
+  <data name="WizardUseThisBench" xml:space="preserve">
+    <value>Use This Bench</value>
+  </data>
+  <data name="WizardExistingTitle" xml:space="preserve">
+    <value>Use an Existing Bench</value>
+  </data>
+  <data name="WizardExistingSubtitle" xml:space="preserve">
+    <value>Point BenchBar at a bench that already exists in WSL.</value>
+  </data>
+  <data name="WizardSiteName" xml:space="preserve">
+    <value>Site name</value>
+  </data>
+  <data name="WizardAppBundleName" xml:space="preserve">
+    <value>App bundle</value>
+  </data>
+  <data name="WizardProfile" xml:space="preserve">
+    <value>Profile</value>
+  </data>
+  <data name="WizardTryAgain" xml:space="preserve">
+    <value>Try Again</value>
+  </data>
+  <data name="WizardTryAgainName" xml:space="preserve">
+    <value>Read the profiles again</value>
+  </data>
+  <data name="WizardAdminPassword" xml:space="preserve">
+    <value>Administrator password</value>
+  </data>
+  <data name="WizardFolderHelp" xml:space="preserve">
+    <value>Inside Ubuntu. The default is in your Linux home folder.</value>
+  </data>
+  <data name="WizardSiteHelp" xml:space="preserve">
+    <value>The site's address uses it, for example http://{0}:8000. A name ending in .localhost needs no hosts line: browsers such as Edge and Chrome open it by themselves. PowerShell and ping do not resolve it.</value>
+  </data>
+  <data name="WizardProfileHelp" xml:space="preserve">
+    <value>The Frappe version and its tools. v16-lts and the team profiles you added appear here when this Ubuntu can install them.</value>
+  </data>
+  <data name="WizardApps" xml:space="preserve">
+    <value>Apps</value>
+  </data>
+  <data name="WizardAppsHelp" xml:space="preserve">
+    <value>minimal is Frappe only; common and extended add more apps.</value>
+  </data>
+  <data name="WizardAdminPasswordHelp" xml:space="preserve">
+    <value>The login of the new site. It is used for this install only and never saved.</value>
+  </data>
+  <data name="WizardReview" xml:space="preserve">
+    <value>Review</value>
+  </data>
+  <data name="WizardNewBenchTitle" xml:space="preserve">
+    <value>New Bench</value>
+  </data>
+  <data name="WizardNewBenchSubtitle" xml:space="preserve">
+    <value>Where the bench goes and how its first site is named.</value>
+  </data>
+  <data name="WizardReviewOff" xml:space="preserve">
+    <value>Review is off. {0}</value>
+  </data>
+  <data name="WizardNeedsAttention" xml:space="preserve">
+    <value>Needs attention: {0}. {1}</value>
+  </data>
+  <data name="WizardNote" xml:space="preserve">
+    <value>Note: {0}. {1}</value>
+  </data>
+  <data name="WizardCopyFix" xml:space="preserve">
+    <value>Copy fix</value>
+  </data>
+  <data name="WizardCopyFixForName" xml:space="preserve">
+    <value>Copy the fix for {0}</value>
+  </data>
+  <data name="WizardReadingProfiles" xml:space="preserve">
+    <value>Reading the profiles...</value>
+  </data>
+  <data name="WizardAskingProfiles" xml:space="preserve">
+    <value>Asking BenchBar which profiles this Ubuntu can install...</value>
+  </data>
+  <data name="WizardProfilesError" xml:space="preserve">
+    <value>The profile list could not be read, so v15-lts is the only choice. {0}</value>
+  </data>
+  <data name="WizardProfileRefused" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="CommonReadingPlan" xml:space="preserve">
+    <value>Reading the plan...</value>
+  </data>
+  <data name="WizardInstall" xml:space="preserve">
+    <value>Install</value>
+  </data>
+  <data name="WizardReviewAgain" xml:space="preserve">
+    <value>Review Again</value>
+  </data>
+  <data name="WizardReviewSubtitle" xml:space="preserve">
+    <value>Nothing has changed yet. This is what Install will do.</value>
+  </data>
+  <data name="WizardStale" xml:space="preserve">
+    <value>The plan is out of date: something changed since you reviewed it. Nothing was changed. Review it again before you install.</value>
+  </data>
+  <data name="WizardSite" xml:space="preserve">
+    <value>Site</value>
+  </data>
+  <data name="WizardAddress" xml:space="preserve">
+    <value>Address</value>
+  </data>
+  <data name="WizardInstallTakes" xml:space="preserve">
+    <value>The install takes about 15 to 30 minutes, most of it downloads.</value>
+  </data>
+  <data name="WizardAsksPassword" xml:space="preserve">
+    <value>  asks for your Linux password</value>
+  </data>
+  <data name="WizardAlreadyDone" xml:space="preserve">
+    <value>  already done</value>
+  </data>
+  <data name="WizardPasswordForStepOne" xml:space="preserve">
+    <value>BenchBar will ask for your Linux password for {0} step that use sudo.</value>
+  </data>
+  <data name="WizardPasswordForStepMany" xml:space="preserve">
+    <value>BenchBar will ask for your Linux password for {0} steps that use sudo.</value>
+  </data>
+  <data name="WizardFixForProblem" xml:space="preserve">
+    <value>the fix for problem {0}</value>
+  </data>
+  <data name="WizardFix" xml:space="preserve">
+    <value>the fix</value>
+  </data>
+  <data name="WizardRootPassword" xml:space="preserve">
+    <value>MariaDB root password</value>
+  </data>
+  <data name="WizardRootPasswordHelp" xml:space="preserve">
+    <value>MariaDB in Ubuntu already has a root password that BenchBar does not know. Enter it and retry.</value>
+  </data>
+  <data name="WizardOpenLog" xml:space="preserve">
+    <value>Open Log</value>
+  </data>
+  <data name="WizardOpenLogName" xml:space="preserve">
+    <value>Open the install log</value>
+  </data>
+  <data name="CommonStop" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="WizardStopName" xml:space="preserve">
+    <value>Stop the install</value>
+  </data>
+  <data name="WizardRetry" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="WizardInstalling" xml:space="preserve">
+    <value>Installing</value>
+  </data>
+  <data name="WizardInstallingSubtitle" xml:space="preserve">
+    <value>This takes a while the first time. You can leave this window open and do something else.</value>
+  </data>
+  <data name="WizardRunAgain" xml:space="preserve">
+    <value>Run Again</value>
+  </data>
+  <data name="WizardStopping" xml:space="preserve">
+    <value>Stopping...</value>
+  </data>
+  <data name="WizardStoppedCard" xml:space="preserve">
+    <value>The install was stopped. Run Again continues where it can; finished steps are not repeated.</value>
+  </data>
+  <data name="WizardFailedTitle" xml:space="preserve">
+    <value>Install Failed</value>
+  </data>
+  <data name="WizardFailedSubtitle" xml:space="preserve">
+    <value>A step did not finish. Retry it, tell us with Report This Problem, or open the log.</value>
+  </data>
+  <data name="WizardStoppedTitle" xml:space="preserve">
+    <value>Install Stopped</value>
+  </data>
+  <data name="WizardStoppedSubtitle" xml:space="preserve">
+    <value>Run Again continues where it can. Finished steps are not repeated.</value>
+  </data>
+  <data name="WizardWaitingTitle" xml:space="preserve">
+    <value>Waiting for the Previous Run</value>
+  </data>
+  <data name="WizardWaitingSubtitle" xml:space="preserve">
+    <value>A run that was stopped is still ending inside Ubuntu. BenchBar tries again by itself.</value>
+  </data>
+  <data name="WizardWrongPasswordTitle" xml:space="preserve">
+    <value>Wrong Linux Password</value>
+  </data>
+  <data name="WizardWrongPasswordSubtitle" xml:space="preserve">
+    <value>Linux did not accept the password. Type it again and press Retry.</value>
+  </data>
+  <data name="WizardNeedsRootTitle" xml:space="preserve">
+    <value>MariaDB Needs Its Password</value>
+  </data>
+  <data name="WizardNeedsRootSubtitle" xml:space="preserve">
+    <value>MariaDB in Ubuntu already has a root password. Enter it and press Retry.</value>
+  </data>
+  <data name="WizardRowWorking" xml:space="preserve">
+    <value>working</value>
+  </data>
+  <data name="WizardSeconds" xml:space="preserve">
+    <value>{0} s</value>
+  </data>
+  <data name="WizardStatusUnchanged" xml:space="preserve">
+    <value>Already done</value>
+  </data>
+  <data name="WizardStatusRunning" xml:space="preserve">
+    <value>Running</value>
+  </data>
+  <data name="WizardStatusFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="WizardStatusSkipped" xml:space="preserve">
+    <value>Skipped</value>
+  </data>
+  <data name="WizardStatusWarning" xml:space="preserve">
+    <value>Warning</value>
+  </data>
+  <data name="WizardStatusStopped" xml:space="preserve">
+    <value>Stopped</value>
+  </data>
+  <data name="WizardStatusWaiting" xml:space="preserve">
+    <value>Waiting</value>
+  </data>
+  <data name="WizardInstallNotFinished" xml:space="preserve">
+    <value>The install did not finish</value>
+  </data>
+  <data name="WizardStepFailed" xml:space="preserve">
+    <value>{0} failed</value>
+  </data>
+  <data name="WizardStepFailedMessage" xml:space="preserve">
+    <value>{0} failed: {1}</value>
+  </data>
+  <data name="WizardWhatToDo" xml:space="preserve">
+    <value>What to do:</value>
+  </data>
+  <data name="WizardLinuxPasswordAgain" xml:space="preserve">
+    <value>The Linux password is the one you chose for your Linux user. Type it again.</value>
+  </data>
+  <data name="WizardFixName" xml:space="preserve">
+    <value>Fix</value>
+  </data>
+  <data name="WizardRetryAdvice" xml:space="preserve">
+    <value>Press Retry to run the install again; finished steps are not repeated. If it fails again, press Report This Problem or Open Log.</value>
+  </data>
+  <data name="WizardRunningAt" xml:space="preserve">
+    <value>Your bench is running at</value>
+  </data>
+  <data name="WizardNotify" xml:space="preserve">
+    <value>Show a notification when a bench stops or crashes</value>
+  </data>
+  <data name="WizardNotifyName" xml:space="preserve">
+    <value>Show notifications</value>
+  </data>
+  <data name="WizardLogon" xml:space="preserve">
+    <value>Open BenchBar when I sign in to Windows</value>
+  </data>
+  <data name="WizardLogonName" xml:space="preserve">
+    <value>Open BenchBar at logon</value>
+  </data>
+  <data name="WizardSkipped" xml:space="preserve">
+    <value>Some steps were skipped. Run these when you are ready:</value>
+  </data>
+  <data name="WizardSkippedStepName" xml:space="preserve">
+    <value>Skipped step</value>
+  </data>
+  <data name="WizardDoneMcp" xml:space="preserve">
+    <value>To let an AI assistant use this bench, run this in a terminal:</value>
+  </data>
+  <data name="WizardTrayHint" xml:space="preserve">
+    <value>Cannot see the BenchBar icon? Windows may hide it under the ^ arrow in the taskbar. To keep it in view, open Settings, Personalization, Taskbar, Other system tray icons, and turn BenchBar on.</value>
+  </data>
+  <data name="WizardOpenSite" xml:space="preserve">
+    <value>Open Site</value>
+  </data>
+  <data name="WizardCloseName" xml:space="preserve">
+    <value>Close the wizard</value>
+  </data>
+  <data name="WizardDoneTitle" xml:space="preserve">
+    <value>Your Bench Is Ready</value>
+  </data>
+  <data name="WizardDoneSubtitle" xml:space="preserve">
+    <value>BenchBar keeps it running in the notification area.</value>
+  </data>
+  <data name="CommonBetaPill" xml:space="preserve">
+    <value>Beta</value>
+  </data>
+  <data name="CommonBetaWindowTitle" xml:space="preserve">
+    <value>BenchBar (Beta)</value>
+  </data>
+  <data name="CommonBetaAbout" xml:space="preserve">
+    <value>BenchBar for Windows is in beta. It works, and you may find rough edges. Report a Bug writes a redacted report and opens a GitHub issue for it, in about a minute.</value>
+  </data>
+  <data name="CommonBetaBanner" xml:space="preserve">
+    <value>BenchBar for Windows is in beta. If something breaks or confuses you, tell us.</value>
+  </data>
+  <data name="CommonBetaWizardLine" xml:space="preserve">
+    <value>This is a beta. If a step fails, Report This Problem sends us what we need.</value>
+  </data>
+  <data name="CommonReportThisProblem" xml:space="preserve">
+    <value>Report This Problem</value>
+  </data>
+  <data name="WizardRestartRefused" xml:space="preserve">
+    <value>Windows did not allow the restart. Restart from the Start menu.</value>
+  </data>
+  <data name="WizardCancelledPrompt" xml:space="preserve">
+    <value>You said no to the Windows prompt. Try again when ready.</value>
+  </data>
+  <data name="WizardStoppedMessage" xml:space="preserve">
+    <value>Stopped. Click the button to try again.</value>
+  </data>
+  <data name="WizardAdminNote" xml:space="preserve">
+    <value>Windows will ask for permission</value>
+  </data>
+  <data name="WizardRestartBlurb" xml:space="preserve">
+    <value>Windows has to restart to finish turning on WSL. BenchBar opens again after you sign in and picks up here. Shut down does not count. Use Restart.</value>
+  </data>
+  <data name="WizardRestartAgainHint" xml:space="preserve">
+    <value>If Windows did not restart, click Restart Now again.</value>
+  </data>
+  <data name="WizardWaitingForPrompt" xml:space="preserve">
+    <value>Waiting for you to answer the Windows prompt. It may be behind other windows.</value>
+  </data>
+  <data name="WizardHomeUnknown" xml:space="preserve">
+    <value>BenchBar could not read your Linux home folder. Make sure Ubuntu starts, then check again.</value>
+  </data>
+  <data name="WizardDistroRunning" xml:space="preserve">
+    <value>Ubuntu is running. Setting this up restarts it, which stops any benches and MariaDB inside it. Restart Ubuntu now?</value>
+  </data>
+  <data name="WizardKeepAwakeNote" xml:space="preserve">
+    <value>Keep this PC plugged in and awake until it finishes.</value>
+  </data>
+  <data name="WizardWaitingPreviousRun" xml:space="preserve">
+    <value>Waiting for the previous run to end inside Ubuntu. BenchBar tries again by itself.</value>
+  </data>
+  <data name="WizardPreviousRunStillGoing" xml:space="preserve">
+    <value>The previous run is still going inside Ubuntu. Wait for it to end, then press Retry.</value>
+  </data>
+  <data name="WizardPasswordTooShort" xml:space="preserve">
+    <value>Use at least 8 characters for a new user.</value>
+  </data>
+  <data name="WizardPasswordLineBreak" xml:space="preserve">
+    <value>The password cannot contain a line break.</value>
+  </data>
+  <data name="WizardStoppedWaiting" xml:space="preserve">
+    <value>Stopped waiting. If you already answered the Windows prompt, WSL keeps installing. Restart Windows when it finishes, then check again.</value>
+  </data>
+  <data name="WizardSiteRule" xml:space="preserve">
+    <value>Lowercase letters, digits, '-' and '.' only.</value>
+  </data>
+  <data name="WizardFolderRule" xml:space="preserve">
+    <value>An absolute Linux path with letters, digits and . _ - + @ only.</value>
+  </data>
+  <data name="WizardTurnOn" xml:space="preserve">
+    <value>Turn On</value>
+  </data>
+  <data name="WizardUpdate" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="WizardMoveKeepAwake" xml:space="preserve">
+    <value>Move Keep Awake</value>
+  </data>
+  <data name="WizardSetUp" xml:space="preserve">
+    <value>Set Up</value>
+  </data>
+  <data name="WizardFixLine" xml:space="preserve">
+    <value>Fix: {0}</value>
+  </data>
+  <data name="WizardCreateUserMakes" xml:space="preserve">
+    <value>Create User makes the Linux user {0}. You can change the name on the next page.</value>
+  </data>
+  <data name="WizardUserNameProblem" xml:space="preserve">
+    <value>Use lowercase letters, digits, '-' and '_', starting with a letter. root is not allowed.</value>
+  </data>
+  <data name="WizardPasswordEmpty" xml:space="preserve">
+    <value>Choose a password. It is what sudo asks for later.</value>
+  </data>
+  <data name="WizardPasswordMismatch" xml:space="preserve">
+    <value>The two passwords are not the same.</value>
+  </data>
+  <data name="WizardChooseBundle" xml:space="preserve">
+    <value>Choose a bundle.</value>
+  </data>
+  <data name="WizardChooseProfile" xml:space="preserve">
+    <value>Choose a profile.</value>
+  </data>
+  <data name="WizardProfileCannot" xml:space="preserve">
+    <value>{0} cannot be used here. {1}</value>
+  </data>
+  <data name="WizardChooseAdminPassword" xml:space="preserve">
+    <value>Choose the Administrator password for the site.</value>
+  </data>
+  <data name="WizardAdminLineBreak" xml:space="preserve">
+    <value>The Administrator password cannot contain a line break.</value>
+  </data>
+  <data name="WizardAdminTooShort" xml:space="preserve">
+    <value>The Administrator password needs at least 8 characters.</value>
+  </data>
+  <data name="WizardDistroAlignFailed" xml:space="preserve">
+    <value>BenchBar could not make {0} its distro: {1}</value>
+  </data>
+  <data name="WizardAdoptFailed" xml:space="preserve">
+    <value>adopt-distro failed</value>
+  </data>
+  <data name="WizardStepDidNotWork" xml:space="preserve">
+    <value>It did not work. Open the log for details.</value>
+  </data>
+  <data name="WizardLinuxUserStepTitle" xml:space="preserve">
+    <value>Linux user</value>
+  </data>
+  <data name="WizardUserNotCreated" xml:space="preserve">
+    <value>The user could not be created.</value>
+  </data>
+  <data name="WizardProfileListEmpty" xml:space="preserve">
+    <value>The profile list was empty.</value>
+  </data>
+  <data name="WizardLinuxPasswordRefused" xml:space="preserve">
+    <value>Linux did not accept that password.</value>
+  </data>
+  <data name="WizardRootPasswordUnknown" xml:space="preserve">
+    <value>MariaDB already has a root password that BenchBar does not know.</value>
+  </data>
+  <data name="WizardInstallNotFinishedLine" xml:space="preserve">
+    <value>The install did not finish.</value>
+  </data>
+  <data name="WizardProfileFallbackLabel" xml:space="preserve">
+    <value>Frappe/ERPNext v15 LTS</value>
+  </data>
+  <data name="WizardProfileTeam" xml:space="preserve">
+    <value> (team)</value>
+  </data>
+  <data name="WizardProfileNotAvailable" xml:space="preserve">
+    <value> (not available here)</value>
+  </data>
+  <data name="WizardUnsupported" xml:space="preserve">
+    <value>Not supported on Linux yet.</value>
+  </data>
+  <data name="WizardUnsupportedWhy" xml:space="preserve">
+    <value>Not supported on Linux yet: {0}.</value>
+  </data>
+  <data name="SetupSchemaNewer" xml:space="preserve">
+    <value>benchbar.exe speaks schema {0}, which this BenchBar does not read. Update BenchBar.</value>
+  </data>
+  <data name="SetupKeepAwakeOther" xml:space="preserve">
+    <value>The keep awake task serves {0}. Move Keep Awake makes it serve {1} instead. {0} is then no longer kept awake: it can go idle and stop, and so can any benches in it.</value>
+  </data>
+  <data name="SetupSecondOne" xml:space="preserve">
+    <value>1 second</value>
+  </data>
+  <data name="SetupSecondsMany" xml:space="preserve">
+    <value>{0} seconds</value>
+  </data>
+  <data name="SetupMinuteOne" xml:space="preserve">
+    <value>1 minute</value>
+  </data>
+  <data name="SetupMinutesMany" xml:space="preserve">
+    <value>{0} minutes</value>
+  </data>
+  <data name="SetupDidNotFinish" xml:space="preserve">
+    <value>{0} did not finish in {1}.</value>
+  </data>
+  <data name="SetupProfileListNotRead" xml:space="preserve">
+    <value>The profile list was not read.</value>
+  </data>
+  <data name="SetupPrerequisitesNotRead" xml:space="preserve">
+    <value>The prerequisites were not read.</value>
+  </data>
+  <data name="SetupCheckTimeout" xml:space="preserve">
+    <value>benchbar.exe setup check did not answer in {0} seconds. Wait a minute and run benchbar.exe setup check again.</value>
+  </data>
+  <data name="SetupCheckExit" xml:space="preserve">
+    <value>benchbar.exe setup check exited with code {0}. Update BenchBar.</value>
+  </data>
+  <data name="SetupEndedNoWord" xml:space="preserve">
+    <value>benchbar.exe ended without saying how it went.</value>
+  </data>
+  <data name="CommonPlanNotMade" xml:space="preserve">
+    <value>The plan could not be made.</value>
+  </data>
+  <data name="SetupExitCode" xml:space="preserve">
+    <value>benchbar.exe exited with code {0}.</value>
+  </data>
+  <data name="SetupAdoptTimeout" xml:space="preserve">
+    <value>benchbar.exe adopt-distro did not finish in 3 minutes.</value>
+  </data>
+  <data name="SetupProfileListExit" xml:space="preserve">
+    <value>benchbar.exe profile list exited with code {0}.</value>
+  </data>
+  <data name="SetupProfileListTimeout" xml:space="preserve">
+    <value>benchbar.exe profile list did not answer in time.</value>
+  </data>
+  <data name="SetupPrerequisitesExit" xml:space="preserve">
+    <value>benchbar.exe doctor --prerequisites exited with code {0}.</value>
+  </data>
+  <data name="SetupPrerequisitesTimeout" xml:space="preserve">
+    <value>benchbar.exe doctor --prerequisites did not answer in time.</value>
+  </data>
+  <data name="CommonVsCodeInstall" xml:space="preserve">
+    <value>Install VS Code and its WSL extension (ms-vscode-remote.remote-wsl), then try again.</value>
+  </data>
+  <data name="CommonVsCodeBadPath" xml:space="preserve">
+    <value>This bench path has characters VS Code's launcher cannot take; open it from a WSL terminal: code {0}</value>
+  </data>
+  <data name="CommonNoDistro" xml:space="preserve">
+    <value>BenchBar does not know which WSL distro to open. Choose one in Settings.</value>
+  </data>
+  <data name="FlyoutDistroHint" xml:space="preserve">
+    <value>The tray does not start it on its own.</value>
+  </data>
+  <data name="CommonSetUpApp" xml:space="preserve">
+    <value>Set Up BenchBar</value>
+  </data>
+  <data name="FlyoutMissingDistroHint" xml:space="preserve">
+    <value>WSL has no distro with that name. Set up BenchBar to install it, or pick another distro in Settings.</value>
+  </data>
+  <data name="FlyoutOpenMainName" xml:space="preserve">
+    <value>Open the BenchBar window</value>
+  </data>
+  <data name="CommonUpdating" xml:space="preserve">
+    <value>Updating to BenchBar {0}.</value>
+  </data>
+  <data name="CommonUpdateOut" xml:space="preserve">
+    <value>BenchBar {0} is out.</value>
+  </data>
+  <data name="CommonUpdateNowName" xml:space="preserve">
+    <value>Update BenchBar now</value>
+  </data>
+  <data name="CommonCopyUpdate" xml:space="preserve">
+    <value>Copy Update Line</value>
+  </data>
+  <data name="CommonCopyUpdateName" xml:space="preserve">
+    <value>Copy the update line for PowerShell</value>
+  </data>
+  <data name="FlyoutLearnMore" xml:space="preserve">
+    <value>Learn more</value>
+  </data>
+  <data name="CommonTheDistro" xml:space="preserve">
+    <value>The WSL distro</value>
+  </data>
+  <data name="CommonStart" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="CommonDistroStopped" xml:space="preserve">
+    <value>{0} is stopped</value>
+  </data>
+  <data name="CommonDistroMissing" xml:space="preserve">
+    <value>{0} is not installed</value>
+  </data>
+  <data name="FlyoutSetUpBench" xml:space="preserve">
+    <value>Set Up a Bench</value>
+  </data>
+  <data name="FlyoutSetUpBenchName" xml:space="preserve">
+    <value>Set up a bench</value>
+  </data>
+  <data name="FlyoutNoBenches" xml:space="preserve">
+    <value>No benches found.</value>
+  </data>
+  <data name="FlyoutSetUpAppName" xml:space="preserve">
+    <value>Set up BenchBar</value>
+  </data>
+  <data name="FlyoutRowName" xml:space="preserve">
+    <value>{0}, {1}</value>
+  </data>
+  <data name="FlyoutMore" xml:space="preserve">
+    <value>More</value>
+  </data>
+  <data name="FlyoutMoreName" xml:space="preserve">
+    <value>More actions</value>
+  </data>
+  <data name="FlyoutOpenSite" xml:space="preserve">
+    <value>Open site</value>
+  </data>
+  <data name="FlyoutVsCode" xml:space="preserve">
+    <value>VS Code</value>
+  </data>
+  <data name="FlyoutVsCodeTip" xml:space="preserve">
+    <value>Open the bench in VS Code</value>
+  </data>
+  <data name="FlyoutCopyPath" xml:space="preserve">
+    <value>Copy path</value>
+  </data>
+  <data name="PlanRunningFor" xml:space="preserve">
+    <value>Running for {0}:{1}</value>
+  </data>
+  <data name="PlanNoPlan" xml:space="preserve">
+    <value>There is no plan</value>
+  </data>
+  <data name="CommonClose" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="PlanStaleTitle" xml:space="preserve">
+    <value>The plan is out of date</value>
+  </data>
+  <data name="PlanStaleBody" xml:space="preserve">
+    <value>Something changed since you reviewed it. Nothing was changed. Read the plan again before you apply it.</value>
+  </data>
+  <data name="PlanStopWaiting" xml:space="preserve">
+    <value>Stop Waiting</value>
+  </data>
+  <data name="PlanFailedReport" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="PlanLeaseRefused" xml:space="preserve">
+    <value>{0} Nothing was changed. BenchBar never takes or breaks a lease by itself.</value>
+  </data>
+  <data name="PlanNothingToChange" xml:space="preserve">
+    <value>There is nothing to change.</value>
+  </data>
+  <data name="PlanSteps" xml:space="preserve">
+    <value>Steps</value>
+  </data>
+  <data name="PlanStepSudo" xml:space="preserve">
+    <value>{0}. {1}  (needs sudo)</value>
+  </data>
+  <data name="PlanStep" xml:space="preserve">
+    <value>{0}. {1}</value>
+  </data>
+  <data name="PlanChanges" xml:space="preserve">
+    <value>Changes: {0}</value>
+  </data>
+  <data name="PlanSudoOne" xml:space="preserve">
+    <value>{0} step uses sudo. BenchBar asks for your Linux password when you confirm; it is used for this run only.</value>
+  </data>
+  <data name="PlanSudoMany" xml:space="preserve">
+    <value>{0} steps use sudo. BenchBar asks for your Linux password when you confirm; it is used for this run only.</value>
+  </data>
+  <data name="PlanWarning" xml:space="preserve">
+    <value>Warning: {0}</value>
+  </data>
+  <data name="PlanNeeds" xml:space="preserve">
+    <value>Needs: {0}</value>
+  </data>
+  <data name="PlanCanStop" xml:space="preserve">
+    <value>You can stop this run, or stop waiting and let it finish in the background.</value>
+  </data>
+  <data name="PlanCannotStop" xml:space="preserve">
+    <value>This cannot be stopped part way. You can stop waiting: it keeps running and BenchBar tells you when it ends.</value>
+  </data>
+  <data name="PlanStepMessage" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="PlanItNeeds" xml:space="preserve">
+    <value>It needs: {0}</value>
+  </data>
+  <data name="PlanChanged" xml:space="preserve">
+    <value>Changed</value>
+  </data>
+  <data name="PlanChangeDetail" xml:space="preserve">
+    <value>{0}: {1}, {2}</value>
+  </data>
+  <data name="PlanChange" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="PlanNext" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="PlanRunStopped" xml:space="preserve">
+    <value>The run was stopped. Run the plan again to finish it.</value>
+  </data>
+  <data name="PlanStopped" xml:space="preserve">
+    <value>Stopped</value>
+  </data>
+  <data name="PlanNothingNeeded" xml:space="preserve">
+    <value>Nothing needed changing</value>
+  </data>
+  <data name="PlanDone" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="PlanDidNotFinish" xml:space="preserve">
+    <value>It did not finish</value>
+  </data>
+  <data name="PlanCommandFailed" xml:space="preserve">
+    <value>The command failed (exit {0}).</value>
+  </data>
+  <data name="PlanNoResult" xml:space="preserve">
+    <value>{0}: no result.</value>
+  </data>
+  <data name="PlanSummaryOk" xml:space="preserve">
+    <value>{0}: {1}.</value>
+  </data>
+  <data name="PlanSummaryFailed" xml:space="preserve">
+    <value>{0}: {1}. {2}</value>
+  </data>
+  <data name="PlanPreviewFailed" xml:space="preserve">
+    <value>The preview could not be made.</value>
+  </data>
+  <data name="PlanPasswordRefused" xml:space="preserve">
+    <value>Linux did not accept that password. Nothing was changed.</value>
+  </data>
+  <data name="PlanRefresh" xml:space="preserve">
+    <value>Refresh Plan</value>
+  </data>
+  <data name="PlanPortsChange" xml:space="preserve">
+    <value>web port {0} to {1}</value>
+  </data>
+  <data name="PlanPortsNoChange" xml:space="preserve">
+    <value>no change</value>
+  </data>
+  <data name="PlanPortsSetUp" xml:space="preserve">
+    <value>set up the service files</value>
+  </data>
+  <data name="PlanEntryLine" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="MainReportBugName" xml:space="preserve">
+    <value>Report a bug</value>
+  </data>
+  <data name="MainDismissBetaName" xml:space="preserve">
+    <value>Dismiss the beta notice</value>
+  </data>
+  <data name="MainBetaNoticeName" xml:space="preserve">
+    <value>Beta notice: {0}</value>
+  </data>
+  <data name="MainAddBenchName" xml:space="preserve">
+    <value>Add a bench</value>
+  </data>
+  <data name="MainAddBenchTip" xml:space="preserve">
+    <value>Add a Bench</value>
+  </data>
+  <data name="MainNewBenchItem" xml:space="preserve">
+    <value>New Bench...</value>
+  </data>
+  <data name="MainExistingBenchItem" xml:space="preserve">
+    <value>I Already Have a Bench...</value>
+  </data>
+  <data name="MainItemName" xml:space="preserve">
+    <value>{0}, {1}</value>
+  </data>
+  <data name="MainSiteItemName" xml:space="preserve">
+    <value>Site {0}, {1}</value>
+  </data>
+  <data name="MainSiteItemOfName" xml:space="preserve">
+    <value>Site {0}, of {1}</value>
+  </data>
+  <data name="MainToolsOffTip" xml:space="preserve">
+    <value>Finish or close the setup first.</value>
+  </data>
+  <data name="MainNeedsAttention" xml:space="preserve">
+    <value>BenchBar needs attention</value>
+  </data>
+  <data name="MainOpenSettings" xml:space="preserve">
+    <value>Open Settings</value>
+  </data>
+  <data name="MainNoBenches" xml:space="preserve">
+    <value>No benches yet</value>
+  </data>
+  <data name="MainNoBenchesBody" xml:space="preserve">
+    <value>Set up Frappe in WSL with a few clicks, or point BenchBar at a bench you already have.</value>
+  </data>
+  <data name="MainSetUpNewBench" xml:space="preserve">
+    <value>Set Up a New Bench</value>
+  </data>
+  <data name="MainDismissName" xml:space="preserve">
+    <value>Dismiss: {0}</value>
+  </data>
+  <data name="MainNoticeName" xml:space="preserve">
+    <value>Notice: {0}</value>
+  </data>
+  <data name="CommonCopied" xml:space="preserve">
+    <value>Copied</value>
+  </data>
+  <data name="MainReleasePage" xml:space="preserve">
+    <value>Release Page</value>
+  </data>
+  <data name="MainReleasePageName" xml:space="preserve">
+    <value>Open the release page</value>
+  </data>
+  <data name="MainNotNow" xml:space="preserve">
+    <value>Not Now</value>
+  </data>
+  <data name="MainDismissUpdateName" xml:space="preserve">
+    <value>Dismiss the update notice</value>
+  </data>
+  <data name="MainOtherWays" xml:space="preserve">
+    <value>Other Ways</value>
+  </data>
+  <data name="MainOtherWaysName" xml:space="preserve">
+    <value>Other ways to update</value>
+  </data>
+  <data name="MainOtherWaysTip" xml:space="preserve">
+    <value>Copy the update line for PowerShell, or open the release page</value>
+  </data>
+  <data name="MainBenches" xml:space="preserve">
+    <value>Benches</value>
+  </data>
+  <data name="MainSettings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="MainAbout" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="CommonGuideViewHealth" xml:space="preserve">
+    <value>View Health...</value>
+  </data>
+  <data name="CommonGuideReviewPort" xml:space="preserve">
+    <value>Review Port Conflict...</value>
+  </data>
+  <data name="CommonGuideSetUpManagement" xml:space="preserve">
+    <value>Set Up Management...</value>
+  </data>
+  <data name="CommonGuideNotManaged" xml:space="preserve">
+    <value>BenchBar does not manage this bench yet, so it cannot start it.</value>
+  </data>
+  <data name="CommonGuidePortHeld" xml:space="preserve">
+    <value>Another program holds one of its ports.</value>
+  </data>
+  <data name="CommonGuideCrashed" xml:space="preserve">
+    <value>It crashed and is being restarted.</value>
+  </data>
+  <data name="CommonGuideBrokenPaused" xml:space="preserve">
+    <value>Its environment is broken, so automatic restarts are paused.</value>
+  </data>
+  <data name="CommonGuideYouStopped" xml:space="preserve">
+    <value>You stopped it.</value>
+  </data>
+  <data name="CommonGuideCrashLoop" xml:space="preserve">
+    <value>It crashed three times in ten minutes, so restarts are paused.</value>
+  </data>
+  <data name="CommonGuideBrokenStopped" xml:space="preserve">
+    <value>Its environment is broken, so it cannot start.</value>
+  </data>
+  <data name="CommonGuidePortHeldStart" xml:space="preserve">
+    <value>Another program held one of its ports when it started.</value>
+  </data>
+  <data name="CommonGuideNotStarted" xml:space="preserve">
+    <value>It has not been started yet.</value>
+  </data>
+  <data name="CommonShimNotFound" xml:space="preserve">
+    <value>benchbar.exe was not found next to BenchBarTray.exe or on PATH. Run the installer again in PowerShell: {0} A security product may have removed it: check Windows Security, Protection history.</value>
+  </data>
+  <data name="CommonShimBlocked" xml:space="preserve">
+    <value>Windows blocked benchbar.exe. If SmartScreen or your antivirus asked, allow it, then try again. Smart App Control blocks programs that are not signed: turn it off in Windows Security, App and browser control, Smart App Control settings. It cannot be turned on again without reinstalling Windows.</value>
+  </data>
+  <data name="CommonShimExpectedAt" xml:space="preserve">
+    <value>benchbar.exe was expected at {0} and is not there. Run the installer again in PowerShell: {1} A security product may have removed it: check Windows Security, Protection history.</value>
+  </data>
+  <data name="CommonShimAccessDenied" xml:space="preserve">
+    <value>Windows refused access to benchbar.exe (access denied). Check that your account can run files in its folder, and that no security product blocks it.</value>
+  </data>
+  <data name="CommonShimCouldNotStart" xml:space="preserve">
+    <value>benchbar.exe could not be started: {0}</value>
+  </data>
+  <data name="CommonActionTimeoutDown" xml:space="preserve">
+    <value>benchbar.exe {0} did not finish in {1}; the bench may still be stopping. Run benchbar.exe status.</value>
+  </data>
+  <data name="CommonActionTimeoutUp" xml:space="preserve">
+    <value>benchbar.exe {0} did not finish in {1}; the bench may still be starting. Run benchbar.exe status.</value>
+  </data>
+  <data name="CommonCommandNoAnswer" xml:space="preserve">
+    <value>benchbar.exe {0} did not answer in {1}.</value>
+  </data>
+  <data name="CommonPrintedNoJson" xml:space="preserve">
+    <value>benchbar.exe {0} printed no JSON (exit {1}).</value>
+  </data>
+  <data name="CommonDownloadedOf" xml:space="preserve">
+    <value> of {0}</value>
+  </data>
+  <data name="CommonDownloaded" xml:space="preserve">
+    <value>Downloaded {0}{1}</value>
+  </data>
+  <data name="CommonPrintedNothing" xml:space="preserve">
+    <value>It printed nothing.</value>
+  </data>
+  <data name="CommonFirstLine" xml:space="preserve">
+    <value>The first line was: {0}</value>
+  </data>
+  <data name="CommonUnreadable" xml:space="preserve">
+    <value>benchbar.exe {0} gave an answer BenchBar cannot read. {1} A benchbar.exe of another version than BenchBar is the likely cause: run the installer again so both match.</value>
+  </data>
+  <data name="CommonStatusNoAnswer" xml:space="preserve">
+    <value>benchbar.exe status gave no usable answer.</value>
+  </data>
+  <data name="CommonNoUsableAnswer" xml:space="preserve">
+    <value>benchbar.exe gave no usable answer. Run benchbar.exe doctor.</value>
+  </data>
+  <data name="CommonStateRunning" xml:space="preserve">
+    <value>running</value>
+  </data>
+  <data name="CommonStateStopped" xml:space="preserve">
+    <value>stopped</value>
+  </data>
+  <data name="CommonStateCrashed" xml:space="preserve">
+    <value>crashed</value>
+  </data>
+  <data name="CommonStatePortConflict" xml:space="preserve">
+    <value>port conflict</value>
+  </data>
+  <data name="CommonStateNeedsRepair" xml:space="preserve">
+    <value>paused, needs repair</value>
+  </data>
+  <data name="CommonStatePaused" xml:space="preserve">
+    <value>paused</value>
+  </data>
+  <data name="CommonStateUnknown" xml:space="preserve">
+    <value>unknown</value>
+  </data>
+  <data name="CommonStateUnknownRaw" xml:space="preserve">
+    <value>unknown ({0})</value>
+  </data>
+  <data name="CommonNoneUp" xml:space="preserve">
+    <value>none up</value>
+  </data>
+  <data name="CommonSomeUp" xml:space="preserve">
+    <value>{0} of {1} up</value>
+  </data>
+  <data name="CommonPortsNotChecked" xml:space="preserve">
+    <value>The ports could not be checked.</value>
+  </data>
+  <data name="CommonPortsReview" xml:space="preserve">
+    <value>{0} Open BenchBar, then Health, to review the ports.</value>
+  </data>
+  <data name="CommonDistroNotStarted" xml:space="preserve">
+    <value>{0} did not start. Open the log or try again.</value>
+  </data>
+  <data name="CommonTheDistroShort" xml:space="preserve">
+    <value>The distro</value>
+  </data>
+  <data name="CommonNeedsAttention" xml:space="preserve">
+    <value>needs attention</value>
+  </data>
+  <data name="CommonDistroNotInstalledShort" xml:space="preserve">
+    <value>distro not installed</value>
+  </data>
+  <data name="CommonDistroStoppedShort" xml:space="preserve">
+    <value>distro stopped</value>
+  </data>
+  <data name="LabsFooter" xml:space="preserve">
+    <value>Experiments can change or disappear. Turning one off stops what it started.</value>
+  </data>
+  <data name="LabsUnsupported" xml:space="preserve">
+    <value>Update BenchBar to use Labs</value>
+  </data>
+  <data name="LabsNotHere" xml:space="preserve">
+    <value>Not on Windows yet.</value>
+  </data>
+  <data name="LabsNotHereOne" xml:space="preserve">
+    <value>Not on Windows yet. It works on {0} only.</value>
+  </data>
+  <data name="LabsNotHereMany" xml:space="preserve">
+    <value>Not on Windows yet. It works on {0} and {1}.</value>
+  </data>
+  <data name="LabsNotRead" xml:space="preserve">
+    <value>The labs could not be read.</value>
+  </data>
+  <data name="LabsCouldNotTurnOn" xml:space="preserve">
+    <value>The experiment could not be turned on.</value>
+  </data>
+  <data name="LabsCouldNotTurnOff" xml:space="preserve">
+    <value>The experiment could not be turned off.</value>
+  </data>
+  <data name="LogonSettingsButton" xml:space="preserve">
+    <value>Open Startup Settings</value>
+  </data>
+  <data name="LogonOffInWindows" xml:space="preserve">
+    <value>Open at logon is turned off in Windows. Turn it on in Settings &gt; Apps &gt; Startup.</value>
+  </data>
+  <data name="LogonOffByPolicy" xml:space="preserve">
+    <value>Open at logon is turned off by a policy on this PC. Settings &gt; Apps &gt; Startup shows its state.</value>
+  </data>
+  <data name="LogonOnByPolicy" xml:space="preserve">
+    <value>Open at logon is turned on by a policy on this PC.</value>
+  </data>
+  <data name="LogonUnreadable" xml:space="preserve">
+    <value>BenchBar could not read the startup setting. Check Settings &gt; Apps &gt; Startup.</value>
+  </data>
+  <data name="UpdateStoreLine" xml:space="preserve">
+    <value>Updates come from the Microsoft Store</value>
+  </data>
+  <data name="UpdateTwoInstalls" xml:space="preserve">
+    <value>Two BenchBar installs are on this PC. Remove the older one with the installer's uninstall line.</value>
+  </data>
+  <data name="UpdateCopyUninstall" xml:space="preserve">
+    <value>Copy Uninstall Line</value>
+  </data>
+  <data name="UpdateInstallExplanation" xml:space="preserve">
+    <value>Run this line in PowerShell. It closes BenchBar and starts it again.</value>
+  </data>
+  <data name="UpdateNowExplanation" xml:space="preserve">
+    <value>Update Now closes BenchBar, installs the new version and starts it again. A window shows the progress.</value>
+  </data>
+  <data name="UpdateUpdatingExplanation" xml:space="preserve">
+    <value>The update runs in its own window. BenchBar closes and starts again when it is done.</value>
+  </data>
+  <data name="UpdateStoreCopyLine" xml:space="preserve">
+    <value>This copy of BenchBar is updated by the Microsoft Store.</value>
+  </data>
+  <data name="UpdateCheckFailed" xml:space="preserve">
+    <value>Could not check for updates: {0}</value>
+  </data>
+  <data name="UpdateLatest" xml:space="preserve">
+    <value>You have the latest version.</value>
+  </data>
+  <data name="UpdateShimMissing" xml:space="preserve">
+    <value>benchbar.exe was not found next to BenchBar.</value>
+  </data>
+  <data name="UpdateShimOtherVersion" xml:space="preserve">
+    <value>benchbar.exe is not the same version as BenchBar. Run the installer again.</value>
+  </data>
+  <data name="UpdateNoAnswer" xml:space="preserve">
+    <value>benchbar.exe gave no update answer (exit code {0}).</value>
+  </data>
+  <data name="UpdateNoAnswerInTime" xml:space="preserve">
+    <value>benchbar.exe did not answer in time.</value>
+  </data>
+  <data name="UpdatePowerShellFailed" xml:space="preserve">
+    <value>Windows PowerShell could not be started: {0}</value>
+  </data>
+  <data name="UpdateWindowNotStarted" xml:space="preserve">
+    <value>Windows did not start the update window.</value>
+  </data>
+  <data name="UpdateAlreadyRunning" xml:space="preserve">
+    <value>An update is already running in its own window.</value>
+  </data>
+  <data name="UpdateUpdatedTo" xml:space="preserve">
+    <value>BenchBar was updated to {0}.</value>
+  </data>
+  <data name="UpdateWhatsNew" xml:space="preserve">
+    <value>What's New</value>
+  </data>
+  <data name="UpdateAboutStopped" xml:space="preserve">
+    <value>unknown (the distro may be stopped)</value>
+  </data>
+  <data name="UpdateAboutNotInstalled" xml:space="preserve">
+    <value>not installed yet</value>
+  </data>
+  <data name="CommonShimMissingShort" xml:space="preserve">
+    <value>benchbar.exe was not found</value>
+  </data>
+  <data name="CommonNoDistroListed" xml:space="preserve">
+    <value>WSL lists no distro. Run the setup from the + menu.</value>
+  </data>
+  <data name="CommonSwitchingTo" xml:space="preserve">
+    <value>Switching to {0}...</value>
+  </data>
+  <data name="CommonShimAt" xml:space="preserve">
+    <value>benchbar.exe ({0})</value>
+  </data>
+  <data name="CommonVersionMismatch" xml:space="preserve">
+    <value>{0} is version {1} but BenchBar is {2}. They must match: run the installer again.</value>
+  </data>
+  <data name="CommonEditorCursor" xml:space="preserve">
+    <value>Cursor</value>
+  </data>
+  <data name="CommonEditorInsiders" xml:space="preserve">
+    <value>VS Code Insiders</value>
+  </data>
+  <data name="CommonDefaultSite" xml:space="preserve">
+    <value>default site</value>
+  </data>
+  <data name="CommonRunnerBench" xml:space="preserve">
+    <value>Bench</value>
+  </data>
+  <data name="CommonRunnerCup" xml:space="preserve">
+    <value>Coffee cup</value>
+  </data>
+  <data name="CommonRunnerKettle" xml:space="preserve">
+    <value>Kettle</value>
+  </data>
+  <data name="CommonRunnerServer" xml:space="preserve">
+    <value>Server rack</value>
+  </data>
+  <data name="CommonRunnerPlane" xml:space="preserve">
+    <value>Paper plane</value>
+  </data>
+  <data name="CommonRunnerSnail" xml:space="preserve">
+    <value>Snail</value>
+  </data>
+  <data name="CommonRunnerBy" xml:space="preserve">
+    <value>{0} (by {1})</value>
+  </data>
+  <data name="CommonRunnerIdTaken" xml:space="preserve">
+    <value>Another runner already has the id "{0}".</value>
+  </data>
+  <data name="CommonRunnerReserved" xml:space="preserve">
+    <value>"{0}" is the name of a built in runner. Rename the folder.</value>
+  </data>
+  <data name="CommonRunnerFolderLink" xml:space="preserve">
+    <value>The runner folder is a link; links are not allowed.</value>
+  </data>
+  <data name="CommonRunnerFrameSize" xml:space="preserve">
+    <value>{0} is not the same size as the other frames.</value>
+  </data>
+  <data name="CommonRunnerNoManifest" xml:space="preserve">
+    <value>There is no manifest.json in the runner folder.</value>
+  </data>
+  <data name="CommonRunnerManifestBig" xml:space="preserve">
+    <value>manifest.json could not be read: it is larger than 64 KB.</value>
+  </data>
+  <data name="CommonRunnerManifestNotObject" xml:space="preserve">
+    <value>manifest.json could not be read: it is not a JSON object.</value>
+  </data>
+  <data name="CommonRunnerManifestNotJson" xml:space="preserve">
+    <value>manifest.json could not be read: it is not valid JSON.</value>
+  </data>
+  <data name="CommonRunnerNameLength" xml:space="preserve">
+    <value>manifest.json could not be read: "name" must be 1 to 40 characters.</value>
+  </data>
+  <data name="CommonRunnerTemplateMissing" xml:space="preserve">
+    <value>manifest.json could not be read: "template" is missing.</value>
+  </data>
+  <data name="CommonRunnerTemplateType" xml:space="preserve">
+    <value>manifest.json could not be read: "template" has the wrong type.</value>
+  </data>
+  <data name="CommonRunnerFrameOrder" xml:space="preserve">
+    <value>manifest.json could not be read: "frame_order" must be forward or ping_pong.</value>
+  </data>
+  <data name="CommonRunnerStatesMissing" xml:space="preserve">
+    <value>manifest.json could not be read: "states" is missing.</value>
+  </data>
+  <data name="CommonRunnerStatesType" xml:space="preserve">
+    <value>manifest.json could not be read: "states" has the wrong type.</value>
+  </data>
+  <data name="CommonRunnerStateType" xml:space="preserve">
+    <value>manifest.json could not be read: "states.{0}" has the wrong type.</value>
+  </data>
+  <data name="CommonRunnerKeyMissing" xml:space="preserve">
+    <value>manifest.json could not be read: "{0}" is missing.</value>
+  </data>
+  <data name="CommonRunnerKeyType" xml:space="preserve">
+    <value>manifest.json could not be read: "{0}" has the wrong type.</value>
+  </data>
+  <data name="CommonRunnerNotState" xml:space="preserve">
+    <value>"{0}" is not a state. Use sleeping, starting, running, crashed, alert or unknown.</value>
+  </data>
+  <data name="CommonRunnerRunningRequired" xml:space="preserve">
+    <value>The running state is required: every other state falls back to it.</value>
+  </data>
+  <data name="CommonRunnerNoFrames" xml:space="preserve">
+    <value>The {0} state lists no frames. Leave it out instead.</value>
+  </data>
+  <data name="CommonRunnerTooManyFrames" xml:space="preserve">
+    <value>The {0} state has {1} frames; the limit is {2}.</value>
+  </data>
+  <data name="CommonRunnerFrameName" xml:space="preserve">
+    <value>"{0}" is not an allowed frame name: use a plain .png file name, no folders.</value>
+  </data>
+  <data name="CommonRunnerEntryLink" xml:space="preserve">
+    <value>"{0}" is a link; links are not allowed.</value>
+  </data>
+  <data name="CommonRunnerTooBig" xml:space="preserve">
+    <value>The runner is {0} KB; the limit is {1} MB.</value>
+  </data>
+  <data name="CommonRunnerFrameMissing" xml:space="preserve">
+    <value>{0} is listed in manifest.json but is not in the folder.</value>
+  </data>
+  <data name="CommonRunnerNotPng" xml:space="preserve">
+    <value>{0} is not a PNG image.</value>
+  </data>
+  <data name="CommonRunnerFrameDimensions" xml:space="preserve">
+    <value>{0} is {1} x {2} px; frames must be {3} px tall and {4} to {5} px wide.</value>
+  </data>
+  <data name="CommonLinkRooms" xml:space="preserve">
+    <value>Rooms are not on Windows yet, so BenchBar did not open this link.</value>
+  </data>
+  <data name="CommonLinkProfileUrl" xml:space="preserve">
+    <value>The profile link has no https address in url=, so BenchBar did not open it.</value>
+  </data>
+  <data name="CommonLinkSubscribeUrl" xml:space="preserve">
+    <value>The subscribe link has no git repository address in url=, so BenchBar did not open it.</value>
+  </data>
+  <data name="CommonLinkNoBench" xml:space="preserve">
+    <value>BenchBar knows no bench yet, so the link has nothing to act on.</value>
+  </data>
+  <data name="CommonLinkNeedsBench" xml:space="preserve">
+    <value>More than one bench: add ?bench=NAME to the link to say which one.</value>
+  </data>
+  <data name="CommonLinkBenchNotFound" xml:space="preserve">
+    <value>No bench named "{0}". The link uses the names and paths from benchbar list.</value>
+  </data>
+  <data name="CommonLinkAmbiguous" xml:space="preserve">
+    <value>More than one bench is named "{0}": use its full path in ?bench= instead.</value>
+  </data>
+  <data name="CommonLinkNoSite" xml:space="preserve">
+    <value>{0} has no site named "{1}".</value>
+  </data>
+  <data name="CommonLinkStartAsk" xml:space="preserve">
+    <value>Start {0}?</value>
+  </data>
+  <data name="CommonLinkStopAsk" xml:space="preserve">
+    <value>Stop {0}?</value>
+  </data>
+  <data name="CommonLinkRestartAsk" xml:space="preserve">
+    <value>Restart {0}?</value>
+  </data>
+  <data name="CommonLinkConsoleAsk" xml:space="preserve">
+    <value>Open a Frappe console for {0}?</value>
+  </data>
+  <data name="CommonLinkDbAsk" xml:space="preserve">
+    <value>Open a database session for {0}?</value>
+  </data>
+  <data name="CommonLinkOpenAsk" xml:space="preserve">
+    <value>Open {0}?</value>
+  </data>
+  <data name="CommonOpenTerminal" xml:space="preserve">
+    <value>Open Terminal</value>
+  </data>
+  <data name="CommonOpen" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="CommonLinkAskDetail" xml:space="preserve">
+    <value>A benchbar:// link asked for this. A web page or another app can open such a link, so check that you expected it.</value>
+  </data>
+  <data name="PlanApply" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="SetupCancelled" xml:space="preserve">
+    <value>Cancelled.</value>
+  </data>
+  <data name="CommonRunnerRocket" xml:space="preserve">
+    <value>Rocket</value>
+  </data>
+  <data name="CommonReadiness" xml:space="preserve">
+    <value>Readiness</value>
+  </data>
+  <data name="MainFinishSetupLink" xml:space="preserve">
+    <value>Finish or close the setup first, then open the link again.</value>
+  </data>
+  <data name="MainLinkNotLocalhost" xml:space="preserve">
+    <value>{0} is not a *.localhost name, so Windows cannot reach it yet. Open the Sites tab and choose Set Up.</value>
+  </data>
+  <data name="MainLinkNotRunning" xml:space="preserve">
+    <value>{0} is not running, so {1} cannot open.</value>
+  </data>
+  <data name="MainLinkBadName" xml:space="preserve">
+    <value>{0} is not a name the terminal can take.</value>
+  </data>
+  <data name="UpdateCouldNotStart" xml:space="preserve">
+    <value>The update could not start. {0} You can run the update line in PowerShell instead.</value>
+  </data>
+  <data name="UpdateHaveNow" xml:space="preserve">
+    <value>{0} You have {1}.
+
+{2}
+
+Update now?</value>
+  </data>
+  <data name="UpdateHaveCopied" xml:space="preserve">
+    <value>{0} You have {1}.
+
+{2} The line is copied to the clipboard:
+
+{3}
+
+Open the release page too?</value>
+  </data>
+  <data name="UpdateClickWhatsNew" xml:space="preserve">
+    <value>{0} Click for what's new.</value>
+  </data>
+  <data name="MainRunningHint" xml:space="preserve">
+    <value>BenchBar is still running. Find it in the notification area near the clock (it may be under the ^ arrow), or open BenchBar from the Start menu.</value>
+  </data>
+  <data name="MainSetupRunning" xml:space="preserve">
+    <value>A setup step is still running. Stop it and close the window?</value>
+  </data>
+  <data name="MainChangeRunning" xml:space="preserve">
+    <value>A change is still running (a site drop, an app update or an add). If you close the window it keeps running and BenchBar tells you the result in a notification. Close the window anyway?</value>
+  </data>
+  <data name="MainRestartTitle" xml:space="preserve">
+    <value>Restart Windows</value>
+  </data>
+  <data name="MainRestartBody" xml:space="preserve">
+    <value>Windows restarts in 15 seconds. Save your work first.
+
+BenchBar opens again after you sign in and carries on with the setup.</value>
+  </data>
+  <data name="MainRestartComment" xml:space="preserve">
+    <value>BenchBar: restarting to finish turning on WSL</value>
+  </data>
+  <data name="MainCrashed" xml:space="preserve">
+    <value>BenchBar closed unexpectedly last time.</value>
+  </data>
+  <data name="MainClickDetails" xml:space="preserve">
+    <value>{0} Click for details.</value>
+  </data>
+  <data name="MainCopyInstall" xml:space="preserve">
+    <value>Copy Install Line</value>
+  </data>
+  <data name="MainFooterVersion" xml:space="preserve">
+    <value>BenchBar {0}</value>
+  </data>
+  <data name="ReportNotWritten" xml:space="preserve">
+    <value>The report could not be written: {0}</value>
+  </data>
+  <data name="ReportTrayOnly" xml:space="preserve">
+    <value>benchbar.exe could not run, so this zip holds the tray's details only. {0}</value>
+  </data>
+  <data name="ReportOpenIssue" xml:space="preserve">
+    <value>Open GitHub Issue</value>
+  </data>
+  <data name="ReportOpenIssueName" xml:space="preserve">
+    <value>Open the GitHub issue</value>
+  </data>
+  <data name="ReportShowZip" xml:space="preserve">
+    <value>Show Zip in Explorer</value>
+  </data>
+  <data name="ReportShowZipName" xml:space="preserve">
+    <value>Show the report zip in Explorer</value>
+  </data>
+  <data name="ReportCopyPath" xml:space="preserve">
+    <value>Copy Path</value>
+  </data>
+  <data name="ReportCopyPathName" xml:space="preserve">
+    <value>Copy the path of the report zip</value>
+  </data>
+  <data name="ReportWorking" xml:space="preserve">
+    <value>Writing the report...</value>
+  </data>
+  <data name="ReportStillWorking" xml:space="preserve">
+    <value>Still writing the report. A distro that does not answer can take up to a minute.</value>
+  </data>
+  <data name="ReportReady" xml:space="preserve">
+    <value>Your report is ready. 1. Click Open GitHub Issue. 2. Click Show Zip in Explorer and drag the zip into the issue. 3. Say what happened and submit.</value>
+  </data>
+  <data name="ToolDoctorTitle" xml:space="preserve">
+    <value>{0} doctor</value>
+  </data>
+  <data name="ToolCopyAll" xml:space="preserve">
+    <value>Copy all</value>
+  </data>
+  <data name="ToolCheckAgain" xml:space="preserve">
+    <value>Check again</value>
+  </data>
+  <data name="ToolRunning" xml:space="preserve">
+    <value>Running checks...</value>
+  </data>
+  <data name="ToolCouldNotRun" xml:space="preserve">
+    <value>Doctor could not run</value>
+  </data>
+  <data name="ToolLevelCount" xml:space="preserve">
+    <value>{0} ({1})</value>
+  </data>
+  <data name="ToolLevelOther" xml:space="preserve">
+    <value>Other</value>
+  </data>
+  <data name="CommonBetaPillName" xml:space="preserve">
+    <value>Beta: BenchBar for Windows is in beta</value>
+  </data>
+  <data name="CommonStatusAdvice" xml:space="preserve">
+    <value>Advice</value>
+  </data>
+  <data name="CommonStatusBlocked" xml:space="preserve">
+    <value>Blocked</value>
+  </data>
+  <data name="CommonStatusToDo" xml:space="preserve">
+    <value>To do</value>
+  </data>
+  <data name="UpdateNotAvailable" xml:space="preserve">
+    <value>not available</value>
+  </data>
+  <data name="CommonDefaultSuffix" xml:space="preserve">
+    <value> (default)</value>
+  </data>
 </root>

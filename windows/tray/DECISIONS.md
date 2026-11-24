@@ -386,12 +386,14 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 - **Dates for display use the current culture (`UiText.Date`), user text lives in `Strings.resx`.** The tray menu, crash toasts, tooltip and WSL messages are moved;
   `UiTextTests` fails when code asks for a missing name or an entry is unused. The pages of the BenchBar window still hold inline text.
 - **Window text moves page by page (TRAY-14, #174), English only, same words.** Done: Settings, Labs, About, Quick Switch, the Linux password
-  dialog, the move site dialog and the two confirm dialogs (and the hot key row), and the Overview (with Tidy Up, Run Bench Command, the
-  Activity card, the lockfile, readiness, lease and uptime lines of its models), the notices and pending banners and the tab names, Health,
-  Discovery, Profiles, History, Logs, Ports, Sites (the page, Move, Open as, Pull, Snapshots and their models, with the Quick Switch
-  blocker lines) and Apps. A string with a value in it is a `{0}` format (`UiText.Format`), never a concatenation, so a translation can
-  reorder it. Still inline: Sharing, the wizard, the flyout, plan review sheets, and the models' own lines in `Tray.Core` (`LabsText`,
-  `LogonView`, `UpdatePolicy`).
+  dialog, the confirm dialogs, the Overview, Health, Discovery, Profiles, History, Logs, Ports, Sites, Apps, the first run wizard, the
+  flyout, the plan review sheets, the main window, the tool windows, Report a Bug, the update and link dialogs, and the lines of the
+  models in `Tray.Core` (`LabsText`, `LogonView`, `UpdatePolicy`, and the wizard, setup, plan, site, app, link, runner and update
+  models). A string with a value in it is a `{0}` format (`UiText.Format`), never a concatenation, so a translation can reorder it; a
+  name chosen by a condition is asked for in each branch, so `UiTextTests` still finds it. Left in English on purpose: CLI commands and
+  flags, JSON parse diagnostics ("The document has no ... list"), the text of a bug report, the PowerShell script of the update window,
+  the demo fixtures, and what mirrors the CLI (`[OK]`, `fix:`). Still inline: the Sharing page and the share models only (another
+  change moves them).
 
 ## Tray parity: Open as (0.9.0, #174)
 

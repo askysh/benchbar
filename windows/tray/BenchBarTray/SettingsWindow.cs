@@ -82,7 +82,7 @@ internal sealed class SettingsWindow : ToolWindow
         _distro.SelectionChanged += (_, _) =>
         {
             if (_syncing || _distro.SelectedItem is not string chosen) return;
-            var name = chosen.Replace(" (default)", "");
+            var name = chosen.Replace(UiText.Get("CommonDefaultSuffix"), "");
             if (string.Equals(name, _model.CurrentDistro, StringComparison.OrdinalIgnoreCase)) return;
             if (!ConfirmSwitch(name))
             {
@@ -205,10 +205,10 @@ internal sealed class SettingsWindow : ToolWindow
         {
             foreach (var (box, get) in _checks) box.IsChecked = get();
             SyncLogon();
-            var names = _model.Distros.Select(d => d.IsDefault ? d.Name + " (default)" : d.Name).ToList();
+            var names = _model.Distros.Select(d => d.IsDefault ? d.Name + UiText.Get("CommonDefaultSuffix") : d.Name).ToList();
             if (!names.SequenceEqual(_distro.Items.OfType<string>())) _distro.ItemsSource = names;
             var current = _model.CurrentDistro;
-            _distro.SelectedItem = names.FirstOrDefault(n => n.Replace(" (default)", "").Equals(current, StringComparison.OrdinalIgnoreCase));
+            _distro.SelectedItem = names.FirstOrDefault(n => n.Replace(UiText.Get("CommonDefaultSuffix"), "").Equals(current, StringComparison.OrdinalIgnoreCase));
             _distro.IsEnabled = !_model.LoadingDistros && !_model.SwitchingDistro && names.Count > 0;
             _distroNote.Text = _model.LoadingDistros ? UiText.Get("SettingsReadingList") : _model.DistroMessage ?? "";
             _distroNote.Visibility = _distroNote.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
