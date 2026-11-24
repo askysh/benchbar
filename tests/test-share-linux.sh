@@ -111,7 +111,7 @@ render_runner() { # DNS_SD CAFFEINATE LSOF
 render_runner /usr/bin/avahi-publish "" /usr/bin/ss >"$TMP_DIR/runner.sh"
 bash -n "$TMP_DIR/runner.sh" || fail "the runner does not parse"
 runner="$(cat "$TMP_DIR/runner.sh")"
-assert_contains "$runner" "benchbar-template: share-run.sh v9 "
+assert_contains "$runner" "benchbar-template: share-run.sh v10 "
 assert_not_contains "$runner" "__" "(every value is filled in)"
 assert_contains "$runner" 'DNS_SD="/usr/bin/avahi-publish"'; assert_contains "$runner" 'CAFFEINATE=""'; assert_contains "$runner" 'LSOF="/usr/bin/ss"'
 # no gateway.json: the runner ends with 78 before it starts anything

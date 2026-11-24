@@ -11,11 +11,19 @@
 FL_BREW_PREFIX=""
 # no Homebrew: the fallback paths stay what they were (nothing reads them)
 fl_brew_default_prefix() { printf '/opt/homebrew'; }
-# the files the layer reads, overridable for the tests
-FL_PROC_VERSION="${FL_PROC_VERSION:-/proc/version}"
-FL_OS_RELEASE="${FL_OS_RELEASE:-/etc/os-release}"
-FL_PROC_DIR="${FL_PROC_DIR:-/proc}"
-FL_USER_RUN_BASE="${FL_USER_RUN_BASE:-/run/user}"
+# the files the layer reads: overridable only by the tests (FL_TESTING=1); a
+# production run always reads the real ones (CORE-25)
+if [[ "${FL_TESTING:-}" == "1" ]]; then
+  FL_PROC_VERSION="${FL_PROC_VERSION:-/proc/version}"
+  FL_OS_RELEASE="${FL_OS_RELEASE:-/etc/os-release}"
+  FL_PROC_DIR="${FL_PROC_DIR:-/proc}"
+  FL_USER_RUN_BASE="${FL_USER_RUN_BASE:-/run/user}"
+else
+  FL_PROC_VERSION=/proc/version
+  FL_OS_RELEASE=/etc/os-release
+  FL_PROC_DIR=/proc
+  FL_USER_RUN_BASE=/run/user
+fi
 
 # A run started by wsl.exe on an older WSL has no login session, so
 # XDG_RUNTIME_DIR is unset and "systemctl --user" cannot find its bus, though
