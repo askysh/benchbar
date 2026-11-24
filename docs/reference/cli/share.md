@@ -512,6 +512,9 @@ file and their folder.
 It also gives back the pf token that install recorded (`pfctl -X TOKEN`), so
 pf is turned off again when the guard was the only thing that turned it on.
 When pf was already enabled before the first install, remove leaves pf on.
+If an install failed after it turned pf on and its two files are gone
+since, the guard reads "not installed" but the reference is still held:
+remove asks for your password and gives it back.
 A token from before a reboot is stale, and releasing it is harmless. The
 boot daemon takes a reference of its own at every boot; it ends at the next
 reboot, because remove deletes the daemon.
