@@ -63,7 +63,7 @@ public sealed record QuickSwitchTarget(string Bench, string BenchName, string Si
 {
     public string Key => OpenAsPins.Key(Bench, Site);
 
-    public string Title => $"{Site} on {BenchName}";
+    public string Title => UiText.Format("OpenAsQuickTitle", Site, BenchName);
 }
 
 public static class QuickSwitchTargets
@@ -81,21 +81,21 @@ public static class QuickSwitchTargets
     public static string? Blocker(IReadOnlyList<BenchStatus> benches, IReadOnlyList<QuickSwitchTarget> targets)
     {
         if (targets.Count > 0) return null;
-        if (benches.Count == 0) return "No bench to open as a user on. Add one in BenchBar.";
+        if (benches.Count == 0) return UiText.Get("OpenAsQuickNoBench");
         var running = benches.Where(b => b.State == BenchState.Running).ToList();
-        if (running.Count == 0) return "No bench is running. Start one first.";
+        if (running.Count == 0) return UiText.Get("OpenAsQuickNoneRunning");
         foreach (var bench in running)
         {
             var rows = SiteRows.From(bench);
-            if (rows.FirstOrDefault(r => r.IsDefault) is not { } site) return $"{bench.Name} has no default site. Make one the default in its Sites tab.";
+            if (rows.FirstOrDefault(r => r.IsDefault) is not { } site) return UiText.Format("OpenAsQuickNoDefault", bench.Name);
             // a site that Windows cannot find and a CLI that sends no Open as fields have no Allow Open as in the Sites tab: not "turn it on"
-            if (site.NeedsSetUp) return $"Set up {site.Name} in the BenchBar window: Windows cannot find that name.";
-            if (site.OpenAs is null) return OpenAsRules.UpdateCli + ".";
-            if (site.OpenAs is not { Enabled: true }) return $"Open as is off for {site.Name}. Turn it on with Allow Open as... in its Sites tab.";
+            if (site.NeedsSetUp) return UiText.Format("OpenAsQuickSetUp", site.Name);
+            if (site.OpenAs is null) return UiText.Get("OpenAsQuickUpdateCli");
+            if (site.OpenAs is not { Enabled: true }) return UiText.Format("OpenAsQuickOff", site.Name);
             var (state, why) = OpenAsRules.For(site, true, bench.Name);
             if (state == OpenAsRules.Availability.Disabled && why is not null) return why;
         }
-        return "Open as is not usable on any running bench.";
+        return UiText.Get("OpenAsQuickNotUsable");
     }
 }
 
@@ -104,7 +104,7 @@ public enum QuickSwitchKind { Administrator, Pin, Other }
 /// <summary>One line of the panel. <see cref="Digit"/> switches at once while the field is empty: 0 Administrator, 1 to 9 the pins.</summary>
 public sealed record QuickSwitchRow(QuickSwitchKind Kind, string User, string? FullName, string Title, string? Detail, bool IsCurrent, int? Digit)
 {
-    public string Hint => IsCurrent ? "last opened" : "";
+    public string Hint => IsCurrent ? UiText.Get("OpenAsQuickLast") : "";
 
     /// <summary>What a screen reader says: the title, the user id under it and the state.</summary>
     public string Spoken => string.Join(", ", new[] { Title, Detail, Hint.Length > 0 ? Hint : null }.Where(s => !string.IsNullOrEmpty(s)));

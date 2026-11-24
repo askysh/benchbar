@@ -28,7 +28,7 @@ internal sealed partial class SitesView
     internal async Task ShowSnapshotsAsync(string site, string? note = null)
     {
         _snapLabel = null;
-        SetPanel(PagePanels.Panel($"Snapshots of {site}", null, [PagePanels.Line("Reading the snapshots...")], [Ui.Button("Close", ClosePanel)]));
+        SetPanel(PagePanels.Panel(UiText.Format("SnapshotTitle", site), null, [PagePanels.Line(UiText.Get("SnapshotReading"))], [Ui.Button(UiText.Get("TidyClose"), ClosePanel)]));
         var generation = _panelGeneration;
         var bench = PanelBench;
         var r = await _services.Cli.RunJsonAsync(SnapshotCommands.List(site, bench), null, CliTimeouts.Read, SnapshotJson.ParseList);
@@ -36,38 +36,38 @@ internal sealed partial class SitesView
         {
             if (generation != _panelGeneration) return; // the person opened something else meanwhile
             SetPanel(r.Value is { } list ? SnapshotsPanel(site, list, note)
-                : PagePanels.Panel($"Snapshots of {site}", null, [PagePanels.Line(Why(r), error: true)], [Ui.Button("Close", ClosePanel)]));
+                : PagePanels.Panel(UiText.Format("SnapshotTitle", site), null, [PagePanels.Line(Why(r), error: true)], [Ui.Button(UiText.Get("TidyClose"), ClosePanel)]));
         });
     }
 
     private UIElement SnapshotsPanel(string site, SiteSnapshotList list, string? note)
     {
         var body = new List<UIElement>();
-        _snapLabel = Ui.Field("Label (optional)", "", _ => HideSnapProblem(), 300);
+        _snapLabel = Ui.Field(UiText.Get("SnapshotLabelField"), "", _ => HideSnapProblem(), 300);
         _snapProblem = PagePanels.Line("", error: true);
         _snapProblem.Visibility = Visibility.Collapsed;
-        var take = Ui.Button("Take Snapshot", () => Start(() => TakeSnapshotAsync(site)), $"Take a snapshot of {site}", primary: true);
+        var take = Ui.Button(UiText.Get("SnapshotTake"), () => Start(() => TakeSnapshotAsync(site)), UiText.Format("SnapshotTakeName", site), primary: true);
         take.IsEnabled = !_busy;
         var takeRow = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
         DockPanel.SetDock(take, Dock.Right);
         take.Margin = new Thickness(8, 0, 0, 0);
         takeRow.Children.Add(take);
-        takeRow.Children.Add(Ui.Labeled("Label (optional)", _snapLabel));
+        takeRow.Children.Add(Ui.Labeled(UiText.Get("SnapshotLabelField"), _snapLabel));
         body.Add(takeRow);
         body.Add(_snapProblem);
         if (note is { Length: > 0 }) body.Add(PagePanels.Line(note));
         if (list.Snapshots.Count == 0)
         {
-            body.Add(PagePanels.Line($"No snapshots of {site} yet. Take one before an upgrade or a risky change; a rollback puts the site back as it was."));
+            body.Add(PagePanels.Line(UiText.Format("SnapshotNone", site)));
         }
         else
         {
             foreach (var snapshot in list.Snapshots) body.Add(SnapshotRow(site, snapshot));
             body.Add(Ui.Text(SnapshotText.Summary(list), 12, opacity: 0.7, margin: new Thickness(0, 6, 0, 0)));
         }
-        return PagePanels.Panel($"Snapshots of {site}",
-            "A snapshot is a backup with files that frappe's pruning never removes, with the apps it was taken with. Taking one changes nothing in the site.",
-            body, [Ui.Button("Close", ClosePanel)]);
+        return PagePanels.Panel(UiText.Format("SnapshotTitle", site),
+            UiText.Get("SnapshotExplain"),
+            body, [Ui.Button(UiText.Get("TidyClose"), ClosePanel)]);
     }
 
     private UIElement SnapshotRow(string site, SiteSnapshot snapshot)
@@ -80,17 +80,17 @@ internal sealed partial class SitesView
         text.Children.Add(Ui.Text(snapshot.Title, 14, FontWeights.SemiBold));
         text.Children.Add(Ui.Text(SnapshotText.Line(snapshot, Clock()), 12, opacity: 0.75));
         if (SnapshotText.Apps(snapshot) is { } apps) text.Children.Add(Ui.Text(apps, 12, opacity: snapshot.AppsMatch == false ? 1 : 0.75));
-        if (snapshot.BeforeRollback) text.Children.Add(Ui.Text("The undo point of the last rollback", 12, opacity: 0.75));
-        if (!snapshot.Complete) text.Children.Add(Ui.Text("Incomplete: a part is missing, so it cannot be rolled back to", 12));
+        if (snapshot.BeforeRollback) text.Children.Add(Ui.Text(UiText.Get("SnapshotUndoPoint"), 12, opacity: 0.75));
+        if (!snapshot.Complete) text.Children.Add(Ui.Text(UiText.Get("SnapshotIncomplete"), 12));
         grid.Children.Add(text);
-        var roll = Ui.Button("Roll Back...", () => Start(() => RollBackAsync(site, snapshot)), $"Roll {site} back to {snapshot.Title}", minWidth: 84);
+        var roll = Ui.Button(UiText.Get("SnapshotRollBack"), () => Start(() => RollBackAsync(site, snapshot)), UiText.Format("SnapshotRollName", site, snapshot.Title), minWidth: 84);
         roll.IsEnabled = !_busy && snapshot.Complete;
         roll.Margin = new Thickness(8, 0, 0, 0);
         Grid.SetColumn(roll, 1);
         grid.Children.Add(roll);
-        var remove = Ui.Button("Remove...", () => Start(() => RemoveSnapshotAsync(site, snapshot)), $"Remove the snapshot {snapshot.Title}", minWidth: 84);
+        var remove = Ui.Button(UiText.Get("ProfileRemove"), () => Start(() => RemoveSnapshotAsync(site, snapshot)), UiText.Format("SnapshotRemoveName", snapshot.Title), minWidth: 84);
         remove.IsEnabled = !_busy && SnapshotText.CanRemove(snapshot);
-        if (!SnapshotText.CanRemove(snapshot)) remove.ToolTip = "This is the undo point of the last rollback. Remove it in Terminal if you are sure.";
+        if (!SnapshotText.CanRemove(snapshot)) remove.ToolTip = UiText.Get("SnapshotUndoTip");
         remove.Margin = new Thickness(6, 0, 0, 0);
         Grid.SetColumn(remove, 2);
         grid.Children.Add(remove);
@@ -120,7 +120,7 @@ internal sealed partial class SitesView
         Rebuild();
         var r = await _services.Cli.RunJsonAsync(SnapshotCommands.Take(site, label, bench), null, CliTimeouts.Apply, SnapshotJson.ParseTaken);
         string text;
-        if (r.Ok) text = r.Value is { } taken ? $"Snapshot taken: {taken.Title}, {ByteSize.Format(taken.SizeBytes)}." : $"A snapshot of {site} was taken.";
+        if (r.Ok) text = r.Value is { } taken ? UiText.Format("SnapshotTaken", taken.Title, ByteSize.Format(taken.SizeBytes)) : UiText.Format("SnapshotTakenPlain", site);
         else text = Why(r);
         var ok = r.Ok;
         PagePanels.OnUi(this, () =>
@@ -141,9 +141,9 @@ internal sealed partial class SitesView
     internal async Task RollBackAsync(string site, SiteSnapshot snapshot)
     {
         var isDefault = Rows.FirstOrDefault(r => r.Name == site)?.IsDefault == true;
-        var typed = _services.ConfirmTyped(new TypedConfirmRequest($"Roll back {site}",
-            $"This replaces the database and the files of {site} with the snapshot {snapshot.Title}. A snapshot of {site} as it is now is taken first, so it can be undone."
-            + (isDefault ? " " + SnapshotCommands.DefaultSiteNote : ""), site, "Roll Back"));
+        var typed = _services.ConfirmTyped(new TypedConfirmRequest(UiText.Format("SnapshotRollTitle", site),
+            UiText.Format("SnapshotRollConfirm", site, snapshot.Title)
+            + (isDefault ? " " + SnapshotCommands.DefaultSiteNote : ""), site, UiText.Get("SnapshotRollButton")));
         if (typed is null || !TypedConfirm.Matches(site, typed)) return;
         if (PanelIsStale) return;
         var bench = PanelBench;
@@ -169,7 +169,7 @@ internal sealed partial class SitesView
             }
             if (outcome.Applied)
             {
-                Say($"{site} was rolled back to {snapshot.Title}. A snapshot of how it was is the way back.", false);
+                Say(UiText.Format("SnapshotRolledBack", site, snapshot.Title), false);
                 _services.RefreshNow();
                 Rebuild();
                 ShowSnapshotsAsync(site).Forget();
@@ -183,13 +183,13 @@ internal sealed partial class SitesView
     internal async Task RemoveSnapshotAsync(string site, SiteSnapshot snapshot)
     {
         if (!SnapshotText.CanRemove(snapshot)) return;
-        if (!_services.Confirm($"Remove the snapshot {snapshot.Title}?", $"Its database dump and files are deleted from sites/{site}/snapshots. This cannot be undone.", "Remove Snapshot")) return;
+        if (!_services.Confirm(UiText.Format("SnapshotRemoveTitle", snapshot.Title), UiText.Format("SnapshotRemoveMessage", site), UiText.Get("SnapshotRemoveButton"))) return;
         var bench = PanelBench;
         SetBusy(true);
         Rebuild();
         var r = await _services.Cli.RunJsonAsync(SnapshotCommands.Remove(site, snapshot.Id, bench), ActivityText.ClickEnvironment(), CliTimeouts.Apply, o => o);
         var ok = r.Ok;
-        var text = ok ? $"The snapshot {snapshot.Title} was removed." : Why(r);
+        var text = ok ? UiText.Format("SnapshotRemoved", snapshot.Title) : Why(r);
         PagePanels.OnUi(this, () =>
         {
             SetBusy(false);
