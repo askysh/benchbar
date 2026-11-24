@@ -193,7 +193,7 @@ MOCK_BENCH_VERSION=5.10.3 ADMIN_PASSWORD=adminpw run01 --yes --offline
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "[OK] bench 5.10.3 at"
 assert_contains "$OUT" "bench 5.10.3 is older than 5.22.0, the oldest known to handle profile v15-lts"
-assert_contains "$OUT" "uv tool upgrade frappe-bench"
+assert_contains "$OUT" "uv tool install --reinstall frappe-bench==5.31.1"
 rm -rf "$BENCH"
 MOCK_BENCH_VERSION=5.25.1 ADMIN_PASSWORD=adminpw run01 --yes --offline
 assert_eq "0" "$CODE" "$OUT"

@@ -136,7 +136,7 @@ fl_install_bench_if_needed() {
     fl_ok "bench ${ver:-(version unknown)} at $(command -v bench)"
     if [[ -n "$ver" && -n "${FL_BENCH_MIN:-}" ]] && fl_version_lt "$ver" "$FL_BENCH_MIN"; then
       fl_warn "bench ${ver} is older than ${FL_BENCH_MIN}, the oldest known to handle profile ${FL_PROFILE}; a newer one is safer"
-      if [[ "$reinstall" == pipx* ]]; then fl_fix "pipx upgrade frappe-bench"; else fl_fix "uv tool upgrade frappe-bench"; fi
+      if [[ "$reinstall" == pipx* ]]; then fl_fix "pipx install --force frappe-bench==${FL_PIN_FRAPPE_BENCH}"; else fl_fix "uv tool install --reinstall frappe-bench==${FL_PIN_FRAPPE_BENCH}"; fi
     fi
     return 0
   fi
