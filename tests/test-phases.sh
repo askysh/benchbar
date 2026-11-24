@@ -151,6 +151,19 @@ for colour in 1 always; do
 done
 printf 'mariadb@10.11 started akash file\nredis started akash file\n' >"$MOCK_BREW_SERVICES"
 
+# ---- 01 on a Mac with no redis-server process (Homebrew's service is not started): not a failure (#293)
+grep -v 'redis-server' "$MOCK_PROCS" >"$MOCK_PROCS.tmp" || true; mv "$MOCK_PROCS.tmp" "$MOCK_PROCS"
+printf 'mariadb@10.11 started akash file\n' >"$MOCK_BREW_SERVICES"
+BENCH="$HOME/frappe-bench"
+make_fake_bench "$BENCH"
+rm -rf "$BENCH/env"
+run01 --yes --offline
+assert_not_contains "$OUT" "redis-server is not running"
+assert_contains "$OUT" "system services are running"
+rm -rf "$BENCH"
+add_proc 901 "redis-server *:6379"
+printf 'mariadb@10.11 started akash file\nredis started akash file\n' >"$MOCK_BREW_SERVICES"
+
 # ---- 01: safety on an existing bench that lost its env
 BENCH="$HOME/frappe-bench"
 make_fake_bench "$BENCH"
