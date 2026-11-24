@@ -383,9 +383,20 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   assert_eq "0" "$CODE" "$OUT$ERR"
   undo4="$(printf '%s' "$OUT" | jget - 'd["rollback"]["before_rollback"]')"
   assert_eq "$undo4" "$(cat "$SNAPS/.last-rollback")"
+  # N4: after a retry the way back is the state before the first attempt, not the half restored site
+  assert_eq "benchbar site rollback acme.localhost --to ${failed3}" "$(printf '%s' "$OUT" | jget - 'd["rollback"]["undo"]')" "(the undo names the oldest unfinished snapshot)"
   assert_eq "$failed3" "$(cat "$SNAPS/.unfinished-rollbacks")" "(the real data from before the failed run stays protected)"
   run_json site snapshots acme.localhost --keep 1 --json --bench-dir "$BENCH"
   assert_eq "True" "$(printf '%s' "$OUT" | jget - '"'"$failed3"'" not in d["over_limit"] and "'"$undo4"'" not in d["over_limit"] and "'"$undo2"'" in d["over_limit"]')" "(A ok, B failed, B retried ok: B's undo point and the failed run's snapshot stay, A's is released)"
+  # N3: what is held back beyond the limit is said, with its size, in the list and in the prune plan
+  run_json site snapshots acme.localhost --keep 1 --json --bench-dir "$BENCH"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - '"'"$failed3"'" in d["held_back"] and d["held_back_bytes"] > 0')" "(the list names the protected snapshots beyond the limit)"
+  run_fm site snapshots acme.localhost --keep 1 --bench-dir "$BENCH"
+  assert_contains "$OUT" "held back"; assert_contains "$OUT" "$failed3"
+  run_fm site snapshot drop acme.localhost --prune --keep 1 --dry-run --bench-dir "$BENCH"
+  assert_contains "$OUT" "held back"
+  run_json site snapshot drop acme.localhost --prune --keep 1 --dry-run --json --bench-dir "$BENCH"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - '"'"$failed3"'" in d["held_back"]')" "(the prune plan names them too)"
   run_fm site snapshot drop acme.localhost "$failed3" --yes --bench-dir "$BENCH"
   assert_eq "1" "$CODE" "$OUT"; assert_file "$SNAPS/$failed3/manifest.json"
   # a before rollback snapshot that fails stops the run before anything is replaced, and moves nothing
@@ -466,6 +477,22 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["snapshots"]["count"] >= 2 and d["snapshots"]["size_bytes"] > 0')"
   assert_contains "$OUT" "snapshot(s)"
   assert_contains "$OUT" "move into the archive with it"
+
+  # ---- N2: a folder left by a kill holds the backup files that left private/backups: named, with its size
+  LEFT="$SNAPS/.incomplete-20260930_010101-killed"
+  mkdir -p "$LEFT"
+  printf 'data' >"$LEFT/20260930_010101-acme_localhost-database.sql.gz"
+  printf '{}' >"$LEFT/manifest.json.tmp"
+  m="$(snap_count)"
+  run_json site snapshots acme.localhost --json --bench-dir "$BENCH"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'len(d["leftovers"]) == 1 and d["leftovers"][0]["size_bytes"] == 6 and "private/backups" in d["leftovers"][0]["move_back"]')" "(the leftover is in the JSON)"
+  run_fm site snapshots acme.localhost --bench-dir "$BENCH"
+  assert_contains "$OUT" ".incomplete-20260930_010101-killed"; assert_contains "$OUT" "private/backups"
+  assert_eq "$m" "$(snap_count)" "(a leftover is no snapshot)"
+  rm -f "$LEFT"/*
+  rmdir "$LEFT"
+  run_json site snapshots acme.localhost --json --bench-dir "$BENCH"
+  assert_eq "0" "$(printf '%s' "$OUT" | jget - 'len(d["leftovers"])')" "(none left)"
 
   # ---- retention: the newest N stay, the rest are named, nothing goes on its own
   n="$(snap_count)"
