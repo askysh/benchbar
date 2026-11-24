@@ -117,6 +117,9 @@ struct SettingsView: View {
                             Text(entry.warning).font(.callout).foregroundStyle(.secondary)
                         }
                         Text("since \(entry.since)").font(.caption).foregroundStyle(.secondary)
+                        if entry.name == Lab.quickSwitch.rawValue, entry.enabled {
+                            HotKeyRecorder(key: QuickSwitchShortcut.shared)
+                        }
                         if let error = labs.errors[entry.name] {
                             Text(error).font(.callout).foregroundStyle(.red)
                         }
@@ -247,7 +250,7 @@ struct SettingsView: View {
 
     private var shortcutsSection: some View {
         Section {
-            ForEach(Self.shortcuts(quickSwitch: Labs.shared.isOn(.quickSwitch), keyHeld: Self.quickSwitchKeyHeld), id: \.keys) { item in
+            ForEach(Self.shortcuts(quickSwitch: Labs.shared.isOn(.quickSwitch), keyHeld: Self.quickSwitchKeyHeld, key: QuickSwitchShortcut.shared.choice), id: \.keys) { item in
                 LabeledContent(item.action) {
                     Text(item.keys).font(.callout.monospaced()).foregroundStyle(.secondary)
                 }
@@ -273,16 +276,16 @@ struct SettingsView: View {
 
     /// Another app holds Quick Switch's key: the lab is on and the Labs row says so.
     static var quickSwitchKeyHeld: Bool {
-        Labs.shared.errors[Lab.quickSwitch.rawValue] == QuickSwitchController.conflictNote
+        Labs.shared.errors[Lab.quickSwitch.rawValue] == QuickSwitchController.conflictNote(for: QuickSwitchShortcut.shared.choice)
     }
 
     /// Quick Switch's rows show only while the lab is on, and so do the Open as keys it brought.
     /// While another app holds the key, its row says so instead of listing a key that does nothing.
-    static func shortcuts(quickSwitch: Bool, keyHeld: Bool = false) -> [(action: String, keys: String)] {
+    static func shortcuts(quickSwitch: Bool, keyHeld: Bool = false, key: HotKeyChoice = .standard) -> [(action: String, keys: String)] {
         guard quickSwitch else { return shortcuts }
         return shortcuts + [
             ("Open as Administrator, a pinned user, or back", OpenAsShortcut.summary),
-            ("Quick Switch, from any app", keyHeld ? "\(HotKey.name) is used by another app" : HotKey.name),
+            ("Quick Switch, from any app", keyHeld ? "\(key.name) is used by another app" : key.name),
         ]
     }
 

@@ -450,6 +450,31 @@ assert_eq "d_0a1b2c3d|Priya Mac|192.168.1.23|s_0a1b2c3d|Priya Nair|True|2026-11-
 assert_eq "None None False" "$(doc '" ".join(str(x) for x in (d["people"][1]["seat_id"], d["people"][1]["seat_full_name"], d["people"][1]["online"]))')"
 assert_not_contains "$OUT" "priya@example.com" "(people never carries the seat's user)"
 assert_not_contains "$OUT" "sha256:"
+# the seats of the room, held or free, so that a host (and both apps) can give one out: id, name, roles,
+# and who holds it. Never the seat's user. seat_mode says who gives out the seats (open: a config without the key).
+assert_eq "seat_mode,seats" "$(doc '",".join(sorted(k for k in d if k in ("seats", "seat_mode")))')"
+assert_eq "full_name,held_by,held_by_name,roles,seat_id" "$(doc '",".join(sorted(d["seats"][0]))')"
+assert_eq "s_0a1b2c3d|Priya Nair|NE|d_0a1b2c3d|Priya Mac" \
+  "$(doc '"|".join(str(x) for x in (d["seats"][0]["seat_id"], d["seats"][0]["full_name"], ",".join(d["seats"][0]["roles"]), d["seats"][0]["held_by"], d["seats"][0]["held_by_name"]))')"
+assert_eq "s_1a2b3c4d|Mgr Singh|Sales User|None|None s_2a2b3c4d|Sam Rao|Stock User|None|None" \
+  "$(doc '" ".join("|".join(str(x) for x in (s["seat_id"], s["full_name"], ",".join(s["roles"]), s["held_by"], s["held_by_name"])) for s in d["seats"][1:])')"
+assert_eq "open" "$(doc 'd["seat_mode"]')"
+assert_not_contains "$OUT" "@example.com" "(no seat's user in the seat list either)"
+printf '{"v": 3, "seat_mode": "host"}\n' >"$SHARE_DIR/gateway.json"
+cli people --json
+assert_eq "host 3" "$(doc '" ".join(str(x) for x in (d["seat_mode"], len(d["seats"])))')"
+rm -f "$SHARE_DIR/gateway.json"
+cli people --json
+# the app's and the tray's fixtures hold only keys the CLI prints, the new ones included
+printf '%s' "$OUT" | python3 -I -c '
+import json, sys
+live = json.load(sys.stdin)
+for name in sys.argv[1:]:
+    fixture = json.load(open(name))
+    assert set(fixture) <= set(live) | {"protocol"}, (name, "keys the CLI no longer prints", set(fixture) - set(live))
+    assert set(fixture["seats"][0]) == set(live["seats"][0]), (name, "seat keys", set(fixture["seats"][0]) ^ set(live["seats"][0]))
+    assert fixture["seat_mode"] in ("open", "host"), name
+' "$ROOT/macos/BenchBarTests/Fixtures/share-people.json" "$ROOT/windows/tray/fixtures/cli/share-people.json" || fail "share people --json and the app fixtures disagree"
 cli devices --json
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "2" "$(doc 'len(d["people"])')"

@@ -138,6 +138,10 @@ final class Labs {
         errors[lab.rawValue] = message
     }
 
+    func clearNote(_ lab: Lab) {
+        errors[lab.rawValue] = nil
+    }
+
     /// A feature hears of a flip of one lab (unregister a hotkey, hide a pane).
     /// Any number of features can observe the same lab; keep the token to cancel.
     @discardableResult

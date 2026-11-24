@@ -5,8 +5,8 @@ import Observation
 @Observable
 final class BenchModel: Identifiable {
     let path: String
-    var summary: BenchSummary
-    var machine = BenchStateMachine()
+    var summary: BenchSummary { didSet { refreshSiteRows() } }
+    var machine = BenchStateMachine() { didSet { refreshSiteRows() } }
     /// The last failed action or refresh, shown once in the popover.
     var lastError: String?
     /// The action a lease refused (`restart`, `down`): the window offers "Break Lease" for it, as a person's choice.
@@ -40,6 +40,7 @@ final class BenchModel: Identifiable {
     init(summary: BenchSummary) {
         self.path = summary.path
         self.summary = summary
+        self.siteRows = Self.makeSiteRows(summary: summary, status: nil)
     }
 
     var id: String { path }
@@ -52,10 +53,19 @@ final class BenchModel: Identifiable {
     var isBusy: Bool { pending != nil || isChangingScheduler || activity != nil }
     /// No com.benchbar agent yet: `benchbar repair` installs or migrates it.
     var needsService: Bool { !summary.serviceInstalled }
-    /// The bench's sites: from the latest status, else from the list.
-    var siteRows: [SiteRow] {
+    /// The bench's sites: from the latest status, else from the list. Built when the summary or the
+    /// status changes, not on every read: a view reads it several times in one `body`, and a view
+    /// that reads it is redrawn only when the rows themselves change.
+    private(set) var siteRows: [SiteRow]
+
+    private static func makeSiteRows(summary: BenchSummary, status: BenchStatus?) -> [SiteRow] {
         SiteRow.make(sites: status?.sites ?? summary.sites, defaultSite: summary.site,
                      port: status?.ports?.web ?? summary.ports.web)
+    }
+
+    private func refreshSiteRows() {
+        let rows = Self.makeSiteRows(summary: summary, status: machine.status)
+        if rows != siteRows { siteRows = rows }
     }
     /// The CLI has listed this bench's sites (an older one may not).
     var sitesKnown: Bool { (status?.sites ?? summary.sites) != nil }

@@ -1,6 +1,19 @@
 import Foundation
 @testable import BenchBar
 
+/// Polls a condition until it holds or the deadline passes, so a test waits for what it needs and
+/// not for a fixed time: a busy runner only makes it take longer, and a quick machine does not wait.
+/// The deadline is generous (it is only reached when the test would fail anyway).
+func waitForCondition(timeout: Duration = .seconds(10), _ condition: () -> Bool) async -> Bool {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: timeout)
+    while !condition() {
+        if clock.now >= deadline { return false }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    return true
+}
+
 /// Loads a JSON file from BenchBarTests/Fixtures (copied into the test bundle).
 nonisolated enum Fixture {
     private final class Token {}
