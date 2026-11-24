@@ -854,15 +854,6 @@
   <data name="OverviewLeaseBreakQuestion" xml:space="preserve">
     <value>{0} Breaking it runs "{1}" anyway, as you: whoever holds the lease may be in the middle of work on it. The run is recorded in the history.</value>
   </data>
-  <data name="OverviewPortConflictLead" xml:space="preserve">
-    <value>Port conflict. Review the proposed resolution before starting.</value>
-  </data>
-  <data name="OverviewPortsCheckFailed" xml:space="preserve">
-    <value>The ports could not be checked: {0}</value>
-  </data>
-  <data name="OverviewPortsNoAnswer" xml:space="preserve">
-    <value>no answer from benchbar.exe.</value>
-  </data>
   <data name="TidyMenuTidyUp" xml:space="preserve">
     <value>Tidy Up...</value>
   </data>
@@ -1393,5 +1384,1199 @@
   </data>
   <data name="BenchTabOverview" xml:space="preserve">
     <value>Overview</value>
+  </data>
+  <data name="HealthTitle" xml:space="preserve">
+    <value>Health</value>
+  </data>
+  <data name="HealthRunDoctor" xml:space="preserve">
+    <value>Run Doctor</value>
+  </data>
+  <data name="HealthRunDoctorName" xml:space="preserve">
+    <value>Run Doctor {0}</value>
+  </data>
+  <data name="HealthRepair" xml:space="preserve">
+    <value>Repair...</value>
+  </data>
+  <data name="HealthRepairName" xml:space="preserve">
+    <value>Repair {0}</value>
+  </data>
+  <data name="HealthRepairHint" xml:space="preserve">
+    <value>Shows the plan first; nothing changes until you confirm</value>
+  </data>
+  <data name="HealthRepairNothing" xml:space="preserve">
+    <value>Nothing repair can fix</value>
+  </data>
+  <data name="HealthDoctor" xml:space="preserve">
+    <value>Doctor</value>
+  </data>
+  <data name="HealthDefaultProfile" xml:space="preserve">
+    <value>Profile {0} is only the default: no profile matches this bench's Frappe, so the env checks warn instead of offering a rebuild.</value>
+  </data>
+  <data name="HealthAllPass" xml:space="preserve">
+    <value>Every check passes.</value>
+  </data>
+  <data name="HealthRunning" xml:space="preserve">
+    <value>Running doctor...</value>
+  </data>
+  <data name="HealthNotRun" xml:space="preserve">
+    <value>Doctor has not run yet.</value>
+  </data>
+  <data name="HealthDoctorNote" xml:space="preserve">
+    <value>Doctor is read only. Repair shows its plan, and runs only after you confirm, with a backup before each change.</value>
+  </data>
+  <data name="HealthWindows" xml:space="preserve">
+    <value>Windows</value>
+  </data>
+  <data name="HealthCheckingWindows" xml:space="preserve">
+    <value>Checking Windows...</value>
+  </data>
+  <data name="HealthNotChecked" xml:space="preserve">
+    <value>Not checked yet.</value>
+  </data>
+  <data name="HealthWindowsNote" xml:space="preserve">
+    <value>These are the rows of benchbar.exe setup check. They never start a stopped distro.</value>
+  </data>
+  <data name="HealthAcknowledged" xml:space="preserve">
+    <value>acknowledged</value>
+  </data>
+  <data name="HealthCopyFix" xml:space="preserve">
+    <value>Copy fix</value>
+  </data>
+  <data name="HealthCopyFixName" xml:space="preserve">
+    <value>Copy fix for {0}</value>
+  </data>
+  <data name="HealthFixFor" xml:space="preserve">
+    <value>Fix for {0}</value>
+  </data>
+  <data name="HealthUndoAck" xml:space="preserve">
+    <value>Undo Acknowledge</value>
+  </data>
+  <data name="HealthAck" xml:space="preserve">
+    <value>Acknowledge</value>
+  </data>
+  <data name="HealthUndoAckName" xml:space="preserve">
+    <value>Undo acknowledging {0}</value>
+  </data>
+  <data name="HealthAckName" xml:space="preserve">
+    <value>Acknowledge {0}</value>
+  </data>
+  <data name="HealthUndoAckTip" xml:space="preserve">
+    <value>Show this warning again</value>
+  </data>
+  <data name="HealthAckTip" xml:space="preserve">
+    <value>Silence this warning for this bench until its message changes</value>
+  </data>
+  <data name="HealthHidePassing" xml:space="preserve">
+    <value>Hide {0} passing</value>
+  </data>
+  <data name="HealthShowPassing" xml:space="preserve">
+    <value>Show {0} passing</value>
+  </data>
+  <data name="HealthPassingName" xml:space="preserve">
+    <value>Passing checks</value>
+  </data>
+  <data name="HealthFailureOne" xml:space="preserve">
+    <value>1 failure</value>
+  </data>
+  <data name="HealthFailureMany" xml:space="preserve">
+    <value>{0} failures</value>
+  </data>
+  <data name="HealthWarningOne" xml:space="preserve">
+    <value>1 warning</value>
+  </data>
+  <data name="HealthWarningMany" xml:space="preserve">
+    <value>{0} warnings</value>
+  </data>
+  <data name="HealthAttentionBoth" xml:space="preserve">
+    <value>{0}, {1}</value>
+  </data>
+  <data name="HealthSummary" xml:space="preserve">
+    <value>{0} passing, {1}</value>
+  </data>
+  <data name="HealthSummaryClean" xml:space="preserve">
+    <value>{0} passing</value>
+  </data>
+  <data name="HealthAckNotSaved" xml:space="preserve">
+    <value>The acknowledgement could not be saved.</value>
+  </data>
+  <data name="HealthAckNotRemoved" xml:space="preserve">
+    <value>The acknowledgement could not be removed.</value>
+  </data>
+  <data name="HealthNoReport" xml:space="preserve">
+    <value>Doctor gave no report.</value>
+  </data>
+  <data name="HealthShimNoAnswer" xml:space="preserve">
+    <value>The Windows checks gave no answer.</value>
+  </data>
+  <data name="RepairTitle" xml:space="preserve">
+    <value>Repair {0}</value>
+  </data>
+  <data name="RepairReading" xml:space="preserve">
+    <value>Reading the plan (benchbar repair --dry-run)...</value>
+  </data>
+  <data name="RepairClose" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="RepairReviewLine" xml:space="preserve">
+    <value>Runs the fixes doctor found, in order, with a backup before each change.</value>
+  </data>
+  <data name="RepairNothing" xml:space="preserve">
+    <value>Nothing to repair.</value>
+  </data>
+  <data name="RepairBackupNote" xml:space="preserve">
+    <value>A backup is taken before every change. Broken folders are moved aside, never deleted.</value>
+  </data>
+  <data name="RepairSudoOne" xml:space="preserve">
+    <value>{0} step uses sudo. BenchBar asks for your Linux password when you press Repair; it is used for this run only. Cancel the question and nothing runs.</value>
+  </data>
+  <data name="RepairSudoMany" xml:space="preserve">
+    <value>{0} steps use sudo. BenchBar asks for your Linux password when you press Repair; it is used for this run only. Cancel the question and nothing runs.</value>
+  </data>
+  <data name="RepairButton" xml:space="preserve">
+    <value>Repair</value>
+  </data>
+  <data name="RepairRunning" xml:space="preserve">
+    <value>Repairing...</value>
+  </data>
+  <data name="RepairRunningLine" xml:space="preserve">
+    <value>This cannot be stopped part way. Keep the window open until it ends.</value>
+  </data>
+  <data name="RepairDone" xml:space="preserve">
+    <value>Repair finished; every check passes.</value>
+  </data>
+  <data name="RepairProblems" xml:space="preserve">
+    <value>Repair finished with problems left</value>
+  </data>
+  <data name="RepairSeeSteps" xml:space="preserve">
+    <value>See the steps below and the log.</value>
+  </data>
+  <data name="RepairStaleTitle" xml:space="preserve">
+    <value>The plan is out of date</value>
+  </data>
+  <data name="RepairStaleLine" xml:space="preserve">
+    <value>Something changed since you reviewed it. Nothing was changed. Review the plan again before you repair.</value>
+  </data>
+  <data name="RepairReviewAgain" xml:space="preserve">
+    <value>Review Again</value>
+  </data>
+  <data name="RepairNoPlan" xml:space="preserve">
+    <value>No repair plan</value>
+  </data>
+  <data name="RepairStopped" xml:space="preserve">
+    <value>Repair stopped</value>
+  </data>
+  <data name="RepairReadAgain" xml:space="preserve">
+    <value>Read Plan Again</value>
+  </data>
+  <data name="RepairStepSudo" xml:space="preserve">
+    <value>{0}  (asks for your Linux password)</value>
+  </data>
+  <data name="RepairCopyLog" xml:space="preserve">
+    <value>Copy Log Path</value>
+  </data>
+  <data name="RepairCopyLogName" xml:space="preserve">
+    <value>Copy the repair log path</value>
+  </data>
+  <data name="RepairStepRunning" xml:space="preserve">
+    <value>running</value>
+  </data>
+  <data name="RepairStepDone" xml:space="preserve">
+    <value>done</value>
+  </data>
+  <data name="RepairStepSkipped" xml:space="preserve">
+    <value>skipped</value>
+  </data>
+  <data name="RepairStepFailed" xml:space="preserve">
+    <value>failed</value>
+  </data>
+  <data name="RepairStepNotStarted" xml:space="preserve">
+    <value>not started</value>
+  </data>
+  <data name="RepairPlanFailed" xml:space="preserve">
+    <value>The repair plan could not be made.</value>
+  </data>
+  <data name="RepairWrongPassword" xml:space="preserve">
+    <value>Linux did not accept that password. Nothing was changed.</value>
+  </data>
+  <data name="RepairWasStopped" xml:space="preserve">
+    <value>The repair was stopped.</value>
+  </data>
+  <data name="RepairFailedExit" xml:space="preserve">
+    <value>The repair failed (exit {0}).</value>
+  </data>
+  <data name="DiscoveryTitle" xml:space="preserve">
+    <value>Find Benches</value>
+  </data>
+  <data name="DiscoveryIntro" xml:space="preserve">
+    <value>BenchBar searches a folder inside Linux for existing Frappe benches.</value>
+  </data>
+  <data name="DiscoveryScan" xml:space="preserve">
+    <value>Scan</value>
+  </data>
+  <data name="DiscoveryScanName" xml:space="preserve">
+    <value>Scan this folder</value>
+  </data>
+  <data name="DiscoveryChoose" xml:space="preserve">
+    <value>Choose Folder...</value>
+  </data>
+  <data name="DiscoveryChooseName" xml:space="preserve">
+    <value>Choose Folder</value>
+  </data>
+  <data name="DiscoveryFolderName" xml:space="preserve">
+    <value>Folder to search in Linux</value>
+  </data>
+  <data name="DiscoveryHome" xml:space="preserve">
+    <value>Home folder (~)</value>
+  </data>
+  <data name="DiscoveryFolders" xml:space="preserve">
+    <value>Folders</value>
+  </data>
+  <data name="DiscoveryCancelScan" xml:space="preserve">
+    <value>Cancel Scan</value>
+  </data>
+  <data name="DiscoverySearching" xml:space="preserve">
+    <value>Searching folders...</value>
+  </data>
+  <data name="DiscoveryNoneTitle" xml:space="preserve">
+    <value>No benches found</value>
+  </data>
+  <data name="DiscoveryNoneLine" xml:space="preserve">
+    <value>Choose a folder containing a bench or its parent projects. Hidden folders, dependencies, tests and symlinks are skipped.</value>
+  </data>
+  <data name="DiscoveryChooseAnother" xml:space="preserve">
+    <value>Choose Another Folder...</value>
+  </data>
+  <data name="DiscoveryEmptyTitle" xml:space="preserve">
+    <value>Your benches, in one place</value>
+  </data>
+  <data name="DiscoveryEmptyLine" xml:space="preserve">
+    <value>Scan a folder such as your home to find benches, then add the ones you want BenchBar to manage.</value>
+  </data>
+  <data name="DiscoveryScanFolder" xml:space="preserve">
+    <value>Scan Folder</value>
+  </data>
+  <data name="DiscoveryNote" xml:space="preserve">
+    <value>Scanning only reads folders. Add Selected remembers your benches; Set Up Management previews the service changes before you apply them.</value>
+  </data>
+  <data name="DiscoveryDeselectAll" xml:space="preserve">
+    <value>Deselect All</value>
+  </data>
+  <data name="DiscoverySelectAll" xml:space="preserve">
+    <value>Select All</value>
+  </data>
+  <data name="DiscoveryFoundOne" xml:space="preserve">
+    <value>1 bench found</value>
+  </data>
+  <data name="DiscoveryFoundMany" xml:space="preserve">
+    <value>{0} benches found</value>
+  </data>
+  <data name="DiscoverySetUpSelected" xml:space="preserve">
+    <value>Set Up Selected...</value>
+  </data>
+  <data name="DiscoverySetUpSelectedName" xml:space="preserve">
+    <value>Set Up Selected</value>
+  </data>
+  <data name="DiscoveryAddSelected" xml:space="preserve">
+    <value>Add Selected</value>
+  </data>
+  <data name="DiscoverySelected" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="DiscoverySitePort" xml:space="preserve">
+    <value>{0} · Port {1}</value>
+  </data>
+  <data name="DiscoveryPort" xml:space="preserve">
+    <value>Port {0}</value>
+  </data>
+  <data name="DiscoveryManagedName" xml:space="preserve">
+    <value>{0} is managed by BenchBar</value>
+  </data>
+  <data name="DiscoverySelectName" xml:space="preserve">
+    <value>Select {0} at {1}</value>
+  </data>
+  <data name="DiscoveryConflict" xml:space="preserve">
+    <value>Port conflict · Review during setup</value>
+  </data>
+  <data name="DiscoveryManaged" xml:space="preserve">
+    <value>Managed by BenchBar</value>
+  </data>
+  <data name="DiscoveryAddedNeedsSetup" xml:space="preserve">
+    <value>Added · Management needs setup</value>
+  </data>
+  <data name="DiscoveryNotAdopted" xml:space="preserve">
+    <value>Not adopted</value>
+  </data>
+  <data name="DiscoverySetUpManagement" xml:space="preserve">
+    <value>Set Up Management...</value>
+  </data>
+  <data name="DiscoverySetUpManagementName" xml:space="preserve">
+    <value>Set Up Management for {0}</value>
+  </data>
+  <data name="DiscoveryWarningOne" xml:space="preserve">
+    <value>1 scan warning</value>
+  </data>
+  <data name="DiscoveryWarningMany" xml:space="preserve">
+    <value>{0} scan warnings</value>
+  </data>
+  <data name="DiscoveryDeepSummary" xml:space="preserve">
+    <value>Stopped at {0} folders deep in {1} folders: a bench deeper than that is not found. Choose a folder closer to it.</value>
+  </data>
+  <data name="DiscoveryAdoptTitle" xml:space="preserve">
+    <value>Set Up Management for {0}</value>
+  </data>
+  <data name="DiscoverySetUp" xml:space="preserve">
+    <value>Set Up</value>
+  </data>
+  <data name="DiscoveryAdoptSummary" xml:space="preserve">
+    <value>Writes the bench's service files and helpers. It never runs migrate, build or update.</value>
+  </data>
+  <data name="DiscoveryTypeFolder" xml:space="preserve">
+    <value>Type the Linux folder to search, for example /home/you/projects.</value>
+  </data>
+  <data name="DiscoveryNoHome" xml:space="preserve">
+    <value>WSL did not say where your home folder is. Type the full path, for example /home/you/projects.</value>
+  </data>
+  <data name="DiscoveryNotLinux" xml:space="preserve">
+    <value>Use a folder inside Linux, starting with /, for example /home/you/projects.</value>
+  </data>
+  <data name="DiscoveryScanUnfinished" xml:space="preserve">
+    <value>The scan did not finish.</value>
+  </data>
+  <data name="DiscoveryScanCancelled" xml:space="preserve">
+    <value>Scan cancelled.</value>
+  </data>
+  <data name="DiscoveryAddedOne" xml:space="preserve">
+    <value>Added 1 bench to BenchBar.</value>
+  </data>
+  <data name="DiscoveryAddedMany" xml:space="preserve">
+    <value>Added {0} benches to BenchBar.</value>
+  </data>
+  <data name="DiscoveryNotAdded" xml:space="preserve">
+    <value>The benches could not be added.</value>
+  </data>
+  <data name="DiscoveryPlanUnread" xml:space="preserve">
+    <value>The port plan could not be read.</value>
+  </data>
+  <data name="DiscoveryBlockedBy" xml:space="preserve">
+    <value>Setup is blocked. {0}</value>
+  </data>
+  <data name="DiscoveryBlocked" xml:space="preserve">
+    <value>Setup is blocked, so nothing can be applied.</value>
+  </data>
+  <data name="DiscoverySetUpMany" xml:space="preserve">
+    <value>Set Up {0} Benches</value>
+  </data>
+  <data name="DiscoverySetUpOne" xml:space="preserve">
+    <value>Set Up Management</value>
+  </data>
+  <data name="DiscoveryIsSetUp" xml:space="preserve">
+    <value>Management is set up. Start the benches from the sidebar.</value>
+  </data>
+  <data name="DiscoveryBlockedEntry" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="DiscoveryPlanMoves" xml:space="preserve">
+    <value>{0}: web port {1} moves to {2} (mode {3}).</value>
+  </data>
+  <data name="DiscoveryPlanStays" xml:space="preserve">
+    <value>{0}: web port {1} stays.</value>
+  </data>
+  <data name="DiscoveryPlanLater" xml:space="preserve">
+    <value>{0}: ports are set when it is set up.</value>
+  </data>
+  <data name="DiscoveryPlanConflict" xml:space="preserve">
+    <value>   Conflict: {0}</value>
+  </data>
+  <data name="DiscoveryPlanBlocked" xml:space="preserve">
+    <value>   Blocked: {0}</value>
+  </data>
+  <data name="DiscoveryWslNoConvert" xml:space="preserve">
+    <value>WSL could not convert {0} to a Linux path.</value>
+  </data>
+  <data name="DiscoveryWslNoStart" xml:space="preserve">
+    <value>WSL could not be started to convert {0}.</value>
+  </data>
+  <data name="ProfileTitle" xml:space="preserve">
+    <value>Team Profiles</value>
+  </data>
+  <data name="ProfileIntro" xml:space="preserve">
+    <value>Pin a base profile and your team's apps, then set up a bench from it.</value>
+  </data>
+  <data name="ProfileAdd" xml:space="preserve">
+    <value>Add Profile</value>
+  </data>
+  <data name="ProfileCreateMenu" xml:space="preserve">
+    <value>Create from Bench...</value>
+  </data>
+  <data name="ProfileImportMenu" xml:space="preserve">
+    <value>Import...</value>
+  </data>
+  <data name="ProfileSubscribeMenu" xml:space="preserve">
+    <value>Subscribe to a Repository...</value>
+  </data>
+  <data name="ProfileChooseTitle" xml:space="preserve">
+    <value>Choose a BenchBar profile</value>
+  </data>
+  <data name="ProfileOpenFilter" xml:space="preserve">
+    <value>BenchBar profile (*.toml)|*.toml|All files (*.*)|*.*</value>
+  </data>
+  <data name="ProfileSaveTitle" xml:space="preserve">
+    <value>Save the profile to share</value>
+  </data>
+  <data name="ProfileSaveFilter" xml:space="preserve">
+    <value>BenchBar profile (*.toml)|*.toml</value>
+  </data>
+  <data name="ProfileNoDistro" xml:space="preserve">
+    <value>BenchBar could not tell which Linux distro to open. Set one in Settings, then try again.</value>
+  </data>
+  <data name="ProfileReading" xml:space="preserve">
+    <value>Reading profiles...</value>
+  </data>
+  <data name="ProfileReadFailedTitle" xml:space="preserve">
+    <value>The profiles could not be read</value>
+  </data>
+  <data name="ProfileTryAgain" xml:space="preserve">
+    <value>Try Again</value>
+  </data>
+  <data name="ProfileList" xml:space="preserve">
+    <value>Profiles</value>
+  </data>
+  <data name="ProfileOnlyBuiltIn" xml:space="preserve">
+    <value>Only the built in profiles</value>
+  </data>
+  <data name="ProfileOnlyBuiltInLine" xml:space="preserve">
+    <value>A team profile pins your team's apps and branches, so everyone sets up the same bench.</value>
+  </data>
+  <data name="ProfileFooter" xml:space="preserve">
+    <value>Set up a bench from one with benchbar install --profile NAME. Team profiles are files in ~/.config/benchbar/profiles inside Linux, a subscribed repository or a folder in BENCHBAR_PROFILE_PATH, never inside BenchBar. Drop a .toml file here to import it.</value>
+  </data>
+  <data name="ProfileTeamName" xml:space="preserve">
+    <value>Team profile</value>
+  </data>
+  <data name="ProfileBuiltInName" xml:space="preserve">
+    <value>Built in profile</value>
+  </data>
+  <data name="ProfileBasedOn" xml:space="preserve">
+    <value>based on {0}</value>
+  </data>
+  <data name="ProfileNotUsed" xml:space="preserve">
+    <value>Not used: {0} has the same name and comes first</value>
+  </data>
+  <data name="ProfileActions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="ProfileActionsName" xml:space="preserve">
+    <value>Actions for {0}</value>
+  </data>
+  <data name="ProfileExport" xml:space="preserve">
+    <value>Export...</value>
+  </data>
+  <data name="ProfileUpdateMenu" xml:space="preserve">
+    <value>Update...</value>
+  </data>
+  <data name="ProfileCheckAccess" xml:space="preserve">
+    <value>Check Access</value>
+  </data>
+  <data name="ProfileShowInExplorer" xml:space="preserve">
+    <value>Show in Explorer</value>
+  </data>
+  <data name="ProfileRemoveSubscription" xml:space="preserve">
+    <value>Remove Subscription...</value>
+  </data>
+  <data name="ProfileRemove" xml:space="preserve">
+    <value>Remove...</value>
+  </data>
+  <data name="ProfileCreateTitle" xml:space="preserve">
+    <value>Create a Team Profile</value>
+  </data>
+  <data name="ProfileCreateLine" xml:space="preserve">
+    <value>Writes a profile from one bench's apps, branches and Frappe version.</value>
+  </data>
+  <data name="ProfileNameField" xml:space="preserve">
+    <value>Profile name</value>
+  </data>
+  <data name="ProfileNameHint" xml:space="preserve">
+    <value>For example acme</value>
+  </data>
+  <data name="ProfileFromBench" xml:space="preserve">
+    <value>From bench</value>
+  </data>
+  <data name="ProfileNameRule" xml:space="preserve">
+    <value>Lower case letters, digits, '.', '_' or '-', starting with a letter or digit.</value>
+  </data>
+  <data name="ProfileCreateNote" xml:space="preserve">
+    <value>BenchBar reads the bench (its apps, their repositories and branches, and its Frappe version) and writes ~/.config/benchbar/profiles/NAME.toml. The bench is not changed; no site data or password goes into the file.</value>
+  </data>
+  <data name="ProfileCreate" xml:space="preserve">
+    <value>Create</value>
+  </data>
+  <data name="ProfileImportTitle" xml:space="preserve">
+    <value>Import a Profile</value>
+  </data>
+  <data name="ProfileImportLine" xml:space="preserve">
+    <value>Adds a profile from a .toml file or an https link, after you review it.</value>
+  </data>
+  <data name="ProfileSourceField" xml:space="preserve">
+    <value>File or https URL</value>
+  </data>
+  <data name="ProfileChooseFile" xml:space="preserve">
+    <value>Choose File...</value>
+  </data>
+  <data name="ProfileChooseFileName" xml:space="preserve">
+    <value>Choose File</value>
+  </data>
+  <data name="ProfileSaveAs" xml:space="preserve">
+    <value>Save as</value>
+  </data>
+  <data name="ProfileSourceHint" xml:space="preserve">
+    <value>A .toml file on this PC (C:\Users\you\acme.toml) or in Linux (/home/you/acme.toml), or an https link.</value>
+  </data>
+  <data name="ProfileSaveAsHint" xml:space="preserve">
+    <value>Optional: the name in the file.</value>
+  </data>
+  <data name="ProfileAddedTitle" xml:space="preserve">
+    <value>Added {0}</value>
+  </data>
+  <data name="ProfileAddedLine" xml:space="preserve">
+    <value>Set up a bench from it with benchbar install --profile {0}.</value>
+  </data>
+  <data name="ProfileDone" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="ProfileClose" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="ProfileBadSource" xml:space="preserve">
+    <value>Use a .toml file on this PC or in Linux, or an https URL.</value>
+  </data>
+  <data name="ProfileReadingBusy" xml:space="preserve">
+    <value>Reading the profile and checking its repositories...</value>
+  </data>
+  <data name="ProfileAdding" xml:space="preserve">
+    <value>Adding the profile...</value>
+  </data>
+  <data name="ProfileImportFailed" xml:space="preserve">
+    <value>The profile was not imported. {0}</value>
+  </data>
+  <data name="ProfileImportNote" xml:space="preserve">
+    <value>BenchBar reads the file, checks that it parses and whether this machine can reach each repository, and shows it before anything is saved. Nothing is installed from here.</value>
+  </data>
+  <data name="ProfileReview" xml:space="preserve">
+    <value>Review</value>
+  </data>
+  <data name="ProfileReplace" xml:space="preserve">
+    <value>Replace Profile</value>
+  </data>
+  <data name="ProfileLineName" xml:space="preserve">
+    <value>Profile: {0}</value>
+  </data>
+  <data name="ProfileLineBase" xml:space="preserve">
+    <value>Based on: {0}</value>
+  </data>
+  <data name="ProfileLineFrom" xml:space="preserve">
+    <value>From: {0}</value>
+  </data>
+  <data name="ProfileAppAtBranch" xml:space="preserve">
+    <value>{0} @ {1}</value>
+  </data>
+  <data name="ProfileLeftOut" xml:space="preserve">
+    <value>Left out when a bench is set up from it, because this machine cannot read their repository or they require an app that is left out: {0}.</value>
+  </data>
+  <data name="ProfileExists" xml:space="preserve">
+    <value>A profile named {0} exists. Adding this one replaces it:</value>
+  </data>
+  <data name="ProfileNoDiff" xml:space="preserve">
+    <value>(no difference)</value>
+  </data>
+  <data name="ProfileSubscribeTitle" xml:space="preserve">
+    <value>Subscribe to a Team's Profiles</value>
+  </data>
+  <data name="ProfileSubscribeLine" xml:space="preserve">
+    <value>Adds the profiles in a team's git repository to this machine.</value>
+  </data>
+  <data name="ProfileGitField" xml:space="preserve">
+    <value>Git repository</value>
+  </data>
+  <data name="ProfileGitHint" xml:space="preserve">
+    <value>For example git@github.com:acme/benchbar-profiles.git</value>
+  </data>
+  <data name="ProfileSubscribedTitle" xml:space="preserve">
+    <value>Subscribed to {0}</value>
+  </data>
+  <data name="ProfileNoProfilesYet" xml:space="preserve">
+    <value>The repository has no profile yet.</value>
+  </data>
+  <data name="ProfileProfilesList" xml:space="preserve">
+    <value>Profiles: {0}.</value>
+  </data>
+  <data name="ProfileBadGit" xml:space="preserve">
+    <value>Use an https, ssh or git@host:owner/repo URL.</value>
+  </data>
+  <data name="ProfileCloning" xml:space="preserve">
+    <value>Cloning...</value>
+  </data>
+  <data name="ProfileSubscribeFailed" xml:space="preserve">
+    <value>The repository was not added. {0}</value>
+  </data>
+  <data name="ProfileSubscribeNote" xml:space="preserve">
+    <value>BenchBar clones the repository into ~/.config/benchbar/sources with your own git credentials and reads only its .toml files; no code from it runs. It never updates on its own: the list shows when it is behind, and Update shows the changes first.</value>
+  </data>
+  <data name="ProfileSubscribe" xml:space="preserve">
+    <value>Subscribe</value>
+  </data>
+  <data name="ProfileExportTitle" xml:space="preserve">
+    <value>Export {0}</value>
+  </data>
+  <data name="ProfileExportLine" xml:space="preserve">
+    <value>Writes a profile file your team can import, with the branch each app is shared on.</value>
+  </data>
+  <data name="ProfileExportPick" xml:space="preserve">
+    <value>Pick the branch each teammate gets, and which apps go into the file.</value>
+  </data>
+  <data name="ProfileKeepName" xml:space="preserve">
+    <value>Keep {0}</value>
+  </data>
+  <data name="ProfileKeepHelp" xml:space="preserve">
+    <value>Put {0} in the file</value>
+  </data>
+  <data name="ProfileBranchFor" xml:space="preserve">
+    <value>Branch for {0}</value>
+  </data>
+  <data name="ProfileDetached" xml:space="preserve">
+    <value>detached</value>
+  </data>
+  <data name="ProfileAppAccess" xml:space="preserve">
+    <value>{0}  ·  {1}</value>
+  </data>
+  <data name="ProfileRequires" xml:space="preserve">
+    <value>requires {0}</value>
+  </data>
+  <data name="ProfileNotVerified" xml:space="preserve">
+    <value>Not verified on the remote</value>
+  </data>
+  <data name="ProfileAddressNote" xml:space="preserve">
+    <value>Repository addresses are written without your SSH host aliases or any login.</value>
+  </data>
+  <data name="ProfileExportBusy" xml:space="preserve">
+    <value>Asking each repository for its default branch and access...</value>
+  </data>
+  <data name="ProfileExportFailed" xml:space="preserve">
+    <value>{0} was not exported. {1}</value>
+  </data>
+  <data name="ProfileExportedOne" xml:space="preserve">
+    <value>Exported 1 app</value>
+  </data>
+  <data name="ProfileExportedMany" xml:space="preserve">
+    <value>Exported {0} apps</value>
+  </data>
+  <data name="ProfileLeftOutList" xml:space="preserve">
+    <value>Left out: {0}</value>
+  </data>
+  <data name="ProfileExporting" xml:space="preserve">
+    <value>Exporting...</value>
+  </data>
+  <data name="ProfileShareTitle" xml:space="preserve">
+    <value>Share an import link</value>
+  </data>
+  <data name="ProfileShareLine" xml:space="preserve">
+    <value>Put the file where your team can read it over https (a repository, a gist), then paste its address here. Teammates click the link and review the profile before BenchBar adds it.</value>
+  </data>
+  <data name="ProfileHosted" xml:space="preserve">
+    <value>Hosted file</value>
+  </data>
+  <data name="ProfileCopyLink" xml:space="preserve">
+    <value>Copy Import Link</value>
+  </data>
+  <data name="ProfileCopied" xml:space="preserve">
+    <value>Copied</value>
+  </data>
+  <data name="ProfileUpdateTitle" xml:space="preserve">
+    <value>Update {0}</value>
+  </data>
+  <data name="ProfileUpdateLine" xml:space="preserve">
+    <value>Shows what changed in the profile's source, then applies it.</value>
+  </data>
+  <data name="ProfileFetching" xml:space="preserve">
+    <value>Fetching the source...</value>
+  </data>
+  <data name="ProfileUpdateFailed" xml:space="preserve">
+    <value>{0} was not updated. {1}</value>
+  </data>
+  <data name="ProfileUpdatedTitle" xml:space="preserve">
+    <value>Updated {0}</value>
+  </data>
+  <data name="ProfileUpToDate" xml:space="preserve">
+    <value>{0} is up to date</value>
+  </data>
+  <data name="ProfileNothingToChange" xml:space="preserve">
+    <value>Nothing to change.</value>
+  </data>
+  <data name="ProfileUpdating" xml:space="preserve">
+    <value>Updating...</value>
+  </data>
+  <data name="ProfileUpdateKind" xml:space="preserve">
+    <value>{0}  ·  {1}</value>
+  </data>
+  <data name="ProfileUpdateBehindOne" xml:space="preserve">
+    <value>{0}  ·  {1}  ·  1 commit behind</value>
+  </data>
+  <data name="ProfileUpdateBehindMany" xml:space="preserve">
+    <value>{0}  ·  {1}  ·  {2} commits behind</value>
+  </data>
+  <data name="ProfileUpdate" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="ProfileCheckTitle" xml:space="preserve">
+    <value>Check Access to {0}</value>
+  </data>
+  <data name="ProfileCheckLine" xml:space="preserve">
+    <value>Tries each repository of the profile with your git credentials.</value>
+  </data>
+  <data name="ProfileCheckBusy" xml:space="preserve">
+    <value>Trying each repository with your git credentials...</value>
+  </data>
+  <data name="ProfileCheckFailed" xml:space="preserve">
+    <value>Access was not checked. {0}</value>
+  </data>
+  <data name="ProfileCheckAgain" xml:space="preserve">
+    <value>Check Again</value>
+  </data>
+  <data name="ProfileRepoName" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="ProfileNotChecked" xml:space="preserve">
+    <value>not checked</value>
+  </data>
+  <data name="ProfileReachable" xml:space="preserve">
+    <value>reachable</value>
+  </data>
+  <data name="ProfileUnreachable" xml:space="preserve">
+    <value>not reachable</value>
+  </data>
+  <data name="ProfileReadFailed" xml:space="preserve">
+    <value>The profiles could not be read.</value>
+  </data>
+  <data name="ProfileNotCreated" xml:space="preserve">
+    <value>The profile was not created (exit {0}).</value>
+  </data>
+  <data name="ProfileCreated" xml:space="preserve">
+    <value>Created {0}. Set up a bench from it with benchbar install --profile {0}.</value>
+  </data>
+  <data name="ProfileNotRemoved" xml:space="preserve">
+    <value>The profile was not removed.</value>
+  </data>
+  <data name="ProfileRemovedMoved" xml:space="preserve">
+    <value>Removed {0}. It was moved to {1}.</value>
+  </data>
+  <data name="ProfileRemoved" xml:space="preserve">
+    <value>Removed {0}.</value>
+  </data>
+  <data name="ProfileRemoveQuestion" xml:space="preserve">
+    <value>Remove profile?</value>
+  </data>
+  <data name="ProfileRemoveSubQuestion" xml:space="preserve">
+    <value>Remove the subscription?</value>
+  </data>
+  <data name="ProfileRemoveNameQuestion" xml:space="preserve">
+    <value>Remove {0}?</value>
+  </data>
+  <data name="ProfileItsRepo" xml:space="preserve">
+    <value>its repository</value>
+  </data>
+  <data name="ProfileRemoveSubBody" xml:space="preserve">
+    <value>This removes the subscription to {0} with all its profiles ({1}). The folder is moved to ~/.config/benchbar/removed, not deleted. Benches set up from them are not changed.</value>
+  </data>
+  <data name="ProfileRemoveFileBody" xml:space="preserve">
+    <value>The file is moved to ~/.config/benchbar/removed, not deleted. Benches set up from it are not changed.</value>
+  </data>
+  <data name="ProfileCommandFailed" xml:space="preserve">
+    <value>The command failed.</value>
+  </data>
+  <data name="ProfileNotExported" xml:space="preserve">
+    <value>The profile was not exported.</value>
+  </data>
+  <data name="ProfileCouldNotUpdate" xml:space="preserve">
+    <value>{0} could not be updated. Nothing was changed.</value>
+  </data>
+  <data name="ProfileRepoNotAdded" xml:space="preserve">
+    <value>The repository was not added.</value>
+  </data>
+  <data name="ProfileOutdatedOne" xml:space="preserve">
+    <value>Outdated · 1 commit</value>
+  </data>
+  <data name="ProfileOutdatedMany" xml:space="preserve">
+    <value>Outdated · {0} commits</value>
+  </data>
+  <data name="ProfileDayOne" xml:space="preserve">
+    <value>1 day</value>
+  </data>
+  <data name="ProfileDayMany" xml:space="preserve">
+    <value>{0} days</value>
+  </data>
+  <data name="ProfileOutdatedDays" xml:space="preserve">
+    <value>{0} / {1}</value>
+  </data>
+  <data name="ProfileVersionPython" xml:space="preserve">
+    <value>Python {0}</value>
+  </data>
+  <data name="ProfileVersionNode" xml:space="preserve">
+    <value>Node {0}</value>
+  </data>
+  <data name="ProfileVersionMariadb" xml:space="preserve">
+    <value>MariaDB {0}</value>
+  </data>
+  <data name="ProfileOriginBuiltin" xml:space="preserve">
+    <value>built in</value>
+  </data>
+  <data name="ProfileOriginUser" xml:space="preserve">
+    <value>local</value>
+  </data>
+  <data name="ProfileOriginImported" xml:space="preserve">
+    <value>imported</value>
+  </data>
+  <data name="ProfileOriginPath" xml:space="preserve">
+    <value>profile path</value>
+  </data>
+  <data name="ProfileOriginSubscribed" xml:space="preserve">
+    <value>subscribed</value>
+  </data>
+  <data name="ProfileOriginSubscribedRepo" xml:space="preserve">
+    <value>subscribed · {0}</value>
+  </data>
+  <data name="ProfileAccessPublic" xml:space="preserve">
+    <value>public</value>
+  </data>
+  <data name="ProfileAccessPrivate" xml:space="preserve">
+    <value>private</value>
+  </data>
+  <data name="ProfileAccessPersonal" xml:space="preserve">
+    <value>personal account</value>
+  </data>
+  <data name="ProfileAccessUnknown" xml:space="preserve">
+    <value>unknown</value>
+  </data>
+  <data name="ProfileRequiredBy" xml:space="preserve">
+    <value>{0} is required by {1}: keep it, or drop those too.</value>
+  </data>
+  <data name="ProfileKeepOne" xml:space="preserve">
+    <value>Keep at least one app.</value>
+  </data>
+  <data name="ProfileNeedsBranch" xml:space="preserve">
+    <value>{0} needs a branch name.</value>
+  </data>
+  <data name="ProfileReachAll" xml:space="preserve">
+    <value>This machine can reach every repository</value>
+  </data>
+  <data name="ProfileSomeLeftOut" xml:space="preserve">
+    <value>Some apps would be left out</value>
+  </data>
+  <data name="ProfileOneUnreachable" xml:space="preserve">
+    <value>1 repository is not reachable</value>
+  </data>
+  <data name="ProfileManyUnreachable" xml:space="preserve">
+    <value>{0} repositories are not reachable</value>
+  </data>
+  <data name="ProfileAskOwner" xml:space="preserve">
+    <value>Ask the repository owner for access, then check again.</value>
+  </data>
+  <data name="ProfileWouldSkip" xml:space="preserve">
+    <value>A bench set up from this profile now would skip: {0}. Ask the repository owner for access, then check again.</value>
+  </data>
+  <data name="PortsConflictLead" xml:space="preserve">
+    <value>Port conflict. Review the proposed resolution before starting.</value>
+  </data>
+  <data name="PortsNotChecked" xml:space="preserve">
+    <value>The ports could not be checked: {0}</value>
+  </data>
+  <data name="PortsNoAnswer" xml:space="preserve">
+    <value>no answer from benchbar.exe.</value>
+  </data>
+  <data name="PortsModeFixed" xml:space="preserve">
+    <value>Fixed</value>
+  </data>
+  <data name="PortsModeAutomatic" xml:space="preserve">
+    <value>Automatic</value>
+  </data>
+  <data name="PortsResolveTitle" xml:space="preserve">
+    <value>Resolve Port Conflict</value>
+  </data>
+  <data name="PortsSettingsTitle" xml:space="preserve">
+    <value>Port Settings</value>
+  </data>
+  <data name="PortsSetUpBench" xml:space="preserve">
+    <value>Set Up {0}</value>
+  </data>
+  <data name="PortsSetUpSelected" xml:space="preserve">
+    <value>Set Up Selected Benches</value>
+  </data>
+  <data name="PortsResolveStart" xml:space="preserve">
+    <value>Resolve and Start</value>
+  </data>
+  <data name="PortsSetUpBenchButton" xml:space="preserve">
+    <value>Set Up Bench</value>
+  </data>
+  <data name="PortsSuccessStarted" xml:space="preserve">
+    <value>Setup completed and the start command succeeded.</value>
+  </data>
+  <data name="PortsSuccess" xml:space="preserve">
+    <value>Management is set up. Start the benches when you are ready.</value>
+  </data>
+  <data name="PortsNotPlanned" xml:space="preserve">
+    <value>The ports could not be planned.</value>
+  </data>
+  <data name="PortsNoPreview" xml:space="preserve">
+    <value>The CLI did not provide a service-change preview. Upgrade benchbar and refresh the preview before applying.</value>
+  </data>
+  <data name="PortsModeNotSaved" xml:space="preserve">
+    <value>The mode could not be saved (exit {0}).</value>
+  </data>
+  <data name="PortsApplyFailed" xml:space="preserve">
+    <value>ports apply failed (exit {0}).</value>
+  </data>
+  <data name="PortsOccupied" xml:space="preserve">
+    <value>Setup completed, but a port is now occupied. The bench was not started. {0}</value>
+  </data>
+  <data name="PortsNotStarted" xml:space="preserve">
+    <value>Setup completed, but the bench was not started. {0}</value>
+  </data>
+  <data name="PortsDidNotStart" xml:space="preserve">
+    <value>Setup completed, but the bench did not start. {0}</value>
+  </data>
+  <data name="PortsUpFailed" xml:space="preserve">
+    <value>up failed (exit {0}).</value>
+  </data>
+  <data name="PortsPlanning" xml:space="preserve">
+    <value>Checking ports and preparing the selection...</value>
+  </data>
+  <data name="PortsCalmLine" xml:space="preserve">
+    <value>The ports this bench uses, and whether BenchBar may move them. Nothing needs setting up.</value>
+  </data>
+  <data name="PortsReviewLine" xml:space="preserve">
+    <value>Review the addresses and service changes before applying. Existing apps and databases are preserved.</value>
+  </data>
+  <data name="PortsApplying" xml:space="preserve">
+    <value>Applying changes...</value>
+  </data>
+  <data name="PortsFailedTitle" xml:space="preserve">
+    <value>Setup did not finish</value>
+  </data>
+  <data name="PortsResolveBlocked" xml:space="preserve">
+    <value>Resolve the blocked benches before applying. Fixed mode keeps the current ports; Automatic allows a new allocation after review.</value>
+  </data>
+  <data name="PortsOutput" xml:space="preserve">
+    <value>Setup output</value>
+  </data>
+  <data name="PortsCalmNote" xml:space="preserve">
+    <value>Fixed keeps these ports. Automatic lets BenchBar propose new ones, for your approval, when another bench or app takes them. A change of mode is saved at once.</value>
+  </data>
+  <data name="PortsNote" xml:space="preserve">
+    <value>Changing the mode saves your preference immediately; ports change only when you apply. Apply writes the service files; it never starts a bench unless you chose Resolve and Start.</value>
+  </data>
+  <data name="PortsCheckAgain" xml:space="preserve">
+    <value>Check Again</value>
+  </data>
+  <data name="PortsRefresh" xml:space="preserve">
+    <value>Refresh Preview</value>
+  </data>
+  <data name="PortsDone" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="PortsAddress" xml:space="preserve">
+    <value>Address</value>
+  </data>
+  <data name="PortsCurrentAddress" xml:space="preserve">
+    <value>Current address</value>
+  </data>
+  <data name="PortsNewAddress" xml:space="preserve">
+    <value>New address</value>
+  </data>
+  <data name="PortsAddressStays" xml:space="preserve">
+    <value>Address stays</value>
+  </data>
+  <data name="PortsNumbers" xml:space="preserve">
+    <value>Web {0} | Socket.IO {1} | Redis {2}/{3}</value>
+  </data>
+  <data name="PortsServiceChanges" xml:space="preserve">
+    <value>Service changes</value>
+  </data>
+  <data name="PortsMode" xml:space="preserve">
+    <value>Port mode</value>
+  </data>
+  <data name="PortsModeName" xml:space="preserve">
+    <value>Port mode {0}</value>
+  </data>
+  <data name="PortsModeHint" xml:space="preserve">
+    <value>Fixed keeps the current ports. Automatic can propose new ports for your approval.</value>
+  </data>
+  <data name="PortsResolved" xml:space="preserve">
+    <value>Port conflict resolved by the proposed allocation</value>
+  </data>
+  <data name="PortsConflictDetails" xml:space="preserve">
+    <value>Conflict details</value>
+  </data>
+  <data name="PortsConflictDetailsName" xml:space="preserve">
+    <value>Conflict details {0}</value>
+  </data>
+  <data name="LogsTitle" xml:space="preserve">
+    <value>{0} log</value>
+  </data>
+  <data name="LogsAllProcesses" xml:space="preserve">
+    <value>All processes</value>
+  </data>
+  <data name="LogsPrevious" xml:space="preserve">
+    <value>Previous log</value>
+  </data>
+  <data name="LogsPreviousHint" xml:space="preserve">
+    <value>logs/bench.previous.log: the end of the log before the last start</value>
+  </data>
+  <data name="LogsFollow" xml:space="preserve">
+    <value>Follow</value>
+  </data>
+  <data name="LogsFollowHint" xml:space="preserve">
+    <value>Stick to the newest line; scrolling up turns it off</value>
+  </data>
+  <data name="LogsProcessFilter" xml:space="preserve">
+    <value>Process filter</value>
+  </data>
+  <data name="LogsSearchName" xml:space="preserve">
+    <value>Search the log</value>
+  </data>
+  <data name="LogsSearchResult" xml:space="preserve">
+    <value>Search result</value>
+  </data>
+  <data name="LogsPreviousMatch" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="LogsPreviousMatchName" xml:space="preserve">
+    <value>Previous match</value>
+  </data>
+  <data name="LogsNextMatch" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="LogsNextMatchName" xml:space="preserve">
+    <value>Next match</value>
+  </data>
+  <data name="LogsClear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="LogsClearName" xml:space="preserve">
+    <value>Clear view</value>
+  </data>
+  <data name="LogsCopyName" xml:space="preserve">
+    <value>Copy the visible lines</value>
+  </data>
+  <data name="LogsTerminal" xml:space="preserve">
+    <value>Open in Terminal</value>
+  </data>
+  <data name="LogsClearTip" xml:space="preserve">
+    <value>Empty the view; the file is not touched</value>
+  </data>
+  <data name="LogsLines" xml:space="preserve">
+    <value>Log lines</value>
+  </data>
+  <data name="LogsLoading" xml:space="preserve">
+    <value>Loading...</value>
+  </data>
+  <data name="LogsLineOne" xml:space="preserve">
+    <value>1 line from {0}</value>
+  </data>
+  <data name="LogsLineMany" xml:space="preserve">
+    <value>{0} lines from {1}</value>
+  </data>
+  <data name="LogsFollowing" xml:space="preserve">
+    <value>{0}, following</value>
+  </data>
+  <data name="LogsBenchLog" xml:space="preserve">
+    <value>the bench log</value>
+  </data>
+  <data name="LogsNotRead" xml:space="preserve">
+    <value>The log could not be read.</value>
+  </data>
+  <data name="LogsRestarted" xml:space="preserve">
+    <value>--- log restarted ---</value>
+  </data>
+  <data name="LogsNoMatches" xml:space="preserve">
+    <value>no matches</value>
+  </data>
+  <data name="LogsMatchOf" xml:space="preserve">
+    <value>{0} of {1}</value>
+  </data>
+  <data name="LogsMatches" xml:space="preserve">
+    <value>{0} matches</value>
+  </data>
+  <data name="HistoryTitle" xml:space="preserve">
+    <value>History</value>
+  </data>
+  <data name="HistoryIntro" xml:space="preserve">
+    <value>Every run that changed something on this computer, newest first: who started it and how it ended.</value>
+  </data>
+  <data name="HistoryRefresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="HistoryRefreshName" xml:space="preserve">
+    <value>Refresh the history</value>
+  </data>
+  <data name="HistoryNotRead" xml:space="preserve">
+    <value>The history could not be read.</value>
+  </data>
+  <data name="HistoryUnsupported" xml:space="preserve">
+    <value>This version of benchbar has no history. Update benchbar in Ubuntu to see what ran.</value>
+  </data>
+  <data name="HistoryNotReadLine" xml:space="preserve">
+    <value>The history could not be read: {0}</value>
+  </data>
+  <data name="HistoryReading" xml:space="preserve">
+    <value>Reading the history...</value>
+  </data>
+  <data name="HistoryNothing" xml:space="preserve">
+    <value>Nothing has run yet. A start, a backup, an app change or a restore shows here once it has run.</value>
+  </data>
+  <data name="HistoryWho" xml:space="preserve">
+    <value>{0}, {1}</value>
+  </data>
+  <data name="HistoryCopyLog" xml:space="preserve">
+    <value>Copy Log Path</value>
+  </data>
+  <data name="HistoryCopyLogName" xml:space="preserve">
+    <value>Copy the log path of {0}</value>
+  </data>
+  <data name="HistoryACommand" xml:space="preserve">
+    <value>a command</value>
+  </data>
+  <data name="HistoryTitleSite" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="HistoryCallerApp" xml:space="preserve">
+    <value>BenchBar app</value>
+  </data>
+  <data name="HistoryCallerTerminal" xml:space="preserve">
+    <value>Terminal</value>
+  </data>
+  <data name="HistoryCallerTray" xml:space="preserve">
+    <value>Windows tray</value>
+  </data>
+  <data name="HistoryCallerScript" xml:space="preserve">
+    <value>A script</value>
+  </data>
+  <data name="HistoryCallerAgent" xml:space="preserve">
+    <value>An agent</value>
+  </data>
+  <data name="HistoryCallerMcp" xml:space="preserve">
+    <value>An agent through MCP</value>
+  </data>
+  <data name="HistoryCallerMcpClient" xml:space="preserve">
+    <value>An agent through MCP ({0})</value>
+  </data>
+  <data name="HistoryDone" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="HistoryFailed" xml:space="preserve">
+    <value>Failed (exit {0})</value>
+  </data>
+  <data name="HistoryChange" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="HistoryMore" xml:space="preserve">
+    <value>{0} more</value>
   </data>
 </root>
