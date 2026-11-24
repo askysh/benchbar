@@ -311,6 +311,20 @@ final class GuestRoomStore {
         inviteNotice = nil
     }
 
+    /// The join on its way that made a key for a host it has not joined: which attempt, which host.
+    private var freshKeyInFlight: (attempt: Int, host: Data)?
+    /// The host the join on its way is pinned to, once that is known.
+    private var joiningHost: Data?
+
+    /// A join that did not end in a saved room gives its fresh key back. Not when a newer attempt
+    /// to the same host took the key over: that one answers for it now.
+    private func dropFreshKey(_ key: Data?, attempt: Int) {
+        guard let key else { return }
+        if let current = freshKeyInFlight, current.host == key, current.attempt != attempt { return }
+        if freshKeyInFlight?.attempt == attempt { freshKeyInFlight = nil }
+        deps.forgetRoomKey(key)
+    }
+
     /// Whether Join would dial the invite's address (the join sheet says so before the click).
     func inviteAddressUsed(_ invite: ShareInvite) -> Bool {
         invite.address.map { deps.inviteAddressAllowed($0.host) } ?? false
@@ -404,6 +418,8 @@ final class GuestRoomStore {
         if case .pinned(let key) = pin { host = key }
         // a key made for this join alone goes again when the join does not end in a saved room
         let freshKey = deps.roomFingerprint != nil ? host.flatMap { key in saved.contains { $0.hostPin == key } ? nil : key } : nil
+        joiningHost = host
+        if let freshKey { freshKeyInFlight = (attempt, freshKey) }
         let fg = host.flatMap { key in deps.roomFingerprint.map { $0(key) } } ?? deps.clientFingerprint()
         guard let fg else {
             join = .refused(room, .failed)
@@ -413,18 +429,24 @@ final class GuestRoomStore {
             do {
                 let transport = try await deps.dial(target.endpoint, pin)
                 guard attempt == joinAttempt else {
+                    // cancelled while it dialled: no room comes of this join, so its key goes too
                     transport.close()
+                    dropFreshKey(freshKey, attempt: attempt)
                     return
                 }
                 dialed = (transport, target)
                 break
             } catch {
-                guard attempt == joinAttempt else { return }
+                guard attempt == joinAttempt else {
+                    dropFreshKey(freshKey, attempt: attempt)
+                    return
+                }
                 failures.append(error)
             }
         }
         guard let (transport, target) = dialed else {
-            if let freshKey { deps.forgetRoomKey(freshKey) }
+            dropFreshKey(freshKey, attempt: attempt)
+            joiningHost = nil
             if failures.contains(.localNetworkDenied) {
                 localNetworkDenied = true
                 join = .refused(room, .localNetworkDenied)
@@ -444,7 +466,10 @@ final class GuestRoomStore {
         let result = await deps.runJoin(transport, code, guestName, deps.model, fg, invite?.check)
         let address = transport.remoteEndpoint
         transport.close()
-        if attempt == joinAttempt { joinTransport = nil }
+        if attempt == joinAttempt {
+            joinTransport = nil
+            joiningHost = nil
+        }
 
         switch result {
         case .failure(let refusal):
@@ -455,9 +480,10 @@ final class GuestRoomStore {
                     lockedUntil = deps.now().addingTimeInterval(Self.lockout)
                 }
             }
-            if let freshKey { deps.forgetRoomKey(freshKey) }
+            dropFreshKey(freshKey, attempt: attempt)
             if attempt == joinAttempt { join = .refused(room, refusal) }
         case .success(let joined):
+            if freshKeyInFlight?.attempt == attempt { freshKeyInFlight = nil }
             wrongInARow = 0
             rejoining = nil
             self.invite = nil
@@ -551,6 +577,10 @@ final class GuestRoomStore {
 
     /// Tells the host first, best effort, so the seat's sessions are wiped there.
     func forget(_ room: SavedRoom) async {
+        // Not while this room is being joined again: the key Forget would delete is the one that join
+        // shows, and a join that ends after it would save a room without its key. The person forgets
+        // it once the join has ended, a few seconds later.
+        if case .joining(let target) = join, target.id == room.serviceName || (joiningHost != nil && joiningHost == room.hostPin) { return }
         _ = try? await withAPI(room) { api async throws(RoomAPIError) in try await api.leave() }
         forwarders.removeValue(forKey: room.id)?.stop()
         deps.rooms.forget(room)

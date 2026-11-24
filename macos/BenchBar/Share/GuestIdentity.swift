@@ -144,8 +144,10 @@ nonisolated struct RoomKeys: @unchecked Sendable {
     /// nil is the login keychain; tests pass a temporary file keychain.
     var keychain: SecKeychain?
 
+    /// The whole hash of the host's key, not the 16 digits a person reads: a host that grinds a key
+    /// with the same first digits as another host's must not get that host's client key shown to it.
     static func label(forHost host: Data) -> String {
-        "\(KeychainIdentity.defaultLabel) \(ShareDeepLink.fp16(of: host))"
+        "\(KeychainIdentity.defaultLabel) \(host.hex)"
     }
 
     /// The key made for one host. It exists once it was used; `reset()` deletes it.

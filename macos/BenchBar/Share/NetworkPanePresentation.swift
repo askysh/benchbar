@@ -121,8 +121,9 @@ nonisolated enum NetworkPanePresentation {
     static let pasteInvite = "Paste invite"
     static let pasteInviteHelp = "Reads the clipboard once, for a BenchBar invite your colleague sent."
 
+    /// The name is the link's own words, so the headline says where it comes from.
     static func invitePrompt(_ room: DiscoveredRoom) -> String {
-        "Join \(name(room)) from the invite"
+        "Join \u{201C}\(name(room))\u{201D} (the name the invite link gives)"
     }
 
     /// What the join sheet of an invite shows before Join (#159 SHARE-8). A link can come from a web
@@ -136,7 +137,7 @@ nonisolated enum NetworkPanePresentation {
         } else {
             address = "Address: none in the link. The room is looked for by its name."
         }
-        return ("This room comes from an invite link, not from your network. Join only if the key below is the one your host reads out.",
+        return ("This room and its name come from an invite link, not from your network. Join only if the key below is the Host key your host sees on their Sharing tab or in benchbar share status (BenchBar 0.9.0 or later shows it).",
                 address, "Host key: " + keyGroups(invite.hostPin))
     }
 

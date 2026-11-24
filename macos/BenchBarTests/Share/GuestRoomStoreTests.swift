@@ -109,6 +109,24 @@ nonisolated final class DialLog: @unchecked Sendable {
     }
 }
 
+/// A dial that waits until the test lets it go on.
+nonisolated final class Gate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _entered = false
+    private var _held = true
+    var entered: Bool { lock.withLock { _entered } }
+    var held: Bool { lock.withLock { _held } }
+    func enter() { lock.withLock { _entered = true } }
+    func open() { lock.withLock { _held = false } }
+}
+
+nonisolated final class KeyLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _keys: [Data] = []
+    var keys: [Data] { lock.withLock { _keys } }
+    func add(_ key: Data) { lock.withLock { _keys.append(key) } }
+}
+
 nonisolated final class NoBrowser: RoomBrowsing, @unchecked Sendable {
     func start(onChange: @escaping @Sendable ([DiscoveredRoom]) -> Void, onDenied: @escaping @Sendable () -> Void) {}
     func stop() {}
@@ -522,14 +540,94 @@ private final class Harness {
         #expect(h.roomKeysForgotten == [Harness.hostKey])
     }
 
+    /// A join that is cancelled while it dials never ends in a saved room: the key made for it goes.
+    @Test(.timeLimit(.minutes(1))) func aJoinCancelledWhileItDialsLeavesNoKeyBehind() async throws {
+        let gate = Gate()
+        let forgotten = KeyLog()
+        let store = GuestRoomStore(dependencies: .init(
+            browser: NoBrowser(),
+            rooms: SavedRoomsStore(defaults: UserDefaults(suiteName: "guest-cancel-dial-\(UUID().uuidString)")!),
+            dial: { _, _ throws(RoomConnectionError) in
+                gate.enter()
+                while gate.held { try? await Task.sleep(for: .milliseconds(5)) }
+                return SilentTransport()
+            },
+            discoveryDial: { _ throws(RoomConnectionError) in throw .unreachable },
+            runJoin: { _, _, _, _, _, _ in .failure(.failed) },
+            clientFingerprint: { Data(count: 32) },
+            makeForwarder: { _ in FakeForwarder() },
+            openURL: { _ in }, readPasteboard: { nil },
+            hostKey: { _ throws(RoomConnectionError) in Data(repeating: 0xab, count: 32) },
+            roomFingerprint: { _ in Data(count: 32) },
+            forgetRoomKey: { forgotten.add($0) }), guestName: "Asha")
+        store.beginJoin(Harness.room)
+        let attempt = Task { await store.submit(code: "482913", for: Harness.room) }
+        for _ in 0..<400 where !gate.entered { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(store.join == .joining(Harness.room))
+        store.cancelJoin()
+        gate.open()
+        await attempt.value
+        #expect(store.join == .none)
+        #expect(forgotten.keys == [Data(repeating: 0xab, count: 32)])
+    }
+
+    /// Forget is refused while that room is being joined again: its key is the one the join shows.
+    @Test func forgetWaitsWhileThatRoomIsJoining() async {
+        let h = Harness()
+        h.roomKeys = true
+        await h.store.submit(code: "482913", for: Harness.room)
+        let room = h.store.saved[0]
+        #expect(room.ownKey == true)
+        h.store.join = .joining(Harness.room)
+        await h.store.forget(room)
+        #expect(h.store.saved.count == 1, "the room was forgotten while it was joining")
+        #expect(h.roomKeysForgotten.isEmpty)
+        h.store.join = .none
+        await h.store.forget(room)
+        #expect(h.store.saved.isEmpty)
+        #expect(h.roomKeysForgotten == [Harness.hostKey])
+    }
+
+    /// With a real (temporary, file) keychain: two hosts get two Keychain items, and deleting one
+    /// host's key leaves the other host's and the shared one alone.
+    @Test func twoHostsGetTwoKeychainItemsAndDeletingOneLeavesTheOthers() throws {
+        guard let scratch = ScratchKeychain() else {
+            Issue.record("no file keychain on this host; the room keys were not exercised")
+            return
+        }
+        let defaults = try #require(UserDefaults(suiteName: "room-keychain-\(UUID().uuidString)"))
+        let shared = KeychainIdentity(label: "BenchBar Share Identity test \(UUID().uuidString)", keychain: scratch.keychain)
+        let keys = RoomKeys(shared: shared, rooms: SavedRoomsStore(defaults: defaults), keychain: scratch.keychain)
+        let hostA = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
+        let hostB = Data(hostA.prefix(8)) + Data((0..<24).map { _ in UInt8.random(in: 0...255) })   // the same first 16 digits
+        defer {
+            try? shared.reset()
+            try? keys.own(hostA).reset()
+            try? keys.own(hostB).reset()
+        }
+        let s = try shared.spkiDER()
+        let a = try keys.provider(forHost: hostA).spkiDER()
+        let b = try keys.provider(forHost: hostB).spkiDER()
+        #expect(a != b && a != s && b != s)
+        #expect(try keys.own(hostA).spkiDER() == a, "the same host shows the same key again")
+        try keys.own(hostA).reset()
+        #expect(try keys.own(hostB).spkiDER() == b)
+        #expect(try shared.spkiDER() == s)
+        #expect(try keys.own(hostA).spkiDER() != a, "a forgotten host gets a new key")
+    }
+
     @Test func theKeyOfARoomIsNamedByItsHostAndOldRoomsShareOne() throws {
         let defaults = try #require(UserDefaults(suiteName: "room-keys-\(UUID().uuidString)"))
         let rooms = SavedRoomsStore(defaults: defaults)
         let keys = RoomKeys(shared: KeychainIdentity(label: "unused"), rooms: rooms)
         let host = Data(repeating: 0xab, count: 32)
         let other = Data(repeating: 0xcd, count: 32)
-        #expect(RoomKeys.label(forHost: host) == "BenchBar Share Identity abababababababab")
+        #expect(RoomKeys.label(forHost: host) == "BenchBar Share Identity " + String(repeating: "ab", count: 32))
         #expect(RoomKeys.label(forHost: host) != RoomKeys.label(forHost: other))
+        // the whole hash names the key: a host that grinds a key with the same first 16 digits gets another one
+        let twin = Data(repeating: 0xab, count: 8) + Data(repeating: 0x01, count: 24)
+        #expect(ShareDeepLink.fp16(of: twin) == ShareDeepLink.fp16(of: host))
+        #expect(RoomKeys.label(forHost: twin) != RoomKeys.label(forHost: host))
         #expect(!keys.usesSharedKey(host), "a host this Mac never joined")
         var saved = SavedRoom(hostFingerprint: Fingerprint.prefix + host.hex, deviceId: "d_0", room: "R", host: "H", site: "", serviceName: "R",
                               lastHost: "", port: 0, localPort: nil, joinedAt: Date(timeIntervalSince1970: 0), salt: nil)
@@ -549,7 +647,9 @@ private final class Harness {
     @Test func theJoinSheetOfAnInviteShowsWhereItLeadsAndTheHostsKey() throws {
         let invite = try #require(InviteFixture.invite())
         let lines = NetworkPanePresentation.inviteCheck(invite, addressAllowed: true)
-        #expect(lines.note == "This room comes from an invite link, not from your network. Join only if the key below is the one your host reads out.")
+        #expect(lines.note == "This room and its name come from an invite link, not from your network. Join only if the key below is the Host key your host sees on their Sharing tab or in benchbar share status (BenchBar 0.9.0 or later shows it).")
+        let linked = DiscoveredRoom(id: "Standup", endpoint: .hostPort(host: "192.168.1.9", port: 8443), display: RoomDisplay(label: "Standup", site: "", protocolV: 3))
+        #expect(NetworkPanePresentation.invitePrompt(linked) == "Join \u{201C}Standup\u{201D} (the name the invite link gives)")
         #expect(lines.address == "Address: 192.168.1.9:8443")
         #expect(lines.key == "Host key: " + NetworkPanePresentation.keyGroups(invite.hostPin))
         #expect(NetworkPanePresentation.keyGroups(Data(repeating: 0xab, count: 32)) == "abab abab abab abab")
