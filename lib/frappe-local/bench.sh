@@ -127,7 +127,7 @@ fl_install_bench_if_needed() {
     # a bench that is on PATH but does not run (its venv's Python was
     # upgraded away) would fail at bench init with a stack trace; say so
     # here with the reinstall for whichever tool owns it
-    local ver reinstall="uv tool install --reinstall frappe-bench"
+    local ver reinstall="uv tool install --reinstall frappe-bench==${FL_PIN_FRAPPE_BENCH}"
     [[ "$(fl_bench_owner)" == "pipx" ]] && reinstall="pipx reinstall frappe-bench"
     if ! ver="$(bench --version 2>/dev/null)"; then
       fl_die "bench at $(command -v bench) does not run (bench --version failed)." "Reinstall it: ${reinstall}"
@@ -141,13 +141,13 @@ fl_install_bench_if_needed() {
     return 0
   fi
   if [[ -n "${BENCHBAR_PLAN_STEP1:-}" ]] && ! command -v uv >/dev/null 2>&1 && ! command -v pipx >/dev/null 2>&1; then
-    fl_dry_run_pending uv && { fl_info "dry-run: frappe-bench is then installed with: uv tool install frappe-bench"; return 0; }
+    fl_dry_run_pending uv && { fl_info "dry-run: frappe-bench is then installed with: uv tool install frappe-bench==${FL_PIN_FRAPPE_BENCH}"; return 0; }
   fi
   if command -v uv >/dev/null 2>&1; then
     # the official docs install bench with uv; uv says where its executables
     # go (UV_TOOL_BIN_DIR, XDG_BIN_HOME, else ~/.local/bin)
     fl_warn "frappe-bench is missing; installing with uv"
-    fl_run uv tool install frappe-bench || fl_die "frappe-bench install failed." "Manual command: uv tool install frappe-bench"
+    fl_run uv tool install "frappe-bench==${FL_PIN_FRAPPE_BENCH}" || fl_die "frappe-bench install failed." "Manual command: uv tool install frappe-bench==${FL_PIN_FRAPPE_BENCH}"
     PIPX_BIN_DIR="$(uv tool dir --bin 2>/dev/null || true)"
     PIPX_BIN_DIR="${PIPX_BIN_DIR:-$HOME/.local/bin}"
     export PATH="${PIPX_BIN_DIR}:$PATH"
@@ -155,7 +155,7 @@ fl_install_bench_if_needed() {
     fl_info "frappe-bench already installed via pipx"
   else
     fl_warn "frappe-bench is missing; installing with pipx"
-    fl_run pipx install frappe-bench || fl_die "frappe-bench install failed." "Manual command: pipx install frappe-bench"
+    fl_run pipx install "frappe-bench==${FL_PIN_FRAPPE_BENCH}" || fl_die "frappe-bench install failed." "Manual command: pipx install frappe-bench==${FL_PIN_FRAPPE_BENCH}"
   fi
   [[ "$FL_DRY_RUN" == "1" ]] && return 0
   command -v bench >/dev/null 2>&1 || fl_die "bench command not found after installing frappe-bench." "Manual check: ls ${PIPX_BIN_DIR:-$HOME/.local/bin}/bench"

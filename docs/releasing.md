@@ -824,6 +824,7 @@ A release builds the same way a week later. Nothing it uses follows
 | NuGet and the .NET SDK (the tray) | `Directory.Packages.props`, `global.json` | Dependabot |
 | `bash:3.2.57` image of the CI tests | its digest in `ci.yml` | by hand |
 | uv and fnm installers of the Linux install | version, URL and sha256 at the top of `00-linux-system-deps.sh` | by hand |
+| The bench CLI (`frappe-bench`, PyPI) and `yarn` (npm) the installer, `repair` and `doctor` install | `FL_PIN_FRAPPE_BENCH` and `FL_PIN_YARN` in `lib/frappe-local/ui.sh` | by hand, see "Bumping the tool pins" below |
 
 Two things stay outside, and why. `actions/setup-go`, `setup-dotnet` and
 `setup-bun` download their toolchain by version and offer no way to give
@@ -834,6 +835,27 @@ suite on current Alpine tools, the second tests Homebrew itself. The
 workflows are checked by actionlint and zizmor in the `workflows` job of
 `ci.yml`; what they accept is in `.github/actionlint.yaml` and
 `.github/zizmor.yml`, each with its reason.
+
+### Bumping the tool pins
+
+Dependabot reads neither file, so look at both when you cut a release
+(`pip index versions frappe-bench`, `npm view yarn versions`). To move one:
+
+1. Change the number in `lib/frappe-local/ui.sh`.
+2. For the bench CLI, read its release notes for `bench init`, `new-site` and
+   `get-app` first: frappe-bench 5.31 changed `bench init` and broke every
+   unpinned install at once (#112). Then run an install on a spare Mac or
+   in the Linux container (`scripts/ci-real.sh`), not on a bench that holds data.
+3. Raise `bench_min` in `config/release-profiles.tsv` only when the profile
+   needs the new version. `tests/test-tool-pins.sh` fails when the pin is
+   older than any `bench_min`, when it is not an exact `X.Y.Z`, or when an
+   install line names no version.
+4. Add a line to the changelog fragment of the release.
+
+Nothing else is checked: PyPI and npm check the archive against the hash in
+their own index, and benchbar does not keep a hash lock of the bench CLI's
+dependencies. A bench already installed is never replaced by the pin; the
+pin only decides what a missing one becomes.
 
 ## Checking a build
 
