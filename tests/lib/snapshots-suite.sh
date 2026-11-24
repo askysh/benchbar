@@ -485,7 +485,7 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
   printf '{}' >"$LEFT/manifest.json.tmp"
   m="$(snap_count)"
   run_json site snapshots acme.localhost --json --bench-dir "$BENCH"
-  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'len(d["leftovers"]) == 1 and d["leftovers"][0]["size_bytes"] == 6 and "private/backups" in d["leftovers"][0]["move_back"]')" "(the leftover is in the JSON)"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'len(d["leftovers"]) == 1 and d["leftovers"][0]["size_bytes"] == 6 and "private/backups" in d["leftovers"][0]["move_back"] and d["leftovers"][0]["move_back"].startswith("mv -n ")')" "(the leftover is in the JSON)"
   run_fm site snapshots acme.localhost --bench-dir "$BENCH"
   assert_contains "$OUT" ".incomplete-20260930_010101-killed"; assert_contains "$OUT" "private/backups"
   assert_eq "$m" "$(snap_count)" "(a leftover is no snapshot)"
@@ -546,4 +546,14 @@ assert d["verify"]["default_site"] == "macdev", d["verify"]
 ' >>"$benv"
   run_json site snapshots acme.localhost --json --bench-dir "$BENCH"
   assert_eq "10" "$(printf '%s' "$OUT" | jget - 'd["keep"]')" "(a bad value falls back to 10)"
+
+  # a failed attempt at another snapshot is no part of this chain: its undo names this run's own snapshot
+  run_fm site snapshot acme.localhost --label other --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT"
+  for d in "$SNAPS"/*-other; do m="${d##*/}"; done
+  run_json site rollback acme.localhost --to "$m" --dry-run --json --bench-dir "$BENCH"
+  token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+  MARIADB_ROOT_PASSWORD=rootpw run_json site rollback acme.localhost --to "$m" --apply "$token" --yes --json --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT$ERR"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["rollback"]["undo"].endswith(d["rollback"]["before_rollback"]) and d["rollback"]["before_rollback"] != "'"$failed3"'"')" "(an old failure of another rollback is not the undo)"
 }

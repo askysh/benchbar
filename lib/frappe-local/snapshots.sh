@@ -327,7 +327,7 @@ fl_snap_move_back() {
   local d stamp
   d="$(fl_snap_dir "$1")/$2"
   stamp="${2#.incomplete-}"; stamp="${stamp:0:15}"
-  printf 'mv %q/%s-* %q/ && rm -f %q/manifest.json* && rmdir %q' "$d" "$stamp" "$(fl_site_backup_dir "$1")" "$d" "$d"
+  printf 'mv -n %q/%s-* %q/ && rm -f %q/manifest.json* && rmdir %q' "$d" "$stamp" "$(fl_site_backup_dir "$1")" "$d" "$d"
 }
 
 # fl_snap_leftovers_json SITE: [{"id","path","size_bytes","move_back"}]
@@ -352,12 +352,17 @@ fl_snap_leftovers_note() {
   done < <(fl_snap_leftovers "$1")
 }
 
-# fl_snap_undo_point SITE: the oldest "before rollback" snapshot of a rollback that did not finish, if any:
-# the state from before the first attempt, which is what a person wants back after a retry
+# fl_snap_undo_point SITE SNAPSHOT: the oldest "before rollback" snapshot of an earlier attempt that did not
+# finish at rolling back to this same SNAPSHOT (its manifest says rollback_of), if any: the state from before
+# the first attempt, which is what a person wants back after a retry. A failed attempt at another snapshot
+# is no part of this chain: going back that far would lose the work done since.
 fl_snap_undo_point() {
-  local list
-  list="$(fl_snap_unfinished "$1")"
-  printf '%s' "${list%%$'\n'*}"
+  local id
+  while IFS= read -r id; do
+    [[ -n "$id" ]] || continue
+    if [[ "$(fl_snap_mfield "$(fl_snap_dir "$1")/${id}/manifest.json" rollback_of)" == "$2" ]]; then printf '%s' "$id"; return 0; fi
+  done < <(fl_snap_unfinished "$1")
+  return 0
 }
 
 # fl_snap_summary BENCH SITE: FL_SNAP_COUNT and FL_SNAP_BYTES, the snapshots of SITE in BENCH and the
@@ -579,7 +584,7 @@ fl_pull_step_snapshot() {
   # (fl_snap_rollback_finished): a retry after a failure must not move the undo point
   # after a retry the way back is the state before the first attempt (the oldest unfinished snapshot), not the
   # half restored site this run just snapshotted
-  SR_UNDO_SNAPSHOT="$(fl_snap_undo_point "$SR_TARGET")"
+  SR_UNDO_SNAPSHOT="$(fl_snap_undo_point "$SR_TARGET" "$SR_SNAP_ID")"
   [[ -n "$SR_UNDO_SNAPSHOT" ]] || SR_UNDO_SNAPSHOT="$FL_SNAP_ID"
   fl_snap_rollback_started "$SR_TARGET" "$FL_SNAP_ID"
   SR_BEFORE_SNAPSHOT="$FL_SNAP_ID"
