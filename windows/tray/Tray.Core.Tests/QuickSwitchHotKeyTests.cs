@@ -56,7 +56,7 @@ public class QuickSwitchHotKeyTests
     [Theory]
     [InlineData("Ctrl+Alt+U")]
     [InlineData("Alt+F9")]
-    [InlineData("Ctrl+Shift+Alt+Space")]
+    [InlineData("Ctrl+Alt+Shift+Space")]
     [InlineData("Ctrl+F5")]
     [InlineData("Ctrl+Win+Left")]
     [InlineData("Alt+7")]
@@ -65,7 +65,7 @@ public class QuickSwitchHotKeyTests
         var chord = HotKeyChord.Parse(text);
         Assert.NotNull(chord);
         Assert.Equal(text, chord.Value.Text);
-        if (text != "Ctrl+Shift+Alt+Space") Assert.Null(HotKeyRules.Refusal(chord.Value));
+        if (text != "Ctrl+Alt+Shift+Space") Assert.Null(HotKeyRules.Refusal(chord.Value));
     }
 
     [Theory]

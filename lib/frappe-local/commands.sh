@@ -252,7 +252,7 @@ flag~share lock~--json~~JSON lines: done, with locked and lock_reason.
 cmd~share unlock~benchbar share unlock [--json]~Unlock the room. A lock after 10 wrong codes stays until share code --new.~no~no~no~yes~stream
 flag~share unlock~--json~~JSON lines: done, with locked and lock_reason.
 cmd~share people~benchbar share people [--json]~The people in the room: name, Mac, address, seat, online. Reads only (it retries a wipe the gateway still owes).~no~no~no~no~document
-flag~share people~--json~~One document: state and people, each with id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen.
+flag~share people~--json~~One document: state; people, each with id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen; seats, every seat of the room with seat_id, full_name, roles, held_by and held_by_name (null for a free seat); seat_mode (host or open).
 cmd~share devices~benchbar share devices [--json]~Another name for share people.~no~no~no~no~document
 flag~share devices~--json~~As share people --json.
 cmd~share remove~benchbar share remove ID [--new-code] [--yes] [--json]~Remove a person from the room: their seat's sessions end and their Mac cannot join again with the current code; a new code (a new invite) lets them back. Asks first (--yes).~yes~no~no~yes~stream

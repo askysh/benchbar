@@ -172,6 +172,7 @@ struct WizardRunTests {
         await base.waitUntil { !run.isPolling }
         #expect(!run.isPolling)
         let count = base.cli.calls.filter { $0.first == "doctor" }.count
+        // a negative check: a short bounded wait, so a stray poll would have been counted
         try await Task.sleep(for: .milliseconds(120))
         #expect(base.cli.calls.filter { $0.first == "doctor" }.count == count, "no more calls once the row passes")
     }

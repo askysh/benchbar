@@ -733,7 +733,15 @@ jobs:
       - name: Build the unsigned release bundle (scripts/release-local.sh)
         run: scripts/release-local.sh --skip-tests
 
+      # ShareInteropTests join a Swift guest to the Node gateway (the Swift CPace against the gateway's):
+      # node is on the runner image, and the step fails here when it is not, so the tests never skip unseen
+      - name: Node for the share interop tests
+        run: node --version
+
       - name: Swift tests
+        env:
+          # reaches the test host as BENCHBAR_REQUIRE_INTEROP: a missing node fails the interop tests
+          TEST_RUNNER_BENCHBAR_REQUIRE_INTEROP: '1'
         run: |
           set -o pipefail
           xcodebuild -project macos/BenchBar.xcodeproj -scheme BenchBar -configuration Debug \
