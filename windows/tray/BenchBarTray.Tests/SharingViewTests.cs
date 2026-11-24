@@ -152,6 +152,20 @@ public class SharingViewTests
         Assert.Equal(["share", "start", "--for", "4h", "--open-seats", "--json", "--bench-dir", P], kit.Runner.Runs.Single(r => r.Args[1] == "start").Args);
     });
 
+    [Fact]
+    public void AnOlderCliGetsNoSeatFlagAndTheFormSaysWhy() => Sta.Run(() =>
+    {
+        // the status of a CLI from before 0.9.0 has no seat_mode: no box, no flag, and the confirmation says open seats
+        var (view, kit, asked) = Make("share-status-off.json", answer: true, text => Clean0(text).Replace(",\"seat_mode\":null", ""));
+        Assert.Contains(ShareText.SeatsNeedNewerCli, view.Lines);
+        Assert.DoesNotContain(ShareText.SeatModeLine(true), view.Lines);
+        kit.Runner.On(a => a.Length > 1 && a[1] == "start").Print(Fixture("share-done.jsonl"));
+        Click(view.Buttons["Start sharing"]);
+        Wait(view.Pending);
+        Assert.Single(asked, a => a.EndsWith("Each of them can take any free seat."));
+        Assert.Equal(["share", "start", "--for", "4h", "--json", "--bench-dir", P], kit.Runner.Runs.Single(r => r.Args[1] == "start").Args);
+    });
+
     // --- the code ---
 
     [Fact]

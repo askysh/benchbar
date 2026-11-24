@@ -443,7 +443,7 @@ fl_share_guests_wait_note() {
 }
 
 fl_cmd_share_start() {
-  local dur=4h name="" name_given=0 label secs deadline started i id code assign=0 open=0
+  local dur=4h name="" name_given=0 label secs deadline started i id code assign=0 open=0 running_mode
   SH_START_SEAT_MODE=host
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
@@ -481,7 +481,10 @@ fl_cmd_share_start() {
     fl_share_gw_int_v started started_epoch
     fl_share_gw_str_raw_v SH_START_ROOM_JSON room_label
     [[ -n "$SH_START_ROOM_JSON" ]] || fl_share_cfg_raw_v SH_START_ROOM_JSON room_label
-    fl_info "unchanged: sharing is already on until $(fl_share_iso_of "$deadline") (benchbar share extend moves the deadline)"
+    # the room that runs keeps its seats as it was started, whatever this start asked for: say which
+    fl_share_seat_mode_json_v running_mode
+    if [[ "$running_mode" == '"host"' ]]; then running_mode="you give out its seats"; else running_mode="its guests take a free seat themselves"; fi
+    fl_info "unchanged: sharing is already on until $(fl_share_iso_of "$deadline"), and ${running_mode} (benchbar share extend moves the deadline; a room with other seats needs benchbar share stop first)"
     [[ "${OPT_JSON:-0}" != 1 ]] || fl_doc_emit 0 "$(fl_share_start_doc "$started" "$deadline")"
     return 0
   fi
@@ -497,9 +500,9 @@ fl_cmd_share_start() {
   started="$(date +%s)"; deadline=$((started + secs))
   fl_header "benchbar share start" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SHARE_SITE"
   if [[ "${OPT_JSON:-0}" == 1 ]]; then
-    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"share_site":%s,"dry_run":%s,"label":%s,"for_s":%s,"deadline":%s,"steps":["static_preflight","gateway_config","job","wait_listening","post_start_preflight"]}' \
+    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"share_site":%s,"dry_run":%s,"label":%s,"for_s":%s,"deadline":%s,"seat_mode":"%s","steps":["static_preflight","gateway_config","job","wait_listening","post_start_preflight"]}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_SHARE_SITE")" "$(fl_json_bool "${FL_DRY_RUN:-0}")" \
-      "$SH_START_ROOM_JSON" "$secs" "$(fl_json_str "$(fl_share_iso_of "$deadline")")")" plan
+      "$SH_START_ROOM_JSON" "$secs" "$(fl_json_str "$(fl_share_iso_of "$deadline")")" "$([[ "$SH_START_SEAT_MODE" == open ]] && printf open || printf host)")" plan
   fi
   fl_box "Share start" \
     "room     $(printf '%s' "$SH_START_ROOM_JSON" | fl_share_json_unquote)" \

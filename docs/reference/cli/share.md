@@ -127,7 +127,7 @@ benchbar share preflight --critical
 ## share start
 
 ```
-benchbar share start [--for DUR] [--name LABEL] [--assign-seats] [--dry-run] [--json]
+benchbar share start [--for DUR] [--name LABEL] [--open-seats] [--dry-run] [--json]
 ```
 
 Starts the room until the deadline (`--for 30m`, `4h`; 5 minutes to 12

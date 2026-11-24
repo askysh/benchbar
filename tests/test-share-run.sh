@@ -772,6 +772,12 @@ cli start --dry-run --assign-seats
 assert_eq "0" "$CODE" "$OUT$ERR"; assert_contains "$OUT" "Guests wait for you"
 cli start --dry-run --open-seats
 assert_eq "0" "$CODE" "$OUT$ERR"; assert_contains "$OUT" "anyone with the code takes any free seat"; assert_not_contains "$OUT" "Guests wait for you"
+plan_mode() { printf '%s\n' "$OUT" | python3 -c 'import json, sys
+print(next(e["seat_mode"] for e in map(json.loads, filter(None, sys.stdin.read().splitlines())) if e.get("event") == "plan"))'; }
+cli start --dry-run --json
+assert_eq "host" "$(plan_mode)" "(the plan line says what the room would be)"
+cli start --dry-run --json --open-seats
+assert_eq "open" "$(plan_mode)"
 cli start --dry-run --open-seats --assign-seats
 assert_eq "1" "$CODE" "$OUT$ERR"; assert_contains "$OUT$ERR" "--assign-seats and --open-seats"
 cli start --dry-run --json

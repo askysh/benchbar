@@ -157,6 +157,11 @@ internal sealed class SharingView : UserControl, IBenchPageView
         box.SelectionChanged += (_, _) => _hours = ShareText.Hours[Math.Max(0, box.SelectedIndex)];
         Ui.Name(box, "Hours to share");
         _root.Children.Add(box);
+        if (!status.KnowsSeatMode)
+        {
+            Line(ShareText.SeatsNeedNewerCli, 0.7); // no box: this CLI has no seat flags, and its rooms have open seats
+            return;
+        }
         var seats = new CheckBox { IsChecked = AssignSeats, Content = ShareText.AssignSeatsToggle, Margin = new Thickness(0, 0, 0, 2) };
         seats.Click += (_, _) => { AssignSeats = seats.IsChecked == true; Render(); };
         Ui.Name(seats, ShareText.AssignSeatsToggle);
@@ -176,7 +181,7 @@ internal sealed class SharingView : UserControl, IBenchPageView
                 if (Confirm("Turn on network protection?", ShareText.LanGuardAsk, "Continue")) await model.RunLanGuardAsync(false);
                 break;
             case SharePrimary.Start:
-                if (!Confirm(ShareText.StartConfirm(Site, AssignSeats), "", "Start sharing")) break;
+                if (!Confirm(ShareText.StartConfirm(Site, AssignSeats && status.KnowsSeatMode), "", "Start sharing")) break;
                 if (await model.StartAsync(_hours, AssignSeats) && await model.LoadCodeAsync()) _revealed = true;
                 Render();
                 break;
