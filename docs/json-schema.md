@@ -732,7 +732,7 @@ Homebrew since 0.7.0, `.benchbar/` in a git checkout.
 
 | Event | Fields |
 |---|---|
-| `plan` | `actions[]` with `id` (a repair action), `label`, `fixes` (the doctor checks it fixes), `sudo` (needs a password: skipped without a terminal, or asked for in a macOS dialog under `BENCHBAR_SUDO=gui`, see [the privileged steps](#the-privileged-steps-and-benchbar_sudogui)); `dry_run`; `backups` (the backup root); `log` |
+| `plan` | `actions[]` with `id` (a repair action), `label`, `fixes` (the doctor checks it fixes), `sudo` (needs a password: skipped without a terminal, or asked for in a macOS dialog under `BENCHBAR_SUDO=gui`, see [the privileged steps](#the-privileged-steps-and-benchbar_sudogui)); `dry_run`; `token` (since 0.9, only when there is something to do; see below); `backups` (the backup root); `log` |
 | `step` | `action`, `status` (`running`, then `done`, `skipped` or `failed`), `message` (for `failed` and `skipped`, the CLI's `[FAIL]` or `[WARN]` line) |
 | `done` | `exit_code` (0 when every check passes afterwards), `log` |
 
@@ -740,6 +740,13 @@ Homebrew since 0.7.0, `.benchbar/` in a git checkout.
 nothing. Without `--yes` (and without `--dry-run`) nothing is applied:
 the plan is printed, then `done` with exit code 1, because the question
 cannot be answered. An empty `actions` means nothing needs repairing.
+
+Since 0.9 the `plan` line has a `token`: a keyed, timed hash of the bench, the
+site, the profile and the actions the run would take. `repair --apply TOKEN
+--yes` makes the plan again and ends with exit 1 and a `done` that says `The
+repair plan changed since it was shown` (or `The plan token expired`) before
+any step, when it is not the same. A plan with nothing to do has no token. A
+run without `--apply` is as before.
 ## `benchbar install --json`
 
 Since 0.8 the `done` line also carries `changed`, `warnings`, `next_actions` and `state_after` ([done fields](#the-done-fields-08)); `adopt` the same.
@@ -749,6 +756,14 @@ stdout as the run goes, the human text in the run's log
 (`logs/<date>-<time>-<pid>.log` in benchbar's state folder). Every line
 carries `schema_version`, `cli_version` and `event`. The BenchBar app's
 New Bench page reads it.
+
+Since 0.9 the `plan` line has a `token`, a keyed, timed hash of the plan's steps
+and of the inputs that decide them (the bench, the site, the profile, the
+bundle, the pins, the port block and the blockers). `install --apply TOKEN --yes`
+with the same flags makes the plan again and ends with exit 1 and a `done` that
+says `The install plan changed since it was shown` (or `The plan token expired`)
+before any dialog or step, when it is not the same. A run without `--apply` is
+as before.
 
 The stream is only valid with `--yes` (or with `--dry-run`): no question
 can be answered on it, so `install --json` without either prints one
@@ -1852,7 +1867,7 @@ none holds a session id.
  "seconds_left":3600,"can_extend_s":28800,"copy":{…},"allowed_users":["priya@example.com"],"seats":2,
  "people":1,"devices_total":1,"devices_online":1,"pending":0,"locked":false,"lock_reason":null,
  "budget_left":10,"join_trouble":false,"wipe_failed":0,"lan_guard":"installed","preflight":null,
- "setup_interrupted":false}
+ "setup_interrupted":false,"seat_mode":"open"}
 ```
 
 - `state`: `on`, `off`, `expired` or `error`.
@@ -1866,6 +1881,9 @@ none holds a session id.
 - `preflight`: null, or with `--preflight` the critical checks as in `share preflight`.
 - `setup_interrupted`: a setup stopped halfway (no `share.json`, but the one it set
   aside or the copy is there); `share setup --refresh` finishes it.
+- `seat_mode`: who gives a person their seat in the room that is on: `host`
+  (you, with `share assign`; a guest cannot take one) or `open` (anyone in the
+  room takes a free one). null while no room is on.
 
 ### `benchbar share preflight --json`
 
@@ -1913,7 +1931,7 @@ owed, else `{"retried":bool,"wiped":N|null,"wipe_failed":M|null}`.
 | `share code` | `code` (`"NNNNNN"`, a placeholder here), `new`, `budget_left` |
 | `share invite` | `url` (`benchbar://share/join?v=1&r=…&h=…&s=…&c=…&a=…&x=…`, holds the code), `text` (the message, lines apart by `\n`), `expires_at` (ISO 8601, UTC), `room` |
 | `share lock`, `share unlock` (done) | `locked`, `lock_reason` |
-| `share people`, `share devices` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` (`devices` is another name for `people`) |
+| `share people`, `share devices` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` (`devices` is another name for `people`), `seats`: every seat of the room, `[{seat_id, full_name, roles, held_by, held_by_name}]` (`held_by` is the `id` of the person in the seat, null for a free seat; never the seat's user), `seat_mode` (`host`, `open`, or null while sharing is off, as in `share status`). With sharing off `people` and `seats` are empty |
 | `share remove`, `share revoke` (done) | `device`, `name`, `removed`, `new_code` (a bool, never the code) |
 | `share assign` (done) | `device`, `name`, `seat_id`, `seat_full_name` |
 | `share log` | `entries`: `[{ts, device, user, method, path, status}]`, `truncated`. `user` is the seat's name (its id when the room no longer has the seat); a line written by 0.8.3 holds the e-mail address of the seat's user until it is 14 days old |

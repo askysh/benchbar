@@ -131,7 +131,8 @@ nonisolated struct WizardState: Equatable, Sendable {
         case checkPrerequisites(folder: String)
         case loadProfiles
         case planInstall(InstallRequest)
-        case startInstall(InstallRequest, withRootPassword: Bool)
+        /// `token`: the plan the user reviewed, only for the run Install starts from Review; a run again passes none.
+        case startInstall(InstallRequest, withRootPassword: Bool, token: String? = nil)
         case stopInstall
         /// Find Benches and its folder scan (the existing adoption flow).
         case openFindBenches
@@ -162,6 +163,11 @@ nonisolated struct WizardState: Equatable, Sendable {
     private(set) var plan: InstallPlan?
     private(set) var planning = false
     private(set) var planError: String?
+    /// The CLI refused the plan token: the machine changed between Review and Install.
+    /// Nothing ran; Review Again plans once more.
+    private(set) var planStale: String?
+    /// The run in progress was started with the reviewed plan's token.
+    private var runHasToken = false
 
     private(set) var progress = InstallProgress()
     /// Names of steps the install runs that the reviewed plan did not run:
@@ -260,7 +266,9 @@ nonisolated struct WizardState: Equatable, Sendable {
         case .cliOnly: return Primary(title: "Done", enabled: true)
         case .check: return Primary(title: "Continue", enabled: canContinueFromCheck)
         case .newBench: return Primary(title: "Review", enabled: formProblem == nil)
-        case .review: return Primary(title: "Install", enabled: plan != nil && !planning)
+        case .review:
+            if planStale != nil { return Primary(title: "Review Again", enabled: !planning) }
+            return Primary(title: "Install", enabled: plan != nil && !planning)
         case .install:
             switch installPhase {
             case .failed: return Primary(title: "Retry", enabled: true)
@@ -408,9 +416,17 @@ nonisolated struct WizardState: Equatable, Sendable {
             page = .review
             plan = nil
             planError = nil
+            planStale = nil
             planning = true
             return [.planInstall(request)]
-        case .review: return beginInstall(withRootPassword: false)
+        case .review:
+            if planStale != nil {
+                plan = nil
+                planStale = nil
+                planning = true
+                return [.planInstall(request)]
+            }
+            return beginInstall(withRootPassword: false, token: plan?.token)
         case .install:
             if case .stopped = installPhase { return beginInstall(withRootPassword: !rootPassword.isEmpty) }
             return retry()
@@ -431,6 +447,7 @@ nonisolated struct WizardState: Equatable, Sendable {
         case .review:
             page = .newBench
             planning = false
+            planStale = nil
             return []
         case .install:
             guard !isInstalling else { return [] }
@@ -441,11 +458,12 @@ nonisolated struct WizardState: Equatable, Sendable {
         }
     }
 
-    private mutating func beginInstall(withRootPassword: Bool) -> [Effect] {
+    private mutating func beginInstall(withRootPassword: Bool, token: String? = nil) -> [Effect] {
         page = .install
         resetInstall()
         installPhase = .running
-        return [.startInstall(request, withRootPassword: withRootPassword)]
+        runHasToken = token != nil
+        return [.startInstall(request, withRootPassword: withRootPassword, token: token)]
     }
 
     private mutating func retry() -> [Effect] {
@@ -482,6 +500,16 @@ nonisolated struct WizardState: Equatable, Sendable {
         guard let done = progress.done else {
             let message = error ?? "benchbar install ended without a result (exit code \(code))."
             installPhase = .failed(Failure(step: progress.failedStep?.name, message: message, fix: nil, log: progress.log))
+            return []
+        }
+        // the reviewed plan's token was refused before any step: back to Review, nothing changed
+        if done.exit != 0, runHasToken, let message = done.error ?? error, StalePlan.isStale(message) {
+            runHasToken = false
+            resetInstall()
+            page = .review
+            plan = nil
+            planning = false
+            planStale = message
             return []
         }
         switch done.exit {

@@ -407,14 +407,19 @@ fl_cmd_lan_guard_install() {
 }
 
 fl_cmd_lan_guard_remove() {
-  local a state fw_paths guard=1 reason path
+  local a state fw_paths guard=1 reason path pf_tokens
   for a in "$@"; do fl_die "Unknown argument for lan-guard remove: $a" "Use: benchbar lan-guard remove [--yes] [--json]"; done
   [[ "${FL_DRY_RUN:-0}" != 1 ]] || fl_die "lan-guard remove has no dry run." "benchbar lan-guard status shows the guard."
   if fl_is_linux; then fl_lgl_remove; return 0; fi
   fl_lg_require_person remove
   fl_lg_fw_allowed_v fw_paths
+  # a pf reference that an install took and never gave back: also when the install failed and its two
+  # files are gone since, so that "not installed" never leaves pf enabled until the next restart
+  fl_lg_pf_tokens_v pf_tokens
   [[ -e "$(fl_lg_anchor)" || -e "$(fl_lg_daemon)" ]] || guard=0
-  if [[ "$guard" == 0 && -z "$fw_paths" ]]; then
+  if [[ "$guard" == 0 && -z "$fw_paths" && -z "$pf_tokens" ]]; then
+    # a record with nothing to give back (pf was on before the guard) goes with it, no password needed
+    rm -f "$(fl_lg_pf_state)"
     fl_ok "unchanged: the guard is not installed"
     fl_lg_fw_legacy_hint
     fl_lg_report
@@ -425,6 +430,10 @@ fl_cmd_lan_guard_remove() {
     fl_confirm "Remove the LAN guard with sudo?" || fl_die "Not removed." "Run: benchbar lan-guard remove"
     reason="remove the LAN guard: its pf anchor and its launch daemon"
     [[ -z "$fw_paths" ]] || reason="${reason}, and the firewall entry for node"
+  elif [[ -n "$pf_tokens" ]]; then
+    fl_confirm "Give back the pf reference a lan-guard install left behind, with sudo (pf is turned off again if nothing else uses it)?" || fl_die "Not removed." "Run: benchbar lan-guard remove"
+    reason="give back the pf reference a lan-guard install left behind"
+    [[ -z "$fw_paths" ]] || reason="${reason}, and take out the firewall entry for node"
   else
     fl_confirm "Take node out of the macOS firewall's allowed list with sudo (benchbar lan-guard allow-node added it)?" || fl_die "Not removed." "Run: benchbar lan-guard remove"
     reason="take node out of the macOS firewall's allowed list (benchbar lan-guard allow-node added it)"
@@ -446,6 +455,9 @@ fl_cmd_lan_guard_remove() {
   if [[ "$guard" == 1 ]]; then
     fl_changed lan-guard "$FL_LANGUARD_PF_ANCHOR_NAME" "removed"
     fl_ok "LAN guard removed"
+  elif [[ -n "$pf_tokens" ]]; then
+    fl_changed lan-guard "pf" "reference given back"
+    fl_ok "the pf reference of the LAN guard is given back"
   fi
   fl_lg_report
 }
@@ -480,6 +492,11 @@ fl_cmd_lan_guard_allow_node() {
         done <<<"$mine"
         fl_confirm "Allow ${real} through the firewall with sudo? The entry is for the program: every script this node runs can then accept incoming connections, on any network. benchbar lan-guard remove takes it out again." \
           || fl_die "Not allowed." "Run: benchbar lan-guard allow-node"
+        # on record before root runs: a CLI that dies between the root step and this bookkeeping (a closed
+        # terminal, a kill) must not leave an entry that remove knows nothing of. The older paths stay on
+        # record until the step has taken them out. A step that fails or is cancelled keeps the record
+        # too: a remove of a path the firewall does not list changes nothing.
+        fl_lg_fw_record "${real}${old:+$'\n'${old}}"
         fl_lg_as_root "allow node (${real}) through the macOS firewall, for the share gateway" "benchbar lan-guard allow-node" "$(fl_lg_allow_node_script "$real" "$old")"
         fl_lg_fw_record "$real"
         fl_changed firewall "$real" "allowed"

@@ -90,8 +90,34 @@ assert_not_contains "$(pq 'c["default_ports"]["fix_command"]')" "--port-offset"
 printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
 FL_BREW_ALT_BIN="$TMP_DIR/nobrew" PATH="/usr/bin:/bin" pre; assert_eq "fail" "$(pq 'c["homebrew"]["level"]')"
 assert_contains "$(pq 'c["homebrew"]["fix_command"]')" "Homebrew/install"
-# ---- success, with the password dialogs: exactly two, one per privileged step
-stream install --json --yes --bench-dir "$BENCH" --site macdev
+# ---- the plan's token (UI-15): the dry run prints it, --apply runs exactly that plan
+stream install --json --dry-run --bench-dir "$BENCH" --site macdev
+tok="$(sx 'e[0]["token"]')"
+assert_eq "64" "${#tok}" "(the install dry run prints a token)"
+stream install --json --dry-run --bench-dir "$BENCH" --site macdev
+assert_eq "$tok" "$(sx 'e[0]["token"]')" "(the same plan, the same token)"
+snap="$(snapshot "$HOME")"
+# another input is another plan: refused before any step, dialog or file
+stream install --json --yes --apply "$tok" --bundle common --bench-dir "$BENCH" --site macdev
+assert_eq "1" "$CODE"
+assert_eq "done" "$(sx '" ".join(x["event"] for x in e)')"
+assert_contains "$(sx 'e[-1]["error"]')" "plan changed since it was shown"
+stream install --json --yes --apply "$tok" --bench-dir "$BENCH" --site other
+assert_eq "1" "$CODE"
+assert_contains "$(sx 'e[-1]["error"]')" "plan changed since it was shown"
+FL_PLAN_NOW=$(( FL_PLAN_NOW + 7200 )) stream install --json --yes --apply "$tok" --bench-dir "$BENCH" --site macdev
+assert_eq "1" "$CODE"
+assert_contains "$(sx 'e[-1]["error"]')" "expired"
+stream install --json --yes --apply nope --bench-dir "$BENCH" --site macdev
+assert_contains "$(sx 'e[-1]["error"]')" "needs the token of a plan"
+stream install --json --apply "$tok" --bench-dir "$BENCH" --site macdev
+assert_contains "$(sx 'e[-1]["error"]')" "needs --yes"
+assert_no_file "$BENCH"
+assert_eq "0" "$(osa_calls)"
+assert_eq "$snap" "$(snapshot "$HOME")" "(a refused token changes nothing)"
+# ---- success, with the password dialogs: exactly two, one per privileged step; the right token runs it
+stream install --json --yes --apply "$tok" --bench-dir "$BENCH" --site macdev
+assert_eq "$tok" "$(sx 'e[0]["token"]')" "(the real run's plan carries the token)"
 assert_eq "0" "$CODE" "$(cat "$STREAM.err")$(tail -n 30 "$(sx 'e[-1]["log"]')")"
 assert_eq "plan" "$(sx 'e[0]["event"]')"
 assert_eq "done" "$(sx 'e[-1]["event"]')"

@@ -25,7 +25,11 @@ public sealed record CliDone(int Exit, IReadOnlyList<CliChange> Changed, IReadOn
 }
 
 /// <summary>A <c>step</c> line of a stream. <see cref="Id"/> is the line's <c>id</c>, else its <c>action</c> or <c>kind</c>.</summary>
-public sealed record CliStep(string Id, string Name, InstallStepStatus Status, string? Message, string? Command, int? Secs);
+public sealed record CliStep(string Id, string Name, InstallStepStatus Status, string? Message, string? Command, int? Secs, string? Parent = null)
+{
+    /// <summary>A sub step (<c>site move</c>'s restore) shares the id of its parent and names it in <c>parent</c>: it is progress, not a row of its own.</summary>
+    public bool IsSubStep => !string.IsNullOrEmpty(Parent);
+}
 
 /// <summary>A line of a <c>--json</c> or <c>--jsonl</c> stream.</summary>
 public abstract record CliEvent
@@ -102,7 +106,7 @@ public static class CliJson
                 var id = JsonRead.Str(o, "id") ?? JsonRead.Str(o, "action") ?? JsonRead.Str(o, "kind");
                 if (string.IsNullOrEmpty(id)) return new CliEvent.Other(o);
                 return new CliEvent.Step(new CliStep(id, JsonRead.Str(o, "name") ?? id, InstallJson.ParseStatus(JsonRead.Str(o, "status")),
-                    JsonRead.Str(o, "message"), JsonRead.Str(o, "command"), JsonRead.Int(o, "secs")));
+                    JsonRead.Str(o, "message"), JsonRead.Str(o, "command"), JsonRead.Int(o, "secs"), JsonRead.Str(o, "parent")));
             case "progress":
                 return new CliEvent.Progress(JsonRead.Str(o, "step") ?? "", JsonRead.Str(o, "label") ?? DownloadLabel(o), JsonRead.Int(o, "elapsed") ?? 0);
             case "done":
