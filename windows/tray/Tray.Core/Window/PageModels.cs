@@ -9,11 +9,11 @@ public static class BenchTabs
 
     public static string Label(BenchTab tab) => tab switch
     {
-        BenchTab.Sites => "Sites",
-        BenchTab.Apps => "Apps",
-        BenchTab.Health => "Health",
-        BenchTab.Sharing => "Sharing",
-        _ => "Overview",
+        BenchTab.Sites => UiText.Get("BenchTabSites"),
+        BenchTab.Apps => UiText.Get("BenchTabApps"),
+        BenchTab.Health => UiText.Get("BenchTabHealth"),
+        BenchTab.Sharing => UiText.Get("BenchTabSharing"),
+        _ => UiText.Get("BenchTabOverview"),
     };
 }
 
