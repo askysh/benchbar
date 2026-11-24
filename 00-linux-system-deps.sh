@@ -240,7 +240,7 @@ if [[ "$FL_DRY_RUN" == "1" ]]; then
     fi
     fl_run fnm install "$FL_NODE_MAJOR"
   fi
-  fl_run npm install -g yarn
+  fl_run npm install -g "yarn@${FL_PIN_YARN}"
   fl_info "dry-run: MariaDB root password: set through sudo mariadb on a fresh server, else the stored one is verified"
   fl_mariadb_dropin_apply mariadb-frappe.cnf "$(fl_mariadb_utf8_dropin_path)"
   [[ "$FL_TEMPLATE_CHANGED" != "1" ]] || fl_mariadb_restart_if_running || true
@@ -391,7 +391,7 @@ NPM_GLOBALS="$("$NPM_BIN" ls -g --depth=0 2>/dev/null || true)"
 if [[ "$NPM_GLOBALS" == *' yarn@'* ]]; then
   fl_info "yarn already globally installed under Node ${FL_NODE_MAJOR}"
 else
-  fl_run "$NPM_BIN" install -g yarn
+  fl_run "$NPM_BIN" install -g "yarn@${FL_PIN_YARN}"
 fi
 YARN_BIN="${NODE_BINDIR}/yarn"
 [[ -x "$YARN_BIN" ]] || YARN_BIN="$(command -v yarn || true)"

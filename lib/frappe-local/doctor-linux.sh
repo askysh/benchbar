@@ -154,7 +154,7 @@ chk_toolchain_yarn() {
   local yarn ver
   yarn="$(fl_bench_which yarn)"
   if [[ -z "$yarn" ]]; then
-    chk__set warn "no yarn on the bench's PATH (bench build needs it)" "$(fl_npm_bin) install -g yarn" yarn_install
+    chk__set warn "no yarn on the bench's PATH (bench build needs it)" "$(fl_npm_bin) install -g yarn@${FL_PIN_YARN}" yarn_install
     return 0
   fi
   ver="$("$yarn" --version 2>/dev/null || true)"
@@ -393,7 +393,7 @@ act_yarn_install() {
   local npm
   npm="$(fl_npm_bin)"
   [[ -x "$npm" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "no npm at ${npm}; install Node ${FL_NODE_MAJOR} first ($(fl_fnm_cmd) install ${FL_NODE_MAJOR})"; return 1; }
-  fl_run_long "npm install -g yarn (Node ${FL_NODE_MAJOR})" "$npm" install -g yarn || return 1
+  fl_run_long "npm install -g yarn@${FL_PIN_YARN} (Node ${FL_NODE_MAJOR})" "$npm" install -g "yarn@${FL_PIN_YARN}" || return 1
   return 0
 }
 

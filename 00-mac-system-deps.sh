@@ -221,7 +221,7 @@ NPM_GLOBALS="$("$NPM_BIN" ls -g --depth=0 2>/dev/null || true)"
 if [[ "$NPM_GLOBALS" == *' yarn@'* ]]; then
   fl_info "yarn already globally installed under ${FL_NODE_FORMULA}"
 else
-  fl_run "$NPM_BIN" install -g yarn
+  fl_run "$NPM_BIN" install -g "yarn@${FL_PIN_YARN}"
 fi
 YARN_BIN="$(fl_formula_prefix "$FL_NODE_FORMULA")/bin/yarn"
 [[ -x "$YARN_BIN" ]] || YARN_BIN="$(command -v yarn || true)"
