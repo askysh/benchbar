@@ -464,4 +464,934 @@
   <data name="SiteMoveBody" xml:space="preserve">
     <value>Moves {0} to another bench on this machine. Nothing changes yet: the next step shows the plan.</value>
   </data>
+  <data name="OverviewTerminalFailed" xml:space="preserve">
+    <value>The terminal could not be opened: {0}</value>
+  </data>
+  <data name="OverviewStateNamed" xml:space="preserve">
+    <value>{0}, {1}</value>
+  </data>
+  <data name="OverviewStateUptime" xml:space="preserve">
+    <value>{0}, {1}</value>
+  </data>
+  <data name="OverviewRestart" xml:space="preserve">
+    <value>Restart</value>
+  </data>
+  <data name="OverviewOpenSite" xml:space="preserve">
+    <value>Open Site</value>
+  </data>
+  <data name="OverviewLogs" xml:space="preserve">
+    <value>Logs</value>
+  </data>
+  <data name="OverviewHealth" xml:space="preserve">
+    <value>Health</value>
+  </data>
+  <data name="OverviewOpenIn" xml:space="preserve">
+    <value>Open in {0}</value>
+  </data>
+  <data name="OverviewAddress" xml:space="preserve">
+    <value>Address</value>
+  </data>
+  <data name="OverviewNoSite" xml:space="preserve">
+    <value>no site</value>
+  </data>
+  <data name="OverviewSite" xml:space="preserve">
+    <value>Site</value>
+  </data>
+  <data name="OverviewSites" xml:space="preserve">
+    <value>Sites</value>
+  </data>
+  <data name="OverviewFolder" xml:space="preserve">
+    <value>Folder</value>
+  </data>
+  <data name="OverviewLog" xml:space="preserve">
+    <value>Log</value>
+  </data>
+  <data name="OverviewPortSettings" xml:space="preserve">
+    <value>Port Settings and Setup...</value>
+  </data>
+  <data name="OverviewPortSettingsName" xml:space="preserve">
+    <value>Port Settings and Setup {0}</value>
+  </data>
+  <data name="OverviewCopyReadyName" xml:space="preserve">
+    <value>Copy the command that gets the bench ready</value>
+  </data>
+  <data name="OverviewPortsNotChecked" xml:space="preserve">
+    <value>The ports could not be checked.</value>
+  </data>
+  <data name="OverviewMoreServicesOnly" xml:space="preserve">
+    <value>Start Services Only</value>
+  </data>
+  <data name="OverviewMoreServicesOnlyTip" xml:space="preserve">
+    <value>up --services-only: the bench's Redis and nothing else, for a restore or a migrate</value>
+  </data>
+  <data name="OverviewMoreStopServices" xml:space="preserve">
+    <value>Stop Services</value>
+  </data>
+  <data name="OverviewMoreStopServicesTip" xml:space="preserve">
+    <value>down: stops the Redis that Start Services Only started</value>
+  </data>
+  <data name="OverviewMoreInstallService" xml:space="preserve">
+    <value>Install Service...</value>
+  </data>
+  <data name="OverviewMoreRefreshService" xml:space="preserve">
+    <value>Refresh Service...</value>
+  </data>
+  <data name="OverviewMoreServiceTip" xml:space="preserve">
+    <value>service: shows its plan first</value>
+  </data>
+  <data name="OverviewMoreWriteLock" xml:space="preserve">
+    <value>Write Lockfile...</value>
+  </data>
+  <data name="OverviewMoreWriteLockTip" xml:space="preserve">
+    <value>lock write: shows what it would write first</value>
+  </data>
+  <data name="OverviewMoreApplyLock" xml:space="preserve">
+    <value>Apply Lockfile...</value>
+  </data>
+  <data name="OverviewMoreApplyLockTip" xml:space="preserve">
+    <value>lock apply: shows the plan first</value>
+  </data>
+  <data name="OverviewMoreRunCommand" xml:space="preserve">
+    <value>Run Bench Command...</value>
+  </data>
+  <data name="OverviewMoreRunCommandTip" xml:space="preserve">
+    <value>benchbar run: one command of the allow list (migrate, clear-cache, build, run-tests and the reads) in this bench; a change shows its plan first</value>
+  </data>
+  <data name="OverviewMoreWatch" xml:space="preserve">
+    <value>Watch Assets in Terminal</value>
+  </data>
+  <data name="OverviewMoreWatchTip" xml:space="preserve">
+    <value>benchbar watch, in Windows Terminal. Close the window to stop it.</value>
+  </data>
+  <data name="OverviewMoreForeground" xml:space="preserve">
+    <value>Run in Foreground in Terminal</value>
+  </data>
+  <data name="OverviewMoreForegroundTip" xml:space="preserve">
+    <value>benchbar fg: stops the background bench and runs it in a terminal. Closing the window stops it.</value>
+  </data>
+  <data name="OverviewMoreName" xml:space="preserve">
+    <value>More actions {0}</value>
+  </data>
+  <data name="OverviewMoreTip" xml:space="preserve">
+    <value>Console, database, services, lockfile and terminal commands</value>
+  </data>
+  <data name="OverviewMoreConsole" xml:space="preserve">
+    <value>Open Console</value>
+  </data>
+  <data name="OverviewMoreConsoleTip" xml:space="preserve">
+    <value>bench console, in Windows Terminal</value>
+  </data>
+  <data name="OverviewMoreDatabase" xml:space="preserve">
+    <value>Open Database</value>
+  </data>
+  <data name="OverviewMoreDatabaseTip" xml:space="preserve">
+    <value>bench mariadb, in Windows Terminal</value>
+  </data>
+  <data name="OverviewDidNotWorkExit" xml:space="preserve">
+    <value>It did not work (exit {0}).</value>
+  </data>
+  <data name="OverviewDidNotWork" xml:space="preserve">
+    <value>It did not work.</value>
+  </data>
+  <data name="OverviewServicesUp" xml:space="preserve">
+    <value>The Redis of this bench is up for a restore or a migrate. Nothing else was started. Stop Services puts it away.</value>
+  </data>
+  <data name="OverviewServicesStopped" xml:space="preserve">
+    <value>The bench's services are stopped.</value>
+  </data>
+  <data name="OverviewBreakLease" xml:space="preserve">
+    <value>Break Lease...</value>
+  </data>
+  <data name="OverviewBreakLeaseName" xml:space="preserve">
+    <value>Break the lease of {0}</value>
+  </data>
+  <data name="OverviewStopBench" xml:space="preserve">
+    <value>Stop {0}</value>
+  </data>
+  <data name="OverviewRestartBench" xml:space="preserve">
+    <value>Restart {0}</value>
+  </data>
+  <data name="OverviewStartBench" xml:space="preserve">
+    <value>Start {0}</value>
+  </data>
+  <data name="OverviewBreakLeaseTitle" xml:space="preserve">
+    <value>Break the lease of {0}?</value>
+  </data>
+  <data name="OverviewBreakLeaseConfirm" xml:space="preserve">
+    <value>Break Lease and Run</value>
+  </data>
+  <data name="OverviewServiceRunScheduler" xml:space="preserve">
+    <value>Run the scheduler</value>
+  </data>
+  <data name="OverviewServiceStopScheduler" xml:space="preserve">
+    <value>Stop the scheduler</value>
+  </data>
+  <data name="OverviewServiceInstall" xml:space="preserve">
+    <value>Install the service</value>
+  </data>
+  <data name="OverviewServiceRefresh" xml:space="preserve">
+    <value>Refresh the service</value>
+  </data>
+  <data name="OverviewServiceSummary" xml:space="preserve">
+    <value>Writes the files that run the bench in the background (Procfile.lean, the runner and the service unit). It never runs migrate or update.</value>
+  </data>
+  <data name="OverviewBadSiteName" xml:space="preserve">
+    <value>{0} is not a name the terminal can take.</value>
+  </data>
+  <data name="OverviewLockCheckAgain" xml:space="preserve">
+    <value>Check Again</value>
+  </data>
+  <data name="OverviewLockCheckAgainName" xml:space="preserve">
+    <value>Check the lockfile again {0}</value>
+  </data>
+  <data name="OverviewLockfile" xml:space="preserve">
+    <value>Lockfile</value>
+  </data>
+  <data name="OverviewLockComparing" xml:space="preserve">
+    <value>Comparing with the lockfile...</value>
+  </data>
+  <data name="OverviewLockInSync" xml:space="preserve">
+    <value>In sync</value>
+  </data>
+  <data name="OverviewLockDiffers" xml:space="preserve">
+    <value>Differs</value>
+  </data>
+  <data name="OverviewLockHide" xml:space="preserve">
+    <value>Hide differences</value>
+  </data>
+  <data name="OverviewLockShow" xml:space="preserve">
+    <value>Show differences</value>
+  </data>
+  <data name="OverviewLockDifferences" xml:space="preserve">
+    <value>Differences</value>
+  </data>
+  <data name="OverviewScheduler" xml:space="preserve">
+    <value>Scheduler</value>
+  </data>
+  <data name="OverviewSchedulerName" xml:space="preserve">
+    <value>Scheduler {0}</value>
+  </data>
+  <data name="OverviewBackgroundJobs" xml:space="preserve">
+    <value>Background jobs</value>
+  </data>
+  <data name="OverviewSchedulerChanging" xml:space="preserve">
+    <value>Changing the scheduler...</value>
+  </data>
+  <data name="OverviewAutostart" xml:space="preserve">
+    <value>Start again after Ubuntu restarts</value>
+  </data>
+  <data name="OverviewAutostartName" xml:space="preserve">
+    <value>Autostart {0}</value>
+  </data>
+  <data name="OverviewAutostartHelp" xml:space="preserve">
+    <value>The bench comes back by itself when Ubuntu starts, if it was running</value>
+  </data>
+  <data name="OverviewAutostartChanging" xml:space="preserve">
+    <value>Changing it...</value>
+  </data>
+  <data name="OverviewAutostartNeedsService" xml:space="preserve">
+    <value>Set up the service first.</value>
+  </data>
+  <data name="OverviewAutostartReading" xml:space="preserve">
+    <value>Reading the setting...</value>
+  </data>
+  <data name="OverviewAutostartNote" xml:space="preserve">
+    <value>If the bench was running when Ubuntu stopped, it starts again by itself.</value>
+  </data>
+  <data name="OverviewAutostartOnFailed" xml:space="preserve">
+    <value>Autostart could not be turned on (exit {0}).</value>
+  </data>
+  <data name="OverviewAutostartOffFailed" xml:space="preserve">
+    <value>Autostart could not be turned off (exit {0}).</value>
+  </data>
+  <data name="OverviewSchedulerRunTitle" xml:space="preserve">
+    <value>Run the scheduler for {0}?</value>
+  </data>
+  <data name="OverviewSchedulerStopTitle" xml:space="preserve">
+    <value>Stop the scheduler for {0}?</value>
+  </data>
+  <data name="OverviewSchedulerRunBody" xml:space="preserve">
+    <value>BenchBar runs benchbar service --with-schedule, then restarts the bench if it is running.</value>
+  </data>
+  <data name="OverviewSchedulerStopBody" xml:space="preserve">
+    <value>BenchBar runs benchbar service --without-schedule, then restarts the bench if it is running.</value>
+  </data>
+  <data name="OverviewSchedulerFailed" xml:space="preserve">
+    <value>The scheduler could not be changed (exit {0}).</value>
+  </data>
+  <data name="OverviewActionName" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="OverviewCopyDetailName" xml:space="preserve">
+    <value>Copy {0}</value>
+  </data>
+  <data name="OverviewDriftAppOnSite" xml:space="preserve">
+    <value>{0} on {1}</value>
+  </data>
+  <data name="OverviewDriftOnSite" xml:space="preserve">
+    <value>on {0}</value>
+  </data>
+  <data name="OverviewDriftBench" xml:space="preserve">
+    <value>bench</value>
+  </data>
+  <data name="OverviewDriftIsAndLock" xml:space="preserve">
+    <value>is {0}, lock {1}</value>
+  </data>
+  <data name="OverviewDriftIs" xml:space="preserve">
+    <value>is {0}</value>
+  </data>
+  <data name="OverviewDriftLock" xml:space="preserve">
+    <value>lock {0}</value>
+  </data>
+  <data name="OverviewDriftLine" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="OverviewDriftLineDetail" xml:space="preserve">
+    <value>{0}: {1} ({2})</value>
+  </data>
+  <data name="OverviewLockOneDifference" xml:space="preserve">
+    <value>1 difference</value>
+  </data>
+  <data name="OverviewLockFooter" xml:space="preserve">
+    <value>Compared with {0}. To bring the bench in line, run benchbar lock apply in a terminal.</value>
+  </data>
+  <data name="OverviewLockNotChecked" xml:space="preserve">
+    <value>The lockfile could not be checked.</value>
+  </data>
+  <data name="OverviewUptime" xml:space="preserve">
+    <value>Up for {0}</value>
+  </data>
+  <data name="OverviewDurationLessThanMinute" xml:space="preserve">
+    <value>less than a minute</value>
+  </data>
+  <data name="OverviewDurationMinutes" xml:space="preserve">
+    <value>{0} min</value>
+  </data>
+  <data name="OverviewDurationHours" xml:space="preserve">
+    <value>{0} h {1} min</value>
+  </data>
+  <data name="OverviewDurationDays" xml:space="preserve">
+    <value>{0} d {1} h</value>
+  </data>
+  <data name="OverviewSchedulerNeedsNew" xml:space="preserve">
+    <value>Needs benchbar 0.4 or later</value>
+  </data>
+  <data name="OverviewSchedulerNote" xml:space="preserve">
+    <value>Runs scheduled jobs (bench schedule) in the background. Changing it restarts a running bench.</value>
+  </data>
+  <data name="OverviewLockWriteTitle" xml:space="preserve">
+    <value>Write the lockfile</value>
+  </data>
+  <data name="OverviewLockWriteConfirm" xml:space="preserve">
+    <value>Write</value>
+  </data>
+  <data name="OverviewLockWriteSummary" xml:space="preserve">
+    <value>Writes benchbar.toml from this bench. The old file is backed up first.</value>
+  </data>
+  <data name="OverviewLockApplyTitle" xml:space="preserve">
+    <value>Apply the lockfile</value>
+  </data>
+  <data name="OverviewLockApplyConfirm" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="OverviewLockApplySummary" xml:space="preserve">
+    <value>Clones missing apps, switches branches and fast forwards to the pinned commits. No site is touched.</value>
+  </data>
+  <data name="OverviewLockMany" xml:space="preserve">
+    <value>{0} differences</value>
+  </data>
+  <data name="OverviewReadyStale" xml:space="preserve">
+    <value>Needs restart (code changed)</value>
+  </data>
+  <data name="OverviewReady" xml:space="preserve">
+    <value>Ready</value>
+  </data>
+  <data name="OverviewReadyNot" xml:space="preserve">
+    <value>Running, not ready</value>
+  </data>
+  <data name="OverviewWaitAgent" xml:space="preserve">
+    <value>the service (not loaded)</value>
+  </data>
+  <data name="OverviewWaitProcesses" xml:space="preserve">
+    <value>the bench processes</value>
+  </data>
+  <data name="OverviewWaitWeb" xml:space="preserve">
+    <value>the site (it does not answer)</value>
+  </data>
+  <data name="OverviewWaitSocketio" xml:space="preserve">
+    <value>the realtime server (socketio)</value>
+  </data>
+  <data name="OverviewWaitRedis" xml:space="preserve">
+    <value>Redis</value>
+  </data>
+  <data name="OverviewWaitWorkers" xml:space="preserve">
+    <value>a background worker</value>
+  </data>
+  <data name="OverviewWaitStale" xml:space="preserve">
+    <value>a restart (Python code changed)</value>
+  </data>
+  <data name="OverviewWaitingOn" xml:space="preserve">
+    <value>Waiting on {0}.</value>
+  </data>
+  <data name="OverviewFileChanged" xml:space="preserve">
+    <value>{0} changed after the bench started.</value>
+  </data>
+  <data name="OverviewLeaseHeld" xml:space="preserve">
+    <value>Held by {0}.</value>
+  </data>
+  <data name="OverviewLeaseHeldUntil" xml:space="preserve">
+    <value>Held by {0} until {1}.</value>
+  </data>
+  <data name="OverviewLeaseHeldNote" xml:space="preserve">
+    <value>Held by {0} ({1}).</value>
+  </data>
+  <data name="OverviewLeaseHeldUntilNote" xml:space="preserve">
+    <value>Held by {0} until {1} ({2}).</value>
+  </data>
+  <data name="OverviewLeaseBreakHelp" xml:space="preserve">
+    <value>Run it anyway. The holder is not told, and what they are doing may break.</value>
+  </data>
+  <data name="OverviewLeaseBreakQuestion" xml:space="preserve">
+    <value>{0} Breaking it runs "{1}" anyway, as you: whoever holds the lease may be in the middle of work on it. The run is recorded in the history.</value>
+  </data>
+  <data name="OverviewPortConflictLead" xml:space="preserve">
+    <value>Port conflict. Review the proposed resolution before starting.</value>
+  </data>
+  <data name="OverviewPortsCheckFailed" xml:space="preserve">
+    <value>The ports could not be checked: {0}</value>
+  </data>
+  <data name="OverviewPortsNoAnswer" xml:space="preserve">
+    <value>no answer from benchbar.exe.</value>
+  </data>
+  <data name="TidyMenuTidyUp" xml:space="preserve">
+    <value>Tidy Up...</value>
+  </data>
+  <data name="TidyMenuTidyUpTip" xml:space="preserve">
+    <value>Scratch benches, the ones that expired and the databases no site refers to</value>
+  </data>
+  <data name="TidyMenuRemoveService" xml:space="preserve">
+    <value>Remove Service...</value>
+  </data>
+  <data name="TidyMenuRemoveServiceTip" xml:space="preserve">
+    <value>uninstall-service for this bench: stops it and removes its background service; shows its plan first</value>
+  </data>
+  <data name="TidyMenuForget" xml:space="preserve">
+    <value>Forget Bench...</value>
+  </data>
+  <data name="TidyMenuForgetTip" xml:space="preserve">
+    <value>bench forget: takes the bench out of benchbar's list; the folder, sites and databases stay</value>
+  </data>
+  <data name="TidyMenuRemoveBench" xml:space="preserve">
+    <value>Remove Bench...</value>
+  </data>
+  <data name="TidyMenuRemoveBenchTip" xml:space="preserve">
+    <value>bench remove: backs up and drops its sites, then moves the folder aside; asks for the folder name</value>
+  </data>
+  <data name="TidyRemoveTitle" xml:space="preserve">
+    <value>Remove {0}</value>
+  </data>
+  <data name="TidyRemoveBody" xml:space="preserve">
+    <value>This backs up each site of {0}, drops its database and moves the folder {1} to a trash folder next to it. Nothing is deleted, and the plan comes next.</value>
+  </data>
+  <data name="TidyRemoveBenchConfirm" xml:space="preserve">
+    <value>Remove Bench</value>
+  </data>
+  <data name="TidyTitle" xml:space="preserve">
+    <value>Tidy up</value>
+  </data>
+  <data name="TidyDays" xml:space="preserve">
+    <value>Days until it expires</value>
+  </data>
+  <data name="TidyRemoveExpired" xml:space="preserve">
+    <value>Remove Expired...</value>
+  </data>
+  <data name="TidyRemoveExpiredName" xml:space="preserve">
+    <value>Remove the expired scratch benches</value>
+  </data>
+  <data name="TidyScratchIntro" xml:space="preserve">
+    <value>A scratch bench expires after the days you give. Then Remove Expired backs up its sites, drops their databases and moves its folder aside. The default bench is never removed.</value>
+  </data>
+  <data name="TidyMarkScratch" xml:space="preserve">
+    <value>Mark Scratch</value>
+  </data>
+  <data name="TidyMarkScratchName" xml:space="preserve">
+    <value>Mark {0} scratch</value>
+  </data>
+  <data name="TidyNotScratch" xml:space="preserve">
+    <value>Not Scratch</value>
+  </data>
+  <data name="TidyNotScratchName" xml:space="preserve">
+    <value>Keep {0}, not scratch</value>
+  </data>
+  <data name="TidyScratchBenches" xml:space="preserve">
+    <value>Scratch benches</value>
+  </data>
+  <data name="TidyOrphanDatabases" xml:space="preserve">
+    <value>Databases no site refers to</value>
+  </data>
+  <data name="TidyClose" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="TidyScratchNotRead" xml:space="preserve">
+    <value>The scratch benches could not be read.</value>
+  </data>
+  <data name="TidyExpiredLine" xml:space="preserve">
+    <value>{0}: {1}, {2}, marked by {3}</value>
+  </data>
+  <data name="TidyPendingLine" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="TidyKeptLine" xml:space="preserve">
+    <value>{0}: kept, {1}</value>
+  </data>
+  <data name="TidyNoneExpired" xml:space="preserve">
+    <value>No scratch bench has expired.</value>
+  </data>
+  <data name="TidyDatabasesNotRead" xml:space="preserve">
+    <value>The databases could not be read.</value>
+  </data>
+  <data name="TidyMarkTitle" xml:space="preserve">
+    <value>Mark {0} scratch for {1} day(s)?</value>
+  </data>
+  <data name="TidyMarkBody" xml:space="preserve">
+    <value>Once the time is up, Remove Expired backs up its sites, drops their databases and moves its folder aside. The default bench is never removed.</value>
+  </data>
+  <data name="TidyDidNotWork" xml:space="preserve">
+    <value>It did not work.</value>
+  </data>
+  <data name="TidyIsScratch" xml:space="preserve">
+    <value>{0} is a scratch bench for {1} day(s).</value>
+  </data>
+  <data name="TidyIsNotScratch" xml:space="preserve">
+    <value>{0} is not a scratch bench.</value>
+  </data>
+  <data name="TidyDaysProblem" xml:space="preserve">
+    <value>Whole days from 1 to {0}.</value>
+  </data>
+  <data name="TidyGcTitle" xml:space="preserve">
+    <value>Remove expired scratch benches</value>
+  </data>
+  <data name="TidyGcConfirm" xml:space="preserve">
+    <value>Remove Benches</value>
+  </data>
+  <data name="TidyGcSummary" xml:space="preserve">
+    <value>Backs up each site of every expired scratch bench, drops its database and moves the bench folder aside. Nothing is deleted, and the default bench is never touched.</value>
+  </data>
+  <data name="TidyGcLine" xml:space="preserve">
+    <value>{0}: {1}, marked scratch by {2}</value>
+  </data>
+  <data name="TidyForgetTitle" xml:space="preserve">
+    <value>Forget {0}</value>
+  </data>
+  <data name="TidyForgetConfirm" xml:space="preserve">
+    <value>Forget Bench</value>
+  </data>
+  <data name="TidyForgetSummary" xml:space="preserve">
+    <value>Takes the bench out of benchbar's list and backs up and removes its service files. The folder, its sites, apps, databases and hosts lines stay.</value>
+  </data>
+  <data name="TidyRemoveSummary" xml:space="preserve">
+    <value>Backs up each site with its files, drops its database, takes the bench out of benchbar's list and moves the folder to a trash folder next to it. Nothing is deleted.</value>
+  </data>
+  <data name="TidyKept" xml:space="preserve">
+    <value>Kept: {0}.</value>
+  </data>
+  <data name="TidySitesNone" xml:space="preserve">
+    <value>Sites: none.</value>
+  </data>
+  <data name="TidySitesLine" xml:space="preserve">
+    <value>Sites: {0}, {1}. Each is backed up, then its database is dropped.</value>
+  </data>
+  <data name="TidyTrash" xml:space="preserve">
+    <value>The folder moves to {0}. Empty it yourself when you are sure.</value>
+  </data>
+  <data name="TidyServiceTitle" xml:space="preserve">
+    <value>Remove the service of {0}</value>
+  </data>
+  <data name="TidyServiceConfirm" xml:space="preserve">
+    <value>Remove Service</value>
+  </data>
+  <data name="TidyServiceSummary" xml:space="preserve">
+    <value>Stops {0} and removes its background service: the unit, the runner and Procfile.lean, each backed up first. The bench, its sites, apps and databases are not touched.</value>
+  </data>
+  <data name="TidySiteOne" xml:space="preserve">
+    <value>1 site</value>
+  </data>
+  <data name="TidySiteMany" xml:space="preserve">
+    <value>{0} sites</value>
+  </data>
+  <data name="TidyOrphanArchived" xml:space="preserve">
+    <value>{0}, named by the archived site {1}</value>
+  </data>
+  <data name="TidyOrphansNone" xml:space="preserve">
+    <value>No orphan database among {0} of frappe's shape.</value>
+  </data>
+  <data name="TidyOrphansOne" xml:space="preserve">
+    <value>1 database of {0} has no site in any bench benchbar knows.</value>
+  </data>
+  <data name="TidyOrphansMany" xml:space="preserve">
+    <value>{0} databases of {1} have no site in any bench benchbar knows.</value>
+  </data>
+  <data name="TidyNoTime" xml:space="preserve">
+    <value>no time known</value>
+  </data>
+  <data name="TidyExpires" xml:space="preserve">
+    <value>expires {0}</value>
+  </data>
+  <data name="TidyExpired" xml:space="preserve">
+    <value>expired {0}</value>
+  </data>
+  <data name="RunCmdTitle" xml:space="preserve">
+    <value>Run a bench command</value>
+  </data>
+  <data name="RunCmdIntro" xml:space="preserve">
+    <value>Runs one command of benchbar's allow list in {0}, under a deadline. A read runs at once; a change shows its plan first.</value>
+  </data>
+  <data name="RunCmdCommand" xml:space="preserve">
+    <value>Command</value>
+  </data>
+  <data name="RunCmdSite" xml:space="preserve">
+    <value>Site</value>
+  </data>
+  <data name="RunCmdFlags" xml:space="preserve">
+    <value>Flags</value>
+  </data>
+  <data name="RunCmdFlagsOptional" xml:space="preserve">
+    <value>Flags (optional)</value>
+  </data>
+  <data name="RunCmdFlagsHint" xml:space="preserve">
+    <value>Only the flags of the command, such as --skip-failing. Each value is one plain word.</value>
+  </data>
+  <data name="RunCmdOutput" xml:space="preserve">
+    <value>Output</value>
+  </data>
+  <data name="RunCmdRun" xml:space="preserve">
+    <value>Run</value>
+  </data>
+  <data name="RunCmdClose" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="RunCmdHelpFlags" xml:space="preserve">
+    <value>{0} Flags: {1}.</value>
+  </data>
+  <data name="RunCmdHelpNoFlags" xml:space="preserve">
+    <value>{0} It takes no flags.</value>
+  </data>
+  <data name="RunCmdReviewPlan" xml:space="preserve">
+    <value>Review Plan...</value>
+  </data>
+  <data name="RunCmdRunning" xml:space="preserve">
+    <value>Running {0}...</value>
+  </data>
+  <data name="RunCmdNoOutput" xml:space="preserve">
+    <value>(no output)</value>
+  </data>
+  <data name="RunCmdDeadline" xml:space="preserve">
+    <value>The deadline stopped it.</value>
+  </data>
+  <data name="RunCmdExit" xml:space="preserve">
+    <value>It ended with exit {0}.</value>
+  </data>
+  <data name="RunCmdDidNotRun" xml:space="preserve">
+    <value>The command did not run.</value>
+  </data>
+  <data name="ActivityLeases" xml:space="preserve">
+    <value>Leases</value>
+  </data>
+  <data name="ActivityLeaseNote" xml:space="preserve">
+    <value>While a lease stands, restart, stop, app changes, site drop and restore, and the lockfile wait for the holder. Starting and reading are never stopped.</value>
+  </data>
+  <data name="ActivityResources" xml:space="preserve">
+    <value>Resources</value>
+  </data>
+  <data name="ActivityChartCpu" xml:space="preserve">
+    <value>CPU</value>
+  </data>
+  <data name="ActivityChartMemory" xml:space="preserve">
+    <value>Memory</value>
+  </data>
+  <data name="ActivityChartCpuDescription" xml:space="preserve">
+    <value>CPU, {0} samples, now {1}</value>
+  </data>
+  <data name="ActivityChartMemoryDescription" xml:space="preserve">
+    <value>Memory, {0} samples, now {1}</value>
+  </data>
+  <data name="ActivityResourcesNote" xml:space="preserve">
+    <value>Measured inside Ubuntu, every few seconds, only while this page is on screen.</value>
+  </data>
+  <data name="ActivityRunningNow" xml:space="preserve">
+    <value>Running now</value>
+  </data>
+  <data name="ActivityChartName" xml:space="preserve">
+    <value>{0} chart</value>
+  </data>
+  <data name="ActivityName" xml:space="preserve">
+    <value>Activity</value>
+  </data>
+  <data name="ActivityAgeJustNow" xml:space="preserve">
+    <value>just now</value>
+  </data>
+  <data name="ActivityAgeMinuteOne" xml:space="preserve">
+    <value>1 minute ago</value>
+  </data>
+  <data name="ActivityAgeMinutes" xml:space="preserve">
+    <value>{0} minutes ago</value>
+  </data>
+  <data name="ActivityAgeHourOne" xml:space="preserve">
+    <value>1 hour ago</value>
+  </data>
+  <data name="ActivityAgeHours" xml:space="preserve">
+    <value>{0} hours ago</value>
+  </data>
+  <data name="ActivityAgeDayOne" xml:space="preserve">
+    <value>1 day ago</value>
+  </data>
+  <data name="ActivityAgeDays" xml:space="preserve">
+    <value>{0} days ago</value>
+  </data>
+  <data name="ActivityLeaseSite" xml:space="preserve">
+    <value>Site {0}</value>
+  </data>
+  <data name="ActivityLeaseBench" xml:space="preserve">
+    <value>The whole bench</value>
+  </data>
+  <data name="ActivityLeaseHeld" xml:space="preserve">
+    <value>{0} is held by {1}</value>
+  </data>
+  <data name="ActivityLeaseHeldUntil" xml:space="preserve">
+    <value>{0} is held by {1} until {2}</value>
+  </data>
+  <data name="ActivityLeaseHeldNote" xml:space="preserve">
+    <value>{0} is held by {1}: {2}</value>
+  </data>
+  <data name="ActivityLeaseHeldUntilNote" xml:space="preserve">
+    <value>{0} is held by {1} until {2}: {3}</value>
+  </data>
+  <data name="ActivityACommand" xml:space="preserve">
+    <value>a command</value>
+  </data>
+  <data name="ActivityCommandSite" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="ActivityOpStarting" xml:space="preserve">
+    <value>{0}, starting</value>
+  </data>
+  <data name="ActivityOpRunning" xml:space="preserve">
+    <value>{0}, running</value>
+  </data>
+  <data name="ActivityOpStep" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="ActivityOpProgress" xml:space="preserve">
+    <value>{0} ({1})</value>
+  </data>
+  <data name="ActivityOpStarted" xml:space="preserve">
+    <value>{0}, started {1}</value>
+  </data>
+  <data name="ActivityResourceLine" xml:space="preserve">
+    <value>CPU {0} percent, memory {1}, {2}, runner speed {3}</value>
+  </data>
+  <data name="ActivityProcessOne" xml:space="preserve">
+    <value>1 process</value>
+  </data>
+  <data name="ActivityProcessMany" xml:space="preserve">
+    <value>{0} processes</value>
+  </data>
+  <data name="RunCmdHelpMigrate" xml:space="preserve">
+    <value>Patches, schema sync and fixtures of the site, after a backup of it.</value>
+  </data>
+  <data name="RunCmdHelpClearCache" xml:space="preserve">
+    <value>Clears the cache of the site.</value>
+  </data>
+  <data name="RunCmdHelpClearWebsiteCache" xml:space="preserve">
+    <value>Clears the website cache of the site.</value>
+  </data>
+  <data name="RunCmdHelpBuild" xml:space="preserve">
+    <value>Builds the bench's assets.</value>
+  </data>
+  <data name="RunCmdHelpRunTests" xml:space="preserve">
+    <value>Runs the apps' tests. It writes test records into the site's database: use a throwaway site, not one you keep.</value>
+  </data>
+  <data name="RunCmdHelpDoctor" xml:space="preserve">
+    <value>Checks the site's setup (a read).</value>
+  </data>
+  <data name="RunCmdHelpListApps" xml:space="preserve">
+    <value>Lists the apps installed on the site (a read).</value>
+  </data>
+  <data name="RunCmdHelpVersion" xml:space="preserve">
+    <value>Prints the versions of the bench's apps (a read).</value>
+  </data>
+  <data name="RunCmdTakesNoFlags" xml:space="preserve">
+    <value>{0} takes no flags.</value>
+  </data>
+  <data name="RunCmdNotAFlag" xml:space="preserve">
+    <value>{0} is not a flag of {1}. It takes: {2}.</value>
+  </data>
+  <data name="RunCmdNeedsValue" xml:space="preserve">
+    <value>{0} needs a value.</value>
+  </data>
+  <data name="RunCmdPlainWord" xml:space="preserve">
+    <value>The value of {0} is one plain word: letters, digits, '.', '_', ':' and '-'.</value>
+  </data>
+  <data name="RunCmdNotOnList" xml:space="preserve">
+    <value>{0} is not on the list of commands benchbar run takes.</value>
+  </data>
+  <data name="RunCmdNeedsSite" xml:space="preserve">
+    <value>{0} needs one of the sites of this bench.</value>
+  </data>
+  <data name="RunCmdReviewTitle" xml:space="preserve">
+    <value>Run {0}</value>
+  </data>
+  <data name="RunCmdSummaryOnSite" xml:space="preserve">
+    <value>Runs {0} on {1}. Nothing else runs.</value>
+  </data>
+  <data name="RunCmdSummary" xml:space="preserve">
+    <value>Runs {0}. Nothing else runs.</value>
+  </data>
+  <data name="RunCmdPlanCommand" xml:space="preserve">
+    <value>Command: {0}</value>
+  </data>
+  <data name="RunCmdPlanBackup" xml:space="preserve">
+    <value>A database backup of the site is taken first.</value>
+  </data>
+  <data name="RunCmdPlanDeadlineMinutes" xml:space="preserve">
+    <value>Deadline: {0} minutes.</value>
+  </data>
+  <data name="RunCmdPlanDeadlineSeconds" xml:space="preserve">
+    <value>Deadline: {0} seconds.</value>
+  </data>
+  <data name="RunCmdPlanOutput" xml:space="preserve">
+    <value>The output goes to the run's log. The code of the bench's apps runs, so use a bench whose apps you trust.</value>
+  </data>
+  <data name="NoticeName" xml:space="preserve">
+    <value>Notices</value>
+  </data>
+  <data name="NoticeGoBack" xml:space="preserve">
+    <value>To go back:</value>
+  </data>
+  <data name="NoticeDismiss" xml:space="preserve">
+    <value>Dismiss</value>
+  </data>
+  <data name="NoticeDismissName" xml:space="preserve">
+    <value>Dismiss: {0}</value>
+  </data>
+  <data name="NoticeCopyCommand" xml:space="preserve">
+    <value>Copy Command</value>
+  </data>
+  <data name="NoticeCopyCommandName" xml:space="preserve">
+    <value>Copy the command to go back: {0}</value>
+  </data>
+  <data name="NoticeReadMore" xml:space="preserve">
+    <value>Read More</value>
+  </data>
+  <data name="NoticeReadMoreName" xml:space="preserve">
+    <value>Read more: {0}</value>
+  </data>
+  <data name="NoticeNotDismissed" xml:space="preserve">
+    <value>The notice was not dismissed (exit {0}).</value>
+  </data>
+  <data name="PendingName" xml:space="preserve">
+    <value>Unfinished operations</value>
+  </data>
+  <data name="PendingUnfinished" xml:space="preserve">
+    <value>Unfinished {0}</value>
+  </data>
+  <data name="PendingLeft" xml:space="preserve">
+    <value>Left to do: {0}</value>
+  </data>
+  <data name="PendingStepTarget" xml:space="preserve">
+    <value>{0} ({1})</value>
+  </data>
+  <data name="PendingResumeName" xml:space="preserve">
+    <value>{0} of {1}</value>
+  </data>
+  <data name="PendingDiscard" xml:space="preserve">
+    <value>Discard...</value>
+  </data>
+  <data name="PendingDiscardName" xml:space="preserve">
+    <value>Discard the unfinished {0} of {1}</value>
+  </data>
+  <data name="PendingFinishAddTitle" xml:space="preserve">
+    <value>Finish adding {0}</value>
+  </data>
+  <data name="PendingFinishAdd" xml:space="preserve">
+    <value>Finish Add</value>
+  </data>
+  <data name="PendingFinishAddSummary" xml:space="preserve">
+    <value>An earlier add stopped part way. This plan runs the steps that did not finish and nothing else.</value>
+  </data>
+  <data name="PendingFinishUpdateTitle" xml:space="preserve">
+    <value>Finish the update of {0}</value>
+  </data>
+  <data name="PendingFinishUpdate" xml:space="preserve">
+    <value>Finish Update</value>
+  </data>
+  <data name="PendingFinishUpdateSummary" xml:space="preserve">
+    <value>An earlier update stopped part way. This run does the steps that did not finish and nothing else.</value>
+  </data>
+  <data name="PendingStepOne" xml:space="preserve">
+    <value>1 step</value>
+  </data>
+  <data name="PendingStepMany" xml:space="preserve">
+    <value>{0} steps</value>
+  </data>
+  <data name="PendingDiscardQuestion" xml:space="preserve">
+    <value>Drop the record of the unfinished {0} of {1}? Its {2} will not run, and BenchBar does not undo what already ran. Nothing else runs now; run the update or add again later if you still want it.</value>
+  </data>
+  <data name="PendingDiscardTitle" xml:space="preserve">
+    <value>Discard the unfinished {0}</value>
+  </data>
+  <data name="PendingDiscardConfirm" xml:space="preserve">
+    <value>Discard</value>
+  </data>
+  <data name="PendingDiscarded" xml:space="preserve">
+    <value>The unfinished {0} of {1} was discarded.</value>
+  </data>
+  <data name="PendingFailed" xml:space="preserve">
+    <value>The command failed (exit {0}).</value>
+  </data>
+  <data name="PendingDidNotFinish" xml:space="preserve">
+    <value>{0} of {1} did not finish</value>
+  </data>
+  <data name="PendingStoppedAt" xml:space="preserve">
+    <value>{0}: stopped at {1}</value>
+  </data>
+  <data name="PendingReason" xml:space="preserve">
+    <value>{0} ({1})</value>
+  </data>
+  <data name="PendingStepsLeft" xml:space="preserve">
+    <value>{0}; {1} step(s) left</value>
+  </data>
+  <data name="PendingKinds" xml:space="preserve">
+    <value>{0} ({1})</value>
+  </data>
+  <data name="BenchBannerProblem" xml:space="preserve">
+    <value>Problem: {0}</value>
+  </data>
+  <data name="BenchBannerResult" xml:space="preserve">
+    <value>Result: {0}</value>
+  </data>
+  <data name="BenchMoreActions" xml:space="preserve">
+    <value>More actions</value>
+  </data>
+  <data name="BenchTabName" xml:space="preserve">
+    <value>{0} tab</value>
+  </data>
+  <data name="BenchTabs" xml:space="preserve">
+    <value>Bench tabs</value>
+  </data>
+  <data name="BenchTabSites" xml:space="preserve">
+    <value>Sites</value>
+  </data>
+  <data name="BenchTabApps" xml:space="preserve">
+    <value>Apps</value>
+  </data>
+  <data name="BenchTabHealth" xml:space="preserve">
+    <value>Health</value>
+  </data>
+  <data name="BenchTabSharing" xml:space="preserve">
+    <value>Sharing</value>
+  </data>
+  <data name="BenchTabOverview" xml:space="preserve">
+    <value>Overview</value>
+  </data>
 </root>
