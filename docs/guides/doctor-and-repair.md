@@ -158,7 +158,10 @@ Chromium: `cd <bench> && bench setup-chrome`.
 ### redis_6379
 
 Nothing listens on port 6379. The bench runs its own Redis on its port
-block, so a Homebrew Redis on 6379 is unused.
+block, so a Homebrew Redis on 6379 is unused. `install` installs the
+`redis` formula but does not start its service (0.9.0), so this warning
+comes from a Redis someone else started, or from a Mac installed by an
+older version.
 
 Fix: `brew services stop redis`, only if nothing else on this Mac needs
 it. `benchbar repair` offers the same and asks first; under `--yes` it

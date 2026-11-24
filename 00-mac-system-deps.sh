@@ -287,7 +287,9 @@ REDIS_BIN="$(command -v redis-server || true)"
 [[ -x "$REDIS_BIN" ]] || fl_die "redis-server not found." "Try: brew reinstall redis"
 REDIS_VERSION="$("$REDIS_BIN" --version | sed -n 's/.*v=\([0-9.]*\).*/\1/p')"
 fl_ok "redis-server - ${REDIS_VERSION:-unknown} at ${REDIS_BIN}"
-fl_ensure_service_started redis "redis-server"
+# Homebrew's own redis service is not started: each bench runs its own Redis on its own ports (11000 and
+# 13000 by default), and a service on 6379 that nothing uses is what doctor's redis_6379 check warns about
+fl_info "Homebrew's redis service is not started: each bench runs its own Redis"
 
 fl_section "PDF"
 # ok | skipped (declined on purpose, return 2) | failed (download, checksum,

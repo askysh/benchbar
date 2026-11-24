@@ -272,10 +272,17 @@ fl_process_running() {
   fi
 }
 
+# fl_brew_services_list: brew services list with colour off. Homebrew colours piped output when
+# HOMEBREW_COLOR is set, and the codes sit in front of the names and states the callers match; the
+# environment is cleared of it and any code that is left is stripped.
+fl_brew_services_list() {
+  env -u HOMEBREW_COLOR HOMEBREW_NO_COLOR=1 NO_COLOR=1 brew services list 2>/dev/null | sed $'s/\x1b\\[[0-9;]*m//g'
+}
+
 fl_brew_service_running() {
   local svc="$1"
   local states
-  states="$(brew services list 2>/dev/null | awk -v s="$svc" '$1==s {print $2}' || true)"
+  states="$(fl_brew_services_list | awk -v s="$svc" '$1==s {print $2}' || true)"
   fl_has_line "$states" started
 }
 
