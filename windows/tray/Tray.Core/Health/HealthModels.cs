@@ -33,15 +33,16 @@ public sealed record HealthReport(string? Bench, string? Site, string? Profile, 
     {
         get
         {
-            var parts = new List<string>();
-            if (Fail > 0) parts.Add(Fail == 1 ? "1 failure" : $"{Fail} failures");
-            if (Warn > 0) parts.Add(Warn == 1 ? "1 warning" : $"{Warn} warnings");
-            return parts.Count == 0 ? null : string.Join(", ", parts);
+            var failures = Fail == 1 ? UiText.Get("HealthFailureOne") : UiText.Format("HealthFailureMany", Fail);
+            var warnings = Warn == 1 ? UiText.Get("HealthWarningOne") : UiText.Format("HealthWarningMany", Warn);
+            if (Fail > 0 && Warn > 0) return UiText.Format("HealthAttentionBoth", failures, warnings);
+            if (Fail > 0) return failures;
+            return Warn > 0 ? warnings : null;
         }
     }
 
     /// <summary>"45 passing, 1 failure, 2 warnings", for the header.</summary>
-    public string SummaryText => Attention is { } a ? $"{Ok} passing, {a}" : $"{Ok} passing";
+    public string SummaryText => Attention is { } a ? UiText.Format("HealthSummary", Ok, a) : UiText.Format("HealthSummaryClean", Ok);
 
     private static int Rank(CheckLevel level) => level switch { CheckLevel.Fail => 0, CheckLevel.Warn => 1, _ => 2 };
 }

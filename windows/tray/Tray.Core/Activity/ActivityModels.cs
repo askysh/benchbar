@@ -174,30 +174,30 @@ public static class HistoryText
     /// <summary>"site backup acme.localhost": the command and what it was aimed at.</summary>
     public static string Title(HistoryEntry e)
     {
-        var command = e.Command ?? e.Argv.FirstOrDefault() ?? "a command";
-        return e.Site is { Length: > 0 } site && !command.Contains(site, StringComparison.Ordinal) ? $"{command} {site}" : command;
+        var command = e.Command ?? e.Argv.FirstOrDefault() ?? UiText.Get("HistoryACommand");
+        return e.Site is { Length: > 0 } site && !command.Contains(site, StringComparison.Ordinal) ? UiText.Format("HistoryTitleSite", command, site) : command;
     }
 
     /// <summary>Who started it, as a person says it. A caller this build does not know is shown as it is.</summary>
     public static string Who(HistoryEntry e) => e.Caller switch
     {
-        "app" => "BenchBar app",
-        "terminal" => "Terminal",
-        "tray" => "Windows tray",
-        "script" => "A script",
-        "agent" => "An agent",
-        "mcp" => "An agent through MCP" + (e.McpClient is { Length: > 0 } c ? $" ({c})" : ""),
+        "app" => UiText.Get("HistoryCallerApp"),
+        "terminal" => UiText.Get("HistoryCallerTerminal"),
+        "tray" => UiText.Get("HistoryCallerTray"),
+        "script" => UiText.Get("HistoryCallerScript"),
+        "agent" => UiText.Get("HistoryCallerAgent"),
+        "mcp" => e.McpClient is { Length: > 0 } c ? UiText.Format("HistoryCallerMcpClient", c) : UiText.Get("HistoryCallerMcp"),
         _ => e.Caller,
     };
 
-    public static string Result(HistoryEntry e) => e.Exit == 0 ? "Done" : $"Failed (exit {e.Exit})";
+    public static string Result(HistoryEntry e) => e.Exit == 0 ? UiText.Get("HistoryDone") : UiText.Format("HistoryFailed", e.Exit);
 
     /// <summary>"site acme.localhost, snapshot acme.localhost": what the run changed, as the CLI recorded it. Null when it changed nothing.</summary>
     public static string? Changes(HistoryEntry e)
     {
         if (e.Changed.Count == 0) return null;
-        var parts = e.Changed.Select(c => $"{c.Kind} {c.Name}").ToList();
-        if (e.ChangedMore > 0) parts.Add($"{e.ChangedMore} more");
+        var parts = e.Changed.Select(c => UiText.Format("HistoryChange", c.Kind, c.Name)).ToList();
+        if (e.ChangedMore > 0) parts.Add(UiText.Format("HistoryMore", e.ChangedMore));
         return string.Join(", ", parts);
     }
 
