@@ -23,6 +23,9 @@ public interface ISettingsHost
     /// <summary>Opens Windows' Settings > Apps > Startup (<c>ms-settings:startupapps</c>).</summary>
     void OpenStartupSettings() { }
 
+    /// <summary>The Quick Switch shortcut; null where the host has none (the row is not shown).</summary>
+    IQuickSwitchHotKey? HotKey => null;
+
     /// <summary>The distro BenchBar uses changed: poll now instead of waiting out the back off.</summary>
     void DistroSwitched() { }
 }
@@ -85,6 +88,9 @@ public sealed class SettingsModel(TrayConfig config, ISettingsHost host, ISetupS
     public bool ShowsUpdateCheck => UpdatePolicy.ChecksForUpdates(host.Package);
 
     public void OpenStartupSettings() => host.OpenStartupSettings();
+
+    /// <summary>The Quick Switch shortcut (opt in), or null when the host offers none.</summary>
+    public IQuickSwitchHotKey? HotKey => host.HotKey;
 
     public bool Notifications
     {

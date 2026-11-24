@@ -116,4 +116,40 @@
   <data name="UnexpectedErrorNotice" xml:space="preserve">
     <value>BenchBar hit an error and kept running. If something looks wrong, tell us.</value>
   </data>
+  <data name="HotKeyBadKey" xml:space="preserve">
+    <value>That key cannot be part of a shortcut. Use a letter, a digit, a function key or an arrow.</value>
+  </data>
+  <data name="HotKeyNeedsModifier" xml:space="preserve">
+    <value>A shortcut needs Ctrl or Alt, so it does not take a key from another app.</value>
+  </data>
+  <data name="HotKeyCtrlLetter" xml:space="preserve">
+    <value>Ctrl with a letter or a digit would take shortcuts like Ctrl+C from every app. Add Alt.</value>
+  </data>
+  <data name="HotKeyReserved" xml:space="preserve">
+    <value>Windows uses {0}. Choose another shortcut.</value>
+  </data>
+  <data name="HotKeyTaken" xml:space="preserve">
+    <value>{0} is taken by another app. {1} stays.</value>
+  </data>
+  <data name="HotKeyTakenAtStart" xml:space="preserve">
+    <value>{0} is taken by another app. Turn the shortcut off and on to try again.</value>
+  </data>
+  <data name="HotKeySwitch" xml:space="preserve">
+    <value>Open Quick Switch with a shortcut</value>
+  </data>
+  <data name="HotKeyRecord" xml:space="preserve">
+    <value>Quick Switch shortcut</value>
+  </data>
+  <data name="HotKeyPressNew" xml:space="preserve">
+    <value>Press the new shortcut...</value>
+  </data>
+  <data name="HotKeyRecordingNote" xml:space="preserve">
+    <value>Press Ctrl or Alt with a key. Esc keeps the current shortcut.</value>
+  </data>
+  <data name="HotKeyReset" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="HotKeyResetName" xml:space="preserve">
+    <value>Reset the Quick Switch shortcut</value>
+  </data>
 </root>
