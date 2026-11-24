@@ -26,8 +26,8 @@ final class AppLinkEffects: LinkEffects {
     var lanRoomsOn: Bool { Labs.shared.isOn(.lanRooms) }
     var confirmLinkActions: Bool { settings.confirmLinkActions }
 
-    private func bench(_ path: String) -> BenchModel? { store.benches.first { $0.path == path } }
-    func benchName(at path: String) -> String? { bench(path)?.name }
+    private func model(at path: String) -> BenchModel? { store.benches.first { $0.path == path } }
+    func benchName(at path: String) -> String? { model(at: path)?.name }
 
     func confirm(_ question: LinkConfirm.Question) -> Bool {
         ShareConfirm.ask(question.title, detail: question.detail, button: question.button, cancelIsDefault: true)
@@ -54,19 +54,19 @@ final class AppLinkEffects: LinkEffects {
     }
 
     func start(_ path: String) {
-        guard let bench = bench(path) else { return }
+        guard let bench = model(at: path) else { return }
         Task { [store] in await store.perform(.up, on: bench) }
     }
     func stop(_ path: String, fromLink: Bool) {
-        guard let bench = bench(path) else { return }
+        guard let bench = model(at: path) else { return }
         Task { [store] in await store.perform(.down, on: bench, fromLink: fromLink) }
     }
     func restart(_ path: String, fromLink: Bool) {
-        guard let bench = bench(path) else { return }
+        guard let bench = model(at: path) else { return }
         Task { [store] in await store.perform(.restart, on: bench, fromLink: fromLink) }
     }
     func openSite(_ path: String, site: String?) {
-        guard let bench = bench(path) else { return }
+        guard let bench = model(at: path) else { return }
         if let site, let row = bench.siteRows.first(where: { $0.name == site }) {
             Workspace.open(row.url)
         } else {
@@ -74,22 +74,22 @@ final class AppLinkEffects: LinkEffects {
         }
     }
     func openLogs(_ path: String) {
-        guard let bench = bench(path) else { return }
+        guard let bench = model(at: path) else { return }
         popover.close()
         logWindows.show(benchName: bench.name, benchPath: bench.path)
     }
     func openBenchWindow(_ path: String) { open(path, tab: .overview) }
     func runDoctor(_ path: String) {
-        guard let bench = bench(path) else { return }
+        guard let bench = model(at: path) else { return }
         open(path, tab: .health)
         Task { [store] in await store.runDoctor(on: bench) }
     }
     func openShell(_ kind: TerminalScript.Kind, bench path: String, site: String?) {
-        guard let bench = bench(path) else { return }
+        guard let bench = model(at: path) else { return }
         Workspace.openShell(kind, site: site ?? bench.summary.site, bench: bench, store: store)
     }
     func openEditor(_ path: String) {
-        guard let bench = bench(path) else { return }
+        guard let bench = model(at: path) else { return }
         if let editor = settings.editor {
             Workspace.openInEditor(bench, editor: editor)
         } else {
