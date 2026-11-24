@@ -12,9 +12,9 @@ public static class EditorKind
 
     public static string DisplayName(string id) => Normalize(id) switch
     {
-        "cursor" => "Cursor",
-        "insiders" => "VS Code Insiders",
-        _ => "VS Code",
+        "cursor" => UiText.Get("CommonEditorCursor"),
+        "insiders" => UiText.Get("CommonEditorInsiders"),
+        _ => UiText.Get("FlyoutVsCode"),
     };
 
     /// <summary>The launcher script that sits in the editor's <c>bin</c> folder.</summary>
@@ -137,7 +137,7 @@ public static class SidebarModel
             items.Add(new SidebarItem(SidebarKind.Bench, bench.Path, bench.Name, BenchPresentation.StateWord(bench), bench.State, bench.Path, bench.WebUrl, false));
             foreach (var site in bench.Sites)
             {
-                items.Add(new SidebarItem(SidebarKind.Site, bench.Path + "|" + site.Name, site.Name, site.IsDefault ? "default site" : "", bench.State, bench.Path, SiteUrl(bench, site), site.IsDefault));
+                items.Add(new SidebarItem(SidebarKind.Site, bench.Path + "|" + site.Name, site.Name, site.IsDefault ? UiText.Get("CommonDefaultSite") : "", bench.State, bench.Path, SiteUrl(bench, site), site.IsDefault));
             }
         }
         return items;
@@ -155,6 +155,6 @@ public sealed record OverviewButtons(string StartStopLabel, bool CanStartStop, b
     {
         var up = bench.State is BenchState.Running or BenchState.Starting;
         var known = bench.State != BenchState.Unknown;
-        return new OverviewButtons(up ? "Stop" : "Start", known && !busy, known && !busy && up, !string.IsNullOrWhiteSpace(bench.WebUrl));
+        return new OverviewButtons(up ? UiText.Get("CommonStop") : UiText.Get("CommonStart"), known && !busy, known && !busy && up, !string.IsNullOrWhiteSpace(bench.WebUrl));
     }
 }

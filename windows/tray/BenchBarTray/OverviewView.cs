@@ -301,7 +301,7 @@ internal sealed partial class OverviewView : UserControl
         var notReady = !ready.Ready || ready.Stale == true;
         var head = Ui.Text(ReadinessWord, 13, FontWeights.SemiBold, opacity: notReady ? 1 : 0.75);
         if (notReady) head.Foreground = Ui.CautionTextBrush;
-        Ui.Name(head, "Readiness");
+        Ui.Name(head, UiText.Get("CommonReadiness"));
         panel.Children.Add(head);
         foreach (var line in ReadinessText.Detail(bench)) panel.Children.Add(Ui.Text(line, 12, opacity: 0.8));
         if (notReady && ready.Fix is { } fix)

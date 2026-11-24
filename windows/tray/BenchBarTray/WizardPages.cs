@@ -30,18 +30,18 @@ internal sealed partial class WizardView
             return button;
         }
         panel.Children.Add(Ui.Text(BetaText.WizardLine, 13, opacity: 0.8, margin: new Thickness(0, 0, 0, 14)));
-        var first = Choice("Set Up a New Bench", "Check this PC, turn on WSL and Ubuntu if they are missing, then install Frappe.", () => _model.ChooseNewBench().Forget());
-        Choice("I Already Have a Bench", "Use a bench inside WSL that BenchBar did not create.", () => _model.ChooseExistingBench().Forget());
-        Choice("Just the Command Line Tool", "Only use benchbar from a terminal.", _model.ChooseCommandLineOnly);
+        var first = Choice(UiText.Get("WizardWelcomeNewTitle"), UiText.Get("WizardWelcomeNewDetail"), () => _model.ChooseNewBench().Forget());
+        Choice(UiText.Get("WizardWelcomeExistingTitle"), UiText.Get("WizardWelcomeExistingDetail"), () => _model.ChooseExistingBench().Forget());
+        Choice(UiText.Get("WizardCliOnlyTitle"), UiText.Get("WizardWelcomeCliDetail"), _model.ChooseCommandLineOnly);
 
         var page = new PageParts
         {
-            Title = "Welcome to BenchBar",
-            Subtitle = "Frappe development on this PC, inside Windows Subsystem for Linux.",
+            Title = UiText.Get("WizardWelcomeTitle"),
+            Subtitle = UiText.Get("WizardWelcomeSubtitle"),
             Content = panel,
             Focus = first,
         };
-        page.Left.Add(BackButton("Cancel"));
+        page.Left.Add(BackButton(UiText.Get("Cancel")));
         return page;
     }
 
@@ -50,13 +50,13 @@ internal sealed partial class WizardView
     private PageParts CliOnlyPage()
     {
         var panel = new StackPanel();
-        panel.Children.Add(Ui.Text("benchbar.exe is already on this PC. It calls the Linux command line tool inside Ubuntu. If that is missing, run this inside Ubuntu:", 14, margin: new Thickness(0, 0, 0, 10)));
-        CopyRow("Linux install line", WizardModel.LinuxCliInstallLine, _model.Copy, panel);
-        panel.Children.Add(Ui.Text("To let an AI assistant use it, run this in a terminal:", 14, margin: new Thickness(0, 10, 0, 10)));
-        CopyRow("MCP line", WizardModel.McpLine, _model.Copy, panel);
+        panel.Children.Add(Ui.Text(UiText.Get("WizardCliOnlyIntro"), 14, margin: new Thickness(0, 0, 0, 10)));
+        CopyRow(UiText.Get("WizardLinuxInstallLine"), WizardModel.LinuxCliInstallLine, _model.Copy, panel);
+        panel.Children.Add(Ui.Text(UiText.Get("WizardCliOnlyMcp"), 14, margin: new Thickness(0, 10, 0, 10)));
+        CopyRow(UiText.Get("WizardMcpLine"), WizardModel.McpLine, _model.Copy, panel);
 
-        var done = Primary("Done", _model.Finish);
-        var page = new PageParts { Title = "Just the Command Line Tool", Subtitle = "No setup wizard needed.", Content = panel, Focus = done };
+        var done = Primary(UiText.Get("WizardDone"), _model.Finish);
+        var page = new PageParts { Title = UiText.Get("WizardCliOnlyTitle"), Subtitle = UiText.Get("WizardCliOnlySubtitle"), Content = panel, Focus = done };
         page.Left.Add(BackButton());
         page.Right.Add(done);
         return page;
@@ -67,7 +67,7 @@ internal sealed partial class WizardView
     private PageParts CheckPage()
     {
         var error = Note(error: true);
-        var reportCheck = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, _model.CheckError), "Report this problem");
+        var reportCheck = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, _model.CheckError), UiText.Get("CommonReportProblemName"));
         reportCheck.Visibility = Visibility.Collapsed;
         reportCheck.Margin = new Thickness(0, 0, 0, 10);
         var status = Ui.Live(Ui.Text("", 13, opacity: 0.75, margin: new Thickness(0, 0, 0, 10)));
@@ -85,7 +85,7 @@ internal sealed partial class WizardView
             Visibility = Visibility.Collapsed,
             Margin = new Thickness(0, 8, 0, 0),
         };
-        Ui.Name(logBox, "Output of the running step");
+        Ui.Name(logBox, UiText.Get("WizardLogName"));
 
         var panel = new StackPanel();
         panel.Children.Add(error);
@@ -96,16 +96,16 @@ internal sealed partial class WizardView
         panel.Children.Add(logBox);
 
         var back = BackButton();
-        var again = Ui.Button("Check Again", () => _model.CheckAsync().Forget(), "Check this PC again");
-        var cancel = Ui.Button("Cancel", () => _model.CancelRun(), "Cancel the running step");
-        var all = Ui.Button("Set Up Everything", () => _model.FixAllAsync().Forget(), "Set up everything that is missing");
-        var next = Primary("Continue", () => _model.ContinueFromCheckAsync().Forget());
+        var again = Ui.Button(UiText.Get("WizardCheckAgain"), () => _model.CheckAsync().Forget(), UiText.Get("WizardCheckAgainName"));
+        var cancel = Ui.Button(UiText.Get("Cancel"), () => _model.CancelRun(), UiText.Get("WizardCancelStepName"));
+        var all = Ui.Button(UiText.Get("WizardSetUpAll"), () => _model.FixAllAsync().Forget(), UiText.Get("WizardSetUpAllName"));
+        var next = Primary(UiText.Get("WizardContinue"), () => _model.ContinueFromCheckAsync().Forget());
 
         string lastKey = "";
         var parts = new PageParts
         {
-            Title = "Check Your PC",
-            Subtitle = "BenchBar needs WSL and Ubuntu 24.04. Each row says what is missing and how to fix it.",
+            Title = UiText.Get("WizardCheckTitle"),
+            Subtitle = UiText.Get("WizardCheckSubtitle"),
             Content = panel,
         };
         parts.Left.Add(back);
@@ -118,7 +118,7 @@ internal sealed partial class WizardView
             cancel.Visibility = _model.BusyStepId is not null ? Visibility.Visible : Visibility.Collapsed;
             Show(error, _model.CheckError);
             reportCheck.Visibility = _model.CheckError is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
-            status.Text = _model.Checking ? "Checking this PC..." : _model.FixingAll ? "Setting things up..." : "";
+            status.Text = _model.Checking ? UiText.Get("WizardChecking") : _model.FixingAll ? UiText.Get("WizardSettingUp") : "";
             status.Visibility = status.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
             var busy = _model.Checking || _model.BusyStepId is not null || _model.FixingAll;
             again.IsEnabled = !busy;
@@ -169,9 +169,9 @@ internal sealed partial class WizardView
         text.Children.Add(Ui.Text(row.Step.Title, 14, FontWeights.SemiBold));
         if (row.Detail.Length > 0) text.Children.Add(Ui.Text(row.Detail, 13, opacity: 0.8, margin: new Thickness(0, 2, 0, 0)));
         if (!row.Step.Blocking && row.Step.Status == SetupStatus.Warn && !row.Step.Waits)
-            text.Children.Add(Ui.Text("Advice only. You can continue without it.", 12, opacity: 0.7, margin: new Thickness(0, 2, 0, 0)));
+            text.Children.Add(Ui.Text(UiText.Get("WizardAdviceOnly"), 12, opacity: 0.7, margin: new Thickness(0, 2, 0, 0)));
         if (row.Busy)
-            text.Children.Add(Ui.Text(row.Message is { Length: > 0 } running ? running : "Working...", 13, opacity: 0.8, margin: new Thickness(0, 2, 0, 0)));
+            text.Children.Add(Ui.Text(row.Message is { Length: > 0 } running ? running : UiText.Get("CommonWorking"), 13, opacity: 0.8, margin: new Thickness(0, 2, 0, 0)));
         else if (row.Message is { Length: > 0 } message)
         {
             var line = Ui.Text(message, 13, margin: new Thickness(0, 2, 0, 0));
@@ -192,7 +192,7 @@ internal sealed partial class WizardView
         grid.Children.Add(text);
         if (row.ButtonLabel is { } label)
         {
-            var button = Ui.Button(label, () => OnRowClicked(row), $"{label}: {row.Step.Title}", minWidth: 96);
+            var button = Ui.Button(label, () => OnRowClicked(row), UiText.Format("WizardRowButtonName", label, row.Step.Title), minWidth: 96);
             button.Margin = new Thickness(12, 0, 0, 0);
             button.VerticalAlignment = VerticalAlignment.Top;
             button.IsEnabled = !anythingBusy && !row.Waiting;
@@ -219,20 +219,20 @@ internal sealed partial class WizardView
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
         if (step.NeedsManualFix || step.HasAdviceCommand)
         {
-            var copy = Ui.Button("Copy", () => _model.Copy(step.CopyText), "Copy the fix: " + step.Title, minWidth: 64);
+            var copy = Ui.Button(UiText.Get("Copy"), () => _model.Copy(step.CopyText), UiText.Format("WizardCopyFixName", step.Title), minWidth: 64);
             buttons.Children.Add(copy);
         }
         if (step.NeedsManualFix)
         {
-            var how = Ui.Link("How to fix", () => _model.OpenUrl(BetaText.HowToFixUrl), "How to fix: " + step.Title);
+            var how = Ui.Link(UiText.Get("WizardHowToFix"), () => _model.OpenUrl(BetaText.HowToFixUrl), UiText.Format("WizardHowToFixName", step.Title));
             how.VerticalAlignment = VerticalAlignment.Center;
             buttons.Children.Add(how);
         }
         // the person's own Stop is not a problem to report
-        var userStop = row.Message is WizardModel.StoppedMessage or WizardModel.CancelledMessage or WizardModel.StoppedWaitingMessage;
+        var userStop = row.Message == WizardModel.StoppedMessage || row.Message == WizardModel.CancelledMessage || row.Message == WizardModel.StoppedWaitingMessage;
         if (step.NeedsManualFix || (row.Message is { Length: > 0 } && step.Status != SetupStatus.Ok && !userStop))
         {
-            var report = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, ReportContext.Step(step, row.Message)), "Report this problem: " + step.Title);
+            var report = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, ReportContext.Step(step, row.Message)), UiText.Format("WizardReportProblemStepName", step.Title));
             report.VerticalAlignment = VerticalAlignment.Center;
             buttons.Children.Add(report);
         }
@@ -252,8 +252,8 @@ internal sealed partial class WizardView
     private UIElement RestartCard()
     {
         var panel = new StackPanel();
-        panel.Children.Add(Ui.Text("Windows needs to restart", 14, FontWeights.SemiBold));
-        panel.Children.Add(Ui.Text(_model.RestartRequested ? "Restarting..." : WizardModel.RestartBlurb, 13, opacity: 0.8, margin: new Thickness(0, 2, 0, 8)));
+        panel.Children.Add(Ui.Text(UiText.Get("WizardRestartTitle"), 14, FontWeights.SemiBold));
+        panel.Children.Add(Ui.Text(_model.RestartRequested ? UiText.Get("WizardRestarting") : WizardModel.RestartBlurb, 13, opacity: 0.8, margin: new Thickness(0, 2, 0, 8)));
         if (_model.StepMessages.TryGetValue(SetupIds.Reboot, out var refused))
         {
             var warn = Ui.Text(refused, 13, margin: new Thickness(0, 0, 0, 8));
@@ -261,7 +261,7 @@ internal sealed partial class WizardView
             panel.Children.Add(warn);
         }
         if (_model.RestartHint is { Length: > 0 } hint) panel.Children.Add(Ui.Live(Ui.Text(hint, 13, margin: new Thickness(0, 0, 0, 8))));
-        var button = Ui.Button("Restart Now", () => { if (_actions.ConfirmRestart()) _model.RestartNow(); }, "Restart Windows now", primary: true);
+        var button = Ui.Button(UiText.Get("WizardRestartNow"), () => { if (_actions.ConfirmRestart()) _model.RestartNow(); }, UiText.Get("WizardRestartNowName"), primary: true);
         button.IsEnabled = !_model.RestartRequested;
         panel.Children.Add(button);
         return Ui.CardOf(panel);
@@ -271,9 +271,9 @@ internal sealed partial class WizardView
 
     private PageParts LinuxUserPage()
     {
-        var name = Ui.Field("Linux user name", _model.UserName, _model.SetUserName, 280);
-        var pass = Ui.Password("Linux password", s => SetSecret(_model.SetPassword, s), 280);
-        var confirm = Ui.Password("Confirm Linux password", s => SetSecret(_model.SetConfirm, s), 280);
+        var name = Ui.Field(UiText.Get("WizardLinuxUserName"), _model.UserName, _model.SetUserName, 280);
+        var pass = Ui.Password(UiText.Get("WizardLinuxPassword"), s => SetSecret(_model.SetPassword, s), 280);
+        var confirm = Ui.Password(UiText.Get("WizardConfirmLinuxPassword"), s => SetSecret(_model.SetConfirm, s), 280);
         var nameProblem = Note(error: true);
         var passProblem = Note(error: true);
         var passAdvice = Note(); // the 8 character minimum is advice here: the user may already exist with a shorter password
@@ -282,10 +282,10 @@ internal sealed partial class WizardView
         var userHint = Note(); // says what Create User is waiting for
 
         var panel = new StackPanel();
-        panel.Children.Add(Ui.Labeled("User name", name, "Lowercase letters, digits, '-' and '_'."));
+        panel.Children.Add(Ui.Labeled(UiText.Get("WizardUserNameLabel"), name, UiText.Get("WizardUserNameHelp")));
         panel.Children.Add(nameProblem);
-        panel.Children.Add(Ui.Labeled("Password", pass, "This is what sudo asks for later. BenchBar keeps it in memory while this window is open and never saves it."));
-        panel.Children.Add(Ui.Labeled("Confirm password", confirm));
+        panel.Children.Add(Ui.Labeled(UiText.Get("WizardPasswordLabel"), pass, UiText.Get("WizardPasswordHelp")));
+        panel.Children.Add(Ui.Labeled(UiText.Get("WizardConfirmPasswordLabel"), confirm));
         panel.Children.Add(passProblem);
         panel.Children.Add(passAdvice);
         panel.Children.Add(error);
@@ -293,14 +293,14 @@ internal sealed partial class WizardView
         panel.Children.Add(working);
 
         var back = BackButton(escapes: false); // two password boxes: Esc must not throw them away
-        var create = Primary("Create User", () => _model.CreateUserAsync().Forget());
-        var reportUser = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, _model.UserError), "Report this problem");
+        var create = Primary(UiText.Get("WizardCreateUser"), () => _model.CreateUserAsync().Forget());
+        var reportUser = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, _model.UserError), UiText.Get("CommonReportProblemName"));
         reportUser.Visibility = Visibility.Collapsed;
         panel.Children.Add(reportUser);
         var page = new PageParts
         {
-            Title = "Create Your Linux User",
-            Subtitle = "Ubuntu has no user yet. BenchBar creates one and adds it to the sudo group.",
+            Title = UiText.Get("WizardLinuxUserTitle"),
+            Subtitle = UiText.Get("WizardLinuxUserSubtitle"),
             Content = panel,
             Focus = name,
         };
@@ -314,9 +314,9 @@ internal sealed partial class WizardView
             Show(passAdvice, _model.PasswordAdvice);
             Show(error, _model.UserError);
             reportUser.Visibility = _model.UserError is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
-            working.Text = _model.CreatingUser ? "Creating the user..." : "";
+            working.Text = _model.CreatingUser ? UiText.Get("WizardCreatingUser") : "";
             create.IsEnabled = _model.CanCreateUser;
-            Show(userHint, _model.CanCreateUser || _model.CreatingUser ? null : "Create User is off. " + (_model.UserNameProblem ?? _model.PasswordProblem));
+            Show(userHint, _model.CanCreateUser || _model.CreatingUser ? null : UiText.Format("WizardCreateUserOff", _model.UserNameProblem ?? _model.PasswordProblem ?? ""));
             back.IsEnabled = !_model.CreatingUser;
             name.IsEnabled = pass.IsEnabled = confirm.IsEnabled = !_model.CreatingUser;
         };
@@ -327,15 +327,15 @@ internal sealed partial class WizardView
 
     private PageParts ExistingBenchPage()
     {
-        var path = Ui.Field("Bench folder", _model.ExistingPath, _model.SetExistingPath, 480);
+        var path = Ui.Field(UiText.Get("WizardBenchFolder"), _model.ExistingPath, _model.SetExistingPath, 480);
         var problem = Note(error: true);
         var panel = new StackPanel();
-        panel.Children.Add(Ui.Labeled("Bench folder in Ubuntu", path, "BenchBar adds its service files and does not change your sites, apps or database."));
+        panel.Children.Add(Ui.Labeled(UiText.Get("WizardBenchFolderInUbuntu"), path, UiText.Get("WizardExistingHelp")));
         panel.Children.Add(problem);
 
         var back = BackButton();
-        var adopt = Primary("Use This Bench", () => _model.StartAdoptAsync().Forget());
-        var page = new PageParts { Title = "Use an Existing Bench", Subtitle = "Point BenchBar at a bench that already exists in WSL.", Content = panel, Focus = path };
+        var adopt = Primary(UiText.Get("WizardUseThisBench"), () => _model.StartAdoptAsync().Forget());
+        var page = new PageParts { Title = UiText.Get("WizardExistingTitle"), Subtitle = UiText.Get("WizardExistingSubtitle"), Content = panel, Focus = path };
         page.Left.Add(back);
         page.Right.Add(adopt);
         page.Refresh = () =>
@@ -350,42 +350,42 @@ internal sealed partial class WizardView
 
     private PageParts NewBenchPage()
     {
-        var folder = Ui.Field("Bench folder", _model.Folder, _model.SetFolder, 480);
-        var site = Ui.Field("Site name", _model.Site, _model.SetSite, 320);
+        var folder = Ui.Field(UiText.Get("WizardBenchFolder"), _model.Folder, _model.SetFolder, 480);
+        var site = Ui.Field(UiText.Get("WizardSiteName"), _model.Site, _model.SetSite, 320);
         var bundle = new ComboBox { Width = 200, HorizontalAlignment = HorizontalAlignment.Left, ItemsSource = WizardModel.Bundles, SelectedItem = _model.Bundle };
         bundle.SelectionChanged += (_, _) => { if (bundle.SelectedItem is string b) _model.SetBundle(b); };
-        Ui.Name(bundle, "App bundle");
+        Ui.Name(bundle, UiText.Get("WizardAppBundleName"));
         var profile = new ComboBox { Width = 420, HorizontalAlignment = HorizontalAlignment.Left };
-        Ui.Name(profile, "Profile");
+        Ui.Name(profile, UiText.Get("WizardProfile"));
         var profileNote = Note(); // what the chosen profile brings, or why one is off
-        var profileTry = Ui.Link("Try Again", () => _model.LoadProfilesAsync(force: true).Forget(), "Read the profiles again");
+        var profileTry = Ui.Link(UiText.Get("WizardTryAgain"), () => _model.LoadProfilesAsync(force: true).Forget(), UiText.Get("WizardTryAgainName"));
         profileTry.Visibility = Visibility.Collapsed;
         var syncingProfile = false;
         profile.SelectionChanged += (_, _) =>
         {
             if (!syncingProfile && profile.SelectedItem is ComboBoxItem { Tag: string name }) _model.SetProfile(name);
         };
-        var admin = Ui.Password("Administrator password", s => SetSecret(_model.SetAdminPassword, s), 320);
+        var admin = Ui.Password(UiText.Get("WizardAdminPassword"), s => SetSecret(_model.SetAdminPassword, s), 320);
         var problem = Note(error: true);
         var formHint = Note(); // says what Review is waiting for
         var prerequisites = new StackPanel(); // the warnings and failures of doctor --prerequisites
         var prerequisitesKey = "";
 
         var panel = new StackPanel();
-        panel.Children.Add(Ui.Labeled("Bench folder", folder, "Inside Ubuntu. The default is in your Linux home folder."));
-        panel.Children.Add(Ui.Labeled("Site name", site, "The site's address uses it, for example http://" + WizardModel.DefaultSite + ":8000. A name ending in .localhost needs no hosts line: browsers such as Edge and Chrome open it by themselves. PowerShell and ping do not resolve it."));
-        panel.Children.Add(Ui.Labeled("Profile", profile, "The Frappe version and its tools. v16-lts and the team profiles you added appear here when this Ubuntu can install them."));
+        panel.Children.Add(Ui.Labeled(UiText.Get("WizardBenchFolder"), folder, UiText.Get("WizardFolderHelp")));
+        panel.Children.Add(Ui.Labeled(UiText.Get("WizardSiteName"), site, UiText.Format("WizardSiteHelp", WizardModel.DefaultSite)));
+        panel.Children.Add(Ui.Labeled(UiText.Get("WizardProfile"), profile, UiText.Get("WizardProfileHelp")));
         panel.Children.Add(profileNote);
         panel.Children.Add(profileTry);
-        panel.Children.Add(Ui.Labeled("Apps", bundle, "minimal is Frappe only; common and extended add more apps."));
-        panel.Children.Add(Ui.Labeled("Administrator password", admin, "The login of the new site. It is used for this install only and never saved."));
+        panel.Children.Add(Ui.Labeled(UiText.Get("WizardApps"), bundle, UiText.Get("WizardAppsHelp")));
+        panel.Children.Add(Ui.Labeled(UiText.Get("WizardAdminPassword"), admin, UiText.Get("WizardAdminPasswordHelp")));
         panel.Children.Add(prerequisites);
         panel.Children.Add(problem);
         panel.Children.Add(formHint);
 
         var back = BackButton(escapes: false); // the Administrator password is typed here
-        var review = Primary("Review", () => _model.ReviewAsync().Forget());
-        var page = new PageParts { Title = "New Bench", Subtitle = "Where the bench goes and how its first site is named.", Content = panel, Focus = folder };
+        var review = Primary(UiText.Get("WizardReview"), () => _model.ReviewAsync().Forget());
+        var page = new PageParts { Title = UiText.Get("WizardNewBenchTitle"), Subtitle = UiText.Get("WizardNewBenchSubtitle"), Content = panel, Focus = folder };
         page.Left.Add(back);
         page.Right.Add(review);
         page.Refresh = () =>
@@ -393,7 +393,7 @@ internal sealed partial class WizardView
             // a typed form shows its problem in red; an empty password only says what Review is waiting for
             var typed = !_model.AdminPassword.IsEmpty;
             Show(problem, _model.FormProblem is { } p && typed ? p : null);
-            Show(formHint, _model.FormProblem is { } waiting && !typed ? "Review is off. " + waiting : null);
+            Show(formHint, _model.FormProblem is { } waiting && !typed ? UiText.Format("WizardReviewOff", waiting) : null);
             review.IsEnabled = _model.FormProblem is null;
             RefreshProfiles(profile, profileNote, profileTry, ref syncingProfile);
             var found = _model.Prerequisites?.NeedsAttention ?? [];
@@ -414,12 +414,12 @@ internal sealed partial class WizardView
     {
         var fail = check.Level == CheckLevel.Fail;
         var row = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
-        var text = Ui.Text($"{(fail ? "Needs attention" : "Note")}: {check.Label}. {check.Message}", 13);
+        var text = Ui.Text(fail ? UiText.Format("WizardNeedsAttention", check.Label, check.Message) : UiText.Format("WizardNote", check.Label, check.Message), 13);
         if (fail) text.Foreground = Ui.CriticalBrush;
         row.Children.Add(text);
         if (check.FixCommand is { Length: > 0 } fix)
         {
-            var copy = Ui.Button("Copy fix", () => _model.Copy(fix), "Copy the fix for " + check.Label, minWidth: 0);
+            var copy = Ui.Button(UiText.Get("WizardCopyFix"), () => _model.Copy(fix), UiText.Format("WizardCopyFixForName", check.Label), minWidth: 0);
             copy.Padding = new Thickness(8, 2, 8, 2);
             copy.HorizontalAlignment = HorizontalAlignment.Left;
             copy.Margin = new Thickness(0, 4, 0, 0);
@@ -449,11 +449,11 @@ internal sealed partial class WizardView
             syncing = false;
         }
         var lines = new List<string>();
-        if (_model.ProfilesLoading) lines.Add("Reading the profiles...");
-        else if (_model.ProfilesChecking) lines.Add("Asking BenchBar which profiles this Ubuntu can install...");
-        if (_model.ProfilesError is { } error) lines.Add("The profile list could not be read, so v15-lts is the only choice. " + error);
+        if (_model.ProfilesLoading) lines.Add(UiText.Get("WizardReadingProfiles"));
+        else if (_model.ProfilesChecking) lines.Add(UiText.Get("WizardAskingProfiles"));
+        if (_model.ProfilesError is { } error) lines.Add(UiText.Format("WizardProfilesError", error));
         if (_model.SelectedProfile is { Versions: { } versions }) lines.Add(versions);
-        foreach (var refused in _model.ProfileChoiceList.Where(c => !c.Enabled)) lines.Add(refused.Name + ": " + refused.Refusal);
+        foreach (var refused in _model.ProfileChoiceList.Where(c => !c.Enabled)) lines.Add(UiText.Format("WizardProfileRefused", refused.Name, refused.Refusal ?? ""));
         Show(note, lines.Count == 0 ? null : string.Join(Environment.NewLine, lines));
         tryAgain.Visibility = _model.ProfilesError is not null && !_model.ProfilesLoading ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -462,9 +462,9 @@ internal sealed partial class WizardView
 
     private PageParts ReviewPage()
     {
-        var working = Ui.Text("Reading the plan...", 14, opacity: 0.75);
+        var working = Ui.Text(UiText.Get("CommonReadingPlan"), 14, opacity: 0.75);
         var error = Note(error: true);
-        var reportPlan = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, _model.PlanError), "Report this problem");
+        var reportPlan = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, _model.PlanError), UiText.Get("CommonReportProblemName"));
         reportPlan.Visibility = Visibility.Collapsed;
         reportPlan.Margin = new Thickness(0, 0, 0, 10);
         var plan = new StackPanel();
@@ -479,8 +479,8 @@ internal sealed partial class WizardView
         var back = BackButton();
         var stale = Note(error: true);
         panel.Children.Insert(1, stale);
-        var install = Primary("Install", () => (_model.CanReviewAgain ? _model.ReviewAgainAsync() : _model.StartInstallAsync()).Forget());
-        var page = new PageParts { Title = "Review", Subtitle = "Nothing has changed yet. This is what Install will do.", Content = panel, Focus = install };
+        var install = Primary(UiText.Get("WizardInstall"), () => (_model.CanReviewAgain ? _model.ReviewAgainAsync() : _model.StartInstallAsync()).Forget());
+        var page = new PageParts { Title = UiText.Get("WizardReview"), Subtitle = UiText.Get("WizardReviewSubtitle"), Content = panel, Focus = install };
         page.Left.Add(back);
         page.Right.Add(install);
         string lastKey = "";
@@ -500,8 +500,8 @@ internal sealed partial class WizardView
             }
             reportPlan.Visibility = _model.PlanError is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
             // the CLI refused the reviewed plan's token before any step: say so, and Install becomes Review Again
-            Show(stale, _model.StaleMessage is null ? null : "The plan is out of date: something changed since you reviewed it. Nothing was changed. Review it again before you install.");
-            install.Content = _model.CanReviewAgain ? "Review Again" : "Install";
+            Show(stale, _model.StaleMessage is null ? null : UiText.Get("WizardStale"));
+            install.Content = _model.CanReviewAgain ? UiText.Get("WizardReviewAgain") : UiText.Get("WizardInstall");
             install.IsEnabled = _model.CanInstall || _model.CanReviewAgain;
             var key = _model.Plan is null ? "-" : string.Join('|', _model.Plan.Steps.Select(s => s.Id + s.WillRun)) + _model.Plan.Site;
             if (key == lastKey) return;
@@ -509,27 +509,27 @@ internal sealed partial class WizardView
             plan.Children.Clear();
             if (_model.Plan is not { } p) return;
             var summary = new StackPanel();
-            summary.Children.Add(Summary("Bench folder", p.Bench));
-            summary.Children.Add(Summary("Site", p.Site));
-            if (p.WebUrl is not null) summary.Children.Add(Summary("Address", p.WebUrl));
-            summary.Children.Add(Summary("Profile", p.Profile ?? _model.Profile));
-            summary.Children.Add(Summary("Apps", p.Bundle ?? _model.Bundle));
+            summary.Children.Add(Summary(UiText.Get("WizardBenchFolder"), p.Bench));
+            summary.Children.Add(Summary(UiText.Get("WizardSite"), p.Site));
+            if (p.WebUrl is not null) summary.Children.Add(Summary(UiText.Get("WizardAddress"), p.WebUrl));
+            summary.Children.Add(Summary(UiText.Get("WizardProfile"), p.Profile ?? _model.Profile));
+            summary.Children.Add(Summary(UiText.Get("WizardApps"), p.Bundle ?? _model.Bundle));
             plan.Children.Add(Ui.CardOf(summary));
-            plan.Children.Add(Ui.Text("The install takes about 15 to 30 minutes, most of it downloads.", 13, opacity: 0.8, margin: new Thickness(0, 0, 0, 8)));
+            plan.Children.Add(Ui.Text(UiText.Get("WizardInstallTakes"), 13, opacity: 0.8, margin: new Thickness(0, 0, 0, 8)));
 
             var steps = new StackPanel();
             foreach (var step in p.Steps)
             {
                 var line = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
                 line.Children.Add(Ui.Text(step.Name, 14, opacity: step.WillRun ? 1 : 0.5));
-                if (step.Sudo && step.WillRun) line.Children.Add(Ui.Text("  asks for your Linux password", 12, opacity: 0.7));
-                if (!step.WillRun) line.Children.Add(Ui.Text("  already done", 12, opacity: 0.7));
+                if (step.Sudo && step.WillRun) line.Children.Add(Ui.Text(UiText.Get("WizardAsksPassword"), 12, opacity: 0.7));
+                if (!step.WillRun) line.Children.Add(Ui.Text(UiText.Get("WizardAlreadyDone"), 12, opacity: 0.7));
                 steps.Children.Add(line);
             }
             plan.Children.Add(Ui.CardOf(steps));
             var sudo = p.PrivilegedSteps.Count;
             if (sudo > 0 && _model.LinuxPassword.IsEmpty)
-                plan.Children.Add(Ui.Text($"BenchBar will ask for your Linux password for {sudo} {(sudo == 1 ? "step" : "steps")} that use sudo.", 13, opacity: 0.8));
+                plan.Children.Add(Ui.Text(sudo == 1 ? UiText.Format("WizardPasswordForStepOne", sudo) : UiText.Format("WizardPasswordForStepMany", sudo), 13, opacity: 0.8));
         };
         return page;
     }
@@ -559,13 +559,13 @@ internal sealed partial class WizardView
             n++;
             var card = new StackPanel();
             card.Children.Add(Ui.Text(blocker.Message, 14, FontWeights.SemiBold));
-            AddFix(card, blocker.Fix, blocker.FixIsCommand, "the fix for problem " + n);
+            AddFix(card, blocker.Fix, blocker.FixIsCommand, UiText.Format("WizardFixForProblem", n));
             into.Children.Add(Ui.CardOf(card, new Thickness(0, 0, 0, 8)));
         }
         if (_model.PlanBlockers.Count == 0 && _model.PlanFix is { Length: > 0 } fix)
         {
             var card = new StackPanel();
-            AddFix(card, fix, _model.PlanFixIsCommand, "the fix");
+            AddFix(card, fix, _model.PlanFixIsCommand, UiText.Get("WizardFix"));
             into.Children.Add(Ui.CardOf(card, new Thickness(0, 0, 0, 8)));
         }
     }
@@ -584,8 +584,8 @@ internal sealed partial class WizardView
         var rows = new StackPanel();
         var progress = Ui.Live(Ui.Text("", 13, opacity: 0.75, margin: new Thickness(0, 8, 0, 0)));
         var failure = new StackPanel { Visibility = Visibility.Collapsed };
-        var root = Ui.Password("MariaDB root password", s => SetSecret(_model.SetRootPassword, s), 320);
-        var rootPanel = Ui.Labeled("MariaDB root password", root, "MariaDB in Ubuntu already has a root password that BenchBar does not know. Enter it and retry.");
+        var root = Ui.Password(UiText.Get("WizardRootPassword"), s => SetSecret(_model.SetRootPassword, s), 320);
+        var rootPanel = Ui.Labeled(UiText.Get("WizardRootPassword"), root, UiText.Get("WizardRootPasswordHelp"));
         rootPanel.Visibility = Visibility.Collapsed;
 
         // the install takes 20 to 30 minutes and its timeouts keep counting while the PC sleeps: the app holds the PC awake, and says what the person can do
@@ -598,14 +598,14 @@ internal sealed partial class WizardView
         panel.Children.Add(rootPanel);
 
         var back = BackButton(escapes: false); // the MariaDB root password box can be on this page
-        var log = Ui.Button("Open Log", () => { if (_model.LogPath is { } path) _actions.OpenLog(path); }, "Open the install log");
-        var stop = Ui.Button("Stop", _model.Stop, "Stop the install");
-        var retry = Primary("Retry", () => _model.RetryAsync().Forget());
+        var log = Ui.Button(UiText.Get("WizardOpenLog"), () => { if (_model.LogPath is { } path) _actions.OpenLog(path); }, UiText.Get("WizardOpenLogName"));
+        var stop = Ui.Button(UiText.Get("CommonStop"), _model.Stop, UiText.Get("WizardStopName"));
+        var retry = Primary(UiText.Get("WizardRetry"), () => _model.RetryAsync().Forget());
         string lastKey = "";
         var parts = new PageParts
         {
-            Title = "Installing",
-            Subtitle = "This takes a while the first time. You can leave this window open and do something else.",
+            Title = UiText.Get("WizardInstalling"),
+            Subtitle = UiText.Get("WizardInstallingSubtitle"),
             Content = panel,
             Focus = stop,
         };
@@ -623,10 +623,10 @@ internal sealed partial class WizardView
             stop.IsEnabled = running && !_model.StopRequested;
             stop.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
             retry.Visibility = _model.Phase is InstallPhase.Failed or InstallPhase.Stopped or InstallPhase.NeedsRootPassword or InstallPhase.NeedsLinuxPassword ? Visibility.Visible : Visibility.Collapsed;
-            retry.Content = _model.Phase == InstallPhase.Stopped ? "Run Again" : "Retry";
+            retry.Content = _model.Phase == InstallPhase.Stopped ? UiText.Get("WizardRunAgain") : UiText.Get("WizardRetry");
             retry.IsEnabled = _model.Phase != InstallPhase.NeedsRootPassword || !_model.RootPassword.IsEmpty;
             log.IsEnabled = _model.LogPath is not null;
-            progress.Text = _model.StopRequested && running ? "Stopping..." : _model.ProgressLabel;
+            progress.Text = _model.StopRequested && running ? UiText.Get("WizardStopping") : _model.ProgressLabel;
             progress.Visibility = progress.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
             rootPanel.Visibility = _model.Phase == InstallPhase.NeedsRootPassword ? Visibility.Visible : Visibility.Collapsed;
 
@@ -652,7 +652,7 @@ internal sealed partial class WizardView
             }
             else if (_model.Phase == InstallPhase.Stopped)
             {
-                failure.Children.Add(Ui.CardOf(Ui.Text("The install was stopped. Run Again continues where it can; finished steps are not repeated.", 14)));
+                failure.Children.Add(Ui.CardOf(Ui.Text(UiText.Get("WizardStoppedCard"), 14)));
                 failure.Visibility = Visibility.Visible;
             }
             Ui.RestoreFocus(panel, focusedRow);
@@ -662,12 +662,12 @@ internal sealed partial class WizardView
 
     private static (string Title, string Subtitle) InstallHeading(InstallPhase phase) => phase switch
     {
-        InstallPhase.Failed => ("Install Failed", "A step did not finish. Retry it, tell us with Report This Problem, or open the log."),
-        InstallPhase.Stopped => ("Install Stopped", "Run Again continues where it can. Finished steps are not repeated."),
-        InstallPhase.WaitingForPreviousRun => ("Waiting for the Previous Run", "A run that was stopped is still ending inside Ubuntu. BenchBar tries again by itself."),
-        InstallPhase.NeedsLinuxPassword => ("Wrong Linux Password", "Linux did not accept the password. Type it again and press Retry."),
-        InstallPhase.NeedsRootPassword => ("MariaDB Needs Its Password", "MariaDB in Ubuntu already has a root password. Enter it and press Retry."),
-        _ => ("Installing", "This takes a while the first time. You can leave this window open and do something else."),
+        InstallPhase.Failed => (UiText.Get("WizardFailedTitle"), UiText.Get("WizardFailedSubtitle")),
+        InstallPhase.Stopped => (UiText.Get("WizardStoppedTitle"), UiText.Get("WizardStoppedSubtitle")),
+        InstallPhase.WaitingForPreviousRun => (UiText.Get("WizardWaitingTitle"), UiText.Get("WizardWaitingSubtitle")),
+        InstallPhase.NeedsLinuxPassword => (UiText.Get("WizardWrongPasswordTitle"), UiText.Get("WizardWrongPasswordSubtitle")),
+        InstallPhase.NeedsRootPassword => (UiText.Get("WizardNeedsRootTitle"), UiText.Get("WizardNeedsRootSubtitle")),
+        _ => (UiText.Get("WizardInstalling"), UiText.Get("WizardInstallingSubtitle")),
     };
 
     private UIElement InstallRowView(InstallRow row)
@@ -689,13 +689,13 @@ internal sealed partial class WizardView
         grid.Children.Add(name);
         if (row.Status == InstallStepStatus.Running)
         {
-            var spin = Ui.Text("working", 12, opacity: 0.7);
+            var spin = Ui.Text(UiText.Get("WizardRowWorking"), 12, opacity: 0.7);
             Grid.SetColumn(spin, 2);
             grid.Children.Add(spin);
         }
         else if (row.Secs is { } secs && row.Status != InstallStepStatus.Unknown)
         {
-            var time = Ui.Text(secs + " s", 12, opacity: 0.7);
+            var time = Ui.Text(UiText.Format("WizardSeconds", secs), 12, opacity: 0.7);
             Grid.SetColumn(time, 2);
             grid.Children.Add(time);
         }
@@ -711,39 +711,39 @@ internal sealed partial class WizardView
 
     private static string StatusWord(InstallStepStatus status) => status switch
     {
-        InstallStepStatus.Done => "Done",
-        InstallStepStatus.Unchanged => "Already done",
-        InstallStepStatus.Running => "Running",
-        InstallStepStatus.Failed => "Failed",
-        InstallStepStatus.Skipped => "Skipped",
-        InstallStepStatus.Warning => "Warning",
-        InstallStepStatus.Stopped => "Stopped",
-        _ => "Waiting",
+        InstallStepStatus.Done => UiText.Get("WizardDone"),
+        InstallStepStatus.Unchanged => UiText.Get("WizardStatusUnchanged"),
+        InstallStepStatus.Running => UiText.Get("WizardStatusRunning"),
+        InstallStepStatus.Failed => UiText.Get("WizardStatusFailed"),
+        InstallStepStatus.Skipped => UiText.Get("WizardStatusSkipped"),
+        InstallStepStatus.Warning => UiText.Get("WizardStatusWarning"),
+        InstallStepStatus.Stopped => UiText.Get("WizardStatusStopped"),
+        _ => UiText.Get("WizardStatusWaiting"),
     };
 
     private UIElement FailureCard(WizardFailure f)
     {
         var panel = new StackPanel();
-        panel.Children.Add(Ui.Text(f.Step is null ? "The install did not finish" : $"{f.Step} failed", 14, FontWeights.SemiBold));
+        panel.Children.Add(Ui.Text(f.Step is null ? UiText.Get("WizardInstallNotFinished") : UiText.Format("WizardStepFailed", f.Step), 14, FontWeights.SemiBold));
         panel.Children.Add(Ui.Text(f.Message, 13, margin: new Thickness(0, 4, 0, 0)));
-        panel.Children.Add(ReportProblemLink(f.Step is null ? f.Message : $"{f.Step} failed: {f.Message}"));
-        var todo = Ui.Text("What to do:", 13, FontWeights.SemiBold, margin: new Thickness(0, 8, 0, 2));
+        panel.Children.Add(ReportProblemLink(f.Step is null ? f.Message : UiText.Format("WizardStepFailedMessage", f.Step, f.Message)));
+        var todo = Ui.Text(UiText.Get("WizardWhatToDo"), 13, FontWeights.SemiBold, margin: new Thickness(0, 8, 0, 2));
         if (_model.Phase == InstallPhase.NeedsLinuxPassword)
         {
             panel.Children.Add(todo);
-            panel.Children.Add(Ui.Text("The Linux password is the one you chose for your Linux user. Type it again.", 13));
+            panel.Children.Add(Ui.Text(UiText.Get("WizardLinuxPasswordAgain"), 13));
         }
         else if (f.Fix is { Length: > 0 } fix)
         {
             panel.Children.Add(todo);
             // a command can be copied; a sentence ("Pass MARIADB_ROOT_PASSWORD.") is only read
-            if (f.FixIsCommand) CopyRow("Fix", fix, _model.Copy, panel);
+            if (f.FixIsCommand) CopyRow(UiText.Get("WizardFixName"), fix, _model.Copy, panel);
             else panel.Children.Add(Ui.Text(fix, 13));
         }
         else if (_model.Phase == InstallPhase.Failed)
         {
             panel.Children.Add(todo);
-            panel.Children.Add(Ui.Text("Press Retry to run the install again; finished steps are not repeated. If it fails again, press Report This Problem or Open Log.", 13));
+            panel.Children.Add(Ui.Text(UiText.Get("WizardRetryAdvice"), 13));
         }
         return Ui.CardOf(panel);
     }
@@ -754,14 +754,14 @@ internal sealed partial class WizardView
     {
         var panel = new StackPanel();
         var address = new StackPanel();
-        address.Children.Add(Ui.Text("Your bench is running at", 13, opacity: 0.75));
+        address.Children.Add(Ui.Text(UiText.Get("WizardRunningAt"), 13, opacity: 0.75));
         address.Children.Add(Ui.Text(_model.SiteUrl ?? _model.Site, 18, FontWeights.SemiBold, margin: new Thickness(0, 2, 0, 0)));
         panel.Children.Add(Ui.CardOf(address));
 
-        var notify = new CheckBox { Content = "Show a notification when a bench stops or crashes", IsChecked = _model.Notifications, Margin = new Thickness(0, 8, 0, 6) };
+        var notify = new CheckBox { Content = UiText.Get("WizardNotify"), IsChecked = _model.Notifications, Margin = new Thickness(0, 8, 0, 6) };
         notify.Click += (_, _) => _model.Notifications = notify.IsChecked == true;
-        Ui.Name(notify, "Show notifications");
-        var logon = new CheckBox { Content = "Open BenchBar when I sign in to Windows", IsChecked = _model.OpenAtLogon, Margin = new Thickness(0, 0, 0, 12) };
+        Ui.Name(notify, UiText.Get("WizardNotifyName"));
+        var logon = new CheckBox { Content = UiText.Get("WizardLogon"), IsChecked = _model.OpenAtLogon, Margin = new Thickness(0, 0, 0, 12) };
         // Checked/Unchecked (UI Automation's Toggle raises no Click); the box shows what Windows reports, never the click's guess.
         var syncingLogon = false;
         void ShowLogon()
@@ -781,23 +781,23 @@ internal sealed partial class WizardView
         logon.Unchecked += (_, _) => LogonToggled();
         _model.Changed += ShowLogon;
         logon.Unloaded += (_, _) => _model.Changed -= ShowLogon;
-        Ui.Name(logon, "Open BenchBar at logon");
+        Ui.Name(logon, UiText.Get("WizardLogonName"));
         panel.Children.Add(notify);
         panel.Children.Add(logon);
 
         if (_model.SkippedCommands.Count > 0)
         {
-            panel.Children.Add(Ui.Text("Some steps were skipped. Run these when you are ready:", 13, margin: new Thickness(0, 0, 0, 6)));
-            foreach (var command in _model.SkippedCommands) CopyRow("Skipped step", command, _model.Copy, panel);
+            panel.Children.Add(Ui.Text(UiText.Get("WizardSkipped"), 13, margin: new Thickness(0, 0, 0, 6)));
+            foreach (var command in _model.SkippedCommands) CopyRow(UiText.Get("WizardSkippedStepName"), command, _model.Copy, panel);
         }
-        panel.Children.Add(Ui.Text("To let an AI assistant use this bench, run this in a terminal:", 13, margin: new Thickness(0, 6, 0, 6)));
-        CopyRow("MCP line", WizardModel.McpLine, _model.Copy, panel);
-        panel.Children.Add(Ui.Text("Cannot see the BenchBar icon? Windows may hide it under the ^ arrow in the taskbar. To keep it in view, open Settings, Personalization, Taskbar, Other system tray icons, and turn BenchBar on.", 13, opacity: 0.85, margin: new Thickness(0, 10, 0, 0)));
+        panel.Children.Add(Ui.Text(UiText.Get("WizardDoneMcp"), 13, margin: new Thickness(0, 6, 0, 6)));
+        CopyRow(UiText.Get("WizardMcpLine"), WizardModel.McpLine, _model.Copy, panel);
+        panel.Children.Add(Ui.Text(UiText.Get("WizardTrayHint"), 13, opacity: 0.85, margin: new Thickness(0, 10, 0, 0)));
 
-        var open = Primary("Open Site", _model.OpenSite);
-        var done = Ui.Button("Done", _model.Finish, "Close the wizard");
+        var open = Primary(UiText.Get("WizardOpenSite"), _model.OpenSite);
+        var done = Ui.Button(UiText.Get("WizardDone"), _model.Finish, UiText.Get("WizardCloseName"));
         done.IsCancel = true;
-        var page = new PageParts { Title = "Your Bench Is Ready", Subtitle = "BenchBar keeps it running in the notification area.", Content = panel, Focus = open };
+        var page = new PageParts { Title = UiText.Get("WizardDoneTitle"), Subtitle = UiText.Get("WizardDoneSubtitle"), Content = panel, Focus = open };
         page.Right.Add(done);
         page.Right.Add(open);
         open.IsEnabled = !string.IsNullOrWhiteSpace(_model.SiteUrl);

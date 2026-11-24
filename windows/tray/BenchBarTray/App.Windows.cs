@@ -94,7 +94,7 @@ public partial class App
     {
         if (_main?.Wizard is { IsBusy: true })
         {
-            var answer = MessageBox.Show(_main, "A setup step is still running. Stop it and close the window?", "BenchBar",
+            var answer = MessageBox.Show(_main, UiText.Get("MainSetupRunning"), "BenchBar",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
             if (answer != MessageBoxResult.Yes)
             {
@@ -105,7 +105,7 @@ public partial class App
         if (PageServicesInstance.HasRunInFlight)
         {
             // the run keeps going in the background (the CLI is not stopped) and its result comes as a notification
-            var answer = MessageBox.Show(_main, "A change is still running (a site drop, an app update or an add). If you close the window it keeps running and BenchBar tells you the result in a notification. Close the window anyway?",
+            var answer = MessageBox.Show(_main, UiText.Get("MainChangeRunning"),
                 "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
             if (answer != MessageBoxResult.Yes)
             {
@@ -233,8 +233,8 @@ public partial class App
 
     private WizardActions BuildWizardActions() => new()
     {
-        ConfirmRestart = () => ConfirmDialog.Ask("Restart Windows", "Windows restarts in 15 seconds. Save your work first.\n\nBenchBar opens again after you sign in and carries on with the setup.",
-            "Restart Now", Theme, _main),
+        ConfirmRestart = () => ConfirmDialog.Ask(UiText.Get("MainRestartTitle"), UiText.Get("MainRestartBody"),
+            UiText.Get("WizardRestartNow"), Theme, _main),
         OpenLog = OpenInstallLog,
         ReportBug = (entry, problem) => ReportBugAsync(entry, problem).Forget(),
     };
@@ -261,7 +261,7 @@ public partial class App
         {
             var info = new ProcessStartInfo("shutdown.exe") { UseShellExecute = false, CreateNoWindow = true };
             // 15 seconds: `shutdown /a` still aborts it
-            foreach (var a in new[] { "/r", "/t", "15", "/c", "BenchBar: restarting to finish turning on WSL" }) info.ArgumentList.Add(a);
+            foreach (var a in new[] { "/r", "/t", "15", "/c", UiText.Get("MainRestartComment") }) info.ArgumentList.Add(a);
             using var process = Process.Start(info);
             // shutdown.exe returns at once; a non zero exit means Windows refused (another user, a policy, a pending restart)
             if (process is null) return false;

@@ -21,9 +21,9 @@ public sealed record LabEntry(string Name, string Title, string Description, str
 
 public static class LabsText
 {
-    public const string Footer = "Experiments can change or disappear. Turning one off stops what it started.";
+    public static string Footer => UiText.Get("LabsFooter");
 
-    public const string Unsupported = "Update BenchBar to use Labs";
+    public static string Unsupported => UiText.Get("LabsUnsupported");
 
     /// <summary>The platform words of the CLI (<c>macos</c>, <c>linux</c>, <c>windows</c>) as people write them.</summary>
     public static string PlatformName(string platform) => platform.Trim().ToLowerInvariant() switch
@@ -37,10 +37,10 @@ public static class LabsText
     public static string NotHere(IReadOnlyList<string>? platforms)
     {
         var names = (platforms ?? []).Where(p => p.Trim().Length > 0).Select(PlatformName).ToList();
-        if (names.Count == 0) return "Not on Windows yet.";
+        if (names.Count == 0) return UiText.Get("LabsNotHere");
         return names.Count == 1
-            ? $"Not on Windows yet. It works on {names[0]} only."
-            : $"Not on Windows yet. It works on {string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}.";
+            ? UiText.Format("LabsNotHereOne", names[0])
+            : UiText.Format("LabsNotHereMany", string.Join(", ", names.Take(names.Count - 1)), names[^1]);
     }
 }
 
@@ -145,7 +145,7 @@ public sealed class LabsModel(ICliClient cli, TimeProvider? time = null)
             }
             else
             {
-                var message = result.Error ?? "The labs could not be read.";
+                var message = result.Error ?? UiText.Get("LabsNotRead");
                 if (message == ShimBenchSource.NotFoundMessage)
                 {
                     Availability = LabsAvailability.CliMissing;
@@ -187,7 +187,7 @@ public sealed class LabsModel(ICliClient cli, TimeProvider? time = null)
             var result = await cli.RunJsonAsync(SetArgs(name, on), SetEnvironment(), CliTimeouts.Plan, o => o, ct).ConfigureAwait(true);
             if (!result.Ok)
             {
-                _errors[name] = result.Error ?? $"The experiment could not be turned {(on ? "on" : "off")}.";
+                _errors[name] = result.Error ?? (on ? UiText.Get("LabsCouldNotTurnOn") : UiText.Get("LabsCouldNotTurnOff"));
                 return false;
             }
             Entries = [.. Entries.Select(e => e.Name == name ? e with { Enabled = on } : e)];

@@ -17,7 +17,7 @@ internal sealed class AboutActions
     public Func<Task<AboutCli>> CliVersion { get; set; } = () => Task.FromResult(AboutCli.Unknown);
 
     /// <summary>Asks benchbar.exe (<c>self-update --check --json</c>); the answer or the reason there is none.</summary>
-    public Func<Task<SelfUpdateCheck>> CheckForUpdates { get; set; } = () => Task.FromResult(SelfUpdateCheck.Failed("not available"));
+    public Func<Task<SelfUpdateCheck>> CheckForUpdates { get; set; } = () => Task.FromResult(SelfUpdateCheck.Failed(UiText.Get("UpdateNotAvailable")));
 
     /// <summary>The release an earlier check found, shown when About opens; null when none is known.</summary>
     public Func<UpdateOffer?> KnownOffer { get; set; } = () => null;
