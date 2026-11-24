@@ -2579,4 +2579,986 @@
   <data name="HistoryMore" xml:space="preserve">
     <value>{0} more</value>
   </data>
+  <data name="SitesAdd" xml:space="preserve">
+    <value>Add Site...</value>
+  </data>
+  <data name="SitesPull" xml:space="preserve">
+    <value>Pull...</value>
+  </data>
+  <data name="SitesPullInto" xml:space="preserve">
+    <value>Pull a site into {0}</value>
+  </data>
+  <data name="SitesDefaultNote" xml:space="preserve">
+    <value>The default site is the one benchup waits for, the runner pings and Open uses.</value>
+  </data>
+  <data name="SitesNone" xml:space="preserve">
+    <value>{0} has no site yet.</value>
+  </data>
+  <data name="SitesDefaultBadge" xml:space="preserve">
+    <value>default</value>
+  </data>
+  <data name="SitesDefaultName" xml:space="preserve">
+    <value>default site</value>
+  </data>
+  <data name="SitesNoResolve" xml:space="preserve">
+    <value>Windows cannot find this name</value>
+  </data>
+  <data name="SitesNoAddress" xml:space="preserve">
+    <value>no address</value>
+  </data>
+  <data name="SitesStartToOpen" xml:space="preserve">
+    <value>Start the bench to open the site</value>
+  </data>
+  <data name="SitesMoreActions" xml:space="preserve">
+    <value>More actions for {0}</value>
+  </data>
+  <data name="SitesOpen" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="SitesSetUp" xml:space="preserve">
+    <value>Set Up...</value>
+  </data>
+  <data name="SitesMaking" xml:space="preserve">
+    <value>Making {0} the default site...</value>
+  </data>
+  <data name="SitesNowDefault" xml:space="preserve">
+    <value>{0} is now the default site.</value>
+  </data>
+  <data name="SitesBackingUp" xml:space="preserve">
+    <value>Backing up {0}... this can take a few minutes.</value>
+  </data>
+  <data name="SitesBackingUpFiles" xml:space="preserve">
+    <value>Backing up {0} with its files... this can take a few minutes.</value>
+  </data>
+  <data name="SitesBackedUp" xml:space="preserve">
+    <value>{0} was backed up.</value>
+  </data>
+  <data name="SitesBackedUpDetail" xml:space="preserve">
+    <value>{0} was backed up: {1}, {2}.</value>
+  </data>
+  <data name="SitesBackedUpDetailFiles" xml:space="preserve">
+    <value>{0} was backed up: {1}, {2}, with files.</value>
+  </data>
+  <data name="SitesBadName" xml:space="preserve">
+    <value>{0} is not a name the console can take.</value>
+  </data>
+  <data name="SitesConsoleFailed" xml:space="preserve">
+    <value>The console did not open: {0}</value>
+  </data>
+  <data name="SitesDatabaseFailed" xml:space="preserve">
+    <value>The database shell did not open: {0}</value>
+  </data>
+  <data name="SitesSetUpTitle" xml:space="preserve">
+    <value>Set up {0}</value>
+  </data>
+  <data name="SitesSetUpHosts" xml:space="preserve">
+    <value>Windows finds only names that end in .localhost. {0} would need a line in the Windows hosts file, and BenchBar never edits it.</value>
+  </data>
+  <data name="SitesSetUpAdvice" xml:space="preserve">
+    <value>Add the site as {0} instead; it opens in your browser without any setup.</value>
+  </data>
+  <data name="SitesAddSuggestion" xml:space="preserve">
+    <value>Add {0}...</value>
+  </data>
+  <data name="SitesFieldName" xml:space="preserve">
+    <value>Site name</value>
+  </data>
+  <data name="SitesFieldPassword" xml:space="preserve">
+    <value>Administrator password</value>
+  </data>
+  <data name="SitesFieldConfirm" xml:space="preserve">
+    <value>Confirm password</value>
+  </data>
+  <data name="SitesLocalhostHint" xml:space="preserve">
+    <value>Names that end in .localhost open in your browser without any setup.</value>
+  </data>
+  <data name="SitesAddTitle" xml:space="preserve">
+    <value>Add a site to {0}</value>
+  </data>
+  <data name="SitesAddExplain" xml:space="preserve">
+    <value>A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards.</value>
+  </data>
+  <data name="SitesEnterName" xml:space="preserve">
+    <value>Enter a site name.</value>
+  </data>
+  <data name="SitesNameRule" xml:space="preserve">
+    <value>Lowercase letters, digits, '-' and '.' only.</value>
+  </data>
+  <data name="SitesAlreadySite" xml:space="preserve">
+    <value>{0} is already a site of this bench.</value>
+  </data>
+  <data name="SitesEnterPassword" xml:space="preserve">
+    <value>Enter an Administrator password.</value>
+  </data>
+  <data name="SitesPasswordsDiffer" xml:space="preserve">
+    <value>The two passwords are not the same.</value>
+  </data>
+  <data name="SitesAddName" xml:space="preserve">
+    <value>Add {0}</value>
+  </data>
+  <data name="SitesConfirmAdd" xml:space="preserve">
+    <value>Add Site</value>
+  </data>
+  <data name="SitesAddSummary" xml:space="preserve">
+    <value>Creates {0} on this bench's MariaDB with only Frappe installed. The password goes to benchbar in its environment, never on a command line.</value>
+  </data>
+  <data name="SitesAdded" xml:space="preserve">
+    <value>{0} was added.</value>
+  </data>
+  <data name="SitesRestoreTitle" xml:space="preserve">
+    <value>Restore {0}</value>
+  </data>
+  <data name="SitesBackupsTitle" xml:space="preserve">
+    <value>Backups of {0}</value>
+  </data>
+  <data name="SitesReadingBackups" xml:space="preserve">
+    <value>Reading the backups...</value>
+  </data>
+  <data name="SitesNoBackup" xml:space="preserve">
+    <value>{0} has no backup yet.</value>
+  </data>
+  <data name="SitesBackUp" xml:space="preserve">
+    <value>Back Up</value>
+  </data>
+  <data name="SitesBackUpName" xml:space="preserve">
+    <value>Back Up {0}</value>
+  </data>
+  <data name="SitesRestore" xml:space="preserve">
+    <value>Restore...</value>
+  </data>
+  <data name="SitesRestoreFrom" xml:space="preserve">
+    <value>Restore {0} from {1}</value>
+  </data>
+  <data name="SitesOpenFolder" xml:space="preserve">
+    <value>Open Folder</value>
+  </data>
+  <data name="SitesOpenFolderName" xml:space="preserve">
+    <value>Open the backup folder of {0}</value>
+  </data>
+  <data name="SitesPickRestore" xml:space="preserve">
+    <value>Pick the backup to restore. {0} is backed up first, then its database is replaced.</value>
+  </data>
+  <data name="SitesNoDistro" xml:space="preserve">
+    <value>No WSL distro is set. Pick one in Settings, then try again.</value>
+  </data>
+  <data name="SitesFolderFailed" xml:space="preserve">
+    <value>The folder did not open: {0}</value>
+  </data>
+  <data name="SitesRestoreConfirm" xml:space="preserve">
+    <value>This replaces the database of {0} with backup {1}. {0} is backed up first.</value>
+  </data>
+  <data name="SitesRestoreConfirmFiles" xml:space="preserve">
+    <value>This replaces the database and the files of {0} with backup {1}. {0} is backed up first.</value>
+  </data>
+  <data name="SitesConfirmRestore" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="SitesRestoreSummary" xml:space="preserve">
+    <value>Backs up {0}, replaces it with backup {1}, then runs bench migrate.</value>
+  </data>
+  <data name="SitesRestored" xml:space="preserve">
+    <value>{0} was restored from {1}.</value>
+  </data>
+  <data name="SitesDropExplain" xml:space="preserve">
+    <value>Backs the site up with its files, drops its database and moves its folder to archived/sites. Nothing is deleted from disk.</value>
+  </data>
+  <data name="SitesNewDefault" xml:space="preserve">
+    <value>New default site</value>
+  </data>
+  <data name="SitesNewDefaultHelp" xml:space="preserve">
+    <value>{0} is the default site: the site you pick becomes the default first.</value>
+  </data>
+  <data name="SitesStepLine" xml:space="preserve">
+    <value>{0}. {1}</value>
+  </data>
+  <data name="SitesReadingPlan" xml:space="preserve">
+    <value>Reading the plan...</value>
+  </data>
+  <data name="SitesDropButton" xml:space="preserve">
+    <value>Drop Site...</value>
+  </data>
+  <data name="SitesDropName" xml:space="preserve">
+    <value>Drop {0}</value>
+  </data>
+  <data name="SitesDropping" xml:space="preserve">
+    <value>Backing up and dropping {0}... A backup with files can take a few minutes on a big site.</value>
+  </data>
+  <data name="SitesDropped" xml:space="preserve">
+    <value>{0} was dropped.</value>
+  </data>
+  <data name="SitesNotDroppedAny" xml:space="preserve">
+    <value>The site was not dropped.</value>
+  </data>
+  <data name="SitesDropConfirm" xml:space="preserve">
+    <value>This backs the site up, drops its database and user, and moves its folder to archived/sites.</value>
+  </data>
+  <data name="SitesConfirmDrop" xml:space="preserve">
+    <value>Drop</value>
+  </data>
+  <data name="SitesNotDropped" xml:space="preserve">
+    <value>{0} was not dropped.</value>
+  </data>
+  <data name="SitesDropBackup" xml:space="preserve">
+    <value>Backup {0} ({1}) is in its archived folder.</value>
+  </data>
+  <data name="SitesDropFolder" xml:space="preserve">
+    <value>Its folder is {0}.</value>
+  </data>
+  <data name="SitesDropNewDefault" xml:space="preserve">
+    <value>{0} is the default site now.</value>
+  </data>
+  <data name="SitesWhyEncrypted" xml:space="preserve">
+    <value>This backup is encrypted; site restore takes a plain set.</value>
+  </data>
+  <data name="SitesWhyPartial" xml:space="preserve">
+    <value>This is a partial backup; site restore takes a full set.</value>
+  </data>
+  <data name="SitesWhyNoDatabase" xml:space="preserve">
+    <value>This backup has no database file.</value>
+  </data>
+  <data name="SitesMenuMakeDefault" xml:space="preserve">
+    <value>Make Default</value>
+  </data>
+  <data name="SitesMenuOpenAs" xml:space="preserve">
+    <value>Open as...</value>
+  </data>
+  <data name="SitesMenuTurnOffOpenAs" xml:space="preserve">
+    <value>Turn Off Open as</value>
+  </data>
+  <data name="SitesMenuAllowOpenAs" xml:space="preserve">
+    <value>Allow Open as...</value>
+  </data>
+  <data name="SitesMenuBackUpFiles" xml:space="preserve">
+    <value>Back Up with Files</value>
+  </data>
+  <data name="SitesMenuBackups" xml:space="preserve">
+    <value>Backups...</value>
+  </data>
+  <data name="SitesMenuSnapshots" xml:space="preserve">
+    <value>Snapshots...</value>
+  </data>
+  <data name="SitesMenuMove" xml:space="preserve">
+    <value>Move to Another Bench...</value>
+  </data>
+  <data name="SitesOnlySite" xml:space="preserve">
+    <value>{0} is the only site of this bench. Add another site before dropping it.</value>
+  </data>
+  <data name="MoveDone" xml:space="preserve">
+    <value>{0} moved to {1}. Its address there is in the result you just read.</value>
+  </data>
+  <data name="MoveTo" xml:space="preserve">
+    <value>To: {0}</value>
+  </data>
+  <data name="MoveApps" xml:space="preserve">
+    <value>Apps: {0}</value>
+  </data>
+  <data name="MoveAddressChanges" xml:space="preserve">
+    <value>Address: {0} becomes {1}. The name stays, so its hosts line is kept.</value>
+  </data>
+  <data name="MoveAddressSame" xml:space="preserve">
+    <value>Address: {0}, as before.</value>
+  </data>
+  <data name="MoveMigrateRuns" xml:space="preserve">
+    <value>Migrate: bench migrate runs after the restore.</value>
+  </data>
+  <data name="MoveMigrateSkipped" xml:space="preserve">
+    <value>Migrate: Not run: the site arrives on the schema it had.</value>
+  </data>
+  <data name="MoveStays" xml:space="preserve">
+    <value>Stays: {0}</value>
+  </data>
+  <data name="MoveLeftAlone" xml:space="preserve">
+    <value>Left alone: The default site of both benches and every other site.</value>
+  </data>
+  <data name="MoveConfirm" xml:space="preserve">
+    <value>Move</value>
+  </data>
+  <data name="MoveSummary" xml:space="preserve">
+    <value>Backs up {0}, restores it in {1}, then drops it here. The backups stay.</value>
+  </data>
+  <data name="MoveStopBench" xml:space="preserve">
+    <value>Stop Bench</value>
+  </data>
+  <data name="MoveNotStopped" xml:space="preserve">
+    <value>The bench did not stop. Nothing was changed.</value>
+  </data>
+  <data name="OpenAsAllowButton" xml:space="preserve">
+    <value>Allow Open as</value>
+  </data>
+  <data name="OpenAsTurningOn" xml:space="preserve">
+    <value>Turning on Open as for {0}...</value>
+  </data>
+  <data name="OpenAsTurningOff" xml:space="preserve">
+    <value>Turning off Open as for {0}...</value>
+  </data>
+  <data name="OpenAsSearchField" xml:space="preserve">
+    <value>Search by name or email</value>
+  </data>
+  <data name="OpenAsFindTitle" xml:space="preserve">
+    <value>Find User</value>
+  </data>
+  <data name="OpenAsFindExplain" xml:space="preserve">
+    <value>Enabled users of {0}. Open signs the browser in as that user, without a password. Each sign in is a real login on {0}, so it is written to its Activity Log.</value>
+  </data>
+  <data name="OpenAsSearch" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="OpenAsShowingFirst" xml:space="preserve">
+    <value>Showing the first {0}; refine the search.</value>
+  </data>
+  <data name="OpenAsLabelFor" xml:space="preserve">
+    <value>Label for {0}</value>
+  </data>
+  <data name="OpenAsLabelTip" xml:space="preserve">
+    <value>A short name for Quick Switch, for example NE</value>
+  </data>
+  <data name="OpenAsOpenName" xml:space="preserve">
+    <value>Open as {0}</value>
+  </data>
+  <data name="OpenAsPin" xml:space="preserve">
+    <value>Pin</value>
+  </data>
+  <data name="OpenAsUnpin" xml:space="preserve">
+    <value>Unpin</value>
+  </data>
+  <data name="OpenAsPinName" xml:space="preserve">
+    <value>Pin {0}</value>
+  </data>
+  <data name="OpenAsUnpinName" xml:space="preserve">
+    <value>Unpin {0}</value>
+  </data>
+  <data name="OpenAsPinTip" xml:space="preserve">
+    <value>Keep in Quick Switch ({0} at most)</value>
+  </data>
+  <data name="OpenAsUnpinTip" xml:space="preserve">
+    <value>Remove from Quick Switch</value>
+  </data>
+  <data name="OpenAsPinLimit" xml:space="preserve">
+    <value>A site keeps {0} pinned users at most. Unpin one first.</value>
+  </data>
+  <data name="OpenAsAllowMessage" xml:space="preserve">
+    <value>Open as signs in to this site as any of its users, without a password.
+
+Each sign in runs the apps' on_login and on_session_creation hooks, as a real login does: it sets last_login, adds an Activity Log entry, mails the System Managers for Administrator and may create an ERPNext Customer or Supplier for a Website User. It may end that user's oldest session.
+
+Use it on development sites only.</value>
+  </data>
+  <data name="OpenAsUpdateCli" xml:space="preserve">
+    <value>Update the benchbar command line tool to use Open as</value>
+  </data>
+  <data name="OpenAsStartFirst" xml:space="preserve">
+    <value>Start {0} first</value>
+  </data>
+  <data name="OpenAsNotUsableNow" xml:space="preserve">
+    <value>Open as is not usable on {0} now</value>
+  </data>
+  <data name="OpenAsNoDevMode" xml:space="preserve">
+    <value>{0} is not in developer mode. Run: bench --site {0} set-config developer_mode 1</value>
+  </data>
+  <data name="OpenAsOnlyDefault" xml:space="preserve">
+    <value>Only the default site can be used: port 8000 serves only it</value>
+  </data>
+  <data name="OpenAsOtherSite" xml:space="preserve">
+    <value>The web process answers as another site. Run: benchbar site default {0}, then benchrestart</value>
+  </data>
+  <data name="OpenAsIsOn" xml:space="preserve">
+    <value>Open as is on</value>
+  </data>
+  <data name="OpenAsIsOnNotUsable" xml:space="preserve">
+    <value>Open as is on, but not usable. {0}</value>
+  </data>
+  <data name="OpenAsAllowTitle" xml:space="preserve">
+    <value>Allow Open as on {0}?</value>
+  </data>
+  <data name="OpenAsTurnedOn" xml:space="preserve">
+    <value>Open as is on for {0}.</value>
+  </data>
+  <data name="OpenAsTurnedOff" xml:space="preserve">
+    <value>Open as is off for {0}. Sign ins already made stay valid.</value>
+  </data>
+  <data name="OpenAsOpened" xml:space="preserve">
+    <value>{0} opened in your browser as {1}.</value>
+  </data>
+  <data name="OpenAsRolesMore" xml:space="preserve">
+    <value>{0} +{1} more</value>
+  </data>
+  <data name="OpenAsUsersFailed" xml:space="preserve">
+    <value>The users could not be read.</value>
+  </data>
+  <data name="OpenAsQuickNoBench" xml:space="preserve">
+    <value>No bench to open as a user on. Add one in BenchBar.</value>
+  </data>
+  <data name="OpenAsQuickNoneRunning" xml:space="preserve">
+    <value>No bench is running. Start one first.</value>
+  </data>
+  <data name="OpenAsQuickNoDefault" xml:space="preserve">
+    <value>{0} has no default site. Make one the default in its Sites tab.</value>
+  </data>
+  <data name="OpenAsQuickSetUp" xml:space="preserve">
+    <value>Set up {0} in the BenchBar window: Windows cannot find that name.</value>
+  </data>
+  <data name="OpenAsQuickUpdateCli" xml:space="preserve">
+    <value>Update the benchbar command line tool to use Open as.</value>
+  </data>
+  <data name="OpenAsQuickOff" xml:space="preserve">
+    <value>Open as is off for {0}. Turn it on with Allow Open as... in its Sites tab.</value>
+  </data>
+  <data name="OpenAsQuickNotUsable" xml:space="preserve">
+    <value>Open as is not usable on any running bench.</value>
+  </data>
+  <data name="PullFromFolder" xml:space="preserve">
+    <value>Copy from a backup folder inside Ubuntu instead of a server</value>
+  </data>
+  <data name="PullFromFolderName" xml:space="preserve">
+    <value>From a backup folder</value>
+  </data>
+  <data name="PullHostField" xml:space="preserve">
+    <value>Host and site</value>
+  </data>
+  <data name="PullFolderField" xml:space="preserve">
+    <value>Backup folder</value>
+  </data>
+  <data name="PullNameField" xml:space="preserve">
+    <value>New local site</value>
+  </data>
+  <data name="PullKeep" xml:space="preserve">
+    <value>Keep production's passwords and integrations</value>
+  </data>
+  <data name="PullExplain" xml:space="preserve">
+    <value>Copies a production site, or a backup you downloaded, into a new site of this bench. Production is only read. You see the plan first.</value>
+  </data>
+  <data name="PullHostHelp" xml:space="preserve">
+    <value>HOST is a Host of ~/.ssh/config inside Ubuntu, and its key must work without a prompt. The latest backup on the server is used and nothing is written there.</value>
+  </data>
+  <data name="PullKeptNote" xml:space="preserve">
+    <value>Warning: {0} Do not start its scheduler or workers unless you mean to reach the same services as production.</value>
+  </data>
+  <data name="PullDone" xml:space="preserve">
+    <value>{0} was pulled.</value>
+  </data>
+  <data name="PullNeutralised" xml:space="preserve">
+    <value>Integrations are switched off and stored passwords are cleared on the copy; the Administrator login is kept. Email is muted and the scheduler paused. Customer data is not touched.</value>
+  </data>
+  <data name="PullKept" xml:space="preserve">
+    <value>Production's passwords, webhooks and integrations stay on the copy. Email is muted and the scheduler paused, but the copy can still talk to the outside.</value>
+  </data>
+  <data name="PullTitle" xml:space="preserve">
+    <value>Pull {0}</value>
+  </data>
+  <data name="PullConfirm" xml:space="preserve">
+    <value>Pull</value>
+  </data>
+  <data name="PullSummaryFolder" xml:space="preserve">
+    <value>Copies the backup in {0} into a new site, {1}. Nothing is read from a server.</value>
+  </data>
+  <data name="PullSummaryServer" xml:space="preserve">
+    <value>Copies the latest backup of {0} into a new site, {1}. Production is only read.</value>
+  </data>
+  <data name="PullEnterFolder" xml:space="preserve">
+    <value>Enter the folder of the backup, as a path inside Ubuntu.</value>
+  </data>
+  <data name="PullFolderPath" xml:space="preserve">
+    <value>The folder is a path inside Ubuntu, such as /home/you/backup or ~/backup.</value>
+  </data>
+  <data name="PullEnterServer" xml:space="preserve">
+    <value>Enter the server as HOST:SITE, for example prod:erp.example.com. HOST is a Host of ~/.ssh/config in Ubuntu.</value>
+  </data>
+  <data name="PullEnterName" xml:space="preserve">
+    <value>Enter a name for the new site.</value>
+  </data>
+  <data name="PullNameTaken" xml:space="preserve">
+    <value>{0} is already a site of this bench. Pull never overwrites one here.</value>
+  </data>
+  <data name="PullWarnSecrets" xml:space="preserve">
+    <value>Warning: the copy keeps production's secrets. Do not start its scheduler or workers unless you mean to reach the same services as production.</value>
+  </data>
+  <data name="PullBackupLine" xml:space="preserve">
+    <value>Backup: {0}</value>
+  </data>
+  <data name="PullLocalCreated" xml:space="preserve">
+    <value>Local site: {0} is created on this bench.</value>
+  </data>
+  <data name="PullLocalReplaced" xml:space="preserve">
+    <value>Local site: {0} is replaced, after a backup.</value>
+  </data>
+  <data name="PullHostsLine" xml:space="preserve">
+    <value>Windows finds only names that end in .localhost. {0} needs a line in the Windows hosts file to open in your browser, and BenchBar never edits it.</value>
+  </data>
+  <data name="PullCopyLine" xml:space="preserve">
+    <value>The copy: {0}</value>
+  </data>
+  <data name="PullEncryptionKey" xml:space="preserve">
+    <value>Encryption key: production's key comes over, so stored passwords that are kept still decrypt.</value>
+  </data>
+  <data name="PullAppDiffers" xml:space="preserve">
+    <value>App that differs: {0}</value>
+  </data>
+  <data name="PullLeftAlone" xml:space="preserve">
+    <value>Left alone: production (nothing is written there) and every other site of this bench.</value>
+  </data>
+  <data name="PullNoToken" xml:space="preserve">
+    <value>This command line tool does not give a plan token, so BenchBar cannot run exactly this plan. Update it, then review again.</value>
+  </data>
+  <data name="PullBackupNew" xml:space="preserve">
+    <value>a new backup is taken on the server first.</value>
+  </data>
+  <data name="PullDaysOld" xml:space="preserve">
+    <value>{0} days old</value>
+  </data>
+  <data name="PullHoursOld" xml:space="preserve">
+    <value>{0} hours old</value>
+  </data>
+  <data name="PullEncrypted" xml:space="preserve">
+    <value>encrypted, decrypted here with gpg</value>
+  </data>
+  <data name="PullAnApp" xml:space="preserve">
+    <value>an app</value>
+  </data>
+  <data name="PullVersionHere" xml:space="preserve">
+    <value>{0} here</value>
+  </data>
+  <data name="PullVersionProd" xml:space="preserve">
+    <value>{0} on production</value>
+  </data>
+  <data name="SnapshotTitle" xml:space="preserve">
+    <value>Snapshots of {0}</value>
+  </data>
+  <data name="SnapshotReading" xml:space="preserve">
+    <value>Reading the snapshots...</value>
+  </data>
+  <data name="SnapshotLabelField" xml:space="preserve">
+    <value>Label (optional)</value>
+  </data>
+  <data name="SnapshotTake" xml:space="preserve">
+    <value>Take Snapshot</value>
+  </data>
+  <data name="SnapshotTakeName" xml:space="preserve">
+    <value>Take a snapshot of {0}</value>
+  </data>
+  <data name="SnapshotNone" xml:space="preserve">
+    <value>No snapshots of {0} yet. Take one before an upgrade or a risky change; a rollback puts the site back as it was.</value>
+  </data>
+  <data name="SnapshotExplain" xml:space="preserve">
+    <value>A snapshot is a backup with files that frappe's pruning never removes, with the apps it was taken with. Taking one changes nothing in the site.</value>
+  </data>
+  <data name="SnapshotUndoPoint" xml:space="preserve">
+    <value>The undo point of the last rollback</value>
+  </data>
+  <data name="SnapshotIncomplete" xml:space="preserve">
+    <value>Incomplete: a part is missing, so it cannot be rolled back to</value>
+  </data>
+  <data name="SnapshotRollBack" xml:space="preserve">
+    <value>Roll Back...</value>
+  </data>
+  <data name="SnapshotRollName" xml:space="preserve">
+    <value>Roll {0} back to {1}</value>
+  </data>
+  <data name="SnapshotRemoveName" xml:space="preserve">
+    <value>Remove the snapshot {0}</value>
+  </data>
+  <data name="SnapshotUndoTip" xml:space="preserve">
+    <value>This is the undo point of the last rollback. Remove it in Terminal if you are sure.</value>
+  </data>
+  <data name="SnapshotTaken" xml:space="preserve">
+    <value>Snapshot taken: {0}, {1}.</value>
+  </data>
+  <data name="SnapshotTakenPlain" xml:space="preserve">
+    <value>A snapshot of {0} was taken.</value>
+  </data>
+  <data name="SnapshotRollTitle" xml:space="preserve">
+    <value>Roll back {0}</value>
+  </data>
+  <data name="SnapshotRollConfirm" xml:space="preserve">
+    <value>This replaces the database and the files of {0} with the snapshot {1}. A snapshot of {0} as it is now is taken first, so it can be undone.</value>
+  </data>
+  <data name="SnapshotRollButton" xml:space="preserve">
+    <value>Roll Back</value>
+  </data>
+  <data name="SnapshotRolledBack" xml:space="preserve">
+    <value>{0} was rolled back to {1}. A snapshot of how it was is the way back.</value>
+  </data>
+  <data name="SnapshotRemoveTitle" xml:space="preserve">
+    <value>Remove the snapshot {0}?</value>
+  </data>
+  <data name="SnapshotRemoveMessage" xml:space="preserve">
+    <value>Its database dump and files are deleted from sites/{0}/snapshots. This cannot be undone.</value>
+  </data>
+  <data name="SnapshotRemoveButton" xml:space="preserve">
+    <value>Remove Snapshot</value>
+  </data>
+  <data name="SnapshotRemoved" xml:space="preserve">
+    <value>The snapshot {0} was removed.</value>
+  </data>
+  <data name="SnapshotLabelMax" xml:space="preserve">
+    <value>At most {0} characters.</value>
+  </data>
+  <data name="SnapshotLabelChars" xml:space="preserve">
+    <value>No quotes, backslashes or line breaks.</value>
+  </data>
+  <data name="SnapshotDefaultNote" xml:space="preserve">
+    <value>This is the default site of the bench. BenchBar runs the rollback as you, not as an agent, after you typed its name. The data of the site is replaced, as for any rollback.</value>
+  </data>
+  <data name="SnapshotReviewTitle" xml:space="preserve">
+    <value>Roll {0} back</value>
+  </data>
+  <data name="SnapshotReviewSummary" xml:space="preserve">
+    <value>Puts {0} back into {1}. A snapshot of {1} as it is now is taken first, so the rollback can be undone.</value>
+  </data>
+  <data name="SnapshotReplaced" xml:space="preserve">
+    <value>Replaced: the database and the public and private files of {0}.</value>
+  </data>
+  <data name="SnapshotTheSite" xml:space="preserve">
+    <value>the site</value>
+  </data>
+  <data name="SnapshotAppsSame" xml:space="preserve">
+    <value>Apps: the same apps as when the snapshot was taken.</value>
+  </data>
+  <data name="SnapshotAppsChanged" xml:space="preserve">
+    <value>Apps: the bench's apps changed since this snapshot. Its data goes into the bench's current code.</value>
+  </data>
+  <data name="SnapshotAppsChangedList" xml:space="preserve">
+    <value>Apps: the bench's apps changed since this snapshot ({0}). Its data goes into the bench's current code.</value>
+  </data>
+  <data name="SnapshotMigrateSkipped" xml:space="preserve">
+    <value>Migrate: not run, the site stays on the schema of the snapshot.</value>
+  </data>
+  <data name="SnapshotLeftAlone" xml:space="preserve">
+    <value>Left alone: every other site and the Windows hosts file.</value>
+  </data>
+  <data name="SnapshotLineFiles" xml:space="preserve">
+    <value>{0}, {1}, with files</value>
+  </data>
+  <data name="SnapshotLineDb" xml:space="preserve">
+    <value>{0}, {1}, database only</value>
+  </data>
+  <data name="SnapshotAppsNow" xml:space="preserve">
+    <value>Same apps as now</value>
+  </data>
+  <data name="SnapshotAppsShort" xml:space="preserve">
+    <value>The apps changed since</value>
+  </data>
+  <data name="SnapshotAppsSince" xml:space="preserve">
+    <value>Apps changed since: {0}</value>
+  </data>
+  <data name="SnapshotHold" xml:space="preserve">
+    <value>The snapshots hold {0}.</value>
+  </data>
+  <data name="SnapshotFree" xml:space="preserve">
+    <value>{0} are free on this volume.</value>
+  </data>
+  <data name="SnapshotBeyond" xml:space="preserve">
+    <value>{0} are beyond the newest {1}; nothing is removed on its own.</value>
+  </data>
+  <data name="AppsRefreshName" xml:space="preserve">
+    <value>Refresh the site lists</value>
+  </data>
+  <data name="AppsRefreshTip" xml:space="preserve">
+    <value>Ask bench which sites have which app (needs MariaDB)</value>
+  </data>
+  <data name="AppsCheckRemotes" xml:space="preserve">
+    <value>Check Remotes</value>
+  </data>
+  <data name="AppsCheckTip" xml:space="preserve">
+    <value>git fetch the apps your focus apps need, to see how far behind they are (only .git changes)</value>
+  </data>
+  <data name="AppsAdd" xml:space="preserve">
+    <value>Add App...</value>
+  </data>
+  <data name="AppsNote" xml:space="preserve">
+    <value>Apps come from the app registry or any git repository, including private ones your SSH key can read. BenchBar never runs bench update.</value>
+  </data>
+  <data name="AppsSiteListStale" xml:space="preserve">
+    <value>Site lists are from the last successful read: {0}</value>
+  </data>
+  <data name="AppsReading" xml:space="preserve">
+    <value>Reading apps...</value>
+  </data>
+  <data name="AppsOnlyFrappe" xml:space="preserve">
+    <value>Only Frappe so far. Add ERPNext or any app from the registry or a git repository.</value>
+  </data>
+  <data name="AppsLocalChanges" xml:space="preserve">
+    <value>local changes</value>
+  </data>
+  <data name="AppsNotInAppsTxt" xml:space="preserve">
+    <value>not in apps.txt</value>
+  </data>
+  <data name="AppsExpected" xml:space="preserve">
+    <value>expected {0}</value>
+  </data>
+  <data name="AppsFocus" xml:space="preserve">
+    <value>focus</value>
+  </data>
+  <data name="AppsIgnored" xml:space="preserve">
+    <value>ignored</value>
+  </data>
+  <data name="AppsBehind" xml:space="preserve">
+    <value>behind</value>
+  </data>
+  <data name="AppsOnNoSite" xml:space="preserve">
+    <value>on no site yet</value>
+  </data>
+  <data name="AppsUpdateOff" xml:space="preserve">
+    <value>Update is off: {0}</value>
+  </data>
+  <data name="AppsCardName" xml:space="preserve">
+    <value>App {0}</value>
+  </data>
+  <data name="AppsInstallOn" xml:space="preserve">
+    <value>Install on {0}</value>
+  </data>
+  <data name="AppsInstallOnApp" xml:space="preserve">
+    <value>App {0} Install on {1}</value>
+  </data>
+  <data name="AppsFocusPin" xml:space="preserve">
+    <value>Focus pin: {0}</value>
+  </data>
+  <data name="AppsChecking" xml:space="preserve">
+    <value>Checking the remotes of the apps your focus apps need...</value>
+  </data>
+  <data name="AppsChecked" xml:space="preserve">
+    <value>Checked the remotes. Nothing your focus apps need is behind.</value>
+  </data>
+  <data name="AppsBehindOne" xml:space="preserve">
+    <value>Checked the remotes. {0} app your focus apps need is behind.</value>
+  </data>
+  <data name="AppsBehindMany" xml:space="preserve">
+    <value>Checked the remotes. {0} apps your focus apps need are behind.</value>
+  </data>
+  <data name="AppsInstalling" xml:space="preserve">
+    <value>Installing {0} on {1}... this migrates the site's database.</value>
+  </data>
+  <data name="AppsInstalled" xml:space="preserve">
+    <value>{0} is installed on {1}.</value>
+  </data>
+  <data name="AppsSettingPin" xml:space="preserve">
+    <value>Setting the focus pin of {0} to {1}...</value>
+  </data>
+  <data name="AppsPinSet" xml:space="preserve">
+    <value>The focus pin of {0} is {1}.</value>
+  </data>
+  <data name="AppsAddAnother" xml:space="preserve">
+    <value>Add Another App</value>
+  </data>
+  <data name="AppsAddAnotherName" xml:space="preserve">
+    <value>Add another app to this plan</value>
+  </data>
+  <data name="AppsAddTitle" xml:space="preserve">
+    <value>Add apps to {0}</value>
+  </data>
+  <data name="AppsAddExplain" xml:space="preserve">
+    <value>Clones apps from the app registry or git repositories and installs them. You see one plan for all of them first.</value>
+  </data>
+  <data name="AppsFieldSource" xml:space="preserve">
+    <value>App or repository</value>
+  </data>
+  <data name="AppsFieldSourceN" xml:space="preserve">
+    <value>App {0} repository</value>
+  </data>
+  <data name="AppsFieldBranch" xml:space="preserve">
+    <value>Branch</value>
+  </data>
+  <data name="AppsFieldBranchN" xml:space="preserve">
+    <value>App {0} branch</value>
+  </data>
+  <data name="AppsFieldCommit" xml:space="preserve">
+    <value>Commit</value>
+  </data>
+  <data name="AppsFieldCommitN" xml:space="preserve">
+    <value>App {0} commit</value>
+  </data>
+  <data name="AppsSourceHelp" xml:space="preserve">
+    <value>erpnext, or a git URL such as https://github.com/org/app. Private repositories work when your SSH key can read them.</value>
+  </data>
+  <data name="AppsBranchLabel" xml:space="preserve">
+    <value>Branch (optional)</value>
+  </data>
+  <data name="AppsBranchHelp" xml:space="preserve">
+    <value>Empty: the profile's branch for a registry name, the repository's default for a URL.</value>
+  </data>
+  <data name="AppsCommitLabel" xml:space="preserve">
+    <value>Commit (optional)</value>
+  </data>
+  <data name="AppsCommitHelp" xml:space="preserve">
+    <value>Pins the app to this commit (7 to 40 hex characters).</value>
+  </data>
+  <data name="AppsInstallOnLabel" xml:space="preserve">
+    <value>Install on</value>
+  </data>
+  <data name="AppsInstallOnHelp" xml:space="preserve">
+    <value>None ticked: the app is cloned and built, and installed on no site yet.</value>
+  </data>
+  <data name="AppsRemove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="AppsRemoveName" xml:space="preserve">
+    <value>Remove app {0}</value>
+  </data>
+  <data name="AppsConfirmAdd" xml:space="preserve">
+    <value>Add App</value>
+  </data>
+  <data name="AppsConfirmAddMany" xml:space="preserve">
+    <value>Add Apps</value>
+  </data>
+  <data name="AppsAddSummary" xml:space="preserve">
+    <value>Clones the app, installs its requirements and builds its assets, which can take several minutes. The bench keeps running.</value>
+  </data>
+  <data name="AppsAddedMany" xml:space="preserve">
+    <value>{0} were added.</value>
+  </data>
+  <data name="AppsNoChangelog" xml:space="preserve">
+    <value>No changelog for {0}: {1}</value>
+  </data>
+  <data name="AppsUpdateExplain" xml:space="preserve">
+    <value>Shows the new commits and the steps before anything changes.</value>
+  </data>
+  <data name="AppsFetching" xml:space="preserve">
+    <value>Fetching the changes...</value>
+  </data>
+  <data name="AppsUpToDate" xml:space="preserve">
+    <value>{0} is up to date on {1}.</value>
+  </data>
+  <data name="AppsItsBranch" xml:space="preserve">
+    <value>its branch</value>
+  </data>
+  <data name="AppsTheBranch" xml:space="preserve">
+    <value>the branch</value>
+  </data>
+  <data name="AppsPendingEarlier" xml:space="preserve">
+    <value>An earlier update of this app stopped part way. This run finishes it.</value>
+  </data>
+  <data name="AppsCommitsOne" xml:space="preserve">
+    <value>{0} new commit on {1}:</value>
+  </data>
+  <data name="AppsCommitsMany" xml:space="preserve">
+    <value>{0} new commits on {1}:</value>
+  </data>
+  <data name="AppsAndMore" xml:space="preserve">
+    <value>and {0} more</value>
+  </data>
+  <data name="AppsThenInOrder" xml:space="preserve">
+    <value>Then, in order:</value>
+  </data>
+  <data name="AppsSitesMigrated" xml:space="preserve">
+    <value>Sites that are migrated: {0}.</value>
+  </data>
+  <data name="AppsSitesBackedUp" xml:space="preserve">
+    <value>Each site is backed up before it is migrated: {0}.</value>
+  </data>
+  <data name="AppsRunUpdate" xml:space="preserve">
+    <value>Run the update of {0}</value>
+  </data>
+  <data name="AppsUpdating" xml:space="preserve">
+    <value>Updating {0}... Do not close BenchBar until it finishes.</value>
+  </data>
+  <data name="AppsUpdated" xml:space="preserve">
+    <value>{0} was updated.</value>
+  </data>
+  <data name="AppsUpdatedChanged" xml:space="preserve">
+    <value>{0} was updated. Changed: {1}.</value>
+  </data>
+  <data name="AppsNotUpdated" xml:space="preserve">
+    <value>{0} was not updated.</value>
+  </data>
+  <data name="AppsPinTitleFocus" xml:space="preserve">
+    <value>Focus</value>
+  </data>
+  <data name="AppsPinTitleIgnore" xml:space="preserve">
+    <value>Ignore</value>
+  </data>
+  <data name="AppsPinTitleAuto" xml:space="preserve">
+    <value>Auto</value>
+  </data>
+  <data name="AppsPinHelpFocus" xml:space="preserve">
+    <value>Always a focus app: doctor watches the apps it needs, never the app itself</value>
+  </data>
+  <data name="AppsPinHelpIgnore" xml:space="preserve">
+    <value>Never a focus app, even with local changes or recent commits of yours</value>
+  </data>
+  <data name="AppsPinHelpAuto" xml:space="preserve">
+    <value>Inferred: local changes, another branch than the profile's, or a commit of yours in the last 14 days</value>
+  </data>
+  <data name="AppsFocusApp" xml:space="preserve">
+    <value>focus app</value>
+  </data>
+  <data name="AppsFocusAppWhy" xml:space="preserve">
+    <value>focus app: {0}</value>
+  </data>
+  <data name="AppsNeededBy" xml:space="preserve">
+    <value>needed by {0}</value>
+  </data>
+  <data name="AppsCommitBehindOne" xml:space="preserve">
+    <value>{0} commit</value>
+  </data>
+  <data name="AppsCommitBehindMany" xml:space="preserve">
+    <value>{0} commits</value>
+  </data>
+  <data name="AppsDayOne" xml:space="preserve">
+    <value>{0} day</value>
+  </data>
+  <data name="AppsBehindUpstream" xml:space="preserve">
+    <value>{0}, {1} behind {2}</value>
+  </data>
+  <data name="AppsItsRemote" xml:space="preserve">
+    <value>its remote</value>
+  </data>
+  <data name="AppsBlockDirty" xml:space="preserve">
+    <value>{0} has local changes. Commit or stash them first; BenchBar never updates over them.</value>
+  </data>
+  <data name="AppsBlockDetached" xml:space="preserve">
+    <value>{0} is on a detached HEAD. Check out a branch first.</value>
+  </data>
+  <data name="AppsBranchLine" xml:space="preserve">
+    <value>branch {0}</value>
+  </data>
+  <data name="AppsEnterSource" xml:space="preserve">
+    <value>Enter an app name or a git URL.</value>
+  </data>
+  <data name="AppsNoDash" xml:space="preserve">
+    <value>The app name or URL cannot start with a dash.</value>
+  </data>
+  <data name="AppsNoSpaces" xml:space="preserve">
+    <value>The app name or URL has no spaces.</value>
+  </data>
+  <data name="AppsBranchDash" xml:space="preserve">
+    <value>A branch cannot start with a dash.</value>
+  </data>
+  <data name="AppsBranchSpaces" xml:space="preserve">
+    <value>A branch has no spaces.</value>
+  </data>
+  <data name="AppsCommitShape" xml:space="preserve">
+    <value>A commit is 7 to 40 hex characters.</value>
+  </data>
+  <data name="AppsProblemFor" xml:space="preserve">
+    <value>App {0}: {1}</value>
+  </data>
+  <data name="AppsListedTwice" xml:space="preserve">
+    <value>App {0}: {1} is listed twice.</value>
+  </data>
+  <data name="AppsTitleNone" xml:space="preserve">
+    <value>Add apps</value>
+  </data>
+  <data name="AppsTitleTwo" xml:space="preserve">
+    <value>Add {0} and {1}</value>
+  </data>
+  <data name="AppsTitleMany" xml:space="preserve">
+    <value>Add {0} apps</value>
+  </data>
+  <data name="AppsPlanCommitPinned" xml:space="preserve">
+    <value>{0} (pinned)</value>
+  </data>
+  <data name="AppsPlanCommitAt" xml:space="preserve">
+    <value>at {0}</value>
+  </data>
+  <data name="AppsPlanPresent" xml:space="preserve">
+    <value>already in the bench</value>
+  </data>
+  <data name="AppsPlanInstallOn" xml:space="preserve">
+    <value>install on {0}</value>
+  </data>
+  <data name="OpenAsQuickTitle" xml:space="preserve">
+    <value>{0} on {1}</value>
+  </data>
+  <data name="OpenAsQuickLast" xml:space="preserve">
+    <value>last opened</value>
+  </data>
 </root>
