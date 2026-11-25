@@ -277,6 +277,18 @@ flag~share open-as~--json~~One document without the link (never the session).
 cmd~share teardown~benchbar share teardown [--yes] [--json]~Stop sharing, drop the copy (backed up first), and delete the share folder with the host identity and the room; the Time Machine exclusions go too. Asks first (--yes); only a person runs it.~yes~no~no~yes~stream
 flag~share teardown~--yes~~Do not ask first.
 flag~share teardown~--json~~JSON lines: steps, done with copy_dropped, archived_path and state_removed.
+cmd~share join~benchbar share join [ADDRESS[:PORT]] [--host-key HEX] [--name NAME] [--seat SEAT_ID] [--no-wait] [--no-open] [--dry-run] [--yes] [--json]~Join somebody's room as a guest. With ADDRESS it asks for the room code, without one for the invite link: neither is ever an argument. It shows the room and the host key first, waits for a seat, and opens the room on a localhost address of this computer. Refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.~yes~no~yes~yes~document
+flag~share join~--host-key~HEX~Join only if the host shows this key (the 64 hex digits: host_pin of a look with --dry-run --json). Another key is refused before any request, with exit code 3. Public, so an argument is fine.
+flag~share join~--name~NAME~The name the host sees for this computer (default: the computer's name).
+flag~share join~--seat~SEAT_ID~Take this seat, in a room where guests pick theirs (the host started it with --open-seats).
+flag~share join~--no-wait~~Do not wait for the host to give a seat: join, say so, and end.
+flag~share join~--no-open~~Do not open the browser; the address is printed.
+flag~share join~--dry-run~~Show the room, its address and the host key, and stop: nothing that depends on the code is sent, nothing is saved.
+flag~share join~--yes~~Do not ask "Join this room?" after an invite link.
+env~share join~BENCHBAR_SUDO~gui: the app or the tray made the run after its own window; the code or the invite link is then the first line of stdin.
+cmd~share joined~benchbar share joined [--json]~The rooms this computer joined: id (16 digits of the host key), room, host, address, whether it is open here, the seat and the local address. Reads only, and dials no room.~no~no~no~no~document
+cmd~share leave~benchbar share leave [ROOM] [--json]~Leave a room: the host is told, so the seat is free and its sessions end, and the local address closes. The room and this computer's key for its host stay. ROOM is the id from share joined; not needed with one room. Only a person runs it.~no~no~yes~yes~stream
+cmd~share forget~benchbar share forget [ROOM] [--json]~Leave a room and delete it from this computer with the key made for its host: to that host, a later join is a new computer. Only a person runs it.~no~no~yes~yes~stream
 cmd~lan-guard~benchbar lan-guard install|status|remove|allow-node ...~The LAN guard: on macOS a pf anchor (com.apple/250.benchbar), on Linux an nftables table (inet benchbar), that refuses the bench ports (8000:8099 9000:9099 11000:11099 13000:13099 3306) to anything but this machine, and on macOS the firewall allow for the share gateway's node.~yes~yes~no~yes~stream
 cmd~lan-guard install~benchbar lan-guard install [--dry-run] [--yes] [--json]~Write the pf anchor and the launch daemon (macOS), or the nftables rules file and the systemd unit (Linux), that load it at boot, with sudo once, then probe the block from the LAN address. Unchanged, with no sudo, when the guard already matches. A person's decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal (macOS: unless BENCHBAR_SUDO=gui).~yes~yes~no~yes~stream
 flag~lan-guard install~--dry-run~~Print what would be written and run, with no sudo.
