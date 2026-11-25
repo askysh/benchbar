@@ -623,7 +623,8 @@ Fix: `benchbar repair` writes the block. Remove an old block by hand.
 
 ### cli_link
 
-`~/.local/bin/benchbar` and `~/.local/bin/frappe-mac` are links to this
+`~/.local/bin/benchbar` and `~/.local/bin/frappe-mac` (the old name of
+`benchbar`) are links to this
 checkout, so both names work from any folder. When Homebrew has the
 `benchbar` formula, its own `bin` folder puts `benchbar` on PATH: the
 links are optional then, and a link to Homebrew's benchbar always counts
@@ -686,7 +687,7 @@ nothing is offered for the Trash then. Nothing is ever deleted for you.
 ### legacy_agents
 
 No per process LaunchAgents of this bench (one each for web, worker,
-socketio and so on) and no agent from frappe-mac 0.2. An agent counts
+socketio and so on) and no agent from frappe-mac 0.2 (the old name of `benchbar`). An agent counts
 only when its plist names this bench's folder and runs honcho, a
 BenchBar or frappe-mac runner, socketio, or `bench` with serve, worker,
 schedule, socketio or start.
