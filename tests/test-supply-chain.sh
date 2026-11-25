@@ -32,7 +32,7 @@ for path in files:
             continue
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}", ref):
             bad.append(f"{name}:{n}: {ref} is not pinned to a full commit sha")
-        elif not re.fullmatch(r"\s+#\s+v\d+(\.\d+)*\s*", rest):
+        elif not re.fullmatch(r"\s+#\s+v?\d+(\.\d+)*\s*", rest):
             bad.append(f"{name}:{n}: {ref} has no '# vX.Y.Z' comment after it")
     if "/workflows/" in path:
         in_jobs, cur, jobs = False, None, {}
