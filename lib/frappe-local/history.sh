@@ -88,6 +88,8 @@ fl_hist_word_v() {
       FL_HIST_NEXT_SECRET=1
     fi
   else
+    # an invite link carries the room code: share join refuses it as an argument, and it is not kept either
+    case "$__word" in *[Bb][Ee][Nn][Cc][Hh][Bb][Aa][Rr]://[Ss][Hh][Aa][Rr][Ee]/[Jj][Oo][Ii][Nn]*) printf -v "$1" '%s' '***'; return 0 ;; esac
     case "$__word" in *://*@*) fl_redact_url_v __word "$__word" ;; esac
     if [[ "$__word" == *'?'*=* || "$__word" == *'&'*=* ]]; then
       # the query of a URL (or a word shaped like one): every secret looking parameter
@@ -122,6 +124,8 @@ fl_hist_words() {
   for __w in ${__args[@]+"${__args[@]}"}; do
     if [[ "$__n" -ge "$FL_HIST_WORDS_MAX" ]]; then FL_HIST_WORDS+=("..."); break; fi
     __n=$((__n + 1))
+    # six digits after "share join" are a room code somebody passed by mistake (it is refused there)
+    if [[ "$__w" =~ ^[0-9\ ]{6,7}$ && " ${FL_HIST_WORDS[*]-} " == *" share join "* ]]; then __w='***'; fi
     fl_hist_word_v __w "$__w" "$__prev"
     __prev="$FL_HIST_NEXT_SECRET"
     FL_HIST_WORDS+=("$__w")
