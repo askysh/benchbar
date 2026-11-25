@@ -31,12 +31,12 @@ assert_contains "$out" "1. first: unchanged"
 # $SECONDS follows the wall clock. A clock that steps back while a step runs (a time sync, WSL
 # after sleep) must not print or send a negative time: the step took no time that can be told.
 assert_eq "0s" "$(fl_fmt_secs -3)"
-fl_step_begin 1; FL_STEP_START=$((SECONDS + 3)); out="$(fl_step_end done)"
+fl_step_begin 1; FL_STEP_START=$((SECONDS + 3)); out="$(fl_step_end "done")"
 assert_contains "$out" "2. second: done (0s)"
 assert_not_contains "$out" "(-"
-out="$(FL_JSONL=1; fl_jsonl_step "" a_step "" "A step" done -3 3>&1)"
+out="$(FL_JSONL=1; fl_jsonl_step "" a_step "" "A step" "done" -3 3>&1)"
 assert_contains "$out" '"secs":0'
-out="$(FL_JSONL=1; fl_jsonl_step "" a_step "" "A step" done 7 3>&1)"
+out="$(FL_JSONL=1; fl_jsonl_step "" a_step "" "A step" "done" 7 3>&1)"
 assert_contains "$out" '"secs":7'
 
 # spinner in non-TTY mode prints a single plain line

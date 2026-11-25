@@ -194,11 +194,13 @@ assert_contains "$OUT" "Completed: $E"
 assert_not_contains "$OUT" "command not found" "(every helper the apply path calls is defined)"
 assert_file "$E/Procfile.lean"
 assert_calls_not_contain '^bench (migrate|build|update|start)'
-# The time a preview step took is not part of the approved plan, in any form the CLI prints it.
-# Seconds alone were cut, so a step of a minute, or one that ran while the clock stepped back
-# ("(-2s)" then), gave plan and apply two tokens: "The port plan changed" on an unchanged plan.
+# A failed second action stops the batch and never records success for it.
+# Stub the adoption boundary so this is deterministic, independent of launchd.
 (
   . "$ROOT/lib/frappe-local/port-management.sh"
+  # The time a preview step took is not part of the approved plan, in any form the CLI prints it.
+  # Seconds alone were cut, so a step of a minute, or one that ran while the clock stepped back
+  # ("(-2s)" then), gave plan and apply two tokens: "The port plan changed" on an unchanged plan.
   timed="$(printf '%s\n' \
     '  [ok] 1. Write Procfile.lean: done (0s)' \
     '  [ok] 2. Render the runner: done (3 files) (12s)' \
@@ -214,11 +216,6 @@ assert_calls_not_contain '^bench (migrate|build|update|start)'
     '  [ok] 5. Clock stepped back: unchanged' \
     '  [ok] 6. Hosts line: skipped (2 sites)')"
   assert_eq "$plain" "$(printf '%s' "$timed" | fl_pm_untimed)" "(step times in every form are cut, a detail in brackets stays)"
-)
-# A failed second action stops the batch and never records success for it.
-# Stub the adoption boundary so this is deterministic, independent of launchd.
-(
-  . "$ROOT/lib/frappe-local/port-management.sh"
   # the apply path asks fl_sudo_gui, which benchbar loads from sudo.sh
   . "$ROOT/lib/frappe-local/sudo.sh"
   . "$ROOT/lib/frappe-local/plan-token.sh"
