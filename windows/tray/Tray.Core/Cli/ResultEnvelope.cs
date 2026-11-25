@@ -20,10 +20,16 @@ public sealed record ResultEnvelope(int Exit, int? SchemaVersion, string? CliVer
     /// <summary>The error and, when it adds something, the fix after it (the CLI's hint), as one text for a refusal.</summary>
     public string? Explained => Explain(Error, Fix);
 
+    /// <summary>The longest error or hint shown: a pull host's or ssh's output can be long, and the line is cut, not wrapped over the page.</summary>
+    public const int MaxShown = 400;
+
+    /// <summary>The text of an error or a hint as one line of plain text (no control characters, line breaks or bidi marks), cut at <see cref="MaxShown"/>.</summary>
+    public static string? Shown(string? text) => Blank(text) is { } t && ShareGuestText.Clean(t, MaxShown) is { Length: > 0 } clean ? clean : null;
+
     internal static string? Explain(string? error, string? fix)
     {
-        var e = Blank(error);
-        var f = Blank(fix);
+        var e = Shown(error);
+        var f = Shown(fix);
         if (e is null || f is null) return e ?? f;
         return e.Contains(f, StringComparison.Ordinal) ? e : e.TrimEnd().EndsWith('.') ? $"{e} {f}" : $"{e}. {f}";
     }

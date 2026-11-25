@@ -16,9 +16,9 @@ public sealed record PlanResultModel(bool Ok, bool Cancelled, string Headline, s
             return new PlanResultModel(false, true, UiText.Get("PlanStopped"), UiText.Get("PlanRunStopped"), done?.Changed ?? [], done?.Warnings ?? [], [], [], done?.Log);
         if (result.Ok)
             return new PlanResultModel(true, false, done is { Changed.Count: 0 } ? UiText.Get("PlanNothingNeeded") : UiText.Get("PlanDone"), null, done?.Changed ?? [], done?.Warnings ?? [], done?.NextActions ?? [], [], done?.Log);
-        var problem = result.Problem ?? UiText.Format("PlanCommandFailed", result.Exit);
+        var problem = ResultEnvelope.Shown(result.Problem) ?? UiText.Format("PlanCommandFailed", result.Exit);
         return new PlanResultModel(false, false, UiText.Get("PlanDidNotFinish"), problem, done?.Changed ?? [], done?.Warnings ?? [], done?.NextActions ?? [], done?.Missing ?? [], done?.Log,
-            done is { Error.Length: > 0, Fix.Length: > 0 } && done.Explained != done.Error ? done.Fix : null);
+            done is { Error.Length: > 0, Fix.Length: > 0 } && done.Explained != ResultEnvelope.Shown(done.Error) ? ResultEnvelope.Shown(done.Fix) : null);
     }
 }
 

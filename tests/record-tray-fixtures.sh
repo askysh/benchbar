@@ -74,7 +74,7 @@ generated() {
     "recorded/list.json|list --json" \
     "recorded/status.json|status --json --bench-dir $BENCH" \
     "cli/ports-check-clean.json|ports check --json --bench-dir $BENCH" \
-    "cli/scan-empty.json|scan --json $HOME/empty"
+    "cli/scan-empty.json|scan --json $HOME/empty"     "cli/envelope-read-failure.json|!status --for-agent --bench-dir $HOME/no-such-bench"     "cli/envelope-usage-error.jsonl|!install --bogus --jsonl"     "cli/envelope-run-refused.jsonl|!run --jsonl --bench-dir $BENCH -- bogus"
 }
 
 # GENERATED_TEXT: fixture file, then the command; commands that print no JSON (autostart) or are
@@ -157,9 +157,11 @@ status=0
 
 # ---- generated files
 while IFS='|' read -r file cmd; do
+  # a leading "!" allows a non zero exit: a refusal prints its envelope all the same
+  allow=0; [[ "$cmd" == "!"* ]] && { allow=1; cmd="${cmd#!}"; }
   # shellcheck disable=SC2086  # the command is one word per argument, none has a space
-  cli_out $cmd >"$TMP_OUT/new.json"
-  python3 -I -c 'import json, sys; json.load(open(sys.argv[1]))' "$TMP_OUT/new.json" || fail "$file: the CLI did not print JSON"
+  ALLOW_EXIT="$allow" cli_out $cmd >"$TMP_OUT/new.json"
+  python3 -I -c 'import json, sys; [json.loads(l) for l in open(sys.argv[1]) if l.strip()]' "$TMP_OUT/new.json" || fail "$file: the CLI did not print JSON"
   if [[ "$CHECK" == 1 ]]; then
     if ! cmp -s "$TMP_OUT/new.json" "$FIXTURES/$file"; then
       printf 'windows/tray/fixtures/%s differs from what the CLI prints now:\n' "$file" >&2

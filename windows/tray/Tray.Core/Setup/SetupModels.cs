@@ -182,10 +182,10 @@ public static class SetupJson
                     JsonRead.Bool(obj, "changed"),
                     JsonRead.Bool(obj, "reboot_required"),
                     JsonRead.Bool(obj, "cancelled"),
-                    envelope?.Warnings ?? [],
-                    envelope?.NextActions.Select(a => a.Command).ToList() ?? [],
+                    envelope?.Warnings ?? JsonRead.Strings(obj, "warnings"),
+                    (envelope?.NextActions ?? ResultEnvelope.Next(obj)).Select(a => a.Command).ToList(),
                     JsonRead.Bool(obj, "user_existed"),
-                    envelope?.ErrorId is { Length: > 0 } errorId ? errorId : null);
+                    (envelope?.ErrorId ?? JsonRead.Str(obj, "error_id")) is { Length: > 0 } errorId ? errorId : null);
             default:
                 return null;
         }
