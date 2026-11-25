@@ -129,6 +129,41 @@ assert_eq "0" "$CODE" "$OUT"
 ! grep -q 'frappe-mac' "$HOME/.zshrc" || fail "dry-run must not write the block"
 touch "$MOCK_STATE/wkhtml_installed"
 
+# ---- 00: Homebrew's own redis service is not started (#293): the bench runs its own Redis on its own ports
+printf 'mariadb@10.11 started akash file\n' >"$MOCK_BREW_SERVICES"
+grep -v 'redis-server' "$MOCK_PROCS" >"$MOCK_PROCS.tmp" || true; mv "$MOCK_PROCS.tmp" "$MOCK_PROCS"
+reset_calls
+run00 --yes --profile v15-lts
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_not_contain '^brew services start redis'
+assert_contains "$OUT" "redis-server"
+add_proc 901 "redis-server *:6379"
+printf 'mariadb@10.11 started akash file\nredis started akash file\n' >"$MOCK_BREW_SERVICES"
+
+# ---- 00: brew services list is read with colour off (#293): colour codes on the names hid the running server
+printf 'mariadb@11.4 started akash file\n' >"$MOCK_BREW_SERVICES"
+for colour in 1 always; do
+  rm -f "$MOCK_BREW_PREFIX/etc/my.cnf.d/frappe.cnf"
+  reset_calls
+  MOCK_BREW_COLOR="$colour" run00 --yes --profile v15-lts
+  assert_eq "0" "$CODE" "(colour ${colour}: $OUT)"
+  assert_calls_contain '^brew services restart mariadb@11.4$'
+done
+printf 'mariadb@10.11 started akash file\nredis started akash file\n' >"$MOCK_BREW_SERVICES"
+
+# ---- 01 on a Mac with no redis-server process (Homebrew's service is not started): not a failure (#293)
+grep -v 'redis-server' "$MOCK_PROCS" >"$MOCK_PROCS.tmp" || true; mv "$MOCK_PROCS.tmp" "$MOCK_PROCS"
+printf 'mariadb@10.11 started akash file\n' >"$MOCK_BREW_SERVICES"
+BENCH="$HOME/frappe-bench"
+make_fake_bench "$BENCH"
+rm -rf "$BENCH/env"
+run01 --yes --offline
+assert_not_contains "$OUT" "redis-server is not running"
+assert_contains "$OUT" "system services are running"
+rm -rf "$BENCH"
+add_proc 901 "redis-server *:6379"
+printf 'mariadb@10.11 started akash file\nredis started akash file\n' >"$MOCK_BREW_SERVICES"
+
 # ---- 01: safety on an existing bench that lost its env
 BENCH="$HOME/frappe-bench"
 make_fake_bench "$BENCH"
@@ -193,7 +228,7 @@ MOCK_BENCH_VERSION=5.10.3 ADMIN_PASSWORD=adminpw run01 --yes --offline
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "[OK] bench 5.10.3 at"
 assert_contains "$OUT" "bench 5.10.3 is older than 5.22.0, the oldest known to handle profile v15-lts"
-assert_contains "$OUT" "uv tool upgrade frappe-bench"
+assert_contains "$OUT" "uv tool install --reinstall frappe-bench==5.31.1"
 rm -rf "$BENCH"
 MOCK_BENCH_VERSION=5.25.1 ADMIN_PASSWORD=adminpw run01 --yes --offline
 assert_eq "0" "$CODE" "$OUT"

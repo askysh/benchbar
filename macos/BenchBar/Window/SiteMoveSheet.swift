@@ -43,6 +43,8 @@ struct SiteMoveSheet: View {
     @State private var step = ""
     @State private var finished: SheetResult?
     @State private var failure: String?
+    /// Stop Bench was clicked and the stop has not ended: one click only.
+    @State private var stopping = false
 
     private var targets: [BenchModel] { workbench.moveTargets(for: bench) }
     private var chosen: String { targets.contains { $0.path == targetPath } ? targetPath : (targets.first?.path ?? "") }
@@ -52,6 +54,7 @@ struct SiteMoveSheet: View {
     private var phase: SheetPhase {
         if let finished { return .done(finished) }
         if let failure { return .failed(failure, title: "\(site) was not moved") }
+        if stopping { return .loading(SiteMoveText.stopping(bench.name)) }
         switch flow.stage {
         case .form: return flow.readError.map { .failed($0, title: "No plan to move \(site)") } ?? .ready
         case .reading: return .loading("Reading the plan…")
@@ -101,7 +104,7 @@ struct SiteMoveSheet: View {
             CancelButton(action: close)
             if plan.needsStop {
                 Button("Stop Bench") { stopThenReview() }
-                    .disabled(!workbench.store.canChange(bench))
+                    .disabled(!SiteMoveText.canStop(canChange: workbench.store.canChange(bench), stopping: stopping))
                     .help("Stops \(bench.name), then reads the plan again")
             }
             Button("Move", role: .destructive) { apply() }
@@ -133,7 +136,11 @@ struct SiteMoveSheet: View {
     }
 
     private func stopThenReview() {
+        guard !stopping else { return }
+        // set before the task starts: a second click in the same moment finds it already set
+        stopping = true
         Task {
+            defer { stopping = false }
             if let error = await workbench.stopForMove(bench) {
                 failure = error
                 return

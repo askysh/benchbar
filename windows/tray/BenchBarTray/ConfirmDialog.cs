@@ -24,7 +24,7 @@ internal sealed class ConfirmDialog : Window
         panel.Children.Add(Ui.Text(message, 14, opacity: 0.9, margin: new Thickness(0, 8, 0, 16)));
         var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         Confirm = Ui.Button(confirmLabel, () => DialogResult = true, confirmLabel);
-        var cancel = Ui.Button("Cancel", () => DialogResult = false, "Cancel");
+        var cancel = Ui.Button(UiText.Get("Cancel"), () => DialogResult = false, UiText.Get("Cancel"));
         cancel.IsDefault = cancel.IsCancel = true;
         cancel.Margin = new Thickness(0);
         bar.Children.Add(Confirm);

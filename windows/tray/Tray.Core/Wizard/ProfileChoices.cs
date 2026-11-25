@@ -17,7 +17,7 @@ public sealed record ProfileChoice(string Name, string Label, string? Versions, 
         get
         {
             var label = Label.Length == 0 || Label == Name ? "" : "  " + Label;
-            return Name + label + (IsTeam ? " (team)" : "") + (Enabled ? "" : " (not available here)");
+            return Name + label + (IsTeam ? UiText.Get("WizardProfileTeam") : "") + (Enabled ? "" : UiText.Get("WizardProfileNotAvailable"));
         }
     }
 
@@ -32,7 +32,7 @@ public sealed record ProfileGate(string Profile, string? Refusal);
 public static class ProfileChoices
 {
     /// <summary>The one profile offered when the list could not be read: the wizard's old fixed choice.</summary>
-    public static ProfileChoice Fallback { get; } = new(WizardModel.DefaultProfile, "Frappe/ERPNext v15 LTS", null, false);
+    public static ProfileChoice Fallback { get; } = new(WizardModel.DefaultProfile, UiText.Get("WizardProfileFallbackLabel"), null, false);
 
     /// <summary>
     /// The built in profiles, then the valid team profiles that no earlier file hides (the Mac app's rule). An invalid file or a
@@ -47,7 +47,7 @@ public static class ProfileChoices
 
     /// <summary>"Not supported on Linux yet: it needs MariaDB 12.0, ..." from the CLI's reasons.</summary>
     public static string Unsupported(string? reason) =>
-        "Not supported on Linux yet" + (string.IsNullOrWhiteSpace(reason) ? "." : ": " + reason.Trim().TrimEnd('.') + ".");
+        string.IsNullOrWhiteSpace(reason) ? UiText.Get("WizardUnsupported") : UiText.Format("WizardUnsupportedWhy", reason.Trim().TrimEnd('.'));
 
     /// <summary>The choices with the gate's dry run answers applied (the fallback for a CLI whose list has no <c>linux_supported</c>). A profile with no answer keeps what it has.</summary>
     public static IReadOnlyList<ProfileChoice> Apply(IReadOnlyList<ProfileChoice> choices, IReadOnlyDictionary<string, string?> refusals) =>

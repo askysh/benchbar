@@ -292,7 +292,10 @@ The snapshots of the site, newest first: the label, the size, the apps with
 their commits when it was taken, and whether the bench's apps are still those
 (`changed: erpnext` when one moved, was added or removed). It also says what
 all the snapshots hold, how much is free on the volume and which snapshots are
-beyond the newest N. Read only.
+beyond the newest N. Snapshots beyond N that stay because they are undo points
+of rollbacks are named with their size ("held back"). A `.incomplete-ID` folder
+left by a snapshot that was cut short is named with its size and the command
+that moves its backup set back to `private/backups`. Read only.
 
 ```bash
 benchbar site snapshots acme.localhost --json

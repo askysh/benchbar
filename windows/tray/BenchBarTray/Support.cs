@@ -85,7 +85,7 @@ internal enum VsCodeOutcome { Launched, NotFound, BadPath }
 /// <summary>Finding VS Code and building the command that opens a bench inside the distro.</summary>
 internal static class VsCode
 {
-    public const string InstallMessage = "Install VS Code and its WSL extension (ms-vscode-remote.remote-wsl), then try again.";
+    public static string InstallMessage => UiText.Get("CommonVsCodeInstall");
     public const string HelpUrl = "https://code.visualstudio.com/docs/remote/wsl";
 
     /// <summary><c>code.cmd</c> on PATH, else the per user install; null when neither exists.</summary>
@@ -127,7 +127,7 @@ internal static class VsCode
 
     /// <summary>What to tell the user for a path that cannot be launched.</summary>
     public static string BadPathMessage(string benchPath) =>
-        "This bench path has characters VS Code's launcher cannot take; open it from a WSL terminal: code " + benchPath;
+        UiText.Format("CommonVsCodeBadPath", benchPath);
 
     /// <summary>Hidden: <c>code.cmd --remote wsl+DISTRO PATH</c>. Check <see cref="CanLaunch"/> first.</summary>
     public static ProcessStartInfo StartInfo(string codeCmd, string distro, string benchPath)

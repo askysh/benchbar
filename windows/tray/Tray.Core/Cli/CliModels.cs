@@ -120,8 +120,8 @@ public static class CliJson
     private static string DownloadLabel(JsonObject o)
     {
         if (o["bytes"] is not JsonValue b || !b.TryGetValue<long>(out var bytes)) return "";
-        var total = o["total"] is JsonValue t && t.TryGetValue<long>(out var all) && all > 0 ? $" of {ByteSize.Format(all)}" : "";
-        return $"Downloaded {ByteSize.Format(bytes)}{total}";
+        var total = o["total"] is JsonValue t && t.TryGetValue<long>(out var all) && all > 0 ? UiText.Format("CommonDownloadedOf", ByteSize.Format(all)) : "";
+        return UiText.Format("CommonDownloaded", ByteSize.Format(bytes), total);
     }
 
     /// <summary>

@@ -11,10 +11,21 @@ public sealed record LockDrift(string Kind, string? App, string? Site, string? E
         get
         {
             var what = Kind.Replace('_', ' ');
-            var subject = string.Join(' ', new[] { App, Site is null ? null : "on " + Site }.OfType<string>());
-            if (subject.Length == 0) subject = "bench";
-            var detail = string.Join(", ", new[] { Actual is null ? null : "is " + Actual, Expected is null ? null : "lock " + Expected }.OfType<string>());
-            return $"{subject}: {what}" + (detail.Length == 0 ? "" : $" ({detail})");
+            var subject = (App, Site) switch
+            {
+                ({ } app, { } site) => UiText.Format("OverviewDriftAppOnSite", app, site),
+                ({ } app, null) => app,
+                (null, { } site) => UiText.Format("OverviewDriftOnSite", site),
+                _ => UiText.Get("OverviewDriftBench"),
+            };
+            var detail = (Actual, Expected) switch
+            {
+                ({ } actual, { } expected) => UiText.Format("OverviewDriftIsAndLock", actual, expected),
+                ({ } actual, null) => UiText.Format("OverviewDriftIs", actual),
+                (null, { } expected) => UiText.Format("OverviewDriftLock", expected),
+                _ => "",
+            };
+            return detail.Length == 0 ? UiText.Format("OverviewDriftLine", subject, what) : UiText.Format("OverviewDriftLineDetail", subject, what, detail);
         }
     }
 
@@ -25,9 +36,9 @@ public sealed record LockDrift(string Kind, string? App, string? Site, string? E
 public sealed record LockCheck(string? LockFile, bool InSync, IReadOnlyList<LockDrift> Drift)
 {
     /// <summary>"In sync", "1 difference" or "3 differences".</summary>
-    public string Badge => InSync ? "In sync" : Drift.Count == 1 ? "1 difference" : $"{Drift.Count} differences";
+    public string Badge => InSync ? UiText.Get("OverviewLockInSync") : Drift.Count == 1 ? UiText.Get("OverviewLockOneDifference") : UiText.Format("OverviewLockMany", Drift.Count);
 
-    public string Footer => $"Compared with {LockFile}. To bring the bench in line, run benchbar lock apply in a terminal.";
+    public string Footer => UiText.Format("OverviewLockFooter", LockFile ?? "");
 }
 
 /// <summary>What asking about the lockfile found: a check, a bench without a lockfile (nothing to show), or a failure.</summary>
@@ -36,7 +47,7 @@ public sealed record LockOutcome(LockCheck? Check, bool NoLockfile, string? Erro
     public static LockOutcome Parse(CliResult<LockCheck> result)
     {
         if (result.Value is { } check) return new LockOutcome(check, false, null);
-        var error = result.Error ?? "The lockfile could not be checked.";
+        var error = result.Error ?? UiText.Get("OverviewLockNotChecked");
         return new LockOutcome(null, error.Contains("No lockfile", StringComparison.OrdinalIgnoreCase), error);
     }
 }
@@ -60,19 +71,19 @@ public static class OverviewFacts
 
     /// <summary>"Up for 2 h 5 min", null unless the bench runs and says since when.</summary>
     public static string? Uptime(BenchStatus bench, DateTimeOffset now) =>
-        bench.State == BenchState.Running && bench.StartedAt is { } since && now >= since ? "Up for " + Duration(now - since) : null;
+        bench.State == BenchState.Running && bench.StartedAt is { } since && now >= since ? UiText.Format("OverviewUptime", Duration(now - since)) : null;
 
     public static string Duration(TimeSpan span)
     {
-        if (span.TotalMinutes < 1) return "less than a minute";
-        if (span.TotalHours < 1) return $"{(int)span.TotalMinutes} min";
-        if (span.TotalDays < 1) return $"{(int)span.TotalHours} h {span.Minutes} min";
-        return $"{(int)span.TotalDays} d {span.Hours} h";
+        if (span.TotalMinutes < 1) return UiText.Get("OverviewDurationLessThanMinute");
+        if (span.TotalHours < 1) return UiText.Format("OverviewDurationMinutes", (int)span.TotalMinutes);
+        if (span.TotalDays < 1) return UiText.Format("OverviewDurationHours", (int)span.TotalHours, span.Minutes);
+        return UiText.Format("OverviewDurationDays", (int)span.TotalDays, span.Hours);
     }
 
     public static string SchedulerNote(bool? scheduler) => scheduler is null
-        ? "Needs benchbar 0.4 or later"
-        : "Runs scheduled jobs (bench schedule) in the background. Changing it restarts a running bench.";
+        ? UiText.Get("OverviewSchedulerNeedsNew")
+        : UiText.Get("OverviewSchedulerNote");
 }
 
 /// <summary>The exact arguments of the Overview's own calls.</summary>
@@ -112,15 +123,15 @@ public static class LockArgs
 
     /// <summary>The sheet's request: the dry run's own text, then <c>--yes</c> after the person's yes.</summary>
     public static PlanReviewRequest Review(string verb, string benchPath) => verb == "write"
-        ? new PlanReviewRequest("Write the lockfile", Preview(verb, benchPath), _ => Run(verb, benchPath))
+        ? new PlanReviewRequest(UiText.Get("OverviewLockWriteTitle"), Preview(verb, benchPath), _ => Run(verb, benchPath))
         {
-            ConfirmLabel = "Write", RequiresToken = false, PlanIsText = true,
-            Summary = "Writes benchbar.toml from this bench. The old file is backed up first.",
+            ConfirmLabel = UiText.Get("OverviewLockWriteConfirm"), RequiresToken = false, PlanIsText = true,
+            Summary = UiText.Get("OverviewLockWriteSummary"),
         }
-        : new PlanReviewRequest("Apply the lockfile", Preview(verb, benchPath), _ => Run(verb, benchPath))
+        : new PlanReviewRequest(UiText.Get("OverviewLockApplyTitle"), Preview(verb, benchPath), _ => Run(verb, benchPath))
         {
-            ConfirmLabel = "Apply", RequiresToken = false, PlanIsText = true,
-            Summary = "Clones missing apps, switches branches and fast forwards to the pinned commits. No site is touched.",
+            ConfirmLabel = UiText.Get("OverviewLockApplyConfirm"), RequiresToken = false, PlanIsText = true,
+            Summary = UiText.Get("OverviewLockApplySummary"),
         };
 }
 

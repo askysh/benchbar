@@ -57,7 +57,7 @@ public sealed class ProfilesModel
             }
             else
             {
-                Error = result.Error ?? "The profiles could not be read.";
+                Error = result.Error ?? UiText.Get("ProfileReadFailed");
             }
             var benches = await _cli.RunJsonAsync(DiscoveryModel.ListArgs(), null, CliTimeouts.Read, ScanJson.ParseList, ct).ConfigureAwait(true);
             if (benches.Value is { } list) Benches = list;
@@ -82,11 +82,11 @@ public sealed class ProfilesModel
         var result = await _cli.RunStreamAsync(CreateArgs(name, benchPath), null, CliTimeouts.Plan, _ => { }, ct).ConfigureAwait(true);
         if (!result.Ok)
         {
-            ActionError = result.Problem ?? result.TextLines.LastOrDefault() ?? $"The profile was not created (exit {result.Exit}).";
+            ActionError = result.Problem ?? result.TextLines.LastOrDefault() ?? UiText.Format("ProfileNotCreated", result.Exit);
             Raise();
             return false;
         }
-        Message = $"Created {name}. Set up a bench from it with benchbar install --profile {name}.";
+        Message = UiText.Format("ProfileCreated", name);
         await LoadAsync(ct).ConfigureAwait(true);
         return true;
     }
@@ -106,11 +106,11 @@ public sealed class ProfilesModel
         IsRemoving = false;
         if (result.Value is not { } removed || !result.Ok)
         {
-            ActionError = result.Error ?? "The profile was not removed.";
+            ActionError = result.Error ?? UiText.Get("ProfileNotRemoved");
             Raise();
             return false;
         }
-        Message = removed.MovedTo.Length > 0 ? $"Removed {removed.Name}. It was moved to {removed.MovedTo}." : $"Removed {removed.Name}.";
+        Message = removed.MovedTo.Length > 0 ? UiText.Format("ProfileRemovedMoved", removed.Name, removed.MovedTo) : UiText.Format("ProfileRemoved", removed.Name);
         await LoadAsync(ct).ConfigureAwait(true);
         return true;
     }
@@ -121,17 +121,17 @@ public sealed class ProfilesModel
     // --- texts ---
 
     public static string RemoveTitle(ProfileInfo? profile) =>
-        profile is null ? "Remove profile?" : profile.Origin == ProfileOrigin.Subscribed ? "Remove the subscription?" : $"Remove {profile.Name}?";
+        profile is null ? UiText.Get("ProfileRemoveQuestion") : profile.Origin == ProfileOrigin.Subscribed ? UiText.Get("ProfileRemoveSubQuestion") : UiText.Format("ProfileRemoveNameQuestion", profile.Name);
 
     public string RemoveMessage(ProfileInfo profile)
     {
         if (profile.Origin == ProfileOrigin.Subscribed)
         {
-            var repo = profile.Subscription is { } s ? ProfileInfo.ShortRepo(s.Repo) : "its repository";
+            var repo = profile.Subscription is { } s ? ProfileInfo.ShortRepo(s.Repo) : UiText.Get("ProfileItsRepo");
             var siblings = ProfileListJson.SiblingsOf(Profiles, profile);
-            return $"This removes the subscription to {repo} with all its profiles ({string.Join(", ", siblings)}). The folder is moved to ~/.config/benchbar/removed, not deleted. Benches set up from them are not changed.";
+            return UiText.Format("ProfileRemoveSubBody", repo, string.Join(", ", siblings));
         }
-        return "The file is moved to ~/.config/benchbar/removed, not deleted. Benches set up from it are not changed.";
+        return UiText.Get("ProfileRemoveFileBody");
     }
 
     private void Raise() => Changed?.Invoke();

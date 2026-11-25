@@ -157,7 +157,7 @@ rm -f "$NODE_DIR"/v22.*/installation/bin/yarn
 scan
 assert_eq "warn" "$(field toolchain_yarn level)"
 assert_eq "yarn_install" "$(field toolchain_yarn action)"
-assert_contains "$(field toolchain_yarn fix_command)" "/installation/bin/npm install -g yarn"
+assert_contains "$(field toolchain_yarn fix_command)" "/installation/bin/npm install -g yarn@1.22.22"
 
 # ---- the site does not resolve (the getent mock knows *.localhost and the listed names)
 scan --site mysite.test

@@ -13,11 +13,11 @@ public sealed record PlanResultModel(bool Ok, bool Cancelled, string Headline, s
     {
         var done = result.Done;
         if (result.Cancelled)
-            return new PlanResultModel(false, true, "Stopped", "The run was stopped. Run the plan again to finish it.", done?.Changed ?? [], done?.Warnings ?? [], [], [], done?.Log);
+            return new PlanResultModel(false, true, UiText.Get("PlanStopped"), UiText.Get("PlanRunStopped"), done?.Changed ?? [], done?.Warnings ?? [], [], [], done?.Log);
         if (result.Ok)
-            return new PlanResultModel(true, false, done is { Changed.Count: 0 } ? "Nothing needed changing" : "Done", null, done?.Changed ?? [], done?.Warnings ?? [], done?.NextActions ?? [], [], done?.Log);
-        var problem = result.Problem ?? $"The command failed (exit {result.Exit}).";
-        return new PlanResultModel(false, false, "It did not finish", problem, done?.Changed ?? [], done?.Warnings ?? [], done?.NextActions ?? [], done?.Missing ?? [], done?.Log);
+            return new PlanResultModel(true, false, done is { Changed.Count: 0 } ? UiText.Get("PlanNothingNeeded") : UiText.Get("PlanDone"), null, done?.Changed ?? [], done?.Warnings ?? [], done?.NextActions ?? [], [], done?.Log);
+        var problem = result.Problem ?? UiText.Format("PlanCommandFailed", result.Exit);
+        return new PlanResultModel(false, false, UiText.Get("PlanDidNotFinish"), problem, done?.Changed ?? [], done?.Warnings ?? [], done?.NextActions ?? [], done?.Missing ?? [], done?.Log);
     }
 }
 
@@ -103,8 +103,8 @@ public sealed class PlanReviewModel : IDisposable
         get
         {
             var title = Request.Title;
-            if (Result is not { } result) return Message ?? $"{title}: no result.";
-            return result.Ok ? $"{title}: {result.Headline.ToLowerInvariant()}." : $"{title}: {result.Headline.ToLowerInvariant()}. {result.Error}".TrimEnd();
+            if (Result is not { } result) return Message ?? UiText.Format("PlanNoResult", title);
+            return result.Ok ? UiText.Format("PlanSummaryOk", title, result.Headline.ToLowerInvariant()) : UiText.Format("PlanSummaryFailed", title, result.Headline.ToLowerInvariant(), result.Error ?? "").TrimEnd();
         }
     }
 
@@ -181,7 +181,7 @@ public sealed class PlanReviewModel : IDisposable
                 Phase = PlanPhase.PlanFailed;
                 // a command without JSON says why on stdout: its [FAIL] line is the reason
                 var fail = preview.TextLines.FirstOrDefault(l => l.Contains("[FAIL]", StringComparison.Ordinal));
-                Message = fail is not null ? fail[(fail.IndexOf("[FAIL]", StringComparison.Ordinal) + 6)..].Trim() : preview.Problem ?? "The preview could not be made.";
+                Message = fail is not null ? fail[(fail.IndexOf("[FAIL]", StringComparison.Ordinal) + 6)..].Trim() : preview.Problem ?? UiText.Get("PlanPreviewFailed");
             }
             Raise();
             return;
@@ -197,7 +197,7 @@ public sealed class PlanReviewModel : IDisposable
         else
         {
             Phase = PlanPhase.PlanFailed;
-            Message = result.Error ?? "The plan could not be made.";
+            Message = result.Error ?? UiText.Get("CommonPlanNotMade");
         }
         Raise();
     }
@@ -249,7 +249,7 @@ public sealed class PlanReviewModel : IDisposable
         if (apply.Done?.WrongSudoPassword == true)
         {
             PasswordWasWrong = true;
-            Message = "Linux did not accept that password. Nothing was changed.";
+            Message = UiText.Get("PlanPasswordRefused");
             Phase = PlanPhase.Review;
         }
         else if (!apply.Ok && !apply.Cancelled && PlanStale.Looks(apply.Problem))

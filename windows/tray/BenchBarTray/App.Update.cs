@@ -101,8 +101,8 @@ public partial class App
                 ShowInfo(start.Message!);
                 break;
             default:
-                _notices.Set(new Notice("update-failed", $"The update could not start. {start.Message} You can run the update line in PowerShell instead.",
-                    "Copy Update Line", () => CopyText(UpdateLinks.InstallCommand)));
+                _notices.Set(new Notice("update-failed", UiText.Format("UpdateCouldNotStart", start.Message ?? ""),
+                    UiText.Get("CommonCopyUpdate"), () => CopyText(UpdateLinks.InstallCommand)));
                 break;
         }
         ShowUpdateEverywhere();
@@ -122,13 +122,13 @@ public partial class App
         }
         if (offer.CanUpdateNow)
         {
-            var answer = MessageBox.Show($"{text} You have {UpdateCheck.ShortVersion()}.\n\n{UpdateLinks.UpdateNowExplanation}\n\nUpdate now?",
+            var answer = MessageBox.Show(UiText.Format("UpdateHaveNow", text, UpdateCheck.ShortVersion(), UpdateLinks.UpdateNowExplanation),
                 "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Information);
             if (answer == MessageBoxResult.Yes) UpdateNow();
             return;
         }
         CopyText(UpdateLinks.InstallCommand);
-        var open = MessageBox.Show($"{text} You have {UpdateCheck.ShortVersion()}.\n\n{UpdateLinks.InstallExplanation} The line is copied to the clipboard:\n\n{UpdateLinks.InstallCommand}\n\nOpen the release page too?",
+        var open = MessageBox.Show(UiText.Format("UpdateHaveCopied", text, UpdateCheck.ShortVersion(), UpdateLinks.InstallExplanation, UpdateLinks.InstallCommand),
             "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Information);
         if (open == MessageBoxResult.Yes) OpenUrl(offer.Url);
     }
@@ -149,7 +149,7 @@ public partial class App
             var version = decision.Version!;
             var text = UpdatedNotice.Text(version);
             _notices.Set(new Notice("updated", text, UpdatedNotice.ActionLabel, () => OpenUrl(UpdateLinks.ReleasePage(version)), Critical: false));
-            ShowInfo(text + " Click for what's new.");
+            ShowInfo(UiText.Format("UpdateClickWhatsNew", text));
         }
         SaveConfig();
         return decision.Show;
@@ -183,5 +183,5 @@ public partial class App
 /// <summary>The one time hint after the first window closes.</summary>
 internal static class RunningHint
 {
-    public const string Text = "BenchBar is still running. Find it in the notification area near the clock (it may be under the ^ arrow), or open BenchBar from the Start menu.";
+    public static string Text => UiText.Get("MainRunningHint");
 }

@@ -82,10 +82,10 @@ public static class ScanJson
         var depth = new string(deep[0][prefix.Length..].TakeWhile(char.IsAsciiDigit).ToArray());
         var summary = deep.Count == 1
             ? deep[0]
-            : $"Stopped at {depth} folders deep in {deep.Count} folders: a bench deeper than that is not found. Choose a folder closer to it.";
+            : UiText.Format("DiscoveryDeepSummary", depth, deep.Count);
         return [summary, .. others];
     }
 
     /// <summary>"1 scan warning" or "N scan warnings".</summary>
-    public static string WarningsTitle(int count) => count == 1 ? "1 scan warning" : $"{count} scan warnings";
+    public static string WarningsTitle(int count) => count == 1 ? UiText.Get("DiscoveryWarningOne") : UiText.Format("DiscoveryWarningMany", count);
 }

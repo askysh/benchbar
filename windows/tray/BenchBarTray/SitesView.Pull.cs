@@ -37,23 +37,23 @@ internal sealed partial class SitesView
 
     internal void OpenPull()
     {
-        _pullFolder = new CheckBox { Content = "Copy from a backup folder inside Ubuntu instead of a server", Margin = new Thickness(0, 0, 0, 10) };
-        Ui.Name(_pullFolder, "From a backup folder");
-        _pullSource = Ui.Field("Host and site", "", _ => PullSourceChanged(), 420);
-        _pullName = Ui.Field("New local site", "", _ => HidePullProblem(), 360);
-        _pullKeep = new CheckBox { Content = "Keep production's passwords and integrations", Margin = new Thickness(0, 0, 0, 4) };
-        Ui.Name(_pullKeep, "Keep production's passwords and integrations");
+        _pullFolder = new CheckBox { Content = UiText.Get("PullFromFolder"), Margin = new Thickness(0, 0, 0, 10) };
+        Ui.Name(_pullFolder, UiText.Get("PullFromFolderName"));
+        _pullSource = Ui.Field(UiText.Get("PullHostField"), "", _ => PullSourceChanged(), 420);
+        _pullName = Ui.Field(UiText.Get("PullNameField"), "", _ => HidePullProblem(), 360);
+        _pullKeep = new CheckBox { Content = UiText.Get("PullKeep"), Margin = new Thickness(0, 0, 0, 4) };
+        Ui.Name(_pullKeep, UiText.Get("PullKeep"));
         _pullProblem = PagePanels.Line("", error: true);
         _pullProblem.Visibility = Visibility.Collapsed;
         _pullKeepNote = Ui.Text(PullCommands.NeutralisedText, 12, opacity: 0.8, margin: new Thickness(0, 0, 0, 10));
         _pullFolder.Click += (_, _) => PullSourceKindChanged();
         _pullKeep.Click += (_, _) => PullKeepChanged();
         _pullAutoName = "";
-        var panel = PagePanels.Panel($"Pull a site into {Bench.Name}",
-            "Copies a production site, or a backup you downloaded, into a new site of this bench. Production is only read. You see the plan first.",
-            [_pullFolder, Ui.Labeled("Host and site", _pullSource, "HOST is a Host of ~/.ssh/config inside Ubuntu, and its key must work without a prompt. The latest backup on the server is used and nothing is written there."),
-             Ui.Labeled("New local site", _pullName, "Names that end in .localhost open in your browser without any setup."), _pullKeep, _pullKeepNote, _pullProblem],
-            [Ui.Button("Review Plan...", () => Start(PullAsync), primary: true), Ui.Button("Cancel", ClosePanel)]);
+        var panel = PagePanels.Panel(UiText.Format("SitesPullInto", Bench.Name),
+            UiText.Get("PullExplain"),
+            [_pullFolder, Ui.Labeled(UiText.Get("PullHostField"), _pullSource, UiText.Get("PullHostHelp")),
+             Ui.Labeled(UiText.Get("PullNameField"), _pullName, UiText.Get("SitesLocalhostHint")), _pullKeep, _pullKeepNote, _pullProblem],
+            [Ui.Button(UiText.Get("RunCmdReviewPlan"), () => Start(PullAsync), primary: true), Ui.Button(UiText.Get("Cancel"), ClosePanel)]);
         SetPanel(panel);
         _pullSource.Focus();
     }
@@ -77,7 +77,7 @@ internal sealed partial class SitesView
         if (_pullName is not null && _pullName.Text == _pullAutoName) _pullName.Text = "";
         _pullAutoName = "";
         HidePullProblem();
-        Ui.Name(_pullSource, _pullFolder?.IsChecked == true ? "Backup folder" : "Host and site");
+        Ui.Name(_pullSource, _pullFolder?.IsChecked == true ? UiText.Get("PullFolderField") : UiText.Get("PullHostField"));
     }
 
     private void PullKeepChanged()
@@ -85,7 +85,7 @@ internal sealed partial class SitesView
         if (_pullKeepNote is null || _pullKeep is null) return;
         var keep = _pullKeep.IsChecked == true;
         _pullKeepNote.Text = keep
-            ? "Warning: " + PullCommands.KeptText + " Do not start its scheduler or workers unless you mean to reach the same services as production."
+            ? UiText.Format("PullKeptNote", PullCommands.KeptText)
             : PullCommands.NeutralisedText;
         _pullKeepNote.Opacity = 1;
         if (keep) _pullKeepNote.Foreground = Ui.CautionTextBrush;
@@ -136,7 +136,7 @@ internal sealed partial class SitesView
             if (outcome.Applied)
             {
                 ClosePanel();
-                Say($"{input.Name} was pulled.", false);
+                Say(UiText.Format("PullDone", input.Name), false);
                 _services.RefreshNow();
             }
             Rebuild();

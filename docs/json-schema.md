@@ -1521,8 +1521,12 @@ Added in 0.9.0. A snapshot is a backup with files kept in
 
 `benchbar site snapshots NAME --json`: `{"schema_version", "cli_version",
 "bench", "site", "folder", "keep", "snapshots": [snapshot, ...],
-"over_limit": [id, ...], "last_rollback_snapshot", "total_bytes",
-"free_bytes"}`, newest first. `total_bytes` is what the snapshots hold,
+"over_limit": [id, ...], "held_back": [id, ...], "held_back_bytes",
+"leftovers": [{"id", "path", "size_bytes", "move_back"}],
+"last_rollback_snapshot", "total_bytes", "free_bytes"}`, newest first.
+`held_back` is what is beyond the limit but protected as an undo point, and
+`leftovers` the `.incomplete-ID` folders a killed snapshot left, each with the
+command in `move_back` that puts its backup files back. `total_bytes` is what the snapshots hold,
 `free_bytes` the free space of the volume (`null` when `df` does not say).
 `over_limit` is what retention would remove, never the undo point of the
 last rollback that finished nor the snapshot of one that did not. Nothing is removed by either command.
@@ -1539,7 +1543,10 @@ apps differ, and one more key:
 The result of `--apply TOKEN --yes --json` is the restore result with
 `rollback: {"snapshot", "before_rollback", "undo"}`: `before_rollback` is the
 snapshot of the state before the rollback and `undo` the command that goes
-back to it. `benchbar site snapshot drop` prints `{"dropped": [id, ...],
+back to the state before the first attempt (after a retry of a rollback that
+did not finish, the oldest unfinished snapshot, not `before_rollback`).
+`benchbar site snapshot drop` also lists `held_back` and `held_back_bytes` in
+its prune plan, and prints `{"dropped": [id, ...],
 "freed_bytes"}` (a plan with `would_drop`); it is for a person at a terminal.
 
 `site drop`'s plan and result and the `sites[]` of `bench remove`'s plan carry
