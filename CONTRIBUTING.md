@@ -214,7 +214,10 @@ without a row counts as 10 seconds, so a new test needs no row to run.
   sentence that ends in the pull request number, for example `Fix the
   port check for a stopped bench (#123)`. No tool trailers in a commit or
   a pull request: no `Co-Authored-By` for a tool and no "Generated with"
-  line. The reviewer checks the title before merging.
+  line. The "PR text" check fails a pull request whose title has an em
+  or en dash or whose title, description or commits carry such a trailer
+  (`scripts/check-pr-text.sh`); the reviewer checks the rest of the
+  title before merging.
 
 The pull request template asks for all of this as checkboxes. A docs only
 fix (a typo, a wrong sentence) may go to `main` instead of `next-release`
