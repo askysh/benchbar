@@ -6,7 +6,7 @@ description: "Open a Frappe site as a pinned user from any app with Quick Switch
 Quick Switch opens a list from any app on the Mac. From the list you open
 a site in your browser, signed in as one of its users. It is a Lab on
 macOS. On Windows the tray menu has its own Quick Switch. See
-[Windows](../windows.md#the-benchbar-window).
+[Windows](../windows-tray.md#the-benchbar-window).
 
 ## Before you start
 

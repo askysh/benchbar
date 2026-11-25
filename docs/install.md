@@ -29,11 +29,14 @@ cask alone cannot pull in its formula. `benchbar install` sets up the
 bench, the site and the background service as in the
 [Quick start](quick-start.md); with a bench you already have, run
 `benchbar adopt` instead. To check a Mac before installing, without a
-bench, run `benchbar doctor --prerequisites` (Apple Silicon, macOS 14,
-Command Line Tools, Homebrew, free disk, the bench folder, cleanup tools
-and the default ports; each check that is not ok names its fix). The BenchBar app drives `install` and `adopt`
-through `--json --yes`, which prints one JSON event per line; the format
-is in the [JSON API](json-schema.md).
+bench, run `benchbar doctor --prerequisites`. It checks Apple Silicon,
+macOS 14, Command Line Tools, Homebrew, free disk, the bench folder,
+cleanup tools and the default ports. Each check that is not ok names its
+fix.
+
+BenchBar.app drives `install` and `adopt` through `--json --yes`. That
+prints one JSON event per line. The format is in the
+[JSON API](json-schema.md).
 
 The cask needs Apple Silicon and macOS Sonoma or later. For the CLI
 alone, on an Intel Mac too (written for it, not checked on real
@@ -73,7 +76,8 @@ In more detail, in this order, and it says so before each step:
    `raw.githubusercontent.com/Homebrew/install/HEAD`, and benchbar does
    not check it. Run it yourself first if you want to read it).
 2. It clones the CLI into `~/.local/share/benchbar`, or pulls when the
-   clone exists, links `benchbar` and `frappe-mac` into `~/.local/bin`,
+   clone exists, links `benchbar` and `frappe-mac` (the old name of `benchbar`, kept as an
+   alias) into `~/.local/bin`,
    and adds that folder to `PATH` in `~/.zshrc` inside a
    `# >>> benchbar-path >>>` marker block.
 3. It installs or updates the BenchBar app from the latest GitHub
