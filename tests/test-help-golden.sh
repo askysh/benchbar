@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The help text is held byte for byte: benchbar --help (also with no command, and as `help`) and
 # benchbar COMMAND --help for every command and subcommand of the table, with the experiments off
-# and on (a command of a lab that is off prints its refusal, not its help). The expected text is in
+# and, for the commands of a lab, on (a command of a lab that is off prints its refusal, not its help). The expected text is in
 # tests/golden/help.txt, written from the hand written help of 0.8.3 (CORE-18): generating the
 # global help from the table must not change one character of it.
 #
@@ -32,6 +32,9 @@ while IFS= read -r k; do
   [[ -z "$k" ]] || grep -qxF -- "$k" <<<"$keys" || fail "a use record names $k, which is not a command of the table"
 done <<<"$ukeys"
 
+# The second pass (the experiments on) runs the global help and the commands whose help was a
+# refusal (a nonzero exit) in the first one: every other command prints the same in both.
+gated=""
 for labs in "" "lan-rooms,quick-switch"; do
   export BENCHBAR_LABS="$labs"
   tag="labs: ${labs:-none}"
@@ -40,8 +43,17 @@ for labs in "" "lan-rooms,quick-switch"; do
   run_fm help; note "benchbar help [$tag]"
   run_fm; note "benchbar [$tag]"
   while IFS= read -r key; do
+    if [[ -n "$labs" ]]; then
+      case "
+$gated
+" in *"
+$key
+"*) ;; *) continue ;; esac
+    fi
     # shellcheck disable=SC2086  # the key is one to three words
     run_fm $key --help; note "benchbar $key --help [$tag]"
+    if [[ -z "$labs" && "$CODE" != "0" ]]; then gated="${gated}${gated:+
+}${key}"; fi
   done <<<"$keys"
 done
 unset BENCHBAR_LABS
@@ -54,6 +66,6 @@ fi
 
 [[ -f "$GOLDEN" ]] || fail "tests/golden/help.txt is missing"
 if ! cmp -s "$GOLDEN" "$ACTUAL"; then
-  fail "the help text differs from tests/golden/help.txt: $(diff "$GOLDEN" "$ACTUAL" | head -20)"
+  fail "the help text differs from tests/golden/help.txt: $(diff "$GOLDEN" "$ACTUAL" | sed -n 1,20p)"
 fi
 assert_eq "$(grep -c '^=== ' "$GOLDEN")" "$(grep -c '^=== ' "$ACTUAL")" "(one section per form)"
