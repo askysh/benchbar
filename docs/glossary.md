@@ -120,7 +120,7 @@ own address, such as `http://macdev:8000`.
 
 Where `benchbar` keeps its logs, backups and the list
 of remembered benches. For Homebrew and the one line installer on a Mac it
-is `~/.local/state/benchbar`. On Linux it is `$XDG_STATE_HOME/benchbar`. In a
+is `~/.local/state/benchbar`. On Linux it is `$XDG_STATE_HOME/benchbar` when that variable is set, else the same `~/.local/state/benchbar`. In a
 git checkout it is the `.benchbar/` folder of the checkout.
 
 ## systemd
