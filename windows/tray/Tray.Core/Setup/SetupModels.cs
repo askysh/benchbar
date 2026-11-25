@@ -176,15 +176,16 @@ public static class SetupJson
             case "log":
                 return new SetupEvent.Log(JsonRead.Str(obj, "line") ?? "");
             case "done":
+                var envelope = ResultEnvelope.From(obj);
                 return new SetupEvent.Done(
-                    JsonRead.Int(obj, "exit") ?? 1,
+                    envelope?.Exit ?? 1,
                     JsonRead.Bool(obj, "changed"),
                     JsonRead.Bool(obj, "reboot_required"),
                     JsonRead.Bool(obj, "cancelled"),
-                    JsonRead.Strings(obj, "warnings"),
-                    JsonRead.Strings(obj, "next_actions"),
+                    envelope?.Warnings ?? JsonRead.Strings(obj, "warnings"),
+                    (envelope?.NextActions ?? ResultEnvelope.Next(obj)).Select(a => a.Command).ToList(),
                     JsonRead.Bool(obj, "user_existed"),
-                    JsonRead.Str(obj, "error_id") is { Length: > 0 } errorId ? errorId : null);
+                    (envelope?.ErrorId ?? JsonRead.Str(obj, "error_id")) is { Length: > 0 } errorId ? errorId : null);
             default:
                 return null;
         }
