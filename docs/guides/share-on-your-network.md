@@ -21,7 +21,7 @@ Windows, or run `benchbar labs on lan-rooms`. See [Labs](labs.md).
   is an nftables table.
 - **Windows.** Open a room on the **Sharing** tab of the BenchBar window,
   since 0.9.0. The bench runs in WSL, which needs mirrored networking for
-  a room. The tray cannot join a room yet. See
+  a room. The same tab joins a room as a guest (NAT or mirrored). See
   [Rooms on Windows](../windows.md#rooms-on-windows).
 
 ## Open a room in the Mac app
@@ -205,6 +205,17 @@ guest only connects out, and the browser in Windows opens the room on
 
 The local address is there while the WSL distribution runs. Keep a
 terminal of the distribution open while you use the room.
+
+### In the Windows tray
+
+The **Sharing** tab has **Join a room...** when the command line tool in WSL
+has `share join`. Type the address of the room, choose **Look at the room**,
+and compare the 16 digits of the host key with the ones the host reads out.
+Only then type the room code. Where the host gives out the seats, the tab
+waits for yours (up to 10 minutes) and **Cancel join** ends the wait. A room
+this computer joined is listed with **Open**, **Leave** and **Forget**;
+**Forget** asks first. The tab joins by address and code. To use an invite
+link, run `benchbar share join` in a terminal.
 
 ## When a room ends
 

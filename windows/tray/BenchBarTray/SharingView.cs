@@ -10,7 +10,7 @@ namespace BenchBar.Tray;
 /// something asks first, as the Mac's alerts do, and nothing runs from a poll: <see cref="Bind"/> only reads. The rules and the
 /// words are in <see cref="ShareModel"/> and <see cref="ShareText"/>; this draws them.
 /// </summary>
-internal sealed class SharingView : UserControl, IBenchPageView
+internal sealed partial class SharingView : UserControl, IBenchPageView
 {
     private readonly PageServices _services;
     private readonly Func<string, ShareModel> _newModel;
@@ -25,15 +25,16 @@ internal sealed class SharingView : UserControl, IBenchPageView
     private ShareSetupPlan? _formPlan;
     private bool _formRefresh;
 
-    public SharingView(PageServices services) : this(services, bench => new ShareModel(services.Cli, bench))
+    public SharingView(PageServices services) : this(services, bench => new ShareModel(services.Cli, bench), null)
     {
         Confirm = (title, detail, button) => ConfirmDialog.Ask(title, detail, button, services.Theme(), services.Owner());
     }
 
-    internal SharingView(PageServices services, Func<string, ShareModel> newModel)
+    internal SharingView(PageServices services, Func<string, ShareModel> newModel, Func<ShareGuestModel>? newGuest = null)
     {
         _services = services;
         _newModel = newModel;
+        _newGuest = newGuest ?? (() => new ShareGuestModel(services.Cli, services.Commands));
         Content = _root;
         Ui.Name(this, "Sharing");
     }
@@ -70,7 +71,7 @@ internal sealed class SharingView : UserControl, IBenchPageView
             _revealed = false;
         }
         Context = context;
-        Pending = _model.RefreshAsync();
+        Pending = Task.WhenAll(_model.RefreshAsync(), StartGuest());
         Render();
     }
 
@@ -110,6 +111,7 @@ internal sealed class SharingView : UserControl, IBenchPageView
         _root.Children.Clear();
         _root.Children.Add(Ui.Title("Sharing"));
         Draw(_model.Status);
+        DrawJoin();
         Lines = [.. _lines];
     }
 
