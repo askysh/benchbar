@@ -44,6 +44,8 @@ FL_OP_PROG_BYTES=""
 FL_OP_NOT_FOR="fg self-update"
 # a record is "starting" from the moment --background wrote it until the detached run takes it over
 FL_OP_START_GRACE=60
+# a stamp this many seconds ahead of the clock is a clock that stepped back (VM time sync: seconds); more is a bad stamp
+FL_OP_CLOCK_SKEW=600
 FL_OP_ID_RE='^op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?$'
 
 fl_ops_dir() { printf '%s/ops' "${FL_STATE_DIR}"; }
@@ -56,17 +58,51 @@ fl__op_str_v() {
   if [[ -n "${2:-}" ]]; then fl_json_str_v "$1" "$2"; else printf -v "$1" '%s' null; fi
 }
 
-# fl_op_new_id_v VAR: a new op id, its file made empty (noclobber, so two runs never share one)
+# fl__op_stamp_secs_v VAR STAMP: STAMP (YYYYMMDD-HHMMSS) as seconds on a scale that counts its fields as UTC (days from
+# the civil date, in bash arithmetic only). Two stamps of one clock differ by the real seconds between them.
+fl__op_stamp_secs_v() {
+  local __y __m __d __era __yoe __doy __doe
+  __y=$((10#${2:0:4})); __m=$((10#${2:4:2})); __d=$((10#${2:6:2}))
+  [[ "$__m" -gt 2 ]] || __y=$((__y - 1))
+  __era=$((__y / 400)); __yoe=$((__y - __era * 400))
+  __doy=$(( (153 * (__m > 2 ? __m - 3 : __m + 9) + 2) / 5 + __d - 1 ))
+  __doe=$((__yoe * 365 + __yoe / 4 - __yoe / 100 + __doy))
+  printf -v "$1" '%s' $(( (__era * 146097 + __doe - 719468) * 86400 + 10#${2:9:2} * 3600 + 10#${2:11:2} * 60 + 10#${2:13:2} ))
+}
+
+# fl_op_new_id_v VAR: a new op id, its file made empty (noclobber, so two runs never share one). The id sorts
+# after every id that is already there (fl_op_ids): the clock can step back (a VM that syncs its time does so by
+# seconds, WSL every 30 s), and a run that starts after a step would carry an older stamp than the run before it.
+# So when the clock is not past the newest stamp in the folder, the id takes that stamp and a -N one above the
+# newest -N of it, and N, not the pid, orders the runs of one stamp. A stamp more than FL_OP_CLOCK_SKEW seconds
+# ahead of the clock is not a step back (a resumed VM, a bad RTC): it is ignored, so one such op does not hold the
+# stamp of every op after it (it stays on top of the list until it is pruned). A name read in bash only, no fork.
 fl_op_new_id_v() {
-  local __dir __stamp __id __n=0
+  local __dir __stamp __id __n=0 __max __top="" __topn=0 __f __b __s __k __now="" __sec
+  local __re='^op-([0-9]{8}-[0-9]{6})-[0-9]+(-([0-9]+))?\.json$'
   __dir="$(fl_ops_dir)"
   mkdir -p "$__dir" 2>/dev/null || return 1
-  __stamp="$(date +%Y%m%d-%H%M%S)-$$"
-  __id="op-${__stamp}"
+  __stamp="$(date +%Y%m%d-%H%M%S)"
+  for __f in "$__dir"/op-*.json; do
+    __b="${__f##*/}"
+    [[ "$__b" =~ $__re ]] || continue
+    __s="${BASH_REMATCH[1]}"; __k="${BASH_REMATCH[3]:-0}"
+    if [[ "$__s" > "$__stamp" ]]; then
+      [[ -n "$__now" ]] || fl__op_stamp_secs_v __now "$__stamp"
+      fl__op_stamp_secs_v __sec "$__s"
+      [[ $((__sec - __now)) -le "$FL_OP_CLOCK_SKEW" ]] || continue
+    fi
+    if [[ "$__s" > "$__top" ]]; then __top="$__s"; __topn="$__k"
+    elif [[ "$__s" == "$__top" && "$__k" -gt "$__topn" ]]; then __topn="$__k"; fi
+  done
+  if [[ -n "$__top" && ! "$__stamp" > "$__top" ]]; then __stamp="$__top"; __n=$((__topn + 1)); fi
+  __max=$((__n + 20))
+  __id="op-${__stamp}-$$"
+  [[ "$__n" -eq 0 ]] || __id="${__id}-${__n}"
   until ( set -o noclobber; : >"${__dir}/${__id}.json" ) 2>/dev/null; do
     __n=$((__n + 1))
-    [[ "$__n" -le 20 ]] || return 1
-    __id="op-${__stamp}-${__n}"
+    [[ "$__n" -le "$__max" ]] || return 1
+    __id="op-${__stamp}-$$-${__n}"
   done
   printf -v "$1" '%s' "$__id"
 }
@@ -307,10 +343,36 @@ fl_op_result_v() {
   printf -v "$1" '%s' "$__line"
 }
 
-# fl_op_ids: every op id, newest first
+# fl_op_ids: every op id, newest first. An id is op-DATE-TIME-PID[-N]: the date and the time are fixed width text,
+# the N (the run's place within one stamp, see fl_op_new_id_v) and the pid are numbers, compared in that order. Sorted
+# as text, pid 9998 came after 10001 and "-5" after "-5-1". One sort for the whole list, no fork per op.
+# An id whose stamp is more than FL_OP_CLOCK_SKEW seconds ahead of the clock (a resumed VM, a bad RTC) is not the
+# newest run: it goes LAST, so ops[0] is a real run and the prune (it keeps the first FL_KEEP_OPS ids of this list)
+# takes it. Several of them follow each other from the nearest stamp to the furthest, the furthest is pruned first.
+# These have the newest stamps, so they are the first lines of the sort: the clock's stamp is made once per call
+# (one date call) and an id is converted to seconds (fl__op_stamp_secs_v) only while it is text greater than that.
 fl_op_ids() {
+  local __now __nowsecs="" __sec __id __far="" __past=0
+  __now="$(date +%Y%m%d-%H%M%S)"
+  while IFS= read -r __id; do
+    if [[ "$__past" != "1" ]]; then
+      if [[ "${__id:3:15}" > "$__now" ]]; then
+        [[ -n "$__nowsecs" ]] || fl__op_stamp_secs_v __nowsecs "$__now"
+        fl__op_stamp_secs_v __sec "${__id:3:15}"
+        if [[ $((__sec - __nowsecs)) -gt "$FL_OP_CLOCK_SKEW" ]]; then __far="${__id}"$'\n'"${__far}"; continue; fi
+      fi
+      __past=1
+    fi
+    printf '%s\n' "$__id"
+  done < <(fl__op_ids_sorted)
+  printf '%s' "$__far"
+}
+
+# fl__op_ids_sorted: the op ids, newest stamp first (see fl_op_ids)
+fl__op_ids_sorted() {
   # shellcheck disable=SC2010  # names this tool made, matched by a strict pattern
-  ls -1 "$(fl_ops_dir)" 2>/dev/null | grep -E '^op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?\.json$' | sort -r | sed 's/\.json$//' || true
+  ls -1 "$(fl_ops_dir)" 2>/dev/null | grep -E '^op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?\.json$' | sed 's/\.json$//' \
+    | sort -t- -k2,2r -k3,3r -k5,5nr -k4,4nr || true
 }
 
 # fl_op_ago_v VAR RECORD: a short "3m 12s" for how long the run has gone (or went), from its own times
