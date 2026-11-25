@@ -498,7 +498,10 @@ UU_DIR="$TMP_DIR/uu"; mkdir -p "$UU_DIR/state" "$UU_DIR/bin"
 uu_out="$(FL_STATE_DIR="$UU_DIR/state" bash -c '
   set -euo pipefail
   . "$1/lib/frappe-local/lock.sh"; . "$1/lib/frappe-local/lease.sh"
-  mkdir() { command mkdir "$@" 2>/dev/null || [[ -d "${!#}" ]]; }
+  # the real mkdir by its path: on bash 3.2 a failed "command mkdir" ends the run under set -e even
+  # inside || or an if
+  mk="$(type -P mkdir)"
+  mkdir() { "$mk" "$@" 2>/dev/null || [[ -d "${!#}" ]]; }
   sleep() { :; }
   fl__lease_lock && printf "first holds\n"
   if (fl__lease_lock); then printf "second holds too\n"; else printf "second waits\n"; fi
@@ -542,7 +545,8 @@ if [[ "$cw_user" == 1 ]]; then
     set -euo pipefail
     . "$1/lib/frappe-local/lock.sh"; . "$1/lib/frappe-local/lease.sh"
     fl_die() { printf "DIE %s\n" "$1"; exit 1; }
-    mkdir() { command mkdir "$@" || return; [[ "$1" == -p ]] || chmod a-w "${!#}"; }
+    mk="$(type -P mkdir)"
+    mkdir() { "$mk" "$@" || return; [[ "$1" == -p ]] || chmod a-w "${!#}"; }
     rc=0; fl_mkdir_excl "$FL_STATE_DIR/x" || rc=$?; printf "excl=%s\n" "$rc"
     command rmdir "$FL_STATE_DIR/x"
     rc=0; fl__lease_lock || rc=$?; printf "lease=%s\n" "$rc"
