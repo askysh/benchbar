@@ -131,6 +131,32 @@ fl_hist_words() {
     __prev="$FL_HIST_NEXT_SECRET"
     FL_HIST_WORDS+=("$__w")
   done
+  fl__hist_mask_split_code
+}
+
+# fl__hist_mask_split_code: after "share join", words of digits (dashes allowed) that together make six
+# digits are a room code typed in parts, as the host prints it ("482 913" without quotes is two words):
+# each of those words becomes ***
+fl__hist_mask_split_code() {
+  local __i=0 __j __k __d __n="${#FL_HIST_WORDS[@]}" __after=0 __re='^-?[0-9][0-9-]*$'
+  while [[ "$__i" -lt "$__n" ]]; do
+    if [[ "$__after" == 0 ]]; then
+      [[ "$__i" -lt 1 || "${FL_HIST_WORDS[$((__i - 1))]}" != "share" || "${FL_HIST_WORDS[$__i]}" != "join" ]] || __after=1
+      __i=$((__i + 1)); continue
+    fi
+    __d=""; __j="$__i"
+    while [[ "$__j" -lt "$__n" && "${FL_HIST_WORDS[$__j]}" =~ $__re ]]; do
+      __d="${__d}${FL_HIST_WORDS[$__j]//-/}"
+      [[ "${#__d}" -lt 6 ]] || break
+      __j=$((__j + 1))
+    done
+    if [[ "${#__d}" -eq 6 && "$__j" -gt "$__i" && "$__j" -lt "$__n" ]]; then
+      for ((__k = __i; __k <= __j; __k++)); do FL_HIST_WORDS[__k]='***'; done
+      __i=$((__j + 1))
+    else
+      __i=$((__i + 1))
+    fi
+  done
 }
 
 # fl_hist_argv_json_v VAR: the command line as a JSON array of words

@@ -151,6 +151,14 @@ KEPT="$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/history.s
   FL_ORIG_ARGS=(site backup 482913); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"
   FL_ORIG_ARGS=(share join 482-913 "482 913" "48-29-13" 4829133 --seat seat-1); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"' _ "$ROOT")"
 assert_eq "share|join|***|***|***|--name|x|192.168.1.20|site|backup|482913|share|join|***|***|***|4829133|--seat|seat-1|" "$KEPT"
+# the host prints the code as "482 913", and a person types it so, without quotes: two words, or three
+KEPT="$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/history.sh"
+  FL_ORIG_ARGS=(share join 192.168.1.20 482 913); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"
+  FL_ORIG_ARGS=(share join 192.168.1.20 48 29 13 --name x); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"
+  FL_ORIG_ARGS=(share join 192.168.1.20 482- 913); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"
+  FL_ORIG_ARGS=(share join 192.168.1.20 4829 13 7); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"
+  FL_ORIG_ARGS=(site backup 482 913); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"' _ "$ROOT")"
+assert_eq "share|join|192.168.1.20|***|***|share|join|192.168.1.20|***|***|***|--name|x|share|join|192.168.1.20|***|***|share|join|192.168.1.20|***|***|7|site|backup|482|913|" "$KEPT" "(a code split into words after share join is masked; seven digits after it are not one code, but its first six are)"
 # at a terminal the code and the link are read without an echo
 assert_contains "$(cat "$ROOT/lib/frappe-local/share-guest.sh")" 'IFS= read -r -s -p'
 assert_eq "2" "$(grep -c 'secret$' "$ROOT/lib/frappe-local/share-guest.sh")" "(the code and the invite link are the secrets read)"

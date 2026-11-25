@@ -13,5 +13,6 @@
   caller that looked at the room first (`--dry-run --json`, `host_pin`). Another key
   ends the run with exit code 3, before any request.
 - `share leave` and `share forget` also work while the `lan-rooms` Lab is off. The room
-  code and the invite link are not shown while you type them. The room history of the
-  shell masks a code with spaces or dashes.
+  code and the invite link are not shown while you type them. `benchbar history` masks a
+  room code passed to `share join` by mistake, also when it is typed in parts, as the host
+  prints it (`482 913` without quotes) or with dashes.
