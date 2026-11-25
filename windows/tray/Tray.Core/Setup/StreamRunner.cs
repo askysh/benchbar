@@ -41,10 +41,19 @@ public sealed class SystemStreamRunner : IStreamRunner
     /// <summary>
     /// The sentence of what a child wrote on stderr: the first <c>[FAIL]</c> line when there is one (the CLI's own refusal, which can come after
     /// lines that only describe the room), else the first line. The generic <c>[FAIL] Command failed (exit N)</c> that <c>benchbar run</c> prints
-    /// after a command is not the reason: it counts only when nothing else is there to say, so a first line that was the meaning stays the meaning.
+    /// after a command is not the reason: it counts only when no other tagged line is there to say more, and then it is the line, not the first
+    /// line of the output (which for a refused join is the room's name, chosen by the host).
     /// </summary>
     public static string? PickError(IReadOnlyList<string> lines) =>
-        lines.FirstOrDefault(l => l.Contains("[FAIL]", StringComparison.Ordinal) && !l.Contains("[FAIL] Command failed (exit", StringComparison.Ordinal)) ?? lines.FirstOrDefault();
+        lines.FirstOrDefault(l => IsFail(l) && !IsGeneric(l)) ?? lines.FirstOrDefault(IsGeneric) ?? lines.FirstOrDefault();
+
+    /// <summary>
+    /// A line is the CLI's own sentence only when it <em>starts</em> with the tag. A tag in the middle of a line is text somebody chose: a refused
+    /// <c>share join</c> prints the host's name for its room before the sentence, and a room named "x [FAIL] You must pay" must not become it.
+    /// </summary>
+    private static bool IsFail(string line) => line.TrimStart().StartsWith("[FAIL]", StringComparison.Ordinal);
+
+    private static bool IsGeneric(string line) => line.TrimStart().StartsWith("[FAIL] Command failed (exit", StringComparison.Ordinal);
 
     /// <summary>
     /// Sends <paramref name="stdin"/> and a line feed (LF, never the platform's line end: the CLI reads the line with <c>read -r</c> and a

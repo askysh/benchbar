@@ -86,6 +86,10 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
     {
         var known = commands is null ? await ReadCatalogueAsync(ct).ConfigureAwait(true) : await commands.GetAsync().ConfigureAwait(true);
         if (commands is not null && known is not null && !known.Labs.Contains(LabName)) known = await commands.RefreshAsync().ConfigureAwait(true);
+        // A CLI that cannot pin gets no look at <c>share joined</c>, whose documents would tell that it was updated: ask its version (any document has it)
+        // once per look at the tab, and read the catalogue again when it is not the one the catalogue came from.
+        if (known is not null && !CanPin(known) && await ProbeVersionAsync(ct).ConfigureAwait(true) is { } version && version != known.CliVersion)
+            known = commands is null ? await ReadCatalogueAsync(ct).ConfigureAwait(true) : await commands.RefreshAsync().ConfigureAwait(true);
         Use(known);
         Raise();
     }
@@ -94,6 +98,14 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
 
     private async Task<CommandCatalogue?> ReadCatalogueAsync(CancellationToken ct) =>
         (await cli.RunJsonAsync(CommandCatalogue.Args, null, CliTimeouts.Read, CommandCatalogue.Parse, ct).ConfigureAwait(true)).Value;
+
+    private async Task<string?> ProbeVersionAsync(CancellationToken ct)
+    {
+        var where = await cli.RunJsonAsync(WhereArgs, null, CliTimeouts.Read, ct).ConfigureAwait(true);
+        return where.Ok ? JsonRead.Str(where.Value!, "cli_version") : null;
+    }
+
+    private static readonly string[] WhereArgs = ["where", "--json"];
 
     private void Use(CommandCatalogue? catalogue)
     {
@@ -462,8 +474,14 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
         Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttp && uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The CLI's sentence for a call that did not work (its <c>error</c> or the <c>[FAIL]</c> line of stderr), else the generic text.</summary>
-    private static string Refusal(CliResult<JsonObject> result, string generic) =>
-        !result.Ok && ShareGuestText.Sentence(result.Error) is { Length: > 0 } sentence ? sentence : generic;
+    private static string Refusal(CliResult<JsonObject> result, string generic)
+    {
+        if (result.Ok) return generic;
+        // A sentence is the CLI's when it comes in its document, or from a stderr line that starts with the tag. Any other first line of a refused
+        // join is the room's own text (its name, chosen by the host) and is never shown as the reason.
+        var tagged = result.Value is not null || result.Done is not null || result.Error?.TrimStart().StartsWith("[FAIL]", StringComparison.Ordinal) == true;
+        return tagged && ShareGuestText.Sentence(result.Error) is { Length: > 0 } sentence ? sentence : generic;
+    }
 
     private bool Begin(string busy)
     {

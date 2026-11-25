@@ -14,12 +14,12 @@ namespace Tray.Core.Tests;
 /// </summary>
 public class ShareGuestTests
 {
-    private const string Code = "482913";
+    internal const string Code = "482913";
     private const string RoomKey = "7fdc34a6ba8c6ac7";
     private const string Pin = "7fdc34a6ba8c6ac7c1afd281d813b5d80957fdaa89d10c000cc72b44c816453d"; // host_pin of share-join-look.json
     private const string Room = "127.0.0.1:38999";
 
-    private static (ShareGuestModel Model, ScriptedStreamRunner Runner) Rig()
+    internal static (ShareGuestModel Model, ScriptedStreamRunner Runner) Rig()
     {
         SynchronizationContext.SetSynchronizationContext(null);
         var (client, runner) = Scripted();
@@ -27,9 +27,9 @@ public class ShareGuestTests
         return (new ShareGuestModel(client, commands), runner);
     }
 
-    private static string Stderr(string name) => SystemStreamRunner.PickError([.. Lines(name).Select(l => l.Trim())])!; // the runner keeps trimmed lines
+    internal static string Stderr(string name) => SystemStreamRunner.PickError([.. Lines(name).Select(l => l.Trim())])!; // the runner keeps trimmed lines
 
-    private static async Task<(ShareGuestModel Model, ScriptedStreamRunner Runner)> LookedAt(string look = "share-join-look.json")
+    internal static async Task<(ShareGuestModel Model, ScriptedStreamRunner Runner)> LookedAt(string look = "share-join-look.json")
     {
         var (model, runner) = Rig();
         runner.On(a => a.Contains("--dry-run")).Print(Lines(look));
@@ -477,12 +477,12 @@ public class ShareGuestTests
         runner.On("commands").Print(string.Join(Environment.NewLine, Lines("commands.json")).Replace("\"labs\": []", "\"labs\": [\"lan-rooms\"]")); // the lab is on and the recorded catalogue lists no share subcommand: an older CLI
         await model.CheckSupportAsync(TestContext.Current.CancellationToken);
         Assert.False(model.Supported);
-        Assert.Single(runner.Runs);
+        Assert.Equal(1, Asked(runner));
 
         var (silent, silentRunner) = Rig(); // no answer to commands at all
         await silent.CheckSupportAsync(TestContext.Current.CancellationToken);
         Assert.False(silent.Supported);
-        Assert.Single(silentRunner.Runs);
+        Assert.Equal(1, Asked(silentRunner));
     }
 
     [Fact]
@@ -570,13 +570,13 @@ public class ShareGuestTests
 
     // --- what the CLI can do is asked once per CLI, not at every look at the tab ---
 
-    private static string Catalogue(string version, bool pin = true, bool lab = true)
+    internal static string Catalogue(string version, bool pin = true, bool lab = true)
     {
         var flags = pin ? "[{\"name\":\"--host-key\",\"value\":\"HEX\",\"help\":\"h\"}]" : "[]";
         return "{\"schema_version\":1,\"cli_version\":\"" + version + "\",\"labs\":" + (lab ? "[\"lan-rooms\"]" : "[]") + ",\"commands\":[{\"name\":\"share join\",\"usage\":\"u\",\"summary\":\"s\",\"mutating\":true,\"flags\":" + flags + "}]}";
     }
 
-    private static int Asked(ScriptedStreamRunner runner) => runner.Runs.Count(r => r.Args[0] == "commands");
+    internal static int Asked(ScriptedStreamRunner runner) => runner.Runs.Count(r => r.Args[0] == "commands");
 
     [Fact]
     public async Task TheCatalogueIsReadOnceForManyLooksAtTheTabAndManyModels()
