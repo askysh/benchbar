@@ -189,7 +189,7 @@ assert_eq "done"$'\n'"done" "$race_out" "(op wait and op status on a run that fi
 fake_op op-20260101-000008-18 running "$LIVE"
 race_out="$(FL_STATE_DIR="$FL_STATE_DIR" OPS="$OPS" bash -c '
   set -euo pipefail
-  . "$1/lib/frappe-local/ops.sh"
+  . "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/ops.sh"
   OPT_JSON=1; n=0
   kill() {
     if [[ "${1:-}" == "-0" ]]; then
