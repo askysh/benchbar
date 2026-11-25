@@ -266,6 +266,22 @@ fl_op_effective_v() {
   printf -v "$1" '%s' "$__s"
 }
 
+# fl_op_now_v REC_VAR STATE_VAR OP_ID: the record and the state to show, for a reader. A run finishes its
+# record before it exits, so a record that still says running while its pid is gone may be one the run
+# finished between the read and the pid check (op wait on a background run said interrupted for a run
+# that was done, macOS CI): the record is read once more before the run counts as interrupted.
+fl_op_now_v() {
+  local __r __s
+  fl_op_read_v __r "$3"
+  fl_op_effective_v __s "$__r"
+  if [[ "$__s" == "interrupted" && -n "$__r" ]]; then
+    fl_op_read_v __r "$3"
+    fl_op_effective_v __s "$__r"
+  fi
+  printf -v "$1" '%s' "$__r"
+  printf -v "$2" '%s' "$__s"
+}
+
 # fl_op_json_v VAR RECORD [RESULT]: the record as the JSON document of op status and op list, with the
 # state that is true now; RESULT (the run's done line) is added as "result"
 fl_op_json_v() {
@@ -337,9 +353,8 @@ fl_op_text() {
 fl_op_one() {
   local id="$1" rec result="" doc eff
   fl_op_id_ok "$id" || fl_die "Not an op id: ${id}" "An op id looks like op-20261119-101500-4242; benchbar op list shows them."
-  fl_op_read_v rec "$id"
+  fl_op_now_v rec eff "$id"
   [[ -n "$rec" ]] || fl_die "No operation ${id}." "benchbar op list shows the operations this machine remembers (the newest 100)."
-  fl_op_effective_v eff "$rec"
   case "$eff" in done|failed|interrupted) fl_op_result_v result "$id" ;; esac
   if [[ "$OPT_JSON" == "1" ]]; then fl_op_json_v doc "$rec" "$result"; printf '%s\n' "$doc"; else fl_op_text "$rec"; fi
 }
@@ -362,9 +377,8 @@ fl_op_list_cmd() {
   rows+=("Op|Command|State|Took|Step")
   while IFS= read -r id; do
     [[ -n "$id" && "$n" -lt "$limit" ]] || continue
-    fl_op_read_v rec "$id"
+    fl_op_now_v rec eff "$id"
     [[ -n "$rec" ]] || continue
-    fl_op_effective_v eff "$rec"
     [[ "$running" != "1" || "$eff" == "running" || "$eff" == "starting" ]] || continue
     n=$((n + 1))
     fl_op_json_v doc "$rec"
@@ -401,9 +415,8 @@ fl_op_wait_cmd() {
   [[ "$timeout" =~ ^[0-9]+$ ]] || fl_die "--timeout takes a number of seconds." "Example: benchbar op wait ${id} --timeout 600"
   fl_op_id_ok "$id" || fl_die "Not an op id: ${id}" "An op id looks like op-20261119-101500-4242; benchbar op list shows them."
   while :; do
-    fl_op_read_v rec "$id"
+    fl_op_now_v rec eff "$id"
     [[ -n "$rec" ]] || fl_die "No operation ${id}." "benchbar op list shows the operations this machine remembers (the newest 100)."
-    fl_op_effective_v eff "$rec"
     case "$eff" in running|starting) ;; *) break ;; esac
     if [[ "$timeout" -gt 0 && $((SECONDS - start)) -ge "$timeout" ]]; then timed_out=1; break; fi
     sleep "$poll"
@@ -461,8 +474,7 @@ fl_op_launch_wait() {
   tries=$(( ${FL_OP_LAUNCH_WAIT:-5} * 5 ))
   [[ "${FL_TESTING:-}" == "1" ]] || tries=25
   while :; do
-    fl_op_read_v rec "$id"
-    fl_op_effective_v st "$rec"
+    fl_op_now_v rec st "$id"
     [[ "$st" == "starting" && "$i" -lt "$tries" ]] || break
     sleep 0.2
     i=$((i + 1))
@@ -545,9 +557,8 @@ fl_op_prune() {
     [[ -n "$id" ]] || continue
     n=$((n + 1))
     [[ "$n" -gt "$keep" && "$id" != "${FL_OP_ID:-}" ]] || continue
-    fl_op_read_v rec "$id"
+    fl_op_now_v rec eff "$id"
     if [[ -n "$rec" ]]; then
-      fl_op_effective_v eff "$rec"
       [[ "$eff" != "running" && "$eff" != "starting" ]] || continue
     fi
     for f in "${dir}/${id}.json" "${dir}/${id}.jsonl" "${dir}/${id}.err"; do
