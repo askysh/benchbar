@@ -185,6 +185,24 @@ race_out="$(FL_STATE_DIR="$FL_STATE_DIR" OPS="$OPS" DEAD="$DEAD" bash -c '
   done
 ' _ "$ROOT" 2>&1)" || fail "the race probe failed to run: $race_out"
 assert_eq "done"$'\n'"done" "$race_out" "(op wait and op status on a run that finished as the reader looked: done, not interrupted)"
+# the document shows the state the reader settled on: no second look at the pid that could say otherwise
+fake_op op-20260101-000008-18 running "$LIVE"
+race_out="$(FL_STATE_DIR="$FL_STATE_DIR" OPS="$OPS" bash -c '
+  set -euo pipefail
+  . "$1/lib/frappe-local/ops.sh"
+  OPT_JSON=1; n=0
+  kill() {
+    if [[ "${1:-}" == "-0" ]]; then
+      n=$((n + 1)); [[ "$n" -ge 2 ]] || return 0
+      return 1
+    fi
+    builtin kill "$@"
+  }
+  fl_op_one op-20260101-000008-18 | sed -n "s/.*\"state\":\"\([a-z]*\)\".*/\1/p"
+  OPT_JSON=0; n=0
+  fl_op_one op-20260101-000008-18 | sed -n "1s/.*  \([a-z]*\)$/\1/p"
+' _ "$ROOT" 2>&1)" || fail "the second race probe failed to run: $race_out"
+assert_eq "running"$'\n'"running" "$race_out" "(op status JSON and text show the state the reader found, not a second pid check)"
 fake_op op-20260101-000007-17 running "$DEAD"
 run_json op wait op-20260101-000001-11 --timeout 1 --json
 assert_eq "1" "$CODE" "$OUT"
