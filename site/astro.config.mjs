@@ -11,8 +11,16 @@ const site = 'https://benchbar.akashmishra.com';
 const rootPage = (label, file, slug) =>
   existsSync(new URL(`../${file}`, import.meta.url)) ? [{ label, slug }] : [];
 
+const repoMaintainers = 'https://github.com/askysh/benchbar/blob/main/maintainers';
+
 export default defineConfig({
   site,
+  // the maintainer pages are in maintainers/, not on this site (DOC-17); the
+  // old addresses go to the files on GitHub
+  redirects: {
+    '/decisions': `${repoMaintainers}/DECISIONS.md`,
+    '/releasing': `${repoMaintainers}/releasing.md`,
+  },
   // the pages live in ../docs and the repo root (src/content.config.ts)
   vite: { server: { fs: { allow: ['..'] } } },
   markdown: { remarkPlugins: [remarkRepoLinks] },
@@ -148,8 +156,6 @@ export default defineConfig({
           label: 'For contributors',
           items: [
             ...rootPage('Contributing', 'CONTRIBUTING.md', 'contributing'),
-            { label: 'Releasing', slug: 'releasing' },
-            { label: 'Decisions', slug: 'decisions' },
             ...rootPage('Roadmap', 'ROADMAP.md', 'roadmap'),
           ],
         },

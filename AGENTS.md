@@ -506,7 +506,7 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   The pull request template lists the same checks.
 - Branch from `next-release` and open the pull request against it.
   `main` holds the last release and moves only when one is cut
-  (docs/releasing.md).
+  (maintainers/releasing.md).
 - Link the issue in the pull request: `Fixes #N` only when the pull
   request finishes the issue, `Part of #N` otherwise. The merge into
   `next-release` does not close an issue, so close a finished one by hand
@@ -521,7 +521,7 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   `PLAN.md`, `TODO.md`). Keep them outside the repository or untracked.
 - Everything under `docs/` is published on the documentation site, so
   add a page there only when it is for users.
-- Record a non obvious choice as one line in `docs/DECISIONS.md` (CLI)
+- Record a non obvious choice as one line in `maintainers/DECISIONS.md` (CLI)
   or `macos/DECISIONS.md` (app). Put a user facing change in a fragment,
   `changelog.d/<issue number>-<short-slug>.md` (format in
   `changelog.d/README.md`), and never edit `CHANGELOG.md` for it: the

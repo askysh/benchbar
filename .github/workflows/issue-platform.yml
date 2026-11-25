@@ -2,7 +2,7 @@
 # Platform it names: macOS is `platform:macos`, Linux is `platform:linux`,
 # Windows beta is `windows`. The label that no longer fits is taken off, so an
 # edit of the dropdown moves it. Labels that do not exist yet are created here.
-# It never touches `test-linux`: that label starts a CI run (docs/DECISIONS.md).
+# It never touches `test-linux`: that label starts a CI run (maintainers/DECISIONS.md).
 # The issue body comes through the environment, never into the shell text.
 name: Issue platform
 

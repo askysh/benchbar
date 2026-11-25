@@ -58,7 +58,7 @@
     <!--
       No unvirtualizedResources: the shim and the tray open the physical data folder
       (%LOCALAPPDATA%\Packages\<family>\LocalCache\Local\BenchBar) directly, so file
-      virtualization has nothing to hide. See windows/tray/DECISIONS.md and docs/DECISIONS.md.
+      virtualization has nothing to hide. See windows/tray/DECISIONS.md and maintainers/DECISIONS.md.
     -->
   </Capabilities>
 

@@ -413,7 +413,7 @@ fl_lease_list() {
 #   S  one site: a lease on the bench or on that site (site drop, site restore, pull, app install --site)
 #   B  the bench itself: a lease on the bench, not one on a site (site add, site default)
 # up is not gated (it starts, never interrupts), nor are the reads, backups, console, db, open and watch
-# (docs/DECISIONS.md). A dry run is a read and passes.
+# (maintainers/DECISIONS.md). A dry run is a read and passes.
 FL_LS_CLASS=""
 FL_LS_BENCHES=""
 FL_LS_SITE=""

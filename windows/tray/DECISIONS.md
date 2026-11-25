@@ -127,7 +127,7 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   `RuntimeInformation.OSArchitecture` (the machine's CPU, so x64 PowerShell emulated on Arm64 installs the arm64 zip), checks the .NET
   runtime in the same two places as `benchbar.exe doctor`, and when `benchbar.exe` cannot start (Smart App Control, an antivirus) says so
   plainly and exits 1 before any PATH write. A tray app it closed is started again whatever fails.
-- Shim: `benchbar.exe doctor` gains `dotnet_desktop` and `tray_logon` (text form only) when `BenchBarTray.exe` sits next to it, about 50 lines. A missing runtime is a warning, so the optional tray never makes doctor exit 1; the check proves the shortcut and the tray exe exist and does not read the shortcut's target. Recorded here because docs/DECISIONS.md belongs to the CLI session this week.
+- Shim: `benchbar.exe doctor` gains `dotnet_desktop` and `tray_logon` (text form only) when `BenchBarTray.exe` sits next to it, about 50 lines. A missing runtime is a warning, so the optional tray never makes doctor exit 1; the check proves the shortcut and the tray exe exist and does not read the shortcut's target. Recorded here because maintainers/DECISIONS.md belongs to the CLI session this week.
 - The code signing policy in docs/windows.md is written in SignPath Foundation's required form and marked pending until the application is approved.
 - Test builds go to testers by hand before any release, unsigned (Akash, 2026-10-29: no signing yet). Each zip carries `install.ps1`; run
   from the unpacked zip (benchbar.exe and SHA256SUMS beside it, no `-Version`, `-Zip` or `-Source`) it installs that folder, and `-Zip PATH`
@@ -344,7 +344,7 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   command would have blanked the flyout.
 - **Versions: an older shim warns, a newer patch of the same minor does not, and a newer shim may be asked for the update check.** Only the old shim forwards `self-update` to the Linux CLI and boots the distro. A tray whose DLLs could not all be replaced can now reach the updater that fixes it.
 - **Install and adopt keep their passwords in the child's environment** (`ADMIN_PASSWORD`, `BENCHBAR_SUDO_PASSWORD`,
-  `MARIADB_ROOT_PASSWORD`). The CLI reads them from there only (it removes `BENCHBAR_SUDO_PASSWORD` at once, docs/DECISIONS.md) and the shim
+  `MARIADB_ROOT_PASSWORD`). The CLI reads them from there only (it removes `BENCHBAR_SUDO_PASSWORD` at once, maintainers/DECISIONS.md) and the shim
   forwards exactly those names through `WSLENV`; a stdin or file channel needs the CLI and the shim to change first. `docs/windows.md` says
   so. Left for a CLI and shim change.
 - **Config saves run on a pool thread, one after the other, and quit waits up to 3 s for the last one.** `Save` retries with `Thread.Sleep` for up to a second; on the UI thread that froze the window.

@@ -16,7 +16,7 @@
 # jobs of ci.yml, where every full run starts them: Linux runners are cheap.
 # These two are not: the repository gets five macOS jobs at a time and a full
 # CI run uses all five. So a pull request and a push never start them
-# (docs/DECISIONS.md, "Real installs on macOS"). They run:
+# (maintainers/DECISIONS.md, "Real installs on macOS"). They run:
 #   nightly              on next-release
 #   by hand              gh workflow run real-install.yml --ref <branch>
 #   on a pull request    when the label test-real is added to it (take the

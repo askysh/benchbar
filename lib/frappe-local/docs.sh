@@ -31,7 +31,6 @@ config,configuration|/reference/configuration/|configuration files and variables
 json|/json-schema/|the JSON API
 runners|/runners/|draw your own menu bar runner
 troubleshooting|/troubleshooting/|when something goes wrong
-decisions|/decisions/|why things are the way they are
 roadmap|/roadmap/|what comes next
 contributing|/contributing/|work on BenchBar"
 

@@ -8,4 +8,4 @@
 
 - A squash merge title is a plain imperative sentence ending in the pull request number, with no AI trailers (CONTRIBUTING.md, AGENTS.md).
 - The bug form asks for the platform (macOS, Linux or Windows beta), and `.claude/TASKS-*.md` working notes are ignored by git.
-- docs/releasing.md says what a second person needs to cut a release and where a bug found by a test pass is written down.
+- maintainers/releasing.md says what a second person needs to cut a release and where a bug found by a test pass is written down.

@@ -166,8 +166,8 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
   [how sharing keeps your bench safe](concepts/sharing-safety.md).
 - For testers: [Test a build](testing.md), the ten minute guide.
 - For contributors: [Contributing](../CONTRIBUTING.md) (the tests and the pull
-  request rules), [Releasing](releasing.md) (how releases are built) and
-  [Decisions](DECISIONS.md) (every non obvious choice).
+  request rules), [Releasing](../maintainers/releasing.md) (how releases are built) and
+  [Decisions](../maintainers/DECISIONS.md) (every non obvious choice).
 - [AGENTS.md](../AGENTS.md): guidance for AI coding agents working on a
   bench.
 - [Privacy of this site](privacy.md): what the docs site counts, and what the

@@ -2,7 +2,7 @@
 # on macOS, the app build and Swift tests on macOS, and an unsigned release
 # bundle you can download from the run to try the app without a GitHub release.
 #
-# Tiers (docs/DECISIONS.md, "CI tiering"). The "changes" job runs
+# Tiers (maintainers/DECISIONS.md, "CI tiering"). The "changes" job runs
 # scripts/ci-plan.sh, which decides every other job from the changed files:
 #   pull request   the tests tests/affected.sh picks, on Linux (bash 5) and in
 #                  the bash 3.2 container, in as many shards as their weight
@@ -28,7 +28,7 @@
 # versions do not know. The CLI jobs run on macos-latest, where /bin/bash
 # is the same 3.2 the CLI targets.
 #
-# Speed (docs/DECISIONS.md, "CI speed" and "CI tiering"): the shards of a leg
+# Speed (maintainers/DECISIONS.md, "CI speed" and "CI tiering"): the shards of a leg
 # are balanced from the per test seconds in tests/timings.tsv
 # (scripts/ci-timings.sh regenerates them from a run) and sized to about 150
 # seconds each; shellcheck is its own Linux job and checks only the changed
@@ -179,7 +179,7 @@ jobs:
         run: /bin/bash tests/run-tests.sh
 
   # The mocked suite on Linux, for the Linux platform layer
-  # (docs/DECISIONS.md, "Linux"). The LAN share and its guard are macOS only
+  # (maintainers/DECISIONS.md, "Linux"). The LAN share and its guard are macOS only
   # (pf, launchd, the Keychain), so the plan leaves them out here.
   cli-linux:
     name: CLI tests (Linux, shard ${{ matrix.shard }}/${{ needs.changes.outputs.linux_n }})

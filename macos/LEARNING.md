@@ -560,7 +560,7 @@ cleaned by macOS.
 
 ## Phase 8: shipping an app outside the App Store
 
-Nothing here runs yet (no Apple Developer account); `docs/releasing.md`
+Nothing here runs yet (no Apple Developer account); `maintainers/releasing.md`
 is the full guide. The ideas, in plain words:
 
 - **Code signing** proves who made the app and that nobody changed it.
@@ -587,7 +587,7 @@ is the full guide. The ideas, in plain words:
   job's `if:`, so a tiny first job checks the secrets and outputs
   `ready`, and the release job runs only when `ready` is true.
 
-Files to read: `docs/releasing.md`, `scripts/macos-release.sh`,
+Files to read: `maintainers/releasing.md`, `scripts/macos-release.sh`,
 `.github/workflows/macos-release.yml`, `packaging/homebrew/Casks/benchbar-app.rb.tmpl`,
 `macos/BenchBar/Updates/Updater.swift`.
 
