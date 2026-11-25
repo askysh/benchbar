@@ -35,7 +35,7 @@ for pair in install:/install/ quick-start:/quick-start/ app:/app/ sites:/guides/
   teams:/guides/teams/ agents:/guides/agents/ mcp:/reference/cli/mcp/ cli:/reference/cli/install/ json:/json-schema/ \
   runners:/runners/ troubleshooting:/troubleshooting/ config:/reference/configuration/ MCP:/reference/cli/mcp/ \
   macos:/macos/ linux:/linux/ windows:/windows/ upgrade:/upgrade/ update:/upgrade/ uninstall:/uninstall/ faq:/faq/ glossary:/glossary/ \
-  features:/features/ share:/guides/share-on-your-network/ labs:/guides/labs/ url-scheme:/reference/url-scheme/; do
+  features:/features/ share:/guides/share-on-your-network/ labs:/guides/labs/ quick-switch:/guides/quick-switch/ url-scheme:/reference/url-scheme/; do
   run_fm docs "${pair%%:*}" --print; assert_eq "0" "$CODE" "$OUT"
   assert_eq "${DOCS}${pair#*:}" "$OUT" "(topic ${pair%%:*})"
 done

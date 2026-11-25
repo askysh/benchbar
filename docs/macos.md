@@ -10,7 +10,8 @@ after you close Terminal.
 ## What you need
 
 - macOS 14 or later on Apple Silicon.
-- Homebrew and the Xcode Command Line Tools. The installer offers both.
+- Homebrew, which needs the Xcode Command Line Tools. Install Homebrew
+  first, then run the command below.
 - About 5 GB of free disk.
 
 ## Install
@@ -28,4 +29,4 @@ install are on the [Install](install.md) page.
 - [The menu bar app](app.md): the popover, the window and the shortcuts.
 - [Update and migrate](upgrade.md) and [Uninstall](uninstall.md).
 - [Troubleshooting](troubleshooting.md) and [First run problems](first-run-problems.md).
-- [Glossary](glossary.md): bench, site, agent and the other words.
+- [Glossary](glossary.md): bench, site, bench agent and the other words.
