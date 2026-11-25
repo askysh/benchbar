@@ -11,10 +11,11 @@ public interface IStreamRunner
 {
     /// <summary>
     /// Runs to the end. <paramref name="environment"/> is added to the child's environment for this one process only.
-    /// Cancelling kills the child and its tree. A timeout throws <see cref="TimeoutException"/>.
+    /// Cancelling kills the child and its tree. A timeout throws <see cref="TimeoutException"/>. <paramref name="stdin"/> is one line
+    /// for the child's standard input (a secret that must not be an argument); null sends nothing and closes the input at once.
     /// </summary>
     Task<StreamResult> RunAsync(string fileName, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? environment,
-        Action<string> onLine, TimeSpan timeout, CancellationToken ct);
+        Action<string> onLine, TimeSpan timeout, CancellationToken ct, string? stdin = null);
 }
 
 public sealed class SystemStreamRunner : IStreamRunner
@@ -34,14 +35,25 @@ public sealed class SystemStreamRunner : IStreamRunner
         return minutes == 1 ? UiText.Get("SetupMinuteOne") : UiText.Format("SetupMinutesMany", minutes);
     }
 
+    /// <summary>How many stderr lines are kept: a refusal of <c>share join</c> prints the room first, so its sentence is not the first line.</summary>
+    private const int ErrorLinesKept = 12;
+
+    /// <summary>
+    /// The sentence of what a child wrote on stderr: the first <c>[FAIL]</c> line when there is one (the CLI's own refusal, which can come after
+    /// lines that only describe the room), else the first line.
+    /// </summary>
+    public static string? PickError(IReadOnlyList<string> lines) =>
+        lines.FirstOrDefault(l => l.Contains("[FAIL]", StringComparison.Ordinal)) ?? lines.FirstOrDefault();
+
     public async Task<StreamResult> RunAsync(string fileName, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? environment,
-        Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+        Action<string> onLine, TimeSpan timeout, CancellationToken ct, string? stdin = null)
     {
         var info = new ProcessStartInfo(fileName)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardInput = true,
+            StandardInputEncoding = new UTF8Encoding(false), // no byte order mark in front of the first line
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             StandardOutputEncoding = Encoding.UTF8,
@@ -56,6 +68,7 @@ public sealed class SystemStreamRunner : IStreamRunner
 
         using var process = new Process { StartInfo = info };
         process.Start();
+        if (stdin is not null) await process.StandardInput.WriteLineAsync(stdin).ConfigureAwait(false);
         process.StandardInput.Close(); // the run never reads a terminal
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -80,7 +93,7 @@ public sealed class SystemStreamRunner : IStreamRunner
                 string? line;
                 while ((line = await process.StandardError.ReadLineAsync(CancellationToken.None).ConfigureAwait(false)) is not null)
                 {
-                    if (line.Trim().Length > 0 && errors.Count < 5) errors.Add(line.Trim());
+                    if (line.Trim().Length > 0 && errors.Count < ErrorLinesKept) errors.Add(line.Trim());
                 }
             }
             catch (Exception ex) when (ex is ObjectDisposedException or IOException or InvalidOperationException)
@@ -99,7 +112,7 @@ public sealed class SystemStreamRunner : IStreamRunner
             {
                 // a grandchild holds a pipe: the child is done, so the result is what it printed so far
             }
-            return new StreamResult(process.ExitCode, errors.Count == 0 ? null : errors[0]);
+            return new StreamResult(process.ExitCode, PickError(errors));
         }
         catch (OperationCanceledException)
         {

@@ -70,6 +70,7 @@ public sealed class SecretEnvironment
 {
     private readonly Dictionary<string, string> _plain = [];
     private readonly Dictionary<string, Secret> _secrets = [];
+    private Secret? _stdin;
 
     public SecretEnvironment Set(string name, string value)
     {
@@ -83,10 +84,24 @@ public sealed class SecretEnvironment
         return this;
     }
 
+    /// <summary>
+    /// The first line of the child's standard input, for a secret that must not be an argument or a variable (the room code of
+    /// <c>share join</c>). Held as a <see cref="Secret"/> until the process starts, hidden in what the child prints back like the others,
+    /// and not in <see cref="Names"/>.
+    /// </summary>
+    public SecretEnvironment Stdin(Secret? line)
+    {
+        _stdin = line is { IsEmpty: false } ? line : null;
+        return this;
+    }
+
     public IReadOnlyCollection<string> Names => [.. _plain.Keys, .. _secrets.Keys];
 
     /// <summary>The values to hide in anything the child prints back.</summary>
-    public IReadOnlyList<Secret> Secrets => [.. _secrets.Values];
+    public IReadOnlyList<Secret> Secrets => [.. _secrets.Values, .. _stdin is null ? [] : new[] { _stdin }];
+
+    /// <summary>The line for the child's stdin, or null. Call it at the last moment and do not keep the result.</summary>
+    public string? MaterializeStdin() => _stdin?.Reveal();
 
     /// <summary>Builds the dictionary handed to the process. Call it at the last moment and do not keep the result.</summary>
     public Dictionary<string, string> Materialize()

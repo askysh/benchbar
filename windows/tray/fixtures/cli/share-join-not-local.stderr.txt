@@ -1,0 +1,3 @@
+  [FAIL] 8.8.8.8 is not an address of a local network, and a room is on the network this computer is on.
+
+Aborting. Use the address in the host's invite or in its benchbar share status (10.x, 172.16 to 172.31, 192.168.x, 169.254.x or 100.64 to 100.127).

@@ -1038,6 +1038,11 @@ address is the one WSL has, and that depends on WSL's networking mode:
 
 BenchBar reads the mode with `wslinfo --networking-mode`; a WSL that has no `wslinfo` counts as NAT.
 
+**Joining a room** needs neither mode: a guest only connects out, and the browser opens the room on `localhost`
+through WSL's localhost forwarding (on unless `.wslconfig` says `localhostForwarding=false`). The **Sharing** tab
+has **Join a room...** (address, a look at the room and its host key, then the code). See
+[Join a room](guides/share-on-your-network.md#in-the-windows-tray).
+
 The **Sharing** tab has a box, **I give out the seats**, under **Start sharing**. With it ticked, a
 person who joins waits: the tab says how many people wait, and under each name there is a list of
 the free seats with their roles and a button, **Give NAME this seat**. For a person who has a seat

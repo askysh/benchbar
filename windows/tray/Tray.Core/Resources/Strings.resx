@@ -5079,4 +5079,223 @@ BenchBar opens again after you sign in and carries on with the setup.</value>
   <data name="CommonDefaultSuffix" xml:space="preserve">
     <value> (default)</value>
   </data>
+  <data name="GuestHeading" xml:space="preserve">
+    <value>Join a room</value>
+  </data>
+  <data name="GuestIntro" xml:space="preserve">
+    <value>Join a room that somebody else shares on this Wi-Fi. This computer gets a seat of its own, and the room opens in your browser.</value>
+  </data>
+  <data name="GuestCancelJoin" xml:space="preserve">
+    <value>Cancel join</value>
+  </data>
+  <data name="GuestJoinButton" xml:space="preserve">
+    <value>Join a room...</value>
+  </data>
+  <data name="GuestHostOf" xml:space="preserve">
+    <value>host: {0}</value>
+  </data>
+  <data name="GuestHostKey" xml:space="preserve">
+    <value>Host key: {0}</value>
+  </data>
+  <data name="GuestSeatFor" xml:space="preserve">
+    <value>Seat for {0}</value>
+  </data>
+  <data name="GuestTakeSeat" xml:space="preserve">
+    <value>Take a seat in {0}</value>
+  </data>
+  <data name="GuestOpen" xml:space="preserve">
+    <value>Open {0}</value>
+  </data>
+  <data name="GuestLeave" xml:space="preserve">
+    <value>Leave {0}</value>
+  </data>
+  <data name="GuestForget" xml:space="preserve">
+    <value>Forget {0}</value>
+  </data>
+  <data name="GuestForgetTitle" xml:space="preserve">
+    <value>Forget {0}?</value>
+  </data>
+  <data name="GuestForgetDetail" xml:space="preserve">
+    <value>{0} is told, the seat of this computer is free, and the key this computer made for the room is deleted. To {0}, a later join is a new computer, and it needs the room code again.</value>
+  </data>
+  <data name="GuestForgetConfirm" xml:space="preserve">
+    <value>Forget</value>
+  </data>
+  <data name="GuestAddressName" xml:space="preserve">
+    <value>Room address</value>
+  </data>
+  <data name="GuestSheetTitle" xml:space="preserve">
+    <value>Join a room by its address</value>
+  </data>
+  <data name="GuestAddressHelp" xml:space="preserve">
+    <value>Type the address of the room as the host shows it, for example 192.168.1.20. Only the address of a computer on your own network works.</value>
+  </data>
+  <data name="GuestLookButton" xml:space="preserve">
+    <value>Look at the room</value>
+  </data>
+  <data name="GuestSheetCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="GuestLookRoom" xml:space="preserve">
+    <value>Room: {0} (host: {1})</value>
+  </data>
+  <data name="GuestLookAddress" xml:space="preserve">
+    <value>Address: {0}</value>
+  </data>
+  <data name="GuestLookKey" xml:space="preserve">
+    <value>Host key: {0}</value>
+  </data>
+  <data name="GuestLookKeyHelp" xml:space="preserve">
+    <value>Ask {0} to read out the host key (the Sharing tab of their BenchBar shows it, and so does benchbar share status). Join only if the digits are the same. Nothing that depends on the room code has been sent yet.</value>
+  </data>
+  <data name="GuestPaired" xml:space="preserve">
+    <value>This computer is in this room already. No code is needed.</value>
+  </data>
+  <data name="GuestOpenPaired" xml:space="preserve">
+    <value>Open the room</value>
+  </data>
+  <data name="GuestCodeLabel" xml:space="preserve">
+    <value>Room code</value>
+  </data>
+  <data name="GuestCodeName" xml:space="preserve">
+    <value>Room code</value>
+  </data>
+  <data name="GuestWaitHelp" xml:space="preserve">
+    <value>Where the host gives out the seats, this waits until they give you yours (up to 10 minutes). Cancel join ends the wait; your place in the room stays for a while.</value>
+  </data>
+  <data name="GuestJoinRoom" xml:space="preserve">
+    <value>Join room</value>
+  </data>
+  <data name="GuestBusyLooking" xml:space="preserve">
+    <value>Looking at the room...</value>
+  </data>
+  <data name="GuestAddressInvalid" xml:space="preserve">
+    <value>That is not the address of a room. Type the IPv4 address the host shows, for example 192.168.1.20, with :PORT when the host says so.</value>
+  </data>
+  <data name="GuestLookFailed" xml:space="preserve">
+    <value>The room could not be looked at.</value>
+  </data>
+  <data name="GuestLookUnreadable" xml:space="preserve">
+    <value>The answer of the room could not be read. Update the BenchBar command line tool in WSL and try again.</value>
+  </data>
+  <data name="GuestStopped" xml:space="preserve">
+    <value>Stopped.</value>
+  </data>
+  <data name="GuestLookFirst" xml:space="preserve">
+    <value>Look at the room first: the code is sent only to a room you have seen.</value>
+  </data>
+  <data name="GuestLocked" xml:space="preserve">
+    <value>{0} locked this room. Ask them to unlock it, then look at the room again.</value>
+  </data>
+  <data name="GuestFull" xml:space="preserve">
+    <value>This room is full. It opens again when someone leaves or {0} removes them.</value>
+  </data>
+  <data name="GuestSeatInvalid" xml:space="preserve">
+    <value>That is not a seat of the room.</value>
+  </data>
+  <data name="GuestCodeInvalid" xml:space="preserve">
+    <value>The room code is 6 digits. Ask the host for it.</value>
+  </data>
+  <data name="GuestBusyOpening" xml:space="preserve">
+    <value>Opening the room...</value>
+  </data>
+  <data name="GuestBusyJoining" xml:space="preserve">
+    <value>Joining. Where the host gives out the seats this waits for yours, up to 10 minutes.</value>
+  </data>
+  <data name="GuestJoinFailed" xml:space="preserve">
+    <value>The room could not be joined.</value>
+  </data>
+  <data name="GuestJoinUnreadable" xml:space="preserve">
+    <value>The answer of the room could not be read. Update the BenchBar command line tool in WSL and try again.</value>
+  </data>
+  <data name="GuestKeyChanged" xml:space="preserve">
+    <value>{0} shows another host key than the one you looked at. You saw {1}; it shows {2}. If the host did not tell you the key changed, leave the room.</value>
+  </data>
+  <data name="GuestJoinedReady" xml:space="preserve">
+    <value>Joined {0}. Your seat: {1}.</value>
+  </data>
+  <data name="GuestJoinedPick" xml:space="preserve">
+    <value>Joined {0}. Pick your seat below.</value>
+  </data>
+  <data name="GuestJoinedWaiting" xml:space="preserve">
+    <value>Joined {0}. Waiting for {1} to give you a seat.</value>
+  </data>
+  <data name="GuestJoinedOther" xml:space="preserve">
+    <value>Joined {0}, but it did not open: {1}</value>
+  </data>
+  <data name="GuestOpenFailed" xml:space="preserve">
+    <value>The room could not be opened.</value>
+  </data>
+  <data name="GuestNotOpen" xml:space="preserve">
+    <value>{0} did not open: {1}</value>
+  </data>
+  <data name="GuestAddressNotLocal" xml:space="preserve">
+    <value>The command line tool gave an address that is not on this computer, so it was not opened.</value>
+  </data>
+  <data name="GuestBusySeat" xml:space="preserve">
+    <value>Taking the seat...</value>
+  </data>
+  <data name="GuestSeatFailed" xml:space="preserve">
+    <value>The seat could not be taken.</value>
+  </data>
+  <data name="GuestSeatTaken" xml:space="preserve">
+    <value>Seat taken in {0}: {1}.</value>
+  </data>
+  <data name="GuestBusyLeaving" xml:space="preserve">
+    <value>Leaving the room...</value>
+  </data>
+  <data name="GuestBusyForgetting" xml:space="preserve">
+    <value>Forgetting the room...</value>
+  </data>
+  <data name="GuestLeft" xml:space="preserve">
+    <value>Left {0}.</value>
+  </data>
+  <data name="GuestForgot" xml:space="preserve">
+    <value>Forgot {0}.</value>
+  </data>
+  <data name="GuestRoomInvalid" xml:space="preserve">
+    <value>That room has no usable id. Update the BenchBar command line tool in WSL.</value>
+  </data>
+  <data name="GuestLeaveFailed" xml:space="preserve">
+    <value>The room could not be left.</value>
+  </data>
+  <data name="GuestHostNotTold" xml:space="preserve">
+    <value>{0} could not be told: the room does not answer, or this computer was no longer in it.</value>
+  </data>
+  <data name="GuestJoinedUnreadable" xml:space="preserve">
+    <value>The rooms this computer joined could not be read.</value>
+  </data>
+  <data name="GuestStateReady" xml:space="preserve">
+    <value>open, seat {0}</value>
+  </data>
+  <data name="GuestStatePick" xml:space="preserve">
+    <value>no seat yet: pick one below</value>
+  </data>
+  <data name="GuestStateWaiting" xml:space="preserve">
+    <value>no seat yet: {0} has not given this computer one</value>
+  </data>
+  <data name="GuestStateWaitingAny" xml:space="preserve">
+    <value>no seat yet: Open shows how to get one</value>
+  </data>
+  <data name="GuestStateRemoved" xml:space="preserve">
+    <value>{0} removed this computer</value>
+  </data>
+  <data name="GuestStateNewRoom" xml:space="preserve">
+    <value>{0} started a new room: join it with its code</value>
+  </data>
+  <data name="GuestStateEnded" xml:space="preserve">
+    <value>{0} ended the room</value>
+  </data>
+  <data name="GuestStateIdentity" xml:space="preserve">
+    <value>the host's key changed: not connected</value>
+  </data>
+  <data name="GuestStateOffline" xml:space="preserve">
+    <value>{0} is not sharing right now</value>
+  </data>
+  <data name="GuestStateClosed" xml:space="preserve">
+    <value>closed here: Open opens it again</value>
+  </data>
+  <data name="GuestStateUnknown" xml:space="preserve">
+    <value>state unknown</value>
+  </data>
 </root>
