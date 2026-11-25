@@ -5208,8 +5208,8 @@ BenchBar opens again after you sign in and carries on with the setup.</value>
   <data name="GuestJoinUnreadable" xml:space="preserve">
     <value>The answer of the room could not be read. Update the BenchBar command line tool in WSL and try again.</value>
   </data>
-  <data name="GuestKeyChanged" xml:space="preserve">
-    <value>{0} shows another host key than the one you looked at. You saw {1}; it shows {2}. If the host did not tell you the key changed, leave the room.</value>
+  <data name="GuestKeyMismatch" xml:space="preserve">
+    <value>The key of the room of {0} changed since you looked at it, so nothing was sent. Look at the room again and compare the host key with {0}.</value>
   </data>
   <data name="GuestJoinedReady" xml:space="preserve">
     <value>Joined {0}. Your seat: {1}.</value>
@@ -5261,6 +5261,9 @@ BenchBar opens again after you sign in and carries on with the setup.</value>
   </data>
   <data name="GuestHostNotTold" xml:space="preserve">
     <value>{0} could not be told: the room does not answer, or this computer was no longer in it.</value>
+  </data>
+  <data name="GuestForwarderOpen" xml:space="preserve">
+    <value>The local address of {0} did not close at once. It closes by itself after 15 minutes without a page request.</value>
   </data>
   <data name="GuestJoinedUnreadable" xml:space="preserve">
     <value>The rooms this computer joined could not be read.</value>

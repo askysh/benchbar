@@ -16,6 +16,7 @@ public class ShareGuestTests
 {
     private const string Code = "482913";
     private const string RoomKey = "7fdc34a6ba8c6ac7";
+    private const string Pin = "7fdc34a6ba8c6ac7c1afd281d813b5d80957fdaa89d10c000cc72b44c816453d"; // host_pin of share-join-look.json
     private const string Room = "127.0.0.1:38999";
 
     private static (ShareGuestModel Model, ScriptedStreamRunner Runner) Rig()
@@ -45,6 +46,7 @@ public class ShareGuestTests
         Assert.Equal((RoomKey, "127.0.0.1", 38999, "Test Room", "Test Host"), (look.HostKey, look.Address, look.Port, look.Room, look.Host));
         Assert.Equal((false, false, false, false, 0, 6), (look.Locked, look.Full, look.Known, look.Paired, look.People, look.Seats));
         Assert.Equal("7fdc 34a6 ba8c 6ac7", look.SpacedKey);
+        Assert.Equal(Pin, look.HostPin);
         Assert.Equal(Room, look.Target);
         Assert.True(ShareGuestJson.Look(Doc("share-join-look-paired.json")).Paired);
     }
@@ -57,6 +59,21 @@ public class ShareGuestTests
         Assert.Throws<FormatException>(() => ShareGuestJson.Look(doc));
         doc["host_key"] = "not sixteen hex digits";
         Assert.Throws<FormatException>(() => ShareGuestJson.Look(doc));
+    }
+
+    [Fact]
+    public void ALookWithoutTheHostPinIsOfACliThatCannotPinTheJoinAndIsNotUsed()
+    {
+        // the whole hash is what --host-key takes: without it, or with one that is not the key shown, no join is offered
+        var noPin = (JsonObject)Doc("share-join-look.json").DeepClone();
+        noPin.Remove("host_pin");
+        Assert.Throws<FormatException>(() => ShareGuestJson.Look(noPin));
+        var short64 = (JsonObject)Doc("share-join-look.json").DeepClone();
+        short64["host_pin"] = Pin[..63];
+        Assert.Throws<FormatException>(() => ShareGuestJson.Look(short64));
+        var other = (JsonObject)Doc("share-join-look.json").DeepClone();
+        other["host_pin"] = new string('a', 64);
+        Assert.Throws<FormatException>(() => ShareGuestJson.Look(other)); // the digits shown are not the start of the hash joined
     }
 
     [Fact]
@@ -220,7 +237,8 @@ public class ShareGuestTests
         Assert.True(await model.JoinAsync(code, ct: TestContext.Current.CancellationToken));
 
         var run = runner.Runs[1];
-        Assert.Equal(["share", "join", Room, "--no-open", "--json"], run.Args);
+        Assert.Equal(["share", "join", Room, "--host-key", Pin, "--no-open", "--json"], run.Args);
+        Assert.DoesNotContain(run.Args, a => a.Contains(Code)); // the pin is public; the code is not an argument
         Assert.Equal(Code, runner.Stdins[1]);
         Assert.Null(runner.Stdins[0]);
         Assert.DoesNotContain(run.Args, a => a.Contains(Code));
@@ -228,7 +246,7 @@ public class ShareGuestTests
         Assert.Equal(("0", "gui"), (run.Env["BENCHBAR_NONINTERACTIVE"], run.Env["BENCHBAR_SUDO"]));
         Assert.True(code.IsEmpty, "the code is disposed when the join ends");
         // nothing the model holds, prints or serialises has it
-        var held = string.Join('|', JsonSerializer.Serialize(model.Rooms), JsonSerializer.Serialize(model.Look), model.Busy, model.LastError, model.Notice, model.KeyWarning, model.ToString());
+        var held = string.Join('|', JsonSerializer.Serialize(model.Rooms), JsonSerializer.Serialize(model.Look), model.Busy, model.LastError, model.Notice, model.ToString());
         Assert.DoesNotContain(Code, held);
         Assert.DoesNotContain("482 913", held);
     }
@@ -241,7 +259,6 @@ public class ShareGuestTests
         runner.On("share", "joined").Print(Lines("share-joined-waiting.json"));
         Assert.True(await model.JoinAsync(Secret.From(Code), ct: TestContext.Current.CancellationToken));
         Assert.Equal(UiText.Format("GuestJoinedWaiting", "Test Room", "Test Host"), model.Notice);
-        Assert.Null(model.KeyWarning);
         Assert.Null(model.Look);
         Assert.Equal(GuestState.Waiting, Assert.Single(model.Rooms).State);
         Assert.Null(model.Busy);
@@ -351,15 +368,30 @@ public class ShareGuestTests
     }
 
     [Fact]
-    public async Task AHostKeyThatChangedAfterTheLookIsWarnedAbout()
+    public async Task AHostThatShowsAnotherKeyIsRefusedWithItsOwnSentenceAndTheCodeIsGone()
     {
         var (model, runner) = await LookedAt();
-        var other = (JsonObject)Doc("share-join-waiting.json").DeepClone();
-        other["host_key"] = "0123456789abcdef";
-        other["id"] = "0123456789abcdef";
-        runner.On(a => a.Contains("--no-open")).Print(other.ToJsonString());
-        Assert.True(await model.JoinAsync(Secret.From(Code), ct: TestContext.Current.CancellationToken));
-        Assert.Equal(UiText.Format("GuestKeyChanged", "Test Room", "7fdc 34a6 ba8c 6ac7", "0123 4567 89ab cdef"), model.KeyWarning);
+        runner.On(a => a.Contains("--no-open")).Fail(ShareGuestModel.HostKeyMismatchExit, Stderr("share-join-key-mismatch.stderr.txt"));
+        runner.On("share", "joined").Print(Lines("share-joined-none.json"));
+        var code = Secret.From(Code);
+        Assert.False(await model.JoinAsync(code, ct: TestContext.Current.CancellationToken));
+        Assert.Equal(UiText.Format("GuestKeyMismatch", "Test Host"), model.LastError);
+        Assert.DoesNotContain("newer", model.LastError!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("could not be joined", model.LastError!);
+        Assert.Null(model.Look); // look again: the digits may be another host's
+        Assert.True(code.IsEmpty);
+        Assert.Equal(3, ShareGuestModel.HostKeyMismatchExit);
+    }
+
+    [Fact]
+    public async Task AnExitOtherThanThreeIsNotTakenForAChangedKey()
+    {
+        var (model, runner) = await LookedAt();
+        runner.On(a => a.Contains("--no-open")).Fail(1, Stderr("share-join-wrong-code.stderr.txt"));
+        runner.On("share", "joined").Print(Lines("share-joined-none.json"));
+        await model.JoinAsync(Secret.From("000000"), ct: TestContext.Current.CancellationToken);
+        Assert.Equal("That code didn't work.", model.LastError);
+        Assert.NotNull(model.Look);
     }
 
     [Fact]
@@ -415,7 +447,7 @@ public class ShareGuestTests
     public async Task TheRoomsAreListedWithJoinedAndNeedNoPersonOrBench()
     {
         var (model, runner) = Rig();
-        runner.On("commands").Print(string.Join('\n', Lines("commands.json")).Replace("\"commands\": [", "\"commands\": [{\"name\":\"share join\",\"usage\":\"u\",\"summary\":\"s\",\"mutating\":true,\"flags\":[]},"));
+        runner.On("commands").Print(string.Join('\n', Lines("commands.json")).Replace("\"commands\": [", "\"commands\": [{\"name\":\"share join\",\"usage\":\"u\",\"summary\":\"s\",\"mutating\":true,\"flags\":[{\"name\":\"--host-key\",\"value\":\"HEX\",\"help\":\"h\"}]},"));
         runner.On("share", "joined").Print(Lines("share-joined-ready.json"));
         await model.CheckSupportAsync(TestContext.Current.CancellationToken);
         Assert.True(model.Supported);
@@ -426,6 +458,16 @@ public class ShareGuestTests
         Assert.Equal(["share", "joined", "--json"], run.Args);
         Assert.DoesNotContain("--bench-dir", run.Args);
         Assert.False(run.Env.ContainsKey("BENCHBAR_SUDO")); // a read, not a person's decision
+    }
+
+    [Fact]
+    public async Task AShareJoinThatCannotPinTheKeyIsAnOlderCliAndHidesTheFeature()
+    {
+        // a CLI from before --host-key: the join is not offered, since the code would go to whatever answers at the address
+        var (model, runner) = Rig();
+        runner.On("commands").Print(string.Join(Environment.NewLine, Lines("commands.json")).Replace("\"commands\": [", "\"commands\": [{\"name\":\"share join\",\"usage\":\"u\",\"summary\":\"s\",\"mutating\":true,\"flags\":[{\"name\":\"--seat\",\"value\":\"ID\",\"help\":\"h\"}]},"));
+        await model.CheckSupportAsync(TestContext.Current.CancellationToken);
+        Assert.False(model.Supported);
     }
 
     [Fact]
@@ -463,6 +505,20 @@ public class ShareGuestTests
     }
 
     [Fact]
+    public async Task ALeaveWhoseLocalAddressDidNotCloseSaysSo()
+    {
+        var (model, runner) = Rig();
+        var room = ShareGuestJson.Rooms(Doc("share-joined-ready.json")).Single();
+        Assert.True(Doc("share-leave.json")["forwarder_stopped"]!.GetValue<bool>()); // a fresh run: the field is there, and true
+        var open = (JsonObject)Doc("share-leave.json").DeepClone();
+        open["forwarder_stopped"] = false;
+        runner.On("share", "leave").Print(open.ToJsonString());
+        runner.On("share", "joined").Print(Lines("share-joined-none.json"));
+        Assert.True(await model.LeaveAsync(room, TestContext.Current.CancellationToken));
+        Assert.Equal(UiText.Format("GuestLeft", "Test Room") + " " + UiText.Format("GuestForwarderOpen", "Test Room"), model.Notice);
+    }
+
+    [Fact]
     public async Task ARoomIdThatIsNotSixteenHexDigitsIsNeverAnArgument()
     {
         var (model, runner) = Rig();
@@ -484,7 +540,7 @@ public class ShareGuestTests
         runner.On("share", "joined").Print(Lines("share-joined-ready.json"));
         var url = await model.OpenUrlAsync(closed, TestContext.Current.CancellationToken);
         Assert.Equal(ShareGuestJson.Join(Doc("share-join-ready.json")).Room.Url, url);
-        Assert.Equal(["share", "join", closed.Target, "--no-wait", "--no-open", "--json"], runner.Runs[0].Args);
+        Assert.Equal(["share", "join", closed.Target, "--no-wait", "--no-open", "--json"], runner.Runs[0].Args); // a listed room has no whole hash: the CLI uses the key it saved
         Assert.Null(runner.Stdins[0]);
     }
 

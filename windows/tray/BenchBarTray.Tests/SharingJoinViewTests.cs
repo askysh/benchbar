@@ -13,13 +13,14 @@ public class SharingJoinViewTests
 {
     private const string Code = "482913";
     private const string Room = "127.0.0.1:38999";
+    private const string Pin = "7fdc34a6ba8c6ac7c1afd281d813b5d80957fdaa89d10c000cc72b44c816453d";
 
     private static (SharingView View, PageKit Kit, List<string> Asked) Make(bool supported = true, bool answer = true, string joined = "share-joined-none.json", string? join = "share-join-waiting.json",
-        string look = "share-join-look.json", string? joinFails = null, string[]? joinedLines = null, string[]? lookLines = null, Action<PageKit>? prepare = null, Action<ScriptedStreamRunner>? script = null)
+        string look = "share-join-look.json", string? joinFails = null, string[]? joinedLines = null, string[]? lookLines = null, Action<PageKit>? prepare = null, Action<ScriptedStreamRunner>? script = null, bool pin = true)
     {
         var kit = new PageKit();
         prepare?.Invoke(kit);
-        if (supported) kit.Runner.On("commands").Print(Parity187cViewTests.CommandsWith("share join", "share joined", "share leave", "share forget"));
+        if (supported) kit.Runner.On("commands").Print(Commands(pin));
         kit.Runner.On(a => a.Length > 1 && a[1] == "join" && a.Contains("--dry-run")).Print(lookLines ?? Fixture(look));
         if (joinFails is not null) kit.Runner.On(a => a.Length > 1 && a[1] == "join").Fail(1, SystemStreamRunner.PickError([.. Fixture(joinFails).Select(l => l.Trim())]));
         else if (join is not null) kit.Runner.On(a => a.Length > 1 && a[1] == "join").Print(Fixture(join));
@@ -41,6 +42,14 @@ public class SharingJoinViewTests
         view.Bind(new BenchContext(Bench(), null));
         Wait(view.Pending);
         return (view, kit, asked);
+    }
+
+    /// <summary>The catalogue of a CLI with the guest commands; <paramref name="pin"/>: <c>share join</c> has <c>--host-key</c>.</summary>
+    private static string Commands(bool pin)
+    {
+        var doc = (JsonObject)JsonNode.Parse(Parity187cViewTests.CommandsWith("share join", "share joined", "share leave", "share forget"))!;
+        if (pin) ((JsonArray)doc["commands"]!.AsArray().Single(c => (string?)c!["name"] == "share join")!["flags"]!).Add(new JsonObject { ["name"] = "--host-key", ["value"] = "HEX", ["help"] = "Pin the key." });
+        return doc.ToJsonString();
     }
 
     private static IEnumerable<(string[] Args, string? Stdin)> JoinRuns(PageKit kit) =>
@@ -80,6 +89,15 @@ public class SharingJoinViewTests
             Assert.False(kit.Services.Commands.Current!.Has("share join"));
         });
         Assert.Contains("Join a room...", view.Buttons.Keys);
+    });
+
+    [Fact]
+    public void ACliThatHasShareJoinButNoHostKeyFlagGetsNoJoin() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make(pin: false);
+        Assert.DoesNotContain("Join a room...", view.Buttons.Keys);
+        Assert.False(view.Guest!.Supported);
+        Assert.Empty(JoinRuns(kit));
     });
 
     // --- the look comes first ---
@@ -161,7 +179,7 @@ public class SharingJoinViewTests
         Wait(view.Pending);
 
         var join = JoinRuns(kit).Single(r => !r.Args.Contains("--dry-run"));
-        Assert.Equal(["share", "join", Room, "--no-open", "--json"], join.Args);
+        Assert.Equal(["share", "join", Room, "--host-key", Pin, "--no-open", "--json"], join.Args); // pinned to the key that was looked at
         Assert.Equal(Code, join.Stdin);
         Assert.All(kit.Runner.Runs, r => Assert.DoesNotContain(r.Args.Concat(r.Env.Values), a => a.Contains(Code)));
         Assert.Null(view.AddressBox); // the sheet closed
@@ -186,6 +204,22 @@ public class SharingJoinViewTests
         Assert.NotNull(view.AddressBox);
         Assert.Contains("Host key: 7fdc 34a6 ba8c 6ac7", view.Lines); // type the code again, no new look
         Assert.DoesNotContain(view.Lines, l => l.Contains("newer"));
+    });
+
+    [Fact]
+    public void AHostThatShowsAnotherKeyIsTheSentenceOfItsOwnAndTheSheetAsksForANewLook() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make(join: null, script: runner => runner.On(a => a.Length > 1 && a[1] == "join" && a.Contains("--no-open"))
+            .Fail(ShareGuestModel.HostKeyMismatchExit, SystemStreamRunner.PickError([.. Fixture("share-join-key-mismatch.stderr.txt").Select(l => l.Trim())])));
+        Look(view);
+        view.CodeBox!.Password = Code;
+        Click(view.Buttons["Join room"]);
+        Wait(view.Pending);
+        Assert.Contains(UiText.Format("GuestKeyMismatch", "Test Host"), view.Lines);
+        Assert.DoesNotContain(view.Lines, l => l.Contains("newer") || l.Contains("could not be joined"));
+        Assert.Null(view.Guest!.Look);
+        Assert.Null(view.CodeBox);
+        Assert.NotNull(view.AddressBox); // the sheet stays: look again
     });
 
     [Fact]

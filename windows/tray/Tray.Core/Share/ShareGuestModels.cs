@@ -15,9 +15,10 @@ public sealed record GuestSeat(string Id, string Name, IReadOnlyList<string> Rol
 
 /// <summary>
 /// <c>share join --dry-run --json</c>, the look before the code is sent: the room, where it is and the host's key. <see cref="HostKey"/> is
-/// the first 16 hex digits of the host's key, the digits <c>share status</c> shows on the host. Nothing here depends on the code.
+/// the first 16 hex digits of the host's key, the digits <c>share status</c> shows on the host, and <see cref="HostPin"/> the whole hash (64 hex
+/// digits, <c>host_pin</c>) that the join is pinned to: the host that shows another key is refused before any request. Nothing here depends on the code.
 /// </summary>
-public sealed record ShareLook(string HostKey, string Address, int Port, string Room, string Host, bool Locked, bool Full, int People, int Seats, bool Known, bool Paired)
+public sealed record ShareLook(string HostPin, string HostKey, string Address, int Port, string Room, string Host, bool Locked, bool Full, int People, int Seats, bool Known, bool Paired)
 {
     /// <summary>"192.168.1.20:8443": always with the port, so the join goes to the room that was looked at.</summary>
     public string Target => $"{Address}:{Port}";
@@ -71,10 +72,12 @@ public static class ShareGuestJson
     public static ShareLook Look(JsonObject o)
     {
         var key = JsonRead.Str(o, "host_key");
+        var pin = JsonRead.Str(o, "host_pin");
         var address = JsonRead.Str(o, "address");
-        if (!ShareGuestText.IsKey(key) || string.IsNullOrEmpty(address) || JsonRead.Int(o, "port") is not { } port)
-            throw new FormatException("share join: the look has no host key or address");
-        return new ShareLook(key!, address, port, JsonRead.Str(o, "room") ?? "", JsonRead.Str(o, "host") ?? "", JsonRead.Bool(o, "locked"), JsonRead.Bool(o, "full"),
+        // without the whole hash there is nothing to pin the join to, so there is no join: the person must not be sent into a room that is not the one looked at
+        if (!ShareGuestText.IsKey(key) || !ShareGuestText.IsPin(pin) || !pin!.StartsWith(key!, StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(address) || JsonRead.Int(o, "port") is not { } port)
+            throw new FormatException("share join: the look has no host key, host pin or address");
+        return new ShareLook(pin.ToLowerInvariant(), key!, address, port, JsonRead.Str(o, "room") ?? "", JsonRead.Str(o, "host") ?? "", JsonRead.Bool(o, "locked"), JsonRead.Bool(o, "full"),
             JsonRead.Int(o, "people") ?? 0, JsonRead.Int(o, "seats") ?? 0, JsonRead.Bool(o, "known"), JsonRead.Bool(o, "paired"));
     }
 
@@ -106,6 +109,9 @@ public static class ShareGuestText
     public const int DefaultPort = 8443;
 
     public static bool IsKey(string? key) => key is { Length: 16 } && key.All(Uri.IsHexDigit);
+
+    /// <summary>The whole hash of the host's key: 64 hex digits.</summary>
+    public static bool IsPin(string? pin) => pin is { Length: 64 } && pin.All(Uri.IsHexDigit);
 
     /// <summary>"0123456789abcdef" is "0123 4567 89ab cdef".</summary>
     public static string SpaceKey(string key) => key.Length == 16 ? $"{key[..4]} {key[4..8]} {key[8..12]} {key[12..]}" : key;
