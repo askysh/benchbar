@@ -64,7 +64,7 @@ public interface ISetupService
     Task<string?> ShimVersionAsync(CancellationToken ct);
 
     /// <summary><c>profile list --json</c>: what the New Bench page offers. The default says the list was not read (the page then offers v15-lts only).</summary>
-    Task<ProfileListResult> ListProfilesAsync(CancellationToken ct) => Task.FromResult(new ProfileListResult([], "The profile list was not read."));
+    Task<ProfileListResult> ListProfilesAsync(CancellationToken ct) => Task.FromResult(new ProfileListResult([], UiText.Get("SetupProfileListNotRead")));
 
     /// <summary>
     /// Asks the CLI whether it installs <paramref name="profile"/> here: <c>install --dry-run --json --offline --profile NAME</c>, read for the
@@ -73,7 +73,7 @@ public interface ISetupService
     Task<ProfileGate> CheckProfileAsync(string profile, string benchDir, CancellationToken ct) => Task.FromResult(new ProfileGate(profile, null));
 
     /// <summary><c>doctor --prerequisites --json</c> for a bench that would go to <paramref name="benchDir"/>: read only, no bench needed. The default says it was not read.</summary>
-    Task<PrerequisiteResult> PrerequisitesAsync(string benchDir, CancellationToken ct) => Task.FromResult(new PrerequisiteResult(null, "The prerequisites were not read."));
+    Task<PrerequisiteResult> PrerequisitesAsync(string benchDir, CancellationToken ct) => Task.FromResult(new PrerequisiteResult(null, UiText.Get("SetupPrerequisitesNotRead")));
 }
 
 /// <summary>The profiles of <c>profile list --json</c>, or why they could not be read.</summary>
@@ -142,10 +142,10 @@ public sealed class ShimSetupService : ISetupService
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new CliProblemException("benchbar.exe setup check did not answer in " + (probe ? "150" : "120") + " seconds. Wait a minute and run benchbar.exe setup check again.");
+            throw new CliProblemException(UiText.Format("SetupCheckTimeout", probe ? "150" : "120"));
         }
         if (string.IsNullOrWhiteSpace(result.Output))
-            throw new CliProblemException(ShimBenchSource.FirstLine(result.Error) ?? $"benchbar.exe setup check exited with code {result.ExitCode}. Update BenchBar.");
+            throw new CliProblemException(ShimBenchSource.FirstLine(result.Error) ?? UiText.Format("SetupCheckExit", result.ExitCode));
         return CliOutput.Parse(result.Output, "setup check", SetupJson.ParseCheck, requires: "steps");
     }
 
@@ -179,7 +179,7 @@ public sealed class ShimSetupService : ISetupService
         if (done is { } d2)
             return new SetupRunResult(d2.Exit, d2.Changed, d2.RebootRequired, d2.Cancelled, d2.Warnings, d2.NextActions, d2.Exit == 0 ? null : failure ?? redact.Clean(result.Error ?? ""), d2.UserExisted, d2.ErrorId);
         return new SetupRunResult(result.ExitCode == 0 ? 1 : result.ExitCode, false, false, false, [], [],
-            failure ?? (result.Error is null ? "benchbar.exe ended without saying how it went." : redact.Clean(result.Error)));
+            failure ?? (result.Error is null ? UiText.Get("SetupEndedNoWord") : redact.Clean(result.Error)));
     }
 
     public async Task<PlanResult> PlanInstallAsync(InstallRequest request, Secret admin, CancellationToken ct)
@@ -202,8 +202,8 @@ public sealed class ShimSetupService : ISetupService
             catch (UnsupportedSchemaException) { }
         }
         var result = await RunStreamAsync(["install", "--dry-run", "--json", .. request.Flags], env, OnLine, PlanTimeout, ct).ConfigureAwait(false);
-        if (done is { Exit: not 0 } failed) return new PlanResult(null, failed.Error ?? failed.Fix ?? "The plan could not be made.", failed.Fix, plan?.Blockers);
-        if (plan is null) return new PlanResult(null, redact.Clean(result.Error ?? "The plan could not be made."));
+        if (done is { Exit: not 0 } failed) return new PlanResult(null, failed.Error ?? failed.Fix ?? UiText.Get("CommonPlanNotMade"), failed.Fix, plan?.Blockers);
+        if (plan is null) return new PlanResult(null, redact.Clean(result.Error ?? UiText.Get("CommonPlanNotMade")));
         return new PlanResult(plan, null);
     }
 
@@ -281,7 +281,7 @@ public sealed class ShimSetupService : ISetupService
             // --json and no --yes: the distro is recorded, and nothing else (the linger change needs a yes) is touched
             var result = await _runner.RunAsync(Shim, ["adopt-distro", name, "--json"], ct, ShimBenchSource.ActionTimeout).ConfigureAwait(false);
             if (result.ExitCode == 0) return ActionResult.Success;
-            return new ActionResult(result.ExitCode, FailedCheckMessage(result.Output) ?? ShimBenchSource.FirstLine(result.Error) ?? ShimBenchSource.FirstLine(result.Output) ?? $"benchbar.exe exited with code {result.ExitCode}.");
+            return new ActionResult(result.ExitCode, FailedCheckMessage(result.Output) ?? ShimBenchSource.FirstLine(result.Error) ?? ShimBenchSource.FirstLine(result.Output) ?? UiText.Format("SetupExitCode", result.ExitCode));
         }
         catch (Win32Exception ex)
         {
@@ -293,7 +293,7 @@ public sealed class ShimSetupService : ISetupService
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return ActionResult.Failure("benchbar.exe adopt-distro did not finish in 3 minutes.");
+            return ActionResult.Failure(UiText.Get("SetupAdoptTimeout"));
         }
     }
 
@@ -341,7 +341,7 @@ public sealed class ShimSetupService : ISetupService
         {
             var result = await _runner.RunAsync(Shim, ProfilesModel.ListArgs(), ct, CliTimeouts.Read).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(result.Output))
-                return new ProfileListResult([], ShimBenchSource.FirstLine(result.Error) ?? $"benchbar.exe profile list exited with code {result.ExitCode}.");
+                return new ProfileListResult([], ShimBenchSource.FirstLine(result.Error) ?? UiText.Format("SetupProfileListExit", result.ExitCode));
             var profiles = CliOutput.Parse(result.Output, "profile list", json => ProfileListJson.Parse(JsonNode.Parse(json)!.AsObject()), requires: "profiles");
             return new ProfileListResult(profiles, null);
         }
@@ -355,7 +355,7 @@ public sealed class ShimSetupService : ISetupService
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return new ProfileListResult([], "benchbar.exe profile list did not answer in time.");
+            return new ProfileListResult([], UiText.Get("SetupProfileListTimeout"));
         }
     }
 
@@ -366,7 +366,7 @@ public sealed class ShimSetupService : ISetupService
             // exit 1 means a check failed; the document is still printed
             var result = await _runner.RunAsync(Shim, PrerequisiteReport.Args(benchDir), ct, CliTimeouts.Read).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(result.Output))
-                return new PrerequisiteResult(null, ShimBenchSource.FirstLine(result.Error) ?? $"benchbar.exe doctor --prerequisites exited with code {result.ExitCode}.");
+                return new PrerequisiteResult(null, ShimBenchSource.FirstLine(result.Error) ?? UiText.Format("SetupPrerequisitesExit", result.ExitCode));
             var report = CliOutput.Parse(result.Output, "doctor --prerequisites", json => PrerequisiteReport.Parse(JsonNode.Parse(json)!.AsObject()), requires: "prerequisites");
             return new PrerequisiteResult(report, null);
         }
@@ -380,7 +380,7 @@ public sealed class ShimSetupService : ISetupService
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return new PrerequisiteResult(null, "benchbar.exe doctor --prerequisites did not answer in time.");
+            return new PrerequisiteResult(null, UiText.Get("SetupPrerequisitesTimeout"));
         }
     }
 

@@ -95,16 +95,16 @@ internal sealed class PortSetupSheet : Window
         var pickers = new Dictionary<string, ComboBox>();
         panel.Children.Add(Ui.Text(Model.Title, 18, FontWeights.SemiBold));
         var explanation = Model.Phase == PortSetupPhase.Planning
-            ? "Checking ports and preparing the selection..."
+            ? UiText.Get("PortsPlanning")
             : calm
-                ? "The ports this bench uses, and whether BenchBar may move them. Nothing needs setting up."
-                : "Review the addresses and service changes before applying. Existing apps and databases are preserved.";
+                ? UiText.Get("PortsCalmLine")
+                : UiText.Get("PortsReviewLine");
         panel.Children.Add(Ui.Text(explanation, 14, opacity: 0.8, margin: new Thickness(0, 6, 0, 8)));
         if (Model.ModeError is { Length: > 0 } modeError) panel.Children.Add(Ui.CriticalText(modeError));
-        if (Model.Phase == PortSetupPhase.Running) panel.Children.Add(Ui.Text("Applying changes...", 14, FontWeights.SemiBold, margin: new Thickness(0, 4, 0, 4)));
+        if (Model.Phase == PortSetupPhase.Running) panel.Children.Add(Ui.Text(UiText.Get("PortsApplying"), 14, FontWeights.SemiBold, margin: new Thickness(0, 4, 0, 4)));
         if (Model.Phase == PortSetupPhase.Failed)
         {
-            panel.Children.Add(Ui.Text("Setup did not finish", 16, FontWeights.SemiBold, margin: new Thickness(0, 4, 0, 0)));
+            panel.Children.Add(Ui.Text(UiText.Get("PortsFailedTitle"), 16, FontWeights.SemiBold, margin: new Thickness(0, 4, 0, 0)));
             if (Model.Error is { Length: > 0 } error) panel.Children.Add(Ui.CriticalText(error));
         }
         if (Model.Phase == PortSetupPhase.Finished) panel.Children.Add(Ui.Text(Model.SuccessText, 14, FontWeights.SemiBold, margin: new Thickness(0, 4, 0, 4)));
@@ -113,17 +113,15 @@ internal sealed class PortSetupSheet : Window
         {
             foreach (var entry in plan.Entries) panel.Children.Add(Entry(entry, calm, pickers));
             if (Model.Phase == PortSetupPhase.Review && !plan.CanApply && !calm)
-                panel.Children.Add(Ui.Text("Resolve the blocked benches before applying. Fixed mode keeps the current ports; Automatic allows a new allocation after review.", 13, opacity: 0.8, margin: new Thickness(0, 8, 0, 0)));
+                panel.Children.Add(Ui.Text(UiText.Get("PortsResolveBlocked"), 13, opacity: 0.8, margin: new Thickness(0, 8, 0, 0)));
         }
         if (Model.Output.Length > 0)
         {
-            var output = new Expander { Header = "Setup output", Margin = new Thickness(0, 8, 0, 0), Content = Ui.Mono(Model.Output) };
-            Ui.Name(output, "Setup output");
+            var output = new Expander { Header = UiText.Get("PortsOutput"), Margin = new Thickness(0, 8, 0, 0), Content = Ui.Mono(Model.Output) };
+            Ui.Name(output, UiText.Get("PortsOutput"));
             panel.Children.Add(output);
         }
-        panel.Children.Add(Ui.Text(calm
-            ? "Fixed keeps these ports. Automatic lets BenchBar propose new ones, for your approval, when another bench or app takes them. A change of mode is saved at once."
-            : "Changing the mode saves your preference immediately; ports change only when you apply. Apply writes the service files; it never starts a bench unless you chose Resolve and Start.",
+        panel.Children.Add(Ui.Text((calm ? UiText.Get("PortsCalmNote") : UiText.Get("PortsNote")),
             12, opacity: 0.7, margin: new Thickness(0, 10, 0, 0)));
         Lines = TextProbe.Lines(panel);
         ModePickers = pickers;
@@ -134,7 +132,7 @@ internal sealed class PortSetupSheet : Window
         var labels = new List<string>();
         if (!Model.IsBusy && Model.Phase != PortSetupPhase.Finished)
         {
-            var refresh = calm ? "Check Again" : "Refresh Preview";
+            var refresh = (calm ? UiText.Get("PortsCheckAgain") : UiText.Get("PortsRefresh"));
             var button = Ui.Button(refresh, () => Model.LoadPlanAsync().Forget(), refresh);
             DockPanel.SetDock(button, Dock.Left);
             _bar.Children.Add(button);
@@ -151,19 +149,19 @@ internal sealed class PortSetupSheet : Window
         switch (Model.Phase)
         {
             case PortSetupPhase.Review when calm:
-                Right("Done", Close, true, dismiss: true);
+                Right(UiText.Get("PortsDone"), Close, true, dismiss: true);
                 break;
             case PortSetupPhase.Review:
-                Right("Cancel", Close, dismiss: true);
+                Right(UiText.Get("Cancel"), Close, dismiss: true);
                 Right(Model.ApplyLabel, () => Model.ApplyAsync().Forget(), true, Model.CanApply);
                 break;
             case PortSetupPhase.Planning:
-                Right("Cancel", Close, dismiss: true);
+                Right(UiText.Get("Cancel"), Close, dismiss: true);
                 break;
             case PortSetupPhase.Running:
                 break;
             default:
-                Right("Done", Close, true, dismiss: true);
+                Right(UiText.Get("PortsDone"), Close, true, dismiss: true);
                 break;
         }
         DockPanel.SetDock(_right, Dock.Right);
@@ -178,25 +176,25 @@ internal sealed class PortSetupSheet : Window
         box.Children.Add(Ui.Text(entry.Path, 12, opacity: 0.7));
         if (calm)
         {
-            box.Children.Add(Pair("Address", entry.CurrentUrl));
+            box.Children.Add(Pair(UiText.Get("PortsAddress"), entry.CurrentUrl));
         }
         else
         {
-            box.Children.Add(Pair("Current address", entry.CurrentUrl));
-            box.Children.Add(Pair(entry.ChangesPorts ? "New address" : "Address stays", entry.ProposedUrl));
+            box.Children.Add(Pair(UiText.Get("PortsCurrentAddress"), entry.CurrentUrl));
+            box.Children.Add(Pair((entry.ChangesPorts ? UiText.Get("PortsNewAddress") : UiText.Get("PortsAddressStays")), entry.ProposedUrl));
         }
         var p = entry.Proposed;
-        box.Children.Add(Ui.Text($"Web {p.Web} | Socket.IO {p.Socketio} | Redis {p.RedisQueue}/{p.RedisCache}", 12, margin: new Thickness(0, 2, 0, 4)));
+        box.Children.Add(Ui.Text(UiText.Format("PortsNumbers", p.Web, p.Socketio, p.RedisQueue, p.RedisCache), 12, margin: new Thickness(0, 2, 0, 4)));
         if (!calm && entry.SetupPlan is { Length: > 0 } setup)
         {
             var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 2) };
-            head.Children.Add(Ui.Text("Service changes", 13, FontWeights.SemiBold));
+            head.Children.Add(Ui.Text(UiText.Get("PortsServiceChanges"), 13, FontWeights.SemiBold));
             box.Children.Add(head);
             box.Children.Add(Ui.Mono(setup));
         }
 
         var mode = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-        mode.Children.Add(Ui.Text("Port mode", 13, margin: new Thickness(0, 4, 10, 0)));
+        mode.Children.Add(Ui.Text(UiText.Get("PortsMode"), 13, margin: new Thickness(0, 4, 10, 0)));
         var picker = new ComboBox { MinWidth = 140, IsEnabled = Model.Phase == PortSetupPhase.Review };
         picker.Items.Add(new ComboBoxItem { Content = PortModes.Title(PortMode.Automatic), Tag = PortMode.Automatic });
         picker.Items.Add(new ComboBoxItem { Content = PortModes.Title(PortMode.Fixed), Tag = PortMode.Fixed });
@@ -206,19 +204,19 @@ internal sealed class PortSetupSheet : Window
             if (e.AddedItems.Count == 1 && e.RemovedItems.Count == 1 && e.AddedItems[0] is ComboBoxItem { Tag: PortMode chosen })
                 Model.SetModeAsync(chosen, entry.Path).Forget();
         };
-        Ui.Name(picker, "Port mode " + entry.Name, "Fixed keeps the current ports. Automatic can propose new ports for your approval.");
+        Ui.Name(picker, UiText.Format("PortsModeName", entry.Name), UiText.Get("PortsModeHint"));
         pickers[entry.Path] = picker;
         mode.Children.Add(picker);
         box.Children.Add(mode);
 
         if (!calm && entry.Blocked is { Length: > 0 } blocked) box.Children.Add(Ui.CriticalText(blocked));
-        else if (entry.ChangesPorts) box.Children.Add(Ui.Text("Port conflict resolved by the proposed allocation", 13, opacity: 0.8, margin: new Thickness(0, 6, 0, 0)));
+        else if (entry.ChangesPorts) box.Children.Add(Ui.Text(UiText.Get("PortsResolved"), 13, opacity: 0.8, margin: new Thickness(0, 6, 0, 0)));
         if (entry.Conflicts.Count > 0)
         {
             var details = new StackPanel();
             foreach (var conflict in entry.Conflicts) details.Children.Add(Ui.Text(conflict, 12));
-            var expander = new Expander { Header = "Conflict details", Content = details, Margin = new Thickness(0, 6, 0, 0) };
-            Ui.Name(expander, "Conflict details " + entry.Name);
+            var expander = new Expander { Header = UiText.Get("PortsConflictDetails"), Content = details, Margin = new Thickness(0, 6, 0, 0) };
+            Ui.Name(expander, UiText.Format("PortsConflictDetailsName", entry.Name));
             box.Children.Add(expander);
         }
         return box;

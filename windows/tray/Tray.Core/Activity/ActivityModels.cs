@@ -10,13 +10,20 @@ public static class ActivityText
     public static string Age(DateTimeOffset time, DateTimeOffset now)
     {
         var span = now - time;
-        if (span < TimeSpan.FromSeconds(45)) return "just now";
-        if (span < TimeSpan.FromMinutes(90)) return Plural((int)Math.Max(1, Math.Round(span.TotalMinutes)), "minute");
-        if (span < TimeSpan.FromHours(36)) return Plural((int)Math.Round(span.TotalHours), "hour");
-        return Plural((int)Math.Round(span.TotalDays), "day");
+        if (span < TimeSpan.FromSeconds(45)) return UiText.Get("ActivityAgeJustNow");
+        if (span < TimeSpan.FromMinutes(90))
+        {
+            var minutes = (int)Math.Max(1, Math.Round(span.TotalMinutes));
+            return minutes == 1 ? UiText.Get("ActivityAgeMinuteOne") : UiText.Format("ActivityAgeMinutes", minutes);
+        }
+        if (span < TimeSpan.FromHours(36))
+        {
+            var hours = (int)Math.Round(span.TotalHours);
+            return hours == 1 ? UiText.Get("ActivityAgeHourOne") : UiText.Format("ActivityAgeHours", hours);
+        }
+        var days = (int)Math.Round(span.TotalDays);
+        return days == 1 ? UiText.Get("ActivityAgeDayOne") : UiText.Format("ActivityAgeDays", days);
     }
-
-    private static string Plural(int n, string unit) => $"{n} {unit}{(n == 1 ? "" : "s")} ago";
 
     public static DateTimeOffset? Time(JsonObject o, string key) =>
         DateTimeOffset.TryParse(JsonRead.Str(o, key), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var t) ? t : null;
@@ -48,15 +55,21 @@ public static class LeaseJson
 
 public static class LeaseText
 {
-    public static string Place(LeaseInfo lease) => lease.Scope == "site" ? $"Site {lease.Site ?? "?"}" : "The whole bench";
+    public static string Place(LeaseInfo lease) => lease.Scope == "site" ? UiText.Format("ActivityLeaseSite", lease.Site ?? "?") : UiText.Get("ActivityLeaseBench");
 
     /// <summary>"Site acme.localhost is held by claude-qa until 3:20 PM: running the QA suite".</summary>
     public static string Line(LeaseInfo lease, DateTimeOffset now, TimeZoneInfo? zone = null, CultureInfo? culture = null)
     {
-        var text = $"{Place(lease)} is held by {lease.Holder}";
-        if (lease.ExpiresAt is { } end) text += " until " + Until(end, now, zone, culture);
-        if (lease.Note is { Length: > 0 } note) text += ": " + note;
-        return text;
+        var place = Place(lease);
+        var until = lease.ExpiresAt is { } end ? Until(end, now, zone, culture) : null;
+        var note = lease.Note is { Length: > 0 } n ? n : null;
+        return (until, note) switch
+        {
+            ({ } u, { } why) => UiText.Format("ActivityLeaseHeldUntilNote", place, lease.Holder, u, why),
+            ({ } u, null) => UiText.Format("ActivityLeaseHeldUntil", place, lease.Holder, u),
+            (null, { } why) => UiText.Format("ActivityLeaseHeldNote", place, lease.Holder, why),
+            _ => UiText.Format("ActivityLeaseHeld", place, lease.Holder),
+        };
     }
 
     internal static string Until(DateTimeOffset end, DateTimeOffset now, TimeZoneInfo? zone = null, CultureInfo? culture = null)
@@ -98,17 +111,21 @@ public sealed record LeaseRefusal(string Holder, DateTimeOffset? Until, string U
     /// <summary>"Held by claude-qa until 11/19/2026 3:20 PM (running the QA suite)."</summary>
     public string Sentence()
     {
-        var text = "Held by " + Holder;
-        if (Until is { } u) text += " until " + UiText.Date(u);
-        else if (UntilText.Length > 0) text += " until " + UntilText;
-        if (Note is { Length: > 0 }) text += $" ({Note})";
-        return text + ".";
+        var until = Until is { } u ? UiText.Date(u) : UntilText.Length > 0 ? UntilText : null;
+        var note = Note is { Length: > 0 } ? Note : null;
+        return (until, note) switch
+        {
+            ({ } at, { } why) => UiText.Format("OverviewLeaseHeldUntilNote", Holder, at, why),
+            ({ } at, null) => UiText.Format("OverviewLeaseHeldUntil", Holder, at),
+            (null, { } why) => UiText.Format("OverviewLeaseHeldNote", Holder, why),
+            _ => UiText.Format("OverviewLeaseHeld", Holder),
+        };
     }
 
-    public const string BreakHelp = "Run it anyway. The holder is not told, and what they are doing may break.";
+    public static string BreakHelp => UiText.Get("OverviewLeaseBreakHelp");
 
     public string BreakQuestion(string what) =>
-        $"{Sentence()} Breaking it runs \"{what}\" anyway, as you: whoever holds the lease may be in the middle of work on it. The run is recorded in the history.";
+        UiText.Format("OverviewLeaseBreakQuestion", Sentence(), what);
 }
 
 public static class LeaseCommands
@@ -157,30 +174,30 @@ public static class HistoryText
     /// <summary>"site backup acme.localhost": the command and what it was aimed at.</summary>
     public static string Title(HistoryEntry e)
     {
-        var command = e.Command ?? e.Argv.FirstOrDefault() ?? "a command";
-        return e.Site is { Length: > 0 } site && !command.Contains(site, StringComparison.Ordinal) ? $"{command} {site}" : command;
+        var command = e.Command ?? e.Argv.FirstOrDefault() ?? UiText.Get("HistoryACommand");
+        return e.Site is { Length: > 0 } site && !command.Contains(site, StringComparison.Ordinal) ? UiText.Format("HistoryTitleSite", command, site) : command;
     }
 
     /// <summary>Who started it, as a person says it. A caller this build does not know is shown as it is.</summary>
     public static string Who(HistoryEntry e) => e.Caller switch
     {
-        "app" => "BenchBar app",
-        "terminal" => "Terminal",
-        "tray" => "Windows tray",
-        "script" => "A script",
-        "agent" => "An agent",
-        "mcp" => "An agent through MCP" + (e.McpClient is { Length: > 0 } c ? $" ({c})" : ""),
+        "app" => UiText.Get("HistoryCallerApp"),
+        "terminal" => UiText.Get("HistoryCallerTerminal"),
+        "tray" => UiText.Get("HistoryCallerTray"),
+        "script" => UiText.Get("HistoryCallerScript"),
+        "agent" => UiText.Get("HistoryCallerAgent"),
+        "mcp" => e.McpClient is { Length: > 0 } c ? UiText.Format("HistoryCallerMcpClient", c) : UiText.Get("HistoryCallerMcp"),
         _ => e.Caller,
     };
 
-    public static string Result(HistoryEntry e) => e.Exit == 0 ? "Done" : $"Failed (exit {e.Exit})";
+    public static string Result(HistoryEntry e) => e.Exit == 0 ? UiText.Get("HistoryDone") : UiText.Format("HistoryFailed", e.Exit);
 
     /// <summary>"site acme.localhost, snapshot acme.localhost": what the run changed, as the CLI recorded it. Null when it changed nothing.</summary>
     public static string? Changes(HistoryEntry e)
     {
         if (e.Changed.Count == 0) return null;
-        var parts = e.Changed.Select(c => $"{c.Kind} {c.Name}").ToList();
-        if (e.ChangedMore > 0) parts.Add($"{e.ChangedMore} more");
+        var parts = e.Changed.Select(c => UiText.Format("HistoryChange", c.Kind, c.Name)).ToList();
+        if (e.ChangedMore > 0) parts.Add(UiText.Format("HistoryMore", e.ChangedMore));
         return string.Join(", ", parts);
     }
 
@@ -223,11 +240,12 @@ public static class OpJson
     /// <summary>"site backup acme.localhost, running: Back up acme.localhost (12 s)".</summary>
     public static string Line(OpRecord op, DateTimeOffset now)
     {
-        var text = (op.Command ?? "a command") + (op.Site is { Length: > 0 } site && op.Command?.Contains(site, StringComparison.Ordinal) != true ? " " + site : "");
-        text += op.State == "starting" ? ", starting" : ", running";
-        if (op.Step is { Length: > 0 } step) text += ": " + step;
-        if (op.Progress is { Length: > 0 } progress) text += $" ({progress})";
-        if (op.StartedAt is { } at) text += $", started {ActivityText.Age(at, now)}";
+        var command = op.Command ?? UiText.Get("ActivityACommand");
+        var text = op.Site is { Length: > 0 } site && op.Command?.Contains(site, StringComparison.Ordinal) != true ? UiText.Format("ActivityCommandSite", command, site) : command;
+        text = op.State == "starting" ? UiText.Format("ActivityOpStarting", text) : UiText.Format("ActivityOpRunning", text);
+        if (op.Step is { Length: > 0 } step) text = UiText.Format("ActivityOpStep", text, step);
+        if (op.Progress is { Length: > 0 } progress) text = UiText.Format("ActivityOpProgress", text, progress);
+        if (op.StartedAt is { } at) text = UiText.Format("ActivityOpStarted", text, ActivityText.Age(at, now));
         return text;
     }
 }
@@ -289,7 +307,8 @@ public sealed class ResourceHistory
 
     /// <summary>"CPU 112.8 percent, memory 25.4 MB, 4 processes, runner speed 5.2".</summary>
     public static string Line(ResourceSample s, double smoothedSpeed, CultureInfo? culture = null) =>
-        $"CPU {UiText.OneDecimal(s.CpuPercent, culture)} percent, memory {ByteSize.Format(s.MemoryBytes, culture)}, {s.Processes} {(s.Processes == 1 ? "process" : "processes")}, runner speed {UiText.OneDecimal(smoothedSpeed, culture)}";
+        UiText.Format("ActivityResourceLine", UiText.OneDecimal(s.CpuPercent, culture), ByteSize.Format(s.MemoryBytes, culture),
+            s.Processes == 1 ? UiText.Get("ActivityProcessOne") : UiText.Format("ActivityProcessMany", s.Processes), UiText.OneDecimal(smoothedSpeed, culture));
 
     /// <summary>The points of a chart of <paramref name="values"/> in a box of <paramref name="width"/> by <paramref name="height"/>, scaled to <paramref name="max"/> (at least 1).</summary>
     public static IReadOnlyList<(double X, double Y)> Points(IReadOnlyList<double> values, double max, double width, double height)
@@ -309,16 +328,16 @@ public sealed record RunCommandInfo(string Name, bool Changes, bool NeedsSite, s
 
 public static class RunAllowList
 {
-    public static IReadOnlyList<RunCommandInfo> All { get; } =
+    public static IReadOnlyList<RunCommandInfo> All =>
     [
-        new("migrate", true, true, "Patches, schema sync and fixtures of the site, after a backup of it.", ["--skip-failing", "--skip-search-index"], []),
-        new("clear-cache", true, true, "Clears the cache of the site.", [], []),
-        new("clear-website-cache", true, true, "Clears the website cache of the site.", [], []),
-        new("build", true, false, "Builds the bench's assets.", [], ["--app"]),
-        new("run-tests", true, true, "Runs the apps' tests. It writes test records into the site's database: use a throwaway site, not one you keep.", ["--failfast"], ["--app", "--module", "--doctype", "--test", "--case"]),
-        new("doctor", false, true, "Checks the site's setup (a read).", [], []),
-        new("list-apps", false, true, "Lists the apps installed on the site (a read).", [], ["--format"]),
-        new("version", false, false, "Prints the versions of the bench's apps (a read).", [], []),
+        new("migrate", true, true, UiText.Get("RunCmdHelpMigrate"), ["--skip-failing", "--skip-search-index"], []),
+        new("clear-cache", true, true, UiText.Get("RunCmdHelpClearCache"), [], []),
+        new("clear-website-cache", true, true, UiText.Get("RunCmdHelpClearWebsiteCache"), [], []),
+        new("build", true, false, UiText.Get("RunCmdHelpBuild"), [], ["--app"]),
+        new("run-tests", true, true, UiText.Get("RunCmdHelpRunTests"), ["--failfast"], ["--app", "--module", "--doctype", "--test", "--case"]),
+        new("doctor", false, true, UiText.Get("RunCmdHelpDoctor"), [], []),
+        new("list-apps", false, true, UiText.Get("RunCmdHelpListApps"), [], ["--format"]),
+        new("version", false, false, UiText.Get("RunCmdHelpVersion"), [], []),
     ];
 
     public static RunCommandInfo? Find(string name) => All.FirstOrDefault(c => c.Name == name);
@@ -339,10 +358,10 @@ public static class RunCommands
             var t = tokens[i];
             if (command.Switches.Contains(t)) { words.Add(t); continue; }
             if (!command.Valued.Contains(t))
-                return ([], command.Switches.Count + command.Valued.Count == 0 ? $"{command.Name} takes no flags." : $"{t} is not a flag of {command.Name}. It takes: {string.Join(", ", command.Switches.Concat(command.Valued))}.");
-            if (i + 1 >= tokens.Length) return ([], $"{t} needs a value.");
+                return ([], command.Switches.Count + command.Valued.Count == 0 ? UiText.Format("RunCmdTakesNoFlags", command.Name) : UiText.Format("RunCmdNotAFlag", t, command.Name, string.Join(", ", command.Switches.Concat(command.Valued))));
+            if (i + 1 >= tokens.Length) return ([], UiText.Format("RunCmdNeedsValue", t));
             var value = tokens[++i];
-            if (value[0] == '-' || !value.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or ':' or '-')) return ([], $"The value of {t} is one plain word: letters, digits, '.', '_', ':' and '-'.");
+            if (value[0] == '-' || !value.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or ':' or '-')) return ([], UiText.Format("RunCmdPlainWord", t));
             words.Add(t);
             words.Add(value);
         }
@@ -351,8 +370,8 @@ public static class RunCommands
 
     public static string? Problem(RunInput input, IEnumerable<string> sites)
     {
-        if (RunAllowList.Find(input.Command) is not { } command) return $"{input.Command} is not on the list of commands benchbar run takes.";
-        if (command.NeedsSite && (string.IsNullOrEmpty(input.Site) || !sites.Contains(input.Site))) return $"{command.Name} needs one of the sites of this bench.";
+        if (RunAllowList.Find(input.Command) is not { } command) return UiText.Format("RunCmdNotOnList", input.Command);
+        if (command.NeedsSite && (string.IsNullOrEmpty(input.Site) || !sites.Contains(input.Site))) return UiText.Format("RunCmdNeedsSite", command.Name);
         return Flags(command, input.Options).Problem;
     }
 
@@ -370,13 +389,13 @@ public static class RunCommands
         var front = Front(input, bench);
         var back = Back(input);
         var what = $"bench {string.Join(' ', back.Skip(1))}";
-        return new PlanReviewRequest($"Run {input.Command}", [.. front, "--dry-run", "--json", .. back],
+        return new PlanReviewRequest(UiText.Format("RunCmdReviewTitle", input.Command), [.. front, "--dry-run", "--json", .. back],
             plan => [.. front, "--apply", plan.Token ?? "", "--yes", "--jsonl", .. back])
         {
-            ConfirmLabel = "Run",
+            ConfirmLabel = UiText.Get("RunCmdRun"),
             CanStop = false, // a migrate is not safe to kill part way
             RequiresToken = true, // a plan without a token is never applied: no --apply ""
-            Summary = $"Runs {what}{(input.Site is { Length: > 0 } site && RunAllowList.Find(input.Command)?.NeedsSite == true ? " on " + site : "")}. Nothing else runs.",
+            Summary = input.Site is { Length: > 0 } site && RunAllowList.Find(input.Command)?.NeedsSite == true ? UiText.Format("RunCmdSummaryOnSite", what, site) : UiText.Format("RunCmdSummary", what),
             Describe = Describe,
         };
     }
@@ -385,10 +404,10 @@ public static class RunCommands
     {
         var lines = new List<string>();
         if (JsonRead.Str(plan.Raw, "summary") is { Length: > 0 } summary) lines.Add(summary);
-        if (JsonRead.Strings(plan.Raw, "argv") is { Count: > 0 } argv) lines.Add("Command: " + string.Join(' ', argv));
-        if (JsonRead.Bool(plan.Raw, "backup_first")) lines.Add("A database backup of the site is taken first.");
-        if (JsonRead.Int(plan.Raw, "timeout_s") is { } seconds) lines.Add($"Deadline: {(seconds >= 120 ? seconds / 60 + " minutes" : seconds + " seconds")}.");
-        lines.Add("The output goes to the run's log. The code of the bench's apps runs, so use a bench whose apps you trust.");
+        if (JsonRead.Strings(plan.Raw, "argv") is { Count: > 0 } argv) lines.Add(UiText.Format("RunCmdPlanCommand", string.Join(' ', argv)));
+        if (JsonRead.Bool(plan.Raw, "backup_first")) lines.Add(UiText.Get("RunCmdPlanBackup"));
+        if (JsonRead.Int(plan.Raw, "timeout_s") is { } seconds) lines.Add(seconds >= 120 ? UiText.Format("RunCmdPlanDeadlineMinutes", seconds / 60) : UiText.Format("RunCmdPlanDeadlineSeconds", seconds));
+        lines.Add(UiText.Get("RunCmdPlanOutput"));
         return lines;
     }
 

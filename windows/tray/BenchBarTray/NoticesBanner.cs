@@ -26,7 +26,7 @@ internal sealed class NoticesBanner : UserControl
         // three notices are tall: the tabs below must stay in reach
         Content = new ScrollViewer { Content = _root, MaxHeight = 260, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Visibility = Visibility.Collapsed;
-        Ui.Name(this, "Notices");
+        Ui.Name(this, UiText.Get("NoticeName"));
     }
 
     /// <summary>The run behind the last click, for tests.</summary>
@@ -69,18 +69,18 @@ internal sealed class NoticesBanner : UserControl
             card.Children.Add(Ui.Text(notice.Text, 13, opacity: 0.9));
             if (notice.SwitchBack is { } back)
             {
-                card.Children.Add(Ui.Text("To go back:", 12, opacity: 0.75, margin: new Thickness(0, 6, 0, 0)));
+                card.Children.Add(Ui.Text(UiText.Get("NoticeGoBack"), 12, opacity: 0.75, margin: new Thickness(0, 6, 0, 0)));
                 card.Children.Add(Ui.Mono(back));
             }
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
             var captured = notice;
-            var dismiss = Ui.Button("Dismiss", () => Pending = DismissAsync(captured), $"Dismiss: {notice.Title}", primary: true);
+            var dismiss = Ui.Button(UiText.Get("NoticeDismiss"), () => Pending = DismissAsync(captured), UiText.Format("NoticeDismissName", notice.Title), primary: true);
             dismiss.IsEnabled = !_busy;
             buttons.Children.Add(dismiss);
             if (notice.SwitchBack is { } command)
-                buttons.Children.Add(Ui.Button("Copy Command", () => _services.CopyText(command), $"Copy the command to go back: {notice.Title}"));
+                buttons.Children.Add(Ui.Button(UiText.Get("NoticeCopyCommand"), () => _services.CopyText(command), UiText.Format("NoticeCopyCommandName", notice.Title)));
             if (notice.SafeDoc is { } doc)
-                buttons.Children.Add(Ui.Button("Read More", () => _services.OpenUrl(doc), $"Read more: {notice.Title}"));
+                buttons.Children.Add(Ui.Button(UiText.Get("NoticeReadMore"), () => _services.OpenUrl(doc), UiText.Format("NoticeReadMoreName", notice.Title)));
             card.Children.Add(buttons);
             _root.Children.Add(Ui.CardOf(card, new Thickness(0, 0, 0, 8)));
         }
@@ -101,7 +101,7 @@ internal sealed class NoticesBanner : UserControl
             _dismissed.Add(notice.Id);
             _services.RefreshNow();
         }
-        else _message = r.Problem ?? $"The notice was not dismissed (exit {r.Exit}).";
+        else _message = r.Problem ?? UiText.Format("NoticeNotDismissed", r.Exit);
         Rebuild();
     }
 }

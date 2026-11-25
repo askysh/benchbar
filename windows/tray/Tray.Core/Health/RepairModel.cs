@@ -110,7 +110,7 @@ public sealed class RepairModel : IDisposable
         }
         else
         {
-            Message = result.Error ?? "The repair plan could not be made.";
+            Message = result.Error ?? UiText.Get("RepairPlanFailed");
             Phase = RepairPhase.Failed;
         }
         Raise();
@@ -159,7 +159,7 @@ public sealed class RepairModel : IDisposable
         if (result.Done?.WrongSudoPassword == true)
         {
             PasswordWasWrong = true;
-            Message = "Linux did not accept that password. Nothing was changed.";
+            Message = UiText.Get("RepairWrongPassword");
             lock (_gate) _steps = [.. _steps.Select(s => s with { Status = InstallStepStatus.Unknown, Message = "" })];
             Ran = false;
             Phase = RepairPhase.Review;
@@ -173,7 +173,7 @@ public sealed class RepairModel : IDisposable
         }
         else if (result.Done is null && !result.Ok)
         {
-            Message = result.Cancelled ? "The repair was stopped." : result.Problem ?? $"The repair failed (exit {result.Exit}).";
+            Message = result.Cancelled ? UiText.Get("RepairWasStopped") : result.Problem ?? UiText.Format("RepairFailedExit", result.Exit);
             Phase = RepairPhase.Failed;
         }
         else

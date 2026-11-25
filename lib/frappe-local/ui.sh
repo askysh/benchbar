@@ -42,6 +42,14 @@ if [[ "${BASH_VERSINFO[0]:-5}" -lt 4 ]] && [[ -t 1 || -t 2 ]]; then
   }
 fi
 
+# The two tools the installer takes from a public registry, at an exact version
+# (INST-9): the bench CLI (PyPI) and yarn (npm). The uv and fnm installers are
+# pinned in 00-linux-system-deps.sh. Fixed here, never read from the
+# environment. To move one, change the number, run tests/test-tool-pins.sh and
+# see "Bumping the tool pins" in docs/releasing.md.
+FL_PIN_FRAPPE_BENCH=5.31.1
+FL_PIN_YARN=1.22.22
+
 FL_TTY=0
 FL_UTF8=0
 FL_COLS=80

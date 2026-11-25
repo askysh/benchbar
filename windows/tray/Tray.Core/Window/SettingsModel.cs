@@ -23,6 +23,9 @@ public interface ISettingsHost
     /// <summary>Opens Windows' Settings > Apps > Startup (<c>ms-settings:startupapps</c>).</summary>
     void OpenStartupSettings() { }
 
+    /// <summary>The Quick Switch shortcut; null where the host has none (the row is not shown).</summary>
+    IQuickSwitchHotKey? HotKey => null;
+
     /// <summary>The distro BenchBar uses changed: poll now instead of waiting out the back off.</summary>
     void DistroSwitched() { }
 }
@@ -85,6 +88,9 @@ public sealed class SettingsModel(TrayConfig config, ISettingsHost host, ISetupS
     public bool ShowsUpdateCheck => UpdatePolicy.ChecksForUpdates(host.Package);
 
     public void OpenStartupSettings() => host.OpenStartupSettings();
+
+    /// <summary>The Quick Switch shortcut (opt in), or null when the host offers none.</summary>
+    public IQuickSwitchHotKey? HotKey => host.HotKey;
 
     public bool Notifications
     {
@@ -164,7 +170,7 @@ public sealed class SettingsModel(TrayConfig config, ISettingsHost host, ISetupS
     public string? ShimPath => host.ShimPath;
 
     /// <summary>The text of the CLI path row: the shim's cli_path, else the shim itself.</summary>
-    public string CliPathText => config.CliPath is { Length: > 0 } p ? p : host.ShimPath ?? "benchbar.exe was not found";
+    public string CliPathText => config.CliPath is { Length: > 0 } p ? p : host.ShimPath ?? UiText.Get("CommonShimMissingShort");
 
     /// <summary><c>wsl.exe --list --verbose</c>; never boots a distro.</summary>
     public async Task LoadDistrosAsync(CancellationToken ct = default)
@@ -174,7 +180,7 @@ public sealed class SettingsModel(TrayConfig config, ISettingsHost host, ISetupS
         try
         {
             Distros = await setup.ListDistrosAsync(ct).ConfigureAwait(true);
-            DistroMessage = Distros.Count == 0 ? "WSL lists no distro. Run the setup from the + menu." : null;
+            DistroMessage = Distros.Count == 0 ? UiText.Get("CommonNoDistroListed") : null;
         }
         finally
         {
@@ -188,7 +194,7 @@ public sealed class SettingsModel(TrayConfig config, ISettingsHost host, ISetupS
     {
         if (SwitchingDistro || string.Equals(name, CurrentDistro, StringComparison.OrdinalIgnoreCase)) return;
         SwitchingDistro = true;
-        DistroMessage = $"Switching to {name}...";
+        DistroMessage = UiText.Format("CommonSwitchingTo", name);
         Changed?.Invoke();
         try
         {

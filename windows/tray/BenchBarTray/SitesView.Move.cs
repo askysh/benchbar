@@ -43,7 +43,7 @@ internal sealed partial class SitesView
             }
             if (outcome.Applied)
             {
-                Say($"{site} moved to {TidyCommands.FolderName(request.Target)}. Its address there is in the result you just read.", false);
+                Say(UiText.Format("MoveDone", site, TidyCommands.FolderName(request.Target)), false);
                 _services.RefreshNow();
             }
             Rebuild();

@@ -105,22 +105,22 @@ public sealed partial class WizardModel : IDisposable
     public const string McpJson = "{\"mcpServers\":{\"benchbar\":{\"command\":\"benchbar.exe\",\"args\":[\"mcp\"]}}}";
     public const string DefaultSite = "linuxdev.localhost";
     public const string DefaultProfile = "v15-lts";
-    public const string RestartRefusedMessage = "Windows did not allow the restart. Restart from the Start menu.";
-    public const string CancelledMessage = "You said no to the Windows prompt. Try again when ready.";
-    public const string StoppedMessage = "Stopped. Click the button to try again.";
-    public const string AdminNote = "Windows will ask for permission";
-    public const string RestartBlurb = "Windows has to restart to finish turning on WSL. BenchBar opens again after you sign in and picks up here. Shut down does not count. Use Restart.";
-    public const string RestartAgainHint = "If Windows did not restart, click Restart Now again.";
-    public const string WaitingForPromptMessage = "Waiting for you to answer the Windows prompt. It may be behind other windows.";
-    public const string HomeUnknownMessage = "BenchBar could not read your Linux home folder. Make sure Ubuntu starts, then check again.";
-    public const string DistroRunningQuestion = "Ubuntu is running. Setting this up restarts it, which stops any benches and MariaDB inside it. Restart Ubuntu now?";
-    public const string KeepAwakeNote = "Keep this PC plugged in and awake until it finishes.";
-    public const string WaitingForPreviousRunMessage = "Waiting for the previous run to end inside Ubuntu. BenchBar tries again by itself.";
-    public const string PreviousRunStillGoingMessage = "The previous run is still going inside Ubuntu. Wait for it to end, then press Retry.";
-    public const string PasswordTooShortMessage = "Use at least 8 characters for a new user.";
-    public const string PasswordLineBreakMessage = "The password cannot contain a line break.";
+    public static string RestartRefusedMessage => UiText.Get("WizardRestartRefused");
+    public static string CancelledMessage => UiText.Get("WizardCancelledPrompt");
+    public static string StoppedMessage => UiText.Get("WizardStoppedMessage");
+    public static string AdminNote => UiText.Get("WizardAdminNote");
+    public static string RestartBlurb => UiText.Get("WizardRestartBlurb");
+    public static string RestartAgainHint => UiText.Get("WizardRestartAgainHint");
+    public static string WaitingForPromptMessage => UiText.Get("WizardWaitingForPrompt");
+    public static string HomeUnknownMessage => UiText.Get("WizardHomeUnknown");
+    public static string DistroRunningQuestion => UiText.Get("WizardDistroRunning");
+    public static string KeepAwakeNote => UiText.Get("WizardKeepAwakeNote");
+    public static string WaitingForPreviousRunMessage => UiText.Get("WizardWaitingPreviousRun");
+    public static string PreviousRunStillGoingMessage => UiText.Get("WizardPreviousRunStillGoing");
+    public static string PasswordTooShortMessage => UiText.Get("WizardPasswordTooShort");
+    public static string PasswordLineBreakMessage => UiText.Get("WizardPasswordLineBreak");
     public const int MinPasswordLength = 8;
-    public const string StoppedWaitingMessage = "Stopped waiting. If you already answered the Windows prompt, WSL keeps installing. Restart Windows when it finishes, then check again.";
+    public static string StoppedWaitingMessage => UiText.Get("WizardStoppedWaiting");
 
     /// <summary>How long Restart Now stays off after a restart was requested. A shutdown that was aborted must not leave the button dead.</summary>
     public TimeSpan RestartRetryAfter { get; set; } = TimeSpan.FromSeconds(30);
@@ -227,20 +227,20 @@ public sealed partial class WizardModel : IDisposable
         var waiting = step.Waits;
         var label = !actionable ? null : step.Action switch
         {
-            SetupIds.ActionReboot => "Restart Now",
-            SetupIds.ActionDistroUser => "Create User",
-            SetupIds.ActionWslEnable => "Turn On",
-            SetupIds.ActionCliInstall when step.IsCliUpdate => "Update", // the shim sends cli_install for an older CLI too
-            _ when StepText.KeepaliveServesOtherDistro(step) => "Move Keep Awake", // the consequence is in the row's detail, above the button
-            _ => "Set Up", // an action id this tray does not know still runs through the generic path
+            SetupIds.ActionReboot => UiText.Get("WizardRestartNow"),
+            SetupIds.ActionDistroUser => UiText.Get("WizardCreateUser"),
+            SetupIds.ActionWslEnable => UiText.Get("WizardTurnOn"),
+            SetupIds.ActionCliInstall when step.IsCliUpdate => UiText.Get("WizardUpdate"), // the shim sends cli_install for an older CLI too
+            _ when StepText.KeepaliveServesOtherDistro(step) => UiText.Get("WizardMoveKeepAwake"), // the consequence is in the row's detail, above the button
+            _ => UiText.Get("WizardSetUp"), // an action id this tray does not know still runs through the generic path
         };
         var detail = StepText.Detail(step, Report.Steps);
         // a step the shim added after this tray was built brings its own fix line: show it
         if (step.Fix is { Length: > 0 } fix && !waiting && !detail.Contains(fix, StringComparison.Ordinal))
-            detail = (detail.Length == 0 ? "" : detail.TrimEnd('.') + ". ") + "Fix: " + fix;
+            detail = (detail.Length == 0 ? "" : detail.TrimEnd('.') + ". ") + UiText.Format("WizardFixLine", fix);
         // the user is created from the Windows name unless it is changed: say which, before the step runs
         if (step.Id == SetupIds.DistroUser && actionable && !waiting && step.Action == SetupIds.ActionDistroUser && !UserCreated)
-            detail = (detail.Length == 0 ? "" : detail.TrimEnd('.') + ". ") + $"Create User makes the Linux user {UserName}. You can change the name on the next page.";
+            detail = (detail.Length == 0 ? "" : detail.TrimEnd('.') + ". ") + UiText.Format("WizardCreateUserMakes", UserName);
         return new CheckRow(step, BusyStepId == step.Id, message, label, actionable && !waiting && step.NeedsAdmin, actionable && !waiting && step.NeedsAdmin ? AdminNote : null, waiting, detail);
     }
 
@@ -282,16 +282,16 @@ public sealed partial class WizardModel : IDisposable
 
     public string? UserNameProblem => LinuxUserPattern.IsMatch(UserName) && UserName != "root"
         ? null
-        : "Use lowercase letters, digits, '-' and '_', starting with a letter. root is not allowed.";
+        : UiText.Get("WizardUserNameProblem");
 
     public string? PasswordProblem
     {
         get
         {
-            if (_linuxPassword.IsEmpty) return "Choose a password. It is what sudo asks for later.";
+            if (_linuxPassword.IsEmpty) return UiText.Get("WizardPasswordEmpty");
             var text = _linuxPassword.Reveal();
             if (HasLineBreak(text)) return PasswordLineBreakMessage;
-            if (!_linuxPassword.SameAs(_confirmPassword)) return "The two passwords are not the same.";
+            if (!_linuxPassword.SameAs(_confirmPassword)) return UiText.Get("WizardPasswordMismatch");
             return null;
         }
     }
@@ -353,13 +353,13 @@ public sealed partial class WizardModel : IDisposable
         name.Length > 0 && (char.IsAsciiLetterLower(name[0]) || char.IsAsciiDigit(name[0]))
         && name.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c is '-' or '.');
 
-    public const string SiteRule = "Lowercase letters, digits, '-' and '.' only.";
+    public static string SiteRule => UiText.Get("WizardSiteRule");
 
     public static bool IsValidFolder(string folder) =>
         folder.Length > 1 && folder[0] == '/' && !folder.Contains("//") && !folder.Contains("..")
         && folder.All(c => char.IsAsciiLetterOrDigit(c) || c is '/' or '.' or '_' or '-' or '+' or '@');
 
-    public const string FolderRule = "An absolute Linux path with letters, digits and . _ - + @ only.";
+    public static string FolderRule => UiText.Get("WizardFolderRule");
 
     public string? FormProblem
     {
@@ -367,13 +367,13 @@ public sealed partial class WizardModel : IDisposable
         {
             if (!IsValidFolder(Folder)) return FolderRule;
             if (!IsValidSite(Site)) return SiteRule;
-            if (!Bundles.Contains(Bundle)) return "Choose a bundle.";
-            if (SelectedProfile is not { } profile) return "Choose a profile.";
-            if (profile.Refusal is { } refusal) return $"{profile.Name} cannot be used here. {refusal}";
-            if (_adminPassword.IsEmpty) return "Choose the Administrator password for the site.";
+            if (!Bundles.Contains(Bundle)) return UiText.Get("WizardChooseBundle");
+            if (SelectedProfile is not { } profile) return UiText.Get("WizardChooseProfile");
+            if (profile.Refusal is { } refusal) return UiText.Format("WizardProfileCannot", profile.Name, refusal);
+            if (_adminPassword.IsEmpty) return UiText.Get("WizardChooseAdminPassword");
             var admin = _adminPassword.Reveal();
-            if (HasLineBreak(admin)) return "The Administrator password cannot contain a line break.";
-            if (admin.Length < MinPasswordLength) return "The Administrator password needs at least 8 characters.";
+            if (HasLineBreak(admin)) return UiText.Get("WizardAdminLineBreak");
+            if (admin.Length < MinPasswordLength) return UiText.Get("WizardAdminTooShort");
             return null;
         }
     }
@@ -661,7 +661,7 @@ public sealed partial class WizardModel : IDisposable
 
     private void ForgetStopped()
     {
-        foreach (var id in _messages.Where(m => m.Value is CancelledMessage or StoppedMessage).Select(m => m.Key).ToList()) _messages.Remove(id);
+        foreach (var id in _messages.Where(m => m.Value == CancelledMessage || m.Value == StoppedMessage).Select(m => m.Key).ToList()) _messages.Remove(id);
     }
 
     /// <summary>The shim's config can change outside the wizard (Settings, adopt-distro by hand): a new name there is the one the next check uses.</summary>
@@ -693,7 +693,7 @@ public sealed partial class WizardModel : IDisposable
         var result = await _setup.UseDistroAsync(name, ct).ConfigureAwait(true);
         if (ct.IsCancellationRequested || _disposed) return;
         if (result.Ok) _alignedDistro = name;
-        else DistroAlignError = $"BenchBar could not make {name} its distro: {result.Message ?? "adopt-distro failed"}";
+        else DistroAlignError = UiText.Format("WizardDistroAlignFailed", name, result.Message ?? UiText.Get("WizardAdoptFailed"));
         if (DistroAlignError is not null) CheckError = DistroAlignError;
     }
 
@@ -786,7 +786,7 @@ public sealed partial class WizardModel : IDisposable
         catch (OperationCanceledException)
         {
             stoppedWaiting = action == SetupIds.ActionWslEnable;
-            result = new SetupRunResult(1, false, false, true, [], [], "Cancelled.");
+            result = new SetupRunResult(1, false, false, true, [], [], UiText.Get("SetupCancelled"));
         }
         catch (TimeoutException ex)
         {
@@ -811,7 +811,7 @@ public sealed partial class WizardModel : IDisposable
             _messages[step.Id] = StoppedWaitingMessage;
         }
         else if (result.Cancelled && !result.RebootRequired) _messages[step.Id] = action == SetupIds.ActionWslEnable ? CancelledMessage : StoppedMessage;
-        else if (!result.Ok && !result.RebootRequired) _messages[step.Id] = result.Error ?? "It did not work. Open the log for details.";
+        else if (!result.Ok && !result.RebootRequired) _messages[step.Id] = result.Error ?? UiText.Get("WizardStepDidNotWork");
         else if (result.Warnings.Count > 0) _messages[step.Id] = result.Warnings[0];
         if (result.RebootRequired)
         {
@@ -990,7 +990,7 @@ public sealed partial class WizardModel : IDisposable
         CreatingUser = true;
         UserError = null;
         Raise();
-        var step = Report.Step(SetupIds.DistroUser) ?? new SetupStepInfo(SetupIds.DistroUser, SetupStatus.Missing, "Linux user", "", SetupIds.ActionDistroUser, false);
+        var step = Report.Step(SetupIds.DistroUser) ?? new SetupStepInfo(SetupIds.DistroUser, SetupStatus.Missing, UiText.Get("WizardLinuxUserStepTitle"), "", SetupIds.ActionDistroUser, false);
         SetupRunResult result;
         try
         {
@@ -1017,7 +1017,7 @@ public sealed partial class WizardModel : IDisposable
         }
         else
         {
-            UserError = _messages.GetValueOrDefault(SetupIds.DistroUser) ?? "The user could not be created.";
+            UserError = _messages.GetValueOrDefault(SetupIds.DistroUser) ?? UiText.Get("WizardUserNotCreated");
             Raise();
         }
     }
@@ -1087,7 +1087,7 @@ public sealed partial class WizardModel : IDisposable
             ct.ThrowIfCancellationRequested();
             if (list.Error is not null || list.Profiles.Count == 0)
             {
-                ProfilesError = list.Error ?? "The profile list was empty.";
+                ProfilesError = list.Error ?? UiText.Get("WizardProfileListEmpty");
                 _listed = [];
                 _profileChoices = [ProfileChoices.Fallback];
                 if (SelectedProfile is null) Profile = DefaultProfile;
@@ -1448,7 +1448,7 @@ public sealed partial class WizardModel : IDisposable
         else if (done is { WrongSudoPassword: true })
         {
             Phase = InstallPhase.NeedsLinuxPassword;
-            Failure = new WizardFailure(null, "Linux did not accept that password.", null, done.Log ?? LogPath);
+            Failure = new WizardFailure(null, UiText.Get("WizardLinuxPasswordRefused"), null, done.Log ?? LogPath);
         }
         else if (result is { Ok: true } && done is not null)
         {
@@ -1462,13 +1462,13 @@ public sealed partial class WizardModel : IDisposable
         else if ((done?.Exit ?? result?.ExitCode) == 2)
         {
             Phase = InstallPhase.NeedsRootPassword;
-            Failure = new WizardFailure(null, "MariaDB already has a root password that BenchBar does not know.", done?.Fix, done?.Log ?? LogPath);
+            Failure = new WizardFailure(null, UiText.Get("WizardRootPasswordUnknown"), done?.Fix, done?.Log ?? LogPath);
         }
         else
         {
             Phase = InstallPhase.Failed;
             var failedStep = _rows.LastOrDefault(r => r.Status == InstallStepStatus.Failed);
-            var message = problem ?? done?.Error ?? failedStep?.Message ?? result?.Error ?? "The install did not finish.";
+            var message = problem ?? done?.Error ?? failedStep?.Message ?? result?.Error ?? UiText.Get("WizardInstallNotFinishedLine");
             Failure = new WizardFailure(failedStep?.Name, message, done?.Fix, done?.Log ?? LogPath);
             _lockHeld = LockText.IsHeld(problem, done?.Error, done?.Fix, failedStep?.Message, result?.Error);
         }

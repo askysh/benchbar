@@ -26,7 +26,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// "Quit when it finishes", chosen in the quit alert while a change ran.
     private var quitWait = QuitAfterChange()
     private var benchesLoaded = false
-    private static let urlLog = Logger(subsystem: "com.akashmishra.benchbar", category: "url")
 
     /// Before launch finishes, so a link that launches the app is not lost.
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -282,79 +281,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if benchesLoaded { handle(url) } else { pendingURLs.append(url) }
     }
 
-    /// One link: URLRouter decides, this only carries it out. Every route is
-    /// a launch or start, stop, restart; nothing that deletes.
+    /// One link: `LinkHandler` decides and acts through `AppLinkEffects`.
     private func handle(_ url: URL) {
-        let benches = store.benches.map {
-            URLRouter.Bench(path: $0.path, name: $0.name, sites: $0.siteRows.map(\.name))
-        }
-        // a link can carry a room code or a profile token: only its scheme and action are logged (MAC-10)
-        let link = URLRouter.logLabel(url)
-        let outcome = URLRouter.route(url, benches: benches, selected: store.selectedPath, lanRooms: Labs.shared.isOn(.lanRooms))
-        // the log line is built from fixed texts and the short label only: never a host, path, query or bench name
-        if let line = URLRouter.rejectionLogLine(link: link, outcome: outcome) {
-            Self.urlLog.notice("\(line, privacy: .public)")
-        }
-        switch outcome {
-        case .ignore:
-            break
-        case .window:
-            openMainWindow()
-        case .share(let target):
-            Self.urlLog.info("share link: a joined room's page")
-            Task { [weak self] in
-                guard let self else { return }
-                // an unknown room only shows the pane; a link never joins (U3)
-                if !(await guest?.open(link: target) ?? false) { mainWindow.show(.network) }
-            }
-        case .shareInvite(let invite):
-            Self.urlLog.info("share invite link: the join sheet, waiting for a click")
-            guest?.open(invite: invite)
-            mainWindow.show(.network)
-        case .profile(let link):
-            Self.urlLog.info("profile link: Team Profiles, sheet prefilled")
-            mainWindow.router.profileRequest = link
-            mainWindow.show(.profiles)
-        case .explain(let message, _):
-            mainWindow.router.notice = message
-            openMainWindow()
-        case .run(let route, let path, let site):
-            guard let bench = store.benches.first(where: { $0.path == path }) else { return }
-            if LinkConfirm.needsAsking(route, setting: settings.confirmLinkActions) {
-                let question = LinkConfirm.question(route, bench: bench.name)
-                guard ShareConfirm.ask(question.title, detail: question.detail, button: question.button, cancelIsDefault: true) else {
-                    Self.urlLog.info("\(route.rawValue, privacy: .public) on \(bench.name, privacy: .public): not confirmed")
-                    return
-                }
-            }
-            Self.urlLog.info("\(route.rawValue, privacy: .public) on \(bench.name, privacy: .public)")
-            switch route {
-            case .up: Task { await store.perform(.up, on: bench) }
-            // with the confirm setting on, the alert above came first and the room confirm still follows
-            case .down: Task { await store.perform(.down, on: bench, fromLink: !settings.confirmLinkActions) }
-            case .restart: Task { await store.perform(.restart, on: bench, fromLink: !settings.confirmLinkActions) }
-            case .open:
-                if let site, let row = bench.siteRows.first(where: { $0.name == site }) {
-                    Workspace.open(row.url)
-                } else {
-                    Workspace.openSite(bench)
-                }
-            case .logs: openLogs(bench)
-            case .window: openBench(bench, tab: .overview, repair: false)
-            case .doctor:
-                openBench(bench, tab: .health, repair: false)
-                Task { await store.runDoctor(on: bench) }
-            case .console, .db:
-                Workspace.openShell(route == .console ? .console : .db, site: site ?? bench.summary.site, bench: bench, store: store)
-            case .editor:
-                if let editor = settings.editor {
-                    Workspace.openInEditor(bench, editor: editor)
-                } else {
-                    mainWindow.router.notice = "Neither VS Code nor Cursor is installed, so there is no editor to open \(bench.name) in."
-                    openMainWindow()
-                }
-            }
-        }
+        let effects = AppLinkEffects(store: store, settings: settings, mainWindow: mainWindow, popover: popover,
+                                     logWindows: logWindows, guestSlot: guestSlot)
+        Task { await LinkHandler.handle(url, effects: effects) }
     }
 
     // MARK: About and Help

@@ -80,10 +80,17 @@ struct SpeedTests {
         let first = await source.sample(target)
         #expect(first.speed == nil, "the first sample is only a baseline")
         #expect(first.snapshot?.cpu.isEmpty == false, "but its snapshot is one for the history")
-        try await Task.sleep(for: .milliseconds(600))
-        let reading = await source.sample(target)
-        let speed = try #require(reading.speed)
-        // yes keeps one core busy: close to 100%, so near the top speed
+        // yes keeps one core busy: close to 100%, so near the top speed. A runner that starves it for a
+        // moment only needs another sample, so read again until the speed shows or the deadline passes.
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(20))
+        var reading = first
+        var speed = 0.0
+        repeat {
+            try await Task.sleep(for: .milliseconds(200))
+            reading = await source.sample(target)
+            speed = reading.speed ?? 0
+        } while speed <= 5 && clock.now < deadline
         #expect(speed > 5, "speed was \(speed)")
         #expect(reading.snapshot?.cpu.keys.contains { $0.pid == busy.processIdentifier } == true)
     }
@@ -104,17 +111,19 @@ struct SpeedTests {
         controller.onSnapshot = { target, _ in snapshots.append(target.pid) }
         controller.onSpeed = { speeds.append($0) }
         controller.run(SpeedTarget(bench: "/b", pid: 42))
-        for _ in 0..<100 where snapshots.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        _ = await waitForCondition { !snapshots.isEmpty }
         controller.stop()
         #expect(snapshots == [42])
         #expect(speeds.count == 1)
     }
 
     @Test func machTimeConvertsToNanoseconds() {
-        let start = MachTime.nanoseconds(mach_absolute_time())
-        Thread.sleep(forTimeInterval: 0.05)
-        let elapsed = MachTime.nanoseconds(mach_absolute_time()) - start
-        #expect(elapsed > 40_000_000 && elapsed < 500_000_000)
+        // against the same clock read the other way, so no sleep and no machine speed in the result:
+        // the converted reading lies between two readings of CLOCK_UPTIME_RAW taken around it
+        let before = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        let converted = MachTime.nanoseconds(mach_absolute_time())
+        let after = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        #expect(converted >= before && converted <= after, "\(before) <= \(converted) <= \(after)")
     }
 }
 

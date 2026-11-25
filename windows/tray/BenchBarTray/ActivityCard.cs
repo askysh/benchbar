@@ -39,7 +39,7 @@ internal sealed class ActivityCard : UserControl
             _timer.Stop();
             Watch(null);
         };
-        Ui.Name(this, "Activity");
+        Ui.Name(this, UiText.Get("ActivityName"));
     }
 
     internal ActivityModel Model => _model;
@@ -125,23 +125,23 @@ internal sealed class ActivityCard : UserControl
         var panel = new StackPanel();
         if (_model.Leases.Count > 0)
         {
-            Heading(panel, lines, "Leases");
+            Heading(panel, lines, UiText.Get("ActivityLeases"));
             foreach (var lease in _model.Leases) Add(panel, lines, LeaseText.Line(lease, now), 13);
-            Add(panel, lines, "While a lease stands, restart, stop, app changes, site drop and restore, and the lockfile wait for the holder. Starting and reading are never stopped.", 12, 0.7);
+            Add(panel, lines, UiText.Get("ActivityLeaseNote"), 12, 0.7);
         }
         if (_model.Resources.Latest is { } latest)
         {
-            Heading(panel, lines, "Resources");
+            Heading(panel, lines, UiText.Get("ActivityResources"));
             Add(panel, lines, ResourceHistory.Line(latest, _model.Resources.Speed), 13);
-            ChartPoints = (Chart(panel, "CPU", _model.Resources.Samples.Select(s => s.CpuPercent).ToList(), Math.Max(100, _model.Resources.Samples.Max(s => s.CpuPercent)),
-                    $"CPU, {_model.Resources.Samples.Count} samples, now {ResourceHistory.Line(latest, _model.Resources.Speed)}"),
-                Chart(panel, "Memory", _model.Resources.Samples.Select(s => (double)s.MemoryBytes).ToList(), _model.Resources.Samples.Max(s => (double)s.MemoryBytes),
-                    $"Memory, {_model.Resources.Samples.Count} samples, now {ByteSize.Format(latest.MemoryBytes)}"));
-            Add(panel, lines, "Measured inside Ubuntu, every few seconds, only while this page is on screen.", 12, 0.7);
+            ChartPoints = (Chart(panel, UiText.Get("ActivityChartCpu"), _model.Resources.Samples.Select(s => s.CpuPercent).ToList(), Math.Max(100, _model.Resources.Samples.Max(s => s.CpuPercent)),
+                    UiText.Format("ActivityChartCpuDescription", _model.Resources.Samples.Count, ResourceHistory.Line(latest, _model.Resources.Speed))),
+                Chart(panel, UiText.Get("ActivityChartMemory"), _model.Resources.Samples.Select(s => (double)s.MemoryBytes).ToList(), _model.Resources.Samples.Max(s => (double)s.MemoryBytes),
+                    UiText.Format("ActivityChartMemoryDescription", _model.Resources.Samples.Count, ByteSize.Format(latest.MemoryBytes))));
+            Add(panel, lines, UiText.Get("ActivityResourcesNote"), 12, 0.7);
         }
         if (_model.Ops.Count > 0)
         {
-            Heading(panel, lines, "Running now");
+            Heading(panel, lines, UiText.Get("ActivityRunningNow"));
             foreach (var op in _model.Ops) Add(panel, lines, OpJson.Line(op, now), 13);
         }
         _body.Children.Add(Ui.CardOf(panel));
@@ -172,7 +172,7 @@ internal sealed class ActivityCard : UserControl
         var canvas = new Canvas { Width = ChartWidth, Height = ChartHeight, Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, ClipToBounds = true };
         canvas.Children.Add(new Rectangle { Width = ChartWidth, Height = ChartHeight, Fill = Ui.Card });
         canvas.Children.Add(line);
-        Ui.Name(canvas, name + " chart", description);
+        Ui.Name(canvas, UiText.Format("ActivityChartName", name), description);
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(Ui.Text(name, 12, opacity: 0.7, margin: new Thickness(0, 6, 8, 0)));
         row.Children.Add(canvas);

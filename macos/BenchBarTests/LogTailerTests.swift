@@ -201,10 +201,7 @@ struct LogTailerTests {
         let t = tailer()
         t.start()
         try append("b\n")
-        for _ in 0..<300 {
-            if seen.text == "a\nb\n" { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        _ = await waitForCondition { seen.text == "a\nb\n" }
         #expect(seen.text == "a\nb\n")
         t.stop()
     }
@@ -255,10 +252,7 @@ struct LogViewTests {
         try h.seekToEnd()
         try h.write(contentsOf: Data(text(5...7).utf8))
         try h.close()
-        for _ in 0..<300 {
-            if model.buffer.lines.last?.text == line(7) { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        _ = await waitForCondition { model.buffer.lines.last?.text == line(7) }
         #expect(model.buffer.lines.map(\.text) == (3...7).map(line))
 
         let edits = EditCounter()
@@ -304,10 +298,7 @@ struct LogViewTests {
             try h.seekToEnd()
             try h.write(contentsOf: Data(text(range).utf8))
             try h.close()
-            for _ in 0..<300 {
-                if model.buffer.lines.last?.text == line(range.upperBound) { break }
-                try await Task.sleep(for: .milliseconds(10))
-            }
+            _ = await waitForCondition { model.buffer.lines.last?.text == line(range.upperBound) }
             #expect(model.buffer.lines.last?.text == line(range.upperBound))
         }
 

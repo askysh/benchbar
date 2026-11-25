@@ -24,16 +24,16 @@ public static class UpdateLinks
     public const string InstallCommand = ShimStart.ReinstallLine;
 
     /// <summary>What to tell the person to do with <see cref="InstallCommand"/>.</summary>
-    public const string InstallExplanation = "Run this line in PowerShell. It closes BenchBar and starts it again.";
+    public static string InstallExplanation => UiText.Get("UpdateInstallExplanation");
 
     /// <summary>What Update Now does, said before the click.</summary>
-    public const string UpdateNowExplanation = "Update Now closes BenchBar, installs the new version and starts it again. A window shows the progress.";
+    public static string UpdateNowExplanation => UiText.Get("UpdateNowExplanation");
 
     /// <summary>What is going on while the update window runs.</summary>
-    public const string UpdatingExplanation = "The update runs in its own window. BenchBar closes and starts again when it is done.";
+    public static string UpdatingExplanation => UiText.Get("UpdateUpdatingExplanation");
 
     /// <summary>The answer of Check for Updates for a packaged copy.</summary>
-    public const string StoreLine = "This copy of BenchBar is updated by the Microsoft Store.";
+    public static string StoreLine => UiText.Get("UpdateStoreCopyLine");
 
     /// <summary>The release page of a version, the same page the update banner's Release Page opens.</summary>
     public static string ReleasePage(string version) => "https://github.com/askysh/benchbar/releases/tag/v" + version.TrimStart('v');
@@ -107,12 +107,12 @@ public static class UpdatePlanner
     /// <summary>The line Check for Updates (the menu item and About) shows for an answer, or for a check that could not run.</summary>
     public static string CheckText(SelfUpdateCheck check)
     {
-        if (check.Problem is { } problem) return "Could not check for updates: " + problem;
+        if (check.Problem is { } problem) return UiText.Format("UpdateCheckFailed", problem);
         var status = check.Status!;
-        if (status.Error is { } error) return "Could not check for updates: " + error;
+        if (status.Error is { } error) return UiText.Format("UpdateCheckFailed", error);
         if (status.Install == InstallKind.Store) return UpdateLinks.StoreLine;
-        if (status.UpdateAvailable && status.Latest is { Length: > 0 } latest) return $"BenchBar {latest} is out.";
-        return "You have the latest version.";
+        if (status.UpdateAvailable && status.Latest is { Length: > 0 } latest) return UiText.Format("CommonUpdateOut", latest);
+        return UiText.Get("UpdateLatest");
     }
 }
 
@@ -143,7 +143,7 @@ public sealed class SelfUpdateClient(IProcessRunner runner, Func<string?> locate
     {
         if (package is { IsPackaged: true }) return SelfUpdateCheck.ForStore(trayVersion); // by construction: a packaged tray runs no check
         var shim = locateShim();
-        if (shim is null) return SelfUpdateCheck.Failed("benchbar.exe was not found next to BenchBar.");
+        if (shim is null) return SelfUpdateCheck.Failed(UiText.Get("UpdateShimMissing"));
         try
         {
             var version = await runner.RunAsync(shim, ["--shim-version"], ct, VersionTimeout).ConfigureAwait(false);
@@ -152,11 +152,11 @@ public sealed class SelfUpdateClient(IProcessRunner runner, Func<string?> locate
             // an older shim never gets the command; a newer one knows it, and asking is how a tray whose files could not all be replaced gets fixed
             var usable = shimVersion == tray || (shimVersion is not null && tray is not null && shimVersion != "unknown" && VersionMismatch.IsNewer(shimVersion, tray));
             if (!usable)
-                return SelfUpdateCheck.Failed("benchbar.exe is not the same version as BenchBar. Run the installer again.");
+                return SelfUpdateCheck.Failed(UiText.Get("UpdateShimOtherVersion"));
 
             var result = await runner.RunAsync(shim, CheckArgs, ct, CheckTimeout).ConfigureAwait(false);
             if (SelfUpdateStatus.Parse(result.Output) is { } status) return new SelfUpdateCheck(status, null);
-            return SelfUpdateCheck.Failed(ShimBenchSource.FirstLine(result.Error) ?? $"benchbar.exe gave no update answer (exit code {result.ExitCode}).");
+            return SelfUpdateCheck.Failed(ShimBenchSource.FirstLine(result.Error) ?? UiText.Format("UpdateNoAnswer", result.ExitCode));
         }
         catch (Win32Exception ex)
         {
@@ -164,7 +164,7 @@ public sealed class SelfUpdateClient(IProcessRunner runner, Func<string?> locate
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return SelfUpdateCheck.Failed("benchbar.exe did not answer in time.");
+            return SelfUpdateCheck.Failed(UiText.Get("UpdateNoAnswerInTime"));
         }
     }
 }
@@ -228,9 +228,9 @@ public sealed class SelfUpdateLauncher(Func<string?> locateShim, Func<ProcessSta
             }
             catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
             {
-                return new UpdateStart(UpdateStartKind.Failed, "Windows PowerShell could not be started: " + ex.Message);
+                return new UpdateStart(UpdateStartKind.Failed, UiText.Format("UpdatePowerShellFailed", ex.Message));
             }
-            if (process is null) return new UpdateStart(UpdateStartKind.Failed, "Windows did not start the update window.");
+            if (process is null) return new UpdateStart(UpdateStartKind.Failed, UiText.Get("UpdateWindowNotStarted"));
             _running = process;
             process.Exited += () =>
             {
@@ -243,7 +243,7 @@ public sealed class SelfUpdateLauncher(Func<string?> locateShim, Func<ProcessSta
         return new UpdateStart(UpdateStartKind.Started);
     }
 
-    public const string AlreadyRunningText = "An update is already running in its own window.";
+    public static string AlreadyRunningText => UiText.Get("UpdateAlreadyRunning");
 
     /// <summary>Windows PowerShell 5.1, which every Windows 10 and 11 has: <c>%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe</c>.</summary>
     public static string PowerShellPath(string systemDirectory) =>
@@ -341,9 +341,9 @@ public sealed record UpdatedNoticeDecision(UpdatedNoticeKind Kind, string? Recor
 /// </summary>
 public static class UpdatedNotice
 {
-    public static string Text(string version) => $"BenchBar was updated to {version}.";
+    public static string Text(string version) => UiText.Format("UpdateUpdatedTo", version);
 
-    public const string ActionLabel = "What's New";
+    public static string ActionLabel => UiText.Get("UpdateWhatsNew");
 
     public static UpdatedNoticeDecision Decide(string? recorded, string currentVersion, bool hadTraySection)
     {
