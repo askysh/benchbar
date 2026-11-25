@@ -90,6 +90,17 @@ assert_contains "$FORMULA" "url \"https://github.com/askysh/benchbar/releases/do
 assert_contains "$FORMULA" "sha256 \"$(sha_of "$TARBALL")\""
 assert_contains "$FORMULA" 'bin.write_exec_script opt_libexec/"benchbar"'
 assert_not_contains "$FORMULA" "{{"
+# the CLI installs on Linux (Linuxbrew) too: no platform restriction, and the
+# Linux layer's tools; MariaDB and Redis come from apt through `benchbar install`
+assert_not_contains "$FORMULA" "depends_on :macos"
+assert_not_contains "$FORMULA" "depends_on :linux"
+assert_contains "$FORMULA" "on_linux do"
+LINUX_BLOCK="$(awk '/^  on_linux do/{f=1} f{print} f&&/^  end/{exit}' "$TMP_DIR/tap1/Formula/benchbar.rb")"
+assert_contains "$LINUX_BLOCK" 'depends_on "git"'
+assert_contains "$LINUX_BLOCK" 'depends_on "curl"'
+assert_not_contains "$LINUX_BLOCK" "mariadb"
+assert_not_contains "$LINUX_BLOCK" "redis"
+assert_contains "$FORMULA" "on macOS and Linux"
 assert_no_file "$TMP_DIR/tap1/Casks" "(no DMG, no cask)"
 
 # ---- with a DMG and a local url
@@ -102,6 +113,7 @@ assert_contains "$CASK" 'cask "benchbar-app" do'
 assert_contains "$CASK" "version \"${VER}\""
 assert_contains "$CASK" "sha256 \"$(sha_of "$TMP_DIR/BenchBar.dmg")\""
 assert_contains "$CASK" 'depends_on formula: "askysh/tap/benchbar"'
+assert_contains "$CASK" 'depends_on macos: :sonoma' "(the app stays macOS only)"
 assert_contains "$CASK" 'uninstall quit: "com.akashmishra.benchbar"'
 assert_not_contains "$CASK" "git clone"
 assert_not_contains "$CASK" "{{"
