@@ -1726,8 +1726,9 @@ printed). `benchbar op status --json` without an op_id and `benchbar op list
 --json` print `{"schema_version", "cli_version", "ops": [record, ...]}`,
 newest first: by the date and time of the op_id, then its `-N` and its pid as
 numbers. A new op_id is never below one that exists, even when the clock steps
-back, so the order is the order the runs started in (its time can then be a
-second or two ahead of `started_at`). `benchbar op wait OP_ID --json` prints the same document as
+back by up to 10 minutes, so the order is the order the runs started in (its
+time can then be a few seconds ahead of `started_at`). An op whose stamp is
+further ahead than that stays on top until the records are pruned. `benchbar op wait OP_ID --json` prints the same document as
 `op status` when the run is not running any more, or when `--timeout` ran
 out (then with `"timed_out": true`).
 

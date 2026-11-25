@@ -44,6 +44,8 @@ FL_OP_PROG_BYTES=""
 FL_OP_NOT_FOR="fg self-update"
 # a record is "starting" from the moment --background wrote it until the detached run takes it over
 FL_OP_START_GRACE=60
+# a stamp this many seconds ahead of the clock is a clock that stepped back (VM time sync: seconds); more is a bad stamp
+FL_OP_CLOCK_SKEW=600
 FL_OP_ID_RE='^op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?$'
 
 fl_ops_dir() { printf '%s/ops' "${FL_STATE_DIR}"; }
@@ -56,13 +58,27 @@ fl__op_str_v() {
   if [[ -n "${2:-}" ]]; then fl_json_str_v "$1" "$2"; else printf -v "$1" '%s' null; fi
 }
 
+# fl__op_stamp_secs_v VAR STAMP: STAMP (YYYYMMDD-HHMMSS) as seconds on a scale that counts its fields as UTC (days from
+# the civil date, in bash arithmetic only). Two stamps of one clock differ by the real seconds between them.
+fl__op_stamp_secs_v() {
+  local __y __m __d __era __yoe __doy __doe
+  __y=$((10#${2:0:4})); __m=$((10#${2:4:2})); __d=$((10#${2:6:2}))
+  [[ "$__m" -gt 2 ]] || __y=$((__y - 1))
+  __era=$((__y / 400)); __yoe=$((__y - __era * 400))
+  __doy=$(( (153 * (__m > 2 ? __m - 3 : __m + 9) + 2) / 5 + __d - 1 ))
+  __doe=$((__yoe * 365 + __yoe / 4 - __yoe / 100 + __doy))
+  printf -v "$1" '%s' $(( (__era * 146097 + __doe - 719468) * 86400 + 10#${2:9:2} * 3600 + 10#${2:11:2} * 60 + 10#${2:13:2} ))
+}
+
 # fl_op_new_id_v VAR: a new op id, its file made empty (noclobber, so two runs never share one). The id sorts
 # after every id that is already there (fl_op_ids): the clock can step back (a VM that syncs its time does so by
 # seconds, WSL every 30 s), and a run that starts after a step would carry an older stamp than the run before it.
 # So when the clock is not past the newest stamp in the folder, the id takes that stamp and a -N one above the
-# newest -N of it, and N, not the pid, orders the runs of one stamp. A name read in bash only, no fork.
+# newest -N of it, and N, not the pid, orders the runs of one stamp. A stamp more than FL_OP_CLOCK_SKEW seconds
+# ahead of the clock is not a step back (a resumed VM, a bad RTC): it is ignored, so one such op does not hold the
+# stamp of every op after it (it stays on top of the list until it is pruned). A name read in bash only, no fork.
 fl_op_new_id_v() {
-  local __dir __stamp __id __n=0 __max __top="" __topn=0 __f __b __s __k
+  local __dir __stamp __id __n=0 __max __top="" __topn=0 __f __b __s __k __now="" __sec
   local __re='^op-([0-9]{8}-[0-9]{6})-[0-9]+(-([0-9]+))?\.json$'
   __dir="$(fl_ops_dir)"
   mkdir -p "$__dir" 2>/dev/null || return 1
@@ -71,6 +87,11 @@ fl_op_new_id_v() {
     __b="${__f##*/}"
     [[ "$__b" =~ $__re ]] || continue
     __s="${BASH_REMATCH[1]}"; __k="${BASH_REMATCH[3]:-0}"
+    if [[ "$__s" > "$__stamp" ]]; then
+      [[ -n "$__now" ]] || fl__op_stamp_secs_v __now "$__stamp"
+      fl__op_stamp_secs_v __sec "$__s"
+      [[ $((__sec - __now)) -le "$FL_OP_CLOCK_SKEW" ]] || continue
+    fi
     if [[ "$__s" > "$__top" ]]; then __top="$__s"; __topn="$__k"
     elif [[ "$__s" == "$__top" && "$__k" -gt "$__topn" ]]; then __topn="$__k"; fi
   done
