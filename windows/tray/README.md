@@ -69,3 +69,7 @@ Debug builds also read `BENCHBAR_TRAY_THEME` (`light` or `dark`), `BENCHBAR_TRAY
 User text goes in `Tray.Core/Resources/Strings.resx` and is read with `UiText.Get`. A
 `Strings.<culture>.resx` next to it translates it. Dates and sizes for display go through
 `UiText.Date` and `ByteSize.Format` with the current culture; machine output stays invariant.
+
+## NuGet lock files
+
+Each project commits a `packages.lock.json` that holds `win-x64` and `win-arm64`, and CI restores with `-p:RestoreLockedMode=true`. After a change to `Directory.Packages.props`, refresh the lock files with `dotnet restore --force-evaluate` from `windows/tray`, without `-r` (a `-r` restore would drop the other runtime from the file), and commit them.

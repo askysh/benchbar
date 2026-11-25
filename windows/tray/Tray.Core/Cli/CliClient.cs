@@ -160,7 +160,7 @@ public sealed class CliClient : ICliClient
         try
         {
             // The secrets are placed in the child's environment here, at the last moment, and the dictionary is not kept.
-            return await _stream.RunAsync(shim, args, env?.Materialize(), onLine, timeout, ct).ConfigureAwait(false);
+            return await _stream.RunAsync(shim, args, env?.Materialize(), onLine, timeout, ct, env?.MaterializeStdin()).ConfigureAwait(false);
         }
         catch (Win32Exception ex)
         {
@@ -180,6 +180,9 @@ public sealed class ScriptedStreamRunner : IStreamRunner
     /// <summary>Every call so far: the arguments and a copy of the environment given to the child.</summary>
     public List<(string[] Args, Dictionary<string, string> Env)> Runs { get; } = [];
 
+    /// <summary>The line each call sent to the child's standard input (null: none), in the order of <see cref="Runs"/>.</summary>
+    public List<string?> Stdins { get; } = [];
+
     /// <summary>Replies to calls whose arguments start with <paramref name="prefix"/> (for example <c>["site", "list"]</c>).</summary>
     public ScriptedReply On(params string[] prefix) =>
         On(args => args.Length >= prefix.Length && args.Take(prefix.Length).SequenceEqual(prefix));
@@ -192,10 +195,11 @@ public sealed class ScriptedStreamRunner : IStreamRunner
     }
 
     public async Task<StreamResult> RunAsync(string fileName, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? environment,
-        Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+        Action<string> onLine, TimeSpan timeout, CancellationToken ct, string? stdin = null)
     {
         var copy = args.ToArray();
         Runs.Add((copy, environment is null ? [] : new Dictionary<string, string>(environment)));
+        Stdins.Add(stdin);
         var reply = _script.FirstOrDefault(s => s.Match(copy)).Reply;
         if (reply is null) return new StreamResult(1, "No scripted reply for: " + string.Join(' ', copy));
         foreach (var line in reply.Lines) onLine(line);

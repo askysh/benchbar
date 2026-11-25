@@ -25,8 +25,8 @@ public sealed class ShareSetupForm(string site)
     public ShareSetupRequest Request(bool refresh) => new(Site, [.. Picked], BackupNow, refresh);
 
     public static string SourceLabel(bool backupNow, int? estMinutes, int? backupAgeSeconds) =>
-        backupNow ? $"Copy my site as it is now (about {estMinutes ?? 1} min)"
-            : backupAgeSeconds is { } age ? $"Use the backup from {ShareText.Countdown(age)} ago" : "Use the newest backup"; // no age until a plan has read the backup
+        backupNow ? UiText.Format("ShareSourceNow", estMinutes ?? 1)
+            : backupAgeSeconds is { } age ? UiText.Format("ShareSourceBackupAge", ShareText.Countdown(age)) : UiText.Get("ShareSourceNewest"); // no age until a plan has read the backup
 }
 
 /// <summary>
@@ -121,15 +121,14 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
     /// The setup as the plan sheet runs it: <c>--dry-run</c> to review, then <c>--acknowledge-data --yes</c> to make the copy. There is no
     /// token in this plan. The sheet's confirm is the person's, and the summary above it says what the copy holds.
     /// </summary>
-    public PlanReviewRequest SetupReview(ShareSetupRequest request, ShareSetupPlan plan) => new(request.Refresh ? "Refresh the shared copy" : "Set up sharing",
+    public PlanReviewRequest SetupReview(ShareSetupRequest request, ShareSetupPlan plan) => new(request.Refresh ? UiText.Get("ShareReviewRefreshTitle") : UiText.Get("ShareReviewSetUpTitle"),
         SetupPlanArgs(request), _ => Bench(["share", "setup", .. request.Arguments, "--acknowledge-data", "--yes", "--json"]))
     {
-        ConfirmLabel = request.Refresh ? "Refresh copy" : "Make the copy",
+        ConfirmLabel = request.Refresh ? UiText.Get("ShareReviewRefreshConfirm") : UiText.Get("ShareReviewMakeConfirm"),
         RequiresToken = false,
         ConfigureEnv = env => { foreach (var (name, value) in PersonEnvironment().Materialize()) env.Set(name, value); },
         ExplainFailure = ShareText.RootPasswordHelp,
-        Summary = $"Makes a hardened copy of {plan.Site} in share.localhost, about {plan.SizeGb.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} GB and {plan.EstMinutes} min. " +
-            $"The copy holds: {ShareText.DataClasses(plan.DataClasses)}. {ShareText.Acknowledgement}",
+        Summary = UiText.Format("ShareReviewSummary", plan.Site, UiText.OneDecimal(plan.SizeGb), plan.EstMinutes, ShareText.DataClasses(plan.DataClasses), ShareText.Acknowledgement),
     };
 
     public static string[] LanGuardInstallArgs() => ["lan-guard", "install", "--yes", "--json"];
@@ -161,7 +160,7 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
             }
             else
             {
-                LastError = result.Error is { Length: > 0 } e ? e : result.Value is { } refused && JsonRead.Str(refused, "error") is { Length: > 0 } text ? text : "Sharing could not be read.";
+                LastError = result.Error is { Length: > 0 } e ? e : result.Value is { } refused && JsonRead.Str(refused, "error") is { Length: > 0 } text ? text : UiText.Get("ShareErrorRead");
                 _errorIsFromRead = true;
             }
             if (Status is { IsLive: true })
@@ -185,7 +184,7 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
         else
         {
             Users = [];
-            LastError = Refusal(result, "The site's users could not be read.");
+            LastError = Refusal(result, UiText.Get("ShareErrorUsers"));
         }
         Raise();
     }
@@ -194,7 +193,7 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
     public async Task<ShareSetupPlan?> PlanSetupAsync(ShareSetupRequest request, CancellationToken ct = default)
     {
         var result = await cli.RunJsonAsync(SetupPlanArgs(request), PersonEnvironment(), CliTimeouts.Plan, ShareJson.SetupPlan, ct).ConfigureAwait(true);
-        LastError = result.Value is null ? result.Error ?? "The setup could not be planned." : null;
+        LastError = result.Value is null ? result.Error ?? UiText.Get("ShareErrorPlan") : null;
         Raise();
         return result.Value;
     }
@@ -204,7 +203,7 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
     /// <summary>Reads the code into memory. A failure says only that it failed: stdout is never repeated.</summary>
     public async Task<bool> LoadCodeAsync(bool fresh = false, CancellationToken ct = default)
     {
-        if (!Begin(fresh ? "Drawing a new code..." : "Reading the room code...")) return false;
+        if (!Begin(fresh ? UiText.Get("ShareBusyNewCode") : UiText.Get("ShareBusyReadCode"))) return false;
         try
         {
             // the document is read as it is: a refusal (exit 2, an error and no code) shows the CLI's sentence, an ok document without a code does not
@@ -215,7 +214,7 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
                 RemovedName = null;
                 return true;
             }
-            LastError = Refusal(result, "The room code could not be read.");
+            LastError = Refusal(result, UiText.Get("ShareErrorCode"));
             return false;
         }
         finally { End(); }
@@ -224,12 +223,12 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
     /// <summary>The invite text for the clipboard: the click on Copy invite is the only way it leaves this call. Null when it could not be read.</summary>
     public async Task<ShareInvite?> ReadInviteAsync(CancellationToken ct = default)
     {
-        if (!Begin("Making the invite...")) return null;
+        if (!Begin(UiText.Get("ShareBusyInvite"))) return null;
         try
         {
             var result = await cli.RunJsonAsync(InviteArgs(), PersonEnvironment(), CliTimeouts.Read, ct).ConfigureAwait(true);
             if (result.Ok && JsonRead.Str(result.Value!, "text") is { Length: > 0 } text) { InviteCopied = true; return new ShareInvite(text); }
-            LastError = Refusal(result, "The invite could not be made.");
+            LastError = Refusal(result, UiText.Get("ShareErrorInvite"));
             return null;
         }
         finally { End(); }
@@ -247,26 +246,26 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
         public Task<bool> StartAsync(int hours, CancellationToken ct = default) => StartAsync(hours, true, ct);
 
     public Task<bool> StartAsync(int hours, bool assignSeats, CancellationToken ct = default) =>
-        RunAsync("Starting sharing...", StartArgs(hours, CliKnowsSeatMode ? assignSeats : null), PersonEnvironment(), CliTimeouts.Apply, ct);
+        RunAsync(UiText.Get("ShareBusyStart"), StartArgs(hours, CliKnowsSeatMode ? assignSeats : null), PersonEnvironment(), CliTimeouts.Apply, ct);
 
     /// <summary>Gives a person a free seat, or moves them to it (<c>share assign</c>); the old seat's sessions end first.</summary>
     public Task<bool> AssignAsync(SharePerson person, ShareSeat seat, CancellationToken ct = default) =>
-        RunAsync($"Giving {person.Name} the seat {seat.Name}...", AssignArgs(person.Id, seat.Id), null, RoomChangeTimeout, ct);
+        RunAsync(UiText.Format("ShareBusyAssign", person.Name, seat.Name), AssignArgs(person.Id, seat.Id), null, RoomChangeTimeout, ct);
 
     public async Task<bool> StopAsync(CancellationToken ct = default)
     {
-        var ok = await RunAsync("Stopping sharing...", StopArgs(), null, CliTimeouts.Apply, ct).ConfigureAwait(true);
+        var ok = await RunAsync(UiText.Get("ShareBusyStop"), StopArgs(), null, CliTimeouts.Apply, ct).ConfigureAwait(true);
         if (ok) Code = null;
         return ok;
     }
 
-    public Task<bool> ExtendAsync(int minutes, CancellationToken ct = default) => RunAsync("Extending...", ExtendArgs(minutes), null, RoomChangeTimeout, ct);
+    public Task<bool> ExtendAsync(int minutes, CancellationToken ct = default) => RunAsync(UiText.Get("ShareBusyExtend"), ExtendArgs(minutes), null, RoomChangeTimeout, ct);
 
-    public Task<bool> SetLockedAsync(bool locked, CancellationToken ct = default) => RunAsync(locked ? "Locking the room..." : "Unlocking the room...", LockArgs(locked), null, CliTimeouts.Plan, ct);
+    public Task<bool> SetLockedAsync(bool locked, CancellationToken ct = default) => RunAsync(locked ? UiText.Get("ShareBusyLock") : UiText.Get("ShareBusyUnlock"), LockArgs(locked), null, CliTimeouts.Plan, ct);
 
     public async Task<bool> RemoveAsync(SharePerson person, CancellationToken ct = default)
     {
-        var ok = await RunAsync($"Removing {person.Name}...", RemoveArgs(person.Id), null, RoomChangeTimeout, ct).ConfigureAwait(true);
+        var ok = await RunAsync(UiText.Format("ShareBusyRemove", person.Name), RemoveArgs(person.Id), null, RoomChangeTimeout, ct).ConfigureAwait(true);
         if (ok)
         {
             RemovedName = person.Name;
@@ -280,7 +279,7 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
     /// What the CLI says (including that this platform has no LAN guard yet) is shown as it is.
     /// </summary>
     public Task<bool> RunLanGuardAsync(bool allowNode, CancellationToken ct = default) =>
-        !LanGuardSupported ? Refuse(ShareText.LanGuardUnavailable) : RunAsync(allowNode ? "Allowing sharing through the firewall..." : "Turning on network protection...", allowNode ? LanGuardAllowNodeArgs() : LanGuardInstallArgs(),
+        !LanGuardSupported ? Refuse(ShareText.LanGuardUnavailable) : RunAsync(allowNode ? UiText.Get("ShareBusyAllowNode") : UiText.Get("ShareBusyProtection"), allowNode ? LanGuardAllowNodeArgs() : LanGuardInstallArgs(),
             PersonEnvironment(), CliTimeouts.Apply, ct);
 
     private async Task<bool> RunAsync(string busy, string[] args, SecretEnvironment? env, TimeSpan timeout, CancellationToken ct)
@@ -289,7 +288,7 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
         try
         {
             var result = await cli.RunStreamAsync(args, env, timeout, _ => { }, ct).ConfigureAwait(true);
-            if (!result.Ok) LastError = result.Cancelled ? "Stopped." : result.Problem ?? $"The command failed (exit {result.Exit}).";
+            if (!result.Ok) LastError = result.Cancelled ? UiText.Get("ShareErrorStopped") : result.Problem ?? UiText.Format("ShareErrorExit", result.Exit);
             return result.Ok;
         }
         finally

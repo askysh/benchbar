@@ -63,6 +63,25 @@ explains the safety model behind it. For the steps, see the
 - Sharing ends at its deadline (4 hours by default, at most 12 hours from
   the start) and when you stop it. Every session of the copy ends with it.
 
+## A guest at a terminal
+
+`benchbar share join` is the guest of the Mac app without the app. It
+checks the same things in the same order:
+
+- It reads the host's key on a connection that shows no certificate, and
+  shows you its first 16 digits before you type the code.
+- The join is pinned to that key. A computer that later answers on the
+  same address with another key is refused, and BenchBar says so. It never
+  takes the new key in place of the old one.
+- The room code and an invite link are never arguments of a command. They
+  are in no log, no history and no JSON document.
+- This computer has one key for each host. On macOS the key is in the
+  Keychain. On Linux and WSL it is a file that only you can read, in the
+  `share-guest` folder of BenchBar's state folder.
+- The room opens on `127.0.0.1` only. The local listener passes on a
+  request only when it comes from the room's own page, and it ends after
+  15 minutes without a request.
+
 ## What guests can see
 
 The pages of the copy that their seat's user can open, and the room's

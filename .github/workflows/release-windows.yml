@@ -263,7 +263,7 @@ jobs:
           # Company, Product and FileDescription are what Explorer and the
           # security dialogs show for BenchBarTray.exe
           $meta = @('-p:Company=Akash Mishra', '-p:Product=BenchBar', '-p:AssemblyTitle=BenchBar tray app', '-p:Description=BenchBar tray app for Windows', '-p:Copyright=Copyright (c) 2026 Akash Mishra. MIT License.')
-          dotnet publish windows/tray/BenchBarTray/BenchBarTray.csproj -c Release -r $env:RID --self-contained false "-p:Version=$env:VERSION" @meta @extra -o out/tray
+          dotnet publish windows/tray/BenchBarTray/BenchBarTray.csproj -c Release -r $env:RID --self-contained false "-p:Version=$env:VERSION" @meta @extra -p:RestoreLockedMode=true -o out/tray
           $exe = 'out/tray/BenchBarTray.exe'
           if (-not (Test-Path $exe)) { throw "dotnet publish did not produce $exe" }
           # fail loudly rather than ship amd64 bits in the arm64 zip
@@ -278,7 +278,7 @@ jobs:
         working-directory: windows/tray
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          dotnet test BenchBarTray.sln -c Release
+          dotnet test BenchBarTray.sln -c Release -p:RestoreLockedMode=true
 
       # What ships, started once on recorded data: it must stay up and quit cleanly
       # (windows/tray/scripts/smoke.ps1). A publish that lacks a file or a manifest

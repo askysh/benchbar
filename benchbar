@@ -166,6 +166,8 @@ FL_OP_ID=""; FL_OP_OWNER=""; FL_OP_JSON=""; FL_OP_COMMAND=""; FL_OP_STARTED=""; 
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/share-run.sh"
 # shellcheck source=lib/frappe-local/share-admin.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/share-admin.sh"
+# shellcheck source=lib/frappe-local/share-guest.sh
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/share-guest.sh"
 # shellcheck source=lib/frappe-local/lan-guard.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/lan-guard.sh"
 # shellcheck source=lib/frappe-local/lan-guard-linux.sh
@@ -376,6 +378,11 @@ Daily
   share preflight     The checks that say whether this Mac is safe to share the copy: the pf block
                       probed from the LAN address, the share web process, the firewall, the copy and
                       its seats. --static or --critical for half, --quiet, --json; exit 1 on a fail.
+  share join [ADDR]   Join somebody's room as a guest: with ADDR (the host's IPv4 address) it asks
+                      for the room code, without one for the invite link. Neither is ever an
+                      argument. It shows the host key first, waits for a seat, and opens the room on
+                      a localhost address. share joined lists the rooms, share leave gives the seat
+                      back, share forget also deletes this computer's key for that host.
   lan-guard install   The pf anchor (macOS) or nftables table (Linux) that keeps the bench ports off
                       the LAN, and the daemon or systemd unit that loads it at boot (sudo, once; a
                       person at a terminal). status (--json), remove, and allow-node (macOS only:
@@ -700,8 +707,10 @@ fl_json_mode_resolve() {
     "site backup"|"site drop"|"site restore"|"site move"|"site snapshot"|"site snapshot drop"|"site snapshots"|"site rollback"|"app add"|"run"|"bench forget"|"bench remove"|"bench scratch"|"bench gc"|"db orphans") FL_JSON_MODE=doc ;;
     # on and off stream like site default; status only reads
     "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
-    "share setup"|"share start"|"share stop"|"share extend"|"share lock"|"share unlock"|"share remove"|"share revoke"|"share assign"|"share teardown") FL_JSON_MODE=stream ;;
-    "share users"|"share preflight"|"share status"|"share code"|"share invite"|"share people"|"share devices"|"share log"|"share open-as") FL_JSON_MODE=doc ;;
+    "share setup"|"share start"|"share stop"|"share extend"|"share lock"|"share unlock"|"share remove"|"share revoke"|"share assign"|"share teardown"|"share leave"|"share forget") FL_JSON_MODE=stream ;;
+    "share users"|"share preflight"|"share status"|"share code"|"share invite"|"share people"|"share devices"|"share log"|"share open-as"|"share joined") FL_JSON_MODE=doc ;;
+    # one document, like share code: a stream closes stdin, and the app and the tray send the room code there
+    "share join") FL_JSON_MODE=doc ;;
     "lan-guard"|"lan-guard install"|"lan-guard remove"|"lan-guard allow-node") FL_JSON_MODE=stream ;;
     "lan-guard status"|wait) FL_JSON_MODE=doc ;;
     "labs on"|"labs off") FL_JSON_MODE=stream ;;
@@ -1405,6 +1414,10 @@ fl_noninteractive_preflight() {
     "share start")
       fl_need "a person at a terminal" "sharing on the network is a person's decision; run benchbar share start in a terminal"
       ;;
+    "share join"|"share leave"|"share forget")
+      # a room is somebody's site with real data, and the code is typed by the person it was given to
+      fl_need "a person at a terminal" "joining and leaving a room is a person's decision; run benchbar share ${ARGS[0]} in a terminal"
+      ;;
     "lan-guard install"|"lan-guard remove"|"lan-guard allow-node")
       # sudo for the pf anchor or the firewall: a person's decision, refused before anything is asked (U3)
       fl_need "a person at a terminal" "benchbar lan-guard ${ARGS[0]} runs sudo; run it in a terminal"
@@ -1468,7 +1481,8 @@ else
 fi
 
 # a command that changes things on a bench it picked on its own says which (and an agent must name one)
-if [[ -z "$OPT_BENCH_DIR" ]]; then
+# (a guest's share commands act on somebody else's room, on no bench of this computer)
+if [[ -z "$OPT_BENCH_DIR" ]] && ! { [[ "$COMMAND" == share ]] && fl_share_guest_sub "${ARGS[0]:-}"; }; then
   case "$COMMAND" in
     install|adopt|register|scan|self-update|labs|profile|ports|lan-guard|docs|report|help|commands|mcp|where|mariadb-password) ;;
     *)
@@ -1506,7 +1520,8 @@ case "$COMMAND" in
     # users, preflight, status, people and log read; setup makes the copy and the identity, start the
     # job, teardown drops the copy and the share folder. stop, extend and the room's changes take no lock:
     # a long setup or start must never keep a share from being stopped or a person from being removed.
-    # code, invite and open-as never open a run log: they handle the room code and a session id
+    # code, invite and open-as never open a run log: they handle the room code and a session id.
+    # Neither do the guest's join, leave and forget: join handles the code, and all three act on no bench.
     case "${ARGS[0]:-}" in
       setup|start|teardown)
         fl_log_init "${FL_STATE_DIR}/logs"
