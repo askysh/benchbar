@@ -344,7 +344,7 @@ run_fm app list --json --bench-dir "$NOSITE"
 assert_eq "0" "$CODE" "(the second run reads a cache with only @ lines) $OUT"
 
 # ---- app add as a plan with a token (0.6.0, for benchbar_app_add over MCP)
-run_json() { set +e; OUT="$("$FM" "$@" 2>"$MOCK_STATE/stderr")"; CODE="$?"; ERR="$(cat "$MOCK_STATE/stderr")"; set -e; }
+run_json() { run_fm_split "$@"; }
 PB="$HOME/plan-bench"
 make_fake_bench "$PB" plansite
 printf 'frappe\n' >"$PB/sites/apps.txt"
