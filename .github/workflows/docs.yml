@@ -62,6 +62,7 @@ jobs:
           filters: |
             docs:
               - 'docs/**'
+              - 'maintainers/**'
               - 'site/**'
               - 'ROADMAP.md'
               - 'CONTRIBUTING.md'
