@@ -278,7 +278,9 @@ fl_log_stamp_v() {
     FL_LOG_BASE=$((10#$__h * 3600 + 10#$__m * 60 + 10#$__s))
     FL_LOG_SECONDS0="$SECONDS"
   fi
-  __t=$(((FL_LOG_BASE + SECONDS - FL_LOG_SECONDS0) % 86400))
+  # the stamp follows the wall clock, back too; the second % keeps a time before the first
+  # call (the clock stepped back across midnight) from printing as a negative one
+  __t=$((((FL_LOG_BASE + SECONDS - FL_LOG_SECONDS0) % 86400 + 86400) % 86400))
   printf -v "$1" '%02d:%02d:%02d' $((__t / 3600)) $((__t % 3600 / 60)) $((__t % 60))
 }
 
@@ -924,6 +926,14 @@ fl_die() {
 
 # ---------------------------------------------------------------- time
 
+# fl_elapsed_v VAR START: the seconds since START (a value of $SECONDS), never below 0. $SECONDS
+# follows the wall clock: after a clock that stepped back, the difference alone is negative.
+fl_elapsed_v() {
+  local __e=$((SECONDS - $2))
+  [[ "$__e" -ge 0 ]] || __e=0
+  printf -v "$1" '%s' "$__e"
+}
+
 fl_fmt_secs() {
   local s="$1"
   # a clock that stepped back (a time sync, WSL after sleep) is not a negative duration
@@ -1202,8 +1212,7 @@ fl_step_begin() {
 fl_step_end() {
   local status="$1" detail="${2:-}" i="$FL_STEP_CURRENT" secs
   [[ "$i" -ge 0 ]] || return 0
-  secs=$((SECONDS - FL_STEP_START))
-  [[ "$secs" -ge 0 ]] || secs=0
+  fl_elapsed_v secs "$FL_STEP_START"
   FL_STEP_STATUS[i]="$status"
   FL_STEP_SECS[i]="$secs"
   fl_spinner_pause
