@@ -19,13 +19,7 @@ for s in bbtest.localhost other; do
 done
 printf '127.0.0.1 macdev\n\n# >>> benchbar >>>\n127.0.0.1 bbtest.localhost\n127.0.0.1 other\n# <<< benchbar <<<\n' >>"$FL_HOSTS_FILE"
 BK="$BENCH/sites/bbtest.localhost/private/backups"
-run_json() {
-  set +e
-  OUT="$("$FM" "$@" 2>"$MOCK_STATE/stderr")"
-  CODE="$?"
-  ERR="$(cat "$MOCK_STATE/stderr")"
-  set -e
-}
+run_json() { run_fm_split "$@"; }
 # make_old_set DIR SLUG STAMP [files]: an old backup set, its files a week old
 make_old_set() {
   local base="$1/$3-$2"

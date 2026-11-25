@@ -10,6 +10,7 @@
 # sides, two BenchBar.app copies, and helpers whose benchbar is gone.
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
+soft_asserts on  # each section checks its own fake prefix and output: report all that fail
 
 # ---- the kind and FL_SELF from SCRIPT_DIR alone
 # kind_of SCRIPT_DIR: "KIND FL_SELF FL_SELF_DIR"

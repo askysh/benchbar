@@ -11,9 +11,8 @@ PIDS=()
 cleanup() {
   local p
   for p in ${PIDS[@]+"${PIDS[@]}"}; do kill "$p" 2>/dev/null || true; done
-  rm -rf "$TMP_DIR"
 }
-trap cleanup EXIT
+on_exit cleanup
 
 # the listeners: a web server that answers 200 for the hosts it is given and
 # 404 for any other, writing every Host it was asked about to a file, and

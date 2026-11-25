@@ -488,6 +488,88 @@ assert_not_contains "$race_out" "a live lock" "(a waiter that judged an older fo
 assert_contains "$race_out" "locked"
 assert_no_file "$RACE_DIR/state/leases.lock"
 assert_no_file "$RACE_DIR/state/leases.lock.reclaim"
+# Two runs make the lock folder at once (issue 138; CI on Ubuntu 26.04, run 45348315776: six takes
+# said ok and the file held five leases). uutils coreutils' mkdir looks for the folder first and,
+# when another process makes it in between, exits 0 all the same: both runs held the lock, both read
+# the file before either wrote it, and the second write dropped the first one's lease. The mkdir
+# here answers as uutils does in that race (a folder that is there counts as made). A take must
+# still wait for the holder, and two reclaimers must not share the guard.
+UU_DIR="$TMP_DIR/uu"; mkdir -p "$UU_DIR/state" "$UU_DIR/bin"
+uu_out="$(FL_STATE_DIR="$UU_DIR/state" bash -c '
+  set -euo pipefail
+  . "$1/lib/frappe-local/lock.sh"; . "$1/lib/frappe-local/lease.sh"
+  # the real mkdir by its path: on bash 3.2 a failed "command mkdir" ends the run under set -e even
+  # inside || or an if
+  mk="$(type -P mkdir)"
+  mkdir() { "$mk" "$@" 2>/dev/null || [[ -d "${!#}" ]]; }
+  sleep() { :; }
+  fl__lease_lock && printf "first holds\n"
+  if (fl__lease_lock); then printf "second holds too\n"; else printf "second waits\n"; fi
+  fl__lease_unlock
+  if (fl__lease_lock); then printf "second holds once the first let go\n"; fi
+  fl__lease_unlock
+  g="$FL_STATE_DIR/leases.lock.reclaim"
+  fl_mkdir_excl "$g" && printf "guard taken\n"
+  if fl_mkdir_excl "$g"; then printf "guard taken twice\n"; fi
+  fl_rmdir_excl "$g"
+' _ "$ROOT" 2>&1)" || fail "the lease lock under a mkdir that answers as uutils does: $uu_out"
+assert_contains "$uu_out" "first holds"
+assert_contains "$uu_out" "second waits" "(a run whose mkdir said yes to a folder another run holds took the lock: $uu_out)"
+assert_not_contains "$uu_out" "second holds too"
+assert_contains "$uu_out" "second holds once the first let go"
+assert_contains "$uu_out" "guard taken"
+assert_not_contains "$uu_out" "guard taken twice"
+assert_no_file "$UU_DIR/state/leases.lock"
+assert_no_file "$UU_DIR/state/leases.lock.reclaim"
+# the same six takes at once with that mkdir first on PATH, the CI runner's case end to end
+# shellcheck disable=SC2016 # expands in the mkdir script
+printf '#!/bin/bash\n# mkdir as uutils coreutils answers the run that lost the race to make a folder: made\n"%s" "$@" 2>/dev/null || [[ -d "${!#}" ]]\n' "$(command -v mkdir)" >"$UU_DIR/bin/mkdir"
+chmod +x "$UU_DIR/bin/mkdir"
+python3 -c 'import os, sys; os.remove(sys.argv[1])' "$LEASES"
+for n in 1 2 3 4 5 6; do
+  (PATH="$UU_DIR/bin:$PATH" BENCHBAR_NONINTERACTIVE=1 BENCHBAR_CALLER="uu-${n}" "$FM" lease take --site "s${n}.localhost" --bench-dir "$BENCH" --for 5 >"$TMP_DIR/take.uu.$n" 2>&1; printf 'exit=%s\n' "$?" >>"$TMP_DIR/take.uu.$n") &
+done
+wait
+assert_eq "6" "$(lease_count)" "(six takes at once under a mkdir that answers as uutils does)$(takes_log uu)"
+assert_no_file "$FL_STATE_DIR/leases.lock"
+# A lock folder that takes no claim (no space, no inodes, no permission) is a write error, said at
+# once: no run holds it, so waiting for one would end in a wrong "busy". The mkdir below makes the
+# folder read only. root writes there anyway, so the check needs a user.
+CW_DIR="$TMP_DIR/cw"; mkdir -p "$CW_DIR/state" "$CW_DIR/bin"
+cw_user=0
+chmod a-w "$CW_DIR/state"
+if [[ ! -w "$CW_DIR/state" ]]; then cw_user=1; fi
+chmod u+w "$CW_DIR/state"
+if [[ "$cw_user" == 1 ]]; then
+  cw_out="$(FL_STATE_DIR="$CW_DIR/state" bash -c '
+    set -euo pipefail
+    . "$1/lib/frappe-local/lock.sh"; . "$1/lib/frappe-local/lease.sh"
+    fl_die() { printf "DIE %s\n" "$1"; exit 1; }
+    mk="$(type -P mkdir)"
+    mkdir() { "$mk" "$@" || return; [[ "$1" == -p ]] || chmod a-w "${!#}"; }
+    rc=0; fl_mkdir_excl "$FL_STATE_DIR/x" || rc=$?; printf "excl=%s\n" "$rc"
+    command rmdir "$FL_STATE_DIR/x"
+    rc=0; fl__lease_lock || rc=$?; printf "lease=%s\n" "$rc"
+    SECONDS=0; (fl_lock_acquire "$FL_STATE_DIR/lock") || true; printf "waited=%s\n" "$SECONDS"
+  ' _ "$ROOT" 2>&1)" || true
+  assert_contains "$cw_out" "excl=2" "(a folder that takes no claim is not a lock another run holds: $cw_out)"
+  assert_contains "$cw_out" "lease=2"
+  assert_contains "$cw_out" "DIE Could not write the lock $CW_DIR/state/lock."
+  assert_contains "$cw_out" "waited=0"
+  assert_no_file "$CW_DIR/state/leases.lock"
+  assert_no_file "$CW_DIR/state/lock"
+  # end to end: lease take says what is wrong, takes nothing and leaves no folder behind
+  # shellcheck disable=SC2016 # expands in the mkdir script
+  printf '#!/bin/bash\n# leases.lock is made read only: its claim cannot be written\n"%s" "$@" || exit\ncase "${!#}" in */leases.lock) chmod a-w "${!#}" ;; esac\n' "$(command -v mkdir)" >"$CW_DIR/bin/mkdir"
+  chmod +x "$CW_DIR/bin/mkdir"
+  python3 -c 'import os, sys; os.remove(sys.argv[1])' "$LEASES"
+  set +e; OUT="$(PATH="$CW_DIR/bin:$PATH" BENCHBAR_NONINTERACTIVE=1 BENCHBAR_CALLER=cw "$FM" lease take --site s1.localhost --bench-dir "$BENCH" --for 5 2>&1)"; CODE="$?"; set -e
+  assert_eq "1" "$CODE" "$OUT"
+  assert_contains "$OUT" "Could not write the lock $FL_STATE_DIR/leases.lock."
+  assert_not_contains "$OUT" "busy"
+  assert_no_file "$FL_STATE_DIR/leases.lock"
+  assert_eq "0" "$(lease_count)" "(nothing was taken)"
+fi
 # the cap
 python3 - "$LEASES" "$BENCH" "$((T0 + 600))" <<'PY'
 import sys

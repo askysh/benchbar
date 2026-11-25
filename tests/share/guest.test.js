@@ -157,7 +157,7 @@ test("a host that shows another key is refused before a byte is written; a wrong
         const identity = guest.identityOf(guest.newKey());
         const before = await budget(gw);
         const attempt = async (options) => {
-            const socket = await guest.dial({ host: LOOPBACK, port: gw.port, identity });
+            const socket = await guest.dial({ host: LOOPBACK, port: gw.port, pin: Buffer.from(gw.host.fp.slice(7), "hex"), identity });
             try {
                 return await guest.join(socket, { name: "Lab PC", model: "Linux", fg: identity.fg, ...options });
             } finally {
@@ -415,4 +415,284 @@ test("several commands at once: a room gets one forwarder, on one port", async (
         assert.ok(!fs.existsSync(path.join(dir, `${id}.start`)), "the lock of the start was left behind");
         assert.strictEqual(cli(dir, "forget", { id }).code, 0);
     });
+});
+
+// A TLS 1.3 server for one made-up host: it counts every byte a guest writes, and answers with `reply(socket)`.
+function fakeHost(reply) {
+    const identity = guest.identityOf(guest.newKey());
+    const seen = { bytes: 0, connections: 0 };
+    const tlsServer = require("node:tls").createServer({ key: identity.key, cert: identity.cert, minVersion: "TLSv1.3", maxVersion: "TLSv1.3" }, (socket) => {
+        seen.connections++;
+        socket.on("error", () => {});
+        socket.on("data", (chunk) => {
+            seen.bytes += chunk.length;
+            if (reply) reply(socket);
+        });
+    });
+    return new Promise((resolve) => tlsServer.listen(0, LOOPBACK, () => resolve({ pin: identity.fg, port: tlsServer.address().port, seen, close: () => tlsServer.close() })));
+}
+
+test("a wrong key is refused before one byte is written, the right key lets the request through", async () => {
+    const host = await fakeHost();
+    try {
+        await assert.rejects(guest.dial({ host: LOOPBACK, port: host.port, pin: crypto.randomBytes(32) }), refused("identity_changed"));
+        await H.sleep(150);
+        assert.strictEqual(host.seen.bytes, 0, "a request went out before the key was compared");
+        const socket = await guest.dial({ host: LOOPBACK, port: host.port, pin: host.pin });
+        guest.exchange(socket, "GET", "/room/hello", null, 200).catch(() => {});
+        await H.sleep(150);
+        assert.ok(host.seen.bytes > 0, "the stand in host does not see a request, so the check above proves nothing");
+        socket.destroy();
+        // a guest key is only ever shown to a pinned host
+        await assert.rejects(guest.dial({ host: LOOPBACK, port: host.port, identity: guest.identityOf(guest.newKey()) }), refused("failed"));
+    } finally {
+        host.close();
+    }
+});
+
+test("a reply is capped and a silent host times out", async () => {
+    const big = await fakeHost((socket) => socket.write(`HTTP/1.1 200 OK\r\nContent-Length: 999999\r\n\r\n${"x".repeat(300_000)}`));
+    const silent = await fakeHost();
+    try {
+        let socket = await guest.dial({ host: LOOPBACK, port: big.port, pin: big.pin });
+        await assert.rejects(guest.exchange(socket, "GET", "/room/hello"), refused("failed"));
+        socket.destroy();
+        socket = await guest.dial({ host: LOOPBACK, port: silent.port, pin: silent.pin });
+        const began = Date.now();
+        await assert.rejects(guest.exchange(socket, "GET", "/room/hello", null, 300), refused("unreachable"));
+        assert.ok(Date.now() - began < 3000);
+        socket.destroy();
+    } finally {
+        big.close();
+        silent.close();
+    }
+});
+
+test("an invite with huge values, %26 and other cases", () => {
+    const long = (n, ch) => ch.repeat(n);
+    assert.strictEqual(guest.parseInvite(inviteLink({ r: long(200_000, "a") })).room.length, 40);
+    for (const bad of [inviteLink({ x: long(5000, "9") }), inviteLink({ h: long(100_000, "a") }), inviteLink({ s: long(100_000, "b") }), inviteLink({ c: long(100_000, "1") })]) {
+        assert.throws(() => guest.parseInvite(bad), refused("invite_malformed"));
+    }
+    assert.strictEqual(guest.parseInvite(inviteLink({ r: "a%26b" })).room, "a&b");
+    // an encoded & stays inside its value: it never starts a second field
+    assert.strictEqual(guest.parseInvite(inviteLink({ r: "a%26c%3D111111" })).code, "482913");
+    assert.strictEqual(guest.parseInvite(inviteLink({ a: "192.168.1.20%3A8443%26x%3D1" })).address, null);
+    assert.throws(() => guest.parseInvite(inviteLink({ c: "48%2029" })), refused("invite_malformed"));
+    // names are case sensitive (an upper case H is not h), hex digits and the scheme are not
+    assert.throws(() => guest.parseInvite(inviteLink().replace("&h=", "&H=")), refused("invite_malformed"));
+    assert.strictEqual(guest.parseInvite(inviteLink({ h: "AB".repeat(32), s: "CD".repeat(16) })).salt, "cd".repeat(16));
+    assert.strictEqual(guest.parseInvite(inviteLink().replace("benchbar://share/join", "BenchBar://Share/Join")).code, "482913");
+});
+
+test("only four plain octets are a local network", () => {
+    for (const bad of ["10.evil.com", "192.168.1", "10", "10.0.0", "10.0.0.1.1", "10.0.0.256", "0x0a.0.0.1", "10..0.1", "10.0.0.1 ", "", "10.0.0.-1"]) assert.ok(!guest.isLocalNetwork(bad), bad);
+    assert.ok(guest.isLocalNetwork("10.0.0.255"));
+});
+
+test("a hello without a site is not a room", async () => {
+    const host = await fakeHost((socket) => {
+        const body = JSON.stringify({ v: 3, room: "R", host: "H", salt: "00".repeat(16), locked: false, full: false, people: 0, seats: 0 });
+        socket.write(`HTTP/1.1 200 OK\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+    });
+    try {
+        const socket = await guest.dial({ host: LOOPBACK, port: host.port, pin: host.pin });
+        await assert.rejects(guest.roomHello(socket), refused("failed"));
+        socket.destroy();
+    } finally {
+        host.close();
+    }
+});
+
+test("a lock is broken by one waiter, never under a live holder, and never takes a fresh lock away", async () => {
+    const dir = H.tmpDir();
+    const lock = path.join(dir, "x.lock");
+    // a long holder keeps its lock alive: a second taker times out while the work waits longer than the stale limit
+    const slow = guest.locked(lock, async () => { await H.sleep(900); return "done"; }, { staleMs: 300 });
+    await H.sleep(100);
+    await assert.rejects(guest.locked(lock, async () => "second", { staleMs: 300, timeoutMs: 600 }), refused("busy"));
+    assert.strictEqual(await slow, "done");
+    assert.ok(!fs.existsSync(lock));
+
+    // a lock whose owner died is broken, by one of many waiters at a time: the work never overlaps
+    const log = path.join(dir, "log");
+    fs.writeFileSync(lock, "dead");
+    const past = new Date(Date.now() - 600_000);
+    fs.utimesSync(lock, past, past);
+    const work = `const g = require(${JSON.stringify(path.join(__dirname, "../../lib/frappe-local/share/guest.js"))});
+        const fs = require("fs");
+        g.lockedSync(${JSON.stringify(lock)}, () => { fs.appendFileSync(${JSON.stringify(log)}, "in\\n"); const end = Date.now() + 25; while (Date.now() < end); fs.appendFileSync(${JSON.stringify(log)}, "out\\n"); });`;
+    const runs = await Promise.all(Array.from({ length: 12 }, () => start(["-e", work])));
+    assert.deepStrictEqual(runs.map((r) => r.code), runs.map(() => 0), runs.map((r) => r.text).join(""));
+    assert.strictEqual(fs.readFileSync(log, "utf8"), "in\nout\n".repeat(12), "two holders were inside at once");
+    assert.deepStrictEqual(fs.readdirSync(dir).filter((n) => n.startsWith("x.lock")), [], "the lock or its helper files were left behind");
+});
+
+test("a rooms file that cannot be read is refused and kept, and the suffix does not change", () => {
+    const dir = H.tmpDir();
+    const store = guest.roomsStore(dir);
+    const suffix = store.suffix();
+    assert.strictEqual(store.suffix(), suffix);
+    const file = path.join(dir, "rooms.json");
+    const room = { id: "ab".repeat(8), host_fp: "sha256:" + "ab".repeat(32), device_id: "d_00000001", room: "R", host: "H", site: "", address: "192.168.1.2", port: 8443, local_port: null, joined_at: "2026-11-25T00:00:00.000Z", salt: "00".repeat(16) };
+    store.save(room);
+    for (const bad of ["{ not json", "[]", "null", "42"]) {
+        fs.writeFileSync(file, bad);
+        assert.throws(() => store.load(), refused("rooms_file"), bad);
+        assert.throws(() => store.suffix(), refused("rooms_file"), bad);
+        assert.throws(() => store.save(room), refused("rooms_file"), bad);
+        assert.throws(() => store.forget(room.id), refused("rooms_file"), bad);
+        assert.strictEqual(fs.readFileSync(file, "utf8"), bad, "the unreadable file was written over");
+    }
+    // a file without a suffix gets one, once
+    fs.writeFileSync(file, JSON.stringify({ v: 1, rooms: [] }));
+    const made = store.suffix();
+    assert.match(made, /^[0-9a-f]{32}$/);
+    assert.strictEqual(store.suffix(), made);
+});
+
+test("the key store takes only a 64 digit host, hands out one key to two callers, and loads a loose file as private", () => {
+    const dir = H.tmpDir();
+    const files = guest.keyStore({ kind: "file", dir });
+    for (const bad of ["", "ab", "../../etc/x", "ab".repeat(32) + "\n", "AB".repeat(32)]) {
+        for (const op of ["load", "create", "remove", "obtain"]) assert.throws(() => files[op](bad), refused("key_store"), `${op} ${JSON.stringify(bad)}`);
+    }
+    const host = "cd".repeat(32);
+    const first = files.obtain(host);
+    assert.strictEqual(first.fresh, true);
+    const second = files.obtain(host);
+    assert.deepStrictEqual([second.fresh, second.key.equals(first.key)], [false, true]);
+    assert.ok(!fs.existsSync(path.join(dir, "keys.lock")));
+    const file = path.join(dir, "keys", `${host}.pem`);
+    fs.chmodSync(file, 0o644);
+    assert.ok(files.load(host).equals(first.key));
+    assert.strictEqual(fs.statSync(file).mode & 0o777, 0o600);
+
+    // a Keychain that refuses the delete is told to the caller, a missing item is nothing to do
+    const security = path.join(dir, "security");
+    fs.writeFileSync(security, "#!/bin/bash\n[[ -f \"" + dir + "/locked\" ]] && exit 36\nexit 44\n", { mode: 0o700 });
+    const chain = guest.keyStore({ kind: "keychain", dir, security });
+    chain.remove(host);
+    fs.writeFileSync(path.join(dir, "locked"), "");
+    assert.throws(() => chain.remove(host), refused("key_store"));
+});
+
+const net = require("node:net");
+const FORWARD_JS = path.join(__dirname, "../../lib/frappe-local/share/guest-forward.js");
+const GUEST_CLI = require("../../lib/frappe-local/share/guest-cli.js");
+
+// A saved room and this computer's key for it, in a guest folder, for a forwarder process to read. The
+// host does not exist: the forwarder runs and says "offline".
+function savedRoom(dir) {
+    const hex = "ef".repeat(32);
+    const id = hex.slice(0, 16);
+    guest.roomsStore(dir).save({ id, host_fp: `sha256:${hex}`, device_id: "d_00000001", room: "Gone Room", host: "Host", site: "", address: LOOPBACK, port: 1,
+        local_port: null, joined_at: "2026-11-25T00:00:00.000Z", salt: "00".repeat(16) });
+    guest.keyStore({ kind: "file", dir }).obtain(hex);
+    return id;
+}
+
+const spawnForwarder = (dir, id, code = null) => {
+    const args = code ? ["-e", `require(${JSON.stringify(FORWARD_JS)}).run(process.argv.slice(1), { tickMs: 100 }).catch((e) => { process.stderr.write("guest-forward: " + (e.code || e.name)); process.exit(1); })`, dir, "file", "", id]
+        : [FORWARD_JS, dir, "file", "", id];
+    return spawn(process.execPath, args, { stdio: ["ignore", "ignore", "pipe"] });
+};
+const exited = (child) => new Promise((resolve) => { let text = ""; child.stderr.on("data", (c) => (text += c)); child.on("close", (code) => resolve({ code, text })); });
+
+test("the forwarder takes its control socket first: a second one for the room says already_running, and four at once leave one", async () => {
+    const dir = H.tmpDir();
+    const id = savedRoom(dir);
+    const all = [0, 1, 2, 3].map(() => spawnForwarder(dir, id));
+    H.track(() => { for (const c of all) c.kill("SIGKILL"); });
+    const results = await Promise.all(all.map(exited).map((p, i) => Promise.race([p.then((r) => ({ i, ...r })), H.sleep(3000).then(() => ({ i, code: null }))])));
+    const alive = results.filter((r) => r.code === null);
+    assert.strictEqual(alive.length, 1, JSON.stringify(results));
+    for (const r of results.filter((x) => x.code !== null)) assert.deepStrictEqual([r.code, r.text.trim()], [1, "guest-forward: already_running"]);
+    const status = await forward.ask(dir, id, "status", 2000);
+    assert.strictEqual(status.ok, true);
+    assert.strictEqual(all[alive[0].i].pid, status.pid);
+    await forward.ask(dir, id, "stop", 2000);
+});
+
+test("a forwarder whose socket is gone ends by itself, and a dead one's socket file is taken over", async () => {
+    const dir = H.tmpDir();
+    const id = savedRoom(dir);
+    const first = spawnForwarder(dir, id, "tick");
+    H.track(() => first.kill("SIGKILL"));
+    const firstEnd = exited(first);
+    for (let i = 0; i < 100 && !(await forward.ask(dir, id, "status", 300)); i++) await H.sleep(50);
+    assert.ok(await forward.ask(dir, id, "status", 1000), "the forwarder did not come up");
+    fs.rmSync(forward.sockPath(dir, id), { force: true });
+    assert.strictEqual((await firstEnd).code, 0, "the forwarder stayed up without its socket");
+
+    // killed hard: the socket file stays, nobody answers, a new forwarder takes it over
+    const second = spawnForwarder(dir, id, "tick");
+    H.track(() => second.kill("SIGKILL"));
+    for (let i = 0; i < 100 && !(await forward.ask(dir, id, "status", 300)); i++) await H.sleep(50);
+    second.kill("SIGKILL");
+    await exited(second);
+    assert.ok(fs.existsSync(forward.sockPath(dir, id)), "a killed forwarder left no socket to take over");
+    const third = spawnForwarder(dir, id, "tick");
+    H.track(() => third.kill("SIGKILL"));
+    for (let i = 0; i < 100 && !(await forward.ask(dir, id, "status", 300)); i++) await H.sleep(50);
+    const status = await forward.ask(dir, id, "status", 1000);
+    assert.strictEqual(status && status.pid, third.pid);
+    await forward.ask(dir, id, "stop", 2000);
+});
+
+test("the forwarder listens on 127.0.0.1 only, takes no more than its cap of connections, and ends a stalled one", async () => {
+    const quiet = net.createServer(() => {});
+    await new Promise((resolve) => quiet.listen(0, LOOPBACK, resolve));
+    const forwarder = new forward.Forwarder({
+        localHost: "room-0123456789abcdef.localhost", port: await H.freePort(), hostLabel: "Host", maxConnections: 2, idleMs: 300,
+        connect: async () => net.connect(quiet.address().port, LOOPBACK)
+    });
+    try {
+        const port = await forwarder.start();
+        assert.strictEqual(forwarder.server.address().address, LOOPBACK);
+        assert.strictEqual(forwarder.server.address().family, "IPv4");
+        const open = () => new Promise((resolve, reject) => {
+            const socket = net.connect(port, LOOPBACK, () => resolve(socket));
+            socket.on("error", () => {});
+            socket.once("error", reject);
+        });
+        const closedSoon = (socket) => new Promise((resolve) => { socket.once("close", () => resolve(true)); setTimeout(() => resolve(false), 600); });
+        const a = await open();
+        const b = await open();
+        await H.sleep(50);
+        const c = await open().catch(() => null);
+        assert.ok(c === null || await closedSoon(c), "a third connection stayed open beyond the cap");
+        a.destroy();
+        b.destroy();
+        await H.sleep(100);
+
+        // a request that passed the gate and then stalled at the host is ended after the idle time
+        const d = await open();
+        d.write(`GET /app HTTP/1.1\r\nHost: ${forwarder.expectedHost}\r\n\r\n`);
+        assert.ok(await new Promise((resolve) => { d.once("close", () => resolve(true)); setTimeout(() => resolve(false), 2500); }), "a stalled connection was never ended");
+    } finally {
+        forwarder.stop();
+        quiet.close();
+    }
+});
+
+test("leave ends a forwarder that ignores stop, and says so when it cannot", async () => {
+    const dir = H.tmpDir();
+    const id = "ab".repeat(8);
+    const stubborn = (pid) => spawn(process.execPath, ["-e", `
+        const net = require("net");
+        net.createServer((c) => { c.on("data", () => c.end(JSON.stringify({ ok: true, pid: ${pid} === null ? process.pid : ${pid}, port: 41000 }) + "\\n")); })
+            .listen(${JSON.stringify(path.join(dir, `${id}.sock`))}); setInterval(() => {}, 1000);`], { stdio: "ignore" });
+    const first = stubborn(null);
+    H.track(() => first.kill("SIGKILL"));
+    for (let i = 0; i < 100 && !(await forward.ask(dir, id, "status", 300)); i++) await H.sleep(50);
+    assert.strictEqual(await GUEST_CLI.stopForwarder({ dir }, id), true);
+    assert.strictEqual(await forward.ask(dir, id, "status", 300), null);
+    // one whose pid is not its own cannot be ended: the caller is told
+    fs.rmSync(path.join(dir, `${id}.sock`), { force: true });
+    const second = stubborn(2 ** 22 + 12345);
+    H.track(() => second.kill("SIGKILL"));
+    for (let i = 0; i < 100 && !(await forward.ask(dir, id, "status", 300)); i++) await H.sleep(50);
+    assert.strictEqual(await GUEST_CLI.stopForwarder({ dir }, id), false);
+    second.kill("SIGKILL");
 });

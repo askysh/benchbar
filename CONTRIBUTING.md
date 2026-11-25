@@ -37,6 +37,14 @@ test builds its own `HOME` and mock state. `tests/run-tests.sh test-doctor`
 runs one file. [docs/testing.md](docs/testing.md) is the guide for
 trying a build on a real Mac.
 
+A failed assertion stops its test file. A block of independent checks can
+call `soft_asserts on` (from `tests/lib/harness.sh`) to list every failure
+and still fail the file at its end; `fail_now` and `soft_checkpoint` stop it
+where a later step needs the earlier ones. `BENCHBAR_SOFT_ASSERTS=1
+tests/run-tests.sh test-doctor` turns that on for a whole run, to see
+everything a change broke. A test never sets its own `EXIT` trap: it calls
+`on_exit 'cmd'` for cleanup, so the harness can still fail the test.
+
 A new test seam (a variable that lets a test replace a program, a path or
 the clock) is read only when `FL_TESTING=1`, which `tests/lib/harness.sh`
 sets: a production run must ignore it.
@@ -214,7 +222,10 @@ without a row counts as 10 seconds, so a new test needs no row to run.
   sentence that ends in the pull request number, for example `Fix the
   port check for a stopped bench (#123)`. No tool trailers in a commit or
   a pull request: no `Co-Authored-By` for a tool and no "Generated with"
-  line. The reviewer checks the title before merging.
+  line. The "PR text" check fails a pull request whose title has an em
+  or en dash or whose title, description or commits carry such a trailer
+  (`scripts/check-pr-text.sh`); the reviewer checks the rest of the
+  title before merging.
 
 The pull request template asks for all of this as checkboxes. A docs only
 fix (a typo, a wrong sentence) may go to `main` instead of `next-release`
