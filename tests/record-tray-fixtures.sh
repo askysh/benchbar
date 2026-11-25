@@ -161,7 +161,13 @@ while IFS='|' read -r file cmd; do
   allow=0; [[ "$cmd" == "!"* ]] && { allow=1; cmd="${cmd#!}"; }
   # shellcheck disable=SC2086  # the command is one word per argument, none has a space
   ALLOW_EXIT="$allow" cli_out $cmd >"$TMP_OUT/new.json"
-  python3 -I -c 'import json, sys; [json.loads(l) for l in open(sys.argv[1]) if l.strip()]' "$TMP_OUT/new.json" || fail "$file: the CLI did not print JSON"
+  python3 -I -c '
+import json, sys
+text = open(sys.argv[1]).read()
+try:
+    json.loads(text)
+except ValueError:
+    [json.loads(l) for l in text.splitlines() if l.strip()]' "$TMP_OUT/new.json" || fail "$file: the CLI did not print JSON"
   if [[ "$CHECK" == 1 ]]; then
     if ! cmp -s "$TMP_OUT/new.json" "$FIXTURES/$file"; then
       printf 'windows/tray/fixtures/%s differs from what the CLI prints now:\n' "$file" >&2
