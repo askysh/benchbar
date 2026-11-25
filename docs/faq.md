@@ -44,8 +44,11 @@ ports plan` shows the allocation without changing anything.
 ## Where are the logs?
 
 `benchbar logs` shows the bench logs. The logs of every `benchbar` run
-and its backups are in the [state folder](glossary.md#state-folder),
-`~/.local/state/benchbar`. See [Troubleshooting](troubleshooting.md).
+and its backups are in the [state folder](glossary.md#state-folder).
+For Homebrew and the one line installer on a Mac, that is
+`~/.local/state/benchbar`. On Linux it is `$XDG_STATE_HOME/benchbar`. In a
+git checkout it is the `.benchbar/` folder of the checkout. See
+[Troubleshooting](troubleshooting.md).
 
 ## How do I update?
 

@@ -31,4 +31,4 @@ Open a new terminal, run `benchbar install` and open
 - [Quick start](quick-start.md): the first ten minutes.
 - [Update and migrate](upgrade.md) and [Uninstall](uninstall.md).
 - [Troubleshooting](troubleshooting.md) and [First run problems](first-run-problems.md).
-- [Glossary](glossary.md): bench, site, agent and the other words.
+- [Glossary](glossary.md): bench, site, bench agent and the other words.

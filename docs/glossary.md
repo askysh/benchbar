@@ -1,12 +1,12 @@
 ---
 title: "Glossary"
-description: "The words BenchBar docs use: bench, site, agent, port block, plan and token, state folder, room, seat, LAN guard, Lab, profile and more, each in one or two sentences."
+description: "The words BenchBar docs use: bench, site, bench agent, coding agent, port block, plan and token, state folder, room, seat, LAN guard, Lab, profile and more, each in one or two sentences."
 ---
 
 One name is used for one thing across these docs. Terms are in
 alphabetical order.
 
-## agent
+## bench agent
 
 The background job that keeps one bench running. On macOS it
 is a launchd agent. On Linux and in WSL it is a `systemd --user` unit.
@@ -25,6 +25,12 @@ The folder that holds one Frappe installation: the Frappe
 apps in `apps/`, a Python environment in `env/` and the sites in
 `sites/`. `bench` is also the name of Frappe's own tool. `benchbar` is
 the command line tool of this project.
+
+## coding agent
+
+An AI tool such as Claude Code or Cursor that works on your machine. It
+can read and drive a bench through `benchbar mcp` or the CLI. See
+[Coding agents and MCP](guides/agents.md).
 
 ## doctor
 
@@ -113,7 +119,9 @@ own address, such as `http://macdev:8000`.
 ## state folder
 
 Where `benchbar` keeps its logs, backups and the list
-of remembered benches: `~/.local/state/benchbar`.
+of remembered benches. For Homebrew and the one line installer on a Mac it
+is `~/.local/state/benchbar`. On Linux it is `$XDG_STATE_HOME/benchbar`. In a
+git checkout it is the `.benchbar/` folder of the checkout.
 
 ## systemd
 
