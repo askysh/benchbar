@@ -35,7 +35,13 @@ case "${1:-}" in
     printf '%s\n' "${*: -1}" >>"${MOCK_BREW_LEAVES:?}" ;;
   services)
     case "${2:-}" in
-      list) printf 'Name Status User File\n'; cat "${MOCK_BREW_SERVICES:?}" ;;
+      list)
+        printf 'Name Status User File\n'
+        # MOCK_BREW_COLOR=1: colour codes unless HOMEBREW_NO_COLOR or NO_COLOR is set (like brew with
+        # HOMEBREW_COLOR on a pipe); "always": colour whatever the environment says
+        if [[ -n "${MOCK_BREW_COLOR:-}" && ( "$MOCK_BREW_COLOR" == always || ( -z "${HOMEBREW_NO_COLOR:-}" && -z "${NO_COLOR:-}" ) ) ]]; then
+          while read -r n st rest; do [[ -z "$n" ]] || printf '\033[1m%s\033[0m \033[32m%s\033[0m %s\n' "$n" "$st" "$rest"; done <"${MOCK_BREW_SERVICES:?}"
+        else cat "${MOCK_BREW_SERVICES:?}"; fi ;;
       restart)
         # a restarted mariadb picks up the bind-address drop-in
         case "${3:-}" in mariadb*)

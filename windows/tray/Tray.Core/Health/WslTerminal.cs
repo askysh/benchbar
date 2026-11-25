@@ -31,5 +31,5 @@ public static class WslCommands
     }
 
     /// <summary>The line to show when no terminal can open because the distro is not known.</summary>
-    public const string NoDistroMessage = "BenchBar does not know which WSL distro to open. Choose one in Settings.";
+    public static string NoDistroMessage => UiText.Get("CommonNoDistro");
 }

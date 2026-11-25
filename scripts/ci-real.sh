@@ -56,12 +56,7 @@ MANAGED="$HOME/.local/share/benchbar"
 BASELINE_BENCH="frappe-bench==5.31.1"
 # The doctor checks that may warn after the upgrade, per platform, each with
 # its reason. Anything else that is not ok fails upgrade-clean.
-#   redis_6379 (macOS): phase 00 starts Homebrew's redis service on 6379 and
-#     the bench runs its own Redis on other ports, so doctor warns "redis on
-#     6379 is not used by the bench" on every Mac benchbar installed, and
-#     repair --yes leaves the service running. Reported with issue 139; take
-#     the id out when install stops starting it or repair stops it.
-UPGRADE_WARN_OK_DARWIN="redis_6379"
+UPGRADE_WARN_OK_DARWIN=""
 UPGRADE_WARN_OK_LINUX=""
 # the CLI under test: the checkout's for a fresh install, the installed one
 # (the managed checkout the one line installer made) in the upgrade jobs

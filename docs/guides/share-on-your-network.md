@@ -70,12 +70,33 @@ benchbar share stop                               # end the room
 `share unlock` stop and allow new joins. Every command is in the
 [share reference](../reference/cli/share.md).
 
-The room code lets a person into the room, and by default it also lets
-them take any free seat. To decide yourself who gets which seat, start
-the room in a terminal with `benchbar share start --assign-seats`, then
-give each person a seat with `benchbar share assign`
-(`benchbar share people` lists the people and the free seats). The app's
-**Start** button starts a room where guests pick their own seat.
+**You give out the seats.** The room code lets a person into the room and
+no further: a guest who joins waits until you give them a seat, and sees
+nothing of the copy before that.
+
+- In the Mac app a guest shows as "Waits for a seat from you" on the
+  **Sharing** tab. Choose **Give a Seat** next to their name and pick the
+  seat. The menu lists every free seat with its roles.
+- In the Windows tray, pick a seat in the list under the person's name and
+  click **Give NAME this seat**.
+- In a terminal, `benchbar share people` lists who waits and the free
+  seats, and `benchbar share assign ID SEAT_ID` gives one.
+
+A guest keeps their place for 10 minutes while they wait. If the room is
+full and somebody has waited more than 2 minutes, the next person who
+joins takes that place. `benchbar share remove ID` puts somebody out whom
+you do not know.
+
+**Read out the host key when a guest asks.** A guest who joins from your
+invite link sees the address the link leads to and 16 digits of your key
+before they join. The same digits are on your **Sharing** tab (Mac app
+and Windows tray) and in `benchbar share status`, as "Host key". If the
+guest's digits differ, the link was not yours.
+
+To let guests take a free seat themselves, as before 0.9.0, turn off **I
+give out the seats** next to **Start** (the Mac app and the tray), or run
+`benchbar share start --open-seats`. Do this only when everybody who has
+the code may use every seat of the room.
 
 Network protection is a separate step: `benchbar lan-guard install`
 asks for your password. Run it yourself. An agent or a script cannot
@@ -85,8 +106,9 @@ install it.
 
 1. Open **On your network** in the sidebar of the BenchBar window.
 2. Under **Nearby**, choose the room and click **Join**. Type the room
-   code, then pick a seat. In a room where the host gives out the seats,
-   the pane says so: ask the host for your seat, then open the room.
+   code. The host gives you a seat: when you pick one yourself, the pane
+   says so. Ask the host for your seat, then open the room. In a room
+   with open seats you pick a seat here.
 3. If a colleague sent you an invite link, click **Paste invite** instead.
    The sheet shows the address the link leads to and the host's key.
 4. Click **Open** on the room in **Your rooms**. The room's site opens in

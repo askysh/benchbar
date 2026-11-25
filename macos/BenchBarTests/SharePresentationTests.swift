@@ -147,4 +147,39 @@ struct SharePresentationTests {
         #expect(SharePresentation.moveTargets(for: sam, people: [sam], known: known).map(\.id) == ["s_b", "s_c"])
         #expect(SharePresentation.moveTargets(for: sam, people: [sam], known: ["s_a": "Sam Rao"]).isEmpty)
     }
+
+    /// #159 SHARE-5: a host must see that a guest waits for them, and what to do about it.
+    /// Restart Sharing starts the room again as it ran. When the room did not say who gives out its
+    /// seats (the people were not read yet, or an older CLI), the stored switch decides: a room
+    /// where the host gives out the seats must never come back with open seats by itself.
+    @Test func aRestartKeepsTheRoomsSeatModeAndFallsBackToTheSwitch() {
+        #expect(SharePresentation.restartAssignsSeats(mode: .host, stored: false))
+        #expect(!SharePresentation.restartAssignsSeats(mode: .open, stored: true), "the person chose open seats for this room")
+        #expect(SharePresentation.restartAssignsSeats(mode: nil, stored: true), "an unknown mode is not open seats")
+        #expect(!SharePresentation.restartAssignsSeats(mode: nil, stored: false))
+    }
+
+    @Test func aRoomWhereTheHostGivesOutSeatsSaysWhoWaits() {
+        let sam = SharePerson(id: "d_1", name: "Sam", seatID: "s_a", seatFullName: "Sam Rao")
+        let asha = SharePerson(id: "d_2", name: "Asha")
+        let ben = SharePerson(id: "d_3", name: "Ben")
+        #expect(SharePresentation.seatCaption(sam, hostGivesSeats: true) == "Sam Rao")
+        #expect(SharePresentation.seatCaption(asha, hostGivesSeats: true) == "Waits for a seat from you")
+        #expect(SharePresentation.seatCaption(asha, hostGivesSeats: false) == "No seat yet")
+        #expect(SharePresentation.seatMenuTitle(asha) == "Give a Seat" && SharePresentation.seatMenuTitle(sam) == "Move to")
+        #expect(SharePresentation.waitingNotice(people: [sam, asha], hostGivesSeats: true)
+            == "1 person waits for a seat. Choose Give a Seat next to their name.")
+        #expect(SharePresentation.waitingNotice(people: [sam, asha, ben], hostGivesSeats: true)
+            == "2 people wait for a seat. Choose Give a Seat next to each name.")
+        #expect(SharePresentation.waitingNotice(people: [sam], hostGivesSeats: true) == nil)
+        #expect(SharePresentation.waitingNotice(people: [sam, asha], hostGivesSeats: false) == nil)
+        #expect(SharePresentation.seatModeLine(hostGivesSeats: true) == "You give out the seats: a guest who joins waits until you give them one.")
+        #expect(SharePresentation.seatModeLine(hostGivesSeats: false) == "Guests pick their own seat: the room code lets them take any free one.")
+        #expect(SharePresentation.startDetail(site: "macdev", assignSeats: true).hasSuffix("They wait until you give each of them a seat."))
+        #expect(SharePresentation.startDetail(site: "macdev", assignSeats: false).hasSuffix("Each of them can take any free seat."))
+        // a seat without roles is its name alone, and a long list of roles is cut
+        let seats = [ShareSeat(id: "s_c", fullName: "Priya Nair", roles: []), ShareSeat(id: "s_d", fullName: "Lee", roles: ["A", "B", "C", "D", "E"])]
+        #expect(SharePresentation.moveTargets(for: asha, people: [asha], known: ["s_c": "Priya Nair", "s_d": "Lee"], seats: seats).map(\.name)
+            == ["Lee · A, B, C and 2 more", "Priya Nair"])
+    }
 }

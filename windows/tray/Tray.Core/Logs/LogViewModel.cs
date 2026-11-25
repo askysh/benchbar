@@ -318,7 +318,7 @@ public sealed class LogViewModel : IDisposable
             }
             else
             {
-                Error = result.Error ?? "The log could not be read.";
+                Error = result.Error ?? UiText.Get("LogsNotRead");
             }
             Changes++;
         }
@@ -340,7 +340,7 @@ public sealed class LogViewModel : IDisposable
             if (_showPrevious) return false;
             var (fresh, restarted) = LogOverlap.NewLines(_rawTail, chunk.Lines);
             if (fresh.Count == 0 && !restarted) return false;
-            if (restarted) _buffer.Append(["--- log restarted ---"]);
+            if (restarted) _buffer.Append([UiText.Get("LogsRestarted")]);
             // the times of the fresh lines are the last ones of the response
             var offset = chunk.Lines.Count - fresh.Count;
             Remember(fresh, chunk.Times.Skip(offset).ToList());

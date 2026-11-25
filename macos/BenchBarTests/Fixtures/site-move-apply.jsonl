@@ -2,6 +2,8 @@
 {"schema_version":1,"event":"step","n":1,"id":"backup","name":"Back up acme.localhost with its files","status":"running"}
 {"schema_version":1,"event":"step","n":1,"id":"backup","name":"Back up acme.localhost with its files","status":"done","secs":4}
 {"schema_version":1,"event":"step","n":2,"id":"restore","name":"Restore it in the other bench","status":"running"}
+{"schema_version":1,"event":"step","n":null,"id":"restore","parent":"restore","name":"Restore the database","status":"running"}
+{"schema_version":1,"event":"step","n":null,"id":"restore","parent":"restore","name":"Restore the database","status":"done","secs":8}
 {"schema_version":1,"event":"progress","step":"restore","label":"Restore it in the other bench","elapsed":10}
 {"schema_version":1,"event":"step","n":2,"id":"restore","name":"Restore it in the other bench","status":"done","secs":12}
 {"schema_version":1,"event":"step","n":5,"id":"drop","name":"Drop it here","status":"done","secs":6}

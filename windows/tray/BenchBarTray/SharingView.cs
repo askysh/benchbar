@@ -19,6 +19,7 @@ internal sealed class SharingView : UserControl, IBenchPageView
     private readonly List<string> _lines = [];
     private ShareModel? _model;
     private int _hours = 4;
+    private readonly Dictionary<string, string> _seatPick = []; // person id -> the seat picked in their box
     private bool _revealed;
     private ShareSetupForm? _form;
     private ShareSetupPlan? _formPlan;
@@ -41,6 +42,9 @@ internal sealed class SharingView : UserControl, IBenchPageView
     public Func<string, string, string, bool> Confirm { get; set; } = (_, _, _) => false;
 
     internal ShareModel? Model => _model;
+
+    /// <summary>The Start form's switch: the host gives out the seats of the room that starts. On until the host unticks it.</summary>
+    internal bool AssignSeats { get; set; } = true;
 
     public BenchContext? Context { get; private set; }
 
@@ -153,6 +157,16 @@ internal sealed class SharingView : UserControl, IBenchPageView
         box.SelectionChanged += (_, _) => _hours = ShareText.Hours[Math.Max(0, box.SelectedIndex)];
         Ui.Name(box, "Hours to share");
         _root.Children.Add(box);
+        if (!status.KnowsSeatMode)
+        {
+            Line(ShareText.SeatsNeedNewerCli, 0.7); // no box: this CLI has no seat flags, and its rooms have open seats
+            return;
+        }
+        var seats = new CheckBox { IsChecked = AssignSeats, Content = ShareText.AssignSeatsToggle, Margin = new Thickness(0, 0, 0, 2) };
+        seats.Click += (_, _) => { AssignSeats = seats.IsChecked == true; Render(); };
+        Ui.Name(seats, ShareText.AssignSeatsToggle);
+        _root.Children.Add(seats);
+        Line(ShareText.SeatModeLine(AssignSeats), 0.7);
     }
 
     private async Task OnPrimary(SharePrimary primary, ShareStatus status)
@@ -167,8 +181,8 @@ internal sealed class SharingView : UserControl, IBenchPageView
                 if (Confirm("Turn on network protection?", ShareText.LanGuardAsk, "Continue")) await model.RunLanGuardAsync(false);
                 break;
             case SharePrimary.Start:
-                if (!Confirm(ShareText.StartConfirm(Site), "", "Start sharing")) break;
-                if (await model.StartAsync(_hours) && await model.LoadCodeAsync()) _revealed = true;
+                if (!Confirm(ShareText.StartConfirm(Site, AssignSeats && status.KnowsSeatMode), "", "Start sharing")) break;
+                if (await model.StartAsync(_hours, AssignSeats) && await model.LoadCodeAsync()) _revealed = true;
                 Render();
                 break;
             case SharePrimary.Stop:
@@ -186,6 +200,11 @@ internal sealed class SharingView : UserControl, IBenchPageView
     private void DrawRoom(ShareStatus status)
     {
         _root.Children.Add(Ui.Heading("Room code"));
+        if (_model!.Status is { } keyed && ShareText.HostKeyLine(keyed) is { } hostKey)
+        {
+            Line(hostKey, 0.7);
+            Line(ShareText.HostKeyHelp, 0.6);
+        }
         var code = _model!.Code;
         var shown = _revealed && code is not null ? code.Spaced : "••• •••";
         _lines.Add("Room code: " + (_revealed && code is not null ? "shown" : "hidden")); // the code itself is never in Lines
@@ -273,7 +292,8 @@ internal sealed class SharingView : UserControl, IBenchPageView
                 break;
             case ShareFixAction.RestartSharing:
                 if (!Confirm("Restart sharing?", "Everyone in the room is disconnected and needs the new room code to join again.", "Restart")) break;
-                if (await _model!.StopAsync()) await _model.StartAsync(_hours);
+                var assign = _model!.HostGivesSeats; // the room that starts again gives out its seats the way the one that ran did
+                if (await _model.StopAsync()) await _model.StartAsync(_hours, assign);
                 break;
         }
     }
@@ -289,12 +309,33 @@ internal sealed class SharingView : UserControl, IBenchPageView
     private void DrawPeople(ShareStatus status)
     {
         _root.Children.Add(Ui.Heading(ShareText.PeopleTitle));
-        if (_model!.People.Count == 0) Line("Nobody has joined yet.", 0.7);
+        Line(ShareText.SeatModeLine(_model!.HostGivesSeats), 0.7);
+        if (_model.People.Count == 0) Line("Nobody has joined yet.", 0.7);
+        if (ShareText.WaitingNotice(_model.People, _model.HostGivesSeats) is { } waiting) Line(waiting, caution: true);
+        var free = ShareText.FreeSeats(_model.Seats, _model.People);
         foreach (var person in ShareText.Sorted(_model.People))
         {
-            Line($"{(person.Online ? "Online" : "Offline")}: {ShareText.PersonLine(person)} · {person.SeatName ?? "No seat yet"}");
-            Row(("Remove " + person.Name, () => Run(() => RemoveAsync(person)), true));
+            Line($"{(person.Online ? "Online" : "Offline")}: {ShareText.PersonLine(person)} · {ShareText.SeatCaption(person, _model.HostGivesSeats)}");
+            if (free.Count == 0)
+            {
+                Row(("Remove " + person.Name, () => Run(() => RemoveAsync(person)), true));
+                continue;
+            }
+            // the seat to give: a box of the free seats with their roles, then the button that gives the one picked
+            var box = new ComboBox { MinWidth = 260, Margin = new Thickness(0, 0, 0, 2), HorizontalAlignment = HorizontalAlignment.Left };
+            foreach (var seat in free) box.Items.Add(ShareText.SeatTitle(seat));
+            box.SelectedIndex = Math.Max(0, free.ToList().FindIndex(s => _seatPick.TryGetValue(person.Id, out var picked) && picked == s.Id));
+            box.SelectionChanged += (_, _) => _seatPick[person.Id] = free[Math.Max(0, box.SelectedIndex)].Id;
+            Ui.Name(box, "Seat for " + person.Name);
+            _root.Children.Add(box);
+            Row((ShareText.AssignButton(person), () => Run(() => AssignAsync(person, free[Math.Max(0, box.SelectedIndex)])), true),
+                ("Remove " + person.Name, () => Run(() => RemoveAsync(person)), true));
         }
+    }
+
+    private async Task AssignAsync(SharePerson person, ShareSeat seat)
+    {
+        if (await _model!.AssignAsync(person, seat)) _seatPick.Remove(person.Id);
     }
 
     private async Task RemoveAsync(SharePerson person)

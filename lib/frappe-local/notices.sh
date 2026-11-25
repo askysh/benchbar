@@ -33,7 +33,18 @@ read -r -d '' FL_NOTICE_TABLE <<'TABLE' || true
 notice~listen-local~0.9.0~The bench now listens on this computer only~The web server and socketio of a bench now accept connections from this computer only (127.0.0.1). Before, they listened on every interface, so anyone on your Wi-Fi could reach the dev server and its debugger. A bench that is running keeps listening on every interface until its service files are rewritten: run `benchbar repair` once per bench (`benchbar doctor` shows `Procfile.lean is outdated`). Repair may restart a running bench itself; if it did not, run `benchbar restart`. If you open the bench from a phone or another PC by this computer's address, run `benchbar listen all` to switch back; `benchbar listen local` undoes it. On Windows, http://SITE.localhost:8000 keeps working.~benchbar listen all~/whats-new/#the-bench-listens-on-this-computer-only
 notice~unknown-flags~0.9.0~An option a command does not take is now an error~An option a command does not take now stops the run with exit 64 and changes nothing. Before, it was ignored and the command ran: `benchbar repair --dry-rn --yes` ran for real. If a script of yours passes options a command never read, remove them. To go back for now, set BENCHBAR_LENIENT_FLAGS=1: an unknown option is then a warning on stderr and the command runs, as before. A flag that needs a value and has none stays an error.~BENCHBAR_LENIENT_FLAGS=1~/whats-new/#unknown-options-are-errors
 notice~pull-neutralise~0.9.0~benchbar pull now neutralises the copy~benchbar pull now neutralises the copy: integrations are switched off and stored passwords are deleted, except the Administrator login. A copy you already pulled keeps what it has until you pull again with --replace. Add --keep-secrets to keep production's integrations and passwords in the copy, as before.~benchbar pull --keep-secrets~/whats-new/#pull-neutralises-the-copy
+notice~room-seats~0.9.0~You now give out the seats of a room~In a room (benchbar share) a person who joins with the code now waits until you give them a seat: benchbar share people shows who waits and the free seats, benchbar share assign ID SEAT_ID gives one, and the BenchBar app has Give a Seat next to each person. Before, anyone with the code took any free seat, the most privileged one included. To start a room that works as before, run benchbar share start --open-seats, or turn off "I give out the seats" in the app.~benchbar share start --open-seats~/whats-new/#you-give-out-the-seats-of-a-room
 TABLE
+
+# fl_notice_applies ID: whether a notice is for this machine at all. room-seats is for a host of rooms: the
+# lan-rooms Lab is on, or sharing was set up once (the rule of the share_scheduler doctor check). Everyone
+# else never started a room, so the old default is not a habit of theirs.
+fl_notice_applies() {
+  case "$1" in
+    room-seats) { declare -F fl_lab_on >/dev/null && fl_lab_on lan-rooms; } || [[ -d "${FL_STATE_DIR}/share" ]] ;;
+    *) return 0 ;;
+  esac
+}
 
 # the state of this run, read once by fl_notices_load
 FL_NOTICES_LAST=""
@@ -125,7 +136,7 @@ fl_notices_sync() {
   if [[ -d "$FL_STATE_DIR" ]]; then [[ -w "$FL_STATE_DIR" ]] || return 0; fi
   while IFS='~' read -r k i s _; do
     [[ "$k" == notice ]] || continue
-    if fl_notices_since_lt "$prev" "$s" && ! fl_notice_has "$active" "$i" && ! fl_notice_has "$FL_NOTICES_SHOWN" "$i"; then
+    if fl_notices_since_lt "$prev" "$s" && ! fl_notice_has "$active" "$i" && ! fl_notice_has "$FL_NOTICES_SHOWN" "$i" && fl_notice_applies "$i"; then
       active="${active}${active:+ }${i}"
     fi
   done <<<"$FL_NOTICE_TABLE"

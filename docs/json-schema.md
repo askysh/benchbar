@@ -1412,7 +1412,7 @@ changing command that a lease stops.
 
 `status --json` has `notices`: the defaults an update changed, until they are
 dismissed. `[]` when there are none, and a fresh install has none. Each entry:
-`id` (`listen-local`, `unknown-flags`, `pull-neutralise`), `title`, `text`,
+`id` (`listen-local`, `unknown-flags`, `pull-neutralise`, `room-seats`), `title`, `text`,
 `switch_back` (the command or variable that goes back), `doc` (a full URL of
 the page that explains it) and `since` (the version of the change).
 `benchbar notices --json` prints `{"schema_version":1,"cli_version":"...","notices":[...]}`;
@@ -1521,8 +1521,12 @@ Added in 0.9.0. A snapshot is a backup with files kept in
 
 `benchbar site snapshots NAME --json`: `{"schema_version", "cli_version",
 "bench", "site", "folder", "keep", "snapshots": [snapshot, ...],
-"over_limit": [id, ...], "last_rollback_snapshot", "total_bytes",
-"free_bytes"}`, newest first. `total_bytes` is what the snapshots hold,
+"over_limit": [id, ...], "held_back": [id, ...], "held_back_bytes",
+"leftovers": [{"id", "path", "size_bytes", "move_back"}],
+"last_rollback_snapshot", "total_bytes", "free_bytes"}`, newest first.
+`held_back` is what is beyond the limit but protected as an undo point, and
+`leftovers` the `.incomplete-ID` folders a killed snapshot left, each with the
+command in `move_back` that puts its backup files back. `total_bytes` is what the snapshots hold,
 `free_bytes` the free space of the volume (`null` when `df` does not say).
 `over_limit` is what retention would remove, never the undo point of the
 last rollback that finished nor the snapshot of one that did not. Nothing is removed by either command.
@@ -1539,7 +1543,10 @@ apps differ, and one more key:
 The result of `--apply TOKEN --yes --json` is the restore result with
 `rollback: {"snapshot", "before_rollback", "undo"}`: `before_rollback` is the
 snapshot of the state before the rollback and `undo` the command that goes
-back to it. `benchbar site snapshot drop` prints `{"dropped": [id, ...],
+back to the state before the first attempt (after a retry of a rollback that
+did not finish, the oldest unfinished snapshot, not `before_rollback`).
+`benchbar site snapshot drop` also lists `held_back` and `held_back_bytes` in
+its prune plan, and prints `{"dropped": [id, ...],
 "freed_bytes"}` (a plan with `would_drop`); it is for a person at a terminal.
 
 `site drop`'s plan and result and the `sites[]` of `bench remove`'s plan carry
@@ -1867,7 +1874,7 @@ none holds a session id.
  "seconds_left":3600,"can_extend_s":28800,"copy":{…},"allowed_users":["priya@example.com"],"seats":2,
  "people":1,"devices_total":1,"devices_online":1,"pending":0,"locked":false,"lock_reason":null,
  "budget_left":10,"join_trouble":false,"wipe_failed":0,"lan_guard":"installed","preflight":null,
- "setup_interrupted":false,"seat_mode":"open"}
+ "setup_interrupted":false,"seat_mode":"open","host_key":"0123456789abcdef"}
 ```
 
 - `state`: `on`, `off`, `expired` or `error`.
@@ -1881,6 +1888,11 @@ none holds a session id.
 - `preflight`: null, or with `--preflight` the critical checks as in `share preflight`.
 - `setup_interrupted`: a setup stopped halfway (no `share.json`, but the one it set
   aside or the copy is there); `share setup --refresh` finishes it.
+- `host_key`: the first 16 hex digits of the fingerprint of this host's key, or
+  null before `share setup`. The join sheet of an invite shows a guest the same
+  digits, so a host can read them out. It is not a secret.
+- `seats`: the number of seats of the room, an integer. In `share people --json`
+  the key of the same name is a list, one object per seat.
 - `seat_mode`: who gives a person their seat in the room that is on: `host`
   (you, with `share assign`; a guest cannot take one) or `open` (anyone in the
   room takes a free one). null while no room is on.
@@ -1916,8 +1928,8 @@ Streams that end in a done line carrying the fields shown (with `--dry-run`,
 
 | Command | Fields |
 |---|---|
-| `share start` | `bench`, `share_site`, `state` (`on`), `label`, `port`, `started_epoch`, `deadline_epoch`, `started`, `deadline` (ISO 8601, UTC) |
-| `share start --dry-run` | `bench`, `share_site`, `dry_run`, `label`, `for_s`, `deadline`, `steps` (ids of what a start does) |
+| `share start` | `bench`, `share_site`, `state` (`on`), `label`, `port`, `started_epoch`, `deadline_epoch`, `started`, `deadline` (ISO 8601, UTC), `seat_mode` (`host`: guests wait until you give each a seat; `open`: `--open-seats`) |
+| `share start --dry-run` | `bench`, `share_site`, `dry_run`, `label`, `for_s`, `deadline`, `seat_mode` (`host` or `open`: what the room would be), `steps` (ids of what a start does) |
 | `share extend` | `bench`, `deadline_epoch`, `deadline`, `capped` (the 12 hour limit from the start was reached), `seconds_left` |
 | `share stop` | `bench`, `share_site`, `state` (`off`) |
 
@@ -1931,7 +1943,7 @@ owed, else `{"retried":bool,"wiped":N|null,"wipe_failed":M|null}`.
 | `share code` | `code` (`"NNNNNN"`, a placeholder here), `new`, `budget_left` |
 | `share invite` | `url` (`benchbar://share/join?v=1&r=…&h=…&s=…&c=…&a=…&x=…`, holds the code), `text` (the message, lines apart by `\n`), `expires_at` (ISO 8601, UTC), `room` |
 | `share lock`, `share unlock` (done) | `locked`, `lock_reason` |
-| `share people`, `share devices` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` (`devices` is another name for `people`), `seats`: every seat of the room, `[{seat_id, full_name, roles, held_by, held_by_name}]` (`held_by` is the `id` of the person in the seat, null for a free seat; never the seat's user), `seat_mode` (`host`, `open`, or null while sharing is off, as in `share status`). With sharing off `people` and `seats` are empty |
+| `share people`, `share devices` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` (`devices` is another name for `people`), `seats`: every seat of the room, `[{seat_id, full_name, roles, held_by, held_by_name}]` (`held_by` is the `id` of the person in the seat, null for a free seat; never the seat's user; in `share status --json` `seats` is the count, an integer), `seat_mode` (`host`, `open`, or null while sharing is off, as in `share status`). With sharing off `people` and `seats` are empty |
 | `share remove`, `share revoke` (done) | `device`, `name`, `removed`, `new_code` (a bool, never the code) |
 | `share assign` (done) | `device`, `name`, `seat_id`, `seat_full_name` |
 | `share log` | `entries`: `[{ts, device, user, method, path, status}]`, `truncated`. `user` is the seat's name (its id when the room no longer has the seat); a line written by 0.8.3 holds the e-mail address of the seat's user until it is 14 days old |

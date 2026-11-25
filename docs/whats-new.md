@@ -12,7 +12,7 @@ came in.
 
 ## 0.9.0 (coming)
 
-0.9.0 is a hardening release. It changes three defaults, so read the
+0.9.0 is a hardening release. It changes four defaults, so read the
 upgrade notes first. It also makes installs and commands faster, fixes
 the first run bugs of Linux and macOS, and gives agents safer tools. New
 commands follow a long run, wait for a bench and run bench commands. Rooms
@@ -20,12 +20,13 @@ come to Linux and to the Windows tray.
 
 ### Upgrade notes
 
-BenchBar 0.9.0 changes three defaults to the safer choice. Each one has a way
+BenchBar 0.9.0 changes four defaults to the safer choice. Each one has a way
 back, an upgrade note here and a notice that shows once after the update: the
 first command you type in a terminal prints it, the Mac app shows it as a
 banner, and `benchbar notices` lists it again. `benchbar notices --dismiss ID`
-or `--all` hides them. A fresh install shows none of them. See
-[notices](reference/cli/other.md#notices).
+or `--all` hides them. A fresh install shows none of them. The fourth, about
+the seats of a room, shows only if you have the Rooms Lab on or set up
+sharing before. See [notices](reference/cli/other.md#notices).
 
 ### After the update
 
@@ -79,6 +80,28 @@ Customer data is not scrubbed.
   again with `--replace`. A script that pulls and then relies on production's
   SMTP, S3 or API credentials must add `--keep-secrets`.
 - More: [pull](reference/cli/pull.md).
+
+### You give out the seats of a room
+
+In a room ([Rooms on your Wi-Fi](guides/share-on-your-network.md), the
+`lan-rooms` Lab) a person who joins with the room code now waits until you
+give them a seat. Before, the code let anyone take any free seat, the most
+privileged one included, with no action from you.
+
+- **What you do now:** in the Mac app, choose **Give a Seat** next to the
+  person on the **Sharing** tab; in the Windows tray, pick a seat under their
+  name and click **Give NAME this seat**; in a terminal, `benchbar share
+  people` shows who waits and the free seats, and `benchbar share assign ID
+  SEAT_ID` gives one. The start of a room and both apps say that guests wait
+  for you, and how many do.
+- **What a guest sees:** the room, and "the host gives out the seats" when
+  they try to pick one. They keep their place for 10 minutes while they wait.
+  A guest on BenchBar 0.8.3 sees "That seat isn't available"; they open the
+  room once you gave them a seat.
+- **Switch back:** `benchbar share start --open-seats`, or turn off **I give
+  out the seats** next to **Start** in either app. The room then works as in
+  0.8: anyone with the code takes a free seat.
+- More: [share start](reference/cli/share.md#share-start).
 
 ### Safer defaults
 
@@ -138,11 +161,9 @@ Customer data is not scrubbed.
 
 ### Rooms on your Wi-Fi
 
-- **macOS, Linux.** You can give out the seats of a room yourself:
-  `benchbar share start --assign-seats`, then `benchbar share assign` for
-  each person. A room started without the flag works as before: the room
-  code lets a person take any free seat. See
-  [share start](reference/cli/share.md#share-start).
+- **macOS, Linux, Windows.** You give out the seats of a room, in the
+  apps and in a terminal. See
+  [You give out the seats of a room](#you-give-out-the-seats-of-a-room).
 - **macOS, Linux.** The copy of a room now also takes away roles that may
   change users, roles or user permissions. If `benchbar share start`
   refuses a copy made by 0.8.3 and names such a role, run

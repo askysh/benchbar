@@ -19,7 +19,7 @@ and bundle it was installed with, and a few environment variables.
 Every profile also installs `pkgconf` (pkg-config) and
 `mariadb-connector-c`, which `mysqlclient` needs to build on v16. When
 `uv` is on PATH, `bench` itself is installed with `uv tool install
-frappe-bench`, as the Frappe docs now recommend; an existing pipx install
+frappe-bench==5.31.1`, as the Frappe docs now recommend; an existing pipx install
 is kept, and doctor says which one owns `bench`.
 
 Each profile accepts a range of MariaDB servers: 10.6 to 10.11 for

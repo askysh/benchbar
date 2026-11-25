@@ -63,6 +63,8 @@ SR_ROLLBACK=0
 SR_SNAP_ID=""
 SR_SNAP_DIR=""
 SR_BEFORE_SNAPSHOT=""
+# the snapshot a person goes back to to undo a rollback: the one of the first unfinished attempt, else SR_BEFORE_SNAPSHOT
+SR_UNDO_SNAPSHOT=""
 SR_PLAN_EXTRA=""
 SR_RESULT_EXTRA=""
 SR_MIGRATE_AUTO=0
@@ -671,7 +673,7 @@ fl_cmd_site_restore() {
   fi
   [[ "$json" != "1" ]] || fl_doc_emit 0 "$(fl_srestore_result_json 0)"
   if [[ "$SR_ROLLBACK" == "1" ]]; then
-    fl_ok "${SR_TARGET} is rolled back to ${SR_SNAP_ID}$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf ' (not migrated)'); undo it with: benchbar site rollback ${SR_TARGET} --to ${SR_BEFORE_SNAPSHOT}"
+    fl_ok "${SR_TARGET} is rolled back to ${SR_SNAP_ID}$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf ' (not migrated)'); undo it with: benchbar site rollback ${SR_TARGET} --to ${SR_UNDO_SNAPSHOT:-${SR_BEFORE_SNAPSHOT}}"
     return 0
   fi
   fl_ok "${SR_TARGET} is restored from ${SR_SET_STAMP}$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf ' (not migrated)'); the default site stays ${SR_DEFAULT_BEFORE:-unset}"

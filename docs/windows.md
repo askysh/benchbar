@@ -611,7 +611,16 @@ several) in your browser signed in as that user, with the same
 `benchbar.exe open --as` call as Find User, and says why when there is
 nothing to open, for example that Open as is off for the site. The row of the
 last user it opened this run says "last opened". It never turns Open as on.
-There is no keyboard shortcut for it yet.
+
+A global shortcut is opt in: **Settings > General > Open Quick Switch with a
+shortcut**. It is off until you turn it on, and the default is Ctrl+Alt+U.
+Click the shortcut to record another one (Esc keeps the current one, and
+**Reset** goes back to the default). A shortcut must contain Ctrl or Alt;
+Ctrl with a letter or a digit needs Alt as well, so it never takes Ctrl+C,
+Ctrl+V or another app's shortcut; Alt+F4 and Alt+Space are Windows'. If
+another app holds the key, BenchBar keeps the old one and says so under the
+row. The shortcut is given back to Windows when you turn it off and when
+BenchBar quits, and it is paused while you record.
 
 **Find Benches** scans a folder inside the distro (default your Linux
 home), adds the benches it finds, sets up their ports and their
@@ -995,8 +1004,8 @@ every distro, so stop your benches first).
   name needs no line).
 - It never reads files inside the distro: every fact comes from
   `benchbar.exe`.
-- Quick Switch has no global keyboard shortcut yet: open it from the tray
-  menu. Open as needs a `*.localhost` name, which the Windows browser reaches
+- Quick Switch has a global shortcut only when you turn it on in Settings
+  (see above). Open as needs a `*.localhost` name, which the Windows browser reaches
   without a hosts line (see [`*.localhost` names](#localhost-names)). See
   [benchbar open](reference/cli/other.md).
 - It cannot join a room as a guest. The guest side (the room code
@@ -1028,6 +1037,11 @@ address is the one WSL has, and that depends on WSL's networking mode:
   [mirrored mode networking](https://learn.microsoft.com/windows/wsl/networking#mirrored-mode-networking).
 
 BenchBar reads the mode with `wslinfo --networking-mode`; a WSL that has no `wslinfo` counts as NAT.
+
+The **Sharing** tab has a box, **I give out the seats**, under **Start sharing**. With it ticked, a
+person who joins waits: the tab says how many people wait, and under each name there is a list of
+the free seats with their roles and a button, **Give NAME this seat**. For a person who has a seat
+the same button moves them to the seat picked. Without the tick, guests pick their own seat.
 
 ## Labs
 

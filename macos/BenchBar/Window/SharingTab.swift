@@ -7,6 +7,8 @@ struct SharingTab: View {
     let bench: BenchModel
     let share: ShareStore
     @State private var hours = 4
+    /// Who gives out the seats of the next room; kept, so the choice is made once.
+    @AppStorage("shareAssignSeats") private var assignSeats = SharePresentation.assignSeatsDefault
     @State private var setupOpen = false
     @State private var showActivity = false
     /// The code is drawn as dots until the host asks (a shared screen, a screenshot); Start and New code show it once.
@@ -30,7 +32,7 @@ struct SharingTab: View {
                     if status.isOn { roomSection(status) }
                     noticesSection(status)
                     // a bench never set up fails every check by definition; the list is for after setup
-                    if SharePrimary.from(status) != .setUp && SharePrimary.from(status) != .finishSetup { checksSection(status) }
+                    if !SharePrimary.from(status).isSetUp { checksSection(status) }
                     if let copy = status.copy { copySection(copy, status: status) }
                     if status.isOn { peopleSection(status) ; activitySection }
                 }
@@ -56,20 +58,22 @@ struct SharingTab: View {
     @ViewBuilder
     private func primarySection(_ status: ShareStatus) -> some View {
         Section {
-            Text(SharePrimary.from(status) == .setUp || SharePrimary.from(status) == .finishSetup ? SharePresentation.setUpIntro : SharePresentation.liveUpdates)
+            let primary = SharePrimary.from(status)
+            Text(primary.isSetUp ? SharePresentation.setUpIntro : SharePresentation.liveUpdates)
                 .foregroundStyle(.secondary)
             HStack {
                 if status.isOn {
                     Text(SharePresentation.indicator(status))
                     Spacer()
+                    let extendOptions = SharePresentation.extendOptions(canExtendS: status.canExtendS)
                     Menu("Extend") {
-                        ForEach(SharePresentation.extendOptions(canExtendS: status.canExtendS), id: \.minutes) { option in
+                        ForEach(extendOptions, id: \.minutes) { option in
                             Button(option.label) { Task { await share.extend(minutes: option.minutes) } }
                         }
                     }
                     .fixedSize()
-                    .disabled(SharePresentation.extendOptions(canExtendS: status.canExtendS).isEmpty)
-                } else if case .start = SharePrimary.from(status) {
+                    .disabled(extendOptions.isEmpty)
+                } else if case .start = primary {
                     Picker("For", selection: $hours) {
                         ForEach(SharePresentation.durations, id: \.self) { Text("\($0) h").tag($0) }
                     }
@@ -78,16 +82,54 @@ struct SharingTab: View {
                 } else {
                     Spacer()
                 }
-                primaryButton(status)
+                primaryButton(status, primary)
             }
-            if status.isOn { Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary) }
+            if status.isOn {
+                Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
+                Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
+            } else if case .start = SharePrimary.from(status) {
+                Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                    .help(SharePresentation.assignSeatsHelp)
+                Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+            }
+            if status.isOn {
+                Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
+                Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
+            } else if case .start = SharePrimary.from(status) {
+                Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                    .help(SharePresentation.assignSeatsHelp)
+                Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+            }
+            if status.isOn {
+                Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
+                Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
+            } else if case .start = SharePrimary.from(status) {
+                if status.knowsSeatMode {
+                    Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                        .help(SharePresentation.assignSeatsHelp)
+                    Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(SharePresentation.seatsNeedNewerCLI).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if status.isOn {
+                Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
+                Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
+            } else if case .start = SharePrimary.from(status) {
+                if status.knowsSeatMode {
+                    Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                        .help(SharePresentation.assignSeatsHelp)
+                    Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(SharePresentation.seatsNeedNewerCLI).font(.caption).foregroundStyle(.secondary)
+                }
+            }
             if let busy = share.busy { Label(busy, systemImage: "hourglass").foregroundStyle(.secondary) }
         }
     }
 
     @ViewBuilder
-    private func primaryButton(_ status: ShareStatus) -> some View {
-        let primary = SharePrimary.from(status)
+    private func primaryButton(_ status: ShareStatus, _ primary: SharePrimary) -> some View {
         Button(primary.title) { Task { await act(primary, status: status) } }
             .buttonStyle(.borderedProminent)
             .disabled(share.busy != nil || primary == .start(enabled: false))
@@ -99,9 +141,9 @@ struct SharingTab: View {
         case .turnOnProtection: await turnOnProtection()
         case .start:
             guard ShareConfirm.ask("Start sharing \(site) on this network?",
-                                   detail: "People on this Wi-Fi who have the room code can join a copy of \(site) until you stop.",
+                                   detail: SharePresentation.startDetail(site: site, assignSeats: assignSeats && status.knowsSeatMode),
                                    button: "Start sharing") else { return }
-            await share.start(hours: hours, label: nil)
+            await share.start(hours: hours, label: nil, assignSeats: assignSeats)
             await share.loadCode()
             codeRevealed = true
         case .stop:
@@ -121,6 +163,10 @@ struct SharingTab: View {
     @ViewBuilder
     private func roomSection(_ status: ShareStatus) -> some View {
         Section("Room code") {
+            if let key = SharePresentation.hostKeyLine(status) {
+                Text(key).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+                    .help(SharePresentation.hostKeyHelp)
+            }
             HStack(alignment: .firstTextBaseline) {
                 Text(SharePresentation.codeText(share.code, revealed: codeRevealed))
                     .font(.system(size: 40, weight: .semibold, design: .monospaced))
@@ -227,8 +273,11 @@ struct SharingTab: View {
         case .restartSharing:
             let confirm = SharePresentation.restartConfirm(online: status.devicesOnline)
             guard ShareConfirm.ask(confirm.message, detail: confirm.detail, button: "Restart") else { return }
+            // the room that starts again gives out its seats the way the one that ran did; a room that
+            // did not say falls back to the switch, never to open seats
+            let assign = SharePresentation.restartAssignsSeats(mode: share.seatMode ?? status.seatMode, stored: assignSeats)
             await share.stop()
-            await share.start(hours: hours, label: nil)
+            await share.start(hours: hours, label: nil, assignSeats: assign)
         }
     }
 
@@ -261,24 +310,28 @@ struct SharingTab: View {
     private func peopleSection(_ status: ShareStatus) -> some View {
         Section(SharePresentation.peopleTitle) {
             if share.people.isEmpty { Text("Nobody has joined yet.").foregroundStyle(.secondary) }
+            if let waiting = SharePresentation.waitingNotice(people: share.people, hostGivesSeats: share.hostGivesSeats) {
+                Label(waiting, systemImage: "person.crop.circle.badge.clock").foregroundStyle(.orange)
+            }
             ForEach(SharePresentation.sorted(share.people)) { person in
                 HStack {
                     Circle().fill(person.online ? Color.green : Color.secondary).frame(width: 8, height: 8)
                         .accessibilityLabel(SharePresentation.presenceText(online: person.online))
                     VStack(alignment: .leading) {
                         Text(SharePresentation.personLine(person))
-                        Text(person.seatFullName ?? "No seat yet").font(.caption).foregroundStyle(.secondary)
+                        Text(SharePresentation.seatCaption(person, hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    let targets = SharePresentation.moveTargets(for: person, people: share.people, known: share.knownSeats)
-                    Menu("Move to") {
+                    let targets = SharePresentation.moveTargets(for: person, people: share.people, known: share.knownSeats, seats: share.seats)
+                    Menu(SharePresentation.seatMenuTitle(person)) {
                         ForEach(targets, id: \.id) { seat in
                             Button(seat.name) { Task { await share.assign(person, seat: seat.id) } }
                         }
                     }
                     .fixedSize()
                     .disabled(targets.isEmpty || share.busy != nil)
-                    .help(targets.isEmpty ? "No free seat this room has shown yet." : "Signs them out of their seat and into the one you pick.")
+                    .help(targets.isEmpty ? "No seat of this room is free." : person.seatID == nil ? "Gives them the seat you pick."
+                        : "Signs them out of their seat and into the one you pick.")
                     Button("Remove") { Task { await remove(person) } }
                 }
             }

@@ -29,13 +29,15 @@ explains the safety model behind it. For the steps, see the
   the count again) ends the share.
 - **The room code proves membership, not the host's identity.** Anyone who
   has the code can join, with no action from you; you see every join and
-  can remove people. In a room started without `--assign-seats` the code
-  also grants every seat: whoever has it can take any free seat, the most
-  privileged one included. Start the room with
-  `benchbar share start --assign-seats` to give out the seats yourself
-  (`share assign`); a guest then cannot take or change a seat. On a first join a guest cannot tell your room from a
+  can remove people. The code does not grant a seat: you give out the
+  seats (`share assign`, **Give a Seat** in the apps), and a guest cannot
+  take or change one. Only a room started with `--open-seats` works as in
+  0.8, where whoever has the code can take any free seat, the most
+  privileged one included. On a first join a guest cannot tell your room from a
   rogue one that also knows the code: the guest's pin of your certificate
-  protects only rejoins.
+  protects only rejoins. A guest who joins from an invite link can check:
+  their join sheet shows 16 digits of the host's key, and yours are on the
+  Sharing tab and in `share status` ("Host key") for you to read out.
 - **A device on the network can slow joins down, not hold them off in
   silence.** The gateway keeps 16 connections for devices that are not in
   the room yet, 4 per address. Such a connection must send a request

@@ -44,6 +44,7 @@ ids() { printf '%s' "$OUT" | jget - '" ".join(n["id"] for n in d["notices"])'; }
 state_is() { rm -rf "$FL_STATE_DIR/benches"; rm -f "$FL_STATE_FILE" "$FL_STATE_DIR/registered-benches.txt"; if [[ "$#" -gt 0 ]]; then printf '%s\n' "$@" >"$FL_STATE_FILE"; fi; }
 HEADING="changes some defaults"
 ALL="listen-local unknown-flags pull-neutralise"
+# room-seats is for a person who used rooms: it joins the others only with the lan-rooms Lab on or a share folder
 
 # ---- a fresh install: the first command records the version, nothing to say
 state_is
@@ -250,5 +251,19 @@ assert "notices" in live
 # ---- the command is in the table (commands --json)
 fm_out commands --json
 assert_eq "benchbar notices [--json] [--dismiss ID|--all]" "$(printf '%s' "$OUT" | jget - '[c["usage"] for c in d["commands"] if c["name"] == "notices"][0]')"
+
+# ---- room-seats: only for a host of rooms (the lan-rooms Lab is on, or sharing was set up)
+state_is "LABS="
+fm_out status --json --bench-dir "$BENCH"
+assert_eq "$ALL" "$(ids)" "(never used rooms: no room notice)"
+state_is "LABS="; mkdir -p "$FL_STATE_DIR/share"
+fm_out status --json --bench-dir "$BENCH"
+assert_eq "$ALL room-seats" "$(ids)" "(sharing was set up: the room notice too)"
+fm_out notices --json
+assert_contains "$OUT" "benchbar share start --open-seats"
+rmdir "$FL_STATE_DIR/share"
+state_is "LABS=lan-rooms"
+fm_out status --json --bench-dir "$BENCH"
+assert_eq "$ALL room-seats" "$(ids)" "(the Lab is on: the room notice too)"
 
 echo "ok"

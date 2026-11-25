@@ -158,7 +158,10 @@ Chromium: `cd <bench> && bench setup-chrome`.
 ### redis_6379
 
 Nothing listens on port 6379. The bench runs its own Redis on its port
-block, so a Homebrew Redis on 6379 is unused.
+block, so a Homebrew Redis on 6379 is unused. `install` installs the
+`redis` formula but does not start its service (0.9.0), so this warning
+comes from a Redis someone else started, or from a Mac installed by an
+older version.
 
 Fix: `brew services stop redis`, only if nothing else on this Mac needs
 it. `benchbar repair` offers the same and asks first; under `--yes` it
@@ -254,7 +257,7 @@ rebuild on v15 does the same).
 `bench version` works in the bench folder. The message also says whether
 pipx or uv owns `bench`. A failure is classified first: a missing `bench`
 command, or one whose own venv is broken (exit 126 or 127), is the CLI's
-problem and gets `uv tool install frappe-bench` or the pipx equivalent;
+problem and gets `uv tool install frappe-bench==5.31.1` or the pipx equivalent (`pipx install frappe-bench==5.31.1`);
 an app in `sites/apps.txt` that does not import is named, with `bench
 setup requirements --python` as the fix. Neither moves the env aside.
 
@@ -276,7 +279,7 @@ formula is never removed.
 
 `yarn` is on the bench's `PATH`. `bench build` needs it.
 
-Fix: `npm install -g yarn` with the bench's npm; `benchbar repair` runs
+Fix: `npm install -g yarn@1.22.22` with the bench's npm; `benchbar repair` runs
 it (`yarn_install`), since yarn is global to one node formula.
 
 ### toolchain_uv

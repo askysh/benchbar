@@ -692,8 +692,9 @@ fl_app_add_plan() {
   done
   body="${body}],\"errors\":$(fl_json_str_array ${AP_ERRORS[@]+"${AP_ERRORS[@]}"}),\"changes\":$(fl_json_bool "$([[ "${#AP_STEPS[@]}" -gt 0 ]] && printf 1 || printf 0)"),\"can_apply\":$(fl_json_bool "$AP_CAN_APPLY"),\"reason\":$(fl_json_str "$AP_REASON")"
   # the bench state the plan was made against: a changed apps.txt, apps/
-  # folder or site list makes the token stale
-  state="$(printf 'apps.txt\n%s\napps\n%s\nsites\n%s\n' "$(fl_apps_txt)" "$(fl__apps_dirs)" "$(fl_sites_list)")"
+  # folder or site list makes the token stale, and so does a moved HEAD of an
+  # app that is already there (APP-13)
+  state="$(printf 'apps.txt\n%s\napps\n%s\nsites\n%s\nheads\n%s\n' "$(fl_apps_txt)" "$(fl__apps_dirs)" "$(fl_sites_list)" "$(fl__apps_heads)")"
   AP_TOKEN_DATA="$(printf '%s\n%s\n' "$body" "$state")"
   fl_plan_token_v AP_TOKEN "$AP_TOKEN_DATA"
   AP_JSON="$(printf '{"schema_version":%d,"cli_version":"%s",%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$body" "$AP_TOKEN")"

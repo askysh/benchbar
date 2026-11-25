@@ -63,13 +63,13 @@ public static class SiteMoveText
 {
     public static IReadOnlyList<string> Facts(SiteMovePlan plan)
     {
-        var lines = new List<string> { "From: " + plan.Bench, "To: " + plan.ToBench };
-        if (plan.Apps.Count > 0) lines.Add("Apps: " + string.Join(", ", plan.Apps));
+        var lines = new List<string> { UiText.Format("ProfileLineFrom", plan.Bench), UiText.Format("MoveTo", plan.ToBench) };
+        if (plan.Apps.Count > 0) lines.Add(UiText.Format("MoveApps", string.Join(", ", plan.Apps)));
         if (plan.Address is { } a)
-            lines.Add("Address: " + (a.PortChanges ? $"{a.UrlBefore} becomes {a.UrlAfter}. The name stays, so its hosts line is kept." : $"{a.UrlAfter}, as before."));
-        lines.Add("Migrate: " + (plan.Migrate ? "bench migrate runs after the restore." : "Not run: the site arrives on the schema it had."));
-        foreach (var stays in plan.Stays) lines.Add("Stays: " + stays);
-        lines.Add("Left alone: The default site of both benches and every other site.");
+            lines.Add(a.PortChanges ? UiText.Format("MoveAddressChanges", a.UrlBefore, a.UrlAfter) : UiText.Format("MoveAddressSame", a.UrlAfter));
+        lines.Add(plan.Migrate ? UiText.Get("MoveMigrateRuns") : UiText.Get("MoveMigrateSkipped"));
+        foreach (var stays in plan.Stays) lines.Add(UiText.Format("MoveStays", stays));
+        lines.Add(UiText.Get("MoveLeftAlone"));
         return lines;
     }
 }
@@ -85,16 +85,16 @@ public static class SiteMoveCommands
     /// so Move waits for the site's name and is never the default button; <see cref="PlanReviewRequest.CanStop"/> is off, a move is not safe to kill.
     /// </summary>
     public static PlanReviewRequest Review(SiteMoveRequest request, Func<Task<bool>> stop) =>
-        PlanReviewRequest.Tokened($"Move {request.Site}", request.Base) with
+        PlanReviewRequest.Tokened(UiText.Format("SiteMoveTitle", request.Site), request.Base) with
         {
-            ConfirmLabel = "Move",
+            ConfirmLabel = UiText.Get("MoveConfirm"),
             CanStop = false,
-            RefreshLabel = "Review Again",
+            RefreshLabel = UiText.Get("RepairReviewAgain"),
             ConfirmName = request.Site,
-            Summary = $"Backs up {request.Site}, restores it in {TidyCommands.FolderName(request.Target)}, then drops it here. The backups stay.",
+            Summary = UiText.Format("MoveSummary", request.Site, TidyCommands.FolderName(request.Target)),
             Describe = plan => SiteMoveText.Facts(SiteMoveJson.Read(plan)),
             Allows = plan => plan.Needs.Count == 0 && plan.Steps.Count > 0,
             BlockedBy = plan => SiteMoveRules.NeedsStop(plan)
-                ? new PlanResolver("Stop Bench", stop, "The bench did not stop. Nothing was changed.") : null,
+                ? new PlanResolver(UiText.Get("MoveStopBench"), stop, UiText.Get("MoveNotStopped")) : null,
         };
 }

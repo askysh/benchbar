@@ -46,8 +46,10 @@ nonisolated struct SidebarModel: Equatable, Sendable {
 
     init(_ inputs: [Input], showsNetwork: Bool = false) {
         self.showsNetwork = showsNetwork
+        // one pass for the names, not a scan of every bench per bench
+        let nameCounts = Dictionary(inputs.map { ($0.name, 1) }, uniquingKeysWith: +)
         benches = inputs.map { input in
-            let twins = inputs.filter { $0.name == input.name }.count > 1
+            let twins = nameCounts[input.name, default: 0] > 1
             return Row(path: input.path, name: input.name,
                        hint: twins ? URL(fileURLWithPath: input.path).deletingLastPathComponent().lastPathComponent : nil,
                        state: input.state, isBusy: input.isBusy, sites: input.sites,

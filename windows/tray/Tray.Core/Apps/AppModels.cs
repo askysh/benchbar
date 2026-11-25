@@ -10,13 +10,13 @@ public static class FocusPins
 {
     public static IReadOnlyList<FocusPin> All { get; } = [FocusPin.Auto, FocusPin.Focus, FocusPin.Ignore];
 
-    public static string Title(FocusPin pin) => pin switch { FocusPin.Focus => "Focus", FocusPin.Ignore => "Ignore", _ => "Auto" };
+    public static string Title(FocusPin pin) => pin switch { FocusPin.Focus => UiText.Get("AppsPinTitleFocus"), FocusPin.Ignore => UiText.Get("AppsPinTitleIgnore"), _ => UiText.Get("AppsPinTitleAuto") };
 
     public static string Help(FocusPin pin) => pin switch
     {
-        FocusPin.Focus => "Always a focus app: doctor watches the apps it needs, never the app itself",
-        FocusPin.Ignore => "Never a focus app, even with local changes or recent commits of yours",
-        _ => "Inferred: local changes, another branch than the profile's, or a commit of yours in the last 14 days",
+        FocusPin.Focus => UiText.Get("AppsPinHelpFocus"),
+        FocusPin.Ignore => UiText.Get("AppsPinHelpIgnore"),
+        _ => UiText.Get("AppsPinHelpAuto"),
     };
 
     public static FocusPin Parse(string? word) => word?.Trim().ToLowerInvariant() switch
@@ -43,7 +43,7 @@ public sealed record BenchApp(string Name, bool InAppsTxt, string? Repo, string?
     public bool IsFocus => Focus == true;
 
     /// <summary>"focus app: your commit today"; null when not a focus app.</summary>
-    public string? FocusSummary => !IsFocus ? null : FocusReasons.Count == 0 ? "focus app" : "focus app: " + string.Join(", ", FocusReasons);
+    public string? FocusSummary => !IsFocus ? null : FocusReasons.Count == 0 ? UiText.Get("AppsFocusApp") : UiText.Format("AppsFocusAppWhy", string.Join(", ", FocusReasons));
 
     /// <summary>"needed by exponent_ecr, 30 commits / 12 days behind upstream/develop"; null unless it is a dependency of a focus app.</summary>
     public string? DependencySummary
@@ -51,11 +51,11 @@ public sealed record BenchApp(string Name, bool InAppsTxt, string? Repo, string?
         get
         {
             if (IsFocus || NeededBy.Count == 0) return null;
-            var who = "needed by " + string.Join(", ", NeededBy);
+            var who = UiText.Format("AppsNeededBy", string.Join(", ", NeededBy));
             if (Behind is not { } behind || behind <= 0) return who;
-            var words = $"{behind} commit{(behind == 1 ? "" : "s")}";
-            if (BehindDays is { } days && days > 0) words += $" / {days} day{(days == 1 ? "" : "s")}";
-            return $"{who}, {words} behind {Upstream ?? "its remote"}";
+            var words = behind == 1 ? UiText.Format("AppsCommitBehindOne", behind) : UiText.Format("AppsCommitBehindMany", behind);
+            if (BehindDays is { } days && days > 0) words = UiText.Format("ProfileOutdatedDays", words, days == 1 ? UiText.Format("AppsDayOne", days) : UiText.Format("ProfileDayMany", days));
+            return UiText.Format("AppsBehindUpstream", who, words, Upstream ?? UiText.Get("AppsItsRemote"));
         }
     }
 
@@ -64,12 +64,12 @@ public sealed record BenchApp(string Name, bool InAppsTxt, string? Repo, string?
 
     /// <summary>Why Update is off, or null when it can run. A dirty app is never updated: the fast forward would stop on its changes.</summary>
     public string? UpdateBlocker =>
-        Dirty ? $"{Name} has local changes. Commit or stash them first; BenchBar never updates over them."
-        : Branch is null ? $"{Name} is on a detached HEAD. Check out a branch first."
+        Dirty ? UiText.Format("AppsBlockDirty", Name)
+        : Branch is null ? UiText.Format("AppsBlockDetached", Name)
         : null;
 
     /// <summary>The line under the name: "branch version-15  ·  https://github.com/frappe/erpnext".</summary>
-    public string SourceLine => string.Join("  ·  ", new[] { Branch is null ? "detached" : "branch " + Branch, Repo }.OfType<string>());
+    public string SourceLine => string.Join("  ·  ", new[] { Branch is null ? UiText.Get("ProfileDetached") : UiText.Format("AppsBranchLine", Branch), Repo }.OfType<string>());
 }
 
 public sealed record BenchAppList(IReadOnlyList<BenchApp> Apps, DateTimeOffset? SitesCheckedAt, string? SitesError, string? FetchedAt = null)
@@ -141,12 +141,12 @@ public sealed record AppAddInput(string Source, string Branch = "", string Commi
     public string TrimmedSource => Source.Trim();
 
     public string? Problem =>
-        TrimmedSource.Length == 0 ? "Enter an app name or a git URL."
-        : TrimmedSource.StartsWith('-') ? "The app name or URL cannot start with a dash."
-        : TrimmedSource.Any(char.IsWhiteSpace) ? "The app name or URL has no spaces."
-        : Branch.Trim().StartsWith('-') ? "A branch cannot start with a dash."
-        : Branch.Trim().Any(char.IsWhiteSpace) ? "A branch has no spaces."
-        : Commit.Trim().Length > 0 && !CommitShape.IsMatch(Commit.Trim()) ? "A commit is 7 to 40 hex characters."
+        TrimmedSource.Length == 0 ? UiText.Get("AppsEnterSource")
+        : TrimmedSource.StartsWith('-') ? UiText.Get("AppsNoDash")
+        : TrimmedSource.Any(char.IsWhiteSpace) ? UiText.Get("AppsNoSpaces")
+        : Branch.Trim().StartsWith('-') ? UiText.Get("AppsBranchDash")
+        : Branch.Trim().Any(char.IsWhiteSpace) ? UiText.Get("AppsBranchSpaces")
+        : Commit.Trim().Length > 0 && !CommitShape.IsMatch(Commit.Trim()) ? UiText.Get("AppsCommitShape")
         : null;
 
     public bool CanReview => Problem is null;
@@ -163,15 +163,15 @@ public static class AppAddBatch
     /// <summary>The first problem of the form, naming the app when there are several; null when the plan can be asked for.</summary>
     public static string? Problem(IReadOnlyList<AppAddInput> inputs)
     {
-        if (inputs.Count == 0) return "Enter an app name or a git URL.";
+        if (inputs.Count == 0) return UiText.Get("AppsEnterSource");
         for (var i = 0; i < inputs.Count; i++)
         {
-            if (inputs[i].Problem is { } problem) return inputs.Count == 1 ? problem : $"App {i + 1}: {problem}";
+            if (inputs[i].Problem is { } problem) return inputs.Count == 1 ? problem : UiText.Format("AppsProblemFor", i + 1, problem);
         }
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < inputs.Count; i++)
         {
-            if (!seen.Add(inputs[i].DisplayName)) return $"App {i + 1}: {inputs[i].DisplayName} is listed twice.";
+            if (!seen.Add(inputs[i].DisplayName)) return UiText.Format("AppsListedTwice", i + 1, inputs[i].DisplayName);
         }
         return null;
     }
@@ -179,10 +179,10 @@ public static class AppAddBatch
     /// <summary>"Add acme_crm", "Add acme_crm and acme_hr", "Add 3 apps".</summary>
     public static string Title(IReadOnlyList<AppAddInput> inputs) => inputs.Count switch
     {
-        0 => "Add apps",
-        1 => "Add " + inputs[0].DisplayName,
-        2 => $"Add {inputs[0].DisplayName} and {inputs[1].DisplayName}",
-        _ => $"Add {inputs.Count} apps",
+        0 => UiText.Get("AppsTitleNone"),
+        1 => UiText.Format("SitesAddName", inputs[0].DisplayName),
+        2 => UiText.Format("AppsTitleTwo", inputs[0].DisplayName, inputs[1].DisplayName),
+        _ => UiText.Format("AppsTitleMany", inputs.Count),
     };
 
     /// <summary>
@@ -201,14 +201,18 @@ public static class AppAddBatch
             var parts = new List<string>();
             if (JsonRead.Str(o, "branch") is { Length: > 0 } branch) parts.Add(branch);
             if (JsonRead.Str(o, "commit") is { Length: >= 7 } commit)
-                parts.Add((parts.Count > 0 ? "at " : "") + commit[..7] + (JsonRead.Str(o, "commit_source") == "pin" ? " (pinned)" : ""));
-            var text = string.Join(' ', parts);
-            if (JsonRead.Bool(o, "present")) text += (text.Length > 0 ? ", " : "") + "already in the bench";
+                {
+                    var shown = JsonRead.Str(o, "commit_source") == "pin" ? UiText.Format("AppsPlanCommitPinned", commit[..7]) : commit[..7];
+                    parts.Add(parts.Count > 0 ? UiText.Format("AppsPlanCommitAt", shown) : shown);
+                }
+            var pieces = new List<string>();
+            if (parts.Count > 0) pieces.Add(string.Join(' ', parts));
+            if (JsonRead.Bool(o, "present")) pieces.Add(UiText.Get("AppsPlanPresent"));
             var on = o["install_on"] is System.Text.Json.Nodes.JsonArray ? JsonRead.Strings(o, "install_on") : [];
             if (on.Count == 0 && entries.Count == 1 && o["sites"] is System.Text.Json.Nodes.JsonArray sites)
                 on = sites.OfType<System.Text.Json.Nodes.JsonObject>().Where(s => !JsonRead.Bool(s, "installed")).Select(s => JsonRead.Str(s, "name") ?? "").Where(n => n.Length > 0).ToList();
-            text += (text.Length > 0 ? ", " : "") + (on.Count > 0 ? "install on " + string.Join(", ", on) : "no site");
-            lines.Add($"{name}: {text}");
+            pieces.Add(on.Count > 0 ? UiText.Format("AppsPlanInstallOn", string.Join(", ", on)) : UiText.Get("OverviewNoSite"));
+            lines.Add(UiText.Format("OverviewDriftLine", name, string.Join(", ", pieces)));
         }
         return lines;
     }

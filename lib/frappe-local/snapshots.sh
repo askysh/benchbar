@@ -274,6 +274,97 @@ fl_snap_over_limit() {
   done < <(fl_snap_ids "$1")
 }
 
+# fl_snap_dir_bytes DIR: the bytes of the files in DIR (not below it)
+fl_snap_dir_bytes() {
+  local f b total=0
+  for f in "$1"/* "$1"/.[!.]*; do
+    [[ -f "$f" ]] || continue
+    b="$(wc -c <"$f" | tr -d '[:space:]')"
+    total=$((total + ${b:-0}))
+  done
+  printf '%s' "$total"
+}
+
+# fl_snap_held_load SITE KEEP: FL_SNAP_HELD (one snapshot per line) and FL_SNAP_HELD_BYTES, the snapshots
+# beyond the newest KEEP that retention holds back because they are undo points. They only leave when a
+# person drops them (snapshot drop SNAPSHOT --force-undo-point), so the list says how much they hold.
+FL_SNAP_HELD=""
+FL_SNAP_HELD_BYTES=0
+fl_snap_held_load() {
+  local id i=0 b
+  FL_SNAP_HELD=""; FL_SNAP_HELD_BYTES=0
+  while IFS= read -r id; do
+    [[ -n "$id" ]] || continue
+    i=$((i + 1))
+    [[ "$i" -gt "$2" ]] || continue
+    fl_snap_is_protected "$1" "$id" || continue
+    FL_SNAP_HELD="${FL_SNAP_HELD}${id}"$'\n'
+    b="$(fl_snap_dir_bytes "$(fl_snap_dir "$1")/${id}")"
+    FL_SNAP_HELD_BYTES=$((FL_SNAP_HELD_BYTES + b))
+  done < <(fl_snap_ids "$1")
+}
+
+# fl_snap_held_note SITE KEEP: a note when retention holds snapshots back (call fl_snap_held_load first)
+fl_snap_held_note() {
+  local n
+  [[ -n "$FL_SNAP_HELD" ]] || return 0
+  n="$(printf '%s' "$FL_SNAP_HELD" | wc -l | tr -d ' ')"
+  fl_note "${n} snapshot(s) beyond the newest ${2} are held back, $(fl_fmt_bytes "$FL_SNAP_HELD_BYTES"): $(printf '%s' "$FL_SNAP_HELD" | tr '\n' ' ')(undo points of rollbacks; a person frees one with: benchbar site snapshot drop ${1} SNAPSHOT --force-undo-point)"
+}
+
+# fl_snap_leftovers SITE: the .incomplete-ID folders a killed snapshot left, as name|bytes lines. They hold the
+# backup files that had left private/backups; no list shows them and no rollback reads them.
+fl_snap_leftovers() {
+  local d
+  for d in "$(fl_snap_dir "$1")"/.incomplete-*; do
+    [[ -d "$d" && ! -L "$d" ]] || continue
+    printf '%s|%s\n' "${d##*/}" "$(fl_snap_dir_bytes "$d")"
+  done
+}
+
+# fl_snap_move_back SITE NAME: the commands that put the backup set of a leftover folder back
+fl_snap_move_back() {
+  local d stamp
+  d="$(fl_snap_dir "$1")/$2"
+  stamp="${2#.incomplete-}"; stamp="${stamp:0:15}"
+  printf 'mv -n %q/%s-* %q/ && rm -f %q/manifest.json* && rmdir %q' "$d" "$stamp" "$(fl_site_backup_dir "$1")" "$d" "$d"
+}
+
+# fl_snap_leftovers_json SITE: [{"id","path","size_bytes","move_back"}]
+fl_snap_leftovers_json() {
+  local name bytes sep=""
+  printf '['
+  while IFS='|' read -r name bytes; do
+    [[ -n "$name" ]] || continue
+    printf '%s{"id":%s,"path":%s,"size_bytes":%s,"move_back":%s}' "$sep" "$(fl_json_str "$name")" "$(fl_json_str "$(fl_snap_dir "$1")/${name}")" "$bytes" "$(fl_json_str "$(fl_snap_move_back "$1" "$name")")"
+    sep=","
+  done < <(fl_snap_leftovers "$1")
+  printf ']'
+}
+
+# fl_snap_leftovers_note SITE: one warning per leftover folder, with its size and the way to put the set back
+fl_snap_leftovers_note() {
+  local name bytes
+  while IFS='|' read -r name bytes; do
+    [[ -n "$name" ]] || continue
+    fl_warn "${name} ($(fl_fmt_bytes "$bytes")) is left by a snapshot that was cut short; it holds the backup files that left private/backups, and it is no snapshot"
+    fl_note "put the set back with: $(fl_snap_move_back "$1" "$name")"
+  done < <(fl_snap_leftovers "$1")
+}
+
+# fl_snap_undo_point SITE SNAPSHOT: the oldest "before rollback" snapshot of an earlier attempt that did not
+# finish at rolling back to this same SNAPSHOT (its manifest says rollback_of), if any: the state from before
+# the first attempt, which is what a person wants back after a retry. A failed attempt at another snapshot
+# is no part of this chain: going back that far would lose the work done since.
+fl_snap_undo_point() {
+  local id
+  while IFS= read -r id; do
+    [[ -n "$id" ]] || continue
+    if [[ "$(fl_snap_mfield "$(fl_snap_dir "$1")/${id}/manifest.json" rollback_of)" == "$2" ]]; then printf '%s' "$id"; return 0; fi
+  done < <(fl_snap_unfinished "$1")
+  return 0
+}
+
 # fl_snap_summary BENCH SITE: FL_SNAP_COUNT and FL_SNAP_BYTES, the snapshots of SITE in BENCH and the
 # bytes they hold (for the plans of site drop and bench remove: bench drop-site moves them with the site)
 FL_SNAP_COUNT=0
@@ -491,11 +582,15 @@ fl_pull_step_snapshot() {
   fi
   # protected now, and it becomes the undo point only when the rollback ends with a passed verify
   # (fl_snap_rollback_finished): a retry after a failure must not move the undo point
+  # after a retry the way back is the state before the first attempt (the oldest unfinished snapshot), not the
+  # half restored site this run just snapshotted
+  SR_UNDO_SNAPSHOT="$(fl_snap_undo_point "$SR_TARGET" "$SR_SNAP_ID")"
+  [[ -n "$SR_UNDO_SNAPSHOT" ]] || SR_UNDO_SNAPSHOT="$FL_SNAP_ID"
   fl_snap_rollback_started "$SR_TARGET" "$FL_SNAP_ID"
   SR_BEFORE_SNAPSHOT="$FL_SNAP_ID"
   SR_RESULT_EXTRA="$(printf ',"rollback":{"snapshot":%s,"before_rollback":%s,"undo":%s}' "$(fl_json_str "$SR_SNAP_ID")" "$(fl_json_str "$FL_SNAP_ID")" \
-    "$(fl_json_str "benchbar site rollback ${SR_TARGET} --to ${FL_SNAP_ID}")")"
-  fl_ok "snapshot ${FL_SNAP_ID} of ${SR_TARGET} ($(fl_fmt_bytes "$(fl_backup_field "$FL_SNAP_JSON" size_bytes)")); undo this rollback with: benchbar site rollback ${SR_TARGET} --to ${FL_SNAP_ID}"
+    "$(fl_json_str "benchbar site rollback ${SR_TARGET} --to ${SR_UNDO_SNAPSHOT}")")"
+  fl_ok "snapshot ${FL_SNAP_ID} of ${SR_TARGET} ($(fl_fmt_bytes "$(fl_backup_field "$FL_SNAP_JSON" size_bytes)")); undo this rollback with: benchbar site rollback ${SR_TARGET} --to ${SR_UNDO_SNAPSHOT}"
   fl_changed snapshot "$SR_TARGET" "$FL_SNAP_ID"
 }
 
@@ -623,6 +718,7 @@ fl_cmd_site_snapshots() {
   dir="$(fl_snap_dir "$name")"
   fl_snap_keep_v keep
   over="$(fl_snap_over_limit "$name" "$keep")"
+  fl_snap_held_load "$name" "$keep"
   last="$(fl_snap_last_rollback "$name")"
   fl_snap_summary "$FL_BENCH_DIR" "$name"
   total="$FL_SNAP_BYTES"
@@ -636,7 +732,8 @@ fl_cmd_site_snapshots() {
       printf '%s%s' "$sep" "$(fl_snap_json "$name" "$id")"; sep=","
     done < <(fl_snap_ids "$name")
     # shellcheck disable=SC2086  # one name per line
-    printf '],"over_limit":%s,"last_rollback_snapshot":%s,"total_bytes":%s,"free_bytes":%s}\n' "$(fl_json_str_array $over)" "$(fl_json_str "$last")" "$total" "${free:-null}"
+    printf '],"over_limit":%s,"held_back":%s,"held_back_bytes":%s,"leftovers":%s,"last_rollback_snapshot":%s,"total_bytes":%s,"free_bytes":%s}\n' "$(fl_json_str_array $over)" \
+      "$(fl_json_str_array $FL_SNAP_HELD)" "$FL_SNAP_HELD_BYTES" "$(fl_snap_leftovers_json "$name")" "$(fl_json_str "$last")" "$total" "${free:-null}"
     } >&3
     return 0
   fi
@@ -658,7 +755,11 @@ fl_cmd_site_snapshots() {
     done < <(fl_snap_apps_list "${dir}/${id}/manifest.json")
     rows+=("${id}|$(fl_snap_mfield "${dir}/${id}/manifest.json" label)$([[ "$id" == "$last" ]] && printf ' (undo point of the last rollback)')|$(fl_fmt_bytes "$(fl_backup_field "$set" size_bytes)")|${apps:--}|${now}")
   done < <(fl_snap_ids "$name")
-  if [[ "$n" == "0" ]]; then fl_info "no snapshots of ${name} yet; take one with: benchbar site snapshot ${name} --label TEXT"; return 0; fi
+  if [[ "$n" == "0" ]]; then
+    fl_info "no snapshots of ${name} yet; take one with: benchbar site snapshot ${name} --label TEXT"
+    fl_snap_leftovers_note "$name"
+    return 0
+  fi
   fl_table "${rows[@]}"
   fl_note "folder: ${dir}"
   fl_note "the snapshots hold $(fl_fmt_bytes "$total")${free:+; $(fl_fmt_bytes "$free") are free on this volume}"
@@ -666,6 +767,8 @@ fl_cmd_site_snapshots() {
     fl_note "retention keeps the newest ${keep}; beyond it: $(printf '%s' "$over" | tr '\n' ' ')"
     fl_note "nothing is removed on its own; a person removes them with: benchbar site snapshot drop ${name} --prune"
   fi
+  fl_snap_held_note "$name" "$keep"
+  fl_snap_leftovers_note "$name"
 }
 
 # site rollback SITE --to SNAPSHOT [--no-migrate] --dry-run --json | --apply TOKEN --yes
@@ -746,6 +849,7 @@ fl_cmd_site_snapshot_drop() {
     [[ "$force" != "1" ]] || fl_die "--force-undo-point goes with one named snapshot; --prune never removes the undo point of the last rollback." "Use: benchbar site snapshot drop ${name} SNAPSHOT --force-undo-point"
     fl_snap_keep_v keep
     while IFS= read -r id; do [[ -n "$id" ]] && ids+=("$id"); done < <(fl_snap_over_limit "$name" "$keep")
+    fl_snap_held_load "$name" "$keep"
   else
     [[ -n "$ref" ]] || fl_die "Name the snapshot to remove, or use --prune." "benchbar site snapshots ${name} lists them"
     fl_snap_resolve "$name" "$ref" || fl_die "$FL_SNAP_ERR" "$FL_SNAP_HINT"
@@ -763,13 +867,14 @@ fl_cmd_site_snapshot_drop() {
   if [[ "${FL_DRY_RUN:-0}" == "1" || "${#ids[@]}" == "0" ]]; then
     if [[ "$json" == "1" ]]; then
       # shellcheck disable=SC2086
-      fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":%s,"would_drop":%s,"dropped":[],"freed_bytes":%s}' \
+      fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":%s,"would_drop":%s,"dropped":[],"freed_bytes":%s,"held_back":%s,"held_back_bytes":%s}' \
         "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_bool "$([[ "${FL_DRY_RUN:-0}" == "1" ]] && printf 1 || printf 0)")" \
-        "$(fl_json_str_array ${ids[@]+"${ids[@]}"})" "$freed")" plan
+        "$(fl_json_str_array ${ids[@]+"${ids[@]}"})" "$freed" "$(fl_json_str_array $FL_SNAP_HELD)" "$FL_SNAP_HELD_BYTES")" plan
       return 0
     fi
-    if [[ "${#ids[@]}" == "0" ]]; then fl_ok "unchanged: no snapshot of ${name} is beyond the newest ${keep:-the limit}"; return 0; fi
+    if [[ "${#ids[@]}" == "0" ]]; then fl_ok "unchanged: no snapshot of ${name} is beyond the newest ${keep:-the limit}"; fl_snap_held_note "$name" "${keep:-0}"; return 0; fi
     fl_info "dry-run: would remove ${#ids[@]} snapshot(s) of ${name} ($(fl_fmt_bytes "$freed")): ${ids[*]}"
+    fl_snap_held_note "$name" "${keep:-0}"
     return 0
   fi
   want="Remove ${#ids[@]} snapshot(s) of ${name} (${ids[*]}), $(fl_fmt_bytes "$freed")? This cannot be undone."

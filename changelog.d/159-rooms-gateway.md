@@ -1,10 +1,11 @@
 ### Sharing
 
-- A room can be started so that you give out the seats: `benchbar share start --assign-seats`. A person
-  who joins with the code then waits (up to 10 minutes) until you run `benchbar share assign` for them,
-  and cannot take or change a seat themselves. Without the flag a room works as before: the code lets a
-  person take any free seat, the most privileged one included. The docs and the start box now say so.
-  `benchbar share people` lists the free seats with their ids when someone has no seat (#159).
+- The gateway can run a room where you give out the seats: a person who joins with the code waits (up
+  to 10 minutes) until you run `benchbar share assign` for them, and cannot take or change a seat
+  themselves. This is how `benchbar share start` starts a room now (see New defaults);
+  `--open-seats` starts one where the code lets a person take any free seat, as before. The docs and
+  the start box say which of the two a room is. `benchbar share people` lists the free seats with their
+  ids when someone has no seat (#159).
 - A device on the Wi-Fi can no longer keep new guests out of a room by holding idle connections open: a
   connection of a device that is not in the room must send a request within 10 seconds and is closed
   60 seconds after it opened. A connection pool that stays full shows as `join_trouble` in

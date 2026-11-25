@@ -46,7 +46,7 @@ internal static class TerminalLauncher
         }
         catch (Win32Exception ex)
         {
-            return "The terminal could not be opened: " + ex.Message;
+            return UiText.Format("OverviewTerminalFailed", ex.Message);
         }
     }
 }
@@ -227,8 +227,8 @@ internal sealed partial class OverviewView : UserControl
         root.Children.Add(head);
 
         var state = BenchPresentation.StateWord(bench);
-        var stateLine = _site is null ? state : $"{bench.Name}, {state}";
-        if (UptimeText is { } up) stateLine += ", " + up.ToLowerInvariant();
+        var stateLine = _site is null ? state : UiText.Format("OverviewStateNamed", bench.Name, state);
+        if (UptimeText is { } up) stateLine = UiText.Format("OverviewStateUptime", stateLine, up.ToLowerInvariant());
         var readiness = ReadinessBlock(bench);
         root.Children.Add(Ui.Text(stateLine, 14, opacity: 0.75, margin: new Thickness(22, 2, 0, readiness is null ? 12 : 4)));
         if (readiness is not null) root.Children.Add(readiness);
@@ -240,12 +240,12 @@ internal sealed partial class OverviewView : UserControl
         var strip = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
         StartStopButton = Add(strip, labels, buttons.StartStopLabel, () => RunAsync(bench, Guarded(_actions.StartStop, b => b.State is BenchState.Running or BenchState.Starting ? null : PortGuardAction.Start),
             bench.State is BenchState.Running or BenchState.Starting ? "down" : "up").Forget(), canStartStop, primary: true);
-        Add(strip, labels, "Restart", () => RunAsync(bench, Guarded(_actions.Restart, _ => PortGuardAction.Restart), "restart").Forget(), canRestart);
-        Add(strip, labels, "Open Site", () => _actions.OpenSite(bench), buttons.CanOpenSite);
-        Add(strip, labels, "Logs", () => _actions.ShowLogs(bench), true);
-        Add(strip, labels, "Health", () => _actions.ShowHealth(bench), true);
+        Add(strip, labels, UiText.Get("OverviewRestart"), () => RunAsync(bench, Guarded(_actions.Restart, _ => PortGuardAction.Restart), "restart").Forget(), canRestart);
+        Add(strip, labels, UiText.Get("OverviewOpenSite"), () => _actions.OpenSite(bench), buttons.CanOpenSite);
+        Add(strip, labels, UiText.Get("OverviewLogs"), () => _actions.ShowLogs(bench), true);
+        Add(strip, labels, UiText.Get("OverviewHealth"), () => _actions.ShowHealth(bench), true);
         var editor = _actions.EditorName();
-        Add(strip, labels, "Open in " + editor, () => OpenEditor(bench), true);
+        Add(strip, labels, UiText.Format("OverviewOpenIn", editor), () => OpenEditor(bench), true);
         strip.Children.Add(MoreMenu(bench));
         root.Children.Add(strip);
         ButtonLabels = labels;
@@ -259,13 +259,13 @@ internal sealed partial class OverviewView : UserControl
         if (MessageText.Length > 0) root.Children.Add(Banner(MessageText));
 
         var details = new StackPanel();
-        details.Children.Add(Detail("Address", string.IsNullOrWhiteSpace(bench.WebUrl) ? "no site" : bench.WebUrl, bench.WebUrl));
-        details.Children.Add(Detail("Site", bench.Site ?? "no site", null));
+        details.Children.Add(Detail(UiText.Get("OverviewAddress"), string.IsNullOrWhiteSpace(bench.WebUrl) ? UiText.Get("OverviewNoSite") : bench.WebUrl, bench.WebUrl));
+        details.Children.Add(Detail(UiText.Get("OverviewSite"), bench.Site ?? UiText.Get("OverviewNoSite"), null));
         if (bench.Sites.Count > 1)
-            details.Children.Add(Detail("Sites", string.Join(", ", bench.Sites.Select(s => s.Name)), null));
-        details.Children.Add(Detail("Folder", bench.Path, bench.Path));
-        if (bench.LogPath is { Length: > 0 } log) details.Children.Add(Detail("Log", log, log));
-        PortSettingsButton = Ui.Button("Port Settings and Setup...", () => OpenPortSetup(bench, startAfterSetup: false, opensSettings: true), "Port Settings and Setup " + bench.Name, minWidth: 0);
+            details.Children.Add(Detail(UiText.Get("OverviewSites"), string.Join(", ", bench.Sites.Select(s => s.Name)), null));
+        details.Children.Add(Detail(UiText.Get("OverviewFolder"), bench.Path, bench.Path));
+        if (bench.LogPath is { Length: > 0 } log) details.Children.Add(Detail(UiText.Get("OverviewLog"), log, log));
+        PortSettingsButton = Ui.Button(UiText.Get("OverviewPortSettings"), () => OpenPortSetup(bench, startAfterSetup: false, opensSettings: true), UiText.Format("OverviewPortSettingsName", bench.Name), minWidth: 0);
         PortSettingsButton.Margin = new Thickness(0, 8, 0, 0);
         PortSettingsButton.HorizontalAlignment = HorizontalAlignment.Left;
         PortSettingsButton.IsEnabled = !busy && !needsService;
@@ -301,13 +301,13 @@ internal sealed partial class OverviewView : UserControl
         var notReady = !ready.Ready || ready.Stale == true;
         var head = Ui.Text(ReadinessWord, 13, FontWeights.SemiBold, opacity: notReady ? 1 : 0.75);
         if (notReady) head.Foreground = Ui.CautionTextBrush;
-        Ui.Name(head, "Readiness");
+        Ui.Name(head, UiText.Get("CommonReadiness"));
         panel.Children.Add(head);
         foreach (var line in ReadinessText.Detail(bench)) panel.Children.Add(Ui.Text(line, 12, opacity: 0.8));
         if (notReady && ready.Fix is { } fix)
         {
             var row = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
-            var copy = Ui.Button("Copy", () => _services?.CopyText(fix), "Copy the command that gets the bench ready", minWidth: 0);
+            var copy = Ui.Button(UiText.Get("Copy"), () => _services?.CopyText(fix), UiText.Get("OverviewCopyReadyName"), minWidth: 0);
             copy.Margin = new Thickness(8, 0, 0, 0);
             DockPanel.SetDock(copy, Dock.Right);
             row.Children.Add(copy);
@@ -370,7 +370,7 @@ internal sealed partial class OverviewView : UserControl
             if (!guard.Allowed)
             {
                 if (guard.Conflict) _portConflict[bench.Path] = guard.Refusal ?? PortGuard.ConflictLead;
-                return ActionResult.Failure(guard.Refusal ?? "The ports could not be checked.");
+                return ActionResult.Failure(guard.Refusal ?? UiText.Get("OverviewPortsNotChecked"));
             }
             _portConflict.Remove(bench.Path);
         }
@@ -394,28 +394,28 @@ internal sealed partial class OverviewView : UserControl
             items[title] = item;
             return item;
         }
-        ConsoleItem = Item("Open Console", "bench console, in Windows Terminal", true, () => OpenShell(_site, WslCommands.Console));
-        DatabaseItem = Item("Open Database", "bench mariadb, in Windows Terminal", true, () => OpenShell(_site, WslCommands.Database));
+        ConsoleItem = Item(UiText.Get("OverviewMoreConsole"), UiText.Get("OverviewMoreConsoleTip"), true, () => OpenShell(_site, WslCommands.Console));
+        DatabaseItem = Item(UiText.Get("OverviewMoreDatabase"), UiText.Get("OverviewMoreDatabaseTip"), true, () => OpenShell(_site, WslCommands.Database));
         var needs = OverviewFacts.NeedsService(bench);
         var stopped = bench.State == BenchState.Stopped && !needs;
         if (_catalogue is { } cli)
         {
             if (cli.HasFlag("up", "--services-only"))
             {
-                Item("Start Services Only", "up --services-only: the bench's Redis and nothing else, for a restore or a migrate", stopped, () => RunAsync(bench, ServicesCall(true)).Forget());
-                Item("Stop Services", "down: stops the Redis that Start Services Only started", stopped, () => RunAsync(bench, ServicesCall(false)).Forget());
+                Item(UiText.Get("OverviewMoreServicesOnly"), UiText.Get("OverviewMoreServicesOnlyTip"), stopped, () => RunAsync(bench, ServicesCall(true)).Forget());
+                Item(UiText.Get("OverviewMoreStopServices"), UiText.Get("OverviewMoreStopServicesTip"), stopped, () => RunAsync(bench, ServicesCall(false)).Forget());
             }
             if (cli.Has("service"))
-                Item(needs ? "Install Service..." : "Refresh Service...", "service: shows its plan first", true, () => ReviewServiceAsync(bench, null).Forget());
-            if (cli.Has("lock write")) Item("Write Lockfile...", "lock write: shows what it would write first", !needs, () => ReviewLockAsync("write").Forget());
+                Item(needs ? UiText.Get("OverviewMoreInstallService") : UiText.Get("OverviewMoreRefreshService"), UiText.Get("OverviewMoreServiceTip"), true, () => ReviewServiceAsync(bench, null).Forget());
+            if (cli.Has("lock write")) Item(UiText.Get("OverviewMoreWriteLock"), UiText.Get("OverviewMoreWriteLockTip"), !needs, () => ReviewLockAsync("write").Forget());
             if (cli.Has("lock apply"))
-                Item("Apply Lockfile...", "lock apply: shows the plan first", !needs && _locks.TryGetValue(bench.Path, out var known) && known.Check is not null, () => ReviewLockAsync("apply").Forget());
+                Item(UiText.Get("OverviewMoreApplyLock"), UiText.Get("OverviewMoreApplyLockTip"), !needs && _locks.TryGetValue(bench.Path, out var known) && known.Check is not null, () => ReviewLockAsync("apply").Forget());
             if (cli.Has("run"))
-                Item("Run Bench Command...", "benchbar run: one command of the allow list (migrate, clear-cache, build, run-tests and the reads) in this bench; a change shows its plan first", !needs, () => RunBenchCommandAsync().Forget());
+                Item(UiText.Get("OverviewMoreRunCommand"), UiText.Get("OverviewMoreRunCommandTip"), !needs, () => RunBenchCommandAsync().Forget());
             AddTidyItems(bench, cli, needs, Item);
-            if (cli.Has("watch")) Item("Watch Assets in Terminal", "benchbar watch, in Windows Terminal. Close the window to stop it.", !needs, () => OpenShell(null, _ => OverviewArgs.InTerminal("watch", bench.Path)));
+            if (cli.Has("watch")) Item(UiText.Get("OverviewMoreWatch"), UiText.Get("OverviewMoreWatchTip"), !needs, () => OpenShell(null, _ => OverviewArgs.InTerminal("watch", bench.Path)));
             if (cli.Has("fg"))
-                Item("Run in Foreground in Terminal", "benchbar fg: stops the background bench and runs it in a terminal. Closing the window stops it.", !needs, () => OpenShell(null, _ => OverviewArgs.InTerminal("fg", bench.Path)));
+                Item(UiText.Get("OverviewMoreForeground"), UiText.Get("OverviewMoreForegroundTip"), !needs, () => OpenShell(null, _ => OverviewArgs.InTerminal("fg", bench.Path)));
         }
         MoreItems = titles;
         MoreMenuItems = items;
@@ -424,8 +424,8 @@ internal sealed partial class OverviewView : UserControl
             menu.PlacementTarget = MoreButton;
             menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
             menu.IsOpen = true;
-        }, "More actions " + bench.Name, minWidth: 40);
-        more.ToolTip = "Console, database, services, lockfile and terminal commands";
+        }, UiText.Format("OverviewMoreName", bench.Name), minWidth: 40);
+        more.ToolTip = UiText.Get("OverviewMoreTip");
         more.IsEnabled = !needs || _catalogue?.Has("service") == true;
         MoreButton = more;
         return more;
@@ -437,10 +437,8 @@ internal sealed partial class OverviewView : UserControl
         if (_services is null) return ActionResult.Success;
         var args = start ? OverviewArgs.ServicesOnly(bench.Path) : OverviewArgs.StopServices(bench.Path);
         var result = await _services.Cli.RunStreamAsync(args, null, TimeSpan.FromMinutes(3), _ => { }).ConfigureAwait(true);
-        if (!result.Ok) return ActionResult.Failure(result.Problem ?? $"It did not work (exit {result.Exit}).");
-        MessageText = start
-            ? "The Redis of this bench is up for a restore or a migrate. Nothing else was started. Stop Services puts it away."
-            : "The bench's services are stopped.";
+        if (!result.Ok) return ActionResult.Failure(result.Problem ?? UiText.Format("OverviewDidNotWorkExit", result.Exit));
+        MessageText = start ? UiText.Get("OverviewServicesUp") : UiText.Get("OverviewServicesStopped");
         _services.RefreshNow();
         return ActionResult.Success;
     };
@@ -471,7 +469,7 @@ internal sealed partial class OverviewView : UserControl
         BreakLeaseButton = null;
         if (_services is null || LeaseRefusal.Parse(message) is not { } lease || !_lastVerb.TryGetValue(bench.Path, out var verb)) return null;
         var row = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-        var button = Ui.Button("Break Lease...", () => BreakLeaseAsync(bench, verb, lease).Forget(), "Break the lease of " + lease.Holder, minWidth: 0);
+        var button = Ui.Button(UiText.Get("OverviewBreakLease"), () => BreakLeaseAsync(bench, verb, lease).Forget(), UiText.Format("OverviewBreakLeaseName", lease.Holder), minWidth: 0);
         button.ToolTip = LeaseRefusal.BreakHelp;
         button.Margin = new Thickness(8, 0, 0, 0);
         DockPanel.SetDock(button, Dock.Right);
@@ -485,14 +483,19 @@ internal sealed partial class OverviewView : UserControl
     internal async Task BreakLeaseAsync(BenchStatus bench, string verb, LeaseRefusal lease)
     {
         if (_services is null) return;
-        var what = verb switch { "down" => "Stop", "restart" => "Restart", _ => "Start" };
-        if (!_services.Confirm($"Break the lease of {lease.Holder}?", lease.BreakQuestion($"{what} {bench.Name}"), "Break Lease and Run")) return;
+        var what = verb switch
+        {
+            "down" => UiText.Format("OverviewStopBench", bench.Name),
+            "restart" => UiText.Format("OverviewRestartBench", bench.Name),
+            _ => UiText.Format("OverviewStartBench", bench.Name),
+        };
+        if (!_services.Confirm(UiText.Format("OverviewBreakLeaseTitle", lease.Holder), lease.BreakQuestion(what), UiText.Get("OverviewBreakLeaseConfirm"))) return;
         _busy.Add(bench.Path);
         _failures.Remove(bench.Path);
         Refresh();
         var result = await _services.Cli.RunStreamAsync([verb, "--break-lease", "--bench-dir", bench.Path], ActivityText.ClickEnvironment(), TimeSpan.FromMinutes(5), _ => { }).ConfigureAwait(true);
         _busy.Remove(bench.Path);
-        if (!result.Ok) _failures[bench.Path] = (result.Problem ?? $"It did not work (exit {result.Exit}).", bench.State);
+        if (!result.Ok) _failures[bench.Path] = (result.Problem ?? UiText.Format("OverviewDidNotWorkExit", result.Exit), bench.State);
         else _services.RefreshNow();
         Refresh();
     }
@@ -517,11 +520,11 @@ internal sealed partial class OverviewView : UserControl
     internal async Task<PlanOutcome> ReviewServiceAsync(BenchStatus bench, bool? scheduler)
     {
         if (_services is null) return PlanOutcome.None;
-        var title = scheduler is { } on ? (on ? "Run the scheduler" : "Stop the scheduler") : OverviewFacts.NeedsService(bench) ? "Install the service" : "Refresh the service";
+        var title = scheduler is { } on ? (on ? UiText.Get("OverviewServiceRunScheduler") : UiText.Get("OverviewServiceStopScheduler")) : OverviewFacts.NeedsService(bench) ? UiText.Get("OverviewServiceInstall") : UiText.Get("OverviewServiceRefresh");
         var request = PlanReviewRequest.Tokened(title, OverviewArgs.ServiceBase(bench.Path, scheduler)) with
         {
             UsesSudoEnv = true,
-            Summary = "Writes the files that run the bench in the background (Procfile.lean, the runner and the service unit). It never runs migrate or update.",
+            Summary = UiText.Get("OverviewServiceSummary"),
         };
         var outcome = await _services.ReviewPlan(request).ConfigureAwait(true);
         if (outcome.Applied) _services.RefreshNow();
@@ -534,7 +537,7 @@ internal sealed partial class OverviewView : UserControl
         var distro = _services?.Distro();
         if (site is not null && !SiteNames.IsValid(site))
         {
-            MessageText = $"{site} is not a name the terminal can take.";
+            MessageText = UiText.Format("OverviewBadSiteName", site);
             Refresh();
             return;
         }
@@ -561,21 +564,21 @@ internal sealed partial class OverviewView : UserControl
 
         var panel = new StackPanel();
         var row = new DockPanel();
-        var again = Ui.Button("Check Again", () => CheckLockAsync(bench).Forget(), "Check the lockfile again " + bench.Name, minWidth: 0);
+        var again = Ui.Button(UiText.Get("OverviewLockCheckAgain"), () => CheckLockAsync(bench).Forget(), UiText.Format("OverviewLockCheckAgainName", bench.Name), minWidth: 0);
         again.Margin = new Thickness(12, 0, 0, 0);
         again.IsEnabled = !running;
         DockPanel.SetDock(again, Dock.Right);
         row.Children.Add(again);
         var text = new StackPanel { Orientation = Orientation.Horizontal };
-        text.Children.Add(Ui.Text("Lockfile", 16, FontWeights.SemiBold, margin: new Thickness(0, 0, 12, 0)));
+        text.Children.Add(Ui.Text(UiText.Get("OverviewLockfile"), 16, FontWeights.SemiBold, margin: new Thickness(0, 0, 12, 0)));
         if (running && outcome?.Check is null)
         {
-            text.Children.Add(Ui.Text("Comparing with the lockfile...", 14, opacity: 0.75));
+            text.Children.Add(Ui.Text(UiText.Get("OverviewLockComparing"), 14, opacity: 0.75));
         }
         else if (outcome?.Check is { } check)
         {
             LockBadge = check.Badge;
-            var glyph = Ui.Glyph(check.InSync ? Ui.CheckGlyph : Ui.WarningGlyph, 16, Ui.StatusBrush(check.InSync ? SetupStatus.Ok : SetupStatus.Warn), check.InSync ? "In sync" : "Differs");
+            var glyph = Ui.Glyph(check.InSync ? Ui.CheckGlyph : Ui.WarningGlyph, 16, Ui.StatusBrush(check.InSync ? SetupStatus.Ok : SetupStatus.Warn), check.InSync ? UiText.Get("OverviewLockInSync") : UiText.Get("OverviewLockDiffers"));
             glyph.Margin = new Thickness(0, 0, 8, 0);
             text.Children.Add(glyph);
             text.Children.Add(Ui.Text(check.Badge, 14));
@@ -595,11 +598,11 @@ internal sealed partial class OverviewView : UserControl
                 if (d.IsFail) line.Foreground = Ui.CriticalBrush;
                 list.Children.Add(line);
             }
-            panel.Children.Add(Ui.Link(_showDrift ? "Hide differences" : "Show differences", () =>
+            panel.Children.Add(Ui.Link(_showDrift ? UiText.Get("OverviewLockHide") : UiText.Get("OverviewLockShow"), () =>
             {
                 _showDrift = !_showDrift;
                 Refresh();
-            }, "Differences"));
+            }, UiText.Get("OverviewLockDifferences")));
             panel.Children.Add(list);
             panel.Children.Add(Ui.Text(drifted.Footer, 12, opacity: 0.7, margin: new Thickness(0, 6, 0, 0)));
         }
@@ -617,11 +620,11 @@ internal sealed partial class OverviewView : UserControl
         var busy = _schedulerBusy.Contains(bench.Path);
         var toggle = new CheckBox
         {
-            Content = "Scheduler",
+            Content = UiText.Get("OverviewScheduler"),
             IsChecked = bench.Scheduler == true,
             IsEnabled = bench.Scheduler is not null && !busy && !needsService && !_busy.Contains(bench.Path),
         };
-        Ui.Name(toggle, "Scheduler " + bench.Name, OverviewFacts.SchedulerNote(bench.Scheduler));
+        Ui.Name(toggle, UiText.Format("OverviewSchedulerName", bench.Name), OverviewFacts.SchedulerNote(bench.Scheduler));
         toggle.Click += (_, _) =>
         {
             var want = toggle.IsChecked == true;
@@ -630,9 +633,9 @@ internal sealed partial class OverviewView : UserControl
         };
         SchedulerToggle = toggle;
         var panel = new StackPanel();
-        panel.Children.Add(Ui.Text("Background jobs", 16, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 6)));
+        panel.Children.Add(Ui.Text(UiText.Get("OverviewBackgroundJobs"), 16, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 6)));
         panel.Children.Add(toggle);
-        panel.Children.Add(Ui.Text(busy ? "Changing the scheduler..." : OverviewFacts.SchedulerNote(bench.Scheduler), 12, opacity: 0.7, margin: new Thickness(22, 2, 0, 0)));
+        panel.Children.Add(Ui.Text(busy ? UiText.Get("OverviewSchedulerChanging") : OverviewFacts.SchedulerNote(bench.Scheduler), 12, opacity: 0.7, margin: new Thickness(22, 2, 0, 0)));
         AutostartToggle = null;
         if (_catalogue?.Has("autostart") == true) AutostartRow(panel, bench, needsService);
         return Ui.CardOf(panel);
@@ -644,12 +647,12 @@ internal sealed partial class OverviewView : UserControl
         var busy = _autostartBusy.Contains(bench.Path);
         var toggle = new CheckBox
         {
-            Content = "Start again after Ubuntu restarts",
+            Content = UiText.Get("OverviewAutostart"),
             IsChecked = known == true,
             IsEnabled = known is not null && !busy && !needsService,
             Margin = new Thickness(0, 10, 0, 0),
         };
-        Ui.Name(toggle, "Autostart " + bench.Name, "The bench comes back by itself when Ubuntu starts, if it was running");
+        Ui.Name(toggle, UiText.Format("OverviewAutostartName", bench.Name), UiText.Get("OverviewAutostartHelp"));
         toggle.Click += (_, _) =>
         {
             var want = toggle.IsChecked == true;
@@ -658,7 +661,7 @@ internal sealed partial class OverviewView : UserControl
         };
         AutostartToggle = toggle;
         panel.Children.Add(toggle);
-        var note = busy ? "Changing it..." : needsService ? "Set up the service first." : known is null ? "Reading the setting..." : "If the bench was running when Ubuntu stopped, it starts again by itself.";
+        var note = busy ? UiText.Get("OverviewAutostartChanging") : needsService ? UiText.Get("OverviewAutostartNeedsService") : known is null ? UiText.Get("OverviewAutostartReading") : UiText.Get("OverviewAutostartNote");
         panel.Children.Add(Ui.Text(note, 12, opacity: 0.7, margin: new Thickness(22, 2, 0, 0)));
     }
 
@@ -671,7 +674,7 @@ internal sealed partial class OverviewView : UserControl
         var result = await _services.Cli.RunStreamAsync(OverviewArgs.Autostart(on, bench.Path), null, CliTimeouts.Apply, _ => { }).ConfigureAwait(true);
         _autostartBusy.Remove(bench.Path);
         if (result.Ok) _autostart[bench.Path] = on;
-        else _failures[bench.Path] = (result.Problem ?? $"Autostart could not be turned {(on ? "on" : "off")} (exit {result.Exit}).", _bench?.State ?? bench.State);
+        else _failures[bench.Path] = (result.Problem ?? (on ? UiText.Format("OverviewAutostartOnFailed", result.Exit) : UiText.Format("OverviewAutostartOffFailed", result.Exit)), _bench?.State ?? bench.State);
         _version++;
         Refresh();
     }
@@ -694,8 +697,8 @@ internal sealed partial class OverviewView : UserControl
                 Refresh();
             return;
         }
-        var title = on ? $"Run the scheduler for {bench.Name}?" : $"Stop the scheduler for {bench.Name}?";
-        var message = $"BenchBar runs benchbar service {(on ? "--with-schedule" : "--without-schedule")}, then restarts the bench if it is running.";
+        var title = on ? UiText.Format("OverviewSchedulerRunTitle", bench.Name) : UiText.Format("OverviewSchedulerStopTitle", bench.Name);
+        var message = on ? UiText.Get("OverviewSchedulerRunBody") : UiText.Get("OverviewSchedulerStopBody");
         if (!Confirm(title, message)) return;
         if (!_schedulerBusy.Add(bench.Path)) return;
         _failures.Remove(bench.Path);
@@ -704,7 +707,7 @@ internal sealed partial class OverviewView : UserControl
         _schedulerBusy.Remove(bench.Path);
         if (!result.Ok)
         {
-            _failures[bench.Path] = (result.Problem ?? $"The scheduler could not be changed (exit {result.Exit}).", _bench?.State ?? bench.State);
+            _failures[bench.Path] = (result.Problem ?? UiText.Format("OverviewSchedulerFailed", result.Exit), _bench?.State ?? bench.State);
             Refresh();
             return;
         }
@@ -720,7 +723,7 @@ internal sealed partial class OverviewView : UserControl
 
     private Button Add(Panel into, List<string> labels, string label, Action click, bool enabled, bool primary = false)
     {
-        var button = Ui.Button(label, click, label + " " + (_bench?.Name ?? ""), primary: primary && enabled);
+        var button = Ui.Button(label, click, UiText.Format("OverviewActionName", label, _bench?.Name ?? ""), primary: primary && enabled);
         button.IsEnabled = enabled;
         into.Children.Add(button);
         labels.Add(label);
@@ -741,7 +744,7 @@ internal sealed partial class OverviewView : UserControl
         grid.Children.Add(v);
         if (copy is not null)
         {
-            var button = Ui.Button("Copy", () => _actions.CopyText(copy), "Copy " + label, minWidth: 56);
+            var button = Ui.Button(UiText.Get("Copy"), () => _actions.CopyText(copy), UiText.Format("OverviewCopyDetailName", label), minWidth: 56);
             button.Margin = new Thickness(8, 0, 0, 0);
             button.Padding = new Thickness(8, 2, 8, 2);
             Grid.SetColumn(button, 2);
@@ -769,7 +772,7 @@ internal sealed partial class OverviewView : UserControl
             result = ActionResult.Failure(ex.Message);
         }
         _busy.Remove(bench.Path);
-        if (!result.Ok) _failures[bench.Path] = (result.Message ?? "It did not work.", bench.State);
+        if (!result.Ok) _failures[bench.Path] = (result.Message ?? UiText.Get("OverviewDidNotWork"), bench.State);
         Refresh();
     }
 
