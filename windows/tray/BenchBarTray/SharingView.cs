@@ -10,7 +10,7 @@ namespace BenchBar.Tray;
 /// something asks first, as the Mac's alerts do, and nothing runs from a poll: <see cref="Bind"/> only reads. The rules and the
 /// words are in <see cref="ShareModel"/> and <see cref="ShareText"/>; this draws them.
 /// </summary>
-internal sealed class SharingView : UserControl, IBenchPageView
+internal sealed partial class SharingView : UserControl, IBenchPageView
 {
     private readonly PageServices _services;
     private readonly Func<string, ShareModel> _newModel;
@@ -25,17 +25,18 @@ internal sealed class SharingView : UserControl, IBenchPageView
     private ShareSetupPlan? _formPlan;
     private bool _formRefresh;
 
-    public SharingView(PageServices services) : this(services, bench => new ShareModel(services.Cli, bench))
+    public SharingView(PageServices services) : this(services, bench => new ShareModel(services.Cli, bench), null)
     {
         Confirm = (title, detail, button) => ConfirmDialog.Ask(title, detail, button, services.Theme(), services.Owner());
     }
 
-    internal SharingView(PageServices services, Func<string, ShareModel> newModel)
+    internal SharingView(PageServices services, Func<string, ShareModel> newModel, Func<ShareGuestModel>? newGuest = null)
     {
         _services = services;
         _newModel = newModel;
+        _newGuest = newGuest ?? (() => new ShareGuestModel(services.Cli, services.Commands));
         Content = _root;
-        Ui.Name(this, "Sharing");
+        Ui.Name(this, UiText.Get("ShareTabTitle"));
     }
 
     /// <summary>The questions the tab asks before it acts: title, detail, button label. Tests answer them; the app shows a dialog.</summary>
@@ -70,7 +71,7 @@ internal sealed class SharingView : UserControl, IBenchPageView
             _revealed = false;
         }
         Context = context;
-        Pending = _model.RefreshAsync();
+        Pending = Task.WhenAll(_model.RefreshAsync(), StartGuest());
         Render();
     }
 
@@ -108,8 +109,9 @@ internal sealed class SharingView : UserControl, IBenchPageView
         _lines.Clear();
         _buttons.Clear();
         _root.Children.Clear();
-        _root.Children.Add(Ui.Title("Sharing"));
+        _root.Children.Add(Ui.Title(UiText.Get("ShareTabTitle")));
         Draw(_model.Status);
+        DrawJoin();
         Lines = [.. _lines];
     }
 
@@ -119,13 +121,13 @@ internal sealed class SharingView : UserControl, IBenchPageView
         if (_model.Busy is { } busy) Line(busy);
         if (status is null)
         {
-            if (_model.LastError is null) Line("Reading sharing...");
+            if (_model.LastError is null) Line(UiText.Get("ShareReading"));
             return;
         }
         if (status.NeedsNewerCli)
         {
             Line(ShareText.NewerCli);
-            Row(("Update", () => _services.OpenUrl(AboutWindow.DocsUrl), true));
+            Row((ShareText.Title(SharePrimary.UpdateCli), () => _services.OpenUrl(AboutWindow.DocsUrl), true));
             return;
         }
         var primary = ShareText.Primary(status);
@@ -152,10 +154,10 @@ internal sealed class SharingView : UserControl, IBenchPageView
         Row([.. buttons]);
         if (primary != SharePrimary.Start) return;
         var box = new ComboBox { Width = 90, Margin = new Thickness(0, 0, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
-        foreach (var h in ShareText.Hours) box.Items.Add($"{h} h");
+        foreach (var h in ShareText.Hours) box.Items.Add(UiText.Format("ShareHoursOption", h));
         box.SelectedIndex = Math.Max(0, ShareText.Hours.ToList().IndexOf(_hours));
         box.SelectionChanged += (_, _) => _hours = ShareText.Hours[Math.Max(0, box.SelectedIndex)];
-        Ui.Name(box, "Hours to share");
+        Ui.Name(box, UiText.Get("ShareHoursName"));
         _root.Children.Add(box);
         if (!status.KnowsSeatMode)
         {
@@ -178,15 +180,15 @@ internal sealed class SharingView : UserControl, IBenchPageView
                 await OpenFormAsync(status.Copy is not null || status.SetupInterrupted);
                 break;
             case SharePrimary.TurnOnProtection:
-                if (Confirm("Turn on network protection?", ShareText.LanGuardAsk, "Continue")) await model.RunLanGuardAsync(false);
+                if (Confirm(UiText.Get("ShareConfirmProtectionTitle"), ShareText.LanGuardAsk, UiText.Get("ShareConfirmContinue"))) await model.RunLanGuardAsync(false);
                 break;
             case SharePrimary.Start:
-                if (!Confirm(ShareText.StartConfirm(Site, AssignSeats && status.KnowsSeatMode), "", "Start sharing")) break;
+                if (!Confirm(ShareText.StartConfirm(Site, AssignSeats && status.KnowsSeatMode), "", ShareText.Title(SharePrimary.Start))) break;
                 if (await model.StartAsync(_hours, AssignSeats) && await model.LoadCodeAsync()) _revealed = true;
                 Render();
                 break;
             case SharePrimary.Stop:
-                if (Confirm(ShareText.StopConfirm(status.DevicesOnline), "", "Stop")) await model.StopAsync();
+                if (Confirm(ShareText.StopConfirm(status.DevicesOnline), "", ShareText.Title(SharePrimary.Stop))) await model.StopAsync();
                 _revealed = false;
                 break;
             default:
@@ -199,24 +201,24 @@ internal sealed class SharingView : UserControl, IBenchPageView
 
     private void DrawRoom(ShareStatus status)
     {
-        _root.Children.Add(Ui.Heading("Room code"));
+        _root.Children.Add(Ui.Heading(UiText.Get("ShareRoomCodeHeading")));
         if (_model!.Status is { } keyed && ShareText.HostKeyLine(keyed) is { } hostKey)
         {
             Line(hostKey, 0.7);
             Line(ShareText.HostKeyHelp, 0.6);
         }
         var code = _model!.Code;
-        var shown = _revealed && code is not null ? code.Spaced : "••• •••";
-        _lines.Add("Room code: " + (_revealed && code is not null ? "shown" : "hidden")); // the code itself is never in Lines
+        var shown = _revealed && code is not null ? code.Spaced : UiText.Get("ShareCodeHidden");
+        _lines.Add(_revealed && code is not null ? UiText.Get("ShareCodeShownLine") : UiText.Get("ShareCodeHiddenLine")); // the code itself is never in Lines
         var text = Ui.Text(shown, 36, System.Windows.FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 4));
         text.FontFamily = new System.Windows.Media.FontFamily("Cascadia Mono, Consolas");
-        Ui.Name(text, _revealed && code is not null ? "Room code" : "Room code, hidden");
+        Ui.Name(text, _revealed && code is not null ? UiText.Get("ShareCodeName") : UiText.Get("ShareCodeNameHidden"));
         _root.Children.Add(text);
-        Row((_revealed ? "Hide" : "Show", () => Run(ToggleCodeAsync), true),
-            ("Copy", () => Run(CopyCodeAsync), true),
-            ("Copy invite", () => Run(CopyInviteAsync), true),
-            ("New code", () => Run(async () => { if (await _model.LoadCodeAsync(true)) _revealed = true; Render(); }), true),
-            (status.Locked == true ? "Unlock" : "Lock room", () => Run(() => _model.SetLockedAsync(status.Locked != true)), true));
+        Row((_revealed ? UiText.Get("ShareButtonHide") : UiText.Get("ShareButtonShow"), () => Run(ToggleCodeAsync), true),
+            (UiText.Get("ShareButtonCopy"), () => Run(CopyCodeAsync), true),
+            (UiText.Get("ShareButtonCopyInvite"), () => Run(CopyInviteAsync), true),
+            (UiText.Get("ShareButtonNewCode"), () => Run(async () => { if (await _model.LoadCodeAsync(true)) _revealed = true; Render(); }), true),
+            (status.Locked == true ? UiText.Get("ShareButtonUnlock") : UiText.Get("ShareButtonLock"), () => Run(() => _model.SetLockedAsync(status.Locked != true)), true));
         if (_model.InviteCopied) Line(ShareText.InviteCopied, 0.8);
         if (_model.RemovedName is { } name) Line(ShareText.RemovedNotice(name), 0.8);
         Line(ShareText.CodeNote, 0.8);
@@ -262,14 +264,14 @@ internal sealed class SharingView : UserControl, IBenchPageView
 
     private void DrawChecks(ShareStatus status)
     {
-        _root.Children.Add(Ui.Heading("Checks"));
+        _root.Children.Add(Ui.Heading(UiText.Get("ShareChecksHeading")));
         Line(ShareText.ProtectionText(status.LanGuard));
         if (status.LanGuard != LanGuardState.Installed && _model!.LanGuardSupported)
-            Row(("Turn on network protection", () => Run(() => OnPrimary(SharePrimary.TurnOnProtection, status)), !status.IsLive));
+            Row((UiText.Get("ShareFixInstall"), () => Run(() => OnPrimary(SharePrimary.TurnOnProtection, status)), !status.IsLive));
         foreach (var check in status.Checks)
         {
-            if (ShareText.WaitsForStart(check, status)) { Line($"{ShareText.CheckTitle(check)}: {ShareText.CheckedAtStart}", 0.7); continue; }
-            Line($"{ShareText.CheckStatus(check.Status)}: {ShareText.CheckTitle(check)}", error: check.Status == ShareCheckStatus.Fail);
+            if (ShareText.WaitsForStart(check, status)) { Line(UiText.Format("ShareLabelValue", ShareText.CheckTitle(check), ShareText.CheckedAtStart), 0.7); continue; }
+            Line(UiText.Format("ShareLabelValue", ShareText.CheckStatus(check.Status), ShareText.CheckTitle(check)), error: check.Status == ShareCheckStatus.Fail);
             if (check.Status != ShareCheckStatus.Ok && check.Message.Length > 0 && ShareText.CheckTitle(check) != check.Message) Line(check.Message, 0.65);
             if (check.Status != ShareCheckStatus.Ok && ShareText.FixLabel(check.Fix) is { } label && check.Fix != ShareFixAction.InstallNetworkProtection
                 && (_model!.LanGuardSupported || check.Fix != ShareFixAction.AllowNodeFirewall))
@@ -282,7 +284,7 @@ internal sealed class SharingView : UserControl, IBenchPageView
         switch (action)
         {
             case ShareFixAction.AllowNodeFirewall:
-                if (Confirm("Allow sharing through the firewall?", ShareText.LanGuardAllowAsk, "Allow")) await _model!.RunLanGuardAsync(true);
+                if (Confirm(UiText.Get("ShareConfirmAllowTitle"), ShareText.LanGuardAllowAsk, UiText.Get("ShareConfirmAllow"))) await _model!.RunLanGuardAsync(true);
                 break;
             case ShareFixAction.UpdateCli:
                 _services.OpenUrl(AboutWindow.DocsUrl);
@@ -291,7 +293,7 @@ internal sealed class SharingView : UserControl, IBenchPageView
                 await OpenFormAsync(true);
                 break;
             case ShareFixAction.RestartSharing:
-                if (!Confirm("Restart sharing?", "Everyone in the room is disconnected and needs the new room code to join again.", "Restart")) break;
+                if (!Confirm(UiText.Get("ShareConfirmRestartTitle"), UiText.Get("ShareConfirmRestartDetail"), UiText.Get("ShareConfirmRestart"))) break;
                 var assign = _model!.HostGivesSeats; // the room that starts again gives out its seats the way the one that ran did
                 if (await _model.StopAsync()) await _model.StartAsync(_hours, assign);
                 break;
@@ -300,25 +302,25 @@ internal sealed class SharingView : UserControl, IBenchPageView
 
     private void DrawCopy(ShareStatus status, ShareCopy copy)
     {
-        _root.Children.Add(Ui.Heading("The copy"));
+        _root.Children.Add(Ui.Heading(UiText.Get("ShareCopyHeading")));
         Line(ShareText.CopyLine(copy));
         if (copy.Drifted) Line(ShareText.DriftWarning, caution: true);
-        Row(("Refresh copy", () => { if (Confirm("Refresh the copy?", ShareText.RefreshConfirm, "Refresh")) Run(() => OpenFormAsync(true)); }, !status.IsLive));
+        Row((UiText.Get("ShareFixRefresh"), () => { if (Confirm(UiText.Get("ShareConfirmRefreshTitle"), ShareText.RefreshConfirm, UiText.Get("ShareConfirmRefresh"))) Run(() => OpenFormAsync(true)); }, !status.IsLive));
     }
 
     private void DrawPeople(ShareStatus status)
     {
         _root.Children.Add(Ui.Heading(ShareText.PeopleTitle));
         Line(ShareText.SeatModeLine(_model!.HostGivesSeats), 0.7);
-        if (_model.People.Count == 0) Line("Nobody has joined yet.", 0.7);
+        if (_model.People.Count == 0) Line(UiText.Get("ShareNobody"), 0.7);
         if (ShareText.WaitingNotice(_model.People, _model.HostGivesSeats) is { } waiting) Line(waiting, caution: true);
         var free = ShareText.FreeSeats(_model.Seats, _model.People);
         foreach (var person in ShareText.Sorted(_model.People))
         {
-            Line($"{(person.Online ? "Online" : "Offline")}: {ShareText.PersonLine(person)} · {ShareText.SeatCaption(person, _model.HostGivesSeats)}");
+            Line(UiText.Format("SharePersonRow", person.Online ? UiText.Get("ShareOnline") : UiText.Get("ShareOffline"), ShareText.PersonLine(person), ShareText.SeatCaption(person, _model.HostGivesSeats)));
             if (free.Count == 0)
             {
-                Row(("Remove " + person.Name, () => Run(() => RemoveAsync(person)), true));
+                Row((UiText.Format("ShareButtonRemove", person.Name), () => Run(() => RemoveAsync(person)), true));
                 continue;
             }
             // the seat to give: a box of the free seats with their roles, then the button that gives the one picked
@@ -326,10 +328,10 @@ internal sealed class SharingView : UserControl, IBenchPageView
             foreach (var seat in free) box.Items.Add(ShareText.SeatTitle(seat));
             box.SelectedIndex = Math.Max(0, free.ToList().FindIndex(s => _seatPick.TryGetValue(person.Id, out var picked) && picked == s.Id));
             box.SelectionChanged += (_, _) => _seatPick[person.Id] = free[Math.Max(0, box.SelectedIndex)].Id;
-            Ui.Name(box, "Seat for " + person.Name);
+            Ui.Name(box, UiText.Format("ShareSeatFor", person.Name));
             _root.Children.Add(box);
             Row((ShareText.AssignButton(person), () => Run(() => AssignAsync(person, free[Math.Max(0, box.SelectedIndex)])), true),
-                ("Remove " + person.Name, () => Run(() => RemoveAsync(person)), true));
+                (UiText.Format("ShareButtonRemove", person.Name), () => Run(() => RemoveAsync(person)), true));
         }
     }
 
@@ -340,7 +342,7 @@ internal sealed class SharingView : UserControl, IBenchPageView
 
     private async Task RemoveAsync(SharePerson person)
     {
-        if (Confirm(ShareText.RemoveConfirm(person, Site), ShareText.RemoveDetail, "Remove")) await _model!.RemoveAsync(person);
+        if (Confirm(ShareText.RemoveConfirm(person, Site), ShareText.RemoveDetail, UiText.Get("ShareConfirmRemove"))) await _model!.RemoveAsync(person);
     }
 
     // --- set up ---
@@ -357,8 +359,8 @@ internal sealed class SharingView : UserControl, IBenchPageView
     private void DrawForm()
     {
         var form = _form!;
-        _root.Children.Add(Ui.Heading(_formRefresh ? "Refresh the shared copy" : "Set up sharing"));
-        Line($"Site: {form.Site}", 0.7);
+        _root.Children.Add(Ui.Heading(_formRefresh ? UiText.Get("ShareReviewRefreshTitle") : UiText.Get("ShareReviewSetUpTitle")));
+        Line(UiText.Format("ShareFormSite", form.Site), 0.7);
         var source = new StackPanel { Margin = new Thickness(0, 2, 0, 6) };
         foreach (var now in new[] { true, false })
         {
@@ -368,11 +370,11 @@ internal sealed class SharingView : UserControl, IBenchPageView
             source.Children.Add(radio);
         }
         _root.Children.Add(source);
-        Line("People (one seat each)", 1);
+        Line(UiText.Get("ShareFormPeople"), 1);
         foreach (var user in _model!.Users.Where(u => u.Selectable))
         {
-            var roles = string.Join(", ", user.Roles.Take(4).Select(r => user.CodeCapableRoles.Contains(r) ? $"{r} (removed in the copy)" : r));
-            var box = new CheckBox { IsChecked = form.Picked.Contains(user.Name), Content = roles.Length > 0 ? $"{user.FullName}: {roles}" : user.FullName, Margin = new Thickness(0, 2, 0, 2) };
+            var roles = string.Join(", ", user.Roles.Take(4).Select(r => user.CodeCapableRoles.Contains(r) ? UiText.Format("ShareFormRoleRemoved", r) : r));
+            var box = new CheckBox { IsChecked = form.Picked.Contains(user.Name), Content = roles.Length > 0 ? UiText.Format("ShareLabelValue", user.FullName, roles) : user.FullName, Margin = new Thickness(0, 2, 0, 2) };
             box.Click += (_, _) => { if (box.IsChecked == true) form.Picked.Add(user.Name); else form.Picked.Remove(user.Name); Render(); };
             Ui.Name(box, user.FullName);
             _root.Children.Add(box);
@@ -380,10 +382,10 @@ internal sealed class SharingView : UserControl, IBenchPageView
         }
         var ack = new CheckBox { IsChecked = form.Acknowledged, Content = new TextBlock { Text = ShareText.Acknowledgement, TextWrapping = TextWrapping.Wrap }, Margin = new Thickness(0, 8, 0, 4) };
         ack.Click += (_, _) => { form.Acknowledged = ack.IsChecked == true; Render(); };
-        Ui.Name(ack, "Acknowledge the copy holds real data");
+        Ui.Name(ack, UiText.Get("ShareFormAcknowledgeName"));
         _root.Children.Add(ack);
         _lines.Add(ShareText.Acknowledgement);
-        Row((_formRefresh ? "Refresh copy" : "Set up sharing", () => Run(ReviewSetupAsync), form.CanRun), ("Cancel", () => { _form = null; Render(); }, true));
+        Row((_formRefresh ? UiText.Get("ShareFixRefresh") : ShareText.Title(SharePrimary.SetUp), () => Run(ReviewSetupAsync), form.CanRun), (UiText.Get("ShareFormCancel"), () => { _form = null; Render(); }, true));
     }
 
     /// <summary>Reads the plan (nothing changes), then the plan sheet shows it and makes the copy only on its confirm.</summary>

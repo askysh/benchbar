@@ -10,6 +10,7 @@
 #   benchbar share users [--site S] [--json]
 #   benchbar share start|stop|extend|status: share-run.sh
 #   benchbar share code|invite|lock|unlock|people|remove|assign|log|open-as|teardown: share-admin.sh
+#   benchbar share join|joined|leave|forget (a guest in somebody else's room): share-guest.sh
 #
 # setup makes the host identity (a P-256 key and certificate under
 # $FL_STATE_DIR/share, mode 0700) and share.localhost, a copy of the site
@@ -635,16 +636,21 @@ fl_cmd_share() {
     log) fl_cmd_share_log "$@" ;;
     open-as) fl_cmd_share_open_as "$@" ;;
     teardown) fl_cmd_share_teardown "$@" ;;
-    *) fl_die "Usage: benchbar share setup|users|preflight|start|stop|extend|status|code|invite|lock|unlock|people|remove|assign|log|open-as|teardown ..." "Example: benchbar share status" ;;
+    join) fl_cmd_share_join "$@" ;;
+    joined) fl_cmd_share_joined "$@" ;;
+    leave|forget) fl_cmd_share_leave "$sub" "$@" ;;
+    *) fl_die "Usage: benchbar share setup|users|preflight|start|stop|extend|status|code|invite|lock|unlock|people|remove|assign|log|open-as|teardown|join|joined|leave|forget ..." "Example: benchbar share status" ;;
   esac
 }
 
 # fl_lab_off_lan_rooms: what `benchbar labs off lan-rooms` undoes (labs.sh calls it). A running share
 # stops through the share stop path, in a subshell so a refusal cannot end the labs run, with no
 # prompt and no JSON of its own. The pf anchor is root's: it is never removed from here, a warning
-# names the command instead.
+# names the command instead. The local addresses of the rooms this computer joined close too; the
+# rooms and their keys stay for the day the Lab is on again.
 fl_lab_off_lan_rooms() {
   local rc=0 state fw
+  if declare -F fl_share_guest_close >/dev/null; then ( fl_share_guest_close ) || true; fi
   if [[ -d "$(fl_share_dir)" ]]; then
     ( OPT_JSON=0; FL_JSONL=0; fl_context_init "${OPT_BENCH_DIR:-}" "${OPT_SITE:-}" "${OPT_PROFILE:-}"; fl_cmd_share_stop ) || rc=1
   fi

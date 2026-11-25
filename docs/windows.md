@@ -749,8 +749,9 @@ Any web page can open a `benchbar://` link, and a browser can remember
 first for `up`, `down`, `restart`, `console` and `db`, with Cancel as the
 default. It is off by default, so launchers and scripts keep working.
 
-Share links (`benchbar://share/...`) need rooms, which are not on Windows
-yet: the tray shows a short note and does nothing else.
+Share links (`benchbar://share/...`) are not acted on by the tray yet: it
+shows a short note and does nothing else. In a WSL terminal, `benchbar share
+join` joins the room (see [Join a room from a terminal](guides/share-on-your-network.md#join-a-room-from-a-terminal)).
 
 ### What it costs
 
@@ -1008,10 +1009,13 @@ every distro, so stop your benches first).
   (see above). Open as needs a `*.localhost` name, which the Windows browser reaches
   without a hosts line (see [`*.localhost` names](#localhost-names)). See
   [benchbar open](reference/cli/other.md).
-- It cannot join a room as a guest. The guest side (the room code
-  exchange, the pinned certificate and the local forwarder) is part of the
-  Mac app and has no `benchbar` command, so it is not on Windows yet. A
-  `benchbar://share/...` link shows a note that says so. Hosting a room is
+- The tray joins a room as a guest by the room's address and code, not by
+  an invite link: **Join a room...** on the **Sharing** tab (see
+  [Rooms on Windows](#rooms-on-windows)). The room code exchange, the pinned
+  certificate and the local forwarder run in the distribution through
+  `benchbar share join`; the room opens in the Windows browser on a
+  `localhost` address. For an invite link run `benchbar share join` in WSL.
+  A `benchbar://share/...` link shows a note in the tray. Hosting a room is
   the **Sharing** tab above.
 
 ## Rooms on Windows
@@ -1037,6 +1041,11 @@ address is the one WSL has, and that depends on WSL's networking mode:
   [mirrored mode networking](https://learn.microsoft.com/windows/wsl/networking#mirrored-mode-networking).
 
 BenchBar reads the mode with `wslinfo --networking-mode`; a WSL that has no `wslinfo` counts as NAT.
+
+**Joining a room** needs neither mode: a guest only connects out, and the browser opens the room on `localhost`
+through WSL's localhost forwarding (on unless `.wslconfig` says `localhostForwarding=false`). The **Sharing** tab
+has **Join a room...** (address, a look at the room and its host key, then the code). See
+[Join a room](guides/share-on-your-network.md#in-the-windows-tray).
 
 The **Sharing** tab has a box, **I give out the seats**, under **Start sharing**. With it ticked, a
 person who joins waits: the tab says how many people wait, and under each name there is a list of

@@ -96,7 +96,8 @@ lib_family() {
     consoles) echo "test-cli" ;;
     report) echo "test-report test-redact" ;;
     selfupdate) echo "test-self-update test-install-sh" ;;
-    share|share-admin|share-preflight|share-run|share-site|lan-guard) echo "test-share test-share-admin test-share-preflight test-share-run test-share-gateway test-lan-guard test-lan-guard-linux test-share-linux test-labs-share" ;;
+    share|share-admin|share-preflight|share-run|share-site|lan-guard) echo "test-share test-share-admin test-share-preflight test-share-run test-share-gateway test-lan-guard test-lan-guard-linux test-share-linux test-labs-share test-share-join" ;;
+    share-guest) echo "test-share-join test-share-gateway test-labs-share test-history test-docs" ;;
     lan-guard-linux|share-linux) echo "test-lan-guard-linux test-share-linux test-labs-share" ;;
     *) return 1 ;;
   esac

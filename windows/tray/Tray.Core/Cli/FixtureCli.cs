@@ -37,7 +37,7 @@ public sealed class FixtureCliRunner : IStreamRunner
     }
 
     public async Task<StreamResult> RunAsync(string fileName, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? environment,
-        Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+        Action<string> onLine, TimeSpan timeout, CancellationToken ct, string? stdin = null)
     {
         var mutating = args.Any(a => a is "--apply" or "--yes" or "--dry-run");
         var match = Answers.FirstOrDefault(a => a.Prefix.Length <= args.Count && a.Prefix.Select((p, i) => args[i] == p).All(x => x));
