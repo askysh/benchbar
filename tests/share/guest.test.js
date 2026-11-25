@@ -1,18 +1,21 @@
 "use strict";
-// The CLI guest's protocol module (lib/frappe-local/share/guest.js) against a real gateway the test starts
-// on loopback: the invite, the key check before anything is written, the join, this computer's key for a
-// host, and the rooms file.
+// The CLI guest (lib/frappe-local/share/guest*.js) against a real gateway the test starts on loopback:
+// the invite, the key check before anything is written, the join, this computer's key for a host, the
+// forwarder, and the rule that the room code and the keys are in no argument, no output and no other file.
 const test = require("node:test");
 const assert = require("node:assert");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const http = require("node:http");
 const path = require("node:path");
 const util = require("node:util");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync, execFileSync } = require("node:child_process");
 const H = require("./helpers.js");
 const guest = require("../../lib/frappe-local/share/guest.js");
+const forward = require("../../lib/frappe-local/share/guest-forward.js");
 
 const { startGateway, roomCode } = H;
+const CLI = path.join(__dirname, "../../lib/frappe-local/share/guest-cli.js");
 const LOOPBACK = "127.0.0.1";
 
 async function withGateway(opts, fn) {
@@ -33,14 +36,45 @@ function inviteLink(over = {}) {
     return "benchbar://share/join?" + Object.entries(q).filter(([, v]) => v !== null).map(([k, v]) => `${k}=${v}`).join("&");
 }
 
-// A child process that runs beside the others.
-function start(args) {
+// One run of guest-cli.js, the way the shell runs it: the request on stdin, KEY=VALUE lines back.
+function answer(code, stdout, stderr = "") {
+    const out = { code, text: stdout + stderr, rows: [] };
+    for (const line of stdout.split("\n").filter(Boolean)) {
+        const [key, value] = [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)];
+        if (key === "row") out.rows.push(value.split("\x1f"));
+        else if (key === "doc") out.doc = JSON.parse(`{${value}}`);
+        else out[key] = value;
+    }
+    return out;
+}
+
+function cli(dir, op, req = {}) {
+    const r = spawnSync(process.execPath, [CLI, op], { input: JSON.stringify({ dir, allow_loopback: true, ...req }), encoding: "utf8", timeout: 60_000 });
+    return answer(r.status, r.stdout, r.stderr);
+}
+
+// A child process that runs beside the others; `input` goes to its stdin.
+function start(args, input = "") {
     return new Promise((resolve) => {
-        const child = spawn(process.execPath, args, { stdio: ["ignore", "pipe", "pipe"] });
-        let text = "";
-        child.stdout.on("data", (c) => (text += c));
-        child.stderr.on("data", (c) => (text += c));
-        child.on("close", (code) => resolve({ code, text }));
+        const child = spawn(process.execPath, args, { stdio: ["pipe", "pipe", "pipe"] });
+        let stdout = "";
+        child.stdout.on("data", (c) => (stdout += c));
+        child.stderr.on("data", (c) => (stdout += c));
+        child.on("close", (code) => resolve(answer(code, stdout)));
+        child.stdin.end(input);
+    });
+}
+
+// A request through the forwarder, as a browser sends it.
+function browse(port, host, target, headers = {}) {
+    return new Promise((resolve, reject) => {
+        const req = http.request({ host: LOOPBACK, port, path: target, agent: false, headers: { host, accept: "text/html", ...headers } }, (res) => {
+            let text = "";
+            res.on("data", (c) => (text += c));
+            res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, text }));
+        });
+        req.on("error", reject);
+        req.end();
     });
 }
 
@@ -211,6 +245,178 @@ test("several joins at once: every room ends up in the rooms file", async () => 
     assert.strictEqual(fs.statSync(path.join(shared, "rooms.json")).mode & 0o777, 0o600);
 });
 
+test("the forwarder's check of a browser's request: one Host, the same origin, no upgrade, and Connection: close", () => {
+    const head = (lines) => Buffer.from(["GET /app HTTP/1.1", ...lines, "", "body"].join("\r\n"));
+    const want = "room-0123456789abcdef.localhost:41000";
+    const ok = forward.gate(head([`Host: ${want}`, "Connection: keep-alive", "Keep-Alive: 5", "Cookie: sid=1", `Origin: http://${want}`, "Sec-Fetch-Site: same-origin"]), want);
+    assert.strictEqual(ok.verdict, "relay");
+    assert.strictEqual(ok.head.toString(), ["GET /app HTTP/1.1", `Host: ${want}`, "Cookie: sid=1", `Origin: http://${want}`, "Sec-Fetch-Site: same-origin", "Connection: close", "", "body"].join("\r\n"));
+    for (const lines of [["Host: evil.example"], [`Host: ${want}`, `Host: ${want}`], [], [`Host: ${want}`, "Origin: http://evil.example"], [`Host: ${want}`, "Sec-Fetch-Site: cross-site"],
+        [`Host: ${want}`, "Sec-Fetch-Site: Same-Site"], [`Host: ${want}`, "Upgrade: websocket"], [`Host: ${want}`, " folded"], [`Host: ${want}`, "no colon"]]) {
+        assert.strictEqual(forward.gate(head(lines), want).verdict, "refuse", lines.join(" | "));
+    }
+    assert.strictEqual(forward.gate(Buffer.from(`GET / HTTP/1.1\r\nHost: ${want}\r\n`), want).verdict, "more");
+    assert.strictEqual(forward.gate(Buffer.alloc(33 * 1024, 65), want).verdict, "refuse");
+    const shown = forward.page("removed", "<Priya>", true).toString();
+    assert.match(shown, /^HTTP\/1\.1 403 /);
+    assert.ok(shown.includes("&lt;Priya&gt; removed you") && !shown.includes("<Priya>") && shown.includes("default-src 'none'"));
+});
+
+test("guest-cli: look, join, a seat, the room through the forwarder, leave and forget; the code and the key are in no argument, output or other file", async () => {
+    await withGateway({}, async (gw) => {
+        const dir = H.tmpDir();
+        const outputs = [];
+        const run = (op, req) => { const r = cli(dir, op, req); outputs.push(r.text); return r; };
+        const code = await roomCode(gw);
+        const hostHex = gw.host.fp.slice(7);
+        const id = hostHex.slice(0, 16);
+        H.track(() => forward.ask(dir, id, "stop", 2000));
+
+        assert.strictEqual(cli(dir, "look", { address: LOOPBACK, port: gw.port, allow_loopback: false }).error, "not_local");
+        assert.strictEqual(run("look", { address: "192.168.1", port: 8443 }).error, "bad_address");
+        const seen = run("look", { address: LOOPBACK, port: gw.port });
+        assert.deepStrictEqual([seen.code, seen.host_key, seen.host_pin, seen.room, seen.host, seen.known, seen.paired, seen.locked],
+            [0, id, hostHex, "Test Room", "Test Host", "false", "false", "false"]);
+
+        const wrong = run("join", { address: LOOPBACK, port: gw.port, host_pin: hostHex, code: code === "000000" ? "111111" : "000000", name: "Lab PC", model: "Linux" });
+        assert.deepStrictEqual([wrong.code, wrong.error], [1, "wrong_code"]);
+        assert.ok(!fs.existsSync(path.join(dir, "keys", `${hostHex}.pem`)), "a join that was refused left its key behind");
+        gw.jump(120_000);   // past the cooldown of the wrong code
+
+        const joined = run("join", { address: LOOPBACK, port: gw.port, host_pin: hostHex, code, name: "Lab PC", model: "Linux" });
+        assert.deepStrictEqual([joined.code, joined.id, joined.state, joined.forwarding], [0, id, "waiting", "true"], joined.text);
+        const port = Number(joined.local_port);
+        const name = new URL(joined.url).host;
+        assert.match(name, /^test-room-[0-9a-f]{16}\.localhost:41[0-9]{3}$/);
+        assert.strictEqual(joined.url, `http://${name}/_benchbar/signin?next=/app`);
+        const noSeat = await browse(port, name, "/app");
+        assert.ok(noSeat.status === 403 && noSeat.text.includes("has not given you a seat yet"), noSeat.text);
+
+        const seats = run("seats", { id });
+        assert.deepStrictEqual([seats.host_assigns, seats.rows.length, seats.rows[1].slice(0, 2)], ["false", 6, ["seat2", "Seat 2"]]);
+        const seated = run("seat", { id, seat_id: "seat2" });
+        assert.deepStrictEqual([seated.code, seated.state, seated.seat], [0, "ready", "seat2@example.com"]);
+        assert.strictEqual(run("seat", { id, seat_id: "nope" }).error, "refused");
+
+        const pageReply = await browse(port, name, "/app/sales-order");
+        assert.deepStrictEqual([pageReply.status, pageReply.text], [200, "upstream-ok"]);
+        const signin = await browse(port, name, "/_benchbar/signin?next=/app");
+        assert.deepStrictEqual([signin.status, signin.headers.location], [302, "/app"]);
+        assert.ok(signin.headers["set-cookie"][0].startsWith(`sid=${H.SID};`));
+        assert.strictEqual((await browse(port, "evil.example", "/app")).status, 403);
+        assert.strictEqual((await browse(port, name, "/app", { "sec-fetch-site": "cross-site" })).status, 403);
+        assert.strictEqual(gw.upstream.hits.filter((h) => h.url === "/app").length, 0, "a refused request reached the host");
+
+        const listed = run("joined");
+        assert.deepStrictEqual(listed.doc.rooms.map((r) => [r.id, r.room, r.host, r.site, r.state, r.seat, r.forwarding, r.address, r.port, r.host_key]),
+            [[id, "Test Room", "Test Host", "macdev", "ready", "seat2@example.com", true, LOOPBACK, gw.port, id]]);
+        const known = run("look", { address: LOOPBACK, port: gw.port });
+        assert.deepStrictEqual([known.known, known.paired], ["true", "true"]);
+
+        // the secrets: the code, and the body of the key
+        const keyFile = path.join(dir, "keys", `${hostHex}.pem`);
+        const keyBody = fs.readFileSync(keyFile, "utf8").split("\n")[1];
+        const standalone = new RegExp(`(?<![0-9A-Za-z])${code}(?![0-9A-Za-z])`);
+        const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : e.isFile() ? [path.join(d, e.name)] : []));
+        const argv = execFileSync("/bin/ps", ["-ax", "-o", "args="], { encoding: "utf8" }).split("\n").filter((line) => line.includes(dir));
+        assert.ok(argv.some((line) => line.includes("guest-forward.js")), "the forwarder is not running");
+        const files = [...walk(dir).filter((f) => f !== keyFile), ...walk(gw.stateDir), ...(fs.existsSync(gw.logDir) ? walk(gw.logDir) : [])];
+        const haystacks = [["output", outputs.join("\n")], ["arguments", argv.join("\n")], ["the gateway's output", gw.output()], ...files.map((f) => [path.basename(f), fs.readFileSync(f, "utf8")])];
+        for (const [what, text] of haystacks) {
+            assert.ok(!standalone.test(text), `${what} holds the room code`);
+            assert.ok(!text.includes(keyBody), `${what} holds the key`);
+        }
+        assert.strictEqual(fs.statSync(path.join(dir, "rooms.json")).mode & 0o777, 0o600);
+
+        // the host removes this computer: the page says so, and the forwarder asks no more
+        const [row] = await people(gw);
+        await gw.control({ op: "remove", device: row.id });
+        assert.strictEqual(run("wait", { id, timeout_s: 0 }).state, "removed");
+        assert.ok((await browse(port, name, "/app")).text.includes("removed you from this room"));
+        assert.deepStrictEqual([run("look", { address: LOOPBACK, port: gw.port }).paired, run("joined").doc.rooms[0].state], ["false", "removed"]);
+
+        const left = run("forget", { id });
+        assert.deepStrictEqual([left.code, left.forgotten, left.told_host], [0, "true", "false"]);
+        assert.deepStrictEqual([run("joined").doc.rooms, fs.existsSync(keyFile), fs.existsSync(forward.sockPath(dir, id))], [[], false, false]);
+        assert.strictEqual(run("open", { id }).error, "no_such_room");
+        await assert.rejects(browse(port, name, "/app"), /ECONNREFUSED/);
+    });
+});
+
+test("guest-cli: an invite joins without a typed code; leave tells the host; a host with another key at a joined address is refused", async () => {
+    await withGateway({ config: { seat_mode: "host" } }, async (gw) => {
+        const dir = H.tmpDir();
+        const hostHex = gw.host.fp.slice(7);
+        const id = hostHex.slice(0, 16);
+        H.track(() => forward.ask(dir, id, "stop", 2000));
+        const { salt, code } = await gw.control({ op: "code" });
+        const link = (over = {}) => inviteLink({ r: "Whatever%20it%20says", h: hostHex, s: salt, c: code, a: `${LOOPBACK}%3A${gw.port}`, ...over });
+
+        assert.strictEqual(cli(dir, "look", { invite: link({ a: "8.8.8.8%3A8443" }) }).error, "invite_no_address");
+        assert.strictEqual(cli(dir, "look", { invite: link({ a: null }) }).error, "invite_no_address");
+        assert.strictEqual(cli(dir, "look", { invite: link({ h: "ab".repeat(32) }) }).error, "not_the_invited_room");
+        assert.strictEqual(cli(dir, "look", { invite: link({ s: "00".repeat(16) }) }).error, "invite_out_of_date");
+        const seen = cli(dir, "look", { invite: link() });
+        assert.deepStrictEqual([seen.code, seen.room, seen.from_invite, seen.host_key], [0, "Test Room", "true", id]);
+        const joined = cli(dir, "join", { invite: link(), address: seen.address, port: Number(seen.port), host_pin: seen.host_pin, name: "Lab PC", model: "Linux" });
+        assert.deepStrictEqual([joined.code, joined.state], [0, "waiting"], joined.text);
+        assert.ok(!joined.text.includes(code));
+
+        // the host gives out the seats: a pick is refused, the wait ends when the host gave one
+        const seats = cli(dir, "seats", { id });
+        assert.strictEqual(seats.host_assigns, "true");
+        assert.strictEqual(cli(dir, "seat", { id, seat_id: "seat1" }).error, "host_assigns");
+        assert.strictEqual(cli(dir, "wait", { id, timeout_s: 0 }).state, "waiting");
+        const [row] = await people(gw);
+        assert.strictEqual((await gw.control({ op: "assign", device: row.id, seat_id: "seat3" })).ok, true);
+        const waited = cli(dir, "wait", { id, timeout_s: 20 });
+        assert.deepStrictEqual([waited.state, waited.seat], ["ready", "seat3@example.com"]);
+
+        const left = cli(dir, "leave", { id });
+        assert.deepStrictEqual([left.code, left.told_host, left.room], [0, "true", "Test Room"]);
+        assert.deepStrictEqual(await people(gw), []);
+        assert.deepStrictEqual(cli(dir, "joined").doc.rooms.map((r) => [r.state, r.forwarding, r.url]), [["closed", false, null]]);
+        assert.ok(fs.existsSync(path.join(dir, "keys", `${hostHex}.pem`)), "leave deleted the key: a rejoin would be a new guest to the host");
+
+        // another host answers on the address this computer joined: its key is not taken over
+        const port = gw.port;
+        await gw.stop();
+        const other = await startGateway({ config: { listen: { host: LOOPBACK, port } } });
+        try {
+            const changed = cli(dir, "look", { address: LOOPBACK, port });
+            assert.deepStrictEqual([changed.code, changed.error, changed.room], [1, "identity_changed", id]);
+            assert.strictEqual(cli(dir, "open", { id }).state, "identity_changed");
+            const shown = await browse(Number(cli(dir, "open", { id }).local_port), new URL(cli(dir, "open", { id }).url).host, "/app");
+            assert.ok(shown.status === 403 && shown.text.includes("looks different"), shown.text);
+            assert.deepStrictEqual(await people(other), []);
+        } finally {
+            await other.stop();
+        }
+    });
+});
+
+test("several commands at once: a room gets one forwarder, on one port", async () => {
+    await withGateway({}, async (gw) => {
+        const dir = H.tmpDir();
+        const hostHex = gw.host.fp.slice(7);
+        const id = hostHex.slice(0, 16);
+        H.track(() => forward.ask(dir, id, "stop", 2000));
+        const joined = cli(dir, "join", { address: LOOPBACK, port: gw.port, host_pin: hostHex, code: await roomCode(gw), name: "Lab PC", model: "Linux" });
+        assert.strictEqual(joined.code, 0, joined.text);
+        await forward.ask(dir, id, "stop", 2000);
+        while (await forward.ask(dir, id, "status", 200)) await H.sleep(50);
+
+        const request = JSON.stringify({ dir, allow_loopback: true, id });
+        const opened = await Promise.all([1, 2, 3, 4, 5, 6].map(() => start([CLI, "open"], request)));
+        assert.deepStrictEqual(opened.map((r) => [r.code, r.forwarding]), opened.map(() => [0, "true"]), opened.map((r) => r.text).join(""));
+        assert.strictEqual(new Set(opened.map((r) => r.local_port)).size, 1, "the commands were told different ports");
+        const running = execFileSync("/bin/ps", ["-ax", "-o", "args="], { encoding: "utf8" }).split("\n").filter((line) => line.includes("guest-forward.js") && line.includes(dir));
+        assert.strictEqual(running.length, 1, `${running.length} forwarders run for one room`);
+        assert.ok(!fs.existsSync(path.join(dir, `${id}.start`)), "the lock of the start was left behind");
+        assert.strictEqual(cli(dir, "forget", { id }).code, 0);
+    });
+});
+
 // A TLS 1.3 server for one made-up host: it counts every byte a guest writes, and answers with `reply(socket)`.
 function fakeHost(reply) {
     const identity = guest.identityOf(guest.newKey());
@@ -369,4 +575,124 @@ test("the key store takes only a 64 digit host, hands out one key to two callers
     chain.remove(host);
     fs.writeFileSync(path.join(dir, "locked"), "");
     assert.throws(() => chain.remove(host), refused("key_store"));
+});
+
+const net = require("node:net");
+const FORWARD_JS = path.join(__dirname, "../../lib/frappe-local/share/guest-forward.js");
+const GUEST_CLI = require("../../lib/frappe-local/share/guest-cli.js");
+
+// A saved room and this computer's key for it, in a guest folder, for a forwarder process to read. The
+// host does not exist: the forwarder runs and says "offline".
+function savedRoom(dir) {
+    const hex = "ef".repeat(32);
+    const id = hex.slice(0, 16);
+    guest.roomsStore(dir).save({ id, host_fp: `sha256:${hex}`, device_id: "d_00000001", room: "Gone Room", host: "Host", site: "", address: LOOPBACK, port: 1,
+        local_port: null, joined_at: "2026-11-25T00:00:00.000Z", salt: "00".repeat(16) });
+    guest.keyStore({ kind: "file", dir }).obtain(hex);
+    return id;
+}
+
+const spawnForwarder = (dir, id, code = null) => {
+    const args = code ? ["-e", `require(${JSON.stringify(FORWARD_JS)}).run(process.argv.slice(1), { tickMs: 100 }).catch((e) => { process.stderr.write("guest-forward: " + (e.code || e.name)); process.exit(1); })`, dir, "file", "", id]
+        : [FORWARD_JS, dir, "file", "", id];
+    return spawn(process.execPath, args, { stdio: ["ignore", "ignore", "pipe"] });
+};
+const exited = (child) => new Promise((resolve) => { let text = ""; child.stderr.on("data", (c) => (text += c)); child.on("close", (code) => resolve({ code, text })); });
+
+test("the forwarder takes its control socket first: a second one for the room says already_running, and four at once leave one", async () => {
+    const dir = H.tmpDir();
+    const id = savedRoom(dir);
+    const all = [0, 1, 2, 3].map(() => spawnForwarder(dir, id));
+    H.track(() => { for (const c of all) c.kill("SIGKILL"); });
+    const results = await Promise.all(all.map(exited).map((p, i) => Promise.race([p.then((r) => ({ i, ...r })), H.sleep(3000).then(() => ({ i, code: null }))])));
+    const alive = results.filter((r) => r.code === null);
+    assert.strictEqual(alive.length, 1, JSON.stringify(results));
+    for (const r of results.filter((x) => x.code !== null)) assert.deepStrictEqual([r.code, r.text.trim()], [1, "guest-forward: already_running"]);
+    const status = await forward.ask(dir, id, "status", 2000);
+    assert.strictEqual(status.ok, true);
+    assert.strictEqual(all[alive[0].i].pid, status.pid);
+    await forward.ask(dir, id, "stop", 2000);
+});
+
+test("a forwarder whose socket is gone ends by itself, and a dead one's socket file is taken over", async () => {
+    const dir = H.tmpDir();
+    const id = savedRoom(dir);
+    const first = spawnForwarder(dir, id, "tick");
+    H.track(() => first.kill("SIGKILL"));
+    const firstEnd = exited(first);
+    for (let i = 0; i < 100 && !(await forward.ask(dir, id, "status", 300)); i++) await H.sleep(50);
+    assert.ok(await forward.ask(dir, id, "status", 1000), "the forwarder did not come up");
+    fs.rmSync(forward.sockPath(dir, id), { force: true });
+    assert.strictEqual((await firstEnd).code, 0, "the forwarder stayed up without its socket");
+
+    // killed hard: the socket file stays, nobody answers, a new forwarder takes it over
+    const second = spawnForwarder(dir, id, "tick");
+    H.track(() => second.kill("SIGKILL"));
+    for (let i = 0; i < 100 && !(await forward.ask(dir, id, "status", 300)); i++) await H.sleep(50);
+    second.kill("SIGKILL");
+    await exited(second);
+    assert.ok(fs.existsSync(forward.sockPath(dir, id)), "a killed forwarder left no socket to take over");
+    const third = spawnForwarder(dir, id, "tick");
+    H.track(() => third.kill("SIGKILL"));
+    for (let i = 0; i < 100 && !(await forward.ask(dir, id, "status", 300)); i++) await H.sleep(50);
+    const status = await forward.ask(dir, id, "status", 1000);
+    assert.strictEqual(status && status.pid, third.pid);
+    await forward.ask(dir, id, "stop", 2000);
+});
+
+test("the forwarder listens on 127.0.0.1 only, takes no more than its cap of connections, and ends a stalled one", async () => {
+    const quiet = net.createServer(() => {});
+    await new Promise((resolve) => quiet.listen(0, LOOPBACK, resolve));
+    const forwarder = new forward.Forwarder({
+        localHost: "room-0123456789abcdef.localhost", port: await H.freePort(), hostLabel: "Host", maxConnections: 2, idleMs: 300,
+        connect: async () => net.connect(quiet.address().port, LOOPBACK)
+    });
+    try {
+        const port = await forwarder.start();
+        assert.strictEqual(forwarder.server.address().address, LOOPBACK);
+        assert.strictEqual(forwarder.server.address().family, "IPv4");
+        const open = () => new Promise((resolve, reject) => {
+            const socket = net.connect(port, LOOPBACK, () => resolve(socket));
+            socket.on("error", () => {});
+            socket.once("error", reject);
+        });
+        const closedSoon = (socket) => new Promise((resolve) => { socket.once("close", () => resolve(true)); setTimeout(() => resolve(false), 600); });
+        const a = await open();
+        const b = await open();
+        await H.sleep(50);
+        const c = await open().catch(() => null);
+        assert.ok(c === null || await closedSoon(c), "a third connection stayed open beyond the cap");
+        a.destroy();
+        b.destroy();
+        await H.sleep(100);
+
+        // a request that passed the gate and then stalled at the host is ended after the idle time
+        const d = await open();
+        d.write(`GET /app HTTP/1.1\r\nHost: ${forwarder.expectedHost}\r\n\r\n`);
+        assert.ok(await new Promise((resolve) => { d.once("close", () => resolve(true)); setTimeout(() => resolve(false), 2500); }), "a stalled connection was never ended");
+    } finally {
+        forwarder.stop();
+        quiet.close();
+    }
+});
+
+test("leave ends a forwarder that ignores stop, and says so when it cannot", async () => {
+    const dir = H.tmpDir();
+    const id = "ab".repeat(8);
+    const stubborn = (pid) => spawn(process.execPath, ["-e", `
+        const net = require("net");
+        net.createServer((c) => { c.on("data", () => c.end(JSON.stringify({ ok: true, pid: ${pid} === null ? process.pid : ${pid}, port: 41000 }) + "\\n")); })
+            .listen(${JSON.stringify(path.join(dir, `${id}.sock`))}); setInterval(() => {}, 1000);`], { stdio: "ignore" });
+    const first = stubborn(null);
+    H.track(() => first.kill("SIGKILL"));
+    for (let i = 0; i < 100 && !(await forward.ask(dir, id, "status", 300)); i++) await H.sleep(50);
+    assert.strictEqual(await GUEST_CLI.stopForwarder({ dir }, id), true);
+    assert.strictEqual(await forward.ask(dir, id, "status", 300), null);
+    // one whose pid is not its own cannot be ended: the caller is told
+    fs.rmSync(path.join(dir, `${id}.sock`), { force: true });
+    const second = stubborn(2 ** 22 + 12345);
+    H.track(() => second.kill("SIGKILL"));
+    for (let i = 0; i < 100 && !(await forward.ask(dir, id, "status", 300)); i++) await H.sleep(50);
+    assert.strictEqual(await GUEST_CLI.stopForwarder({ dir }, id), false);
+    second.kill("SIGKILL");
 });
