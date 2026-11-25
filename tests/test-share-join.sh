@@ -117,8 +117,29 @@ for sub in "join 192.168.1.20" leave forget; do
 done
 assert_no_file "$GUEST"
 
+# the Lab is off: leaving and forgetting still run (an experiment that is off stays undoable), joining does not
+for sub in leave forget; do
+  BENCHBAR_LABS="" guest "" "$sub"
+  assert_eq 1 "$CODE" "(${sub}, Lab off) $ALL"; assert_contains "$ALL" "joined no room"; assert_not_contains "$ALL" "labs on lan-rooms"
+done
+
+# macOS: BENCHBAR_SUDO=gui counts only when BenchBar.app is above the command (fl_person_env_ok). Here an
+# app that runs (pid 4300) is not above this command.
+mkdir -p "$MOCK_STATE/pstree"
+printf '1 /Applications/BenchBar.app/Contents/MacOS/BenchBar
+' >"$MOCK_STATE/pstree/4300"
+for sub in "join 192.168.1.20" leave forget; do
+  # shellcheck disable=SC2086  # the words of a subcommand
+  BENCHBAR_APP_PID=4300 guest "" $sub
+  assert_eq 1 "$CODE" "(${sub}, no app above) $ALL"; assert_contains "$ALL" "needs a person at a terminal"; assert_contains "$ALL" "is not above this command"
+  # shellcheck disable=SC2086
+  BENCHBAR_APP_PID="" guest "" $sub
+  assert_eq 1 "$CODE" "(${sub}, no app pid) $ALL"; assert_contains "$ALL" "BENCHBAR_APP_PID is not set"
+done
+find "$MOCK_STATE/pstree/4300" -delete
+
 # the code and an invite link are never arguments: refused, and not echoed, logged or kept in the history
-for word in 482913 "482 913" "benchbar://share/join?v=1&r=Lab&h=$(printf 'ab%.0s' {1..32})&s=$(printf 'cd%.0s' {1..16})&c=482913&a=192.168.1.20%3A8443&x=1900000000"; do
+for word in 482913 "482 913" 482-913 "48 29-13" "benchbar://share/join?v=1&r=Lab&h=$(printf 'ab%.0s' {1..32})&s=$(printf 'cd%.0s' {1..16})&c=482913&a=192.168.1.20%3A8443&x=1900000000"; do
   guest "" join "$word"
   assert_eq 1 "$CODE" "$ALL"; assert_contains "$ALL" "never passed as an argument"
 done
@@ -127,8 +148,12 @@ if grep -r -q -E '482 ?913' "$FL_STATE_DIR" 2>/dev/null; then fail "a room code 
 # and should such a command line ever reach the history, its words are masked there too
 KEPT="$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/history.sh"
   FL_ORIG_ARGS=(share join "482 913" 482913 "benchbar://share/join?v=1&c=482913" --name x 192.168.1.20); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"
-  FL_ORIG_ARGS=(site backup 482913); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"' _ "$ROOT")"
-assert_eq "share|join|***|***|***|--name|x|192.168.1.20|site|backup|482913|" "$KEPT"
+  FL_ORIG_ARGS=(site backup 482913); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"
+  FL_ORIG_ARGS=(share join 482-913 "482 913" "48-29-13" 4829133 --seat seat-1); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"' _ "$ROOT")"
+assert_eq "share|join|***|***|***|--name|x|192.168.1.20|site|backup|482913|share|join|***|***|***|4829133|--seat|seat-1|" "$KEPT"
+# at a terminal the code and the link are read without an echo
+assert_contains "$(cat "$ROOT/lib/frappe-local/share-guest.sh")" 'IFS= read -r -s -p'
+assert_eq "2" "$(grep -c 'secret$' "$ROOT/lib/frappe-local/share-guest.sh")" "(the code and the invite link are the secrets read)"
 : >"$SEEN"
 
 guest "" join 8.8.8.8
@@ -163,13 +188,35 @@ ROOM_CODE="$(ctl '{"op":"code"}' | jget - 'd["code"]')"
 WRONG=000000; [[ "$ROOM_CODE" != 000000 ]] || WRONG=111111
 ITEM="$MOCK_STATE/keychain/benchbar-share-guest--${ROOM_KEY}"
 
-# the look: the room, its address and the host key, and nothing else happens
+# the look: the room, its address and the host key, and nothing else happens; with BenchBar.app installed
+# the output says that the app is a second guest
 guest "" join "127.0.0.1:${ROOM_PORT}" --dry-run --json
-assert_eq 0 "$CODE" "$ALL"
+assert_eq 0 "$CODE" "$ALL"; assert_not_contains "$ALL" "two guests"
+mkdir -p "$HOME/Applications/BenchBar.app"
+guest "" join "127.0.0.1:${ROOM_PORT}" --dry-run --json
+rmdir "$HOME/Applications/BenchBar.app"
+assert_eq 0 "$CODE" "$ALL"; assert_contains "$ALL" "two guests to Test Host"
 assert_eq "('${ROOM_ID}', 'Test Room', 'Test Host', '127.0.0.1', ${ROOM_PORT}, False, False)" "$(printf '%s' "$OUT" | jget - '(d["host_key"], d["room"], d["host"], d["address"], d["port"], d["paired"], d["known"])')"
 assert_contains "$ALL" "Host key  ${ROOM_ID:0:4} ${ROOM_ID:4:4} ${ROOM_ID:8:4} ${ROOM_ID:12:4}"
 assert_eq "[]" "$(people '[p["name"] for p in d["people"]]')"
 assert_no_file "$GUEST/rooms.json"; assert_no_file "$ITEM"
+
+# --host-key: the key a look showed is the key that is joined; another key, or a malformed one, ends the run
+# before the room is asked anything (exit 3 for another key)
+HOST_KEY_UP="$(printf '%s' "$ROOM_KEY" | tr 'a-f' 'A-F')"
+guest "" join "127.0.0.1:${ROOM_PORT}" --host-key "$HOST_KEY_UP" --dry-run --json
+assert_eq 0 "$CODE" "$ALL"; assert_eq "$ROOM_KEY" "$(printf '%s' "$OUT" | jget - 'd["host_pin"]')"
+OTHER_KEY="$(printf 'ab%.0s' {1..32})"
+guest "$ROOM_CODE" join "127.0.0.1:${ROOM_PORT}" --host-key "$OTHER_KEY" --json
+assert_eq 3 "$CODE" "$ALL"; assert_contains "$ERR" "shows another host key than the one you asked for"; assert_eq "" "$OUT"
+assert_no_file "$GUEST/rooms.json"; assert_no_file "$ITEM"
+assert_eq "[]" "$(people '[p["name"] for p in d["people"]]')"
+for bad in abc "${ROOM_KEY:0:63}" "${ROOM_KEY:0:63}g" "" "${ROOM_KEY}00"; do
+  guest "$ROOM_CODE" join "127.0.0.1:${ROOM_PORT}" --host-key "$bad"
+  assert_eq 1 "$CODE" "(host key ${bad}) $ALL"; assert_contains "$ALL" "takes the 64 hex digits"
+done
+guest "" join "127.0.0.1:${ROOM_PORT}" --host-key
+assert_eq 1 "$CODE" "$ALL"; assert_contains "$ALL" "--host-key needs"
 
 # a wrong code: one sentence on stderr, no document, and the key made for the try is gone again
 guest "$WRONG" join "127.0.0.1:${ROOM_PORT}" --name "Lab PC" --json
@@ -182,7 +229,7 @@ printf 120000 >"$ROOM_CLOCK"   # past the gateway's pause after a wrong code
 
 # the join as the tray makes it: the code on stdin, a seat, no browser
 : >"$MOCK_LOG"
-guest "${ROOM_CODE:0:3} ${ROOM_CODE:3:3}" join "127.0.0.1:${ROOM_PORT}" --name "Lab PC" --seat seat2 --no-open --json
+guest "${ROOM_CODE:0:3} ${ROOM_CODE:3:3}" join "127.0.0.1:${ROOM_PORT}" --host-key "$ROOM_KEY" --name "Lab PC" --seat seat2 --no-open --json
 assert_eq 0 "$CODE" "$ALL"
 assert_eq "(True, '${ROOM_ID}', 'Test Room', 'ready', 'seat2@example.com', True, 0)" "$(last '(d["joined"], d["id"], d["room"], d["state"], d["seat"], d["forwarding"], d["exit"])')"
 assert_eq "[{'kind': 'share', 'name': 'Test Room', 'detail': 'joined'}]" "$(last 'd["changed"]')"
@@ -237,7 +284,7 @@ assert_contains "$(cat "$MOCK_STATE/node.argv")" "guest-cli.js join"
 # leave: the host is told, the seat is free, the address is closed; the room and the key stay
 guest "" leave "${ROOM_ID:0:4} ${ROOM_ID:4:4}" "${ROOM_ID:8:8}" --json
 assert_eq 0 "$CODE" "$ALL"
-assert_eq "(True, 'Test Room', [{'kind': 'share', 'name': 'Test Room', 'detail': 'left'}])" "$(last '(d["told_host"], d["room"], d["changed"])')"
+assert_eq "(True, True, 'Test Room', [{'kind': 'share', 'name': 'Test Room', 'detail': 'left'}])" "$(last '(d["told_host"], d["forwarder_stopped"], d["room"], d["changed"])')"
 assert_eq "[]" "$(people '[p["name"] for p in d["people"]]')"
 run_fm share joined --json
 assert_eq "[('closed', False, None)]" "$(printf '%s' "$OUT" | jget - '[(r["state"], r["forwarding"], r["url"]) for r in d["rooms"]]')"
@@ -273,7 +320,10 @@ assert_eq "('${ROOM_ID}', 'Test Room', True)" "$(printf '%s' "$OUT" | jget - '(d
 assert_contains "$ALL" "from the invite link, not found on the network"
 assert_no_file "$KEYFILE"
 
-guest "$LINK" join --name "Lab PC" --no-wait --json
+guest "$LINK" join --host-key "$OTHER_KEY" --dry-run
+assert_eq 3 "$CODE" "$ALL"; assert_contains "$ALL" "another host key"
+assert_no_file "$KEYFILE"
+guest "$LINK" join --name "Lab PC" --no-wait --host-key "$ROOM_KEY" --json
 assert_eq 0 "$CODE" "$ALL"
 assert_eq "(True, 'waiting', None, True, 6)" "$(last '(d["joined"], d["state"], d["seat"], d["host_assigns"], len(d["seats"]))')"
 assert_contains "$ALL" "No seat yet"
@@ -314,7 +364,8 @@ ctl '{"op":"remove","device":"'"$DEVICE"'"}' >/dev/null
 ctl '{"op":"rotate"}' >/dev/null
 guest "$LINK" join
 assert_eq 1 "$CODE" "$ALL"; assert_contains "$ALL" "out of date: the host changed the code"
-guest "" forget "$ROOM_ID"
+# with the Lab off, forgetting still works
+BENCHBAR_LABS="" guest "" forget "$ROOM_ID"
 assert_eq 0 "$CODE" "$ALL"; assert_contains "$OUT" "could not be told"
 assert_no_file "$KEYFILE"
 

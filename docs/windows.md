@@ -749,8 +749,9 @@ Any web page can open a `benchbar://` link, and a browser can remember
 first for `up`, `down`, `restart`, `console` and `db`, with Cancel as the
 default. It is off by default, so launchers and scripts keep working.
 
-Share links (`benchbar://share/...`) need rooms, which are not on Windows
-yet: the tray shows a short note and does nothing else.
+Share links (`benchbar://share/...`) are not acted on by the tray yet: it
+shows a short note and does nothing else. In a WSL terminal, `benchbar share
+join` joins the room (see [Join a room from a terminal](guides/share-on-your-network.md#join-a-room-from-a-terminal)).
 
 ### What it costs
 
@@ -1008,11 +1009,11 @@ every distro, so stop your benches first).
   (see above). Open as needs a `*.localhost` name, which the Windows browser reaches
   without a hosts line (see [`*.localhost` names](#localhost-names)). See
   [benchbar open](reference/cli/other.md).
-- It cannot join a room as a guest. The guest side (the room code
-  exchange, the pinned certificate and the local forwarder) is part of the
-  Mac app and has no `benchbar` command, so it is not on Windows yet. A
-  `benchbar://share/...` link shows a note that says so. Hosting a room is
-  the **Sharing** tab above.
+- The tray does not join a room as a guest yet. In WSL, `benchbar share
+  join` does (the room code exchange, the pinned certificate and the local
+  forwarder run in the distribution; the room opens in the Windows browser
+  on a `localhost` address). A `benchbar://share/...` link shows a note in
+  the tray. Hosting a room is the **Sharing** tab above.
 
 ## Rooms on Windows
 

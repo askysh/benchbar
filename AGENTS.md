@@ -459,9 +459,13 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   a terminal, or that runs inside the app or on Linux, is not stopped: the
   guard is against a mistake, not a boundary, so the rule above is the rule.
 - Joining a room is the person's choice. Never run `benchbar share join`,
-  `share leave` or `share forget` (they refuse an agent anyway), and never
-  ask for a room code or an invite link. `benchbar share joined --json`
-  reads the list of joined rooms.
+  `share leave` or `share forget`, and never ask for a room code or an
+  invite link. They refuse `--for-agent`, `mcp` and `BENCHBAR_NONINTERACTIVE`,
+  and on macOS a bare `BENCHBAR_SUDO=gui` counts only when the app is an
+  ancestor of the process. On Linux and WSL `fl_person_env_ok` accepts a
+  bare `BENCHBAR_SUDO=gui`, the recorded limit of `lan-guard` and `share
+  start`: so the rule above is the rule, not the check. `benchbar share
+  joined --json` reads the list of joined rooms.
 - Experiments are the person's choice. `benchbar labs` lists them; never
   run `benchbar labs on` (it refuses `--for-agent`, `benchbar mcp`,
   `BENCHBAR_NONINTERACTIVE=1` and a run without a terminal unless the app
