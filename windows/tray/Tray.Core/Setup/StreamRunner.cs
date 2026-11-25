@@ -40,10 +40,45 @@ public sealed class SystemStreamRunner : IStreamRunner
 
     /// <summary>
     /// The sentence of what a child wrote on stderr: the first <c>[FAIL]</c> line when there is one (the CLI's own refusal, which can come after
-    /// lines that only describe the room), else the first line.
+    /// lines that only describe the room), else the first line. The generic <c>[FAIL] Command failed (exit N)</c> that <c>benchbar run</c> prints
+    /// after a command is not the reason: it counts only when nothing else is there to say, so a first line that was the meaning stays the meaning.
     /// </summary>
     public static string? PickError(IReadOnlyList<string> lines) =>
-        lines.FirstOrDefault(l => l.Contains("[FAIL]", StringComparison.Ordinal)) ?? lines.FirstOrDefault();
+        lines.FirstOrDefault(l => l.Contains("[FAIL]", StringComparison.Ordinal) && !l.Contains("[FAIL] Command failed (exit", StringComparison.Ordinal)) ?? lines.FirstOrDefault();
+
+    /// <summary>
+    /// Sends <paramref name="stdin"/> and a line feed (LF, never the platform's line end: the CLI reads the line with <c>read -r</c> and a
+    /// carriage return would stay in it) as UTF-8 bytes without a byte order mark, then closes the input; the run never reads a terminal. A child that
+    /// ended before it read gives <see cref="IOException"/>: that is not an error of ours, its exit code and what it wrote on stderr say why.
+    /// </summary>
+    private static async Task SendStdinAsync(Process process, string? stdin, CancellationToken ct)
+    {
+        try
+        {
+            if (stdin is not null)
+            {
+                var bytes = new UTF8Encoding(false).GetBytes(stdin + "\n");
+                var input = process.StandardInput.BaseStream;
+                await input.WriteAsync(bytes, ct).ConfigureAwait(false);
+                await input.FlushAsync(ct).ConfigureAwait(false);
+            }
+        }
+        catch (IOException)
+        {
+            // the child is gone: nothing to read it
+        }
+        finally
+        {
+            try
+            {
+                process.StandardInput.Close();
+            }
+            catch (IOException)
+            {
+                // see above
+            }
+        }
+    }
 
     public async Task<StreamResult> RunAsync(string fileName, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? environment,
         Action<string> onLine, TimeSpan timeout, CancellationToken ct, string? stdin = null)
@@ -68,8 +103,6 @@ public sealed class SystemStreamRunner : IStreamRunner
 
         using var process = new Process { StartInfo = info };
         process.Start();
-        if (stdin is not null) await process.StandardInput.WriteLineAsync(stdin).ConfigureAwait(false);
-        process.StandardInput.Close(); // the run never reads a terminal
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeout);
@@ -103,6 +136,7 @@ public sealed class SystemStreamRunner : IStreamRunner
         }, CancellationToken.None);
         try
         {
+            await SendStdinAsync(process, stdin, cts.Token).ConfigureAwait(false); // under the timeout and the cancel token, with the pumps already reading
             await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
             try
             {

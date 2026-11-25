@@ -447,7 +447,7 @@ public class ShareGuestTests
     public async Task TheRoomsAreListedWithJoinedAndNeedNoPersonOrBench()
     {
         var (model, runner) = Rig();
-        runner.On("commands").Print(string.Join('\n', Lines("commands.json")).Replace("\"commands\": [", "\"commands\": [{\"name\":\"share join\",\"usage\":\"u\",\"summary\":\"s\",\"mutating\":true,\"flags\":[{\"name\":\"--host-key\",\"value\":\"HEX\",\"help\":\"h\"}]},"));
+        runner.On("commands").Print(string.Join('\n', Lines("commands.json")).Replace("\"labs\": []", "\"labs\": [\"lan-rooms\"]").Replace("\"commands\": [", "\"commands\": [{\"name\":\"share join\",\"usage\":\"u\",\"summary\":\"s\",\"mutating\":true,\"flags\":[{\"name\":\"--host-key\",\"value\":\"HEX\",\"help\":\"h\"}]},"));
         runner.On("share", "joined").Print(Lines("share-joined-ready.json"));
         await model.CheckSupportAsync(TestContext.Current.CancellationToken);
         Assert.True(model.Supported);
@@ -465,7 +465,7 @@ public class ShareGuestTests
     {
         // a CLI from before --host-key: the join is not offered, since the code would go to whatever answers at the address
         var (model, runner) = Rig();
-        runner.On("commands").Print(string.Join(Environment.NewLine, Lines("commands.json")).Replace("\"commands\": [", "\"commands\": [{\"name\":\"share join\",\"usage\":\"u\",\"summary\":\"s\",\"mutating\":true,\"flags\":[{\"name\":\"--seat\",\"value\":\"ID\",\"help\":\"h\"}]},"));
+        runner.On("commands").Print(string.Join(Environment.NewLine, Lines("commands.json")).Replace("\"labs\": []", "\"labs\": [\"lan-rooms\"]").Replace("\"commands\": [", "\"commands\": [{\"name\":\"share join\",\"usage\":\"u\",\"summary\":\"s\",\"mutating\":true,\"flags\":[{\"name\":\"--seat\",\"value\":\"ID\",\"help\":\"h\"}]},"));
         await model.CheckSupportAsync(TestContext.Current.CancellationToken);
         Assert.False(model.Supported);
     }
@@ -474,7 +474,7 @@ public class ShareGuestTests
     public async Task AnOlderCliWithoutShareJoinHidesTheFeatureAndAsksNothingElse()
     {
         var (model, runner) = Rig();
-        runner.On("commands").Print(Lines("commands.json")); // the recorded catalogue lists no share subcommand (the lab was off, or the CLI is older)
+        runner.On("commands").Print(string.Join(Environment.NewLine, Lines("commands.json")).Replace("\"labs\": []", "\"labs\": [\"lan-rooms\"]")); // the lab is on and the recorded catalogue lists no share subcommand: an older CLI
         await model.CheckSupportAsync(TestContext.Current.CancellationToken);
         Assert.False(model.Supported);
         Assert.Single(runner.Runs);
@@ -566,6 +566,87 @@ public class ShareGuestTests
         Assert.Equal(UiText.Get("GuestStateWaitingAny"), ShareGuestModel.StateText(room with { State = GuestState.Waiting, HostAssigns = null }));
         foreach (var state in Enum.GetValues<GuestState>())
             Assert.DoesNotMatch("^Guest[A-Z]", ShareGuestModel.StateText(room with { State = state })); // a missing entry would show as its own name
+    }
+
+    // --- what the CLI can do is asked once per CLI, not at every look at the tab ---
+
+    private static string Catalogue(string version, bool pin = true, bool lab = true)
+    {
+        var flags = pin ? "[{\"name\":\"--host-key\",\"value\":\"HEX\",\"help\":\"h\"}]" : "[]";
+        return "{\"schema_version\":1,\"cli_version\":\"" + version + "\",\"labs\":" + (lab ? "[\"lan-rooms\"]" : "[]") + ",\"commands\":[{\"name\":\"share join\",\"usage\":\"u\",\"summary\":\"s\",\"mutating\":true,\"flags\":" + flags + "}]}";
+    }
+
+    private static int Asked(ScriptedStreamRunner runner) => runner.Runs.Count(r => r.Args[0] == "commands");
+
+    [Fact]
+    public async Task TheCatalogueIsReadOnceForManyLooksAtTheTabAndManyModels()
+    {
+        var (client, runner) = Scripted();
+        runner.On("commands").Print(Catalogue("0.9.0"));
+        runner.On("share", "joined").Print(Lines("share-joined-none.json").Select(l => l.Replace("0.8.3", "0.9.0")).ToArray());
+        var support = new CommandSupport(client);
+        for (var look = 0; look < 3; look++)
+        {
+            var model = new ShareGuestModel(client, support); // a new view makes a new model each time the tab is shown
+            await model.CheckSupportAsync(TestContext.Current.CancellationToken);
+            Assert.True(model.Supported);
+            await model.RefreshAsync(TestContext.Current.CancellationToken);
+        }
+        Assert.Equal(1, Asked(runner));
+        Assert.Equal(3, runner.Runs.Count(r => r.Args[1] == "joined"));
+    }
+
+    [Fact]
+    public async Task ACliWithoutThePinIsAskedOnceToo()
+    {
+        var (client, runner) = Scripted();
+        runner.On("commands").Print(Catalogue("0.9.0", pin: false));
+        var support = new CommandSupport(client);
+        for (var look = 0; look < 3; look++)
+        {
+            var model = new ShareGuestModel(client, support);
+            await model.CheckSupportAsync(TestContext.Current.CancellationToken);
+            Assert.False(model.Supported);
+        }
+        Assert.Equal(1, Asked(runner));
+    }
+
+    [Fact]
+    public async Task ACatalogueReadWhileTheLabWasOffIsReadAgainOnceAndThenKept()
+    {
+        var (client, runner) = Scripted();
+        var first = 0;
+        runner.On(a => a[0] == "commands" && first++ == 0).Print(Catalogue("0.9.0", lab: false)); // what the tray read at its start
+        runner.On("commands").Print(Catalogue("0.9.0")); // the lab is on now
+        var support = new CommandSupport(client);
+        await support.GetAsync();
+        var model = new ShareGuestModel(client, support);
+        await model.CheckSupportAsync(TestContext.Current.CancellationToken);
+        Assert.True(model.Supported);
+        Assert.Equal(2, Asked(runner));
+        await new ShareGuestModel(client, support).CheckSupportAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, Asked(runner)); // the catalogue with the lab on is kept
+    }
+
+    [Fact]
+    public async Task ACliThatWasUpdatedIsAskedAgainAndTheFeatureFollowsIt()
+    {
+        var (client, runner) = Scripted();
+        var first = 0;
+        runner.On(a => a[0] == "commands" && first++ == 0).Print(Catalogue("0.9.0"));
+        runner.On("commands").Print(Catalogue("0.9.1", pin: false)); // the CLI inside WSL was updated, and the new one has no --host-key
+        runner.On("share", "joined").Print(Lines("share-joined-ready.json").Select(l => l.Replace("0.8.3", "0.9.1")).ToArray());
+        var support = new CommandSupport(client);
+        var model = new ShareGuestModel(client, support);
+        await model.CheckSupportAsync(TestContext.Current.CancellationToken);
+        Assert.True(model.Supported);
+        Assert.Equal(1, Asked(runner));
+        await model.RefreshAsync(TestContext.Current.CancellationToken); // the joined document says 0.9.1: the catalogue was read from 0.9.0
+        Assert.Equal(2, Asked(runner));
+        Assert.False(model.Supported);
+        Assert.Empty(model.Rooms);
+        await new ShareGuestModel(client, support).CheckSupportAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, Asked(runner)); // and 0.9.1 is remembered now
     }
 
     // --- the secret on stdin ---

@@ -48,6 +48,7 @@ public class SharingJoinViewTests
     private static string Commands(bool pin)
     {
         var doc = (JsonObject)JsonNode.Parse(Parity187cViewTests.CommandsWith("share join", "share joined", "share leave", "share forget"))!;
+        doc["labs"] = new JsonArray("lan-rooms"); // the lab was on when the CLI printed it
         if (pin) ((JsonArray)doc["commands"]!.AsArray().Single(c => (string?)c!["name"] == "share join")!["flags"]!).Add(new JsonObject { ["name"] = "--host-key", ["value"] = "HEX", ["help"] = "Pin the key." });
         return doc.ToJsonString();
     }
@@ -83,7 +84,9 @@ public class SharingJoinViewTests
         {
             // the tray read its catalogue while the lab was off: it lists no share subcommand
             var old = new ScriptedStreamRunner();
-            old.On("commands").Print(Fixture("commands.json"));
+            var first = 0;
+            old.On(a => a[0] == "commands" && first++ == 0).Print(Fixture("commands.json"));
+            old.On("commands").Print(Commands(pin: true)); // what the CLI prints now, with the lab on
             kit.Services.Commands = new CommandSupport(new CliClient(old, () => "benchbar.exe"));
             Wait(kit.Services.Commands.GetAsync());
             Assert.False(kit.Services.Commands.Current!.Has("share join"));

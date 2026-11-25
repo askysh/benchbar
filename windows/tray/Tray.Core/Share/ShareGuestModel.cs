@@ -23,6 +23,7 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
     /// <summary>The last join or open of each room that was waiting for a seat: <c>share joined</c> does not carry who gives the seats or the free ones, <c>share join</c> does.</summary>
     private readonly Dictionary<string, GuestRoom> _waiting = [];
     private bool _refreshing;
+    private string? _catalogueVersion;
 
     public event Action? Changed;
 
@@ -76,19 +77,28 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
     // --- reading ---
 
     /// <summary>
-    /// Whether this CLI can join a room. The catalogue of the tray is read once and may be from before the lab was turned on (the commands of
-    /// a lab that is off are left out of it), so a catalogue without the command is read again here, once per call.
+    /// Whether this CLI can join a room. The catalogue of the tray is read once per run of the tray, not at every look at the tab, and it is read
+    /// again only when it cannot be right: it was printed while the lan-rooms lab was off (the commands of a lab that is off are left out, and
+    /// this tab exists only while the lab is on), or the CLI's version moved on since (a <c>share joined</c> document says it, see
+    /// <see cref="RefreshAsync"/>).
     /// </summary>
     public async Task CheckSupportAsync(CancellationToken ct = default)
     {
-        var known = commands?.Current;
-        if (!CanPin(known))
-        {
-            var read = await cli.RunJsonAsync(CommandCatalogue.Args, null, CliTimeouts.Read, CommandCatalogue.Parse, ct).ConfigureAwait(true);
-            known = read.Value;
-        }
-        Supported = CanPin(known);
+        var known = commands is null ? await ReadCatalogueAsync(ct).ConfigureAwait(true) : await commands.GetAsync().ConfigureAwait(true);
+        if (commands is not null && known is not null && !known.Labs.Contains(LabName)) known = await commands.RefreshAsync().ConfigureAwait(true);
+        Use(known);
         Raise();
+    }
+
+    private const string LabName = "lan-rooms";
+
+    private async Task<CommandCatalogue?> ReadCatalogueAsync(CancellationToken ct) =>
+        (await cli.RunJsonAsync(CommandCatalogue.Args, null, CliTimeouts.Read, CommandCatalogue.Parse, ct).ConfigureAwait(true)).Value;
+
+    private void Use(CommandCatalogue? catalogue)
+    {
+        Supported = CanPin(catalogue);
+        _catalogueVersion = catalogue?.CliVersion;
     }
 
     /// <summary>
@@ -108,7 +118,16 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
         try
         {
             var result = await cli.RunJsonAsync(JoinedArgs(), null, CliTimeouts.Read, ct).ConfigureAwait(true);
-            if (result.Ok) Rooms = [.. ShareGuestJson.Rooms(result.Value!).Select(WithSeats)];
+            if (result.Ok)
+            {
+                Rooms = [.. ShareGuestJson.Rooms(result.Value!).Select(WithSeats)];
+                // every document carries the CLI's version: a version other than the one the catalogue was read from means the CLI was updated, so what it can do is asked again
+                if (JsonRead.Str(result.Value!, "cli_version") is { Length: > 0 } version && _catalogueVersion is not null && version != _catalogueVersion)
+                {
+                    Use(commands is null ? await ReadCatalogueAsync(ct).ConfigureAwait(true) : await commands.RefreshAsync().ConfigureAwait(true));
+                    if (!Supported) Rooms = [];
+                }
+            }
             else LastError ??= Refusal(result, UiText.Get("GuestJoinedUnreadable")); // the sentence of the action that came first stays
         }
         finally
