@@ -278,7 +278,9 @@ fl_log_stamp_v() {
     FL_LOG_BASE=$((10#$__h * 3600 + 10#$__m * 60 + 10#$__s))
     FL_LOG_SECONDS0="$SECONDS"
   fi
-  __t=$(((FL_LOG_BASE + SECONDS - FL_LOG_SECONDS0) % 86400))
+  # the stamp follows the wall clock, back too; the second % keeps a time before the first
+  # call (the clock stepped back across midnight) from printing as a negative one
+  __t=$((((FL_LOG_BASE + SECONDS - FL_LOG_SECONDS0) % 86400 + 86400) % 86400))
   printf -v "$1" '%02d:%02d:%02d' $((__t / 3600)) $((__t % 3600 / 60)) $((__t % 60))
 }
 
@@ -550,7 +552,11 @@ fl_jsonl_step() {
   fl_json_num_v n "$1"
   fl_json_str_v p "$3"
   f=",\"n\":${n},\"id\":$(fl_json_str "$2"),\"parent\":${p},\"name\":$(fl_json_str "$4"),\"status\":\"$5\""
-  [[ -z "${6:-}" ]] || f="${f},\"secs\":$6"
+  # never negative: $SECONDS follows the wall clock, and a clock that stepped back while the
+  # step ran would send secs below 0
+  if [[ -n "${6:-}" ]]; then
+    if [[ "$6" == -* ]]; then f="${f},\"secs\":0"; else f="${f},\"secs\":$6"; fi
+  fi
   [[ -z "$msg" ]] || f="${f},\"message\":$(fl_json_str "$msg")"
   [[ -z "${8:-}" ]] || f="${f},\"command\":$(fl_json_str "$8")"
   [[ "$5" != "running" ]] || FL_JSONL_CUR="$2"
@@ -807,13 +813,15 @@ fl_doc_rest() {
 # now; the size of the file in FL_PROGRESS_FILE is the bytes of a download
 fl_jsonl_progress() {
   [[ "$FL_JSONL" == "1" ]] || return 0
-  local bytes=""
+  local bytes="" elapsed="$2"
+  # never negative (a clock that stepped back, as in fl_jsonl_step)
+  [[ "$elapsed" != -* ]] || elapsed=0
   if [[ -n "${FL_PROGRESS_FILE:-}" && -f "$FL_PROGRESS_FILE" ]]; then
     bytes="$(stat -c %s "$FL_PROGRESS_FILE" 2>/dev/null || stat -f %z "$FL_PROGRESS_FILE" 2>/dev/null || true)"
   fi
   # the last progress line is in the operation's record too (benchbar op status)
-  fl_op_note_progress "$1" "$2" "$bytes"
-  fl_jsonl progress ",\"step\":$(fl_json_str "$FL_JSONL_CUR"),\"label\":$(fl_json_str "$1"),\"elapsed\":$2,\"bytes\":$(fl_json_num "$bytes"),\"total\":null"
+  fl_op_note_progress "$1" "$elapsed" "$bytes"
+  fl_jsonl progress ",\"step\":$(fl_json_str "$FL_JSONL_CUR"),\"label\":$(fl_json_str "$1"),\"elapsed\":${elapsed},\"bytes\":$(fl_json_num "$bytes"),\"total\":null"
 }
 
 # fl_jsonl_section_end STATUS: closes the open section of a phase script
@@ -918,8 +926,18 @@ fl_die() {
 
 # ---------------------------------------------------------------- time
 
+# fl_elapsed_v VAR START: the seconds since START (a value of $SECONDS), never below 0. $SECONDS
+# follows the wall clock: after a clock that stepped back, the difference alone is negative.
+fl_elapsed_v() {
+  local __e=$((SECONDS - $2))
+  [[ "$__e" -ge 0 ]] || __e=0
+  printf -v "$1" '%s' "$__e"
+}
+
 fl_fmt_secs() {
   local s="$1"
+  # a clock that stepped back (a time sync, WSL after sleep) is not a negative duration
+  [[ "$s" != -* ]] || s=0
   if [[ "$s" -ge 3600 ]]; then
     printf '%dh %02dm' $((s / 3600)) $(((s % 3600) / 60))
   elif [[ "$s" -ge 60 ]]; then
@@ -1194,7 +1212,7 @@ fl_step_begin() {
 fl_step_end() {
   local status="$1" detail="${2:-}" i="$FL_STEP_CURRENT" secs
   [[ "$i" -ge 0 ]] || return 0
-  secs=$((SECONDS - FL_STEP_START))
+  fl_elapsed_v secs "$FL_STEP_START"
   FL_STEP_STATUS[i]="$status"
   FL_STEP_SECS[i]="$secs"
   fl_spinner_pause

@@ -28,6 +28,24 @@ assert_contains "$out" "1. first"
 assert_contains "$out" "2. second"
 fl_step_begin 0; out="$(fl_step_end unchanged)"
 assert_contains "$out" "1. first: unchanged"
+# $SECONDS follows the wall clock. A clock that steps back while a step runs (a time sync, WSL
+# after sleep) must not print or send a negative time: the step took no time that can be told.
+assert_eq "0s" "$(fl_fmt_secs -3)"
+fl_step_begin 1; FL_STEP_START=$((SECONDS + 3)); out="$(fl_step_end "done")"
+assert_contains "$out" "2. second: done (0s)"
+assert_not_contains "$out" "(-"
+out="$(FL_JSONL=1; fl_jsonl_step "" a_step "" "A step" "done" -3 3>&1)"
+assert_contains "$out" '"secs":0'
+out="$(FL_JSONL=1; fl_jsonl_step "" a_step "" "A step" "done" 7 3>&1)"
+assert_contains "$out" '"secs":7'
+# the same for every time a command reports (run's elapsed_s, wait's waited_s): fl_elapsed_v
+el=""; fl_elapsed_v el $((SECONDS + 3))
+assert_eq "0" "$el" "(a start that is ahead of the clock is no time, not a negative one)"
+el=""; fl_elapsed_v el $((SECONDS - 4))
+[[ "$el" == 4 || "$el" == 5 ]] || fail "fl_elapsed_v counts the seconds since the start: got [$el]"
+# the stamp of a log line follows the clock back across midnight, and is never a negative time
+stamp="$(s=""; FL_LOG_BASE=5; FL_LOG_SECONDS0=$((SECONDS + 10)); fl_log_stamp_v s; printf '%s' "$s")"
+[[ "$stamp" == "23:59:55" || "$stamp" == "23:59:56" ]] || fail "a log stamp 10 s before 00:00:05 is 23:59:55: got [$stamp]"
 
 # spinner in non-TTY mode prints a single plain line
 out="$(fl_spinner_start "working"; fl_spinner_stop)"
