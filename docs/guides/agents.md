@@ -106,11 +106,12 @@ not need a terminal: `benchbar_site_backups` for the backups of a site
 and `benchbar_ports_plan` for port conflicts, `benchbar_lock_check` for a
 bench against its team lockfile, `benchbar_doctor_prerequisites` for what a
 machine needs before an install, `benchbar_labs_list`, `benchbar_where` and
-`benchbar_self_update_check`, `benchbar_stats` and `benchbar_app_focus_list`. `benchbar_scan`
+`benchbar_self_update_check`, `benchbar_stats` and `benchbar_app_focus_list`, which
+`benchbar_app_focus` and `benchbar_app_unfocus` pin (no plan: a pin is one line in the bench's state file). `benchbar_scan`
 finds the benches under a folder, `benchbar_report` returns the redacted
 diagnostics for a bug report as text, and `benchbar_status` says whether
 autostart and the scheduler are on. Turning a lab on, registering a bench,
-sharing, the LAN guard, `self-update`, `site default`, `app focus NAME` and `app unfocus NAME`
+sharing, the LAN guard, `self-update` and `site default`
 are your decisions and have no tool: the agent tells you the command.
 
 Calls run side by side: a status answers while an app add runs, and the
