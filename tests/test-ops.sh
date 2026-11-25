@@ -191,6 +191,79 @@ assert_file "$OPS/op-20200101-000005-5.json" "(the newest stay)"
 assert_file "$OPS/op-20190101-000000-9.json" "(a run that still runs is never pruned)"
 assert_eq "3" "$(find "$OPS" -name 'op-*.json' | wc -l | tr -d ' ')" "(the new run, the newest of the others and the running one)"
 
+# ---- 5b. newest first is a number order: pid 10001 started after pid 9998, a "-N" run after its bare name, and N
+# before the pid (the ids are text; as text "9998" came after "10001", and "...-5.json" after "...-5-1.json")
+rm -rf "$OPS"
+for id in op-20200101-000000-77777 op-20200101-000001-99 op-20200101-000001-9998 op-20200101-000001-10001 \
+  op-20200101-000001-10001-1 op-20200101-000001-10001-2 op-20200101-000001-10001-10 op-20200101-000001-5-3 op-20200101-000002-5; do
+  fake_op "$id" "done" "$DEAD" 0
+done
+EXPECT_ORDER="op-20200101-000002-5 op-20200101-000001-10001-10 op-20200101-000001-5-3 op-20200101-000001-10001-2 op-20200101-000001-10001-1 op-20200101-000001-10001 op-20200101-000001-9998 op-20200101-000001-99 op-20200101-000000-77777"
+run_json op list --json
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "$EXPECT_ORDER" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(op list: newest first, by number)"
+run_json op status --json
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "$EXPECT_ORDER" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(op status: the same order)"
+run_fm op list
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$EXPECT_ORDER" "$(printf '%s\n' "$OUT" | grep -o 'op-2020[0-9-]*' | tr '\n' ' ' | sed 's/ $//')" "(the text table too)"
+# the prune keeps the newest by the same order: a new run (today) and the three newest of these
+FL_KEEP_OPS=4 run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_file "$OPS/op-20200101-000002-5.json" "(the newest stay)"
+assert_file "$OPS/op-20200101-000001-10001-10.json"
+assert_file "$OPS/op-20200101-000001-5-3.json"
+assert_no_file "$OPS/op-20200101-000001-10001-2.json" "(older than the three newest)"
+assert_no_file "$OPS/op-20200101-000001-10001.json"
+assert_no_file "$OPS/op-20200101-000001-9998.json"
+assert_no_file "$OPS/op-20200101-000001-99.json"
+assert_no_file "$OPS/op-20200101-000000-77777.json"
+
+# ---- 5c. a clock that steps back does not put a later run before an earlier one (a VM that syncs its time steps
+# back by seconds: WSL by 2.5 s every 30 s). A `date` that answers the id's stamp from a file stands for the clock.
+rm -rf "$OPS"
+CLOCKBIN="$TMP_DIR/clockbin"; mkdir -p "$CLOCKBIN"
+# shellcheck disable=SC2016  # the wrapper's own text, nothing to expand here
+printf '#!/bin/bash\nif [[ "${1:-}" == "+%%Y%%m%%d-%%H%%M%%S" ]]; then cat "$CLOCK_FILE"; else exec "%s" "$@"; fi\n' "$(type -P date)" >"$CLOCKBIN/date"
+chmod +x "$CLOCKBIN/date"
+export CLOCK_FILE="$TMP_DIR/clock"
+step_clock() { printf '%s' "$1" >"$CLOCK_FILE"; }
+step_clock 20300102-030405
+PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+CA="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+step_clock 20300102-030403   # two seconds back
+# (a failed run prints no document on stdout: its id is the one file that is new)
+ids_now() { local f; for f in "$OPS"/op-*.json; do f="${f##*/}"; printf '%s
+' "${f%.json}"; done | sort; }
+ids_before="$(ids_now)"
+PATH="$CLOCKBIN:$PATH" MOCK_BENCH_BACKUP_EXIT=1 run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+CB="$(comm -13 <(printf '%s
+' "$ids_before") <(ids_now))"
+# the flake: the run that just failed is ops[0], though the clock says it started before the one that is done
+run_json op status --json
+assert_eq "failed 1 site backup" "$(printf '%s' "$OUT" | jget - 'd["ops"][0]["state"] + " " + str(d["ops"][0]["exit"]) + " " + d["ops"][0]["command"]')" "(ops[0] after a step back)"
+PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"   # the clock is still back
+assert_eq "0" "$CODE" "$OUT"
+CC="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+step_clock 20300102-030406   # it passed the newest stamp: its own stamp again
+PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+CD="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+run_json op list --json
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "$CD $CC $CB $CA" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(newest first, whatever the pids)"
+run_json op status --json
+assert_eq "$CD" "$(printf '%s' "$OUT" | jget - 'd["ops"][0]["op_id"]')"
+# and the ids say how: the stamp of the newest one, the next N
+case "$CA" in op-20300102-030405-*) ;; *) fail "the first run has the clock's stamp: $CA" ;; esac
+case "$CB" in op-20300102-030405-*-1) ;; *) fail "a run after a step back takes the newest stamp and the next N: $CB" ;; esac
+case "$CC" in op-20300102-030405-*-2) ;; *) fail "the next one takes the next N: $CC" ;; esac
+case "$CD" in op-20300102-030406-*) ;; *) fail "a clock past the newest stamp is used as it is: $CD" ;; esac
+unset CLOCK_FILE
+
 # ---- 6. --background: refused before it starts, or started detached with an op_id at once
 rm -rf "$OPS"
 run_json up --background --json --bench-dir "$BENCH"
