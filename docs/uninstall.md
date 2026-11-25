@@ -58,7 +58,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/b
 curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --uninstall
 ```
 
-It removes the app, the `benchbar` and `frappe-mac` links and the PATH
+It removes the app, the `benchbar` and `frappe-mac` (the old name) links and the PATH
 block. Then it asks, for each bench's agent, whether to stop the bench
 and remove its agent, runner and `Procfile.lean`, and last whether to
 delete the checkout. Answer no to keep either. With `--yes` the answer
