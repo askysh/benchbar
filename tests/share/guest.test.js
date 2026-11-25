@@ -343,6 +343,30 @@ test("guest-cli: look, join, a seat, the room through the forwarder, leave and f
     });
 });
 
+test("guest-cli: a look with a host key reads the room only for that key; another key or an invite for one is refused before a byte", async () => {
+    const dir = H.tmpDir();
+    // asynchronous: the stand in host is in this process, which a synchronous run would block
+    const look = (req) => start([CLI, "look"], JSON.stringify({ dir, allow_loopback: true, ...req }));
+    const host = await fakeHost();
+    try {
+        const other = "ab".repeat(32);
+        assert.strictEqual((await look({ address: LOOPBACK, port: host.port, expect_pin: other })).error, "host_key_mismatch");
+        const invite = inviteLink({ h: other, a: `${LOOPBACK}%3A${host.port}` });
+        assert.strictEqual((await look({ invite, expect_pin: "cd".repeat(32) })).error, "host_key_mismatch");
+        for (const bad of ["xyz", "AB".repeat(32), "ab".repeat(31)]) assert.strictEqual((await look({ address: LOOPBACK, port: host.port, expect_pin: bad })).error, "failed", bad);
+        await H.sleep(200);
+        assert.strictEqual(host.seen.bytes, 0, "a request went out to a host with another key");
+    } finally {
+        host.close();
+    }
+    await withGateway({}, async (gw) => {
+        const pin = gw.host.fp.slice(7);
+        const seen = await look({ address: LOOPBACK, port: gw.port, expect_pin: pin });
+        assert.deepStrictEqual([seen.code, seen.host_pin], [0, pin]);
+        assert.strictEqual((await look({ address: LOOPBACK, port: gw.port, expect_pin: "ab".repeat(32) })).error, "host_key_mismatch");
+    });
+});
+
 test("guest-cli: an invite joins without a typed code; leave tells the host; a host with another key at a joined address is refused", async () => {
     await withGateway({ config: { seat_mode: "host" } }, async (gw) => {
         const dir = H.tmpDir();

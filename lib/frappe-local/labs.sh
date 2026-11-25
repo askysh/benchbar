@@ -182,7 +182,7 @@ fl_lab_require() {
 # them (lan-guard remove) for the root files it cannot remove itself.
 fl_lab_undo_key() {
   case "$1" in
-    "share stop"|"share status"|"share teardown"|"lan-guard status"|"lan-guard remove") return 0 ;;
+    "share stop"|"share status"|"share teardown"|"share leave"|"share forget"|"lan-guard status"|"lan-guard remove") return 0 ;;
   esac
   return 1
 }

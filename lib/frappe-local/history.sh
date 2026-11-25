@@ -124,8 +124,9 @@ fl_hist_words() {
   for __w in ${__args[@]+"${__args[@]}"}; do
     if [[ "$__n" -ge "$FL_HIST_WORDS_MAX" ]]; then FL_HIST_WORDS+=("..."); break; fi
     __n=$((__n + 1))
-    # six digits after "share join" are a room code somebody passed by mistake (it is refused there)
-    if [[ "$__w" =~ ^[0-9\ ]{6,7}$ && " ${FL_HIST_WORDS[*]-} " == *" share join "* ]]; then __w='***'; fi
+    # six digits after "share join", with or without spaces or dashes between them, are a room code somebody
+    # passed by mistake (it is refused there)
+    if [[ "${__w//[ -]/}" =~ ^[0-9]{6}$ && " ${FL_HIST_WORDS[*]-} " == *" share join "* ]]; then __w='***'; fi
     fl_hist_word_v __w "$__w" "$__prev"
     __prev="$FL_HIST_NEXT_SECRET"
     FL_HIST_WORDS+=("$__w")

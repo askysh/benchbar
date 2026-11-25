@@ -1960,7 +1960,7 @@ None of them ever holds the room code or a key.
 | `share join` | `joined` (false: this computer was in the room already, no code was used), then the room: `id` (the first 16 hex digits of the host's key), `room`, `host`, `site`, `address`, `port`, `host_key`, `joined_at`, `forwarding`, `state`, `seat`, `url`, `local_port`, `deadline_epoch`. While `state` is `waiting`: `host_assigns` and `seats`: `[{seat_id, full_name, roles, taken_by}]` |
 | `share join --dry-run` | `id`, `host_pin` (the 64 hex digits of the host's key), `host_key` (its first 16), `address`, `port`, `room`, `host`, `locked`, `full`, `people`, `seats`, `known`, `paired` (this computer is in the room now), `from_invite` |
 | `share joined` | `rooms`: a list of the room fields of `share join` |
-| `share leave`, `share forget` (done) | `id`, `room`, `host`, `told_host` (false: the room did not answer, or this computer was no longer in it); `share forget` adds `forgotten` |
+| `share leave`, `share forget` (done) | `id`, `room`, `host`, `told_host` (false: the room did not answer, or this computer was no longer in it), `forwarder_stopped` (false: the process of the local address did not end); `share forget` adds `forgotten` |
 
 - `state`: `ready` (a seat, the room is open on `url`), `waiting` (no seat yet), `removed`, `new_room` (the host started another room: join it with its code), `ended`, `identity_changed` (the host shows another key: not connected), `offline`, or `closed` (no local address is open; `share join` opens it).
 - `seat`: the user of the seat this computer holds, or null.

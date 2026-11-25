@@ -3,7 +3,7 @@
 #
 # share-guest.sh: the guest side of a room, from a terminal (macOS, Linux, WSL).
 #
-#   benchbar share join [ADDRESS[:PORT]] [--name NAME] [--seat SEAT_ID] [--no-wait] [--no-open] [--dry-run] [--yes] [--json]
+#   benchbar share join [ADDRESS[:PORT]] [--host-key HEX] [--name NAME] [--seat SEAT_ID] [--no-wait] [--no-open] [--dry-run] [--yes] [--json]
 #   benchbar share joined [--json]
 #   benchbar share leave [ROOM] [--json]
 #   benchbar share forget [ROOM] [--json]
@@ -64,11 +64,16 @@ fl_sg_call_v() {
   return "$__code"
 }
 
-# fl_sg_read_v VAR PROMPT: one line from the person: typed at the terminal, or the first line of stdin when
-# the app or the tray made the run
+# fl_sg_read_v VAR PROMPT [secret]: one line from the person: typed at the terminal (a secret, the room code
+# or an invite link, is not shown, so it is not in the scrollback), or the first line of stdin when the app
+# or the tray made the run
 fl_sg_read_v() {
   local __line=""
-  if [[ -t 0 ]]; then
+  if [[ -t 0 && "${3:-}" == secret ]]; then
+    fl_spinner_pause
+    IFS= read -r -s -p "  $2 (not shown): " __line || true
+    printf '\n'
+  elif [[ -t 0 ]]; then
     fl_spinner_pause
     IFS= read -r -p "  $2: " __line || true
   else
@@ -83,7 +88,7 @@ fl_sg_doc() { printf '{"schema_version":%d,"cli_version":"%s",%s}' "$FL_SCHEMA_V
 
 # fl_sg_refuse REPLY HOST WHERE: the sentence for the word guest-cli.js refused with, and the end of the command
 fl_sg_refuse() {
-  local err retry room host="${2:-the host}" where="${3:-the address of the room}" msg fix="Run the command again." mode=""
+  local err retry room host="${2:-the host}" where="${3:-the address of the room}" msg fix="Run the command again." mode="" rc=1
   fl_share_reply_v err "$1" error
   fl_share_reply_v retry "$1" retry_after
   fl_share_reply_v room "$1" room
@@ -122,6 +127,13 @@ fl_sg_refuse() {
     invite_expired) msg="This invite has expired and its room no longer answers."; fix="Ask ${host} for a new one." ;;
     not_the_invited_room) msg="This isn't the room in the invite: the computer that answered shows another key. BenchBar did not connect."; fix="Ask ${host} for a new invite." ;;
     invite_out_of_date) msg="This invite is out of date: the host changed the code."; fix="Ask ${host} for a new one." ;;
+    host_key_mismatch)
+      msg="The computer at ${where} shows another host key than the one you asked for (--host-key). BenchBar did not connect and sent nothing."
+      fix="Check the key with ${host} (benchbar share status shows it there). To look at the room again: benchbar share join ${where} --dry-run"
+      rc=3 ;;
+    rooms_file)
+      msg="The list of joined rooms ($(fl_share_guest_dir)/rooms.json) cannot be read. BenchBar did not change it."
+      fix="Move the file aside to start a new list (the keys in $(fl_share_guest_dir)/keys stay), then join your rooms again." ;;
     key_store)
       if fl_is_linux; then msg="This computer's key for the room could not be read or written in $(fl_share_guest_dir)/keys."; fix="Check that the folder is yours and writable, then run the command again."
       else msg="The Keychain did not give or take this computer's key for the room."; fix="Unlock the login Keychain (security unlock-keychain), then run the command again."; fi ;;
@@ -135,7 +147,19 @@ fl_sg_refuse() {
     no_such_seat|refused) msg="That seat isn't available."; fix="Run the command again without --seat to see the free ones." ;;
     *) msg="That didn't work: the room gave an answer BenchBar does not know." ;;
   esac
-  fl_die "$msg" "$fix"
+  fl_die "$msg" "$fix" "$rc"
+}
+
+# fl_sg_app_present: 0 on a Mac where BenchBar.app is installed (it is a guest of its own)
+fl_sg_app_present() {
+  local dirs="${FL_APP_DIRS:-/Applications:$HOME/Applications}" dir
+  ! fl_is_linux || return 1
+  while [[ -n "$dirs" ]]; do
+    dir="${dirs%%:*}"
+    if [[ "$dirs" == *:* ]]; then dirs="${dirs#*:}"; else dirs=""; fi
+    [[ ! -d "${dir}/BenchBar.app" ]] || return 0
+  done
+  return 1
 }
 
 # fl_sg_state_line STATE HOST SEAT: what `joined` and the end of `join` say of a room
@@ -155,8 +179,8 @@ fl_sg_state_line() {
 # ---------------------------------------------------------------- share join
 
 fl_cmd_share_join() {
-  local usage="Use: benchbar share join [ADDRESS[:PORT]] [--name NAME] [--seat SEAT_ID] [--no-wait] [--no-open] [--dry-run] [--yes] [--json]"
-  local target="" name="" seat="" wait=1 open=1 invite="" code="" addr="" port="$FL_SHARE_GATEWAY_PORT" where req="" reply body model mode
+  local usage="Use: benchbar share join [ADDRESS[:PORT]] [--host-key HEX] [--name NAME] [--seat SEAT_ID] [--no-wait] [--no-open] [--dry-run] [--yes] [--json]"
+  local hostkey="" have_hostkey=0 target="" name="" seat="" wait=1 open=1 invite="" code="" addr="" port="$FL_SHARE_GATEWAY_PORT" where req="" reply body model mode
   local id pin key shown room host paired locked full state url who doc extra="" seats assigns line n pick sid sname staken ids=() joined=false
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -164,6 +188,8 @@ fl_cmd_share_join() {
       --name=*) name="${1#*=}" ;;
       --seat) [[ $# -ge 2 ]] || fl_die "--seat needs a seat id." "$usage"; seat="$2"; shift ;;
       --seat=*) seat="${1#*=}" ;;
+      --host-key) [[ $# -ge 2 ]] || fl_die "--host-key needs the 64 hex digits of the host's key." "$usage"; hostkey="$2"; have_hostkey=1; shift ;;
+      --host-key=*) hostkey="${1#*=}"; have_hostkey=1 ;;
       --no-wait) wait=0 ;;
       --no-open) open=0 ;;
       -*) fl_die "Unknown argument for share join: $1" "$usage" ;;
@@ -173,7 +199,7 @@ fl_cmd_share_join() {
   done
   if [[ -n "$target" ]]; then
     # never echoed: the word may be the code
-    if [[ "$target" =~ ^[0-9\ ]{6,7}$ || "$target" == *://* || "$target" == *[\?\&=]* ]]; then
+    if [[ "${target//[ -]/}" =~ ^[0-9]{6}$ || "$target" == *://* || "$target" == *[\?\&=]* ]]; then
       fl_die "The room code and an invite link are typed or pasted when benchbar asks, never passed as an argument: an argument stays in the shell's history and shows in the list of processes." \
         "For an invite: benchbar share join. For a code: benchbar share join ADDRESS. If the code was in a command you ran, ask the host for a new one (benchbar share code --new)."
     fi
@@ -182,6 +208,11 @@ fl_cmd_share_join() {
     addr="${target%%:*}"
     [[ "$target" != *:* ]] || port="$((10#${target##*:}))"
   fi
+  if [[ "$have_hostkey" == 1 ]]; then
+    # public, so an argument is fine: the full hash that a look (--dry-run --json: host_pin) showed
+    hostkey="$(printf '%s' "$hostkey" | tr 'A-F' 'a-f')"
+    [[ "$hostkey" =~ ^[0-9a-f]{64}$ ]] || fl_die "--host-key takes the 64 hex digits of the host's key: host_pin in benchbar share join --dry-run --json." "$usage"
+  fi
   [[ -z "$seat" || "$seat" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || fl_die "That is not a seat id." "benchbar share join lists the free seats of a room where guests pick."
   fl_share_require_person "Joining a room" "benchbar share join"
   fl_site_json_begin
@@ -189,11 +220,11 @@ fl_cmd_share_join() {
   fl_sg_node "Joining a room"
 
   if [[ -z "$target" ]]; then
-    fl_sg_read_v invite "Paste the invite link"
+    fl_sg_read_v invite "Paste the invite link" secret
     [[ -n "$invite" ]] || fl_die "No invite was given." "Paste the benchbar://share/join link, or join with the address and the code: benchbar share join ADDRESS"
-    fl_sg_req_v req "\"invite\":$(fl_json_str "$invite")"
+    fl_sg_req_v req "\"invite\":$(fl_json_str "$invite")${hostkey:+,\"expect_pin\":\"${hostkey}\"}"
   else
-    fl_sg_req_v req "\"address\":\"${addr}\",\"port\":${port}"
+    fl_sg_req_v req "\"address\":\"${addr}\",\"port\":${port}${hostkey:+,\"expect_pin\":\"${hostkey}\"}"
   fi
   fl_sg_call_v reply look "$req" || fl_sg_refuse "$reply" "the host" "${target:-the address in the invite}"
   for line in id pin:host_pin key:host_key room host addr:address port paired locked full doc; do
@@ -204,6 +235,9 @@ fl_cmd_share_join() {
   # what a person checks before the code is sent: the name is the host's own words, the key is not
   printf '  Room      %s (host: %s)\n  Address   %s%s\n  Host key  %s\n' "$room" "$host" "$where" "$([[ -z "$invite" ]] || printf ' (from the invite link, not found on the network)')" "$shown"
   printf '  If you are not sure this is the right computer, ask %s to read out the host key: benchbar share status shows it there.\n' "$host"
+  if fl_sg_app_present; then
+    fl_note "BenchBar.app is installed here. A room joined in the app and one joined here are two guests to ${host}: the host counts this person twice, and each takes a seat."
+  fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_note "dry-run: nothing was sent that depends on the room code, and nothing was saved."
     [[ "${OPT_JSON:-0}" != 1 ]] || fl_doc_emit 0 "$(fl_sg_doc "$doc")" plan
@@ -224,7 +258,7 @@ fl_cmd_share_join() {
       if [[ -t 0 ]]; then fl_confirm "Join this room?" || fl_die "Not joined: nothing was sent that depends on the room code." "Run benchbar share join again to join."; fi
       body="\"invite\":$(fl_json_str "$invite")"
     else
-      fl_sg_read_v code "Room code"
+      fl_sg_read_v code "Room code" secret
       code="${code// /}"
       [[ "$code" =~ ^[0-9]{6}$ ]] || fl_sg_refuse "error=invalid_code" "$host" "$where"
       body="\"code\":\"${code}\""
@@ -318,7 +352,7 @@ fl_cmd_share_joined() {
 # ---------------------------------------------------------------- share leave, share forget
 
 fl_cmd_share_leave() {
-  local action="$1" a id="" req reply told room host doc
+  local action="$1" a id="" req reply told room host doc stopped
   shift
   for a in "$@"; do
     case "$a" in
@@ -334,9 +368,14 @@ fl_cmd_share_leave() {
   fl_sg_node "Leaving a room"
   fl_sg_req_v req "\"id\":\"${id}\""
   fl_sg_call_v reply "$action" "$req" || fl_sg_refuse "$reply"
-  for a in told:told_host room host doc; do fl_share_reply_v "${a%%:*}" "$reply" "${a##*:}"; done
+  for a in told:told_host stopped:forwarder_stopped room host doc; do fl_share_reply_v "${a%%:*}" "$reply" "${a##*:}"; done
   if [[ "$told" == true ]]; then fl_ok "Left ${room}: ${host} was told, so the seat is free and its sessions are ended there."
-  else fl_warn "${host} could not be told: the room does not answer, or this computer was no longer in it. The room's local address is closed."; fi
+  else fl_warn "${host} could not be told: the room does not answer, or this computer was no longer in it."; fi
+  if [[ "$stopped" == false ]]; then
+    fl_warn "The local address of ${room} is still open: its process (guest-forward.js) did not end. Stop it yourself, then run benchbar share joined to check."
+  else
+    fl_note "The local address of ${room} is closed."
+  fi
   if [[ "$action" == forget ]]; then
     fl_changed share "$room" "forgotten"
     fl_ok "Forgot ${room}: this computer's key for ${host} is deleted. To ${host}, a later join is a new computer."
