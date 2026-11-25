@@ -797,7 +797,7 @@ fl_signal_traps_install
 # shellcheck source=lib/frappe-local/stream.sh
 . "${SCRIPT_DIR}/lib/frappe-local/stream.sh"
 
-# The bodies of the commands: lib/frappe-local/cmd-<command>.sh (CORE-18, docs/DECISIONS.md). They
+# The bodies of the commands: lib/frappe-local/cmd-<command>.sh (CORE-18, maintainers/DECISIONS.md). They
 # are sourced here, where the functions used to be, so a run that ends before this point (--version,
 # --help, a usage error) does not read them. A lean start skips them: no lean command calls one.
 # shellcheck source=lib/frappe-local/cmd-doctor.sh

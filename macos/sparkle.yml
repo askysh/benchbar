@@ -1,7 +1,7 @@
 # Included by project.yml only when BENCHBAR_SPARKLE=YES. Adds Sparkle 2
 # and the SPARKLE compilation condition, so code under "#if SPARKLE" is
 # built. The appcast URL and public EdDSA key come from build settings
-# (see docs/releasing.md); nothing here holds a secret.
+# (see maintainers/releasing.md); nothing here holds a secret.
 packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle

@@ -30,7 +30,7 @@ Xcode, the SwiftUI/AppKit app, Swift tests, launchctl, codesign, notarization, D
 - Read first, put the plan in the draft PR description, then proceed without waiting. Stop only
   for something irreversible or a scope question the repo cannot answer.
 - Fan independent work out to parallel subagents.
-- Non obvious choices: one line in docs/DECISIONS.md (CLI) or macos/DECISIONS.md (app). User
+- Non obvious choices: one line in maintainers/DECISIONS.md (CLI) or macos/DECISIONS.md (app). User
   facing changes: a changelog fragment, changelog.d/<issue>-<slug>.md (never CHANGELOG.md itself). No version bumps unless asked.
 - Never touch release secrets, signing, Sparkle, notarization or release.yml unless asked.
 - No em dashes in anything you write.

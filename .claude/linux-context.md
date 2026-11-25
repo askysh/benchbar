@@ -29,7 +29,7 @@ Xcode, the Mac app, Swift tests, launchctl, codesign, notarization, DMGs, the Ke
 - Fan independent work out to the agents in .claude/agents (linux-layer for lib/ and tests/,
   test-runner for test runs, Explore for searches, reviewer before marking a PR ready).
 - `sudo` needs a password here unless Akash set it up otherwise; ask before a step that needs it.
-- Non obvious choices: one line in docs/DECISIONS.md. User facing changes:
+- Non obvious choices: one line in maintainers/DECISIONS.md. User facing changes:
   a changelog fragment, changelog.d/<issue>-<slug>.md (never CHANGELOG.md itself). No version bumps unless asked. Never touch release.yml, signing or Sparkle.
 - No em dashes in anything you write.
 

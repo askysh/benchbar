@@ -164,7 +164,7 @@ fingerprint() {
 
 # The image ships MySQL (stopped) and its /etc/mysql: mariadb-server cannot
 # install over them. GitHub's Ubuntu runners boot systemd, but the runner user
-# has no user manager until linger starts one (docs/DECISIONS.md, "Linux").
+# has no user manager until linger starts one (maintainers/DECISIONS.md, "Linux").
 prepare_linux() {
   sudo systemctl stop mysql 2>/dev/null || true
   sudo apt-get purge -y 'mysql-*' >/dev/null

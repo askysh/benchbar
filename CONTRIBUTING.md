@@ -172,12 +172,12 @@ without a row counts as 10 seconds, so a new test needs no row to run.
 ## What a pull request needs
 
 - **Against `next-release`.** `main` holds the last release and moves only
-  when one is cut ([docs/releasing.md](docs/releasing.md#branches)).
+  when one is cut ([maintainers/releasing.md](maintainers/releasing.md#branches)).
 - **Small, one topic.** A fix and a refactor are two pull requests. Keep a
   pull request under about 800 changed lines (generated files and fixtures
   aside): a larger change is a stack of pull requests, each one reviewable
   on its own. There is no release pull request: a release fast forwards
-  `main` to commits that were already reviewed ([docs/releasing.md](docs/releasing.md#branches)).
+  `main` to commits that were already reviewed ([maintainers/releasing.md](maintainers/releasing.md#branches)).
 - **Reviewed and green.** Every pull request is reviewed before it merges,
   by the maintainer or by a reviewer that reads it with a fresh context, and
   the review is a comment on the pull request. It merges only with a green
@@ -207,7 +207,7 @@ without a row counts as 10 seconds, so a new test needs no row to run.
   conflict there. `bash scripts/changelog-fold.sh --check` validates yours.
 - **DECISIONS.** One line per non obvious choice: the decision, then the
   reason. CLI and repo choices go in
-  [docs/DECISIONS.md](docs/DECISIONS.md), app choices in
+  [maintainers/DECISIONS.md](maintainers/DECISIONS.md), app choices in
   [macos/DECISIONS.md](macos/DECISIONS.md). If a reviewer would ask "why
   not the obvious way?", that answer is a DECISIONS line.
 - **Tested on.** The OS (the macOS version, or the Ubuntu version, or the
@@ -231,7 +231,7 @@ The pull request template asks for all of this as checkboxes. A docs only
 fix (a typo, a wrong sentence) may go to `main` instead of `next-release`
 when it cannot wait for a release; say so in the pull request. The site
 is built from `main` only, so it shows the last release
-([docs/releasing.md](docs/releasing.md#the-docs-site)).
+([maintainers/releasing.md](maintainers/releasing.md#the-docs-site)).
 
 ## Issues
 
@@ -249,7 +249,7 @@ N, and links a workaround when there is one.
   holds.
 - **Closing.** A fixed issue is closed with the pull request that fixed
   it and, at the release, with the version (see
-  [docs/releasing.md](docs/releasing.md#cutting-a-release)). An open
+  [maintainers/releasing.md](maintainers/releasing.md#cutting-a-release)). An open
   issue means "not fixed yet": do not leave a fixed one open.
 - **Security.** A hole that puts a user at risk is not a public issue.
   Report it as [SECURITY.md](SECURITY.md) says. A public issue that turns
@@ -284,5 +284,5 @@ terms:
 
 ## Releases
 
-Maintainers cut releases; [docs/releasing.md](docs/releasing.md) has the
+Maintainers cut releases; [maintainers/releasing.md](maintainers/releasing.md) has the
 steps.

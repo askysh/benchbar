@@ -169,7 +169,7 @@ whats_new_problems() {
   fi
   grep -q "^## ${base//./\\.} " "$page" || printf 'no section for %s, the version of the code (FL_VERSION)\n' "$base"
   while IFS= read -r ver; do
-    ver_later "$ver" "$released" || printf '"## %s (coming)" but %s is released: write its date, as docs/releasing.md says\n' "$ver" "$released"
+    ver_later "$ver" "$released" || printf '"## %s (coming)" but %s is released: write its date, as maintainers/releasing.md says\n' "$ver" "$released"
   done < <(sed -n 's/^## \([0-9][0-9.]*\) (coming).*/\1/p' "$page")
   return 0
 }
@@ -193,7 +193,7 @@ assert_contains "$(whats_new_problems "$WN" 0.9.0-rc.1 "$CL")" '"## 0.8.3 (comin
 while IFS= read -r ver; do
   grep -q "^## ${ver} " "$NEW" || fail "docs/whats-new.md has no section for ${ver}"
 done < <(awk '/^## [0-9]+\.[0-9]+\.[0-9]+ /{ split($2, v, "."); if (v[1] > 0 || v[2] >= 8) print $2 }' "$ROOT/CHANGELOG.md")
-grep -q 'whats-new' "$ROOT/docs/releasing.md" || fail "docs/releasing.md has no step that writes the What's new section"
+grep -q 'whats-new' "$ROOT/maintainers/releasing.md" || fail "maintainers/releasing.md has no step that writes the What's new section"
 grep -q 'data-exclude-search' "$ROOT/site/astro.config.mjs" || fail "the Umami script lacks data-exclude-search (docs/privacy.md says no query string is sent)"
 
 

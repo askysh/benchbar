@@ -6,7 +6,7 @@
 #
 # A release moves main to the head of next-release and adds no commit: main
 # then holds the very commits that were reviewed and that CI ran, and
-# auto-tag.yml tags it (docs/releasing.md). Run it from a checkout, as a
+# auto-tag.yml tags it (maintainers/releasing.md). Run it from a checkout, as a
 # repository admin: the push needs the bypass of the main ruleset.
 #
 # It checks, in this order, and stops at the first that fails:
@@ -93,11 +93,11 @@ if ! git merge-base --is-ancestor "$OLD" "$SHA"; then
   if [[ -n "$code_commits" ]]; then
     refuse "main (${OLD:0:9}) has commits that next-release (${SHA:0:9}) has not, and not only docs, so main cannot be fast forwarded and this script will not merge or force it. Commits only main has that change more than docs:
 ${code_commits%$'\n'}
-Bring their change to next-release by pull request and ask the maintainer how to put main right (docs/releasing.md)."
+Bring their change to next-release by pull request and ask the maintainer how to put main right (maintainers/releasing.md)."
   fi
   # only docs: one merge commit of main into next-release, built without a checkout
   merge_tree="$(git merge-tree --write-tree --no-messages "$SHA" "$OLD" 2>&1)" || {
-    refuse "main has ${extra_n} docs commit(s) that next-release has not, but merging them conflicts, so nothing was merged or pushed. Bring the docs change to next-release by pull request (docs/releasing.md). ${merge_tree:+Detail: $(printf '%s' "$merge_tree" | head -n 1)}"
+    refuse "main has ${extra_n} docs commit(s) that next-release has not, but merging them conflicts, so nothing was merged or pushed. Bring the docs change to next-release by pull request (maintainers/releasing.md). ${merge_tree:+Detail: $(printf '%s' "$merge_tree" | head -n 1)}"
   }
   tree="$(printf '%s\n' "$merge_tree" | head -n 1)"
   MERGE="$(git commit-tree "$tree" -p "$SHA" -p "$OLD" \

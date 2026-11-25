@@ -591,7 +591,7 @@ fl_db_named_by_other_site() {
   # Fails closed: a list that cannot be read, a known or registered bench
   # that is gone (an unmounted volume) or whose sites/ cannot be read counts
   # as naming DB, so nothing is dropped. A bench benchbar has never seen is
-  # not looked at (docs/DECISIONS.md).
+  # not looked at (maintainers/DECISIONS.md).
   if declare -F fl_known_bench_candidates >/dev/null; then
     # every folder benchbar was told of, the unfiltered list: one that is gone
     # (an unmounted volume) fails closed below; one that is there but is no
