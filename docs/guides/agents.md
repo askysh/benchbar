@@ -61,6 +61,8 @@ the argument `mcp`.
 | `benchbar_doctor_prerequisites` | read | What this machine needs before a bench can be installed (tools, Homebrew or apt packages, MariaDB, free disk), each check with its level and fix, no bench needed. | `bench` |
 | `benchbar_self_update_check` | read | This benchbar and the BenchBar app against the latest release, and the command that would update them (available is null when GitHub could not be asked). | none |
 | `benchbar_app_focus_list` | read | Every app of one bench with whether it is a focus app (the ones being worked on), why, and how far behind its remote it is, from the last git fetch. | `bench` |
+| `benchbar_app_focus` | acts | Pin an app of a bench as a focus app (one the person works on): doctor never warns about it, and warns when an app it needs falls behind. | `name`*, `auto`, `bench` |
+| `benchbar_app_unfocus` | acts | Pin an app of a bench as not a focus app (a branch you only tried): doctor checks it like any other app. | `name`*, `bench` |
 | `benchbar_lease_take` | acts | Take a lease on a bench (bench, the whole bench with every site) or on one site (site, of bench or of the default bench) for a while (minutes, default 30, at most 480), for work that spans many commands: tests on a site, a migration you watch. | `bench`, `site`, `minutes`, `note` |
 | `benchbar_lease_renew` | acts | Push the end of a lease you hold to minutes from now (default: its first length). | `lease`*, `minutes` |
 | `benchbar_lease_release` | acts | Let go of a lease. | `lease`* |
