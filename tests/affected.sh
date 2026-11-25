@@ -112,6 +112,7 @@ script_tests() {
     macos-appcast) echo "test-macos-appcast" ;;
     check-profile-formulae) echo "test-doctor-hardening test-homebrew" ;;
     ci-plan|ci-timings) echo "test-ci-plan" ;;
+    check-pr-text) echo "test-pr-text" ;;
     ci-install-tool|macos-packages|macos-build) echo "test-supply-chain" ;;
   esac
 }
