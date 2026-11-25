@@ -45,7 +45,8 @@ public class ResultEnvelopeTests
         Assert.Equal(64, done.Exit);
         Assert.Equal("unknown_flag", done.ErrorId);
         Assert.Equal("Unknown option for install: --bogus", done.Problem);
-        Assert.Equal("Unknown option for install: --bogus. Usage: benchbar install [--yes] [--json]. Every flag: benchbar install --help", done.Explained);
+        Assert.StartsWith("Unknown option for install: --bogus. Usage: benchbar install ", done.Explained);
+        Assert.EndsWith("turns this error into a warning.", done.Explained);
     }
 
     [Fact]
@@ -66,6 +67,18 @@ public class ResultEnvelopeTests
         Assert.Equal(64, result.Exit);
         Assert.Equal("benchbar run does not run 'bogus': it is not on the allow list.", result.Problem);
         Assert.True(result.Done!.Raw["refused"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task ARecordedReadFailureIsAnEnvelopeWithTheError()
+    {
+        var (client, runner) = CliFixture.Scripted();
+        runner.On("status").Print(CliFixture.Lines("envelope-read-failure.json")).Fail(1);
+        var result = await client.RunJsonAsync(["status", "--for-agent"], null, Short, TestContext.Current.CancellationToken);
+        Assert.False(result.Ok);
+        Assert.Equal("No bench at /home/akash/no-such-bench.", result.Done!.Error);
+        Assert.Equal("0.8.3", result.Done.CliVersion);
+        Assert.Empty(result.Done.NextActions);
     }
 
     [Fact]
@@ -145,6 +158,7 @@ public class ResultEnvelopeTests
         var model = PlanResultModel.From(new CliStreamResult(64, done, null, false, []));
         Assert.Equal("Unknown option for install: --bogus", model.Error);
         Assert.StartsWith("Usage: benchbar install", model.Hint);
+        Assert.True(model.Hint!.Length <= ResultEnvelope.MaxShown);
         var plain = PlanResultModel.From(new CliStreamResult(1, CliJson.FindDone(CliFixture.Lines("sudo-wrong.jsonl")), null, false, []));
         Assert.Null(plain.Hint);
     }
