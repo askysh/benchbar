@@ -21,7 +21,7 @@ fl_action_label() {
   if fl_is_linux; then
     case "$1" in
       node_install) printf 'fnm install %s (the Node of profile %s; an older Node is not removed)' "$FL_NODE_MAJOR" "$FL_PROFILE"; return 0 ;;
-      yarn_install) printf 'install yarn under Node %s (npm install -g yarn)' "$FL_NODE_MAJOR"; return 0 ;;
+      yarn_install) printf 'install yarn under Node %s (npm install -g yarn@%s)' "$FL_NODE_MAJOR" "$FL_PIN_YARN"; return 0 ;;
       wkhtmltopdf_install) printf 'install the patched wkhtmltopdf package (apt, sudo)'; return 0 ;;
       write_plist) printf 'write and load the systemd user unit'; return 0 ;;
     esac
@@ -29,7 +29,7 @@ fl_action_label() {
   case "$1" in
     python_leaves) printf 'mark %s as user-installed' "$FL_PYTHON_FORMULA" ;;
     node_install) printf 'brew install %s (the Node of profile %s; an older node formula is not removed)' "$FL_NODE_FORMULA" "$FL_PROFILE" ;;
-    yarn_install) printf 'install yarn under %s (npm install -g yarn)' "$FL_NODE_FORMULA" ;;
+    yarn_install) printf 'install yarn under %s (npm install -g yarn@%s)' "$FL_NODE_FORMULA" "$FL_PIN_YARN" ;;
     uv_install) printf 'brew install uv (bench makes the env and installs apps with it)' ;;
     honcho_install) printf 'install honcho into the bench env' ;;
     honcho_setuptools) printf "install setuptools into honcho's venv" ;;
@@ -188,7 +188,7 @@ act_yarn_install() {
   local npm
   npm="$(fl_npm_bin)"
   [[ -x "$npm" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "no npm at ${npm}; install ${FL_NODE_FORMULA} first"; return 1; }
-  fl_run_long "npm install -g yarn (${FL_NODE_FORMULA})" "$npm" install -g yarn || return 1
+  fl_run_long "npm install -g yarn@${FL_PIN_YARN} (${FL_NODE_FORMULA})" "$npm" install -g "yarn@${FL_PIN_YARN}" || return 1
   return 0
 }
 

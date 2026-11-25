@@ -61,8 +61,8 @@ public static class ReadinessText
     public static string? Headline(BenchStatus bench)
     {
         if (bench.State != BenchState.Running || bench.Ready is not { } ready) return null;
-        if (ready.Stale == true) return "Needs restart (code changed)";
-        return ready.Ready ? "Ready" : "Running, not ready";
+        if (ready.Stale == true) return UiText.Get("OverviewReadyStale");
+        return ready.Ready ? UiText.Get("OverviewReady") : UiText.Get("OverviewReadyNot");
     }
 
     /// <summary>What a not ready bench waits on, in words ("the realtime server (socketio)"); an unknown part keeps the CLI's name.</summary>
@@ -70,13 +70,13 @@ public static class ReadinessText
 
     public static string Part(string name) => name switch
     {
-        "agent" => "the service (not loaded)",
-        "processes" => "the bench processes",
-        "web" => "the site (it does not answer)",
-        "socketio" => "the realtime server (socketio)",
-        "redis" => "Redis",
-        "workers" => "a background worker",
-        "stale" => "a restart (Python code changed)",
+        "agent" => UiText.Get("OverviewWaitAgent"),
+        "processes" => UiText.Get("OverviewWaitProcesses"),
+        "web" => UiText.Get("OverviewWaitWeb"),
+        "socketio" => UiText.Get("OverviewWaitSocketio"),
+        "redis" => UiText.Get("OverviewWaitRedis"),
+        "workers" => UiText.Get("OverviewWaitWorkers"),
+        "stale" => UiText.Get("OverviewWaitStale"),
         _ => name,
     };
 
@@ -86,8 +86,8 @@ public static class ReadinessText
         if (Headline(bench) is null || bench.Ready is not { } ready || ready is { Ready: true, Stale: not true }) return [];
         var lines = new List<string>();
         var waiting = WaitingOn(ready);
-        if (waiting.Count > 0) lines.Add("Waiting on " + string.Join(", ", waiting) + ".");
-        if (ready.Stale == true && ready.StaleFile is { } file) lines.Add($"{file} changed after the bench started.");
+        if (waiting.Count > 0) lines.Add(UiText.Format("OverviewWaitingOn", string.Join(", ", waiting)));
+        if (ready.Stale == true && ready.StaleFile is { } file) lines.Add(UiText.Format("OverviewFileChanged", file));
         return lines;
     }
 }

@@ -28,11 +28,11 @@ public interface IShortcutLogon
 public sealed record LogonView(bool IsOn, bool CanChange, string? Note = null, bool ShowSettingsButton = false)
 {
     public const string SettingsUri = "ms-settings:startupapps";
-    public const string SettingsButton = "Open Startup Settings";
-    public const string TurnedOffInWindows = "Open at logon is turned off in Windows. Turn it on in Settings > Apps > Startup.";
-    public const string TurnedOffByPolicy = "Open at logon is turned off by a policy on this PC. Settings > Apps > Startup shows its state.";
-    public const string TurnedOnByPolicy = "Open at logon is turned on by a policy on this PC.";
-    public const string Unreadable = "BenchBar could not read the startup setting. Check Settings > Apps > Startup.";
+    public static string SettingsButton => UiText.Get("LogonSettingsButton");
+    public static string TurnedOffInWindows => UiText.Get("LogonOffInWindows");
+    public static string TurnedOffByPolicy => UiText.Get("LogonOffByPolicy");
+    public static string TurnedOnByPolicy => UiText.Get("LogonOnByPolicy");
+    public static string Unreadable => UiText.Get("LogonUnreadable");
 
     /// <summary>Before the first answer: off, and not changeable until it is known (so a click cannot race the read).</summary>
     public static LogonView Loading { get; } = new(false, false);

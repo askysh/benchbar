@@ -3,7 +3,7 @@ namespace BenchBar.Tray.Core;
 /// <summary>What changes about the update UI when the Windows programs come from the Microsoft Store.</summary>
 public static class UpdatePolicy
 {
-    public const string StoreLine = "Updates come from the Microsoft Store";
+    public static string StoreLine => UiText.Get("UpdateStoreLine");
 
     /// <summary>Only the one line installer's copy checks for an update (through benchbar.exe self-update) and offers Update Now; the Store updates a package.</summary>
     public static bool ChecksForUpdates(IPackageInfo package) => !package.IsPackaged;
@@ -24,9 +24,9 @@ public static class TwoInstalls
 {
     public const string Key = "two-installs";
 
-    public const string Text = "Two BenchBar installs are on this PC. Remove the older one with the installer's uninstall line.";
+    public static string Text => UiText.Get("UpdateTwoInstalls");
 
-    public const string CopyLabel = "Copy Uninstall Line";
+    public static string CopyLabel => UiText.Get("UpdateCopyUninstall");
 
     /// <summary>The one line installer with its own uninstall switch (docs/windows.md, Uninstall): it asks once, then removes the two programs and keeps WSL, the distro and the benches.</summary>
     public const string UninstallLine = "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1))) -Uninstall";

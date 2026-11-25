@@ -21,8 +21,7 @@ public static partial class StepText
         var detail = step.Detail;
         if (step.Id == SetupIds.Keepalive && OtherDistroPattern().Match(detail.Trim()) is { Success: true } m)
         {
-            return $"The keep awake task serves {m.Groups["have"].Value}. "
-                + $"Move Keep Awake makes it serve {m.Groups["want"].Value} instead. {m.Groups["have"].Value} is then no longer kept awake: it can go idle and stop, and so can any benches in it.";
+            return UiText.Format("SetupKeepAwakeOther", m.Groups["have"].Value, m.Groups["want"].Value);
         }
         if (step.Waits)
         {

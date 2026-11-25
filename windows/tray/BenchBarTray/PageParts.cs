@@ -38,7 +38,7 @@ internal static class PagePanels
         var block = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap };
         if (error) block.Foreground = Ui.CriticalBrush;
         var border = Ui.CardOf(block, new Thickness(0, 0, 0, 10));
-        Ui.Name(border, (error ? "Problem: " : "Result: ") + text);
+        Ui.Name(border, error ? UiText.Format("BenchBannerProblem", text) : UiText.Format("BenchBannerResult", text));
         return border;
     }
 
@@ -111,7 +111,7 @@ internal static class PagePanels
             menu.IsOpen = true;
         };
         Ui.Name(button, automationName);
-        button.ToolTip = "More actions";
+        button.ToolTip = UiText.Get("BenchMoreActions");
         return button;
     }
 }

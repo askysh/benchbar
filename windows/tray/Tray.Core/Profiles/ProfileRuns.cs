@@ -33,7 +33,7 @@ public abstract class ProfileRun
 
     protected void Fail(string? message)
     {
-        Error = message ?? "The command failed.";
+        Error = message ?? UiText.Get("ProfileCommandFailed");
         Phase = ProfileRunPhase.Failed;
         Raise();
     }
@@ -195,7 +195,7 @@ public sealed class ProfileExportRun : ProfileRun
         if (result.Value is not { } exported || !result.Ok)
         {
             // the plan is still good: back to the choices, with the CLI's sentence above them
-            Error = result.Error ?? "The profile was not exported.";
+            Error = result.Error ?? UiText.Get("ProfileNotExported");
             Phase = ProfileRunPhase.Ready;
             Raise();
             return;
@@ -252,7 +252,7 @@ public sealed class ProfileUpdateRun : ProfileRun
         }
         if (applied.Applied == false)
         {
-            Fail($"{Name} could not be updated. Nothing was changed.");
+            Fail(UiText.Format("ProfileCouldNotUpdate", Name));
             return;
         }
         Phase = ProfileRunPhase.Done;
@@ -314,7 +314,7 @@ public sealed class ProfileSubscribeRun : ProfileRun
         if (result.Value is not { } subscribed || !result.Ok)
         {
             // back to the form so the address can be fixed
-            Error = result.Error ?? "The repository was not added.";
+            Error = result.Error ?? UiText.Get("ProfileRepoNotAdded");
             Phase = ProfileRunPhase.Failed;
             Raise();
             return;

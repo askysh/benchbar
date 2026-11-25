@@ -100,7 +100,7 @@ public sealed class CliClient : ICliClient
         var done = CliJson.FindDone(copy) ?? (document is null ? null : CliJson.ParseDone(document));
         var exit = done?.Exit ?? result.ExitCode;
         if (document is null || (done is { Exit: not 0 } && JsonRead.Str(document, "event") == "done"))
-            return new CliResult<T>(exit == 0 ? 1 : exit, default, done, done?.Problem ?? error ?? $"benchbar.exe {args.FirstOrDefault()} printed no JSON (exit {result.ExitCode}).");
+            return new CliResult<T>(exit == 0 ? 1 : exit, default, done, done?.Problem ?? error ?? UiText.Format("CommonPrintedNoJson", args.FirstOrDefault() ?? "", result.ExitCode));
         try
         {
             return new CliResult<T>(exit, parse(document), done, exit == 0 ? null : done?.Problem ?? error);

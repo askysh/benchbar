@@ -28,10 +28,10 @@ public sealed class SystemStreamRunner : IStreamRunner
         if (timeout.TotalSeconds < 60)
         {
             var seconds = Math.Max(1, (int)Math.Ceiling(timeout.TotalSeconds));
-            return seconds == 1 ? "1 second" : $"{seconds} seconds";
+            return seconds == 1 ? UiText.Get("SetupSecondOne") : UiText.Format("SetupSecondsMany", seconds);
         }
         var minutes = (int)timeout.TotalMinutes;
-        return minutes == 1 ? "1 minute" : $"{minutes} minutes";
+        return minutes == 1 ? UiText.Get("SetupMinuteOne") : UiText.Format("SetupMinutesMany", minutes);
     }
 
     public async Task<StreamResult> RunAsync(string fileName, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? environment,
@@ -105,7 +105,7 @@ public sealed class SystemStreamRunner : IStreamRunner
         {
             ProcessKill.Tree(process);
             if (ct.IsCancellationRequested) throw;
-            throw new TimeoutException($"{Path.GetFileName(fileName)} did not finish in {TimeoutText(timeout)}.");
+            throw new TimeoutException(UiText.Format("SetupDidNotFinish", Path.GetFileName(fileName), TimeoutText(timeout)));
         }
     }
 }

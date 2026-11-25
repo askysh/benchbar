@@ -13,8 +13,8 @@ public sealed record ProfileSubscription(string Repo, string Dir, int? Behind, i
         get
         {
             if (Behind is not > 0) return null;
-            var text = $"Outdated · {Behind} commit{(Behind == 1 ? "" : "s")}";
-            if (Days is > 0) text += $" / {Days} day{(Days == 1 ? "" : "s")}";
+            var text = Behind == 1 ? UiText.Get("ProfileOutdatedOne") : UiText.Format("ProfileOutdatedMany", Behind!);
+            if (Days is > 0) text = UiText.Format("ProfileOutdatedDays", text, Days == 1 ? UiText.Get("ProfileDayOne") : UiText.Format("ProfileDayMany", Days));
             return text;
         }
     }
@@ -40,7 +40,7 @@ public sealed record ProfileInfo(string Name, string Kind, string? Source, strin
     public string? UnsupportedReason { get; init; }
 
     /// <summary>"Python 3.11, Node 22, MariaDB 10.11", the parts the CLI gave; empty when it gave none.</summary>
-    public string Versions => string.Join(", ", new[] { Python is null ? null : "Python " + Python, Node is null ? null : "Node " + Node, Mariadb is null ? null : "MariaDB " + Mariadb }.OfType<string>());
+    public string Versions => string.Join(", ", new[] { Python is null ? null : UiText.Format("ProfileVersionPython", Python), Node is null ? null : UiText.Format("ProfileVersionNode", Node), Mariadb is null ? null : UiText.Format("ProfileVersionMariadb", Mariadb) }.OfType<string>());
 
     /// <summary>A shadowed file has the same name as the one that wins, so the file is part of the id.</summary>
     public string Id => Name + "\t" + File;
@@ -65,11 +65,11 @@ public sealed record ProfileInfo(string Name, string Kind, string? Source, strin
     /// <summary>"built in", "local", "imported", "subscribed · acme/profiles".</summary>
     public string OriginText => Origin switch
     {
-        ProfileOrigin.Builtin => "built in",
-        ProfileOrigin.User => "local",
-        ProfileOrigin.Imported => "imported",
-        ProfileOrigin.Path => "profile path",
-        _ => Subscription?.Repo is { } repo ? "subscribed · " + ShortRepo(repo) : "subscribed",
+        ProfileOrigin.Builtin => UiText.Get("ProfileOriginBuiltin"),
+        ProfileOrigin.User => UiText.Get("ProfileOriginUser"),
+        ProfileOrigin.Imported => UiText.Get("ProfileOriginImported"),
+        ProfileOrigin.Path => UiText.Get("ProfileOriginPath"),
+        _ => Subscription?.Repo is { } repo ? UiText.Format("ProfileOriginSubscribedRepo", ShortRepo(repo)) : UiText.Get("ProfileOriginSubscribed"),
     };
 
     public bool CanExport => IsTeam && Valid;
@@ -130,10 +130,10 @@ public static class RepoAccess
 {
     public static string Label(string? access) => access switch
     {
-        "public" => "public",
-        "private" => "private",
-        "personal" => "personal account",
-        _ => "unknown",
+        "public" => UiText.Get("ProfileAccessPublic"),
+        "private" => UiText.Get("ProfileAccessPrivate"),
+        "personal" => UiText.Get("ProfileAccessPersonal"),
+        _ => UiText.Get("ProfileAccessUnknown"),
     };
 }
 
@@ -200,12 +200,12 @@ public sealed class ProfileExportChoices
         foreach (var dropped in plan.Apps.Where(a => !Keeps(a.Name)))
         {
             var by = plan.Apps.Where(a => Keeps(a.Name) && a.Requires.Contains(dropped.Name)).Select(a => a.Name).ToList();
-            if (by.Count > 0) return $"{dropped.Name} is required by {string.Join(", ", by)}: keep it, or drop those too.";
+            if (by.Count > 0) return UiText.Format("ProfileRequiredBy", dropped.Name, string.Join(", ", by));
         }
-        if (!plan.Apps.Any(a => Keeps(a.Name))) return "Keep at least one app.";
+        if (!plan.Apps.Any(a => Keeps(a.Name))) return UiText.Get("ProfileKeepOne");
         foreach (var app in plan.Apps.Where(a => Keeps(a.Name)))
         {
-            if (!IsBranch(Branch(app).Trim())) return $"{app.Name} needs a branch name.";
+            if (!IsBranch(Branch(app).Trim())) return UiText.Format("ProfileNeedsBranch", app.Name);
         }
         return null;
     }
@@ -235,7 +235,7 @@ public sealed record ProfileRepoCheck(string App, string Repo, bool? Reachable, 
     /// <summary>A check mark, a cross or a question mark.</summary>
     public string Mark => Reachable switch { true => "✓", false => "✗", null => "?" };
 
-    public string Accessibility => Reachable switch { true => "reachable", false => "not reachable", null => "not checked" };
+    public string Accessibility => Reachable switch { true => UiText.Get("ProfileReachable"), false => UiText.Get("ProfileUnreachable"), null => UiText.Get("ProfileNotChecked") };
 
     public static ProfileRepoCheck Parse(JsonObject o) => new(JsonRead.Str(o, "app") ?? "", JsonRead.Str(o, "repo") ?? "",
         o["reachable"] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null, JsonRead.Str(o, "reason"));
@@ -288,11 +288,11 @@ public sealed record ProfileCheck(string Name, IReadOnlyList<ProfileRepoCheck> R
     public (bool Warning, string Title, string? Detail) Verdict()
     {
         var missing = Repos.Count(r => r.Reachable != true);
-        if (missing == 0 && SkippedApps.Count == 0) return (false, "This machine can reach every repository", null);
-        var title = missing == 0 ? "Some apps would be left out" : missing == 1 ? "1 repository is not reachable" : $"{missing} repositories are not reachable";
+        if (missing == 0 && SkippedApps.Count == 0) return (false, UiText.Get("ProfileReachAll"), null);
+        var title = missing == 0 ? UiText.Get("ProfileSomeLeftOut") : missing == 1 ? UiText.Get("ProfileOneUnreachable") : UiText.Format("ProfileManyUnreachable", missing);
         var detail = SkippedApps.Count == 0
-            ? "Ask the repository owner for access, then check again."
-            : $"A bench set up from this profile now would skip: {string.Join(", ", SkippedApps)}. Ask the repository owner for access, then check again.";
+            ? UiText.Get("ProfileAskOwner")
+            : UiText.Format("ProfileWouldSkip", string.Join(", ", SkippedApps));
         return (true, title, detail);
     }
 }

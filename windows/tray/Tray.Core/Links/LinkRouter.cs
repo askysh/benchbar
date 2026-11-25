@@ -165,7 +165,7 @@ public static class LinkRouter
         if (!TryParts(link, out var parts)) return new LinkOutcome.Ignore(LinkIgnore.NotOurScheme);
         var first = parts.Words.Length > 0 ? parts.Words[0] : "";
         if (first == "share")
-            return new LinkOutcome.Explain("Rooms are not on Windows yet, so BenchBar did not open this link.", LinkWhy.ShareNotOnWindows);
+            return new LinkOutcome.Explain(UiText.Get("CommonLinkRooms"), LinkWhy.ShareNotOnWindows);
         if (first == "profile") return ProfileRoute(parts);
         if (first.Length == 0) return new LinkOutcome.Ignore(LinkIgnore.NoRoute);
         if (!Routes.TryGetValue(first, out var route)) return new LinkOutcome.Ignore(LinkIgnore.UnknownRoute);
@@ -181,11 +181,11 @@ public static class LinkRouter
         {
             return ProfileSourceRule.IsImportUrl(address)
                 ? new LinkOutcome.Profile(ProfileLinkKind.Import, address)
-                : new LinkOutcome.Explain("The profile link has no https address in url=, so BenchBar did not open it.", LinkWhy.ProfileNeedsHttps);
+                : new LinkOutcome.Explain(UiText.Get("CommonLinkProfileUrl"), LinkWhy.ProfileNeedsHttps);
         }
         return ProfileSourceRule.IsGitUrl(address)
             ? new LinkOutcome.Profile(ProfileLinkKind.Subscribe, address)
-            : new LinkOutcome.Explain("The subscribe link has no git repository address in url=, so BenchBar did not open it.", LinkWhy.SubscribeNeedsGit);
+            : new LinkOutcome.Explain(UiText.Get("CommonLinkSubscribeUrl"), LinkWhy.SubscribeNeedsGit);
     }
 
     private static LinkOutcome Resolve(LinkRoute route, string? benchQuery, string? siteQuery, IReadOnlyList<LinkBench> benches, string? selected)
@@ -200,12 +200,12 @@ public static class LinkRouter
                 return new LinkOutcome.Window();
             case NoPick:
                 return benches.Count == 0
-                    ? new LinkOutcome.Explain("BenchBar knows no bench yet, so the link has nothing to act on.", LinkWhy.NoBench)
-                    : new LinkOutcome.Explain("More than one bench: add ?bench=NAME to the link to say which one.", LinkWhy.NeedsBench);
+                    ? new LinkOutcome.Explain(UiText.Get("CommonLinkNoBench"), LinkWhy.NoBench)
+                    : new LinkOutcome.Explain(UiText.Get("CommonLinkNeedsBench"), LinkWhy.NeedsBench);
             case NotFound nf:
-                return new LinkOutcome.Explain($"No bench named \"{Short(nf.Query)}\". The link uses the names and paths from benchbar list.", LinkWhy.BenchNotFound);
+                return new LinkOutcome.Explain(UiText.Format("CommonLinkBenchNotFound", Short(nf.Query)), LinkWhy.BenchNotFound);
             case Ambiguous am:
-                return new LinkOutcome.Explain($"More than one bench is named \"{Short(am.Query)}\": use its full path in ?bench= instead.", LinkWhy.BenchAmbiguous);
+                return new LinkOutcome.Explain(UiText.Format("CommonLinkAmbiguous", Short(am.Query)), LinkWhy.BenchAmbiguous);
             default:
                 return new LinkOutcome.Ignore(LinkIgnore.UnknownRoute);
         }
@@ -214,7 +214,7 @@ public static class LinkRouter
         if (TakesSite(route) && siteQuery is { } wanted)
         {
             site = bench.Sites.FirstOrDefault(s => string.Equals(s, wanted, StringComparison.OrdinalIgnoreCase));
-            if (site is null) return new LinkOutcome.Explain($"{bench.Name} has no site named \"{Short(wanted)}\".", LinkWhy.SiteNotFound);
+            if (site is null) return new LinkOutcome.Explain(UiText.Format("CommonLinkNoSite", bench.Name, Short(wanted)), LinkWhy.SiteNotFound);
         }
         return new LinkOutcome.Run(route, bench.Path, site);
     }
@@ -351,13 +351,13 @@ public static class LinkConfirm
     {
         var (title, button) = route switch
         {
-            LinkRoute.Up => ($"Start {bench}?", "Start"),
-            LinkRoute.Down => ($"Stop {bench}?", "Stop"),
-            LinkRoute.Restart => ($"Restart {bench}?", "Restart"),
-            LinkRoute.Console => ($"Open a Frappe console for {bench}?", "Open Terminal"),
-            LinkRoute.Db => ($"Open a database session for {bench}?", "Open Terminal"),
-            _ => ($"Open {bench}?", "Open"),
+            LinkRoute.Up => (UiText.Format("CommonLinkStartAsk", bench), UiText.Get("CommonStart")),
+            LinkRoute.Down => (UiText.Format("CommonLinkStopAsk", bench), UiText.Get("CommonStop")),
+            LinkRoute.Restart => (UiText.Format("CommonLinkRestartAsk", bench), UiText.Get("OverviewRestart")),
+            LinkRoute.Console => (UiText.Format("CommonLinkConsoleAsk", bench), UiText.Get("CommonOpenTerminal")),
+            LinkRoute.Db => (UiText.Format("CommonLinkDbAsk", bench), UiText.Get("CommonOpenTerminal")),
+            _ => (UiText.Format("CommonLinkOpenAsk", bench), UiText.Get("CommonOpen")),
         };
-        return new Question(title, "A benchbar:// link asked for this. A web page or another app can open such a link, so check that you expected it.", button);
+        return new Question(title, UiText.Get("CommonLinkAskDetail"), button);
     }
 }

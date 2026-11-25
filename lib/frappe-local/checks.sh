@@ -311,13 +311,13 @@ fl_bench_cli_fix() {
   # a bench that neither uv nor pipx installed: uv's reinstall would land in
   # uv's own folder and leave the broken one first on PATH, so no guess
   if [[ "$owner" == "other" ]]; then
-    printf "the bench at %s was not installed by uv or pipx: reinstall it with the tool that did, or remove it and run: uv tool install frappe-bench" "$(command -v bench 2>/dev/null || printf bench)"
+    printf "the bench at %s was not installed by uv or pipx: reinstall it with the tool that did, or remove it and run: uv tool install frappe-bench==%s" "$(command -v bench 2>/dev/null || printf bench)" "$FL_PIN_FRAPPE_BENCH"
     return 0
   fi
   if [[ "$owner" == "pipx" ]]; then
-    case "$how" in install) printf 'pipx install frappe-bench' ;; *) printf 'pipx reinstall frappe-bench' ;; esac
+    case "$how" in install) printf 'pipx install frappe-bench==%s' "$FL_PIN_FRAPPE_BENCH" ;; *) printf 'pipx reinstall frappe-bench' ;; esac
   else
-    case "$how" in install) printf 'uv tool install frappe-bench' ;; *) printf 'uv tool install --reinstall frappe-bench' ;; esac
+    case "$how" in install) printf 'uv tool install frappe-bench==%s' "$FL_PIN_FRAPPE_BENCH" ;; *) printf 'uv tool install --reinstall frappe-bench==%s' "$FL_PIN_FRAPPE_BENCH" ;; esac
   fi
 }
 
@@ -1346,7 +1346,7 @@ chk_toolchain_yarn() {
   local yarn ver
   yarn="$(fl_bench_which yarn)"
   if [[ -z "$yarn" ]]; then
-    chk__set warn "no yarn on the bench's PATH (bench build needs it)" "$(fl_npm_bin) install -g yarn" yarn_install
+    chk__set warn "no yarn on the bench's PATH (bench build needs it)" "$(fl_npm_bin) install -g yarn@${FL_PIN_YARN}" yarn_install
     return 0
   fi
   ver="$("$yarn" --version 2>/dev/null || true)"

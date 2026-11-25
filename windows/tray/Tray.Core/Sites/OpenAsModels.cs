@@ -15,7 +15,7 @@ public sealed record SiteUser(string Name, string FullName, string UserType, IRe
     public string Title => FullName.Length > 0 ? FullName : Name;
 
     /// <summary>"Sales User, Accounts User +2 more"; empty without roles.</summary>
-    public string RolesLine => Roles.Count == 0 ? "" : string.Join(", ", Roles) + (RoleCount > Roles.Count ? $" +{RoleCount - Roles.Count} more" : "");
+    public string RolesLine => Roles.Count == 0 ? "" : RoleCount > Roles.Count ? UiText.Format("OpenAsRolesMore", string.Join(", ", Roles), RoleCount - Roles.Count) : string.Join(", ", Roles);
 }
 
 public sealed record SiteUserList(string Site, IReadOnlyList<SiteUser> Users, bool Truncated);
@@ -26,14 +26,10 @@ public static class OpenAsRules
     public const int Limit = 50;
 
     /// <summary>What the question says before Open as is turned on. The CLI says the same before it asks in a terminal.</summary>
-    public const string AllowMessage = "Open as signs in to this site as any of its users, without a password.\n\n"
-        + "Each sign in runs the apps' on_login and on_session_creation hooks, as a real login does: it sets last_login, "
-        + "adds an Activity Log entry, mails the System Managers for Administrator and may create an ERPNext Customer or Supplier "
-        + "for a Website User. It may end that user's oldest session.\n\n"
-        + "Use it on development sites only.";
+    public static string AllowMessage => UiText.Get("OpenAsAllowMessage");
 
     /// <summary>What an opted in site says when the CLI sends no developer mode field (older than 0.8.1).</summary>
-    public const string UpdateCli = "Update the benchbar command line tool to use Open as";
+    public static string UpdateCli => UiText.Get("OpenAsUpdateCli");
 
     public enum Availability { Hidden, Available, Disabled }
 
@@ -44,9 +40,9 @@ public static class OpenAsRules
     public static (Availability State, string? Why) For(SiteRowInfo row, bool benchRunning, string benchName)
     {
         if (row.OpenAs is not { Enabled: true } || row.NeedsSetUp) return (Availability.Hidden, null);
-        if (row.OpenAs.Usable == true) return benchRunning ? (Availability.Available, null) : (Availability.Disabled, $"Start {benchName} first");
+        if (row.OpenAs.Usable == true) return benchRunning ? (Availability.Available, null) : (Availability.Disabled, UiText.Format("OpenAsStartFirst", benchName));
         if (!row.IsDefault) return (Availability.Hidden, null);
-        return (Availability.Disabled, Reasons(row).FirstOrDefault() ?? $"Open as is not usable on {row.Name} now");
+        return (Availability.Disabled, Reasons(row).FirstOrDefault() ?? UiText.Format("OpenAsNotUsableNow", row.Name));
     }
 
     /// <summary>Why an opted in site cannot be used, in the order to fix them.</summary>
@@ -55,9 +51,9 @@ public static class OpenAsRules
         if (row.OpenAs is not { Enabled: true } state || state.Usable == true) return [];
         var reasons = new List<string>();
         if (state.DeveloperMode is null) reasons.Add(UpdateCli);
-        else if (state.DeveloperMode == false) reasons.Add($"{row.Name} is not in developer mode. Run: bench --site {row.Name} set-config developer_mode 1");
-        if (!row.IsDefault) reasons.Add("Only the default site can be used: port 8000 serves only it");
-        else if (state.DeveloperMode == true) reasons.Add($"The web process answers as another site. Run: benchbar site default {row.Name}, then benchrestart");
+        else if (state.DeveloperMode == false) reasons.Add(UiText.Format("OpenAsNoDevMode", row.Name));
+        if (!row.IsDefault) reasons.Add(UiText.Get("OpenAsOnlyDefault"));
+        else if (state.DeveloperMode == true) reasons.Add(UiText.Format("OpenAsOtherSite", row.Name));
         return reasons;
     }
 
@@ -66,16 +62,16 @@ public static class OpenAsRules
     {
         if (row.OpenAs is not { Enabled: true } || row.NeedsSetUp) return null;
         var why = Reasons(row);
-        return why.Count == 0 ? ("Open as is on", false) : ("Open as is on, but not usable. " + string.Join(' ', why), true);
+        return why.Count == 0 ? (UiText.Get("OpenAsIsOn"), false) : (UiText.Format("OpenAsIsOnNotUsable", string.Join(' ', why)), true);
     }
 
-    public static string AllowTitle(string site) => $"Allow Open as on {site}?";
+    public static string AllowTitle(string site) => UiText.Format("OpenAsAllowTitle", site);
 
-    public static string TurnedOn(string site) => $"Open as is on for {site}.";
+    public static string TurnedOn(string site) => UiText.Format("OpenAsTurnedOn", site);
 
-    public static string TurnedOff(string site) => $"Open as is off for {site}. Sign ins already made stay valid.";
+    public static string TurnedOff(string site) => UiText.Format("OpenAsTurnedOff", site);
 
-    public static string Opened(string site, SiteUser user) => $"{site} opened in your browser as {user.Title}.";
+    public static string Opened(string site, SiteUser user) => UiText.Format("OpenAsOpened", site, user.Title);
 
     /// <summary>
     /// The CLI's sentence from what it wrote to stderr. <c>open</c> and <c>users</c> are not in the JSON modes, so a refusal prints nothing on
@@ -145,7 +141,7 @@ public sealed class FindUserModel(ICliClient cli, string bench, string site)
     {
         var result = await cli.RunJsonAsync(OpenAsCommands.Users(Site, query, bench), null, CliTimeouts.Read, OpenAsJson.ParseUsers, ct).ConfigureAwait(true);
         List = result.Value ?? List;
-        Error = result.Value is null ? OpenAsRules.CliSentence(result.Error) ?? "The users could not be read." : null;
+        Error = result.Value is null ? OpenAsRules.CliSentence(result.Error) ?? UiText.Get("OpenAsUsersFailed") : null;
     }
 
     /// <summary>Opens the site in the browser signed in as <paramref name="user"/>. The answer is the CLI's: <c>opened</c> true, or its refusal as it words it.</summary>
@@ -154,7 +150,7 @@ public sealed class FindUserModel(ICliClient cli, string bench, string site)
         var result = await cli.RunJsonAsync(OpenAsCommands.OpenAs(Site, user.Name, bench), OpenAsCommands.PersonEnvironment(), CliTimeouts.Plan, OpenAsJson.Opened, ct).ConfigureAwait(true);
         var ok = result.Ok && result.Value;
         NoteIsError = !ok;
-        Note = ok ? OpenAsRules.Opened(Site, user) : OpenAsRules.CliSentence(result.Error) ?? $"{Site} could not be opened as {user.Title}.";
+        Note = ok ? OpenAsRules.Opened(Site, user) : OpenAsRules.CliSentence(result.Error) ?? UiText.Format("QuickSwitchCouldNotOpen", Site, user.Title);
         return ok;
     }
 }
