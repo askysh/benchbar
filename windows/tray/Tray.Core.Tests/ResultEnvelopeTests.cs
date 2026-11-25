@@ -72,7 +72,7 @@ public class ResultEnvelopeTests
     public async Task AReadThatFailedPrintsAnEnvelopeWithNextActions()
     {
         var (client, runner) = CliFixture.Scripted();
-        runner.On("site", "list").Print(CliFixture.Lines("envelope-read-failure.json")).Fail(1);
+        runner.On("site", "list").Print(CliFixture.Lines("envelope-read-failure-next.json")).Fail(1);
         var result = await client.RunJsonAsync(["site", "list", "--for-agent"], null, Short, TestContext.Current.CancellationToken);
         Assert.False(result.Ok);
         Assert.Equal(1, result.Exit);

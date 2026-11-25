@@ -161,6 +161,8 @@ while IFS='|' read -r file cmd; do
   allow=0; [[ "$cmd" == "!"* ]] && { allow=1; cmd="${cmd#!}"; }
   # shellcheck disable=SC2086  # the command is one word per argument, none has a space
   ALLOW_EXIT="$allow" cli_out $cmd >"$TMP_OUT/new.json"
+  # a refusal also prints its [FAIL] text (stderr is merged here): the envelope is the JSON lines
+  [[ "$allow" == 0 ]] || { grep '^{' "$TMP_OUT/new.json" >"$TMP_OUT/lines.json" || true; mv "$TMP_OUT/lines.json" "$TMP_OUT/new.json"; }
   python3 -I -c '
 import json, sys
 text = open(sys.argv[1]).read()
