@@ -1,3 +1,5 @@
+# Decisions
+
 One line per non obvious choice: the decision, then the reason. The
 decisions of the app work live in `macos/DECISIONS.md`. The 0.5.5, 0.5 and 0.4
 runs come first, the 0.3 easy install run follows.
