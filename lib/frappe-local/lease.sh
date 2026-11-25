@@ -81,11 +81,16 @@ fl__lease_write() {
 # The lock is never renamed away and put back. That was the first design: a waiter that judged the
 # old folder stale could rename a live lock away, and the put back landed inside the new folder,
 # which no rmdir could remove any more, so every later take ended with "busy".
+# Returns 1 when another run keeps the lock, 2 when the folder takes no claim (no space, no
+# permission): nobody holds it then, and fl__lease_lock_or_die says so at once.
 fl__lease_lock() {
-  local dir="${FL_STATE_DIR}/leases.lock" guard i=0
+  local dir="${FL_STATE_DIR}/leases.lock" guard i=0 rc
   guard="${dir}.reclaim"
   mkdir -p "$FL_STATE_DIR" 2>/dev/null || true
-  while ! fl_mkdir_excl "$dir"; do
+  while :; do
+    rc=0; fl_mkdir_excl "$dir" || rc=$?
+    [[ "$rc" != 0 ]] || return 0
+    if [[ "$rc" == 2 ]]; then rmdir "$dir" 2>/dev/null || true; return 2; fi
     if [[ -d "$dir" && "$(fl__lock_age "$dir")" -ge 30 ]]; then
       if fl_mkdir_excl "$guard"; then
         # judged again: since the look above another waiter may have removed the stale folder and a
@@ -103,6 +108,15 @@ fl__lease_lock() {
   done
 }
 fl__lease_unlock() { fl_rmdir_excl "${FL_STATE_DIR}/leases.lock" || true; }
+
+# fl__lease_lock_or_die: the lock, or a refusal that says why: busy, or the folder cannot be written
+fl__lease_lock_or_die() {
+  local rc=0
+  fl__lease_lock || rc=$?
+  [[ "$rc" != 2 ]] || fl_die "Could not write the lock ${FL_STATE_DIR}/leases.lock." \
+    "Check the free space and the owner of ${FL_STATE_DIR} (df -h ${FL_STATE_DIR}; ls -ld ${FL_STATE_DIR}), then try again."
+  [[ "$rc" == 0 ]] || fl_die "Another lease command is busy (${FL_STATE_DIR}/leases.lock)." "Try again in a moment."
+}
 
 # fl_lease_holder_v VAR: who a lease is held by: BENCHBAR_CALLER (a name the agent or script chose; a mcp
 # server sets it per client), else "agent" under BENCHBAR_NONINTERACTIVE, else the login name
@@ -238,7 +252,7 @@ fl_lease_take() {
     fl_info "dry-run: would take a lease on ${what} for ${mins} minutes as ${holder}"
     return 0
   fi
-  fl__lease_lock || fl_die "Another lease command is busy (${FL_STATE_DIR}/leases.lock)." "Try again in a moment."
+  fl__lease_lock_or_die
   fl__lease_load
   # a bench lease covers every site of the bench, and a site lease sits under a bench lease: one holder at a time
   for line in ${FL_LEASE_LINES[@]+"${FL_LEASE_LINES[@]}"}; do
@@ -290,7 +304,7 @@ fl_lease_release() {
   id="$1"
   fl__lease_id_check "$id"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would release lease ${id}"; return 0; fi
-  fl__lease_lock || fl_die "Another lease command is busy (${FL_STATE_DIR}/leases.lock)." "Try again in a moment."
+  fl__lease_lock_or_die
   fl__lease_load
   for line in ${FL_LEASE_LINES[@]+"${FL_LEASE_LINES[@]}"}; do
     if [[ "${line%%$'\t'*}" == "$id" ]]; then found="$line"; else keep+=("$line"); fi
@@ -325,7 +339,7 @@ fl_lease_renew() {
   fl__lease_id_check "$id"
   [[ -z "$mins" ]] || fl__lease_minutes_v mins "$mins"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would renew lease ${id}"; return 0; fi
-  fl__lease_lock || fl_die "Another lease command is busy (${FL_STATE_DIR}/leases.lock)." "Try again in a moment."
+  fl__lease_lock_or_die
   fl__lease_load
   for line in ${FL_LEASE_LINES[@]+"${FL_LEASE_LINES[@]}"}; do
     if [[ "${line%%$'\t'*}" == "$id" ]]; then found="$line"; else keep+=("$line"); fi

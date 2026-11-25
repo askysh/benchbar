@@ -102,10 +102,17 @@ fl__lock_age() {
 # own mkdir, reports success all the same: two runs held one lock and a lease was lost although
 # its take said ok (issue 138). The winner is the run whose claim file goes in first: bash's
 # noclobber opens it with O_EXCL, which no coreutils is between. A run that lost the claim does not
-# hold the folder and leaves it alone.
+# hold the folder and leaves it alone. Returns 0 held, 1 held by another run (or gone again), 2 the
+# claim cannot be written (no space, no inodes, no permission): a folder that is there with no claim
+# in it after a second try is not a race, and the caller says so instead of waiting for nobody.
 fl_mkdir_excl() {
   mkdir "$1" 2>/dev/null || return 1
-  ( set -o noclobber; : >"${1}/claim" ) 2>/dev/null
+  ( set -o noclobber; : >"${1}/claim" ) 2>/dev/null && return 0
+  [[ -d "$1" && ! -e "${1}/claim" ]] || return 1
+  # a folder another run made a moment ago, before its own claim: the claim is still free
+  ( set -o noclobber; : >"${1}/claim" ) 2>/dev/null && return 0
+  [[ -d "$1" && ! -e "${1}/claim" ]] || return 1
+  return 2
 }
 
 # fl_rmdir_excl DIR: lets go of a folder fl_mkdir_excl made: its claim, then the folder
@@ -118,7 +125,7 @@ fl_rmdir_excl() {
 # folder's) or dies naming the live owner. WHAT names it in messages.
 fl_lock_acquire() {
   local dir="${1:-${FL_STATE_DIR}/lock}" what="${2:-}" owner try stale guard now held_by
-  local deadline="" told=0 parent busy
+  local deadline="" told=0 parent busy rc
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   parent="$(dirname "$dir")"
   mkdir -p "$parent" 2>/dev/null || true
@@ -127,7 +134,13 @@ fl_lock_acquire() {
   try=0
   while [[ "$try" -lt 5 ]]; do
     try=$((try + 1))
-    if fl_mkdir_excl "$dir"; then
+    rc=0; fl_mkdir_excl "$dir" || rc=$?
+    if [[ "$rc" == 2 ]]; then
+      # the folder is there and takes no claim: nobody holds it, and waiting would not help
+      rmdir "$dir" 2>/dev/null || true
+      fl_die "Could not write the lock ${dir}." "Check the free space and the owner of ${parent} (df -h ${parent}; ls -ld ${parent}), then run again."
+    fi
+    if [[ "$rc" == 0 ]]; then
       fl__lock_write_pid "$dir" || { fl_rmdir_excl "$dir"; fl_die "Could not write the lock ${dir}."; }
       FL_LOCK_DIR="$dir"
       FL_LOCK_DIRS="${FL_LOCK_DIRS}${dir}"$'\n'

@@ -529,6 +529,43 @@ done
 wait
 assert_eq "6" "$(lease_count)" "(six takes at once under a mkdir that answers as uutils does)$(takes_log uu)"
 assert_no_file "$FL_STATE_DIR/leases.lock"
+# A lock folder that takes no claim (no space, no inodes, no permission) is a write error, said at
+# once: no run holds it, so waiting for one would end in a wrong "busy". The mkdir below makes the
+# folder read only. root writes there anyway, so the check needs a user.
+CW_DIR="$TMP_DIR/cw"; mkdir -p "$CW_DIR/state" "$CW_DIR/bin"
+cw_user=0
+chmod a-w "$CW_DIR/state"
+if [[ ! -w "$CW_DIR/state" ]]; then cw_user=1; fi
+chmod u+w "$CW_DIR/state"
+if [[ "$cw_user" == 1 ]]; then
+  cw_out="$(FL_STATE_DIR="$CW_DIR/state" bash -c '
+    set -euo pipefail
+    . "$1/lib/frappe-local/lock.sh"; . "$1/lib/frappe-local/lease.sh"
+    fl_die() { printf "DIE %s\n" "$1"; exit 1; }
+    mkdir() { command mkdir "$@" || return; [[ "$1" == -p ]] || chmod a-w "${!#}"; }
+    rc=0; fl_mkdir_excl "$FL_STATE_DIR/x" || rc=$?; printf "excl=%s\n" "$rc"
+    command rmdir "$FL_STATE_DIR/x"
+    rc=0; fl__lease_lock || rc=$?; printf "lease=%s\n" "$rc"
+    SECONDS=0; (fl_lock_acquire "$FL_STATE_DIR/lock") || true; printf "waited=%s\n" "$SECONDS"
+  ' _ "$ROOT" 2>&1)" || true
+  assert_contains "$cw_out" "excl=2" "(a folder that takes no claim is not a lock another run holds: $cw_out)"
+  assert_contains "$cw_out" "lease=2"
+  assert_contains "$cw_out" "DIE Could not write the lock $CW_DIR/state/lock."
+  assert_contains "$cw_out" "waited=0"
+  assert_no_file "$CW_DIR/state/leases.lock"
+  assert_no_file "$CW_DIR/state/lock"
+  # end to end: lease take says what is wrong, takes nothing and leaves no folder behind
+  # shellcheck disable=SC2016 # expands in the mkdir script
+  printf '#!/bin/bash\n# leases.lock is made read only: its claim cannot be written\n"%s" "$@" || exit\ncase "${!#}" in */leases.lock) chmod a-w "${!#}" ;; esac\n' "$(command -v mkdir)" >"$CW_DIR/bin/mkdir"
+  chmod +x "$CW_DIR/bin/mkdir"
+  python3 -c 'import os, sys; os.remove(sys.argv[1])' "$LEASES"
+  set +e; OUT="$(PATH="$CW_DIR/bin:$PATH" BENCHBAR_NONINTERACTIVE=1 BENCHBAR_CALLER=cw "$FM" lease take --site s1.localhost --bench-dir "$BENCH" --for 5 2>&1)"; CODE="$?"; set -e
+  assert_eq "1" "$CODE" "$OUT"
+  assert_contains "$OUT" "Could not write the lock $FL_STATE_DIR/leases.lock."
+  assert_not_contains "$OUT" "busy"
+  assert_no_file "$FL_STATE_DIR/leases.lock"
+  assert_eq "0" "$(lease_count)" "(nothing was taken)"
+fi
 # the cap
 python3 - "$LEASES" "$BENCH" "$((T0 + 600))" <<'PY'
 import sys
