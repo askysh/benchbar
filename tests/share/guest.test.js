@@ -238,6 +238,11 @@ test("several joins at once: every room ends up in the rooms file", async () => 
     assert.deepStrictEqual(saved.map((r) => r.code), digits.map(() => 0), saved.map((r) => r.text).join(""));
     assert.deepStrictEqual(guest.roomsStore(shared).load().map((r) => r.room).sort(), digits.map((digit) => `Room ${digit}`));
     assert.ok(!fs.existsSync(path.join(shared, "rooms.lock")), "the lock of the rooms file was left behind");
+    // the suffix behind the local names: 128 bits, the same at every call
+    const suffix = guest.roomsStore(shared).suffix();
+    assert.match(suffix, /^[0-9a-f]{32}$/);
+    assert.strictEqual(guest.roomsStore(shared).suffix(), suffix);
+    assert.strictEqual(fs.statSync(path.join(shared, "rooms.json")).mode & 0o777, 0o600);
 });
 
 test("the forwarder's check of a browser's request: one Host, the same origin, no upgrade, and Connection: close", () => {
