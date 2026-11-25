@@ -112,6 +112,18 @@ struct SharingTab: View {
                     Text(SharePresentation.seatsNeedNewerCLI).font(.caption).foregroundStyle(.secondary)
                 }
             }
+            if status.isOn {
+                Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
+                Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
+            } else if case .start = SharePrimary.from(status) {
+                if status.knowsSeatMode {
+                    Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                        .help(SharePresentation.assignSeatsHelp)
+                    Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(SharePresentation.seatsNeedNewerCLI).font(.caption).foregroundStyle(.secondary)
+                }
+            }
             if let busy = share.busy { Label(busy, systemImage: "hourglass").foregroundStyle(.secondary) }
         }
     }
@@ -151,6 +163,10 @@ struct SharingTab: View {
     @ViewBuilder
     private func roomSection(_ status: ShareStatus) -> some View {
         Section("Room code") {
+            if let key = SharePresentation.hostKeyLine(status) {
+                Text(key).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+                    .help(SharePresentation.hostKeyHelp)
+            }
             HStack(alignment: .firstTextBaseline) {
                 Text(SharePresentation.codeText(share.code, revealed: codeRevealed))
                     .font(.system(size: 40, weight: .semibold, design: .monospaced))

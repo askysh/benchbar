@@ -87,6 +87,12 @@ full and somebody has waited more than 2 minutes, the next person who
 joins takes that place. `benchbar share remove ID` puts somebody out whom
 you do not know.
 
+**Read out the host key when a guest asks.** A guest who joins from your
+invite link sees the address the link leads to and 16 digits of your key
+before they join. The same digits are on your **Sharing** tab (Mac app
+and Windows tray) and in `benchbar share status`, as "Host key". If the
+guest's digits differ, the link was not yours.
+
 To let guests take a free seat themselves, as before 0.9.0, turn off **I
 give out the seats** next to **Start** (the Mac app and the tray), or run
 `benchbar share start --open-seats`. Do this only when everybody who has

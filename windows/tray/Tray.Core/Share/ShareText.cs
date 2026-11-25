@@ -97,6 +97,18 @@ public static class ShareText
 
     public static string StartConfirm(string site) => $"Start sharing {site} on this network? People on this Wi-Fi who have the room code can join a copy of {site} until you stop.";
 
+    // --- the host's key (#159 SHARE-8) ---
+
+    /// <summary>"Host key: 0123 4567 89ab cdef": the digits a guest sees on the join sheet of an invite, for the host to read out.
+    /// Null without 16 hex digits.</summary>
+    public static string? HostKeyLine(ShareStatus status)
+    {
+        if (status.HostKey is not { Length: 16 } key || !key.All(Uri.IsHexDigit)) return null;
+        return $"Host key: {key[..4]} {key[4..8]} {key[8..12]} {key[12..]}";
+    }
+
+    public const string HostKeyHelp = "A guest who joins from your invite link sees these digits before they join. Read them out when asked.";
+
     // --- who gives out the seats (#159 SHARE-5) ---
 
     public const string AssignSeatsToggle = "I give out the seats";

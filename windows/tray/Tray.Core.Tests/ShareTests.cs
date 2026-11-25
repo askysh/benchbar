@@ -355,6 +355,18 @@ public class ShareTests
         Assert.Equal(ShareText.LanGuardUnavailable, model.LastError);
     }
 
+    // --- #159 SHARE-8: the host's key, for the host to read out ---
+
+    [Fact]
+    public void TheHostKeyIsShownInGroupsOfFour()
+    {
+        var status = ShareStatus.Parse(Doc("share-status-on.json"));
+        Assert.Equal("0123456789abcdef", status.HostKey);
+        Assert.Equal("Host key: 0123 4567 89ab cdef", ShareText.HostKeyLine(status));
+        Assert.Null(ShareText.HostKeyLine(ShareStatus.Parse(Doc("share-status-old.json")))); // a CLI before 0.9.0
+        Assert.Null(ShareText.HostKeyLine(status with { HostKey = "not sixteen hex!" }));
+    }
+
     // --- an older CLI in WSL has no seat flags: none is sent ---
 
     [Fact]

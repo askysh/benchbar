@@ -1874,7 +1874,7 @@ none holds a session id.
  "seconds_left":3600,"can_extend_s":28800,"copy":{…},"allowed_users":["priya@example.com"],"seats":2,
  "people":1,"devices_total":1,"devices_online":1,"pending":0,"locked":false,"lock_reason":null,
  "budget_left":10,"join_trouble":false,"wipe_failed":0,"lan_guard":"installed","preflight":null,
- "setup_interrupted":false,"seat_mode":"open"}
+ "setup_interrupted":false,"seat_mode":"open","host_key":"0123456789abcdef"}
 ```
 
 - `state`: `on`, `off`, `expired` or `error`.
@@ -1888,6 +1888,9 @@ none holds a session id.
 - `preflight`: null, or with `--preflight` the critical checks as in `share preflight`.
 - `setup_interrupted`: a setup stopped halfway (no `share.json`, but the one it set
   aside or the copy is there); `share setup --refresh` finishes it.
+- `host_key`: the first 16 hex digits of the fingerprint of this host's key, or
+  null before `share setup`. The join sheet of an invite shows a guest the same
+  digits, so a host can read them out. It is not a secret.
 - `seats`: the number of seats of the room, an integer. In `share people --json`
   the key of the same name is a list, one object per seat.
 - `seat_mode`: who gives a person their seat in the room that is on: `host`

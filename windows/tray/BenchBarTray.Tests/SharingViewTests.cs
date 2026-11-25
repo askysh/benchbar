@@ -98,6 +98,7 @@ public class SharingViewTests
     {
         var (view, _, _) = Make("share-status-on.json");
         Assert.Contains("Sharing on your network · 1 online · 59 min left", view.Lines);
+        Assert.Contains("Host key: 0123 4567 89ab cdef", view.Lines); // #159 SHARE-8
         Assert.Contains(ShareText.Full, view.Lines);
         Assert.Contains(ShareText.JoinTrouble, view.Lines);
         Assert.Contains(ShareText.WipeOwed, view.Lines);

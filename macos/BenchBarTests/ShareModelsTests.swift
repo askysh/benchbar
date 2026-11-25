@@ -180,6 +180,12 @@ struct ShareModelsTests {
         #expect(old.seats.isEmpty && old.seatMode == nil)
         #expect(try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status")).seatMode == .open)
         #expect(try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status-old")).seatMode == nil)
+        // #159 SHARE-8: the host's key, for the host to read out
+        let keyed = try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status"))
+        #expect(keyed.hostKey == "0123456789abcdef")
+        #expect(SharePresentation.hostKeyLine(keyed) == "Host key: 0123 4567 89ab cdef")
+        #expect(SharePresentation.hostKeyLine(try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status-old"))) == nil)
+        #expect(SharePresentation.hostKeyLine(ShareStatus(state: .on, hostKey: "not sixteen hex")) == nil)
 
         let users = try BenchJSON.decode(ShareUsers.self, from: Fixture.data("share-users"))
         #expect(users.users[0].codeCapableRoles == ["System Manager"])

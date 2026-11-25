@@ -237,6 +237,17 @@ nonisolated enum SharePresentation {
         return roles.count > 3 ? "\(name) · \(shown) and \(roles.count - 3) more" : "\(name) · \(shown)"
     }
 
+    // MARK: The host's key (#159 SHARE-8)
+
+    /// "Host key: 0123 4567 89ab cdef": the digits a guest sees on the join sheet of an invite, for
+    /// the host to read out. nil without 16 hex digits (no setup yet, or a CLI before 0.9.0).
+    static func hostKeyLine(_ status: ShareStatus) -> String? {
+        guard let key = status.hostKey, key.count == 16, key.allSatisfy({ $0.isHexDigit && $0.isASCII }) else { return nil }
+        let digits = Array(key)
+        return "Host key: " + stride(from: 0, to: 16, by: 4).map { String(digits[$0..<$0 + 4]) }.joined(separator: " ")
+    }
+    static let hostKeyHelp = "A guest who joins from your invite link sees these digits before they join. Read them out when asked: a link that only uses your room's name shows other digits."
+
     // MARK: Who gives out the seats (#159 SHARE-5)
 
     static let assignSeatsToggle = "I give out the seats"
