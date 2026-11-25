@@ -250,7 +250,7 @@ instead of the Keychain, uses the site `linuxdev.localhost` and never edits
 .deb), the MariaDB admin step (`sudo mariadb`, its config drop-in and
 restart) and starting a stopped `mariadb` or `redis-server`; it is asked
 once up front. The helper block goes to `~/.bashrc`, so tell the user to
-run `source ~/.bashrc`. Only v15-lts is supported on Linux so far.
+run `source ~/.bashrc`. The v15-lts and v16-lts profiles are supported on Linux.
 
 On Windows the benches run inside WSL 2, so run `benchbar` in the distro
 and follow the Linux notes above. From PowerShell, `benchbar.exe` forwards
