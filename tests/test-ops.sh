@@ -121,7 +121,8 @@ assert_eq "True" "$(printf '%s' "$OUT" | jget - '[c["name"] for c in d["commands
 # ---- 3. a run that died without a done line is interrupted; one that runs is running
 sleep 120 &
 LIVE=$!
-trap 'kill "$LIVE" 2>/dev/null || true; cd /; { rm -r "$TMP_DIR"; } 2>/dev/null || true' EXIT
+# shellcheck disable=SC2016  # expanded when the harness runs it, with LIVE as it is then
+on_exit 'kill "$LIVE" 2>/dev/null || true'
 sleep 0 & DEAD=$!; wait "$DEAD" || true
 fake_op op-20260101-000001-11 running "$LIVE"
 fake_op op-20260101-000002-12 running "$DEAD"

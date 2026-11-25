@@ -586,7 +586,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar share log [--device ID] [--since TIME] [--limit N] [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
 | `benchbar share open-as USER [--print-url] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | document |
 | `benchbar share teardown [--yes] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | stream |
-| `benchbar share join [ADDRESS[:PORT]] [--name NAME] [--seat SEAT_ID] [--no-wait] [--no-open] [--dry-run] [--yes] [--json]` (Lab `lan-rooms`) | yes | no | yes | yes | document |
+| `benchbar share join [ADDRESS[:PORT]] [--host-key HEX] [--name NAME] [--seat SEAT_ID] [--no-wait] [--no-open] [--dry-run] [--yes] [--json]` (Lab `lan-rooms`) | yes | no | yes | yes | document |
 | `benchbar share joined [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
 | `benchbar share leave [ROOM] [--json]` (Lab `lan-rooms`) | no | no | yes | yes | stream |
 | `benchbar share forget [ROOM] [--json]` (Lab `lan-rooms`) | no | no | yes | yes | stream |
@@ -649,6 +649,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `share open-as` | `--json` |  | One document without the link (never the session). |
 | `share teardown` | `--yes` |  | Do not ask first. |
 | `share teardown` | `--json` |  | JSON lines: steps, done with copy_dropped, archived_path and state_removed. |
+| `share join` | `--host-key` | `HEX` | Join only if the host shows this key (the 64 hex digits: host_pin of a look with --dry-run --json). Another key is refused before any request, with exit code 3. Public, so an argument is fine. |
 | `share join` | `--name` | `NAME` | The name the host sees for this computer (default: the computer's name). |
 | `share join` | `--seat` | `SEAT_ID` | Take this seat, in a room where guests pick theirs (the host started it with --open-seats). |
 | `share join` | `--no-wait` |  | Do not wait for the host to give a seat: join, say so, and end. |

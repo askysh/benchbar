@@ -173,7 +173,14 @@ host's invite or in its `benchbar share status`.
 
 A room that you joined from a terminal and a room that you joined in the
 Mac app are two guests to the host. Each has its own key and its own list
-of rooms.
+of rooms. The host counts you twice, and each takes a seat. On a Mac with
+BenchBar.app, `share join` says so before it asks for the code.
+
+To look at a room first and join it later, run `benchbar share join
+ADDRESS --dry-run --json` and read `host_pin`, the full key of the host.
+Then join with `--host-key HEX`: BenchBar joins only if the host still
+shows that key, and otherwise ends with exit code 3, before it sends
+anything. The tray works this way.
 
 Only a person runs `share join`, `share leave` and `share forget`. An
 agent or a script is refused.
@@ -190,6 +197,11 @@ guest only connects out, and the browser in Windows opens the room on
   address through the localhost forwarding of WSL, which is on unless
   `.wslconfig` says `localhostForwarding=false`.
 - Mirrored: there is nothing to set up.
+- A Windows program that already listens on the same `localhost` port
+  (41000 to 41999) can take the browser's request before WSL sees it. BenchBar
+  checks the port inside WSL only. If the address shows another page, run
+  `benchbar share leave` and `benchbar share join` again to get another
+  port, or close the program that holds it.
 
 The local address is there while the WSL distribution runs. Keep a
 terminal of the distribution open while you use the room.

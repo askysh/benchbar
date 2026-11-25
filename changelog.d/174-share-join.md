@@ -9,3 +9,10 @@
   for that host.
 - The room code and an invite link are never arguments of a command, so they stay out
   of the shell's history. Only a person runs these commands: an agent is refused.
+- `benchbar share join --host-key HEX` joins only if the host shows that key, for a
+  caller that looked at the room first (`--dry-run --json`, `host_pin`). Another key
+  ends the run with exit code 3, before any request.
+- `share leave` and `share forget` also work while the `lan-rooms` Lab is off. The room
+  code and the invite link are not shown while you type them. `benchbar history` masks a
+  room code passed to `share join` by mistake, also when it is typed in parts, as the host
+  prints it (`482 913` without quotes) or with dashes.

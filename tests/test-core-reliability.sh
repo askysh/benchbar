@@ -279,6 +279,7 @@ grep -q 'fl_tmp_cleanup' "$FM" || fail "benchbar's exit trap must remove the tem
 SLOWSH="$TMP_DIR/slow14"; printf '#!/usr/bin/env bash\nsleep 60\n' >"$SLOWSH"; chmod +x "$SLOWSH"
 mkdir -p "$TMP_DIR/tmp14"
 TMPDIR="$TMP_DIR/tmp14" bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/run.sh"; FL_PLAIN=1; fl_ui_init
+  # trap in a child shell
   trap fl_tmp_cleanup EXIT; fl_signal_traps_install; FL_KILL_GRACE=0; fl_run_long slow "$1"' "$ROOT" "$SLOWSH" >/dev/null 2>&1 &
 RUNNER=$!
 for _ in $(seq 1 50); do ls "$TMP_DIR"/tmp14/benchbar-cmd.* >/dev/null 2>&1 && break; sleep 0.1; done
@@ -295,6 +296,7 @@ QUICK="$TMP_DIR/quick15"; printf '#!/bin/bash\n/bin/sleep 0.15\n' >"$QUICK"; chm
 for runner in "fl_run_long quick" "fl_run_with_timeout 30 quick"; do
   : >"$TMP_DIR/sleeps15"
   PATH="$TMP_DIR/bin15:$PATH" TMPDIR="$TMP_DIR/tmp14" bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/run.sh"; FL_PLAIN=1; fl_ui_init
+    # trap in a child shell
     trap fl_tmp_cleanup EXIT; '"$runner"' "$1"' "$ROOT" "$QUICK" >/dev/null 2>&1 || fail "$runner: a quick command must succeed"
   grep -q -x '0.02' "$TMP_DIR/sleeps15" || fail "$runner: the first pauses of the wait must be 20 ms"$'\n'"$(cat "$TMP_DIR/sleeps15")"
   if grep -q -x -E '1|0\.5' "$TMP_DIR/sleeps15"; then fail "$runner: a command of 150 ms must not be waited on with a long pause"$'\n'"$(cat "$TMP_DIR/sleeps15")"; fi

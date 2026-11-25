@@ -17,7 +17,7 @@
 . "$ROOT/lib/frappe-local/bench.sh"
 
 git config --global user.email me@example.com
-run_json() { set +e; OUT="$("$FM" "$@" 2>"$MOCK_STATE/stderr")"; CODE="$?"; ERR="$(cat "$MOCK_STATE/stderr")"; set -e; }
+run_json() { run_fm_split "$@"; }
 remote_head() { git -C "$REMOTES/$1.git" rev-parse "${2:-main}"; }
 
 # ---------------------------------------------------------------- APP-4: the user's ssh command

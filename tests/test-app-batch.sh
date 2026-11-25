@@ -37,7 +37,7 @@ mkdir -p "$BENCH/sites/site2"; printf '{}\n' >"$BENCH/sites/site2/site_config.js
 printf 'frappe 15.0.0\n' >"$BENCH/sites/site2/installed_apps"
 
 # run_json ARGS...: stdout (the JSON document) in OUT, the text in ERR
-run_json() { set +e; OUT="$("$FM" "$@" 2>"$MOCK_STATE/stderr")"; CODE="$?"; ERR="$(cat "$MOCK_STATE/stderr")"; set -e; }
+run_json() { run_fm_split "$@"; }
 plan() { run_json app add "$@" --dry-run --json --bench-dir "$BENCH"; }
 apply() { run_json app add "$@" --apply "$TOKEN" --yes --json --bench-dir "$BENCH"; }
 calls() { grep -c -E "$1" "$MOCK_LOG" || true; }

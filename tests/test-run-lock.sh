@@ -96,6 +96,7 @@ GRANDCHILD="$TMP_DIR/grandchild.pid"; TRACE="$TMP_DIR/trace"; : >"$TRACE"
 bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/run.sh"; . "$0/lib/frappe-local/lock.sh"
   FL_PLAIN=1; fl_ui_init
   fl_lock_acquire "$1"
+  # trap in a child shell
   trap "fl_lock_release; printf lock-released >>\"$3\"" EXIT
   fl_signal_traps_install
   fl_run_long "slow" "$2" "$4"' "$ROOT" "$LOCK" "$SLOW" "$TRACE" "$GRANDCHILD" >/dev/null 2>&1 &

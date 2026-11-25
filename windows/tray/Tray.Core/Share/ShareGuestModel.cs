@@ -46,9 +46,6 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
     /// <summary>The last thing that worked ("Left Test Room."), cleared by the next action.</summary>
     public string? Notice { get; private set; }
 
-    /// <summary>Set after a join whose room shows another host key than the one the person looked at: the room is in the list, nothing else follows.</summary>
-    public string? KeyWarning { get; private set; }
-
     // --- the exact calls ---
 
     public static string[] JoinedArgs() => ["share", "joined", "--json"];
@@ -57,8 +54,11 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
 
     /// <summary>The join. Without <paramref name="wait"/> the CLI ends when the host has not given a seat yet; without a seat id and where guests
     /// pick, it ends with the free seats. <c>--no-open</c>: the CLI never opens a browser for a run with <c>--json</c>, and the tray opens the address itself.</summary>
-    public static string[] JoinArgs(string target, string? seat = null, bool wait = true) =>
-        ["share", "join", target, .. seat is null ? [] : new[] { "--seat", seat }, .. wait ? [] : new[] { "--no-wait" }, "--no-open", "--json"];
+    public static string[] JoinArgs(string target, string? seat = null, bool wait = true, string? hostPin = null) =>
+        ["share", "join", target, .. hostPin is null ? [] : new[] { "--host-key", hostPin }, .. seat is null ? [] : new[] { "--seat", seat }, .. wait ? [] : new[] { "--no-wait" }, "--no-open", "--json"];
+
+    /// <summary>The CLI ends a join with this code when the host shows another key than <c>--host-key</c>, before any request.</summary>
+    public const int HostKeyMismatchExit = 3;
 
     public static string[] LeaveArgs(string id) => ["share", "leave", id, "--json"];
 
@@ -82,14 +82,20 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
     public async Task CheckSupportAsync(CancellationToken ct = default)
     {
         var known = commands?.Current;
-        if (known?.Has("share join") != true)
+        if (!CanPin(known))
         {
             var read = await cli.RunJsonAsync(CommandCatalogue.Args, null, CliTimeouts.Read, CommandCatalogue.Parse, ct).ConfigureAwait(true);
             known = read.Value;
         }
-        Supported = known?.Has("share join") == true;
+        Supported = CanPin(known);
         Raise();
     }
+
+    /// <summary>
+    /// The CLI joins and can pin the join to the key that was looked at (<c>--host-key</c>). A CLI that has <c>share join</c> without the flag is
+    /// treated as one that has no join: the code is never sent to a room the person did not pin.
+    /// </summary>
+    private static bool CanPin(CommandCatalogue? catalogue) => catalogue?.Has("share join") == true && catalogue.HasFlag("share join", "--host-key");
 
     /// <summary>
     /// <c>share joined --json</c>: the rooms this computer joined. It dials no room, so it is cheap and asked on every look at the tab. The view
@@ -217,10 +223,16 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
             Raise(); // the Cancel button is drawn from CanCancel
             try
             {
-                var result = await cli.RunJsonAsync(JoinArgs(look.Target, seat), Person().Stdin(line), JoinTimeout, cts.Token).ConfigureAwait(true);
+                var result = await cli.RunJsonAsync(JoinArgs(look.Target, seat, hostPin: look.HostPin), Person().Stdin(line), JoinTimeout, cts.Token).ConfigureAwait(true);
                 if (!result.Ok)
                 {
-                    LastError = Refusal(result, UiText.Get("GuestJoinFailed"));
+                    if (result.Exit == HostKeyMismatchExit)
+                    {
+                        // the host shows another key than the one looked at: nothing was sent; the person looks again and compares the digits
+                        LastError = UiText.Format("GuestKeyMismatch", look.Host);
+                        Look = null;
+                    }
+                    else LastError = Refusal(result, UiText.Get("GuestJoinFailed"));
                     return false;
                 }
                 GuestJoin joined;
@@ -233,10 +245,6 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
                     LastError = UiText.Get("GuestJoinUnreadable");
                     return false;
                 }
-                // the CLI looks at the room again before it sends the code, so a host that changed its key in between would be joined
-                // without the person seeing the new digits: say so, and leave the decision to them
-                KeyWarning = string.Equals(joined.Room.HostKey, look.HostKey, StringComparison.OrdinalIgnoreCase) ? null
-                    : UiText.Format("GuestKeyChanged", joined.Room.Room, look.SpacedKey, joined.Room.SpacedKey);
                 Remember(joined.Room);
                 Notice = joined.Room.State switch
                 {
@@ -390,9 +398,14 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
                 return false;
             }
             _waiting.Remove(room.Id);
-            Notice = result.Value is { } doc && doc["told_host"] is JsonValue t && t.TryGetValue<bool>(out var told) && !told
-                ? done + " " + UiText.Format("GuestHostNotTold", room.Host)
-                : done;
+            var note = done;
+            if (result.Value is { } doc)
+            {
+                if (doc["told_host"] is JsonValue t && t.TryGetValue<bool>(out var told) && !told) note += " " + UiText.Format("GuestHostNotTold", room.Host);
+                // forwarder_stopped (since the review fixes of #344): false means the process of the local address did not end with the command
+                if (doc["forwarder_stopped"] is JsonValue f && f.TryGetValue<bool>(out var stopped) && !stopped) note += " " + UiText.Format("GuestForwarderOpen", room.Room);
+            }
+            Notice = note;
             return true;
         }
         catch (OperationCanceledException)
@@ -439,7 +452,6 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
         Busy = busy;
         LastError = null;
         Notice = null;
-        KeyWarning = null;
         Raise();
         return true;
     }

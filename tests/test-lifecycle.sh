@@ -40,7 +40,7 @@ assert_eq "$A" "$(gstate BENCH_DIR)"
 PLB="$HOME/Library/LaunchAgents/com.benchbar.scratch-one.plist"
 PLC="$HOME/Library/LaunchAgents/com.benchbar.scratch-two.plist"
 assert_file "$PLB"; assert_file "$PLC"
-run_json() { set +e; OUT="$("$FM" "$@" 2>"$MOCK_STATE/stderr")"; CODE="$?"; ERR="$(cat "$MOCK_STATE/stderr")"; set -e; }
+run_json() { run_fm_split "$@"; }
 noni() { BENCHBAR_NONINTERACTIVE=1 run_json "$@" </dev/null; }
 
 # ---- uninstall-service keeps the shared helper block while another bench has a service

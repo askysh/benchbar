@@ -154,7 +154,7 @@ BenchBar for Windows is a beta. The benches run in WSL 2. See
 | Self update | `benchbar.exe self-update` and Update Now in the tray. | 0.8.3 | Windows | [Update](windows.md#update) |
 | Verified downloads | `benchbar.exe self-update` runs `install.ps1` of the release it installs, after it checks its checksum. `install.ps1` checks the provenance of the zip when `gh` is signed in. | 0.9.0 | Windows | [Update](windows.md#update) |
 
-The tray hosts a room and cannot join one yet. A Lab lists its platforms,
+The tray hosts a room and joins one by its address and code (not by an invite link). A Lab lists its platforms,
 and `labs on` refuses on another one. The Labs page shows why.
 
 ## MCP server

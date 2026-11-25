@@ -9,6 +9,7 @@
 # and self-update, which leaves the app's CLI to the app's own channel.
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
+soft_asserts on  # the sections check separate outputs: one failure must not hide the rest
 
 PREFIX="$MOCK_BREW_PREFIX"
 CELLAR="$PREFIX/Cellar/benchbar"

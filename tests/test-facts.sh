@@ -158,6 +158,7 @@ TMPDIR="$TIMING" MARK="$TIMING/answered" bash -c '
     fl_par_add_real "$1"
   }
   trap "fl_on_signal TERM" TERM
+  # trap in a child shell
   trap fl_facts_end EXIT
   fl_facts_begin
   fl_doctor_start x
@@ -192,6 +193,7 @@ TMPDIR="$AFWIN" bash -c '
   fl_log() { :; }; fl_now() { echo 1; }; fl_apps_all() { printf "a\nb\n"; }
   fl__af_collect() { exec sleep 9.37; }
   trap "fl_on_signal TERM" TERM
+  # trap in a child shell
   trap fl_facts_end EXIT
   ( sleep 0.5; kill -TERM "$$" ) &
   fl_app_facts_load

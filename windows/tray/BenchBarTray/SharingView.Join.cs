@@ -67,7 +67,6 @@ internal sealed partial class SharingView
         _root.Children.Add(Ui.Heading(UiText.Get("GuestHeading")));
         Line(UiText.Get("GuestIntro"), 0.7);
         if (guest.LastError is { } problem) Line(problem, error: true);
-        if (guest.KeyWarning is { } warning) Line(warning, caution: true);
         if (guest.Notice is { } notice) Line(notice, 0.8);
         if (guest.Busy is { } busy)
         {

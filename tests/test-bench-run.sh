@@ -15,13 +15,7 @@ mkdir -p "$BENCH/sites/bbtest.localhost"; printf '{}\n' >"$BENCH/sites/bbtest.lo
 printf '127.0.0.1 macdev\n\n# >>> benchbar >>>\n127.0.0.1 bbtest.localhost\n# <<< benchbar <<<\n' >>"$FL_HOSTS_FILE"
 
 # run_json ARGS...: stdout in OUT, stderr in ERR, apart
-run_json() {
-  set +e
-  OUT="$("$FM" "$@" 2>"$MOCK_STATE/stderr")"
-  CODE="$?"
-  ERR="$(cat "$MOCK_STATE/stderr")"
-  set -e
-}
+run_json() { run_fm_split "$@"; }
 R() { run_json run --bench-dir "$BENCH" "$@"; }
 
 # ---- refusals: exit 64, the list in the message, no bench call
