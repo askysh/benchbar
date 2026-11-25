@@ -121,8 +121,31 @@ nonisolated enum NetworkPanePresentation {
     static let pasteInvite = "Paste invite"
     static let pasteInviteHelp = "Reads the clipboard once, for a BenchBar invite your colleague sent."
 
+    /// The name is the link's own words, so the headline says where it comes from.
     static func invitePrompt(_ room: DiscoveredRoom) -> String {
-        "Join \(name(room)) from the invite"
+        "Join \u{201C}\(name(room))\u{201D} (the name the invite link gives)"
+    }
+
+    /// What the join sheet of an invite shows before Join (#159 SHARE-8). A link can come from a web
+    /// page or a chat, and its label is whatever the link says: the address it leads to and the
+    /// host's key are shown, so the guest can compare the key with the one the host reads out.
+    static func inviteCheck(_ invite: ShareInvite, addressAllowed: Bool) -> (note: String, address: String, key: String) {
+        let address: String
+        if let a = invite.address {
+            address = addressAllowed ? "Address: \(a.host):\(a.port)"
+                : "Address: \(a.host):\(a.port) is not on a local network, so it is not used. The room is looked for by its name."
+        } else {
+            address = "Address: none in the link. The room is looked for by its name."
+        }
+        return ("This room and its name come from an invite link, not from your network. Join only if the key below is the Host key your host sees on their Sharing tab or in benchbar share status (BenchBar 0.9.0 or later shows it).",
+                address, "Host key: " + keyGroups(invite.hostPin))
+    }
+
+    /// The first 16 hex digits of a host's key in groups of four, as the host's Sharing tab and
+    /// `benchbar share status` show them.
+    static func keyGroups(_ hostPin: Data) -> String {
+        let hex = Array(ShareDeepLink.fp16(of: hostPin))
+        return stride(from: 0, to: hex.count, by: 4).map { String(hex[$0..<min($0 + 4, hex.count)]) }.joined(separator: " ")
     }
 
     static func inviteProblem(_ problem: ShareInvite.Problem) -> String {

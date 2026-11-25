@@ -177,6 +177,16 @@ private struct JoinSheet: View {
             EmptyView()
         case .enteringCode(let room):
             Text(store.invite == nil ? NetworkPanePresentation.codePrompt(room) : NetworkPanePresentation.invitePrompt(room)).font(.headline)
+            if let invite = store.invite {
+                let check = NetworkPanePresentation.inviteCheck(invite, addressAllowed: store.inviteAddressUsed(invite))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(check.note)
+                    Text(check.address)
+                    Text(check.key).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
             TextField("Your name", text: $store.guestName)
             HStack {
                 Group {
