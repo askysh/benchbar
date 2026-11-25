@@ -123,7 +123,7 @@ test("a host that shows another key is refused before a byte is written; a wrong
         const identity = guest.identityOf(guest.newKey());
         const before = await budget(gw);
         const attempt = async (options) => {
-            const socket = await guest.dial({ host: LOOPBACK, port: gw.port, identity });
+            const socket = await guest.dial({ host: LOOPBACK, port: gw.port, pin: Buffer.from(gw.host.fp.slice(7), "hex"), identity });
             try {
                 return await guest.join(socket, { name: "Lab PC", model: "Linux", fg: identity.fg, ...options });
             } finally {
