@@ -147,10 +147,15 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 
 - [What's new](whats-new.md): what changed in each release, and what to do when you update.
 - [Features](features.md): every feature by platform, with the version it came in.
-- [Install](install.md): Homebrew, the one line installer, the DMG,
-  building from source, moving to Homebrew, and uninstalling.
+- [Install](install.md): Homebrew, the one line installer, the DMG and
+  building from source. [Update and migrate](upgrade.md) and
+  [Uninstall](uninstall.md) have their own pages.
 - [Quick start](quick-start.md): adopt a bench or install a new one.
-- [Windows](windows.md): benches in WSL, `benchbar.exe` and the tray.
+- Start here for your system: [macOS](macos.md), [Linux](linux.md) or
+  [Windows](windows.md) (benches in WSL, `benchbar.exe` and the tray).
+- [FAQ](faq.md) and [Glossary](glossary.md): short answers, and what
+  bench, site, agent and the other words mean.
+- [BenchBar compared with other ways to run a bench](concepts/alternatives.md).
 - [Benches and sites](guides/benches-and-sites.md): daily use, sites,
   several benches, ports and the scheduler.
 - [CLI reference](reference/cli/install.md): every command, flag and exit
