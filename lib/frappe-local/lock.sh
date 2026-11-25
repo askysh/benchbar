@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# lock.sh: one benchbar run at a time. A lock is a directory (mkdir is
-# atomic) holding the owner's pid in pid, written through a temp file and
+# lock.sh: one benchbar run at a time. A lock is a directory (made by
+# fl_mkdir_excl: mkdir alone is not atomic on every Linux) holding the
+# owner's pid in pid, written through a temp file and
 # rename so it is either absent or complete. Two locks are taken: the state
 # folder's (every install kind has its own state folder) and the bench's
 # own, <bench>/.benchbar.lock, so a Homebrew CLI, the app's CLI and a git
@@ -95,6 +96,24 @@ fl__lock_age() {
   printf '%s' "$(( $(date +%s) - m ))"
 }
 
+# fl_mkdir_excl DIR: makes the folder DIR as a lock; of several runs that make it at once, one wins.
+# The exit code of mkdir does not say which. uutils coreutils (the coreutils of Ubuntu 25.10 and
+# later) looks for the folder first and, when another process makes it between that look and its
+# own mkdir, reports success all the same: two runs held one lock and a lease was lost although
+# its take said ok (issue 138). The winner is the run whose claim file goes in first: bash's
+# noclobber opens it with O_EXCL, which no coreutils is between. A run that lost the claim does not
+# hold the folder and leaves it alone.
+fl_mkdir_excl() {
+  mkdir "$1" 2>/dev/null || return 1
+  ( set -o noclobber; : >"${1}/claim" ) 2>/dev/null
+}
+
+# fl_rmdir_excl DIR: lets go of a folder fl_mkdir_excl made: its claim, then the folder
+fl_rmdir_excl() {
+  rm -f "${1}/claim" 2>/dev/null
+  rmdir "$1" 2>/dev/null
+}
+
 # fl_lock_acquire [DIR] [WHAT]: takes the lock DIR (default: the state
 # folder's) or dies naming the live owner. WHAT names it in messages.
 fl_lock_acquire() {
@@ -108,8 +127,8 @@ fl_lock_acquire() {
   try=0
   while [[ "$try" -lt 5 ]]; do
     try=$((try + 1))
-    if mkdir "$dir" 2>/dev/null; then
-      fl__lock_write_pid "$dir" || { rmdir "$dir" 2>/dev/null; fl_die "Could not write the lock ${dir}."; }
+    if fl_mkdir_excl "$dir"; then
+      fl__lock_write_pid "$dir" || { fl_rmdir_excl "$dir"; fl_die "Could not write the lock ${dir}."; }
       FL_LOCK_DIR="$dir"
       FL_LOCK_DIRS="${FL_LOCK_DIRS}${dir}"$'\n'
       if [[ -z "$FL_LOCK_MAIN" ]]; then FL_LOCK_MAIN="$dir"; FL_LOCK_LEVEL="$BASH_SUBSHELL"
@@ -157,7 +176,7 @@ fl_lock_acquire() {
     # pid again: another reclaimer may have replaced the stale lock with a
     # live one of its own in between, and that one must stay.
     guard="${dir}.reclaim"
-    if mkdir "$guard" 2>/dev/null; then
+    if fl_mkdir_excl "$guard"; then
       now="$(cat "$dir/pid" 2>/dev/null || true)"
       stale="${dir}.stale.$$"
       held_by="$(fl__lock_info "$dir")"
@@ -165,10 +184,10 @@ fl_lock_acquire() {
         fl_warn "Reclaiming stale lock left by pid ${owner:-unknown}${held_by:+ (${held_by})}"
         rm -rf "$stale"
       fi
-      rmdir "$guard" 2>/dev/null || true
+      fl_rmdir_excl "$guard" || true
     elif [[ -d "$guard" && "$(fl__lock_age "$guard")" -ge "$FL_LOCK_GRACE_SECS" ]]; then
       # a reclaimer that died with the guard
-      rmdir "$guard" 2>/dev/null || true
+      fl_rmdir_excl "$guard" || true
     else
       sleep 0.2
     fi

@@ -488,6 +488,47 @@ assert_not_contains "$race_out" "a live lock" "(a waiter that judged an older fo
 assert_contains "$race_out" "locked"
 assert_no_file "$RACE_DIR/state/leases.lock"
 assert_no_file "$RACE_DIR/state/leases.lock.reclaim"
+# Two runs make the lock folder at once (issue 138; CI on Ubuntu 26.04, run 45348315776: six takes
+# said ok and the file held five leases). uutils coreutils' mkdir looks for the folder first and,
+# when another process makes it in between, exits 0 all the same: both runs held the lock, both read
+# the file before either wrote it, and the second write dropped the first one's lease. The mkdir
+# here answers as uutils does in that race (a folder that is there counts as made). A take must
+# still wait for the holder, and two reclaimers must not share the guard.
+UU_DIR="$TMP_DIR/uu"; mkdir -p "$UU_DIR/state" "$UU_DIR/bin"
+uu_out="$(FL_STATE_DIR="$UU_DIR/state" bash -c '
+  set -euo pipefail
+  . "$1/lib/frappe-local/lock.sh"; . "$1/lib/frappe-local/lease.sh"
+  mkdir() { command mkdir "$@" 2>/dev/null || [[ -d "${!#}" ]]; }
+  sleep() { :; }
+  fl__lease_lock && printf "first holds\n"
+  if (fl__lease_lock); then printf "second holds too\n"; else printf "second waits\n"; fi
+  fl__lease_unlock
+  if (fl__lease_lock); then printf "second holds once the first let go\n"; fi
+  fl__lease_unlock
+  g="$FL_STATE_DIR/leases.lock.reclaim"
+  fl_mkdir_excl "$g" && printf "guard taken\n"
+  if fl_mkdir_excl "$g"; then printf "guard taken twice\n"; fi
+  fl_rmdir_excl "$g"
+' _ "$ROOT" 2>&1)" || fail "the lease lock under a mkdir that answers as uutils does: $uu_out"
+assert_contains "$uu_out" "first holds"
+assert_contains "$uu_out" "second waits" "(a run whose mkdir said yes to a folder another run holds took the lock: $uu_out)"
+assert_not_contains "$uu_out" "second holds too"
+assert_contains "$uu_out" "second holds once the first let go"
+assert_contains "$uu_out" "guard taken"
+assert_not_contains "$uu_out" "guard taken twice"
+assert_no_file "$UU_DIR/state/leases.lock"
+assert_no_file "$UU_DIR/state/leases.lock.reclaim"
+# the same six takes at once with that mkdir first on PATH, the CI runner's case end to end
+# shellcheck disable=SC2016 # expands in the mkdir script
+printf '#!/bin/bash\n# mkdir as uutils coreutils answers the run that lost the race to make a folder: made\n"%s" "$@" 2>/dev/null || [[ -d "${!#}" ]]\n' "$(command -v mkdir)" >"$UU_DIR/bin/mkdir"
+chmod +x "$UU_DIR/bin/mkdir"
+python3 -c 'import os, sys; os.remove(sys.argv[1])' "$LEASES"
+for n in 1 2 3 4 5 6; do
+  (PATH="$UU_DIR/bin:$PATH" BENCHBAR_NONINTERACTIVE=1 BENCHBAR_CALLER="uu-${n}" "$FM" lease take --site "s${n}.localhost" --bench-dir "$BENCH" --for 5 >"$TMP_DIR/take.uu.$n" 2>&1; printf 'exit=%s\n' "$?" >>"$TMP_DIR/take.uu.$n") &
+done
+wait
+assert_eq "6" "$(lease_count)" "(six takes at once under a mkdir that answers as uutils does)$(takes_log uu)"
+assert_no_file "$FL_STATE_DIR/leases.lock"
 # the cap
 python3 - "$LEASES" "$BENCH" "$((T0 + 600))" <<'PY'
 import sys

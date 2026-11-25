@@ -74,34 +74,35 @@ fl__lease_write() {
 # lock folder older than 30 seconds belongs to a run that died inside its few file operations, and
 # a waiter takes it away. One waiter at a time does that, under a guard folder (leases.lock.reclaim),
 # and it reads the age again under the guard, right before it removes the folder.
-# The lock is never renamed away and put back. That was the first design, and it lost leases (seen
-# in CI, six takes over one stale lock): a waiter judged the old folder stale, a second waiter
-# removed it and a third took the lock, and then the first one renamed that live lock away. While
-# it was away a fourth run took the lock too, so two runs wrote the file and one lease was lost
-# although its take said ok; and the put back landed inside the new folder, which no rmdir could
-# remove any more, so every later take ended with "busy".
+# Both folders are made with fl_mkdir_excl (lock.sh), not a bare mkdir: uutils coreutils' mkdir
+# (Ubuntu 25.10 and later) also says yes to the run that lost the race to make the folder, so two
+# takes held the lock, both read the file before either wrote it, and one lease was lost although
+# its take said ok (issue 138, CI on Ubuntu 26.04).
+# The lock is never renamed away and put back. That was the first design: a waiter that judged the
+# old folder stale could rename a live lock away, and the put back landed inside the new folder,
+# which no rmdir could remove any more, so every later take ended with "busy".
 fl__lease_lock() {
   local dir="${FL_STATE_DIR}/leases.lock" guard i=0
   guard="${dir}.reclaim"
   mkdir -p "$FL_STATE_DIR" 2>/dev/null || true
-  while ! mkdir "$dir" 2>/dev/null; do
+  while ! fl_mkdir_excl "$dir"; do
     if [[ -d "$dir" && "$(fl__lock_age "$dir")" -ge 30 ]]; then
-      if mkdir "$guard" 2>/dev/null; then
+      if fl_mkdir_excl "$guard"; then
         # judged again: since the look above another waiter may have removed the stale folder and a
         # third run taken the lock, and that one is not this run's to remove
-        if [[ -d "$dir" && "$(fl__lock_age "$dir")" -ge 30 ]]; then rmdir "$dir" 2>/dev/null || true; fi
-        rmdir "$guard" 2>/dev/null || true
+        if [[ -d "$dir" && "$(fl__lock_age "$dir")" -ge 30 ]]; then fl_rmdir_excl "$dir" || true; fi
+        fl_rmdir_excl "$guard" || true
         continue
       fi
       # a waiter that died with the guard
-      if [[ -d "$guard" && "$(fl__lock_age "$guard")" -ge 30 ]]; then rmdir "$guard" 2>/dev/null || true; fi
+      if [[ -d "$guard" && "$(fl__lock_age "$guard")" -ge 30 ]]; then fl_rmdir_excl "$guard" || true; fi
     fi
     i=$((i + 1))
     [[ "$i" -le 50 ]] || return 1
     sleep 0.1
   done
 }
-fl__lease_unlock() { rmdir "${FL_STATE_DIR}/leases.lock" 2>/dev/null || true; }
+fl__lease_unlock() { fl_rmdir_excl "${FL_STATE_DIR}/leases.lock" || true; }
 
 # fl_lease_holder_v VAR: who a lease is held by: BENCHBAR_CALLER (a name the agent or script chose; a mcp
 # server sets it per client), else "agent" under BENCHBAR_NONINTERACTIVE, else the login name
