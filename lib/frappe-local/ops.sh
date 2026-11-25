@@ -302,11 +302,28 @@ fl_op_effective_v() {
   printf -v "$1" '%s' "$__s"
 }
 
-# fl_op_json_v VAR RECORD [RESULT]: the record as the JSON document of op status and op list, with the
-# state that is true now; RESULT (the run's done line) is added as "result"
+# fl_op_now_v REC_VAR STATE_VAR OP_ID: the record and the state to show, for a reader. A run finishes its
+# record before it exits, so a record that still says running while its pid is gone may be one the run
+# finished between the read and the pid check (op wait on a background run said interrupted for a run
+# that was done, macOS CI): the record is read once more before the run counts as interrupted.
+fl_op_now_v() {
+  local __now_rec __now_st
+  fl_op_read_v __now_rec "$3"
+  fl_op_effective_v __now_st "$__now_rec"
+  if [[ "$__now_st" == "interrupted" && -n "$__now_rec" ]]; then
+    fl_op_read_v __now_rec "$3"
+    fl_op_effective_v __now_st "$__now_rec"
+  fi
+  printf -v "$1" '%s' "$__now_rec"
+  printf -v "$2" '%s' "$__now_st"
+}
+
+# fl_op_json_v VAR RECORD [RESULT] [STATE]: the record as the JSON document of op status and op list, with
+# the state that is true now; RESULT (the run's done line) is added as "result". STATE is the state the
+# caller already has from fl_op_now_v: the document shows that one, not a second look at the pid.
 fl_op_json_v() {
-  local __rec="$2" __eff __doc
-  fl_op_effective_v __eff "$__rec"
+  local __rec="$2" __eff="${4:-}" __doc
+  [[ -n "$__eff" ]] || fl_op_effective_v __eff "$__rec"
   __doc="$__rec"
   if [[ "$__eff" == "interrupted" ]]; then
     __doc="${__doc/\"state\":\"running\"/\"state\":\"interrupted\"}"
@@ -375,11 +392,11 @@ fl_op_epoch() {
 
 # ---------------------------------------------------------------- benchbar op
 
-# fl_op_text RECORD: an op for a person
+# fl_op_text RECORD [STATE]: an op for a person (STATE as for fl_op_json_v)
 fl_op_text() {
-  local rec="$1" id state cmd bench site step sname sstat plabel pel log ex ago out
+  local rec="$1" id state="${2:-}" cmd bench site step sname sstat plabel pel log ex ago out
   fl_op_field_v id "$rec" op_id
-  fl_op_effective_v state "$rec"
+  [[ -n "$state" ]] || fl_op_effective_v state "$rec"
   fl_op_field_v cmd "$rec" command; fl_op_field_v bench "$rec" bench; fl_op_field_v site "$rec" site
   fl_op_field_v step "$rec" id; fl_op_field_v sname "$rec" name; fl_op_field_v sstat "$rec" status
   fl_op_field_v plabel "$rec" label; fl_op_field_v pel "$rec" elapsed
@@ -399,11 +416,10 @@ fl_op_text() {
 fl_op_one() {
   local id="$1" rec result="" doc eff
   fl_op_id_ok "$id" || fl_die "Not an op id: ${id}" "An op id looks like op-20261119-101500-4242; benchbar op list shows them."
-  fl_op_read_v rec "$id"
+  fl_op_now_v rec eff "$id"
   [[ -n "$rec" ]] || fl_die "No operation ${id}." "benchbar op list shows the operations this machine remembers (the newest 100)."
-  fl_op_effective_v eff "$rec"
   case "$eff" in done|failed|interrupted) fl_op_result_v result "$id" ;; esac
-  if [[ "$OPT_JSON" == "1" ]]; then fl_op_json_v doc "$rec" "$result"; printf '%s\n' "$doc"; else fl_op_text "$rec"; fi
+  if [[ "$OPT_JSON" == "1" ]]; then fl_op_json_v doc "$rec" "$result" "$eff"; printf '%s\n' "$doc"; else fl_op_text "$rec" "$eff"; fi
 }
 
 # fl_op_list_cmd: the operations, newest first (--limit N, --running)
@@ -424,12 +440,11 @@ fl_op_list_cmd() {
   rows+=("Op|Command|State|Took|Step")
   while IFS= read -r id; do
     [[ -n "$id" && "$n" -lt "$limit" ]] || continue
-    fl_op_read_v rec "$id"
+    fl_op_now_v rec eff "$id"
     [[ -n "$rec" ]] || continue
-    fl_op_effective_v eff "$rec"
     [[ "$running" != "1" || "$eff" == "running" || "$eff" == "starting" ]] || continue
     n=$((n + 1))
-    fl_op_json_v doc "$rec"
+    fl_op_json_v doc "$rec" "" "$eff"
     docs="${docs}${sep}${doc%$'\n'}"; sep=","
     fl_op_field_v cmd "$rec" command; fl_op_ago_v ago "$rec"; fl_op_field_v step "$rec" id
     rows+=("${id}|${cmd:-?}|${eff}|${ago}|${step:--}")
@@ -463,20 +478,19 @@ fl_op_wait_cmd() {
   [[ "$timeout" =~ ^[0-9]+$ ]] || fl_die "--timeout takes a number of seconds." "Example: benchbar op wait ${id} --timeout 600"
   fl_op_id_ok "$id" || fl_die "Not an op id: ${id}" "An op id looks like op-20261119-101500-4242; benchbar op list shows them."
   while :; do
-    fl_op_read_v rec "$id"
+    fl_op_now_v rec eff "$id"
     [[ -n "$rec" ]] || fl_die "No operation ${id}." "benchbar op list shows the operations this machine remembers (the newest 100)."
-    fl_op_effective_v eff "$rec"
     case "$eff" in running|starting) ;; *) break ;; esac
     if [[ "$timeout" -gt 0 && $((SECONDS - start)) -ge "$timeout" ]]; then timed_out=1; break; fi
     sleep "$poll"
   done
   case "$eff" in done|failed|interrupted) fl_op_result_v result "$id" ;; esac
   if [[ "$OPT_JSON" == "1" ]]; then
-    fl_op_json_v doc "$rec" "$result"
+    fl_op_json_v doc "$rec" "$result" "$eff"
     [[ "$timed_out" != "1" ]] || doc="${doc%\}},\"timed_out\":true}"
     printf '%s\n' "$doc"
   else
-    fl_op_text "$rec"
+    fl_op_text "$rec" "$eff"
     [[ "$timed_out" != "1" ]] || printf 'Still running after %ss; benchbar op wait %s goes on.\n' "$timeout" "$id"
   fi
   [[ "$timed_out" != "1" ]] || return 1
@@ -523,8 +537,7 @@ fl_op_launch_wait() {
   tries=$(( ${FL_OP_LAUNCH_WAIT:-5} * 5 ))
   [[ "${FL_TESTING:-}" == "1" ]] || tries=25
   while :; do
-    fl_op_read_v rec "$id"
-    fl_op_effective_v st "$rec"
+    fl_op_now_v rec st "$id"
     [[ "$st" == "starting" && "$i" -lt "$tries" ]] || break
     sleep 0.2
     i=$((i + 1))
@@ -607,9 +620,8 @@ fl_op_prune() {
     [[ -n "$id" ]] || continue
     n=$((n + 1))
     [[ "$n" -gt "$keep" && "$id" != "${FL_OP_ID:-}" ]] || continue
-    fl_op_read_v rec "$id"
+    fl_op_now_v rec eff "$id"
     if [[ -n "$rec" ]]; then
-      fl_op_effective_v eff "$rec"
       [[ "$eff" != "running" && "$eff" != "starting" ]] || continue
     fi
     for f in "${dir}/${id}.json" "${dir}/${id}.jsonl" "${dir}/${id}.err"; do

@@ -5,8 +5,9 @@
 # package manager and targets next-release, the Swift packages of the app are
 # the ones macos/Package.resolved names (and Package.swift, project.yml and
 # sparkle.yml agree), the build tools of the CI come with a sha256, the Go of
-# the shim is a supported release, and the third party installers of the
-# Linux install carry a version and a sha256.
+# the shim is a supported release, the NuGet packages of the tray are locked
+# (packages.lock.json, restored with RestoreLockedMode), and the third party
+# installers of the Linux install carry a version and a sha256.
 # shellcheck disable=SC2016  # the patterns hold literal $ on purpose
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
@@ -204,5 +205,44 @@ done
 assert_not_contains "$LINUX" "astral.sh/uv/install.sh"
 assert_not_contains "$LINUX" "fnm.vercel.app"
 assert_contains "$(cat "$ROOT/lib/frappe-local/bench.sh")" "astral.sh/uv/${uv_ver}/install.sh"
+
+# ---- NuGet packages of the tray: a lock file per project, and every CI restore is locked (OPS-7)
+props="$(cat "$ROOT/windows/tray/Directory.Build.props")"
+assert_contains "$props" "<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>"
+for proj in "$ROOT"/windows/tray/*/*.csproj; do
+  [[ -f "$(dirname "$proj")/packages.lock.json" ]] || fail "${proj#"$ROOT"/} has no packages.lock.json next to it (cd windows/tray && dotnet restore --force-evaluate, then commit it)"
+done
+for lock in "$ROOT"/windows/tray/*/packages.lock.json; do
+  assert_contains "$(cat "$lock")" '"version": 2' "(${lock#"$ROOT"/} is a NuGet lock file)"
+  assert_contains "$(cat "$lock")" "win-arm64" "(${lock#"$ROOT"/} covers the arm64 build)"
+done
+# a restore that is not locked (-p:RestoreLockedMode=true, or dotnet restore --locked-mode) would take a version that changed since the lock file was written
+set +e
+OUT="$(python3 -I - "$ROOT" <<'PY' 2>&1
+import glob, re, sys
+
+root = sys.argv[1]
+bad = []
+files = sorted(glob.glob(root + "/.github/workflows/*.yml")) + sorted(glob.glob(root + "/.github/actions/*/action.yml"))
+for path in files:
+    for n, line in enumerate(open(path).read().split("\n"), 1):
+        code = line.strip()
+        m = re.match(r"^(?:-\s+)?(?:run:\s+)?dotnet (restore|build|test|publish|pack)\b(.*)$", code)
+        if not m:
+            continue
+        # --no-restore and --no-build leave the restore to an earlier command that is checked on its own
+        if m.group(1) != "restore" and "--no-restore" in m.group(2):
+            continue
+        if m.group(1) == "test" and "--no-build" in m.group(2):
+            continue
+        if "--locked-mode" not in m.group(2) and "-p:RestoreLockedMode=true" not in m.group(2):
+            bad.append(f"{path[len(root) + 1:]}:{n}: {code} restores without -p:RestoreLockedMode=true")
+print("\n".join(bad))
+sys.exit(1 if bad else 0)
+PY
+)"
+CODE=$?
+set -e
+assert_eq 0 "$CODE" "(every dotnet restore in CI is locked)"$'\n'"$OUT"
 
 printf 'test-supply-chain: ok\n'

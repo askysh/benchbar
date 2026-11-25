@@ -159,6 +159,51 @@ assert_eq "failed 3" "$(printf '%s' "$OUT" | jget - 'd["state"] + " " + str(d["e
 run_json op wait op-20260101-000002-12 --json
 assert_eq "1" "$CODE" "(an interrupted run: exit 1)"
 assert_eq "interrupted" "$(printf '%s' "$OUT" | jget - 'd["state"]')"
+# A run that ends between a reader's look at its record and the reader's check of its pid is done, not
+# interrupted (macOS CI, run 45633459351: op wait on a background site backup said interrupted, its
+# output held the done line). The run finishes its record before it exits, so a reader that finds the
+# pid gone reads the record once more. The kill below is that moment: it finishes the record, then says
+# the pid is gone.
+fake_op op-20260101-000007-17 running "$DEAD"
+race_out="$(FL_STATE_DIR="$FL_STATE_DIR" OPS="$OPS" DEAD="$DEAD" bash -c '
+  set -euo pipefail
+  . "$1/lib/frappe-local/ops.sh"
+  OPT_JSON=1
+  kill() {
+    if [[ "${1:-}" == "-0" ]]; then
+      local f="$OPS/op-20260101-000007-17.json" r
+      IFS= read -r r <"$f"; r="${r/\"state\":\"running\"/\"state\":\"done\"}"; r="${r/\"exit\":null/\"exit\":0}"
+      printf "%s\n" "$r" >"$f.tmp" && mv -f "$f.tmp" "$f"
+      return 1
+    fi
+    builtin kill "$@"
+  }
+  for c in "fl_op_wait_cmd op-20260101-000007-17" "fl_op_one op-20260101-000007-17"; do
+    $c | sed -n "s/.*\"state\":\"\([a-z]*\)\".*/\1/p"
+    # back to running for the next reader
+    IFS= read -r r <"$OPS/op-20260101-000007-17.json"; r="${r/\"state\":\"done\"/\"state\":\"running\"}"; printf "%s\n" "$r" >"$OPS/op-20260101-000007-17.json"
+  done
+' _ "$ROOT" 2>&1)" || fail "the race probe failed to run: $race_out"
+assert_eq "done"$'\n'"done" "$race_out" "(op wait and op status on a run that finished as the reader looked: done, not interrupted)"
+# the document shows the state the reader settled on: no second look at the pid that could say otherwise
+fake_op op-20260101-000008-18 running "$LIVE"
+race_out="$(FL_STATE_DIR="$FL_STATE_DIR" OPS="$OPS" bash -c '
+  set -euo pipefail
+  . "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/ops.sh"
+  OPT_JSON=1; n=0
+  kill() {
+    if [[ "${1:-}" == "-0" ]]; then
+      n=$((n + 1)); [[ "$n" -ge 2 ]] || return 0
+      return 1
+    fi
+    builtin kill "$@"
+  }
+  fl_op_one op-20260101-000008-18 | sed -n "s/.*\"state\":\"\([a-z]*\)\".*/\1/p"
+  OPT_JSON=0; n=0
+  fl_op_one op-20260101-000008-18 | sed -n "1s/.*  \([a-z]*\)$/\1/p"
+' _ "$ROOT" 2>&1)" || fail "the second race probe failed to run: $race_out"
+assert_eq "running"$'\n'"running" "$race_out" "(op status JSON and text show the state the reader found, not a second pid check)"
+fake_op op-20260101-000007-17 running "$DEAD"
 run_json op wait op-20260101-000001-11 --timeout 1 --json
 assert_eq "1" "$CODE" "$OUT"
 assert_eq "running True" "$(printf '%s' "$OUT" | jget - 'd["state"] + " " + str(d["timed_out"])')" "(gave up waiting, the run goes on)"
