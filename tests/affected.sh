@@ -85,6 +85,7 @@ lib_family() {
     sites|site-backups|site-restore|snapshots|pull) echo "test-sites test-bench-run test-site-backups test-site-restore test-snapshots test-snapshots-2 test-pull test-install-json" ;;
     ports|port-management) echo "test-ports test-port-management test-multi-bench test-adopt" ;;
     cmd-install) echo "test-install-json test-install-json-2 test-install-failures test-install-linux test-phases test-fresh-install test-wsl-preflight test-prerequisites-linux test-ports test-service test-adopt test-json" ;;
+    cmd-where) echo "test-lean-load test-status-cost test-mcp test-docs-command test-homebrew test-cli test-json test-version-sources" ;;
     cmd-service) echo "test-service test-adopt test-install-json test-phases test-platform test-platform-linux test-json" ;;
     cmd-adopt) echo "test-adopt test-service test-ports test-port-management test-multi-bench test-install-json" ;;
     service|launchd|systemd|templates|shellrc|mariadb|wkhtmltopdf|platform|platform-linux) echo "test-platform test-platform-linux test-systemd test-service test-templates test-shellrc test-wsl-preflight test-install-linux test-install-failures test-install-json test-phases test-sudo-env test-windows-commands test-hygiene test-homebrew" ;;
