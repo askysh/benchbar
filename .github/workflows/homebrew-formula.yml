@@ -137,3 +137,73 @@ jobs:
           brew uninstall askysh/tap/benchbar
           [ ! -e "$(brew --prefix)/bin/benchbar" ] || { echo "::error::bin/benchbar is left after brew uninstall"; exit 1; }
           [ ! -e "$(brew --prefix)/opt/benchbar" ] || { echo "::error::opt/benchbar is left after brew uninstall"; exit 1; }
+
+  # The same formula on Homebrew for Linux (Ubuntu): style, audit, install,
+  # test and the CLI in an empty HOME. No cask: it is macOS only.
+  formula-linux:
+    name: brew install on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ANALYTICS: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: Homebrew/actions/setup-homebrew@61b401267256bb9c047d6d1481b176d5772a0ba7 # 2026.11.23.1
+
+      - name: Tarball and a local askysh/tap
+        id: tap
+        run: |
+          version="$(sed -n 's/^FL_VERSION="\([^"]*\)"$/\1/p' benchbar | head -n 1)"
+          case "$version" in
+            *-rc.*) echo "::notice title=Release candidate::$version is a pre-release, which the tap never takes; the formula check is skipped."
+                    echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0 ;;
+          esac
+          dist="$RUNNER_TEMP/dist"
+          scripts/cli-tarball.sh "$version" "$dist"
+          brew tap-new --no-git askysh/tap
+          if brew trust --help >/dev/null 2>&1; then brew trust askysh/tap; fi
+          tap="$(brew --repository)/Library/Taps/askysh/homebrew-tap"
+          scripts/homebrew-render.sh --version "$version" --cli "$dist/benchbar-cli-${version}.tar.gz" \
+            --url "file://$dist/benchbar-cli-${version}.tar.gz" "$tap"
+          cat "$tap/Formula/benchbar.rb"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: brew style and brew audit
+        if: steps.tap.outputs.skip != 'true'
+        run: |
+          brew style askysh/tap/benchbar
+          brew audit --strict --formula askysh/tap/benchbar
+
+      - name: brew install and brew test
+        if: steps.tap.outputs.skip != 'true'
+        run: |
+          brew install --formula askysh/tap/benchbar
+          brew test askysh/tap/benchbar
+
+      - name: The installed CLI in an empty HOME
+        if: steps.tap.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.tap.outputs.version }}
+        run: |
+          export HOME="$RUNNER_TEMP/home"
+          mkdir -p "$HOME"
+          unset XDG_STATE_HOME
+          cli="$(brew --prefix)/bin/benchbar"
+          "$cli" --version | grep -F "benchbar ${VERSION}"
+          where="$("$cli" where --json)"
+          echo "$where"
+          case "$where" in *'"install":"homebrew"'*) ;; *) echo "::error::where --json does not say homebrew"; exit 1 ;; esac
+          case "$where" in *'"state_dir":"'"$HOME"'/.local/state/benchbar"'*) ;; *) echo "::error::state is not in ~/.local/state/benchbar"; exit 1 ;; esac
+          case "$where" in *"/Cellar/"*) echo "::error::where --json names a Cellar path"; exit 1 ;; esac
+
+      - name: brew uninstall
+        if: steps.tap.outputs.skip != 'true'
+        run: |
+          brew uninstall askysh/tap/benchbar
+          [ ! -e "$(brew --prefix)/bin/benchbar" ] || { echo "::error::bin/benchbar is left after brew uninstall"; exit 1; }

@@ -102,7 +102,7 @@ from mcpclient import Client, text
 fake, mode, tok = sys.argv[1], sys.argv[2], sys.argv[3]
 c = Client([os.environ["FM"], "mcp"], {"BENCHBAR_MCP_CLI": fake, "FAKE_MODE": mode, "BENCHBAR_MCP_ALLOW_BENCH": "/x/acme"})
 tools = c.tools()
-assert len(tools) == 66, [t["name"] for t in tools]
+assert len(tools) == 68, [t["name"] for t in tools]
 LABEL = "Data from the bench ("
 tokens = {}                                                    # the token each plan tool returned: its apply tool takes that one
 for t in tools:
@@ -644,10 +644,13 @@ assert open(log).read() == before, "a refused call ran the CLI"
 names = [t["name"] for t in c.tools()]
 for gone in ("benchbar_repair", "benchbar_install", "benchbar_labs_on", "benchbar_labs_off", "benchbar_labs_status",
              "benchbar_ports_setup", "benchbar_register", "benchbar_site_hosts", "benchbar_console", "benchbar_db", "benchbar_share", "benchbar_share_on", "benchbar_lan_guard", "benchbar_self_update",
-             "benchbar_site_default", "benchbar_app_focus", "benchbar_app_unfocus"):
+             "benchbar_site_default"):
     assert gone not in names, gone
     r = c.call(gone, {})
     assert r.get("error", {}).get("code") == -32602 and "unknown tool" in r["error"]["message"], (gone, r)
+# focus and unfocus are tools (P15, #158): a pin in the bench's state file, gated by no lease
+for here in ("benchbar_app_focus", "benchbar_app_unfocus"):
+    assert here in names, here
 c.close()
 PY
 FM="$FM" python3 "$TMP_DIR/readtools.py" "$FAKE" "$FAKE_LOG" || fail "MCP-15: the read tools"
