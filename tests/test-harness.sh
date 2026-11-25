@@ -160,13 +160,77 @@ on_exit 'printf "after a failure\n"'
 EOF
 eq 0 "$CODE" "$OUT"; has "$OUT" "dir still there"; has "$OUT" "after a failure"
 
-# ---- no test that sources the harness sets its own EXIT trap at the top level: use on_exit
-hits=""
+# ---- a cleanup cannot end the handler or change the status: each runs in a subshell
+run_case cleanexit <<'EOF'
+soft_asserts on
+on_exit 'exit 0'
+on_exit 'printf "second ran\n"'
+assert_eq a b "(soft)"
+EOF
+eq 1 "$CODE" "(on_exit 'exit 0' hid a soft failure: $OUT)"; has "$OUT" "second ran"
+run_case cleanown <<'EOF'
+on_exit 'exit 0'
+on_exit 'printf "second ran\n"'
+exit 3
+EOF
+eq 3 "$CODE" "(on_exit 'exit 0' changed the test's own exit code: $OUT)"; has "$OUT" "second ran"
+run_case cleanunset <<'EOF'
+set -u
+soft_asserts on
+on_exit 'printf "%s\n" "${UNSET_CLEANUP_VARIABLE}"'
+on_exit 'printf "second ran\n"'
+assert_eq a b "(soft)"
+EOF
+eq 1 "$CODE" "(a set -u abort in a cleanup hid a soft failure: $OUT)"; has "$OUT" "second ran"
+run_case cleanunsetok <<'EOF'
+set -u
+on_exit 'printf "%s\n" "${UNSET_CLEANUP_VARIABLE}"'
+on_exit 'printf "second ran\n"'
+EOF
+eq 0 "$CODE" "$OUT"; has "$OUT" "second ran"
+
+# ---- no test that sources the harness (and no tests/lib file but the harness) sets its own EXIT
+# trap: it replaces harness_exit and a soft failure then passes. Use on_exit CMD. The scan drops
+# heredoc bodies, and a line marked "trap in a child shell" (itself or the line above) is a trap of
+# a bash -c child, not of the test.
+trap_hits() {
+  awk '
+    hd != "" { t = $0; sub(/^[ \t]+/, "", t); if (t == hd) hd = ""; prev = $0; next }
+    {
+      line = $0; keep = line
+      if (line ~ /trap in a child shell/ || prev ~ /trap in a child shell/) keep = ""
+      print FILENAME ":" FNR ": " keep
+      if (match(line, /<<-?[ \t]*["\047]?[A-Za-z_][A-Za-z_0-9]*["\047]?/) && substr(line, RSTART - 1, 1) != "<" && RSTART > 0) {
+        hd = substr(line, RSTART, RLENGTH); gsub(/<<-?[ \t]*["\047]?/, "", hd); gsub(/["\047]/, "", hd)
+      }
+      prev = line
+    }' "$@" | grep -E "(^|[;&|({[:space:]])trap[[:space:]]+(-|'[^']*'|\"([^\"\\\\]|\\\\.)*\"|[^[:space:]'\";&|]+)([[:space:]]+[A-Za-z0-9]+)*[[:space:]]+(EXIT|0)([[:space:];&)]|\$)" || true
+}
+cat >"$WORK/traps-bad.sh" <<'EOF'
+trap 'x' EXIT
+  trap x 0
+f() {
+  trap "a; b" EXIT
+}
+(trap - EXIT)
+trap 'x' INT EXIT
+if true; then trap 'x' EXIT; fi
+EOF
+eq 6 "$(trap_hits "$WORK/traps-bad.sh" | wc -l | tr -d ' ')" "(the scan missed a trap form)"
+# shellcheck disable=SC2016  # the sample text is not meant to expand
+{
+  printf '%s\n' "trap 'x' INT" "trap 'exit 143' TERM; wait; exit 0 ;;" "x=\$((1<<3)); y=<<<abc" \
+    "cat <<'TXT'" "trap 'x' EXIT" "TXT" "bash -c 'a" "  # trap in a child shell" "  trap x EXIT'" "trap x EXIT # trap in a child shell"
+} >"$WORK/traps-ok.sh"
+eq "" "$(trap_hits "$WORK/traps-ok.sh")" "(the scan flagged text that is not a trap of the test)"
+files=()
 for f in "$ROOT"/tests/test-*.sh; do
-  grep -qE '^(\.|source) .*lib/harness\.sh' "$f" || continue
-  h="$(grep -nE '^trap .* EXIT' "$f" || true)"
-  [[ -z "$h" ]] || hits="${hits}${f##*/}: ${h}"$'\n'
+  grep -qE '^(\.|source) .*lib/harness\.sh' "$f" && files+=("$f")
 done
+for f in "$ROOT"/tests/lib/*.sh; do
+  [[ "${f##*/}" == harness.sh ]] || files+=("$f")
+done
+hits="$(trap_hits "${files[@]}")"
 eq "" "$hits" "(a trap of its own replaces harness_exit and a soft failure then passes: use on_exit CMD)"
 
 # ---- no test picks a "free" port by binding port 0 and closing it: the number is in the system's

@@ -17,22 +17,26 @@ TMP_DIR="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/benchbar-test.XXXXXX")" && pwd -P)"
 # and otherwise ended well into a failing one.
 SOFT_FILE="$TMP_DIR/soft-fails"
 SOFT_ASSERTS="${BENCHBAR_SOFT_ASSERTS:-0}"
-# on_exit CMD: cleanup the test needs (kill a listener, cd away); runs in order before the folder
-# is removed. A test never sets its own EXIT trap: that replaces harness_exit and a soft failure
-# then passes (test-harness checks for it).
+# on_exit CMD: cleanup the test needs (kill a listener, stop a server); runs in order, each in a
+# subshell, before the folder is removed. So an "exit" or a set -u abort in one cleanup ends only
+# that cleanup, and nothing it does changes the test's status. A cleanup that must change the
+# shell of the test itself is not supported. A test never sets its own EXIT trap: that replaces
+# harness_exit and a soft failure then passes (test-harness checks for it).
 ON_EXIT_CMDS=""
 on_exit() { ON_EXIT_CMDS="${ON_EXIT_CMDS}${1}"$'\n'; }
 harness_exit() {
   local code="$?" n=0 c
   while IFS= read -r c; do
-    [[ -z "$c" ]] || eval "$c" || true
+    [[ -z "$c" ]] || ( eval "$c" ) || true
   done <<<"$ON_EXIT_CMDS"
   [[ -f "$SOFT_FILE" ]] && n="$(wc -l <"$SOFT_FILE" | tr -d ' ')"
+  cd / 2>/dev/null || true
   rm -rf "$TMP_DIR"
   if [[ "$code" == "0" && "$n" != "0" ]]; then
     printf 'FAIL: %s assertion(s) failed (listed above)\n' "$n" >&2
-    exit 1
+    code=1
   fi
+  exit "$code"
 }
 trap harness_exit EXIT
 
