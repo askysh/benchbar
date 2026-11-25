@@ -19,13 +19,7 @@ export FL_OP_WAIT_POLL=0.1
 unset BENCHBAR_CALLER
 
 # no terminal on stdin, whatever runs the suite; JSON calls keep stdout and stderr apart
-run_json() {
-  set +e
-  OUT="$("$FM" "$@" 2>"$MOCK_STATE/stderr" </dev/null)"
-  CODE="$?"
-  ERR="$(cat "$MOCK_STATE/stderr")"
-  set -e
-}
+run_json() { run_fm_split "$@"; }
 run_quiet() { set +e; "$FM" "$@" >/dev/null 2>&1 </dev/null; set -e; }
 # last_line: the newest line of the history file
 last_line() { tail -n 1 "$HIST"; }
