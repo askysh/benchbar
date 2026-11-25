@@ -56,17 +56,32 @@ fl__op_str_v() {
   if [[ -n "${2:-}" ]]; then fl_json_str_v "$1" "$2"; else printf -v "$1" '%s' null; fi
 }
 
-# fl_op_new_id_v VAR: a new op id, its file made empty (noclobber, so two runs never share one)
+# fl_op_new_id_v VAR: a new op id, its file made empty (noclobber, so two runs never share one). The id sorts
+# after every id that is already there (fl_op_ids): the clock can step back (a VM that syncs its time does so by
+# seconds, WSL every 30 s), and a run that starts after a step would carry an older stamp than the run before it.
+# So when the clock is not past the newest stamp in the folder, the id takes that stamp and a -N one above the
+# newest -N of it, and N, not the pid, orders the runs of one stamp. A name read in bash only, no fork.
 fl_op_new_id_v() {
-  local __dir __stamp __id __n=0
+  local __dir __stamp __id __n=0 __max __top="" __topn=0 __f __b __s __k
+  local __re='^op-([0-9]{8}-[0-9]{6})-[0-9]+(-([0-9]+))?\.json$'
   __dir="$(fl_ops_dir)"
   mkdir -p "$__dir" 2>/dev/null || return 1
-  __stamp="$(date +%Y%m%d-%H%M%S)-$$"
-  __id="op-${__stamp}"
+  __stamp="$(date +%Y%m%d-%H%M%S)"
+  for __f in "$__dir"/op-*.json; do
+    __b="${__f##*/}"
+    [[ "$__b" =~ $__re ]] || continue
+    __s="${BASH_REMATCH[1]}"; __k="${BASH_REMATCH[3]:-0}"
+    if [[ "$__s" > "$__top" ]]; then __top="$__s"; __topn="$__k"
+    elif [[ "$__s" == "$__top" && "$__k" -gt "$__topn" ]]; then __topn="$__k"; fi
+  done
+  if [[ -n "$__top" && ! "$__stamp" > "$__top" ]]; then __stamp="$__top"; __n=$((__topn + 1)); fi
+  __max=$((__n + 20))
+  __id="op-${__stamp}-$$"
+  [[ "$__n" -eq 0 ]] || __id="${__id}-${__n}"
   until ( set -o noclobber; : >"${__dir}/${__id}.json" ) 2>/dev/null; do
     __n=$((__n + 1))
-    [[ "$__n" -le 20 ]] || return 1
-    __id="op-${__stamp}-${__n}"
+    [[ "$__n" -le "$__max" ]] || return 1
+    __id="op-${__stamp}-$$-${__n}"
   done
   printf -v "$1" '%s' "$__id"
 }
@@ -290,10 +305,13 @@ fl_op_result_v() {
   printf -v "$1" '%s' "$__line"
 }
 
-# fl_op_ids: every op id, newest first
+# fl_op_ids: every op id, newest first. An id is op-DATE-TIME-PID[-N]: the date and the time are fixed width text,
+# the N (the run's place within one stamp, see fl_op_new_id_v) and the pid are numbers, compared in that order. Sorted
+# as text, pid 9998 came after 10001 and "-5" after "-5-1". One sort for the whole list, no fork per op.
 fl_op_ids() {
   # shellcheck disable=SC2010  # names this tool made, matched by a strict pattern
-  ls -1 "$(fl_ops_dir)" 2>/dev/null | grep -E '^op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?\.json$' | sort -r | sed 's/\.json$//' || true
+  ls -1 "$(fl_ops_dir)" 2>/dev/null | grep -E '^op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?\.json$' | sed 's/\.json$//' \
+    | sort -t- -k2,2r -k3,3r -k5,5nr -k4,4nr || true
 }
 
 # fl_op_ago_v VAR RECORD: a short "3m 12s" for how long the run has gone (or went), from its own times

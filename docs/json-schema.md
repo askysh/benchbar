@@ -1679,7 +1679,8 @@ it started (a missing input) have none. `fg` and `self-update` have
 none either: they end by replacing the process.
 
 `op_id` is `op-<date>-<time>-<pid>` (`op-20261119-101500-4242`; a `-N`
-follows when two runs share the second and the pid). It is in:
+follows when a run starts in the same second as an earlier one, or when the clock
+went back). It is in:
 
 - the `plan`, every `step` and `progress`, and the `done` line of the
   stream (`--json` of `install`, `adopt`, `repair`, `pull` and the commands
@@ -1723,7 +1724,10 @@ its `done` line (`exit`, `changed[]`, `warnings[]`, `next_actions[]`,
 `state_after`, and the fields of the document the command would have
 printed). `benchbar op status --json` without an op_id and `benchbar op list
 --json` print `{"schema_version", "cli_version", "ops": [record, ...]}`,
-newest first. `benchbar op wait OP_ID --json` prints the same document as
+newest first: by the date and time of the op_id, then its `-N` and its pid as
+numbers. A new op_id is never below one that exists, even when the clock steps
+back, so the order is the order the runs started in (its time can then be a
+second or two ahead of `started_at`). `benchbar op wait OP_ID --json` prints the same document as
 `op status` when the run is not running any more, or when `--timeout` ran
 out (then with `"timed_out": true`).
 
