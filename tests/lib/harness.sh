@@ -17,8 +17,16 @@ TMP_DIR="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/benchbar-test.XXXXXX")" && pwd -P)"
 # and otherwise ended well into a failing one.
 SOFT_FILE="$TMP_DIR/soft-fails"
 SOFT_ASSERTS="${BENCHBAR_SOFT_ASSERTS:-0}"
+# on_exit CMD: cleanup the test needs (kill a listener, cd away); runs in order before the folder
+# is removed. A test never sets its own EXIT trap: that replaces harness_exit and a soft failure
+# then passes (test-harness checks for it).
+ON_EXIT_CMDS=""
+on_exit() { ON_EXIT_CMDS="${ON_EXIT_CMDS}${1}"$'\n'; }
 harness_exit() {
-  local code="$?" n=0
+  local code="$?" n=0 c
+  while IFS= read -r c; do
+    [[ -z "$c" ]] || eval "$c" || true
+  done <<<"$ON_EXIT_CMDS"
   [[ -f "$SOFT_FILE" ]] && n="$(wc -l <"$SOFT_FILE" | tr -d ' ')"
   rm -rf "$TMP_DIR"
   if [[ "$code" == "0" && "$n" != "0" ]]; then

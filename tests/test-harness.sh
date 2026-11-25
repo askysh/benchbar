@@ -144,6 +144,34 @@ printf 'ps ok\n'
 EOF
 eq 0 "$CODE" "$OUT"; has "$OUT" "ps ok"
 
+# ---- cleanup goes through on_exit: the harness owns the EXIT trap, so a soft failure still fails the
+# test when the file has cleanup of its own (a trap of its own replaced harness_exit and failed open)
+run_case onexit <<'EOF'
+soft_asserts on
+on_exit 'printf "cleanup one\n"'
+on_exit 'printf "cleanup two\n"'
+assert_eq a b "(soft)"
+printf 'reached\n'
+EOF
+eq 1 "$CODE" "(a soft failure with on_exit cleanup must fail the test: $OUT)"
+has "$OUT" "cleanup one"; has "$OUT" "cleanup two"; has "$OUT" reached
+# the cleanup runs before the folder is removed, and a failing command does not stop the rest
+run_case onexitdir <<'EOF'
+on_exit 'test -d "$TMP_DIR" && printf "dir still there\n"'
+on_exit 'false'
+on_exit 'printf "after a failure\n"'
+EOF
+eq 0 "$CODE" "$OUT"; has "$OUT" "dir still there"; has "$OUT" "after a failure"
+
+# ---- no test that sources the harness sets its own EXIT trap at the top level: use on_exit
+hits=""
+for f in "$ROOT"/tests/test-*.sh; do
+  grep -qE '^(\.|source) .*lib/harness\.sh' "$f" || continue
+  h="$(grep -nE '^trap .* EXIT' "$f" || true)"
+  [[ -z "$h" ]] || hits="${hits}${f##*/}: ${h}"$'\n'
+done
+eq "" "$hits" "(a trap of its own replaces harness_exit and a soft failure then passes: use on_exit CMD)"
+
 # ---- no test picks a "free" port by binding port 0 and closing it: the number is in the system's
 # ephemeral range, where a test running beside this one can be handed it before the listener binds.
 # Keep the listener open (the port is then held), or pick below that range as test-services-served does.

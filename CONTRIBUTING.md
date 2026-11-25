@@ -37,6 +37,14 @@ test builds its own `HOME` and mock state. `tests/run-tests.sh test-doctor`
 runs one file. [docs/testing.md](docs/testing.md) is the guide for
 trying a build on a real Mac.
 
+A failed assertion stops its test file. A block of independent checks can
+call `soft_asserts on` (from `tests/lib/harness.sh`) to list every failure
+and still fail the file at its end; `fail_now` and `soft_checkpoint` stop it
+where a later step needs the earlier ones. `BENCHBAR_SOFT_ASSERTS=1
+tests/run-tests.sh test-doctor` turns that on for a whole run, to see
+everything a change broke. A test never sets its own `EXIT` trap: it calls
+`on_exit 'cmd'` for cleanup, so the harness can still fail the test.
+
 A new test seam (a variable that lets a test replace a program, a path or
 the clock) is read only when `FL_TESTING=1`, which `tests/lib/harness.sh`
 sets: a production run must ignore it.

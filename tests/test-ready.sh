@@ -11,9 +11,8 @@ PIDS=()
 cleanup() {
   local p
   for p in ${PIDS[@]+"${PIDS[@]}"}; do kill "$p" 2>/dev/null || true; { wait "$p"; } 2>/dev/null || true; done
-  rm -rf "$TMP_DIR"
 }
-trap cleanup EXIT
+on_exit cleanup
 
 cat >"$TMP_DIR/listen.py" <<'PY'
 import random, socket, sys

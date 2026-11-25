@@ -8,6 +8,7 @@
 # 600 s a test may take.
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
+soft_asserts on  # every check reads one JSON document: report all that fail, not the first
 # shellcheck source=tests/lib/install-stream.sh
 . "$ROOT/tests/lib/install-stream.sh"
 
