@@ -464,7 +464,7 @@ benchbar uninstall-service --bench-dir ~/dev/v16-bench
 benchbar uninstall-service --all
 ```
 
-To remove BenchBar itself, see [Uninstall](../../install.md#uninstall).
+To remove BenchBar itself, see [Uninstall](../../uninstall.md).
 
 ## op
 

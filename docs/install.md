@@ -29,11 +29,14 @@ cask alone cannot pull in its formula. `benchbar install` sets up the
 bench, the site and the background service as in the
 [Quick start](quick-start.md); with a bench you already have, run
 `benchbar adopt` instead. To check a Mac before installing, without a
-bench, run `benchbar doctor --prerequisites` (Apple Silicon, macOS 14,
-Command Line Tools, Homebrew, free disk, the bench folder, cleanup tools
-and the default ports; each check that is not ok names its fix). The BenchBar app drives `install` and `adopt`
-through `--json --yes`, which prints one JSON event per line; the format
-is in the [JSON API](json-schema.md).
+bench, run `benchbar doctor --prerequisites`. It checks Apple Silicon,
+macOS 14, Command Line Tools, Homebrew, free disk, the bench folder,
+cleanup tools and the default ports. Each check that is not ok names its
+fix.
+
+BenchBar.app drives `install` and `adopt` through `--json --yes`. That
+prints one JSON event per line. The format is in the
+[JSON API](json-schema.md).
 
 The cask needs Apple Silicon and macOS Sonoma or later. For the CLI
 alone, on an Intel Mac too (written for it, not checked on real
@@ -73,7 +76,8 @@ In more detail, in this order, and it says so before each step:
    `raw.githubusercontent.com/Homebrew/install/HEAD`, and benchbar does
    not check it. Run it yourself first if you want to read it).
 2. It clones the CLI into `~/.local/share/benchbar`, or pulls when the
-   clone exists, links `benchbar` and `frappe-mac` into `~/.local/bin`,
+   clone exists, links `benchbar` and `frappe-mac` (the old name of `benchbar`, kept as an
+   alias) into `~/.local/bin`,
    and adds that folder to `PATH` in `~/.zshrc` inside a
    `# >>> benchbar-path >>>` marker block.
 3. It installs or updates the BenchBar app from the latest GitHub
@@ -360,106 +364,9 @@ Bug, uninstall (`-Uninstall`) and how to verify a download.
 
 ## Updating
 
-BenchBar.app carries its own copy of the CLI, and since 0.7.1 Homebrew's
-and the one line installer's `benchbar` hand off to it once the app is
-installed: whichever `benchbar` you run, it is the app's version. So with
-the app, updating the app updates everything, by either channel:
-
-- **In the app**: **Update Now** (or **Check for Updates…** in the menu
-  bar menu). Sparkle downloads the new version and restarts BenchBar.
-  Your benches keep running.
-- **With Homebrew**, when the cask installed the app:
-
-  ```bash
-  brew upgrade
-  ```
-
-  The cask has `auto_updates`, so brew replaces the app only when the
-  app itself is older than the tap's version: after Sparkle updated it,
-  `brew upgrade` leaves it alone, and when Sparkle has not, brew updates
-  it. Right after a release the tap can be a few minutes behind.
-
-`benchbar where` shows which CLI runs (`install app`) and which one it
-was handed off from, and `benchbar --version` adds a `via` line for it.
-When Homebrew's or the installer's copy is newer than the app's CLI, both
-say so: the app's older CLI still runs, so that one version works on your
-benches, until the app updates. To run Homebrew's or the installer's own
-copy for once, set `BENCHBAR_NO_HANDOFF=1`. A git checkout of your own
-never hands off.
-
-### Without the app
-
-Homebrew's CLI updates with `brew upgrade askysh/tap/benchbar`, which
-`benchbar self-update` runs after asking. The one line installer's CLI
-updates with `benchbar self-update`:
-
-```bash
-benchbar self-update               # shows the plan, asks, checks the installer, then runs it
-benchbar self-update --check       # this version against the latest release
-```
-
-or, on any version, including 0.5.x, which has no `self-update`:
-
-```bash
-curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes
-```
-
-`self-update` runs the installer of the release it installs (the file at
-that release's tag), and only after its sha256 matched the line for
-`install.sh` in that release's `SHA256SUMS`. It then checks the CLI out at
-the release's tag, so the CLI and the app are the same version. A release
-whose sums do not list `install.sh` is refused, with the line above to
-update by hand.
-
-It pulls the CLI in `~/.local/share/benchbar`, replaces the app in
-`~/Applications` (it quits a running BenchBar first), and changes no
-bench: it never adopts, installs or updates a bench and never runs
-`bench update`. It never runs `sudo`. An app in `/Applications` is
-replaced there when that folder is writable (the app and `self-update`
-pass `BENCHBAR_APP_DIR=/Applications`).
-
-The pull is a fast forward only: local changes in
-`~/.local/share/benchbar` stop it with a message instead of being
-overwritten. After an update, run `benchbar doctor`: when it says the
-runner is outdated, `benchbar repair` rewrites it, and a running bench
-picks it up on its next start.
-
-If your `benchbar` is a git checkout of your own, for example
-`~/dev/benchbar`, `self-update` updates only the app (`--app-only`) and
-tells you to update the CLI with `git pull` in that checkout.
-
-## From the one line installer to Homebrew
-
-Your benches keep running through the move: their agents and runners
-never name the CLI.
-
-1. Install with Homebrew:
-
-   ```bash
-   brew install askysh/tap/benchbar askysh/tap/benchbar-app
-   ```
-
-2. Run Homebrew's `repair` by its full path. In this Terminal
-   `~/.local/bin` still leads to the old copy, so plain `benchbar` would
-   run that one:
-
-   ```bash
-   /opt/homebrew/opt/benchbar/bin/benchbar repair
-   ```
-
-   It moves the state to `~/.local/state/benchbar`, points the
-   `~/.local/bin` links at Homebrew's CLI and rewrites the helper block in
-   `~/.zshrc`.
-
-3. Run `source ~/.zshrc`, or open a new Terminal tab.
-4. Later, move `~/.local/share/benchbar` and `~/Applications/BenchBar.app`
-   to the Trash.
-
-Do not use `install.sh --uninstall` for this: it stops every bench's
-agent. Until the old copies are gone, doctor's "Second CLI" and
-"BenchBar.app copies" warnings point at them. Two copies of the app
-matter more than two of the CLI: the login item and Spotlight may open
-the old one, and its CLI is the one every `benchbar` hands off to.
+Updating is on its own page: [Update and migrate](upgrade.md). It covers
+the app, Homebrew, the one line installer and the move from the one line
+installer to Homebrew.
 
 ## After installing
 
@@ -504,76 +411,5 @@ its window starts the [first run wizard](app.md#a-new-bench-from-the-app).
 
 ## Uninstall
 
-Uninstalling removes BenchBar, not your benches: every bench, site,
-database and the Homebrew packages they use stay. Two things are worth
-knowing first:
-
-- Removing a bench's agent stops that bench. Without the agent it no
-  longer runs in the background; you can still run it by hand with
-  `bench start` in its folder.
-- The logs and file backups of every benchbar run, the remembered
-  benches and the settings benchbar keeps for each bench are in
-  `~/.local/state/benchbar`, for Homebrew and the one line installer
-  alike. Uninstalling keeps that folder; move it to the Trash yourself
-  when you no longer want them. When `~/.local/state` is on another
-  volume than `~/.local/share/benchbar`, the state stays in that
-  checkout's `.benchbar/` folder, and deleting the checkout deletes it.
-
-What `install`, `adopt` and the rest wrote outside the bench stays too,
-and you remove it yourself when you want it gone:
-
-- The marked block in `/etc/hosts` with a line per site (macOS). `benchbar uninstall-service --all` offers to remove it, with `sudo` and a backup, when you run it in a terminal; with `--yes` it prints the command instead and never edits the file.
-- The MariaDB root password: the Keychain item `benchbar-mariadb` on macOS, a 0600 file in the state folder on Linux.
-- The patched wkhtmltopdf package that `install` put in for PDF output; remove it with the package tool of your system.
-- On Linux, the apt packages `install` added (MariaDB, Redis and the rest), and uv and fnm with the Python and Node they fetched, under `~/.local`. On macOS the Homebrew packages stay.
-- The app's login item, when you turned on "Open BenchBar at login": turn it off in the app's Settings first, or remove it in System Settings, General, Login Items. Deleting the app leaves a dead entry there.
-- On Linux, linger for your user (`sudo loginctl disable-linger USER`), and the `~/.bashrc` helper block when you did not use `uninstall-service`.
-- The LAN guard of a room: `benchbar lan-guard remove` takes out the pf anchor and its launch daemon (macOS), or the nftables table, its systemd unit and its rules file (Linux).
-
-### Homebrew
-
-```bash
-benchbar uninstall-service --all
-brew uninstall --cask benchbar-app
-brew uninstall benchbar
-```
-
-Run `uninstall-service --all` first: `brew uninstall` cannot stop the
-background agents. It asks once, then stops every bench that has a
-benchbar agent and removes its agent, runner and `Procfile.lean`, and the
-`# >>> benchbar >>>` block from `~/.zshrc`.
-
-### The one line installer
-
-To see the plan without changing anything, then to uninstall:
-
-```bash
-curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --uninstall --dry-run
-curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --uninstall
-```
-
-It removes the app, the `benchbar` and `frappe-mac` links and the PATH
-block. Then it asks, for each bench's agent, whether to stop the bench
-and remove its agent, runner and `Procfile.lean`, and last whether to
-delete the checkout. Answer no to keep either. With `--yes` the answer
-to both is yes. When `~/.local/state/benchbar` is a link into the
-checkout, the checkout is kept even with `--yes`, and the run says to
-move the state first.
-
-### One bench
-
-To remove only the background service of one bench and keep BenchBar:
-
-```bash
-benchbar uninstall-service --bench-dir ~/frappe-bench   # use your bench's folder
-```
-
-It stops the bench and removes its agent, runner and `Procfile.lean`.
-It also removes the `# >>> benchbar >>>` block from `~/.zshrc`, so
-`benchup` and the other helpers are gone for every bench until
-`benchbar repair` on a remaining bench writes the block again.
-
-benchbar never deletes a whole bench. The only commands that drop or
-overwrite a site's database, `benchbar site drop` and `benchbar pull
---replace`, back it up first. To wipe a bench by hand, see
-[Troubleshooting](troubleshooting.md#wiping-a-bench).
+Uninstalling has its own page: [Uninstall](uninstall.md). It removes
+BenchBar, not your benches.

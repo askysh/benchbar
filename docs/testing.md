@@ -154,7 +154,7 @@ twice and the second run says `unchanged`.
   and `benchbar commands --json` show what an agent reads.
 
 Coming from an older version: update as in
-[Updating](install.md#updating), then run `benchbar doctor`. If it says
+[Updating](upgrade.md#update-the-app-and-the-cli), then run `benchbar doctor`. If it says
 the runner script is outdated, `benchbar repair` rewrites it (it asks
 first).
 
@@ -198,4 +198,4 @@ and databases, the Homebrew packages and the MariaDB password in the
 Keychain stay. Add `--dry-run` after `--uninstall` to see the list
 first. `benchbar uninstall-service` alone removes only the background
 service of one bench. For a Homebrew install, see
-[Uninstall](install.md#uninstall).
+[Uninstall](uninstall.md).
