@@ -110,7 +110,7 @@ machine needs before an install, `benchbar_labs_list`, `benchbar_where` and
 finds the benches under a folder, `benchbar_report` returns the redacted
 diagnostics for a bug report as text, and `benchbar_status` says whether
 autostart and the scheduler are on. Turning a lab on, registering a bench,
-sharing, the LAN guard, `self-update`, `site default` and `app focus NAME`
+sharing, the LAN guard, `self-update`, `site default`, `app focus NAME` and `app unfocus NAME`
 are your decisions and have no tool: the agent tells you the command.
 
 Calls run side by side: a status answers while an app add runs, and the
