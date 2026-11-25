@@ -127,24 +127,29 @@ benchbar share preflight --critical
 ## share start
 
 ```
-benchbar share start [--for DUR] [--name LABEL] [--assign-seats] [--dry-run] [--json]
+benchbar share start [--for DUR] [--name LABEL] [--open-seats] [--dry-run] [--json]
 ```
 
 Starts the room until the deadline (`--for 30m`, `4h`; 5 minutes to 12
 hours; 4 hours by default). The bench must be running. Refused like
 `share setup`. A second start says "unchanged".
 
-**Who gives a person their seat.** The room code lets a person into the
-room. Without `--assign-seats` it also lets them take any free seat, the
-most privileged one included, with no action from you: give the code only
-to people who may use every seat of the room, or use `--assign-seats`.
-With `--assign-seats` you give out the seats. A person who joins has no
-seat and sees nothing of the copy until you run
-[`share assign`](#share-assign) for them. They cannot take a seat or
-change to another one themselves, and they keep their place in the room
-for 10 minutes while they wait (2 minutes in a room without the flag).
-[`share people`](#share-people) lists who waits and which seats are free.
-The start box says which of the two the room is. On WSL with NAT networking it
+**Who gives a person their seat.** You do. The room code lets a person
+into the room and no further: a person who joins has no seat and sees
+nothing of the copy until you run [`share assign`](#share-assign) for
+them. They cannot take a seat or change to another one themselves.
+[`share people`](#share-people) lists who waits and which seats are free,
+and the start says that guests wait for you. A person keeps their place
+for 10 minutes while they wait. When the room is full, the next person who
+joins takes the place of whoever has waited longest, if that is more than
+2 minutes; [`share remove`](#share-remove) puts out somebody you do not
+know.
+
+`--open-seats` starts the room of 0.8: the code also lets a person take
+any free seat, the most privileged one included, with no action from you
+(and a person without a seat keeps their place for 2 minutes). Use it only
+when everybody who has the code may use every seat. `--assign-seats` names
+the default and is not needed; the two do not go together. On WSL with NAT networking it
 is refused before anything is written, even with `--dry-run`; with mirrored
 networking it warns what the Hyper-V firewall needs (see
 [Sharing on Linux](#sharing-on-linux)).
@@ -278,8 +283,8 @@ benchbar share assign ID SEAT_ID [--json]
 ```
 
 Gives a person a free seat, or moves them to another one; the old seat's
-sessions end first. In a room started with `--assign-seats` this is the
-only way a person gets or changes a seat. `share people` shows the ids of
+sessions end first. This is the only way a person gets or changes a seat,
+unless the room was started with `--open-seats`. `share people` shows the ids of
 the people and of the free seats.
 
 ```bash
@@ -565,7 +570,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar share setup [--site S] [--from STAMP\|latest] [--backup-now] [--users A,B] [--name LABEL] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | stream |
 | `benchbar share users [--site S] [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
 | `benchbar share preflight [--static\|--critical] [--quiet] [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
-| `benchbar share start [--for DUR] [--name LABEL] [--assign-seats] [--dry-run] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | stream |
+| `benchbar share start [--for DUR] [--name LABEL] [--open-seats] [--dry-run] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | stream |
 | `benchbar share stop [--json]` (Lab `lan-rooms`) | no | no | no | yes | stream |
 | `benchbar share extend --by DUR [--json]` (Lab `lan-rooms`) | no | no | no | yes | stream |
 | `benchbar share status [--preflight] [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
@@ -608,7 +613,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `share preflight` | `--json` |  | One document: protocol, ok, lan_ip and the checks, each with a status, a message and a fix_action. |
 | `share start` | `--for` | `DUR` | How long the share runs: 30m, 4h; from 5 minutes to 12 hours. Default: 4h. |
 | `share start` | `--name` | `LABEL` | The room's label for this share, at most 40 printable characters. Default: the one share setup recorded. |
-| `share start` | `--assign-seats` |  | You give out the seats: a person who joins with the code waits (up to 10 minutes) until you run benchbar share assign for them, and cannot take or change a seat themselves. Without it, anyone with the code takes any free seat. |
+| `share start` | `--open-seats` |  | Guests take a free seat themselves, as before 0.9.0: anyone with the room code takes any free seat, the most privileged one included. Without it you give out the seats: a person who joins waits (up to 10 minutes) until you run benchbar share assign for them, and cannot take or change a seat themselves. |
+| `share start` | `--assign-seats` |  | The default, said out loud: you give out the seats. Not with --open-seats. |
 | `share start` | `--dry-run` |  | Print the plan and start nothing. |
 | `share start` | `--json` |  | JSON lines: plan, steps, done (with the deadline). |
 | `share stop` | `--json` |  | JSON lines: steps, done. |

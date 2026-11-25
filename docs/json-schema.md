@@ -1412,7 +1412,7 @@ changing command that a lease stops.
 
 `status --json` has `notices`: the defaults an update changed, until they are
 dismissed. `[]` when there are none, and a fresh install has none. Each entry:
-`id` (`listen-local`, `unknown-flags`, `pull-neutralise`), `title`, `text`,
+`id` (`listen-local`, `unknown-flags`, `pull-neutralise`, `room-seats`), `title`, `text`,
 `switch_back` (the command or variable that goes back), `doc` (a full URL of
 the page that explains it) and `since` (the version of the change).
 `benchbar notices --json` prints `{"schema_version":1,"cli_version":"...","notices":[...]}`;
@@ -1874,7 +1874,7 @@ none holds a session id.
  "seconds_left":3600,"can_extend_s":28800,"copy":{…},"allowed_users":["priya@example.com"],"seats":2,
  "people":1,"devices_total":1,"devices_online":1,"pending":0,"locked":false,"lock_reason":null,
  "budget_left":10,"join_trouble":false,"wipe_failed":0,"lan_guard":"installed","preflight":null,
- "setup_interrupted":false,"seat_mode":"open"}
+ "setup_interrupted":false,"seat_mode":"open","host_key":"0123456789abcdef"}
 ```
 
 - `state`: `on`, `off`, `expired` or `error`.
@@ -1888,6 +1888,11 @@ none holds a session id.
 - `preflight`: null, or with `--preflight` the critical checks as in `share preflight`.
 - `setup_interrupted`: a setup stopped halfway (no `share.json`, but the one it set
   aside or the copy is there); `share setup --refresh` finishes it.
+- `host_key`: the first 16 hex digits of the fingerprint of this host's key, or
+  null before `share setup`. The join sheet of an invite shows a guest the same
+  digits, so a host can read them out. It is not a secret.
+- `seats`: the number of seats of the room, an integer. In `share people --json`
+  the key of the same name is a list, one object per seat.
 - `seat_mode`: who gives a person their seat in the room that is on: `host`
   (you, with `share assign`; a guest cannot take one) or `open` (anyone in the
   room takes a free one). null while no room is on.
@@ -1923,8 +1928,8 @@ Streams that end in a done line carrying the fields shown (with `--dry-run`,
 
 | Command | Fields |
 |---|---|
-| `share start` | `bench`, `share_site`, `state` (`on`), `label`, `port`, `started_epoch`, `deadline_epoch`, `started`, `deadline` (ISO 8601, UTC) |
-| `share start --dry-run` | `bench`, `share_site`, `dry_run`, `label`, `for_s`, `deadline`, `steps` (ids of what a start does) |
+| `share start` | `bench`, `share_site`, `state` (`on`), `label`, `port`, `started_epoch`, `deadline_epoch`, `started`, `deadline` (ISO 8601, UTC), `seat_mode` (`host`: guests wait until you give each a seat; `open`: `--open-seats`) |
+| `share start --dry-run` | `bench`, `share_site`, `dry_run`, `label`, `for_s`, `deadline`, `seat_mode` (`host` or `open`: what the room would be), `steps` (ids of what a start does) |
 | `share extend` | `bench`, `deadline_epoch`, `deadline`, `capped` (the 12 hour limit from the start was reached), `seconds_left` |
 | `share stop` | `bench`, `share_site`, `state` (`off`) |
 
@@ -1938,7 +1943,7 @@ owed, else `{"retried":bool,"wiped":N|null,"wipe_failed":M|null}`.
 | `share code` | `code` (`"NNNNNN"`, a placeholder here), `new`, `budget_left` |
 | `share invite` | `url` (`benchbar://share/join?v=1&r=…&h=…&s=…&c=…&a=…&x=…`, holds the code), `text` (the message, lines apart by `\n`), `expires_at` (ISO 8601, UTC), `room` |
 | `share lock`, `share unlock` (done) | `locked`, `lock_reason` |
-| `share people`, `share devices` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` (`devices` is another name for `people`), `seats`: every seat of the room, `[{seat_id, full_name, roles, held_by, held_by_name}]` (`held_by` is the `id` of the person in the seat, null for a free seat; never the seat's user), `seat_mode` (`host`, `open`, or null while sharing is off, as in `share status`). With sharing off `people` and `seats` are empty |
+| `share people`, `share devices` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` (`devices` is another name for `people`), `seats`: every seat of the room, `[{seat_id, full_name, roles, held_by, held_by_name}]` (`held_by` is the `id` of the person in the seat, null for a free seat; never the seat's user; in `share status --json` `seats` is the count, an integer), `seat_mode` (`host`, `open`, or null while sharing is off, as in `share status`). With sharing off `people` and `seats` are empty |
 | `share remove`, `share revoke` (done) | `device`, `name`, `removed`, `new_code` (a bool, never the code) |
 | `share assign` (done) | `device`, `name`, `seat_id`, `seat_full_name` |
 | `share log` | `entries`: `[{ts, device, user, method, path, status}]`, `truncated`. `user` is the seat's name (its id when the room no longer has the seat); a line written by 0.8.3 holds the e-mail address of the seat's user until it is 14 days old |

@@ -1038,6 +1038,11 @@ address is the one WSL has, and that depends on WSL's networking mode:
 
 BenchBar reads the mode with `wslinfo --networking-mode`; a WSL that has no `wslinfo` counts as NAT.
 
+The **Sharing** tab has a box, **I give out the seats**, under **Start sharing**. With it ticked, a
+person who joins waits: the tab says how many people wait, and under each name there is a list of
+the free seats with their roles and a button, **Give NAME this seat**. For a person who has a seat
+the same button moves them to the seat picked. Without the tick, guests pick their own seat.
+
 ## Labs
 
 Labs work the same on Windows. The **Labs** page of the BenchBar window

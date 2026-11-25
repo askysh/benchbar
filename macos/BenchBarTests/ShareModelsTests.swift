@@ -18,6 +18,9 @@ nonisolated final class FakeShareCLI: ShareCLI, @unchecked Sendable {
     var statusCalls: [Bool] { lock.withLock { _statusCalls } }
     var calls: [String] { lock.withLock { _calls } }
     func setPeople(_ list: [SharePerson]) { lock.withLock { people = list } }
+    private var seats: [ShareSeat] = []
+    private var seatMode: ShareSeatMode?
+    func setSeats(_ list: [ShareSeat], mode: ShareSeatMode?) { lock.withLock { seats = list; seatMode = mode } }
 
     private func record(_ call: String) throws(CLIError) {
         lock.withLock { _calls.append(call) }
@@ -44,7 +47,7 @@ nonisolated final class FakeShareCLI: ShareCLI, @unchecked Sendable {
     }
 
     func sharePeople(bench: String) async throws(CLIError) -> SharePeople {
-        lock.withLock { SharePeople(state: .on, people: people) }
+        lock.withLock { SharePeople(state: .on, people: people, seats: seats, seatMode: seatMode) }
     }
 
     func shareUsers(bench: String, site: String) async throws(CLIError) -> ShareUsers {
@@ -76,7 +79,9 @@ nonisolated final class FakeShareCLI: ShareCLI, @unchecked Sendable {
     }
 
     func shareSetup(bench: String, request: ShareSetupRequest, onStep: @escaping @Sendable (String) -> Void) async throws(CLIError) { try await held("setup") }
-    func shareStart(bench: String, forHours hours: Int, label: String?) async throws(CLIError) { try record("start \(hours)") }
+    func shareStart(bench: String, forHours hours: Int, label: String?, assignSeats: Bool?) async throws(CLIError) {
+        try record(assignSeats.map { $0 ? "start \(hours) assign-seats" : "start \(hours) open-seats" } ?? "start \(hours)")
+    }
     func shareStop(bench: String) async throws(CLIError) { try record("stop") }
     func shareExtend(bench: String, byMinutes minutes: Int) async throws(CLIError) { try record("extend \(minutes)") }
     func shareLock(bench: String, locked: Bool) async throws(CLIError) { try record(locked ? "lock" : "unlock") }
@@ -165,6 +170,22 @@ struct ShareModelsTests {
         #expect(people.people[0].seatFullName == "Sam Rao")
         #expect(people.people[1].seatID == nil)
         #expect(people.people[1].online == false)
+        // every seat of the room, held or free, and who gives them out (#159 SHARE-5)
+        #expect(people.seats.map(\.id) == ["s_1234abcd", "s_5678efab"])
+        #expect(people.seats[0].heldBy == "d_0a1b2c3d" && people.seats[0].heldByName == "Sam")
+        #expect(people.seats[1] == ShareSeat(id: "s_5678efab", fullName: "Mgr Singh", roles: ["Sales Manager", "Accounts User"]))
+        #expect(people.seatMode == .host)
+        // a CLI before 0.9.0 sends neither
+        let old = try BenchJSON.decode(SharePeople.self, from: Data(#"{"schema_version":1,"cli_version":"0.8.3","state":"on","people":[]}"#.utf8))
+        #expect(old.seats.isEmpty && old.seatMode == nil)
+        #expect(try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status")).seatMode == .open)
+        #expect(try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status-old")).seatMode == nil)
+        // #159 SHARE-8: the host's key, for the host to read out
+        let keyed = try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status"))
+        #expect(keyed.hostKey == "0123456789abcdef")
+        #expect(SharePresentation.hostKeyLine(keyed) == "Host key: 0123 4567 89ab cdef")
+        #expect(SharePresentation.hostKeyLine(try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status-old"))) == nil)
+        #expect(SharePresentation.hostKeyLine(ShareStatus(state: .on, hostKey: "not sixteen hex")) == nil)
 
         let users = try BenchJSON.decode(ShareUsers.self, from: Fixture.data("share-users"))
         #expect(users.users[0].codeCapableRoles == ["System Manager"])
@@ -373,6 +394,57 @@ struct ShareStoreTests {
         #expect(store.knownSeats.isEmpty)
     }
 
+    /// #159 SHARE-5: the room's seat list fills the menu before anybody holds a seat, so the first
+    /// guest of a room where the host gives out the seats can get one.
+    @Test func theSeatListOfTheRoomIsKnownBeforeAnybodyHoldsASeat() async {
+        let fake = FakeShareCLI([on(), on(), ShareStatus(state: .off)])
+        let asha = SharePerson(id: "d_2", name: "Asha")
+        fake.setPeople([asha])
+        fake.setSeats([ShareSeat(id: "s_a", fullName: "Sam Rao", roles: ["Sales User"]),
+                       ShareSeat(id: "s_b", fullName: "Mgr Singh", roles: ["Sales Manager", "Accounts User"])], mode: .host)
+        let store = ShareStore(bench: "/b", client: fake, log: { _ in })
+        await store.refresh()
+        await store.loadPeople()
+        #expect(store.knownSeats == ["s_a": "Sam Rao", "s_b": "Mgr Singh"])
+        #expect(store.hostGivesSeats)
+        let targets = SharePresentation.moveTargets(for: asha, people: store.people, known: store.knownSeats, seats: store.seats)
+        #expect(targets.map(\.id) == ["s_b", "s_a"])
+        #expect(targets.map(\.name) == ["Mgr Singh · Sales Manager, Accounts User", "Sam Rao · Sales User"])
+        let ok = await store.assign(asha, seat: "s_b")
+        #expect(ok && fake.calls.contains("assign d_2 s_b"))
+        await store.refresh()
+        await store.refresh()
+        #expect(store.knownSeats.isEmpty && store.seats.isEmpty && !store.hostGivesSeats)
+    }
+
+    @Test func startSaysWhoGivesOutTheSeats() async {
+        let fake = FakeShareCLI([ShareStatus(state: .off), on()])
+        let store = ShareStore(bench: "/b", client: fake, log: { _ in })
+        await store.refresh()
+        await store.start(hours: 2, label: nil, assignSeats: true)
+        await store.start(hours: 4, label: nil, assignSeats: false)
+        #expect(fake.calls.filter { $0.hasPrefix("start") } == ["start 2 assign-seats", "start 4 open-seats"])
+    }
+
+    /// A CLI from before the seat flags (its status has no `seat_mode`) refuses them with "Unknown
+    /// argument for share start", so none is sent: the room it starts has open seats, as it always had.
+    @Test func anOlderCLIIsStartedWithoutASeatFlag() async throws {
+        let old = try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status-old"))
+        #expect(!old.knowsSeatMode)
+        #expect(try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status")).knowsSeatMode)
+        let fake = FakeShareCLI([ShareStatus(state: .off, knowsSeatMode: false)])
+        let store = ShareStore(bench: "/b", client: fake, log: { _ in })
+        await store.refresh()
+        #expect(!store.cliKnowsSeatMode)
+        await store.start(hours: 4, label: nil, assignSeats: true)
+        #expect(fake.calls.filter { $0.hasPrefix("start") } == ["start 4"])
+        // before the first status nothing is known either: no flag
+        let unread = FakeShareCLI([ShareStatus(state: .off)])
+        await ShareStore(bench: "/b", client: unread, log: { _ in }).start(hours: 4, label: nil, assignSeats: true)
+        #expect(unread.calls.filter { $0.hasPrefix("start") } == ["start 4"])
+        #expect(SharePresentation.startDetail(site: "s", assignSeats: false).hasSuffix("Each of them can take any free seat."))
+    }
+
     @Test func theCodeIsForgottenWhenSharingStops() async {
         let fake = FakeShareCLI([on(), ShareStatus(state: .off)])
         let store = ShareStore(bench: "/b", client: fake, log: { _ in })
@@ -500,13 +572,25 @@ struct ShareCLITests {
         }
     }
 
+    @Test func startPassesTheSeatSwitchToTheCLI() async throws {
+        let (cli, runner) = client()
+        try await cli.shareStart(bench: "/b", forHours: 4, label: nil, assignSeats: true)
+        #expect(runner.calls[0].arguments == ["share", "start", "--for", "4h", "--assign-seats", "--plain", "--bench-dir", "/b"])
+        // the way back is said out loud too, so the room never depends on the CLI's default
+        try await cli.shareStart(bench: "/b", forHours: 4, label: nil, assignSeats: false)
+        #expect(runner.calls[1].arguments == ["share", "start", "--for", "4h", "--open-seats", "--plain", "--bench-dir", "/b"])
+        try await cli.shareStart(bench: "/b", forHours: 4, label: nil, assignSeats: nil)
+        #expect(runner.calls[2].arguments == ["share", "start", "--for", "4h", "--plain", "--bench-dir", "/b"])
+        #expect(SharePresentation.assignSeatsDefault)
+    }
+
     @Test func personCallsSayTheyComeFromTheAppAndOthersDoNot() async throws {
         let (cli, runner) = client()
-        try await cli.shareStart(bench: "/b", forHours: 4, label: nil)
+        try await cli.shareStart(bench: "/b", forHours: 4, label: nil, assignSeats: false)
         try await cli.shareTeardown(bench: "/b")
         try await cli.shareStop(bench: "/b")
         try await cli.shareRemove(bench: "/b", person: "d_0a1b2c3d", newCode: true)
-        #expect(runner.calls[0].arguments == ["share", "start", "--for", "4h", "--plain", "--bench-dir", "/b"])
+        #expect(runner.calls[0].arguments == ["share", "start", "--for", "4h", "--open-seats", "--plain", "--bench-dir", "/b"])
         #expect(runner.calls[0].environment["BENCHBAR_SUDO"] == "gui")
         #expect(runner.calls[1].arguments.contains("--yes"))
         #expect(runner.calls[1].environment["BENCHBAR_SUDO"] == "gui")

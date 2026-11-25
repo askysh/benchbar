@@ -97,6 +97,58 @@ public static class ShareText
 
     public static string StartConfirm(string site) => $"Start sharing {site} on this network? People on this Wi-Fi who have the room code can join a copy of {site} until you stop.";
 
+    // --- the host's key (#159 SHARE-8) ---
+
+    /// <summary>"Host key: 0123 4567 89ab cdef": the digits a guest sees on the join sheet of an invite, for the host to read out.
+    /// Null without 16 hex digits.</summary>
+    public static string? HostKeyLine(ShareStatus status)
+    {
+        if (status.HostKey is not { Length: 16 } key || !key.All(Uri.IsHexDigit)) return null;
+        return $"Host key: {key[..4]} {key[4..8]} {key[8..12]} {key[12..]}";
+    }
+
+    public const string HostKeyHelp = "A guest who joins from your invite link sees these digits before they join. Read them out when asked.";
+
+    // --- who gives out the seats (#159 SHARE-5) ---
+
+    public const string AssignSeatsToggle = "I give out the seats";
+    public const string SeatsNeedNewerCli = "Guests pick their own seat: the BenchBar command line tool in WSL is older than 0.9.0 and cannot start a room where you give out the seats.";
+
+    public static string StartConfirm(string site, bool assignSeats) =>
+        StartConfirm(site) + (assignSeats ? " They wait until you give each of them a seat." : " Each of them can take any free seat.");
+
+    public static string SeatModeLine(bool hostGivesSeats) => hostGivesSeats
+        ? "You give out the seats: a guest who joins waits until you give them one."
+        : "Guests pick their own seat: the room code lets them take any free one.";
+
+    public static string SeatCaption(SharePerson person, bool hostGivesSeats) =>
+        person.SeatName ?? (hostGivesSeats ? "Waits for a seat from you" : "No seat yet");
+
+    /// <summary>The line above the people while somebody waits for the host; null when nobody does.</summary>
+    public static string? WaitingNotice(IReadOnlyList<SharePerson> people, bool hostGivesSeats)
+    {
+        var waiting = people.Count(p => p.SeatId is null);
+        if (!hostGivesSeats || waiting == 0) return null;
+        return waiting == 1 ? "1 person waits for a seat. Pick a seat under their name, then Give." : $"{waiting} people wait for a seat. Pick a seat under each name, then Give.";
+    }
+
+    /// <summary>A seat with its roles, so the host sees what it may do before giving it.</summary>
+    public static string SeatTitle(ShareSeat seat) => seat.Roles.Count switch
+    {
+        0 => seat.Name,
+        <= 3 => $"{seat.Name} · {string.Join(", ", seat.Roles)}",
+        _ => $"{seat.Name} · {string.Join(", ", seat.Roles.Take(3))} and {seat.Roles.Count - 3} more",
+    };
+
+    /// <summary>The seats a person can be given: the ones nobody in the room holds, by name.</summary>
+    public static IReadOnlyList<ShareSeat> FreeSeats(IReadOnlyList<ShareSeat> seats, IReadOnlyList<SharePerson> people)
+    {
+        var held = people.Where(p => p.SeatId is not null).Select(p => p.SeatId!).ToHashSet(StringComparer.Ordinal);
+        return [.. seats.Where(s => s.HeldBy is null && !held.Contains(s.Id)).OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    public static string AssignButton(SharePerson person) => person.SeatId is null ? $"Give {person.Name} this seat" : $"Move {person.Name} to this seat";
+
     public static string RemoveConfirm(SharePerson person, string site) => $"Remove {person.Name}? Closes their connections and signs them out of {site}.";
 
     public static string ProtectionText(LanGuardState state) => state switch

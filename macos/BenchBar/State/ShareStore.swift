@@ -109,6 +109,13 @@ final class ShareStore {
     /// Seats seen held in this room (id → full name). The CLI lists only the
     /// seats people hold, so a free seat is one seen earlier that nobody holds now.
     private(set) var knownSeats: [String: String] = [:]
+    /// Every seat of the room as the CLI lists it (0.9.0 on), so a seat can be given before anybody held it.
+    private(set) var seats: [ShareSeat] = []
+    private(set) var seatMode: ShareSeatMode?
+    /// The CLI's last status had `seat_mode`: it takes `--assign-seats` and `--open-seats`.
+    var cliKnowsSeatMode: Bool { status?.knowsSeatMode ?? false }
+    /// The host gives out the seats: a guest who joins waits for Give a Seat.
+    var hostGivesSeats: Bool { (seatMode ?? status?.seatMode) == .host }
     private(set) var busy: String?
     /// Setup or teardown calls the CLI is running: quitting now stops one
     /// halfway, and the copy needs setup again.
@@ -227,6 +234,8 @@ final class ShareStore {
             code = nil
             removedName = nil
             knownSeats = [:]
+            seats = []
+            seatMode = nil
             if !people.isEmpty { people = [] }
             return
         }
@@ -257,6 +266,9 @@ final class ShareStore {
             let list = try await client.sharePeople(bench: bench)
             people = list.people
             for person in list.people { if let seat = person.seatID { knownSeats[seat] = person.seatFullName ?? seat } }
+            seats = list.seats
+            seatMode = list.seatMode
+            for seat in list.seats { knownSeats[seat.id] = seat.fullName }
             for event in tracker.people(list.people) { emit(event) }
         } catch {
             report(error)
@@ -326,8 +338,12 @@ final class ShareStore {
     }
 
     @discardableResult
-    func start(hours: Int, label: String?) async -> Bool {
-        let ok = await perform("Starting…") { client, bench throws(CLIError) in try await client.shareStart(bench: bench, forHours: hours, label: label) }
+    func start(hours: Int, label: String?, assignSeats: Bool) async -> Bool {
+        // a seat flag goes only to a CLI that said it knows seat modes; an older one refuses the flag
+        let flag: Bool? = cliKnowsSeatMode ? assignSeats : nil
+        let ok = await perform("Starting…") { client, bench throws(CLIError) in
+            try await client.shareStart(bench: bench, forHours: hours, label: label, assignSeats: flag)
+        }
         ensurePolling()
         return ok
     }
