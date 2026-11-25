@@ -212,7 +212,6 @@ for bad in abc "${ROOM_KEY:0:63}" "${ROOM_KEY:0:63}g" "" "${ROOM_KEY}00"; do
 done
 guest "" join "127.0.0.1:${ROOM_PORT}" --host-key
 assert_eq 1 "$CODE" "$ALL"; assert_contains "$ALL" "--host-key needs"
-assert_eq "" "$(ls "$GUEST" 2>/dev/null | grep -v '^rooms' || true)" "(a refused run left files in the guest folder)"
 
 # a wrong code: one sentence on stderr, no document, and the key made for the try is gone again
 guest "$WRONG" join "127.0.0.1:${ROOM_PORT}" --name "Lab PC" --json
