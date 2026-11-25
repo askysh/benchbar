@@ -235,9 +235,10 @@ guest "12345" join "127.0.0.1:${ROOM_PORT}"
 assert_eq 1 "$CODE" "$ALL"; assert_contains "$ALL" "The room code is 6 digits."
 printf 120000 >"$ROOM_CLOCK"   # past the gateway's pause after a wrong code
 
-# the join as the tray makes it: the code on stdin, a seat, no browser
+# the join as the tray makes it: the code on stdin, a seat, no browser. A .NET writer on Windows ends the
+# line with CR LF and wsl.exe passes the bytes as they are: the CR is no part of the code (#347 review)
 : >"$MOCK_LOG"
-guest "${ROOM_CODE:0:3} ${ROOM_CODE:3:3}" join "127.0.0.1:${ROOM_PORT}" --host-key "$ROOM_KEY" --name "Lab PC" --seat seat2 --no-open --json
+guest "${ROOM_CODE:0:3} ${ROOM_CODE:3:3}"$'\r' join "127.0.0.1:${ROOM_PORT}" --host-key "$ROOM_KEY" --name "Lab PC" --seat seat2 --no-open --json
 assert_eq 0 "$CODE" "$ALL"
 assert_eq "(True, '${ROOM_ID}', 'Test Room', 'ready', 'seat2@example.com', True, 0)" "$(last '(d["joined"], d["id"], d["room"], d["state"], d["seat"], d["forwarding"], d["exit"])')"
 assert_eq "[{'kind': 'share', 'name': 'Test Room', 'detail': 'joined'}]" "$(last 'd["changed"]')"

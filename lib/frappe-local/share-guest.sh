@@ -79,6 +79,8 @@ fl_sg_read_v() {
   else
     IFS= read -r __line || true
   fi
+  # a line from Windows (the tray through wsl.exe) ends in CR LF: the CR is no part of the answer
+  __line="${__line%$'\r'}"
   printf -v "$1" '%s' "$__line"
 }
 
