@@ -296,6 +296,52 @@ EDGE_OUT="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
 [[ "$EDGE_OUT" =~ ^op-20300102-030405-[0-9]+$ ]] || fail "601 s ahead is not a step back: $EDGE_OUT"
 unset CLOCK_FILE
 
+# ---- 5e. a record far ahead of the clock (more than 600 s) sorts last, not first: ops[0] is the newest real run, and
+# the prune (which keeps the first FL_KEEP_OPS ids of the list) takes the far ones, the furthest first. Several far
+# ones sort among themselves from the nearest to the furthest (by stamp, then -N, then pid, all ascending).
+rm -rf "$OPS"
+fake_op op-20990101-000000-333 "done" "$DEAD" 0
+fake_op op-20990101-000000-111 "done" "$DEAD" 0
+fake_op op-20980101-000000-222 "done" "$DEAD" 0
+run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+FR1="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+FR2="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+FAR_ORDER="op-20980101-000000-222 op-20990101-000000-111 op-20990101-000000-333"
+run_json op list --json
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "$FR2 $FR1 $FAR_ORDER" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(op list: the real runs newest first, then the far ones, nearest first)"
+run_json op status --json
+assert_eq "$FR2" "$(printf '%s' "$OUT" | jget - 'd["ops"][0]["op_id"]')" "(ops[0] is the newest real run)"
+# six records and a limit of five: the prune takes the furthest one only
+FL_KEEP_OPS=5 run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_no_file "$OPS/op-20990101-000000-333.json" "(the furthest goes first)"
+assert_file "$OPS/op-20990101-000000-111.json"
+assert_file "$OPS/op-20980101-000000-222.json"
+# then a limit of three: the three newest real runs stay, the far ones go
+FL_KEEP_OPS=3 run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_no_file "$OPS/op-20990101-000000-111.json"
+assert_no_file "$OPS/op-20980101-000000-222.json"
+assert_eq "3" "$(find "$OPS" -name 'op-*.json' | wc -l | tr -d ' ')" "(the new run and the two before it)"
+# the edge, with the clock of 5c (20300102-030405): 600 s ahead keeps its place on top, 601 s goes last
+export CLOCK_FILE="$TMP_DIR/clock"
+step_clock 20300102-030405
+rm -rf "$OPS"
+fake_op op-20300102-030400-7 "done" "$DEAD" 0
+fake_op op-20300102-031405-5 "done" "$DEAD" 0
+PATH="$CLOCKBIN:$PATH" run_json op list --json
+assert_eq "op-20300102-031405-5 op-20300102-030400-7" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(600 s ahead is a step back: on top)"
+rm -rf "$OPS"
+fake_op op-20300102-030400-7 "done" "$DEAD" 0
+fake_op op-20300102-031406-5 "done" "$DEAD" 0
+PATH="$CLOCKBIN:$PATH" run_json op list --json
+assert_eq "op-20300102-030400-7 op-20300102-031406-5" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(601 s ahead is not: last)"
+unset CLOCK_FILE
+
 # ---- 6. --background: refused before it starts, or started detached with an op_id at once
 rm -rf "$OPS"
 run_json up --background --json --bench-dir "$BENCH"
