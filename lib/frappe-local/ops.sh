@@ -271,15 +271,15 @@ fl_op_effective_v() {
 # finished between the read and the pid check (op wait on a background run said interrupted for a run
 # that was done, macOS CI): the record is read once more before the run counts as interrupted.
 fl_op_now_v() {
-  local __r __s
-  fl_op_read_v __r "$3"
-  fl_op_effective_v __s "$__r"
-  if [[ "$__s" == "interrupted" && -n "$__r" ]]; then
-    fl_op_read_v __r "$3"
-    fl_op_effective_v __s "$__r"
+  local __now_rec __now_st
+  fl_op_read_v __now_rec "$3"
+  fl_op_effective_v __now_st "$__now_rec"
+  if [[ "$__now_st" == "interrupted" && -n "$__now_rec" ]]; then
+    fl_op_read_v __now_rec "$3"
+    fl_op_effective_v __now_st "$__now_rec"
   fi
-  printf -v "$1" '%s' "$__r"
-  printf -v "$2" '%s' "$__s"
+  printf -v "$1" '%s' "$__now_rec"
+  printf -v "$2" '%s' "$__now_st"
 }
 
 # fl_op_json_v VAR RECORD [RESULT]: the record as the JSON document of op status and op list, with the
