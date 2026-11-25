@@ -392,8 +392,10 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   models). A string with a value in it is a `{0}` format (`UiText.Format`), never a concatenation, so a translation can reorder it; a
   name chosen by a condition is asked for in each branch, so `UiTextTests` still finds it. Left in English on purpose: CLI commands and
   flags, JSON parse diagnostics ("The document has no ... list"), the text of a bug report, the PowerShell script of the update window,
-  the demo fixtures, and what mirrors the CLI (`[OK]`, `fix:`). Still inline: the Sharing page and the share models only (another
-  change moves them).
+  the demo fixtures, and what mirrors the CLI (`[OK]`, `fix:`). The Sharing page is moved too (keys `Share*` for the host side and
+  `Guest*` for joining a room): its view, `ShareText`, the models' busy and error lines and the setup form. Nothing is inline any more
+  except the separators (` · `, `{0} {1}` of the room code) and the CLI's own words. The size of a copy in "about 1.5 GB" now uses the
+  culture's decimal separator, as the other sizes do.
 
 ## Tray parity: Open as (0.9.0, #174)
 
