@@ -123,7 +123,11 @@ for sub in leave forget; do
   assert_eq 1 "$CODE" "(${sub}, Lab off) $ALL"; assert_contains "$ALL" "joined no room"; assert_not_contains "$ALL" "labs on lan-rooms"
 done
 
-# macOS: BENCHBAR_SUDO=gui counts only when BenchBar.app is above the command (fl_person_env_ok)
+# macOS: BENCHBAR_SUDO=gui counts only when BenchBar.app is above the command (fl_person_env_ok). Here an
+# app that runs (pid 4300) is not above this command.
+mkdir -p "$MOCK_STATE/pstree"
+printf '1 /Applications/BenchBar.app/Contents/MacOS/BenchBar
+' >"$MOCK_STATE/pstree/4300"
 for sub in "join 192.168.1.20" leave forget; do
   # shellcheck disable=SC2086  # the words of a subcommand
   BENCHBAR_APP_PID=4300 guest "" $sub
@@ -132,6 +136,7 @@ for sub in "join 192.168.1.20" leave forget; do
   BENCHBAR_APP_PID="" guest "" $sub
   assert_eq 1 "$CODE" "(${sub}, no app pid) $ALL"; assert_contains "$ALL" "BENCHBAR_APP_PID is not set"
 done
+find "$MOCK_STATE/pstree/4300" -delete
 
 # the code and an invite link are never arguments: refused, and not echoed, logged or kept in the history
 for word in 482913 "482 913" 482-913 "48 29-13" "benchbar://share/join?v=1&r=Lab&h=$(printf 'ab%.0s' {1..32})&s=$(printf 'cd%.0s' {1..16})&c=482913&a=192.168.1.20%3A8443&x=1900000000"; do
