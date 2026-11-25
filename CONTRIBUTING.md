@@ -165,7 +165,16 @@ without a row counts as 10 seconds, so a new test needs no row to run.
 
 - **Against `next-release`.** `main` holds the last release and moves only
   when one is cut ([docs/releasing.md](docs/releasing.md#branches)).
-- **Small, one topic.** A fix and a refactor are two pull requests.
+- **Small, one topic.** A fix and a refactor are two pull requests. Keep a
+  pull request under about 800 changed lines (generated files and fixtures
+  aside): a larger change is a stack of pull requests, each one reviewable
+  on its own. There is no release pull request: a release fast forwards
+  `main` to commits that were already reviewed ([docs/releasing.md](docs/releasing.md#branches)).
+- **Reviewed and green.** Every pull request is reviewed before it merges,
+  by the maintainer or by a reviewer that reads it with a fresh context, and
+  the review is a comment on the pull request. It merges only with a green
+  "CI result": that one check needs every job, and the `next-release` and
+  `main` rulesets require it, so a red or still running job blocks the merge.
 - **The issue.** Write `Fixes #123` when the pull request finishes the
   issue and `Part of #123` when it does not. A pull request for a bug a
   user reported always names the report. GitHub closes an issue only from
