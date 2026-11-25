@@ -175,7 +175,7 @@ fl_selfupdate_fetch() {
   done <"${SU_TMP}/SHA256SUMS"
   if [[ -z "$want" ]]; then
     rm -rf "$SU_TMP"
-    fl_die "The SHA256SUMS of v${SU_PIN} has no line for install.sh, so the installer cannot be checked and was not run." "Update by hand: see https://github.com/askysh/benchbar/blob/main/docs/install.md#updating"
+    fl_die "The SHA256SUMS of v${SU_PIN} has no line for install.sh, so the installer cannot be checked and was not run." "Update by hand: see https://github.com/askysh/benchbar/blob/main/docs/upgrade.md"
   fi
   have="$(shasum -a 256 "${SU_TMP}/install.sh" | awk '{print $1}')"
   if [[ "$have" != "$want" ]]; then

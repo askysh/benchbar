@@ -53,7 +53,7 @@ macOS version. A row that says "macOS" does not work on Linux.
 | `console` and `db` | A Python console and the site's database shell. | 0.5.8 | macOS; Linux 0.8.0 | [console](reference/cli/other.md#console), [db](reference/cli/other.md#db) |
 | `ports setup` | Previews the ports of several benches, asks once, then applies. `ports check` and `ports mode` read and pin them. | 0.5.8 | macOS; Linux 0.8.0 | [ports](reference/cli/ports.md) |
 | Site backup and drop | Backs up a site, and drops one after a backup. | 0.5.8 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md#backing-up-and-dropping-a-site) |
-| Self update | `self-update` updates the CLI and the app. | 0.6.0 | macOS; Linux 0.8.0 | [Install](install.md#updating) |
+| Self update | `self-update` updates the CLI and the app. | 0.6.0 | macOS; Linux 0.8.0 | [Update](upgrade.md#update-the-app-and-the-cli) |
 | Homebrew | `brew install askysh/tap/benchbar` installs the CLI. The app cask is macOS only. | 0.7.0 | macOS; Linux 0.9.0 | [Install](install.md#homebrew-on-linux) |
 | `docs` | Opens the documentation, or the page of one topic. | 0.5.5 | macOS; Linux 0.8.0 | [docs](reference/cli/other.md#docs) |
 | `where` | Says how this CLI was installed, where its state folder is and which app it belongs to. | 0.7.0 | macOS; Linux 0.8.0 | [where](reference/cli/other.md#where) |
