@@ -1,9 +1,10 @@
 # PR text: the pull request title and every commit message follow
 # CONTRIBUTING.md ("What a pull request needs", Commits): no em dash or en
 # dash in the title, and no tool trailer (a Co-Authored-By that names a tool or
-# a bot, or a "Generated with" line) in the title or any commit.
+# a bot, or a "Generated with" line) in the title, the description or any commit.
 # scripts/check-pr-text.sh holds the rule, tests/test-pr-text.sh tests it.
-# The title comes through the environment, never into the shell text.
+# The description is checked for a tool trailer too (dashes: the title only).
+# The title and the description come through the environment, never into the shell text.
 name: PR text
 
 on:
@@ -33,6 +34,7 @@ jobs:
       - name: Check the title and the commits
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: scripts/check-pr-text.sh "$PR_TITLE" "$BASE_SHA..$HEAD_SHA"

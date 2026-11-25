@@ -5,5 +5,5 @@
 
 ### For contributors
 
-- A "PR text" check fails a pull request whose title has an em or en dash, or whose title or commits carry a tool trailer (a Co-Authored-By for a tool or bot, a "Generated with" line). CONTRIBUTING.md has the rule and the failure message points to it.
+- A "PR text" check fails a pull request whose title has an em or en dash, or whose title, description or commits carry a tool trailer (a Co-Authored-By for a tool or bot, a "Generated with" line). CONTRIBUTING.md has the rule and the failure message points to it.
 - A new issue from the bug form gets the label of its Platform: `platform:macos`, `platform:linux` or `windows`.

@@ -40,9 +40,16 @@ jobs:
             "Windows beta") want="windows"; color="0078D4"; text="Reported on Windows" ;;
             *) echo "No Platform in this issue: nothing to label."; exit 0 ;;
           esac
-          # create the label when the repository does not have it yet
-          if ! gh label list --limit 200 --json name --jq '.[].name' | grep -qxF "$want"; then
-            gh label create "$want" --color "$color" --description "$text"
+          # create the label when the repository does not have it yet; a label
+          # that another run made in between ("already exists") is fine
+          labels="$(gh label list --limit 200 --json name --jq '.[].name')"
+          if ! grep -qxF "$want" <<<"$labels"; then
+            if ! made="$(gh label create "$want" --color "$color" --description "$text" 2>&1)"; then
+              case "$made" in
+                *"already exists"*) ;;
+                *) printf '%s\n' "$made" >&2; exit 1 ;;
+              esac
+            fi
           fi
           gh issue edit "$NUMBER" --add-label "$want"
           for other in platform:macos platform:linux windows; do
