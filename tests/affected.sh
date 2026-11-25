@@ -78,12 +78,13 @@ lib_family() {
     doctor-linux|preflight-linux) echo "test-doctor-linux test-doctor test-repair test-wsl-preflight test-install-linux test-install-failures test-prerequisites-linux" ;;
     repair|cmd-repair) echo "test-repair test-repair-json test-doctor test-doctor-hardening test-install-json" ;;
     docs) echo "test-docs test-docs-command" ;;
-    commands) echo "test-docs test-docs-command test-labs test-json" ;;
+    commands) echo "test-docs test-docs-command test-labs test-json test-unknown-flags test-envelope test-install-json test-agent-contracts" ;;
     apps|app-plan) echo "test-apps test-app-cli test-app-batch test-app-recovery test-pull test-apps-git test-lock" ;;
     bench|benchinfo|benchstate|discovery|freshness) echo "test-bench-flow test-status-cost test-discovery test-multi-bench test-adopt test-json test-freshness test-ports test-port-management test-install-json" ;;
     bench-run) echo "test-bench-run test-bench-run-mcp test-site-backups test-docs test-agent-contracts" ;;
     sites|site-backups|site-restore|snapshots|pull) echo "test-sites test-bench-run test-site-backups test-site-restore test-snapshots test-snapshots-2 test-pull test-install-json" ;;
     ports|port-management) echo "test-ports test-port-management test-multi-bench test-adopt" ;;
+    cmd-install) echo "test-install-json test-install-json-2 test-install-failures test-install-linux test-phases test-fresh-install test-wsl-preflight test-prerequisites-linux test-ports test-service test-adopt test-json" ;;
     cmd-service) echo "test-service test-adopt test-install-json test-phases test-platform test-platform-linux test-json" ;;
     cmd-adopt) echo "test-adopt test-service test-ports test-port-management test-multi-bench test-install-json" ;;
     service|launchd|systemd|templates|shellrc|mariadb|wkhtmltopdf|platform|platform-linux) echo "test-platform test-platform-linux test-systemd test-service test-templates test-shellrc test-wsl-preflight test-install-linux test-install-failures test-install-json test-phases test-sudo-env test-windows-commands test-hygiene test-homebrew" ;;
