@@ -54,6 +54,7 @@ macOS version. A row that says "macOS" does not work on Linux.
 | `ports setup` | Previews the ports of several benches, asks once, then applies. `ports check` and `ports mode` read and pin them. | 0.5.8 | macOS; Linux 0.8.0 | [ports](reference/cli/ports.md) |
 | Site backup and drop | Backs up a site, and drops one after a backup. | 0.5.8 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md#backing-up-and-dropping-a-site) |
 | Self update | `self-update` updates the CLI and the app. | 0.6.0 | macOS; Linux 0.8.0 | [Install](install.md#updating) |
+| Homebrew | `brew install askysh/tap/benchbar` installs the CLI. The app cask is macOS only. | 0.7.0 | macOS; Linux 0.9.0 | [Install](install.md#homebrew-on-linux) |
 | `docs` | Opens the documentation, or the page of one topic. | 0.5.5 | macOS; Linux 0.8.0 | [docs](reference/cli/other.md#docs) |
 | `where` | Says how this CLI was installed, where its state folder is and which app it belongs to. | 0.7.0 | macOS; Linux 0.8.0 | [where](reference/cli/other.md#where) |
 | Run bench commands | `benchbar run -- migrate`, `clear-cache`, `build`, `run-tests` and more from an allow list, with a plan and token for a change. | 0.9.0 | macOS, Linux | [run](reference/cli/run.md) |
@@ -186,7 +187,7 @@ Windows (`benchbar.exe mcp`) since 0.8.0. The tools below are the ones in
 | Long runs, history and readiness | `benchbar_op_status` reads a long run by its `op_id`, `benchbar_history` what ran before the agent and who started it, and `benchbar_wait` blocks until a bench is ready. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md#long-runs-and-op_id) |
 | Site drop | `benchbar_site_drop_plan`, then `benchbar_site_drop` with the token of the plan. The default site is refused. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md#parity-with-the-command-line) |
 | Ports, autostart, scan, report | `benchbar_ports_mode`, `benchbar_ports_apply` with the token of `benchbar_ports_plan`, `benchbar_autostart`, `benchbar_doctor_ack` for a warning the person has seen, `benchbar_scan` and `benchbar_report`. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md#parity-with-the-command-line) |
-| More read tools | `benchbar_site_backups`, `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`, `benchbar_labs_list`, `benchbar_where`, `benchbar_doctor_prerequisites`, `benchbar_self_update_check`, `benchbar_app_focus_list` and `benchbar_stats` (CPU and memory of the running bench). | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
+| More read tools | `benchbar_site_backups`, `benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_lock_check`, `benchbar_labs_list`, `benchbar_where`, `benchbar_doctor_prerequisites`, `benchbar_self_update_check`, `benchbar_app_focus_list` (the focus state, pinned with `benchbar_app_focus` and `benchbar_app_unfocus`) and `benchbar_stats` (CPU and memory of the running bench). | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
 
 A person approves each plan before the agent applies it. Turning a Lab
 on, rooms, the LAN guard, `self-update`, `register`, `console`, `db` and

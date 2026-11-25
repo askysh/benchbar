@@ -758,11 +758,38 @@ TOOLS["benchbar_self_update_check"] = (
 )
 TOOLS["benchbar_app_focus_list"] = (
     "Every app of one bench with whether it is a focus app (the ones being worked on), why, and how far behind its "
-    "remote it is, from the last git fetch. Read only: it never fetches. Pinning an app as focus is for a person "
-    "(benchbar app focus NAME).",
+    "remote it is, from the last git fetch. Read only: it never fetches. Pin one with benchbar_app_focus or "
+    "benchbar_app_unfocus.",
     {"bench": BENCH},
     lambda a: ["app", "focus", "--list", "--json"] + bench_args(a),
     True,
+    (0,),
+)
+# app focus and app unfocus (parity row P15, #158): a pin in the bench's state file (APP_FOCUS), no change to the
+# bench's files and no plan. fl__lease_scope does not gate them, so they take no lease argument.
+FOCUS_NAME = {"type": "string", "description": "The app, as benchbar_app_list names it (it must be in the bench)."}
+
+
+def app_focus_args(a):
+    return ["app", "focus", required(a, "name"), "--json"] + (["--auto"] if a.get("auto") is True else []) + bench_args(a)
+
+
+TOOLS["benchbar_app_focus"] = (
+    "Pin an app of a bench as a focus app (one the person works on): doctor never warns about it, and warns when an app "
+    "it needs falls behind. With auto: true the pin is dropped and focus is inferred again. It only writes the pin in "
+    "the bench's state file; no app, site or service changes. benchbar_app_focus_list shows the state, and the fresh "
+    "list follows the result.",
+    {"name": FOCUS_NAME, "auto": {"type": "boolean", "description": "true infers focus again (app focus NAME --auto) instead of pinning."}, "bench": BENCH},
+    app_focus_args,
+    False,
+    (0,),
+)
+TOOLS["benchbar_app_unfocus"] = (
+    "Pin an app of a bench as not a focus app (a branch you only tried): doctor checks it like any other app. It only "
+    "writes the pin in the bench's state file; nothing else changes. Undo it with benchbar_app_focus and auto: true.",
+    {"name": FOCUS_NAME, "bench": BENCH},
+    lambda a: ["app", "unfocus", required(a, "name"), "--json"] + bench_args(a),
+    False,
     (0,),
 )
 # leases (0.9): a bench or a site held for a while, so another agent or the app does not restart, migrate, drop or
@@ -1219,6 +1246,8 @@ REQUIRED = {
     "benchbar_ports_plan": ["paths"],
     "benchbar_app_install_plan": ["name", "site"],
     "benchbar_app_install": ["name", "site", "token"],
+    "benchbar_app_focus": ["name"],
+    "benchbar_app_unfocus": ["name"],
     "benchbar_app_update_plan": ["name"],
     "benchbar_app_update": ["name", "token"],
     "benchbar_site_restore_plan": ["site", "from"],
@@ -1317,6 +1346,8 @@ ANNOTATIONS = {
     "benchbar_service_install": {"destructiveHint": True, "idempotentHint": True},
     "benchbar_lease_take": {"idempotentHint": False},
     "benchbar_ports_apply": {"destructiveHint": True, "idempotentHint": True},
+    "benchbar_app_focus": {"destructiveHint": False, "idempotentHint": True},
+    "benchbar_app_unfocus": {"destructiveHint": False, "idempotentHint": True},
     "benchbar_site_drop": {"destructiveHint": True, "idempotentHint": False},
     "benchbar_run": {"destructiveHint": True, "idempotentHint": False},
     "benchbar_lock_write": {"idempotentHint": True},
@@ -1360,6 +1391,8 @@ UNTRUSTED = {
     "benchbar_doctor_prerequisites": "machine checks, with tool and package output",
     "benchbar_self_update_check": "release names and install paths",
     "benchbar_app_focus_list": "app names, branches and commits",
+    "benchbar_app_focus": "app names, branches and commits",
+    "benchbar_app_unfocus": "app names, branches and commits",
     "benchbar_lease_list": "lease holders and notes written by other agents",
     "benchbar_scan": "bench folders and names under the scanned path",
     "benchbar_report": "diagnostics: versions, checks, service files and log lines",
@@ -1450,6 +1483,8 @@ AFTER = {
     "benchbar_app_add": ("apps", lambda a: ["app", "list", "--json"] + bench_args(a)),
     "benchbar_site_add": ("sites", lambda a: ["site", "list", "--json"] + bench_args(a)),
     "benchbar_app_install": ("apps", lambda a: ["app", "list", "--json"] + bench_args(a)),
+    "benchbar_app_focus": ("focus", lambda a: ["app", "focus", "--list", "--json"] + bench_args(a)),
+    "benchbar_app_unfocus": ("focus", lambda a: ["app", "focus", "--list", "--json"] + bench_args(a)),
     "benchbar_app_update": ("apps", lambda a: ["app", "list", "--json"] + bench_args(a)),
     "benchbar_site_restore": ("sites", lambda a: ["site", "list", "--json"] + bench_args(a)),
     "benchbar_site_drop": ("sites", lambda a: ["site", "list", "--json"] + bench_args(a)),
@@ -1470,7 +1505,7 @@ AFTER = {
 BENCH_GUARDED_READS = {"benchbar_run_read"}
 AFTER_TOOL = {"apps": "benchbar_app_list", "status": "benchbar_status", "sites": "benchbar_site_list",
               "doctor": "benchbar_doctor", "benches": "benchbar_list", "leases": "benchbar_lease_list",
-              "lock": "benchbar_lock_check", "profiles": "benchbar_profile_list"}
+              "lock": "benchbar_lock_check", "profiles": "benchbar_profile_list", "focus": "benchbar_app_focus_list"}
 # a read after an action that exits 1 and still prints its document: doctor with a FAIL
 AFTER_CODES = {"doctor": (0, 1), "lock": (0, 1)}
 
@@ -2635,7 +2670,7 @@ INSTRUCTIONS = (
     "benchbar_scan (benches under a folder), benchbar_report (redacted diagnostics as text), "
     "benchbar_profile_list, benchbar_profile_check, benchbar_op_status (the long runs by op_id), benchbar_history (what ran on this machine and who started it), and the plans benchbar_app_add_plan, benchbar_site_add_plan, benchbar_site_restore_plan, benchbar_site_rollback_plan, benchbar_site_move_plan, "
     "benchbar_service_install_plan (schedule true or false for the scheduler), benchbar_ports_plan, benchbar_site_drop_plan, benchbar_app_install_plan, benchbar_app_update_plan (it runs git fetch on the app), benchbar_lock_apply_plan, benchbar_pull_plan, benchbar_profile_remove_plan, benchbar_run_plan, and benchbar_run_read (doctor, list-apps, version of a site). Actions: benchbar_up (services_only for Redis alone), benchbar_down, "
-    "benchbar_restart, benchbar_site_backup, benchbar_site_snapshot (save a site before a risky change: no plan, it only adds a snapshot), benchbar_doctor_ack (silence or show a doctor warning), benchbar_autostart (on or off), "
+    "benchbar_restart, benchbar_site_backup, benchbar_site_snapshot (save a site before a risky change: no plan, it only adds a snapshot), benchbar_doctor_ack (silence or show a doctor warning), benchbar_autostart (on or off), benchbar_app_focus and benchbar_app_unfocus (pin an app as a focus app or not), "
     "benchbar_ports_mode (automatic or fixed), benchbar_lock_write (benchbar.toml from the bench), benchbar_profile_create (a team profile from a bench), and the plan appliers benchbar_app_add, benchbar_site_add, "
     "benchbar_site_restore, benchbar_site_rollback (put a snapshot back; never the default site), benchbar_site_move (a site to another bench; never the default site), benchbar_service_install, benchbar_ports_apply, benchbar_site_drop, benchbar_app_install, benchbar_app_update, benchbar_lock_apply, benchbar_pull (a neutralised copy of a production site as a new site), benchbar_profile_remove, benchbar_run (migrate, clear-cache, clear-website-cache, build, run-tests: "
     "plan with benchbar_run_plan; use them before raw commands of the bench). "
