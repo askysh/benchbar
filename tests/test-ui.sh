@@ -44,7 +44,7 @@ assert_eq "0" "$el" "(a start that is ahead of the clock is no time, not a negat
 el=""; fl_elapsed_v el $((SECONDS - 4))
 [[ "$el" == 4 || "$el" == 5 ]] || fail "fl_elapsed_v counts the seconds since the start: got [$el]"
 # the stamp of a log line follows the clock back across midnight, and is never a negative time
-stamp="$(FL_LOG_BASE=5; FL_LOG_SECONDS0=$((SECONDS + 10)); fl_log_stamp_v s; printf '%s' "$s")"
+stamp="$(s=""; FL_LOG_BASE=5; FL_LOG_SECONDS0=$((SECONDS + 10)); fl_log_stamp_v s; printf '%s' "$s")"
 [[ "$stamp" == "23:59:55" || "$stamp" == "23:59:56" ]] || fail "a log stamp 10 s before 00:00:05 is 23:59:55: got [$stamp]"
 
 # spinner in non-TTY mode prints a single plain line
