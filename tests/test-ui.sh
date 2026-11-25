@@ -38,6 +38,14 @@ out="$(FL_JSONL=1; fl_jsonl_step "" a_step "" "A step" "done" -3 3>&1)"
 assert_contains "$out" '"secs":0'
 out="$(FL_JSONL=1; fl_jsonl_step "" a_step "" "A step" "done" 7 3>&1)"
 assert_contains "$out" '"secs":7'
+# the same for every time a command reports (run's elapsed_s, wait's waited_s): fl_elapsed_v
+el=""; fl_elapsed_v el $((SECONDS + 3))
+assert_eq "0" "$el" "(a start that is ahead of the clock is no time, not a negative one)"
+el=""; fl_elapsed_v el $((SECONDS - 4))
+[[ "$el" == 4 || "$el" == 5 ]] || fail "fl_elapsed_v counts the seconds since the start: got [$el]"
+# the stamp of a log line follows the clock back across midnight, and is never a negative time
+stamp="$(FL_LOG_BASE=5; FL_LOG_SECONDS0=$((SECONDS + 10)); fl_log_stamp_v s; printf '%s' "$s")"
+[[ "$stamp" == "23:59:55" || "$stamp" == "23:59:56" ]] || fail "a log stamp 10 s before 00:00:05 is 23:59:55: got [$stamp]"
 
 # spinner in non-TTY mode prints a single plain line
 out="$(fl_spinner_start "working"; fl_spinner_stop)"
