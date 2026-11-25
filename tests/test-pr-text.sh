@@ -103,4 +103,13 @@ assert_eq 2 "$CODE" "(no title is a usage error)"
 check "x" "nosuch..range"
 assert_eq 2 "$CODE" "(an unreadable range is an error, not a pass)"
 
+# The workflow runs the script from the merge commit GitHub makes for the pull request, not from
+# the pull request's head: a branch cut before the script existed has no scripts/check-pr-text.sh,
+# and the check failed with exit 127 on every such pull request (#342). The merge commit has the
+# script and, with fetch-depth 0, the base and head commits that the range names.
+WF="$(cat "$ROOT/.github/workflows/pr-text.yml")"
+# shellcheck disable=SC2016 # the workflow expression, literally
+assert_not_contains "$WF" 'ref: ${{ github.event.pull_request.head.sha }}' "(pr-text.yml must not check out the head: an older branch has no script)"
+assert_contains "$WF" "fetch-depth: 0"
+
 printf 'test-pr-text: ok\n'
