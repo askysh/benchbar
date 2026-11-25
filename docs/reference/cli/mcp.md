@@ -303,8 +303,9 @@ asks for: `repair` and bench installs, turning a lab on or off
 (`labs on` refuses an agent too), registering a bench (`register`: it
 decides which folders the changing tools may touch), the `/etc/hosts` line
 (`site hosts`, `sudo`), a console or SQL shell in a site (`console`, `db`),
-sharing a site, the LAN guard, `self-update`, changing the default site
-(`site default`) and pinning a focus app (`app focus NAME`). An agent reads
+sharing a site, the LAN guard, `self-update` and changing the default site
+(`site default`). Pinning a focus app is a tool (`benchbar_app_focus`,
+`benchbar_app_unfocus`): a pin is one line in the bench's state file. An agent reads
 the state with the read tools
 (`benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_labs_list`,
 `benchbar_self_update_check`, `benchbar_site_list`, `benchbar_app_focus_list`)
