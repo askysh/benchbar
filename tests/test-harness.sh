@@ -93,14 +93,11 @@ EOF
 eq 1 "$CODE"; has "$OUT" "(soft)"; has "$OUT" "(hard)"; hasnt "$OUT" reached
 
 # ---- BENCHBAR_SOFT_ASSERTS=1 is soft mode for a file that never asked
-cat >"$WORK/env.sh" <<EOF
-#!/usr/bin/env bash
-. "$ROOT/tests/lib/harness.sh"
+BENCHBAR_SOFT_ASSERTS=1 run_case env <<'EOF'
 assert_eq a b "(one)"
 assert_eq c d "(two)"
 printf 'reached\n'
 EOF
-set +e; OUT="$(BENCHBAR_SOFT_ASSERTS=1 "$BASH" "$WORK/env.sh" 2>&1)"; CODE="$?"; set -e
 eq 1 "$CODE"; has "$OUT" "(one)"; has "$OUT" "(two)"; has "$OUT" reached
 
 # ---- run_fm merges the streams (OUT as before); run_fm_split keeps them apart
