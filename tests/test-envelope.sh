@@ -63,7 +63,7 @@ NO_JSON=" fg watch console db docs mcp help mariadb-password path site app lock 
 # $B is the bench, $NOBENCH a folder that is no bench; @TOKEN@ is the token of `ports plan` for the bench.
 # The rows run in this order, on one fixture bench: up before open and users, create before export and import.
 # The last field is for a row that cannot exit 0 for an agent: a person's decision (labs on, share setup, start,
-# code, invite, open-as and teardown, lan-guard remove and allow-node) is refused under --for-agent with exit 1
+# code, invite, open-as and teardown, a guest's join, leave and forget, lan-guard remove and allow-node) is refused under --for-agent with exit 1
 # (2 for labs on), and with nothing shared (a person has to start it) the commands of a room refuse with exit 1.
 # a lease needs a holder name under --for-agent (lease take refuses an agent without one)
 export BENCHBAR_CALLER=envelope-test
@@ -164,6 +164,10 @@ share assign|share assign d_0123abcd nowhere|share assign|1
 share log|share log --limit 5|-
 share open-as|share open-as nobody|share open-as|1
 share teardown|share teardown --yes|-|1
+share join|share join 192.168.1.20|-|1
+share joined|share joined|-
+share leave|share leave|-|1
+share forget|share forget|-|1
 bench forget|bench forget $B2 --dry-run|bench forget $B2 --apply bogus --yes
 bench remove|bench remove $B2 --dry-run|bench remove $B2 --apply bogus --yes
 bench gc|bench gc --dry-run|bench gc --apply bogus --yes

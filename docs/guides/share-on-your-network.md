@@ -124,6 +124,88 @@ showed to that host. Every host sees another key of yours, so two hosts
 cannot tell that the same Mac joined both. A new code or invite from
 the host is needed to join again.
 
+## Join a room from a terminal
+
+On macOS, Linux and Windows (WSL), `benchbar share join` joins a room
+without the Mac app. Turn on the `lan-rooms` Lab first:
+`benchbar labs on lan-rooms`.
+
+With the host's address and the room code:
+
+```bash
+benchbar share join 192.168.1.20
+```
+
+With an invite link:
+
+```bash
+benchbar share join
+```
+
+1. BenchBar shows the room, its address and the host key (16 digits). If
+   you are not sure that this is the right computer, ask the host to read
+   out the key. `benchbar share status` shows it there.
+2. Type the room code, or paste the invite link, when BenchBar asks. The
+   code and the link are never arguments of the command: an argument
+   stays in the history of your shell.
+3. The host gives you a seat. BenchBar waits for it, for 10 minutes at
+   most. In a room with open seats, you pick a seat from a list.
+4. The room's site opens in your browser on an address of your own
+   computer (`http://<room>-<digits>.localhost:<port>`). No other
+   computer on the network can use that address.
+
+The local address closes after 15 minutes without a page request. Run
+`benchbar share join 192.168.1.20` again to open it. No code is needed
+while you are still in the room.
+
+| Command | What it does |
+|---|---|
+| `benchbar share joined` | Lists the rooms this computer joined, with their ids. |
+| `benchbar share leave [ROOM]` | Leaves a room. The host is told, your seat is free and the local address closes. |
+| `benchbar share forget [ROOM]` | Leaves a room and deletes this computer's key for that host. |
+
+`ROOM` is the id that `share joined` prints. You can omit it when the
+computer joined one room.
+
+The address is an IPv4 address of a local network. From a terminal,
+BenchBar does not search the network for rooms: use the address in the
+host's invite or in its `benchbar share status`.
+
+A room that you joined from a terminal and a room that you joined in the
+Mac app are two guests to the host. Each has its own key and its own list
+of rooms. The host counts you twice, and each takes a seat. On a Mac with
+BenchBar.app, `share join` says so before it asks for the code.
+
+To look at a room first and join it later, run `benchbar share join
+ADDRESS --dry-run --json` and read `host_pin`, the full key of the host.
+Then join with `--host-key HEX`: BenchBar joins only if the host still
+shows that key, and otherwise ends with exit code 3, before it sends
+anything. The tray works this way.
+
+Only a person runs `share join`, `share leave` and `share forget`. An
+agent or a script is refused.
+
+### On Windows (WSL)
+
+`share join` works with NAT networking and with mirrored networking. A
+guest only connects out, and the browser in Windows opens the room on
+`localhost`.
+
+- NAT: WSL reaches the Wi-Fi through Windows. If the room does not
+  answer, check that Windows itself reaches the host. A VPN or the
+  firewall of Windows can be in the way. The browser reaches the local
+  address through the localhost forwarding of WSL, which is on unless
+  `.wslconfig` says `localhostForwarding=false`.
+- Mirrored: there is nothing to set up.
+- A Windows program that already listens on the same `localhost` port
+  (41000 to 41999) can take the browser's request before WSL sees it. BenchBar
+  checks the port inside WSL only. If the address shows another page, run
+  `benchbar share leave` and `benchbar share join` again to get another
+  port, or close the program that holds it.
+
+The local address is there while the WSL distribution runs. Keep a
+terminal of the distribution open while you use the room.
+
 ## When a room ends
 
 A room ends when its time runs out, when the host clicks **Stop**, or when

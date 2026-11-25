@@ -586,6 +586,10 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar share log [--device ID] [--since TIME] [--limit N] [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
 | `benchbar share open-as USER [--print-url] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | document |
 | `benchbar share teardown [--yes] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | stream |
+| `benchbar share join [ADDRESS[:PORT]] [--host-key HEX] [--name NAME] [--seat SEAT_ID] [--no-wait] [--no-open] [--dry-run] [--yes] [--json]` (Lab `lan-rooms`) | yes | no | yes | yes | document |
+| `benchbar share joined [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
+| `benchbar share leave [ROOM] [--json]` (Lab `lan-rooms`) | no | no | yes | yes | stream |
+| `benchbar share forget [ROOM] [--json]` (Lab `lan-rooms`) | no | no | yes | yes | stream |
 | `benchbar lan-guard install\|status\|remove\|allow-node ...` (Lab `lan-rooms`) | yes | yes | no | yes | stream |
 | `benchbar lan-guard install [--dry-run] [--yes] [--json]` (Lab `lan-rooms`) | yes | yes | no | yes | stream |
 | `benchbar lan-guard status [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
@@ -645,6 +649,13 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `share open-as` | `--json` |  | One document without the link (never the session). |
 | `share teardown` | `--yes` |  | Do not ask first. |
 | `share teardown` | `--json` |  | JSON lines: steps, done with copy_dropped, archived_path and state_removed. |
+| `share join` | `--host-key` | `HEX` | Join only if the host shows this key (the 64 hex digits: host_pin of a look with --dry-run --json). Another key is refused before any request, with exit code 3. Public, so an argument is fine. |
+| `share join` | `--name` | `NAME` | The name the host sees for this computer (default: the computer's name). |
+| `share join` | `--seat` | `SEAT_ID` | Take this seat, in a room where guests pick theirs (the host started it with --open-seats). |
+| `share join` | `--no-wait` |  | Do not wait for the host to give a seat: join, say so, and end. |
+| `share join` | `--no-open` |  | Do not open the browser; the address is printed. |
+| `share join` | `--dry-run` |  | Show the room, its address and the host key, and stop: nothing that depends on the code is sent, nothing is saved. |
+| `share join` | `--yes` |  | Do not ask "Join this room?" after an invite link. |
 | `lan-guard install` | `--dry-run` |  | Print what would be written and run, with no sudo. |
 | `lan-guard install` | `--yes` |  | Do not ask first (sudo still asks for the password). |
 | `lan-guard install` | `--json` |  | JSON lines: done, with state, active, ports, anchor and lan_ip. |
@@ -657,4 +668,5 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | Command | Environment variable | What it does |
 |---|---|---|
 | `share setup` | `MARIADB_ROOT_PASSWORD` | Making the copy restores it as MariaDB's root user: the password from the Keychain, this variable, or typed at a terminal. With none of them, setup and its dry run exit 2 before any change. |
+| `share join` | `BENCHBAR_SUDO` | gui: the app or the tray made the run after its own window; the code or the invite link is then the first line of stdin. |
 <!-- /generated:cli-commands -->
