@@ -26,6 +26,12 @@ note() {
 keys="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/commands.sh"; fl_cmd_table' "$ROOT" | awk -F'~' '$1 == "cmd" { print $2 }')"
 [[ -n "$keys" ]] || fail "no cmd record in the table"
 
+# every `use` record of the global help names a command of the table, or - (a heading, a blank line, an option)
+ukeys="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/commands.sh"; fl_usage_table' "$ROOT" | awk -F'~' '$1 == "use" && $2 != "-" { print $2 }' | sort -u)"
+while IFS= read -r k; do
+  [[ -z "$k" ]] || grep -qxF -- "$k" <<<"$keys" || fail "a use record names $k, which is not a command of the table"
+done <<<"$ukeys"
+
 for labs in "" "lan-rooms,quick-switch"; do
   export BENCHBAR_LABS="$labs"
   tag="labs: ${labs:-none}"
