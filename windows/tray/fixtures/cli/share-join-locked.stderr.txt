@@ -1,0 +1,7 @@
+  Room      Test Room (host: Test Host)
+  Address   127.0.0.1:38999
+  Host key  7fdc 34a6 ba8c 6ac7
+  If you are not sure this is the right computer, ask Test Host to read out the host key: benchbar share status shows it there.
+  [FAIL] Test Host locked this room.
+
+Aborting. Ask Test Host to unlock it (benchbar share unlock), then run the command again.

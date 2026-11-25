@@ -11,10 +11,11 @@ public interface IStreamRunner
 {
     /// <summary>
     /// Runs to the end. <paramref name="environment"/> is added to the child's environment for this one process only.
-    /// Cancelling kills the child and its tree. A timeout throws <see cref="TimeoutException"/>.
+    /// Cancelling kills the child and its tree. A timeout throws <see cref="TimeoutException"/>. <paramref name="stdin"/> is one line
+    /// for the child's standard input (a secret that must not be an argument); null sends nothing and closes the input at once.
     /// </summary>
     Task<StreamResult> RunAsync(string fileName, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? environment,
-        Action<string> onLine, TimeSpan timeout, CancellationToken ct);
+        Action<string> onLine, TimeSpan timeout, CancellationToken ct, string? stdin = null);
 }
 
 public sealed class SystemStreamRunner : IStreamRunner
@@ -34,14 +35,69 @@ public sealed class SystemStreamRunner : IStreamRunner
         return minutes == 1 ? UiText.Get("SetupMinuteOne") : UiText.Format("SetupMinutesMany", minutes);
     }
 
+    /// <summary>How many stderr lines are kept: a refusal of <c>share join</c> prints the room first, so its sentence is not the first line.</summary>
+    private const int ErrorLinesKept = 12;
+
+    /// <summary>
+    /// The sentence of what a child wrote on stderr: the first <c>[FAIL]</c> line when there is one (the CLI's own refusal, which can come after
+    /// lines that only describe the room), else the first line. The generic <c>[FAIL] Command failed (exit N)</c> that <c>benchbar run</c> prints
+    /// after a command is not the reason: it counts only when no other tagged line is there to say more, and then it is the line, not the first
+    /// line of the output (which for a refused join is the room's name, chosen by the host).
+    /// </summary>
+    public static string? PickError(IReadOnlyList<string> lines) =>
+        lines.FirstOrDefault(l => IsFail(l) && !IsGeneric(l)) ?? lines.FirstOrDefault(IsGeneric) ?? lines.FirstOrDefault();
+
+    /// <summary>
+    /// A line is the CLI's own sentence only when it <em>starts</em> with the tag. A tag in the middle of a line is text somebody chose: a refused
+    /// <c>share join</c> prints the host's name for its room before the sentence, and a room named "x [FAIL] You must pay" must not become it.
+    /// </summary>
+    private static bool IsFail(string line) => line.TrimStart().StartsWith("[FAIL]", StringComparison.Ordinal);
+
+    private static bool IsGeneric(string line) => line.TrimStart().StartsWith("[FAIL] Command failed (exit", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Sends <paramref name="stdin"/> and a line feed (LF, never the platform's line end: the CLI reads the line with <c>read -r</c> and a
+    /// carriage return would stay in it) as UTF-8 bytes without a byte order mark, then closes the input; the run never reads a terminal. A child that
+    /// ended before it read gives <see cref="IOException"/>: that is not an error of ours, its exit code and what it wrote on stderr say why.
+    /// </summary>
+    private static async Task SendStdinAsync(Process process, string? stdin, CancellationToken ct)
+    {
+        try
+        {
+            if (stdin is not null)
+            {
+                var bytes = new UTF8Encoding(false).GetBytes(stdin + "\n");
+                var input = process.StandardInput.BaseStream;
+                await input.WriteAsync(bytes, ct).ConfigureAwait(false);
+                await input.FlushAsync(ct).ConfigureAwait(false);
+            }
+        }
+        catch (IOException)
+        {
+            // the child is gone: nothing to read it
+        }
+        finally
+        {
+            try
+            {
+                process.StandardInput.Close();
+            }
+            catch (IOException)
+            {
+                // see above
+            }
+        }
+    }
+
     public async Task<StreamResult> RunAsync(string fileName, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? environment,
-        Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+        Action<string> onLine, TimeSpan timeout, CancellationToken ct, string? stdin = null)
     {
         var info = new ProcessStartInfo(fileName)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardInput = true,
+            StandardInputEncoding = new UTF8Encoding(false), // no byte order mark in front of the first line
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             StandardOutputEncoding = Encoding.UTF8,
@@ -56,7 +112,6 @@ public sealed class SystemStreamRunner : IStreamRunner
 
         using var process = new Process { StartInfo = info };
         process.Start();
-        process.StandardInput.Close(); // the run never reads a terminal
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeout);
@@ -80,7 +135,7 @@ public sealed class SystemStreamRunner : IStreamRunner
                 string? line;
                 while ((line = await process.StandardError.ReadLineAsync(CancellationToken.None).ConfigureAwait(false)) is not null)
                 {
-                    if (line.Trim().Length > 0 && errors.Count < 5) errors.Add(line.Trim());
+                    if (line.Trim().Length > 0 && errors.Count < ErrorLinesKept) errors.Add(line.Trim());
                 }
             }
             catch (Exception ex) when (ex is ObjectDisposedException or IOException or InvalidOperationException)
@@ -90,6 +145,7 @@ public sealed class SystemStreamRunner : IStreamRunner
         }, CancellationToken.None);
         try
         {
+            await SendStdinAsync(process, stdin, cts.Token).ConfigureAwait(false); // under the timeout and the cancel token, with the pumps already reading
             await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
             try
             {
@@ -99,7 +155,7 @@ public sealed class SystemStreamRunner : IStreamRunner
             {
                 // a grandchild holds a pipe: the child is done, so the result is what it printed so far
             }
-            return new StreamResult(process.ExitCode, errors.Count == 0 ? null : errors[0]);
+            return new StreamResult(process.ExitCode, PickError(errors));
         }
         catch (OperationCanceledException)
         {

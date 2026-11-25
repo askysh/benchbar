@@ -88,6 +88,8 @@ fl_hist_word_v() {
       FL_HIST_NEXT_SECRET=1
     fi
   else
+    # an invite link carries the room code: share join refuses it as an argument, and it is not kept either
+    case "$__word" in *[Bb][Ee][Nn][Cc][Hh][Bb][Aa][Rr]://[Ss][Hh][Aa][Rr][Ee]/[Jj][Oo][Ii][Nn]*) printf -v "$1" '%s' '***'; return 0 ;; esac
     case "$__word" in *://*@*) fl_redact_url_v __word "$__word" ;; esac
     if [[ "$__word" == *'?'*=* || "$__word" == *'&'*=* ]]; then
       # the query of a URL (or a word shaped like one): every secret looking parameter
@@ -122,9 +124,38 @@ fl_hist_words() {
   for __w in ${__args[@]+"${__args[@]}"}; do
     if [[ "$__n" -ge "$FL_HIST_WORDS_MAX" ]]; then FL_HIST_WORDS+=("..."); break; fi
     __n=$((__n + 1))
+    # six digits after "share join", with or without spaces or dashes between them, are a room code somebody
+    # passed by mistake (it is refused there)
+    if [[ "${__w//[ -]/}" =~ ^[0-9]{6}$ && " ${FL_HIST_WORDS[*]-} " == *" share join "* ]]; then __w='***'; fi
     fl_hist_word_v __w "$__w" "$__prev"
     __prev="$FL_HIST_NEXT_SECRET"
     FL_HIST_WORDS+=("$__w")
+  done
+  fl__hist_mask_split_code
+}
+
+# fl__hist_mask_split_code: after "share join", words of digits (dashes allowed) that together make six
+# digits are a room code typed in parts, as the host prints it ("482 913" without quotes is two words):
+# each of those words becomes ***
+fl__hist_mask_split_code() {
+  local __i=0 __j __k __d __n="${#FL_HIST_WORDS[@]}" __after=0 __re='^-?[0-9][0-9-]*$'
+  while [[ "$__i" -lt "$__n" ]]; do
+    if [[ "$__after" == 0 ]]; then
+      [[ "$__i" -lt 1 || "${FL_HIST_WORDS[$((__i - 1))]}" != "share" || "${FL_HIST_WORDS[$__i]}" != "join" ]] || __after=1
+      __i=$((__i + 1)); continue
+    fi
+    __d=""; __j="$__i"
+    while [[ "$__j" -lt "$__n" && "${FL_HIST_WORDS[$__j]}" =~ $__re ]]; do
+      __d="${__d}${FL_HIST_WORDS[$__j]//-/}"
+      [[ "${#__d}" -lt 6 ]] || break
+      __j=$((__j + 1))
+    done
+    if [[ "${#__d}" -eq 6 && "$__j" -gt "$__i" && "$__j" -lt "$__n" ]]; then
+      for ((__k = __i; __k <= __j; __k++)); do FL_HIST_WORDS[__k]='***'; done
+      __i=$((__j + 1))
+    else
+      __i=$((__i + 1))
+    fi
   done
 }
 

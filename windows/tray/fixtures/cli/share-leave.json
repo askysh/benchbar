@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.8.3","event":"done","id":"00e32d48bbd686cf","room":"Test Room","host":"Test Host","told_host":true,"forwarder_stopped":true,"exit":0,"changed":[{"kind":"share","name":"Test Room","detail":"left"}],"warnings":[],"next_actions":[],"state_after":null,"log":null}

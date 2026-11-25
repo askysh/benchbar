@@ -1,0 +1,3 @@
+  [FAIL] Joining a room runs on Node 22 or later, and the one here cannot be used: there is no executable node at /nonexistent/node.
+
+Aborting. Install it (benchbar install does, with the other dependencies), then run the command again.

@@ -74,9 +74,9 @@ done
 LIB_CORE="test-json-strings test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-run-lock test-status-cost test-tray-fixtures"
 lib_family() {
   case "$1" in
-    checks|doctor) echo "test-doctor test-doctor-hardening test-doctor-linux test-repair test-repair-json test-json" ;;
+    checks|doctor|cmd-doctor) echo "test-doctor test-doctor-hardening test-doctor-linux test-repair test-repair-json test-json" ;;
     doctor-linux|preflight-linux) echo "test-doctor-linux test-doctor test-repair test-wsl-preflight test-install-linux test-install-failures test-prerequisites-linux" ;;
-    repair) echo "test-repair test-repair-json test-doctor test-doctor-hardening test-install-json" ;;
+    repair|cmd-repair) echo "test-repair test-repair-json test-doctor test-doctor-hardening test-install-json" ;;
     docs) echo "test-docs test-docs-command" ;;
     commands) echo "test-docs test-docs-command test-labs test-json" ;;
     apps|app-plan) echo "test-apps test-app-cli test-app-batch test-app-recovery test-pull test-apps-git test-lock" ;;
@@ -94,7 +94,8 @@ lib_family() {
     consoles) echo "test-cli" ;;
     report) echo "test-report test-redact" ;;
     selfupdate) echo "test-self-update test-install-sh" ;;
-    share|share-admin|share-preflight|share-run|share-site|lan-guard) echo "test-share test-share-admin test-share-preflight test-share-run test-share-gateway test-lan-guard test-lan-guard-linux test-share-linux test-labs-share" ;;
+    share|share-admin|share-preflight|share-run|share-site|lan-guard) echo "test-share test-share-admin test-share-preflight test-share-run test-share-gateway test-lan-guard test-lan-guard-linux test-share-linux test-labs-share test-share-join" ;;
+    share-guest) echo "test-share-join test-share-gateway test-labs-share test-history test-docs" ;;
     lan-guard-linux|share-linux) echo "test-lan-guard-linux test-share-linux test-labs-share" ;;
     *) return 1 ;;
   esac
