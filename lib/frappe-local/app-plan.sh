@@ -22,15 +22,6 @@ fl_app_plan_wanted() {
   return 1
 }
 
-# git with the user's own credentials that never prompts, with a timeout
-fl__ap_git() {
-  local secs="$1" out="$2" err="$3"
-  shift 3
-  fl_run_capture_timeout "$secs" "$out" "$err" fl_git_net "$@"
-}
-
-fl__ap_first_line() { grep -v '^[[:space:]]*$' "$1" 2>/dev/null | grep -v '^warning:' | awk 'NR==1' || true; }
-
 # fl__ap_remote REPO [BRANCH]: 0 when the repo is readable without a prompt
 # and BRANCH (a branch or tag, when given) exists; else 1 with AP__ERR.
 # Without BRANCH it asks for the remote HEAD and sets AP__DEFAULT.
@@ -60,17 +51,15 @@ fl__ap_pin_resolve() {
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-plan.XXXXXX")"
   AP__FULL="$(git -C "$dir" rev-parse -q --verify "${pin}^{commit}" 2>/dev/null || true)"
   if [[ -z "$AP__FULL" && "${#pin}" == "40" ]]; then
-    fl__ap_git "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/out" "$tmp/err" -C "$dir" fetch --quiet --depth 1 --filter=blob:none origin "$pin" || true
-    fl_log_file_append "$tmp/err"
+    fl_git_timed "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/out" fl_git_net -C "$dir" fetch --quiet --depth 1 --filter=blob:none origin "$pin" || true
     AP__FULL="$(git -C "$dir" rev-parse -q --verify "${pin}^{commit}" 2>/dev/null || true)"
   fi
   if [[ -z "$AP__FULL" ]]; then
     if [[ "$(git -C "$dir" rev-parse --is-shallow-repository 2>/dev/null || true)" == "true" ]]; then
-      fl__ap_git "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/out" "$tmp/err" -C "$dir" fetch --quiet --unshallow --tags --filter=blob:none origin '+refs/heads/*:refs/remotes/origin/*' || true
+      fl_git_timed "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/out" fl_git_net -C "$dir" fetch --quiet --unshallow --tags --filter=blob:none origin '+refs/heads/*:refs/remotes/origin/*' || true
     else
-      fl__ap_git "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/out" "$tmp/err" -C "$dir" fetch --quiet --tags --filter=blob:none origin '+refs/heads/*:refs/remotes/origin/*' || true
+      fl_git_timed "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/out" fl_git_net -C "$dir" fetch --quiet --tags --filter=blob:none origin '+refs/heads/*:refs/remotes/origin/*' || true
     fi
-    fl_log_file_append "$tmp/err"
     AP__FULL="$(git -C "$dir" rev-parse -q --verify "${pin}^{commit}" 2>/dev/null || true)"
   fi
   rm -rf "$tmp"
@@ -86,11 +75,10 @@ fl__ap_read_hooks() {
   local repo="$1" branch="$2" name="$3" pin="${4:-}" tmp code=0 path="" ref="HEAD" dep have
   AP__PKG=""; AP__REQ=""; AP__ERR=""; AP__SHA=""
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-plan.XXXXXX")"
-  fl__ap_git "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/out" "$tmp/err" \
+  fl_git_timed "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/out" fl_git_net \
     clone --quiet --depth 1 --filter=blob:none --no-checkout --branch "$branch" -- "$repo" "$tmp/repo" || code=$?
-  fl_log_file_append "$tmp/err"
   if [[ "$code" != "0" ]]; then
-    AP__ERR="could not read hooks.py of ${repo} (git clone exit ${code}): $(fl__ap_first_line "$tmp/err")"
+    AP__ERR="could not read hooks.py of ${repo} (git clone exit ${code}): ${FL_GR_ERR}"
     rm -rf "$tmp"; return 1
   fi
   if [[ -n "$pin" ]]; then
@@ -109,15 +97,15 @@ fl__ap_read_hooks() {
     rm -rf "$tmp"; return 1
   fi
   code=0
-  fl__ap_git "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/hooks.py" "$tmp/err" -C "$tmp/repo" show "${ref}:${path}" || code=$?
+  fl_git_timed "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/hooks.py" fl_git_net -C "$tmp/repo" show "${ref}:${path}" || code=$?
   if [[ "$code" != "0" ]]; then
-    AP__ERR="could not read ${path} from ${repo}: $(fl__ap_first_line "$tmp/err")"
+    AP__ERR="could not read ${path} from ${repo}: ${FL_GR_ERR}"
     rm -rf "$tmp"; return 1
   fi
   AP__PKG="${path%/hooks.py}"
   AP__REQ="$(fl_hooks_required_apps "$tmp/hooks.py")"
   # the Frappe this app is built for ([tool.bench.frappe-dependencies]) against the bench's
-  fl__ap_git "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/pyproject.toml" "$tmp/err" -C "$tmp/repo" show "${ref}:pyproject.toml" || true
+  fl_git_timed "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/pyproject.toml" fl_git_net -C "$tmp/repo" show "${ref}:pyproject.toml" || true
   dep="$(fl_pyproject_frappe_dep "$tmp/pyproject.toml")"
   have="$(fl_bench_frappe_version)"
   if [[ -n "$dep" && -n "$have" ]] && ! fl_dep_fits "$dep" "$have"; then

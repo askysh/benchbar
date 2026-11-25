@@ -482,24 +482,38 @@ fl_git_net() {
   env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_SSH_COMMAND="$(fl_git_ssh_command "$dir")" "${FL_GIT_EXT_OFF[@]}" git "$@"
 }
 
-# fl_git_remote_run SECS GIT_ARGS...: fl_git_net with a deadline; sets
-# FL_GR_CODE, FL_GR_OUT and FL_GR_ERR, and puts git's stderr in the log
-fl_git_remote_run() {
-  local secs="$1" out err
-  shift
-  out="$(mktemp "${TMPDIR:-/tmp}/benchbar-gitnet.XXXXXX")"
+# fl_git_timed SECS OUT COMMAND...: COMMAND (fl_git_net, or a function built on
+# it) with stdout in the file OUT and a deadline: its whole process group ends
+# after SECS. Sets FL_GR_CODE (124 after a timeout) and FL_GR_ERR (the first
+# line of stderr without warnings, "timed out after Ns" on 124), puts stderr in
+# the log, and returns FL_GR_CODE. The one place a network git call gets its
+# deadline and its error line.
+fl_git_timed() {
+  local secs="$1" out="$2" err
+  shift 2
   err="$(mktemp "${TMPDIR:-/tmp}/benchbar-gitnet.XXXXXX")"
   FL_GR_CODE=0
   # the shell tells "Terminated" of a job it killed on a timeout: not a line for the user
-  { fl_run_capture_timeout "$secs" "$out" "$err" fl_git_net "$@" || FL_GR_CODE=$?; } 2>/dev/null
-  FL_GR_OUT="$(cat "$out" 2>/dev/null || true)"
+  { fl_run_capture_timeout "$secs" "$out" "$err" "$@" || FL_GR_CODE=$?; } 2>/dev/null
   fl_log_file_append "$err"
   if [[ "$FL_GR_CODE" == "124" ]]; then
     FL_GR_ERR="timed out after ${secs}s"
   else
     FL_GR_ERR="$(grep -v '^[[:space:]]*$' "$err" 2>/dev/null | grep -v '^warning:' | awk 'NR==1' || true)"
   fi
-  rm -f "$out" "$err"
+  rm -f "$err"
+  return "$FL_GR_CODE"
+}
+
+# fl_git_remote_run SECS GIT_ARGS...: fl_git_net with a deadline; sets
+# FL_GR_CODE, FL_GR_OUT and FL_GR_ERR, and puts git's stderr in the log
+fl_git_remote_run() {
+  local secs="$1" out
+  shift
+  out="$(mktemp "${TMPDIR:-/tmp}/benchbar-gitnet.XXXXXX")"
+  fl_git_timed "$secs" "$out" fl_git_net "$@" || true
+  FL_GR_OUT="$(cat "$out" 2>/dev/null || true)"
+  rm -f "$out"
   return 0
 }
 
