@@ -8,6 +8,10 @@ Edit them here; GitHub renders them as they are, and the site in `site/`
 (Astro Starlight) builds from this folder. This README is not a page on
 the site.
 
+Pages for maintainers are not in this folder, because everything here is
+published. Decisions and Releasing are in `maintainers/`, and the site
+redirects their old addresses to GitHub.
+
 ## Run the site locally
 
 ```bash

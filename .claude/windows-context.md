@@ -24,7 +24,7 @@ shim (`windows/shim`, Go) and the tray app (`windows/tray`, .NET).
   for something irreversible or a scope question the repo cannot answer.
 - Fan independent work out to the agents in .claude/agents (shim-go, tray-dotnet, test-runner,
   Explore, reviewer).
-- Non obvious choices: one line in docs/DECISIONS.md (CLI and shim) or the tray's own decisions
+- Non obvious choices: one line in maintainers/DECISIONS.md (CLI and shim) or the tray's own decisions
   file once it exists. User facing changes:
   a changelog fragment, changelog.d/<issue>-<slug>.md (never CHANGELOG.md itself). No version bumps.
 - No em dashes in anything you write.

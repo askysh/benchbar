@@ -9,7 +9,7 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <!-- Both runtimes are in each packages.lock.json (see RuntimeIdentifiers), so a locked restore passes for the x64 and the arm64 build. -->
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
-    <!-- Every project commits a packages.lock.json and CI restores in locked mode, so a package that changed upstream fails the build instead of entering it (docs/DECISIONS.md, Supply chain). -->
+    <!-- Every project commits a packages.lock.json and CI restores in locked mode, so a package that changed upstream fails the build instead of entering it (maintainers/DECISIONS.md, Supply chain). -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

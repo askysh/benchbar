@@ -4,4 +4,4 @@
 
 ### For contributors
 
-- The two pins are `FL_PIN_FRAPPE_BENCH` and `FL_PIN_YARN` in `lib/frappe-local/ui.sh`. `docs/releasing.md` says how to move them, and `tests/test-tool-pins.sh` fails when a pin is not an exact version, is older than a profile's `bench_min`, or an install line names no version.
+- The two pins are `FL_PIN_FRAPPE_BENCH` and `FL_PIN_YARN` in `lib/frappe-local/ui.sh`. `maintainers/releasing.md` says how to move them, and `tests/test-tool-pins.sh` fails when a pin is not an exact version, is older than a profile's `bench_min`, or an install line names no version.

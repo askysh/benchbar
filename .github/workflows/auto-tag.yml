@@ -2,7 +2,7 @@
 #
 # Work lands on next-release; main moves only when a release is cut, and then
 # by a fast forward to a next-release commit that CI already ran, pushed by
-# the maintainer (docs/releasing.md): no new squash, no merge commit, and
+# the maintainer (maintainers/releasing.md): no new squash, no merge commit, and
 # afterwards main and next-release are the same commit. On that push:
 #   1. the version is read from FL_VERSION in benchbar and must be a release
 #      (X.Y.Z; a release candidate is tagged by hand on next-release and never
@@ -122,8 +122,8 @@ jobs:
             rc=0
             if [[ -n "$base" ]]; then scripts/docs-only.sh "$base" "$GITHUB_SHA" >/dev/null || rc=$?; else rc=2; fi
             if [[ "$rc" == 0 ]]; then
-              echo "::notice title=main is ahead::main ($GITHUB_SHA) has docs commits that next-release has not. The next release brings them in with one merge commit before it fast forwards main (docs/releasing.md)."
+              echo "::notice title=main is ahead::main ($GITHUB_SHA) has docs commits that next-release has not. The next release brings them in with one merge commit before it fast forwards main (maintainers/releasing.md)."
             else
-              echo "::warning title=main is ahead::main ($GITHUB_SHA) has commits that next-release has not, and not only docs. The next release is a fast forward of main to next-release, so it is refused until this is sorted out (docs/releasing.md)."
+              echo "::warning title=main is ahead::main ($GITHUB_SHA) has commits that next-release has not, and not only docs. The next release is a fast forward of main to next-release, so it is refused until this is sorted out (maintainers/releasing.md)."
             fi
           fi

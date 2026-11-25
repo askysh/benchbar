@@ -57,7 +57,7 @@ PENDING_STEPS=()
 FL_ASSUME_YES=0
 
 # The two installers this script downloads and runs, each pinned to a version
-# and checked against the sha256 of the script before it runs (docs/DECISIONS.md,
+# and checked against the sha256 of the script before it runs (maintainers/DECISIONS.md,
 # "Supply chain"). To move to a newer version, change the version, the URL and
 # the sum together: curl -fsSL URL | shasum -a 256.
 #   uv:  astral's installer from the GitHub release. It checks the uv archive

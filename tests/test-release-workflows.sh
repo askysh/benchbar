@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The release keys are guarded (docs/releasing.md, "Secrets"): every job that
+# The release keys are guarded (maintainers/releasing.md, "Secrets"): every job that
 # reads one of the ten release secrets declares `environment: release`, and
 # no other job does, so a pull request or a branch run never reaches the
 # environment; the composite actions read no secret; the signed build
@@ -120,7 +120,7 @@ assert_contains "$(cat "$SCRIPT")" "drop_notary_key"
 assert_contains "$(cat "$SCRIPT")" 'mktemp "${BENCHBAR_KEY_DIR:-${TMPDIR:-/tmp}}/benchbar-notary.XXXXXX"'
 assert_contains "$(cat "$SCRIPT")" 'mktemp "${BENCHBAR_KEY_DIR:-${TMPDIR:-/tmp}}/benchbar-sparkle.XXXXXX"'
 
-# ---- release candidates (docs/releasing.md, "Release candidates"): a tag with a
+# ---- release candidates (maintainers/releasing.md, "Release candidates"): a tag with a
 # suffix builds like a release but is a GitHub pre-release, which no updater
 # offers and the tap skips; a tag must sit on merged work
 assert_contains "$(cat "$RELEASE")" 'prerelease: ${{ steps.version.outputs.prerelease }}'
@@ -138,7 +138,7 @@ tap_if="$(grep -n -m 1 "if: github.event_name != 'release'" <<<"$TAP" | cut -d: 
 tap_env="$(grep -n -m 1 'environment: release' <<<"$TAP" | cut -d: -f1)"
 [[ -n "$tap_if" && -n "$tap_env" && "$tap_if" -lt "$tap_env" ]] || fail "the tap job must skip a pre-release (if:) before it asks for the environment"
 
-# ---- a release is a fast forward of main (docs/releasing.md): auto-tag tags main's
+# ---- a release is a fast forward of main (maintainers/releasing.md): auto-tag tags main's
 # commit, refuses a candidate on main, runs the one version check, and pushes no
 # branch (main equals next-release after the fast forward, nothing to catch up)
 AUTO="$(grep -v '^[[:space:]]*#' "$WF/auto-tag.yml")"

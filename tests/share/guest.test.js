@@ -638,6 +638,24 @@ test("the forwarder takes its control socket first: a second one for the room sa
     await forward.ask(dir, id, "stop", 2000);
 });
 
+// A forwarder answers on its control socket only once its port is bound, which took over 2 s on a slow
+// runner (next-release macOS run 45699162129: two of four forwarders stayed up). A socket that accepts the
+// connection belongs to a live forwarder, whether it answers in time or not: only a refused connection is
+// a dead one's file to take over.
+test("a forwarder that is alive but slow to answer keeps its socket: a second one says already_running", async () => {
+    const dir = H.tmpDir();
+    const id = savedRoom(dir);
+    const sock = forward.sockPath(dir, id);
+    const slow = net.createServer(() => { /* accepts, never answers */ });
+    await new Promise((resolve) => slow.listen(sock, resolve));
+    H.track(() => slow.close());
+    const second = spawnForwarder(dir, id);
+    H.track(() => second.kill("SIGKILL"));
+    const r = await Promise.race([exited(second), H.sleep(8000).then(() => ({ code: null, text: "" }))]);
+    assert.deepStrictEqual([r.code, r.text.trim()], [1, "guest-forward: already_running"]);
+    assert.ok(fs.existsSync(sock), "the live forwarder's socket was removed");
+});
+
 test("a forwarder whose socket is gone ends by itself, and a dead one's socket file is taken over", async () => {
     const dir = H.tmpDir();
     const id = savedRoom(dir);

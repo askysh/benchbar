@@ -507,7 +507,7 @@ asking stops.
 ## Updates
 
 Every release has Sparkle, the macOS updater (see
-[Releasing](releasing.md)). It checks for a new version once a day on
+[Releasing](../maintainers/releasing.md)). It checks for a new version once a day on
 its own and offers it in its own window; **Check for Updates…** in the
 app menu and the menu bar menu asks at once. **Check for Updates** in
 About asks GitHub for the latest release, one request that downloads

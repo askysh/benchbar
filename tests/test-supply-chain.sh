@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # What the build trusts is pinned, and the pins say the same everywhere
-# (docs/DECISIONS.md, "Supply chain"): every action is a commit sha with its
+# (maintainers/DECISIONS.md, "Supply chain"): every action is a commit sha with its
 # version in a comment, every job has a timeout, Dependabot watches each
 # package manager and targets next-release, the Swift packages of the app are
 # the ones macos/Package.resolved names (and Package.swift, project.yml and

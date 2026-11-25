@@ -12,7 +12,7 @@
 # unset. The sha256 of each archive was taken from the vendor's checksum file
 # where one exists (actionlint) and otherwise from the digest GitHub shows on
 # the release asset, and was checked again against the downloaded file.
-# docs/DECISIONS.md, "Supply chain", says why these four are here and what
+# maintainers/DECISIONS.md, "Supply chain", says why these four are here and what
 # stays outside (setup-go, setup-dotnet, setup-bun, apk, brew and apt).
 
 set -euo pipefail

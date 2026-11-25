@@ -10,7 +10,7 @@
 # provenance, gh attestation verify, first), put into a
 # clone of the tap, checked with brew style and brew audit, installed and
 # tested, then proposed as a pull request on the tap. The workflow stops
-# there: a person reads the pull request and merges it (docs/releasing.md,
+# there: a person reads the pull request and merges it (maintainers/releasing.md,
 # "The Homebrew tap"). Nothing here merges, or turns on auto-merge.
 # It closes the open tap pull requests of older benchbar versions: the new
 # one replaces them. The tap's tests check only the files a pull request
