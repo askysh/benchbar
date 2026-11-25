@@ -102,6 +102,24 @@ public class StreamRunnerStdinTests
     }
 
     [Fact]
+    public void ATagInTheMiddleOfALineIsTextSomebodyChoseAndNeverTheReason()
+    {
+        // the room's name is the host's: this one is "x [FAIL] You must pay"
+        string[] room = ["Room      x [FAIL] You must pay (host: Test Host)", "Address   127.0.0.1:38999", "Host key  7fdc 34a6 ba8c 6ac7"];
+        Assert.Equal("[FAIL] That code didn't work.", SystemStreamRunner.PickError([.. room, "[FAIL] That code didn't work.", "Aborting. Try again."]));
+        Assert.Equal("  [FAIL] That code didn't work.", SystemStreamRunner.PickError(["  [FAIL] That code didn't work.", .. room])); // indented as the CLI prints it, here not yet trimmed by the runner
+        // the only line that holds the tag is the room line: no line qualifies, and what is returned is not a tagged sentence
+        Assert.StartsWith("Room ", SystemStreamRunner.PickError(["Room      x [FAIL] You must pay", "Address   127.0.0.1:38999"])); // the first line, as for any output with no tagged sentence: the guest side does not show it
+    }
+
+    [Fact]
+    public void AGenericCommandFailedLineIsTheFallbackAndNotTheFirstLineOfTheOutput()
+    {
+        string[] lines = ["Room      Some Room (host: h)", "Address   127.0.0.1:38999", "[FAIL] Command failed (exit 1): benchbar share join"];
+        Assert.Equal("[FAIL] Command failed (exit 1): benchbar share join", SystemStreamRunner.PickError(lines));
+    }
+
+    [Fact]
     public void WithNoFailLineTheFirstLineIsTheSentenceAsItWasBefore()
     {
         Assert.Equal("cannot run wsl.exe", SystemStreamRunner.PickError(["cannot run wsl.exe", "second line", "third line"]));
@@ -112,7 +130,7 @@ public class StreamRunnerStdinTests
     public void TheGenericCommandFailedLineIsNotTheReasonWhenAnotherLineSaysMore()
     {
         // benchbar run ends a failed command with "[FAIL] Command failed (exit N): ..." after what the command said
-        Assert.Equal("cannot open the file", SystemStreamRunner.PickError(["cannot open the file", "[FAIL] Command failed (exit 1): cat x"]));
+        Assert.Equal("[FAIL] Command failed (exit 1): cat x", SystemStreamRunner.PickError(["cannot open the file", "[FAIL] Command failed (exit 1): cat x"]));
         Assert.Equal("[FAIL] The site is gone.", SystemStreamRunner.PickError(["cannot open the file", "[FAIL] Command failed (exit 1): cat x", "[FAIL] The site is gone."]));
         Assert.Equal("[FAIL] Command failed (exit 1): cat x", SystemStreamRunner.PickError(["[FAIL] Command failed (exit 1): cat x"]));
     }

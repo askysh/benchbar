@@ -73,32 +73,36 @@ public static class ShareGuestJson
     {
         var key = JsonRead.Str(o, "host_key");
         var pin = JsonRead.Str(o, "host_pin");
-        var address = JsonRead.Str(o, "address");
+        var address = ShareGuestText.RoomAddress(JsonRead.Str(o, "address"));
         // without the whole hash there is nothing to pin the join to, so there is no join: the person must not be sent into a room that is not the one looked at
         if (!ShareGuestText.IsKey(key) || !ShareGuestText.IsPin(pin) || !pin!.StartsWith(key!, StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(address) || JsonRead.Int(o, "port") is not { } port)
             throw new FormatException("share join: the look has no host key, host pin or address");
-        return new ShareLook(pin.ToLowerInvariant(), key!, address, port, JsonRead.Str(o, "room") ?? "", JsonRead.Str(o, "host") ?? "", JsonRead.Bool(o, "locked"), JsonRead.Bool(o, "full"),
+        var lookRoom = ShareGuestText.Clean(JsonRead.Str(o, "room"));
+        var lookHost = ShareGuestText.Clean(JsonRead.Str(o, "host"));
+        return new ShareLook(pin.ToLowerInvariant(), key!, address, port, lookRoom, lookHost, JsonRead.Bool(o, "locked"), JsonRead.Bool(o, "full"),
             JsonRead.Int(o, "people") ?? 0, JsonRead.Int(o, "seats") ?? 0, JsonRead.Bool(o, "known"), JsonRead.Bool(o, "paired"));
     }
 
     public static GuestRoom Room(JsonObject o)
     {
         var id = JsonRead.Str(o, "id");
-        if (string.IsNullOrEmpty(id) || JsonRead.Str(o, "address") is not { Length: > 0 } address) throw new FormatException("share joined: a room has no id or address");
-        return new GuestRoom(id, JsonRead.Str(o, "room") ?? "", JsonRead.Str(o, "host") ?? "", JsonRead.Str(o, "site") ?? "", address, JsonRead.Int(o, "port") ?? 8443,
-            JsonRead.Str(o, "host_key") ?? id, JsonRead.Bool(o, "forwarding"), State(JsonRead.Str(o, "state")), JsonRead.Str(o, "seat"), JsonRead.Str(o, "url"),
+        if (string.IsNullOrEmpty(id) || !ShareGuestText.IsKey(id) || ShareGuestText.RoomAddress(JsonRead.Str(o, "address")) is not { } address) throw new FormatException("share joined: a room has no id or address");
+        return new GuestRoom(id, ShareGuestText.Clean(JsonRead.Str(o, "room")), ShareGuestText.Clean(JsonRead.Str(o, "host")), ShareGuestText.Clean(JsonRead.Str(o, "site")), address, JsonRead.Int(o, "port") ?? 8443,
+            JsonRead.Str(o, "host_key") ?? id, JsonRead.Bool(o, "forwarding"), State(JsonRead.Str(o, "state")), CleanOrNull(JsonRead.Str(o, "seat")), JsonRead.Str(o, "url"),
             o["host_assigns"] is JsonValue h && h.TryGetValue<bool>(out var assigns) ? assigns : null, Seats(o));
     }
 
     public static IReadOnlyList<GuestRoom> Rooms(JsonObject o) =>
         o["rooms"] is JsonArray a ? [.. a.OfType<JsonObject>().Where(r => JsonRead.Str(r, "id") is { Length: > 0 }).Select(Room)] : [];
 
+    private static string? CleanOrNull(string? text) => text is null ? null : ShareGuestText.Clean(text);
+
     public static GuestJoin Join(JsonObject o) => new(JsonRead.Bool(o, "joined"), Room(o));
 
     private static IReadOnlyList<GuestSeat> Seats(JsonObject o) =>
         o["seats"] is JsonArray a
             ? [.. a.OfType<JsonObject>().Where(s => JsonRead.Str(s, "seat_id") is { Length: > 0 }).Select(s => new GuestSeat(JsonRead.Str(s, "seat_id")!,
-                JsonRead.Str(s, "full_name") ?? JsonRead.Str(s, "seat_id")!, JsonRead.Strings(s, "roles"), JsonRead.Str(s, "taken_by")))]
+                ShareGuestText.Clean(JsonRead.Str(s, "full_name") ?? JsonRead.Str(s, "seat_id")), [.. JsonRead.Strings(s, "roles").Select(r => ShareGuestText.Clean(r))], CleanOrNull(JsonRead.Str(s, "taken_by"))))]
             : [];
 }
 
@@ -140,6 +144,30 @@ public static class ShareGuestText
         return digits.Length == 6 && digits.All(char.IsAsciiDigit) ? digits : null;
     }
 
-    /// <summary>The sentence of what the CLI wrote on stderr (<c>  [FAIL] message</c>), without the colour codes and the tag.</summary>
-    public static string? Sentence(string? stderr) => OpenAsRules.CliSentence(stderr);
+    /// <summary>The sentence of what the CLI wrote on stderr (<c>  [FAIL] message</c>), without the colour codes and the tag, and as one line of plain text.</summary>
+    public static string? Sentence(string? stderr) => OpenAsRules.CliSentence(stderr) is { } sentence ? Clean(sentence, 300) : null;
+
+    /// <summary>
+    /// Text that a host chose (the name of its room and of itself, seat names and roles) as one line of plain text: control characters, line and
+    /// paragraph separators and the characters that turn text around (bidi marks and overrides) become spaces, runs of spaces become one, and
+    /// the text is cut at <paramref name="max"/> characters. What is left cannot make a second line, or a line that reads as something else.
+    /// </summary>
+    public static string Clean(string? text, int max = 80)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        var builder = new StringBuilder(text.Length);
+        foreach (var c in text)
+        {
+            var code = (int)c;
+            var bad = char.IsControl(c) || code is 0x2028 or 0x2029 or 0x200E or 0x200F or 0x061C or (>= 0x202A and <= 0x202E) or (>= 0x2066 and <= 0x2069);
+            var space = bad || char.IsWhiteSpace(c);
+            if (space && (builder.Length == 0 || builder[^1] == ' ')) continue;
+            builder.Append(space ? ' ' : c);
+        }
+        var clean = builder.ToString().TrimEnd();
+        return clean.Length <= max ? clean : clean[..(max - 3)].TrimEnd() + "...";
+    }
+
+    /// <summary>The IPv4 address of a room as the CLI prints it, or null: it becomes an argument of the next call, so it is nothing else.</summary>
+    public static string? RoomAddress(string? address) => Address(address) is { } a && !a.Contains(':') ? a : null;
 }
