@@ -178,7 +178,25 @@ the release notes say so. For a bug that is not listed, search the
 [open issues](https://github.com/askysh/benchbar/issues) and file one with
 the bug form.
 
-None at the moment.
+- **Two runs at once can both take a state guard** ([#340](https://github.com/askysh/benchbar/issues/340),
+  Ubuntu 25.10 and later, WSL too, where `mkdir` is the uutils one). Three
+  guards in the state code still use a plain `mkdir`, so two `benchbar`
+  commands started in the same instant can both hold one. It is rare. Run
+  one `benchbar` command at a time on such a system (the lease lock and the
+  run lock are not affected).
+- **One keepalive at a time on Windows** (beta). While one distro is kept
+  awake, **Start** cannot start a second distro. Switch the distro in
+  Settings, or stop the other keepalive first
+  ([the Windows page](windows.md)).
+- **Windows programs are not signed** (SignPath declined the project on
+  2026-11-13, and there is no Store package). With Smart App Control on,
+  Windows blocks `benchbar.exe` and BenchBar Tray and the installer stops
+  before it writes anything; a program started from an unpacked zip shows
+  "The publisher could not be verified" (click **Run**). See
+  [Smart App Control](windows.md#smart-app-control).
+- **Intel Macs are not verified** ([#22](https://github.com/askysh/benchbar/issues/22)).
+  The CLI is written to work there and the app is not built for Intel, but
+  nobody has run it end to end. Tell us what you see.
 
 ## Resetting the MariaDB root password
 
