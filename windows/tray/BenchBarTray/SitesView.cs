@@ -278,9 +278,9 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         });
     }
 
-    private static string Why(CliStreamResult r) => r.Problem ?? UiText.Format("PendingFailed", r.Exit);
+    private static string Why(CliStreamResult r) => r.Done?.Explained ?? r.Problem ?? UiText.Format("PendingFailed", r.Exit);
 
-    private static string Why<T>(CliResult<T> r) => r.Error ?? r.Done?.Problem ?? UiText.Format("PendingFailed", r.Exit);
+    private static string Why<T>(CliResult<T> r) => r.Done?.Explained ?? r.Error ?? r.Done?.Problem ?? UiText.Format("PendingFailed", r.Exit);
 
     // --- Make Default, Back Up ---
 

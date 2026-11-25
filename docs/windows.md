@@ -517,6 +517,14 @@ from the `ready` object of `status --json`, with what the bench waits on
 changed, and the CLI's own fix line with **Copy**. A CLI older than 0.9 sends
 neither member, and the window shows neither.
 
+When a command fails or is refused, the window shows the CLI's error and,
+after it, the CLI's own hint (the fix) in one line, instead of the error
+alone. A plan or a run that ends with next steps lists each command with
+**Copy**. Every command's result is read by one decoder of the result
+envelope (`docs/json-schema.md`), so the Sites, Apps, Health and plan pages
+all show a failure the same way. A field a newer CLI adds, or one of an
+unexpected type, is ignored and costs nothing else.
+
 **Pull...** on the Sites tab copies a production site into a new site of the
 bench (`benchbar pull`). Give `HOST:SITE`, where HOST is a Host of
 `~/.ssh/config` inside Ubuntu and its key must work without a prompt, or tick
