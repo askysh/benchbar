@@ -223,6 +223,8 @@ claude mcp add benchbar -- benchbar mcp
 | `benchbar_doctor_prerequisites` | read | What this machine needs before a bench can be installed (tools, Homebrew or apt packages, MariaDB, free disk), each check with its level and fix, no bench needed. | `bench` |
 | `benchbar_self_update_check` | read | This benchbar and the BenchBar app against the latest release, and the command that would update them (available is null when GitHub could not be asked). | none |
 | `benchbar_app_focus_list` | read | Every app of one bench with whether it is a focus app (the ones being worked on), why, and how far behind its remote it is, from the last git fetch. | `bench` |
+| `benchbar_app_focus` | acts | Pin an app of a bench as a focus app (one the person works on): doctor never warns about it, and warns when an app it needs falls behind. | `name`*, `auto`, `bench` |
+| `benchbar_app_unfocus` | acts | Pin an app of a bench as not a focus app (a branch you only tried): doctor checks it like any other app. | `name`*, `bench` |
 | `benchbar_lease_take` | acts | Take a lease on a bench (bench, the whole bench with every site) or on one site (site, of bench or of the default bench) for a while (minutes, default 30, at most 480), for work that spans many commands: tests on a site, a migration you watch. | `bench`, `site`, `minutes`, `note` |
 | `benchbar_lease_renew` | acts | Push the end of a lease you hold to minutes from now (default: its first length). | `lease`*, `minutes` |
 | `benchbar_lease_release` | acts | Let go of a lease. | `lease`* |
@@ -301,8 +303,9 @@ asks for: `repair` and bench installs, turning a lab on or off
 (`labs on` refuses an agent too), registering a bench (`register`: it
 decides which folders the changing tools may touch), the `/etc/hosts` line
 (`site hosts`, `sudo`), a console or SQL shell in a site (`console`, `db`),
-sharing a site, the LAN guard, `self-update`, changing the default site
-(`site default`) and pinning a focus app (`app focus NAME`). An agent reads
+sharing a site, the LAN guard, `self-update` and changing the default site
+(`site default`). Pinning a focus app is a tool (`benchbar_app_focus`,
+`benchbar_app_unfocus`): a pin is one line in the bench's state file. An agent reads
 the state with the read tools
 (`benchbar_ports_check`, `benchbar_ports_plan`, `benchbar_labs_list`,
 `benchbar_self_update_check`, `benchbar_site_list`, `benchbar_app_focus_list`)

@@ -26,6 +26,13 @@ mkdir -p "$TMP_DIR/clone/.git" "$TMP_DIR/plain"
 assert_eq "checkout $TMP_DIR/clone/benchbar $TMP_DIR/clone" "$(kind_of "$TMP_DIR/clone")"
 assert_eq "other $TMP_DIR/plain/benchbar $TMP_DIR/plain" "$(kind_of "$TMP_DIR/plain")"
 assert_eq "other" "$(kind_of /opt/homebrew/opt/benchbar-dev/libexec | cut -d ' ' -f 1)" "(only the benchbar formula is Homebrew's)"
+# Linuxbrew: the prefix is /home/linuxbrew/.linuxbrew (or ~/.linuxbrew), same shapes
+assert_eq "homebrew /home/linuxbrew/.linuxbrew/opt/benchbar/bin/benchbar /home/linuxbrew/.linuxbrew/opt/benchbar/libexec" "$(kind_of /home/linuxbrew/.linuxbrew/opt/benchbar/libexec)" "(Linuxbrew opt)"
+assert_eq "homebrew /home/linuxbrew/.linuxbrew/opt/benchbar/bin/benchbar /home/linuxbrew/.linuxbrew/opt/benchbar/libexec" "$(kind_of /home/linuxbrew/.linuxbrew/Cellar/benchbar/0.9.0/libexec)" "(Linuxbrew Cellar)"
+assert_eq "homebrew $HOME/.linuxbrew/opt/benchbar/bin/benchbar $HOME/.linuxbrew/opt/benchbar/libexec" "$(kind_of "$HOME/.linuxbrew/Cellar/benchbar/0.9.0/libexec")" "(Linuxbrew in the home folder)"
+# FL_SELF_PREFIX of a Linuxbrew CLI
+# shellcheck disable=SC2016 # expands in the child bash
+assert_eq "/home/linuxbrew/.linuxbrew" "$(SCRIPT_DIR=/home/linuxbrew/.linuxbrew/Cellar/benchbar/0.9.0/libexec bash -c 'set -euo pipefail; . "$0/lib/frappe-local/install-kind.sh"; printf "%s" "$FL_SELF_PREFIX"' "$ROOT")" "(Linuxbrew prefix)"
 
 # ---- where state.sh puts the state for each kind (no folder to move here)
 # state_dir_as KIND: FL_STATE_DIR as state.sh picks it for KIND
@@ -38,6 +45,9 @@ assert_eq "$HOME/.local/state/benchbar" "$(state_dir_as homebrew)"
 assert_eq "$HOME/.local/state/benchbar" "$(state_dir_as managed)"
 assert_eq "$TMP_DIR/plain/.benchbar" "$(state_dir_as checkout)"
 assert_eq "$TMP_DIR/plain/.benchbar" "$(state_dir_as other)"
+# on Linux the state is under XDG_STATE_HOME, the folder the one line installer uses too
+assert_eq "$TMP_DIR/xdg/benchbar" "$(XDG_STATE_HOME="$TMP_DIR/xdg" FL_PLATFORM=linux state_dir_as homebrew)" "(Linuxbrew uses XDG_STATE_HOME)"
+assert_eq "$TMP_DIR/xdg/benchbar" "$(XDG_STATE_HOME="$TMP_DIR/xdg" FL_PLATFORM=linux state_dir_as managed)" "(managed shares it)"
 # a fixed path: the app, an MCP client and launchd never see an
 # XDG_STATE_HOME exported in ~/.zshrc, and must find the same state
 assert_eq "$HOME/.local/state/benchbar" "$(XDG_STATE_HOME="$TMP_DIR/xdg" state_dir_as homebrew)" "(XDG_STATE_HOME is not used)"

@@ -277,6 +277,27 @@ distro. benchbar stops nothing for you.
 After the install, run `source ~/.bashrc` (or open a new terminal), then
 `benchup`. The helpers are in `~/.bashrc`, not in `~/.zshrc`.
 
+### Homebrew on Linux
+
+The CLI formula installs on Linux with Homebrew (Linuxbrew) too. The
+app cask is macOS only, so on Linux you install the formula alone:
+
+```bash
+brew install askysh/tap/benchbar
+benchbar install                   # sets up this machine: asks for sudo once
+source ~/.bashrc && benchup
+```
+
+The formula adds only `git` and `curl` on Linux. MariaDB, Redis, Python
+and Node are not Homebrew's here: `benchbar install` gets them from apt,
+uv and fnm, exactly as after the one line installer, and the bench runs
+as a `systemd --user` unit. The state folder is the same too,
+`$XDG_STATE_HOME/benchbar` (`~/.local/state/benchbar` by default), so
+moving between the one line installer and Homebrew keeps your benches.
+`benchbar where --json` says `"install":"homebrew"`, and
+`benchbar self-update` runs `brew upgrade askysh/tap/benchbar` instead
+of the installer. The prefix is usually `/home/linuxbrew/.linuxbrew`.
+
 ### Profiles on Linux
 
 Python comes from uv and Node from fnm, so each profile gets its own:
