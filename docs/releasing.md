@@ -450,6 +450,36 @@ pull request is merged. In this order:
    run `scripts/bump-version.sh X.Y.Z+1`, release as usual (a candidate if
    the fix is not tiny), and put the cause in the changelog.
 
+### A fix for the released version (hotfix)
+
+Most fixes go the usual way: a pull request to `next-release`, then a patch
+release of `next-release` (step 4 above). Take the hotfix path only when
+`next-release` holds work that is not ready to ship and the released version
+needs a fix now.
+
+1. Branch from the release tag: `git switch -c hotfix/X.Y.Z+1 vX.Y.Z`.
+2. Make the fix with its test, run `scripts/bump-version.sh X.Y.Z+1` and
+   `scripts/changelog-fold.sh` so the version and `## X.Y.Z+1` agree, and
+   open a pull request against `main`. It needs a green "CI result" like any
+   pull request; keep it to the fix.
+3. Merge it. The push to `main` with the new version is tagged by
+   `auto-tag.yml` and starts the release builds; approve the `release`
+   environment and publish as in [Cutting a release](#cutting-a-release).
+4. Bring the fix to `next-release` before anything else lands there: make
+   one real merge commit of `origin/main` into `origin/next-release` on a
+   branch, open a pull request with it so CI runs on the merge, and when it
+   is green push that same merge commit with
+   `git push origin <merge>:refs/heads/next-release` (a fast forward, which
+   the admin may push past the ruleset; a squash would lose the ancestry).
+   `main` is then an ancestor of `next-release` again, and the next release
+   is a plain fast forward. Resolve a conflict in the merge, not by
+   reverting either side.
+
+A security update from Dependabot targets `main`, whatever
+`target-branch` says (GitHub sends security updates to the default branch).
+Treat it as a hotfix: merge it to `main` only if it must ship at once,
+otherwise close it and take the same bump on `next-release`.
+
 ### A key may have leaked
 
 A run you did not approve, a lost laptop, a secret in a log. **Revoke
