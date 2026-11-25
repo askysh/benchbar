@@ -79,8 +79,8 @@ nonisolated final class FakeShareCLI: ShareCLI, @unchecked Sendable {
     }
 
     func shareSetup(bench: String, request: ShareSetupRequest, onStep: @escaping @Sendable (String) -> Void) async throws(CLIError) { try await held("setup") }
-    func shareStart(bench: String, forHours hours: Int, label: String?, assignSeats: Bool) async throws(CLIError) {
-        try record(assignSeats ? "start \(hours) assign-seats" : "start \(hours)")
+    func shareStart(bench: String, forHours hours: Int, label: String?, assignSeats: Bool?) async throws(CLIError) {
+        try record(assignSeats.map { $0 ? "start \(hours) assign-seats" : "start \(hours) open-seats" } ?? "start \(hours)")
     }
     func shareStop(bench: String) async throws(CLIError) { try record("stop") }
     func shareExtend(bench: String, byMinutes minutes: Int) async throws(CLIError) { try record("extend \(minutes)") }
@@ -414,9 +414,29 @@ struct ShareStoreTests {
     @Test func startSaysWhoGivesOutTheSeats() async {
         let fake = FakeShareCLI([ShareStatus(state: .off), on()])
         let store = ShareStore(bench: "/b", client: fake, log: { _ in })
+        await store.refresh()
         await store.start(hours: 2, label: nil, assignSeats: true)
         await store.start(hours: 4, label: nil, assignSeats: false)
-        #expect(fake.calls.filter { $0.hasPrefix("start") } == ["start 2 assign-seats", "start 4"])
+        #expect(fake.calls.filter { $0.hasPrefix("start") } == ["start 2 assign-seats", "start 4 open-seats"])
+    }
+
+    /// A CLI from before the seat flags (its status has no `seat_mode`) refuses them with "Unknown
+    /// argument for share start", so none is sent: the room it starts has open seats, as it always had.
+    @Test func anOlderCLIIsStartedWithoutASeatFlag() async throws {
+        let old = try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status-old"))
+        #expect(!old.knowsSeatMode)
+        #expect(try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status")).knowsSeatMode)
+        let fake = FakeShareCLI([ShareStatus(state: .off, knowsSeatMode: false)])
+        let store = ShareStore(bench: "/b", client: fake, log: { _ in })
+        await store.refresh()
+        #expect(!store.cliKnowsSeatMode)
+        await store.start(hours: 4, label: nil, assignSeats: true)
+        #expect(fake.calls.filter { $0.hasPrefix("start") } == ["start 4"])
+        // before the first status nothing is known either: no flag
+        let unread = FakeShareCLI([ShareStatus(state: .off)])
+        await ShareStore(bench: "/b", client: unread, log: { _ in }).start(hours: 4, label: nil, assignSeats: true)
+        #expect(unread.calls.filter { $0.hasPrefix("start") } == ["start 4"])
+        #expect(SharePresentation.startDetail(site: "s", assignSeats: false).hasSuffix("Each of them can take any free seat."))
     }
 
     @Test func theCodeIsForgottenWhenSharingStops() async {
@@ -550,6 +570,12 @@ struct ShareCLITests {
         let (cli, runner) = client()
         try await cli.shareStart(bench: "/b", forHours: 4, label: nil, assignSeats: true)
         #expect(runner.calls[0].arguments == ["share", "start", "--for", "4h", "--assign-seats", "--plain", "--bench-dir", "/b"])
+        // the way back is said out loud too, so the room never depends on the CLI's default
+        try await cli.shareStart(bench: "/b", forHours: 4, label: nil, assignSeats: false)
+        #expect(runner.calls[1].arguments == ["share", "start", "--for", "4h", "--open-seats", "--plain", "--bench-dir", "/b"])
+        try await cli.shareStart(bench: "/b", forHours: 4, label: nil, assignSeats: nil)
+        #expect(runner.calls[2].arguments == ["share", "start", "--for", "4h", "--plain", "--bench-dir", "/b"])
+        #expect(SharePresentation.assignSeatsDefault)
     }
 
     @Test func personCallsSayTheyComeFromTheAppAndOthersDoNot() async throws {
@@ -558,7 +584,7 @@ struct ShareCLITests {
         try await cli.shareTeardown(bench: "/b")
         try await cli.shareStop(bench: "/b")
         try await cli.shareRemove(bench: "/b", person: "d_0a1b2c3d", newCode: true)
-        #expect(runner.calls[0].arguments == ["share", "start", "--for", "4h", "--plain", "--bench-dir", "/b"])
+        #expect(runner.calls[0].arguments == ["share", "start", "--for", "4h", "--open-seats", "--plain", "--bench-dir", "/b"])
         #expect(runner.calls[0].environment["BENCHBAR_SUDO"] == "gui")
         #expect(runner.calls[1].arguments.contains("--yes"))
         #expect(runner.calls[1].environment["BENCHBAR_SUDO"] == "gui")

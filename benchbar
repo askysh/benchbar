@@ -842,7 +842,7 @@ fl_jsonl_begin_generic() {
   # plan of their own (once they know it); for the others the plan is the command.
   if [[ "$FL_DRY_RUN" == "1" ]]; then
     case "$FL_JSON_KEY" in
-      service|"site add"|"site backup"|"site drop"|"site restore"|"app update"|"app install"|"lock apply"|"app add"|"share setup"|run) ;;
+      service|"site add"|"site backup"|"site drop"|"site restore"|"app update"|"app install"|"lock apply"|"app add"|"share setup"|"share start"|run) ;;
       *)
         fl_bench_detect "$OPT_BENCH_DIR"
         fl_jsonl plan ",\"command\":$(fl_json_str "$FL_JSON_KEY"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"dry_run\":true"

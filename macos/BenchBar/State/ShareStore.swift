@@ -112,6 +112,8 @@ final class ShareStore {
     /// Every seat of the room as the CLI lists it (0.9.0 on), so a seat can be given before anybody held it.
     private(set) var seats: [ShareSeat] = []
     private(set) var seatMode: ShareSeatMode?
+    /// The CLI's last status had `seat_mode`: it takes `--assign-seats` and `--open-seats`.
+    var cliKnowsSeatMode: Bool { status?.knowsSeatMode ?? false }
     /// The host gives out the seats: a guest who joins waits for Give a Seat.
     var hostGivesSeats: Bool { (seatMode ?? status?.seatMode) == .host }
     private(set) var busy: String?
@@ -337,8 +339,10 @@ final class ShareStore {
 
     @discardableResult
     func start(hours: Int, label: String?, assignSeats: Bool) async -> Bool {
+        // a seat flag goes only to a CLI that said it knows seat modes; an older one refuses the flag
+        let flag: Bool? = cliKnowsSeatMode ? assignSeats : nil
         let ok = await perform("Starting…") { client, bench throws(CLIError) in
-            try await client.shareStart(bench: bench, forHours: hours, label: label, assignSeats: assignSeats)
+            try await client.shareStart(bench: bench, forHours: hours, label: label, assignSeats: flag)
         }
         ensurePolling()
         return ok

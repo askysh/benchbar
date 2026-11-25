@@ -42,6 +42,10 @@ public sealed record ShareStatus(int Protocol, ShareState State, string? Site, s
     /// <summary>The room model (rooms, codes, seats) is protocol 3.</summary>
     public const int RoomProtocol = 3;
 
+    /// <summary>The status has <c>seat_mode</c> (null with no room): this CLI takes <c>--assign-seats</c> and <c>--open-seats</c>.
+    /// The CLI inside WSL can be older than the tray; one before 0.9.0 has neither the key nor the flags.</summary>
+    public bool KnowsSeatMode { get; init; }
+
     public bool IsOn => State == ShareState.On;
 
     /// <summary>On or on its way up: turning the lab off ends both.</summary>
@@ -57,7 +61,8 @@ public sealed record ShareStatus(int Protocol, ShareState State, string? Site, s
         o["locked"] is JsonValue l && l.TryGetValue<bool>(out var locked) ? locked : null, JsonRead.Str(o, "lock_reason"), JsonRead.Int(o, "budget_left"),
         JsonRead.Bool(o, "join_trouble"), JsonRead.Int(o, "wipe_failed") ?? 0, ShareJson.Guard(JsonRead.Str(o, "lan_guard")),
         o["preflight"] is JsonObject p && p["checks"] is JsonArray checks ? [.. checks.OfType<JsonObject>().Select(ShareJson.Check)] : [],
-        JsonRead.Bool(o, "setup_interrupted"), JsonRead.Str(o, "degraded"), JsonRead.Str(o, "error"));
+        JsonRead.Bool(o, "setup_interrupted"), JsonRead.Str(o, "degraded"), JsonRead.Str(o, "error"))
+    { KnowsSeatMode = o.ContainsKey("seat_mode") };
 }
 
 /// <summary>

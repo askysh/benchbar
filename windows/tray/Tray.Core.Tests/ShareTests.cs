@@ -183,7 +183,7 @@ public class ShareTests
         runner.On("share", "status").Print(Lines("share-status-on.json"));
         runner.On("share", "people").Print(Lines("share-people.json"));
         Assert.True(await model.StartAsync(4, TestContext.Current.CancellationToken));
-        Assert.Equal(["share", "start", "--for", "4h", "--json", "--bench-dir", Bench], runner.Runs[0].Args);
+        Assert.Equal(["share", "start", "--for", "4h", "--json", "--bench-dir", Bench], runner.Runs[0].Args); // no status read yet: no seat flag
         Assert.Equal("0", runner.Runs[0].Env["BENCHBAR_NONINTERACTIVE"]);
         Assert.Equal("gui", runner.Runs[0].Env["BENCHBAR_SUDO"]);
         Assert.True(model.Status!.IsOn); // a run is followed by one read
@@ -218,7 +218,9 @@ public class ShareTests
         // #159 SHARE-5: the host gives out the seats
         Assert.Equal(["share", "assign", "d_0a1b2c3d", "s_33333333", "--json", "--bench-dir", Bench], model.AssignArgs("d_0a1b2c3d", "s_33333333"));
         Assert.Equal(["share", "start", "--for", "2h", "--assign-seats", "--json", "--bench-dir", Bench], model.StartArgs(2, assignSeats: true));
-        Assert.Equal(["share", "start", "--for", "2h", "--json", "--bench-dir", Bench], model.StartArgs(2));
+        Assert.Equal(["share", "start", "--for", "2h", "--assign-seats", "--json", "--bench-dir", Bench], model.StartArgs(2));
+        Assert.Equal(["share", "start", "--for", "2h", "--open-seats", "--json", "--bench-dir", Bench], model.StartArgs(2, assignSeats: false));
+        Assert.Equal(["share", "start", "--for", "2h", "--json", "--bench-dir", Bench], model.StartArgs(2, assignSeats: null));
     }
 
     [Fact]
@@ -351,6 +353,32 @@ public class ShareTests
         Assert.False(await model.RunLanGuardAsync(true, TestContext.Current.CancellationToken));
         Assert.Empty(runner.Runs);
         Assert.Equal(ShareText.LanGuardUnavailable, model.LastError);
+    }
+
+    // --- an older CLI in WSL has no seat flags: none is sent ---
+
+    [Fact]
+    public async Task TheSeatFlagGoesOnlyToACliThatKnowsSeatModes()
+    {
+        Assert.True(ShareStatus.Parse(Doc("share-status-off.json")).KnowsSeatMode);
+        Assert.True(ShareStatus.Parse(Doc("share-status-on.json")).KnowsSeatMode);
+        Assert.False(ShareStatus.Parse(Doc("share-status-old.json")).KnowsSeatMode);
+
+        var (model, runner) = Rig();
+        runner.On("share", "status").Print(Lines("share-status-off.json"));
+        runner.On("share", "start").Print(Lines("share-done.jsonl"));
+        await model.RefreshAsync(false, TestContext.Current.CancellationToken);
+        Assert.True(model.CliKnowsSeatMode);
+        await model.StartAsync(4, false, TestContext.Current.CancellationToken);
+        Assert.Equal(["share", "start", "--for", "4h", "--open-seats", "--json", "--bench-dir", Bench], runner.Runs.Single(r => r.Args[1] == "start").Args);
+
+        var (old, oldRunner) = Rig();
+        oldRunner.On("share", "status").Print(Lines("share-status-old.json"));
+        oldRunner.On("share", "start").Print(Lines("share-done.jsonl"));
+        await old.RefreshAsync(false, TestContext.Current.CancellationToken);
+        Assert.False(old.CliKnowsSeatMode);
+        await old.StartAsync(4, true, TestContext.Current.CancellationToken);
+        Assert.Equal(["share", "start", "--for", "4h", "--json", "--bench-dir", Bench], oldRunner.Runs.Single(r => r.Args[1] == "start").Args);
     }
 
     // --- #159 SHARE-5: the seats of the room, and who gives them out ---

@@ -8,7 +8,7 @@ struct SharingTab: View {
     let share: ShareStore
     @State private var hours = 4
     /// Who gives out the seats of the next room; kept, so the choice is made once.
-    @AppStorage("shareAssignSeats") private var assignSeats = false
+    @AppStorage("shareAssignSeats") private var assignSeats = SharePresentation.assignSeatsDefault
     @State private var setupOpen = false
     @State private var showActivity = false
     /// The code is drawn as dots until the host asks (a shared screen, a screenshot); Start and New code show it once.
@@ -100,6 +100,18 @@ struct SharingTab: View {
                     .help(SharePresentation.assignSeatsHelp)
                 Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
             }
+            if status.isOn {
+                Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
+                Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
+            } else if case .start = SharePrimary.from(status) {
+                if status.knowsSeatMode {
+                    Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                        .help(SharePresentation.assignSeatsHelp)
+                    Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(SharePresentation.seatsNeedNewerCLI).font(.caption).foregroundStyle(.secondary)
+                }
+            }
             if let busy = share.busy { Label(busy, systemImage: "hourglass").foregroundStyle(.secondary) }
         }
     }
@@ -117,7 +129,7 @@ struct SharingTab: View {
         case .turnOnProtection: await turnOnProtection()
         case .start:
             guard ShareConfirm.ask("Start sharing \(site) on this network?",
-                                   detail: SharePresentation.startDetail(site: site, assignSeats: assignSeats),
+                                   detail: SharePresentation.startDetail(site: site, assignSeats: assignSeats && status.knowsSeatMode),
                                    button: "Start sharing") else { return }
             await share.start(hours: hours, label: nil, assignSeats: assignSeats)
             await share.loadCode()

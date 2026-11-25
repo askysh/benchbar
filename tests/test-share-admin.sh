@@ -463,6 +463,10 @@ assert_not_contains "$OUT" "@example.com" "(no seat's user in the seat list eith
 printf '{"v": 3, "seat_mode": "host"}\n' >"$SHARE_DIR/gateway.json"
 cli people --json
 assert_eq "host 3" "$(doc '" ".join(str(x) for x in (d["seat_mode"], len(d["seats"])))')"
+# the host gives out the seats and somebody has none: the list says that they wait, and for whom
+cli people
+assert_contains "$OUT" "1 person waits for a seat from you"
+assert_contains "$OUT" "benchbar share assign ID SEAT_ID"
 rm -f "$SHARE_DIR/gateway.json"
 cli people --json
 # the app's and the tray's fixtures hold only keys the CLI prints, the new ones included
@@ -481,6 +485,7 @@ assert_eq "2" "$(doc 'len(d["people"])')"
 cli people
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_contains "$OUT" "People in the room"
+assert_not_contains "$OUT" "waits for a seat from you" "(an open room: nobody waits for the host)"
 assert_contains "$OUT" "d_1a2b3c4d"
 assert_contains "$OUT" "Priya Nair"
 # SHARE-5: someone has no seat, so the free seats are listed with the ids share assign takes; a held seat is not

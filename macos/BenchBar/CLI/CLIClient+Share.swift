@@ -10,7 +10,7 @@ nonisolated protocol ShareCLI: Sendable {
     func shareLog(bench: String, device: String?, since: String?, limit: Int) async throws(CLIError) -> ShareLog
     func shareSetupPlan(bench: String, request: ShareSetupRequest) async throws(CLIError) -> ShareSetupPlan
     func shareSetup(bench: String, request: ShareSetupRequest, onStep: @escaping @Sendable (String) -> Void) async throws(CLIError)
-    func shareStart(bench: String, forHours hours: Int, label: String?, assignSeats: Bool) async throws(CLIError)
+    func shareStart(bench: String, forHours hours: Int, label: String?, assignSeats: Bool?) async throws(CLIError)
     func shareStop(bench: String) async throws(CLIError)
     func shareExtend(bench: String, byMinutes minutes: Int) async throws(CLIError)
     func shareLock(bench: String, locked: Bool) async throws(CLIError)
@@ -124,10 +124,12 @@ extension CLIClient: ShareCLI {
         }
     }
 
-    /// `assignSeats`: the host gives out the seats (`--assign-seats`); a guest then waits for `share assign`.
-    func shareStart(bench: String, forHours hours: Int, label: String?, assignSeats: Bool) async throws(CLIError) {
+    /// `assignSeats`: the host gives out the seats (`--assign-seats`, the CLI's default since 0.9.0); a guest
+    /// then waits for `share assign`. Off is `--open-seats`. Either is passed, so the room is what the switch said.
+    /// nil passes neither: a CLI from before the flags refuses them, and starts the open room it always did.
+    func shareStart(bench: String, forHours hours: Int, label: String?, assignSeats: Bool?) async throws(CLIError) {
         let labelArgs = label.flatMap { $0.isEmpty ? nil : ["--name", $0] } ?? []
-        let seatArgs = assignSeats ? ["--assign-seats"] : []
+        let seatArgs = assignSeats.map { $0 ? ["--assign-seats"] : ["--open-seats"] } ?? []
         _ = try await run(["share", "start", "--for", "\(hours)h"] + labelArgs + seatArgs + ["--plain", "--bench-dir", bench],
                           timeout: Timeout.action, acceptExitCodes: [0], extraEnvironment: Self.personEnvironment)
     }

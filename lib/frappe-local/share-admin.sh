@@ -447,13 +447,20 @@ fl_cmd_share_people() {
   table=("ID|Name|Mac|Address|Seat|Online")
   while IFS=$'\x1f' read -r id name model ip seat full online _; do
     [[ -n "$id" ]] || continue
-    if [[ -n "$seat" ]]; then held="${held} ${seat}"; else waiting=1; fi
+    if [[ -n "$seat" ]]; then held="${held} ${seat}"; else waiting=$((waiting + 1)); fi
     [[ -n "$full" ]] || full="${seat:-no seat yet}"
     table+=("${id}|${name//|/}|${model//|/}|${ip//|/}|${full//|/}|$([[ "$online" == true ]] && printf yes || printf no)")
   done <<<"$rows"
   fl_info "People in the room: $((${#table[@]} - 1))"
   [[ "${#table[@]}" == 1 ]] || fl_table "${table[@]}"
-  [[ "$waiting" == 0 ]] || fl_share_free_seats "$held"
+  if [[ "$waiting" -gt 0 ]]; then
+    fl_share_seat_mode_json_v seat_mode
+    if [[ "$seat_mode" == '"host"' ]]; then
+      if [[ "$waiting" == 1 ]]; then fl_warn "1 person waits for a seat from you: in this room a guest cannot take one."
+      else fl_warn "${waiting} people wait for a seat from you: in this room a guest cannot take one."; fi
+    fi
+    fl_share_free_seats "$held"
+  fi
 }
 
 # fl_share_free_seats HELD: the seats of share.json that nobody holds (HELD: the held ids, space separated),
