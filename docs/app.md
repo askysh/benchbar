@@ -530,7 +530,7 @@ instead.
   update through Homebrew.
 
 The close button on the banner hides it until the next version; the
-menu item stays. See [Updating](install.md#updating).
+menu item stays. See [Updating](upgrade.md#update-the-app-and-the-cli).
 
 After an update that changes a default (0.9.0 changes three: the bench
 listens on this computer only, an unknown option is an error, and `pull`
