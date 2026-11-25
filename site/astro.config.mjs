@@ -85,6 +85,7 @@ export default defineConfig({
             { label: 'macOS', slug: 'macos' },
             { label: 'Linux', slug: 'linux' },
             { label: 'Windows', slug: 'windows' },
+            { label: 'The BenchBar tray on Windows', slug: 'windows-tray' },
             { label: 'The menu bar app', slug: 'app' },
           ],
         },

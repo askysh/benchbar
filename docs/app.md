@@ -3,8 +3,8 @@ title: "The menu bar app"
 description: "The BenchBar menu bar app and window: the runner, the popover, keyboard shortcuts, the pages for each bench, Sharing and On your network, Labs, and what the app never does."
 ---
 
-The BenchBar app lives in the menu bar. It shows every bench as a small
-runner, and a window with a page per bench for its sites, apps and
+BenchBar.app lives in the menu bar. It shows every
+[bench](glossary.md#bench) as a small runner, and a window with a page per bench for its sites, apps and
 health. It installs with [Homebrew](install.md#homebrew) (the
 `benchbar-app` cask), the
 [one line installer](install.md#the-one-line-installer) or the
@@ -32,9 +32,13 @@ pane, or draw your own: see [Custom runners](runners.md).
 
 Click the runner for the popover: bench, site, state and uptime, Start,
 Stop and Restart, the logs and the bench folder, the bench's sites with
-an Open button each (none for a site whose name has no `/etc/hosts` line, unless it ends in `.localhost`; the Sites tab in the window has Set Up…), and a health summary: the first checks that need
-attention with a Copy Fix button, Repair when something is repairable,
-and a button to check again. With more than one bench a picker at the
+an Open button each, and a health summary. The health summary shows the
+first checks that need attention with a Copy Fix button, Repair when
+something is repairable, and a button to check again.
+
+A site has no Open button when its name has no `/etc/hosts` line, unless
+the name ends in `.localhost`. The Sites tab in the window has Set Up…
+for that site. With more than one bench a picker at the
 top chooses which bench the popover shows.
 
 ![The same popover in dark mode](images/popover-dark.png)

@@ -21,13 +21,15 @@ hero:
       variant: minimal
 ---
 
-Local Frappe and ERPNext development benches on macOS, Linux and Windows
-(through WSL). The `benchbar` command line tool installs a bench, runs it
-in the background under launchd (macOS) or systemd (Linux and WSL) and
-keeps it healthy. On a Mac, the BenchBar menu bar app shows each bench as
-a small runner with start, stop and a health check one click away, and a
-window for each bench's sites, apps and health. On Windows, a tray app
-does the same.
+BenchBar runs local Frappe and ERPNext development benches on macOS,
+Linux and Windows (through WSL). A [bench](glossary.md#bench) is the
+folder that holds one Frappe installation and its sites. The `benchbar`
+command line tool installs a bench, runs it in the background under
+launchd (macOS) or systemd (Linux and WSL) and keeps it healthy. On a
+Mac, BenchBar.app shows each bench as a small runner in the menu bar,
+with start, stop and a health check one click away, and a window for each
+bench's sites, apps and health. On Windows, the BenchBar tray does the
+same. The [Glossary](glossary.md) explains the other words.
 
 ![The BenchBar popover: a running bench with Start, Stop, Restart, its sites and a health summary](images/popover-light.png)
 
