@@ -1487,6 +1487,18 @@ Topics:
   home                     the introduction
   install                  install BenchBar and your first bench
   quick-start, start       the first ten minutes
+  macos                    start here on a Mac
+  linux                    start here on Linux
+  windows                  BenchBar for Windows
+  upgrade, update          update and migrate
+  uninstall                remove BenchBar
+  faq                      short answers
+  glossary                 the words the docs use
+  features                 every feature and since when
+  share, sharing           share a site on your network
+  labs                     experiments you turn on
+  quick-switch             open a site as a pinned user
+  url-scheme               benchbar:// links
   app                      the menu bar app and its window
   sites, benches           benches and sites
   apps                     add, install and update apps
@@ -4110,6 +4122,18 @@ Topics:
   home                     the introduction
   install                  install BenchBar and your first bench
   quick-start, start       the first ten minutes
+  macos                    start here on a Mac
+  linux                    start here on Linux
+  windows                  BenchBar for Windows
+  upgrade, update          update and migrate
+  uninstall                remove BenchBar
+  faq                      short answers
+  glossary                 the words the docs use
+  features                 every feature and since when
+  share, sharing           share a site on your network
+  labs                     experiments you turn on
+  quick-switch             open a site as a pinned user
+  url-scheme               benchbar:// links
   app                      the menu bar app and its window
   sites, benches           benches and sites
   apps                     add, install and update apps
