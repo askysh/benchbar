@@ -25,9 +25,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # The merge commit GitHub makes for the pull request (the checkout default), not its head:
+      # a branch cut before scripts/check-pr-text.sh existed has no script (exit 127 on #342).
+      # fetch-depth 0 brings the base and head commits that the range names.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
 
