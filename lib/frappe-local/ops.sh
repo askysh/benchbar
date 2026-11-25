@@ -44,6 +44,8 @@ FL_OP_PROG_BYTES=""
 FL_OP_NOT_FOR="fg self-update"
 # a record is "starting" from the moment --background wrote it until the detached run takes it over
 FL_OP_START_GRACE=60
+# a stamp this many seconds ahead of the clock is a clock that stepped back (VM time sync: seconds); more is a bad stamp
+FL_OP_CLOCK_SKEW=600
 FL_OP_ID_RE='^op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?$'
 
 fl_ops_dir() { printf '%s/ops' "${FL_STATE_DIR}"; }
@@ -56,17 +58,51 @@ fl__op_str_v() {
   if [[ -n "${2:-}" ]]; then fl_json_str_v "$1" "$2"; else printf -v "$1" '%s' null; fi
 }
 
-# fl_op_new_id_v VAR: a new op id, its file made empty (noclobber, so two runs never share one)
+# fl__op_stamp_secs_v VAR STAMP: STAMP (YYYYMMDD-HHMMSS) as seconds on a scale that counts its fields as UTC (days from
+# the civil date, in bash arithmetic only). Two stamps of one clock differ by the real seconds between them.
+fl__op_stamp_secs_v() {
+  local __y __m __d __era __yoe __doy __doe
+  __y=$((10#${2:0:4})); __m=$((10#${2:4:2})); __d=$((10#${2:6:2}))
+  [[ "$__m" -gt 2 ]] || __y=$((__y - 1))
+  __era=$((__y / 400)); __yoe=$((__y - __era * 400))
+  __doy=$(( (153 * (__m > 2 ? __m - 3 : __m + 9) + 2) / 5 + __d - 1 ))
+  __doe=$((__yoe * 365 + __yoe / 4 - __yoe / 100 + __doy))
+  printf -v "$1" '%s' $(( (__era * 146097 + __doe - 719468) * 86400 + 10#${2:9:2} * 3600 + 10#${2:11:2} * 60 + 10#${2:13:2} ))
+}
+
+# fl_op_new_id_v VAR: a new op id, its file made empty (noclobber, so two runs never share one). The id sorts
+# after every id that is already there (fl_op_ids): the clock can step back (a VM that syncs its time does so by
+# seconds, WSL every 30 s), and a run that starts after a step would carry an older stamp than the run before it.
+# So when the clock is not past the newest stamp in the folder, the id takes that stamp and a -N one above the
+# newest -N of it, and N, not the pid, orders the runs of one stamp. A stamp more than FL_OP_CLOCK_SKEW seconds
+# ahead of the clock is not a step back (a resumed VM, a bad RTC): it is ignored, so one such op does not hold the
+# stamp of every op after it (it stays on top of the list until it is pruned). A name read in bash only, no fork.
 fl_op_new_id_v() {
-  local __dir __stamp __id __n=0
+  local __dir __stamp __id __n=0 __max __top="" __topn=0 __f __b __s __k __now="" __sec
+  local __re='^op-([0-9]{8}-[0-9]{6})-[0-9]+(-([0-9]+))?\.json$'
   __dir="$(fl_ops_dir)"
   mkdir -p "$__dir" 2>/dev/null || return 1
-  __stamp="$(date +%Y%m%d-%H%M%S)-$$"
-  __id="op-${__stamp}"
+  __stamp="$(date +%Y%m%d-%H%M%S)"
+  for __f in "$__dir"/op-*.json; do
+    __b="${__f##*/}"
+    [[ "$__b" =~ $__re ]] || continue
+    __s="${BASH_REMATCH[1]}"; __k="${BASH_REMATCH[3]:-0}"
+    if [[ "$__s" > "$__stamp" ]]; then
+      [[ -n "$__now" ]] || fl__op_stamp_secs_v __now "$__stamp"
+      fl__op_stamp_secs_v __sec "$__s"
+      [[ $((__sec - __now)) -le "$FL_OP_CLOCK_SKEW" ]] || continue
+    fi
+    if [[ "$__s" > "$__top" ]]; then __top="$__s"; __topn="$__k"
+    elif [[ "$__s" == "$__top" && "$__k" -gt "$__topn" ]]; then __topn="$__k"; fi
+  done
+  if [[ -n "$__top" && ! "$__stamp" > "$__top" ]]; then __stamp="$__top"; __n=$((__topn + 1)); fi
+  __max=$((__n + 20))
+  __id="op-${__stamp}-$$"
+  [[ "$__n" -eq 0 ]] || __id="${__id}-${__n}"
   until ( set -o noclobber; : >"${__dir}/${__id}.json" ) 2>/dev/null; do
     __n=$((__n + 1))
-    [[ "$__n" -le 20 ]] || return 1
-    __id="op-${__stamp}-${__n}"
+    [[ "$__n" -le "$__max" ]] || return 1
+    __id="op-${__stamp}-$$-${__n}"
   done
   printf -v "$1" '%s' "$__id"
 }
@@ -266,11 +302,28 @@ fl_op_effective_v() {
   printf -v "$1" '%s' "$__s"
 }
 
-# fl_op_json_v VAR RECORD [RESULT]: the record as the JSON document of op status and op list, with the
-# state that is true now; RESULT (the run's done line) is added as "result"
+# fl_op_now_v REC_VAR STATE_VAR OP_ID: the record and the state to show, for a reader. A run finishes its
+# record before it exits, so a record that still says running while its pid is gone may be one the run
+# finished between the read and the pid check (op wait on a background run said interrupted for a run
+# that was done, macOS CI): the record is read once more before the run counts as interrupted.
+fl_op_now_v() {
+  local __now_rec __now_st
+  fl_op_read_v __now_rec "$3"
+  fl_op_effective_v __now_st "$__now_rec"
+  if [[ "$__now_st" == "interrupted" && -n "$__now_rec" ]]; then
+    fl_op_read_v __now_rec "$3"
+    fl_op_effective_v __now_st "$__now_rec"
+  fi
+  printf -v "$1" '%s' "$__now_rec"
+  printf -v "$2" '%s' "$__now_st"
+}
+
+# fl_op_json_v VAR RECORD [RESULT] [STATE]: the record as the JSON document of op status and op list, with
+# the state that is true now; RESULT (the run's done line) is added as "result". STATE is the state the
+# caller already has from fl_op_now_v: the document shows that one, not a second look at the pid.
 fl_op_json_v() {
-  local __rec="$2" __eff __doc
-  fl_op_effective_v __eff "$__rec"
+  local __rec="$2" __eff="${4:-}" __doc
+  [[ -n "$__eff" ]] || fl_op_effective_v __eff "$__rec"
   __doc="$__rec"
   if [[ "$__eff" == "interrupted" ]]; then
     __doc="${__doc/\"state\":\"running\"/\"state\":\"interrupted\"}"
@@ -290,10 +343,36 @@ fl_op_result_v() {
   printf -v "$1" '%s' "$__line"
 }
 
-# fl_op_ids: every op id, newest first
+# fl_op_ids: every op id, newest first. An id is op-DATE-TIME-PID[-N]: the date and the time are fixed width text,
+# the N (the run's place within one stamp, see fl_op_new_id_v) and the pid are numbers, compared in that order. Sorted
+# as text, pid 9998 came after 10001 and "-5" after "-5-1". One sort for the whole list, no fork per op.
+# An id whose stamp is more than FL_OP_CLOCK_SKEW seconds ahead of the clock (a resumed VM, a bad RTC) is not the
+# newest run: it goes LAST, so ops[0] is a real run and the prune (it keeps the first FL_KEEP_OPS ids of this list)
+# takes it. Several of them follow each other from the nearest stamp to the furthest, the furthest is pruned first.
+# These have the newest stamps, so they are the first lines of the sort: the clock's stamp is made once per call
+# (one date call) and an id is converted to seconds (fl__op_stamp_secs_v) only while it is text greater than that.
 fl_op_ids() {
+  local __now __nowsecs="" __sec __id __far="" __past=0
+  __now="$(date +%Y%m%d-%H%M%S)"
+  while IFS= read -r __id; do
+    if [[ "$__past" != "1" ]]; then
+      if [[ "${__id:3:15}" > "$__now" ]]; then
+        [[ -n "$__nowsecs" ]] || fl__op_stamp_secs_v __nowsecs "$__now"
+        fl__op_stamp_secs_v __sec "${__id:3:15}"
+        if [[ $((__sec - __nowsecs)) -gt "$FL_OP_CLOCK_SKEW" ]]; then __far="${__id}"$'\n'"${__far}"; continue; fi
+      fi
+      __past=1
+    fi
+    printf '%s\n' "$__id"
+  done < <(fl__op_ids_sorted)
+  printf '%s' "$__far"
+}
+
+# fl__op_ids_sorted: the op ids, newest stamp first (see fl_op_ids)
+fl__op_ids_sorted() {
   # shellcheck disable=SC2010  # names this tool made, matched by a strict pattern
-  ls -1 "$(fl_ops_dir)" 2>/dev/null | grep -E '^op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?\.json$' | sort -r | sed 's/\.json$//' || true
+  ls -1 "$(fl_ops_dir)" 2>/dev/null | grep -E '^op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?\.json$' | sed 's/\.json$//' \
+    | sort -t- -k2,2r -k3,3r -k5,5nr -k4,4nr || true
 }
 
 # fl_op_ago_v VAR RECORD: a short "3m 12s" for how long the run has gone (or went), from its own times
@@ -313,11 +392,11 @@ fl_op_epoch() {
 
 # ---------------------------------------------------------------- benchbar op
 
-# fl_op_text RECORD: an op for a person
+# fl_op_text RECORD [STATE]: an op for a person (STATE as for fl_op_json_v)
 fl_op_text() {
-  local rec="$1" id state cmd bench site step sname sstat plabel pel log ex ago out
+  local rec="$1" id state="${2:-}" cmd bench site step sname sstat plabel pel log ex ago out
   fl_op_field_v id "$rec" op_id
-  fl_op_effective_v state "$rec"
+  [[ -n "$state" ]] || fl_op_effective_v state "$rec"
   fl_op_field_v cmd "$rec" command; fl_op_field_v bench "$rec" bench; fl_op_field_v site "$rec" site
   fl_op_field_v step "$rec" id; fl_op_field_v sname "$rec" name; fl_op_field_v sstat "$rec" status
   fl_op_field_v plabel "$rec" label; fl_op_field_v pel "$rec" elapsed
@@ -337,11 +416,10 @@ fl_op_text() {
 fl_op_one() {
   local id="$1" rec result="" doc eff
   fl_op_id_ok "$id" || fl_die "Not an op id: ${id}" "An op id looks like op-20261119-101500-4242; benchbar op list shows them."
-  fl_op_read_v rec "$id"
+  fl_op_now_v rec eff "$id"
   [[ -n "$rec" ]] || fl_die "No operation ${id}." "benchbar op list shows the operations this machine remembers (the newest 100)."
-  fl_op_effective_v eff "$rec"
   case "$eff" in done|failed|interrupted) fl_op_result_v result "$id" ;; esac
-  if [[ "$OPT_JSON" == "1" ]]; then fl_op_json_v doc "$rec" "$result"; printf '%s\n' "$doc"; else fl_op_text "$rec"; fi
+  if [[ "$OPT_JSON" == "1" ]]; then fl_op_json_v doc "$rec" "$result" "$eff"; printf '%s\n' "$doc"; else fl_op_text "$rec" "$eff"; fi
 }
 
 # fl_op_list_cmd: the operations, newest first (--limit N, --running)
@@ -362,12 +440,11 @@ fl_op_list_cmd() {
   rows+=("Op|Command|State|Took|Step")
   while IFS= read -r id; do
     [[ -n "$id" && "$n" -lt "$limit" ]] || continue
-    fl_op_read_v rec "$id"
+    fl_op_now_v rec eff "$id"
     [[ -n "$rec" ]] || continue
-    fl_op_effective_v eff "$rec"
     [[ "$running" != "1" || "$eff" == "running" || "$eff" == "starting" ]] || continue
     n=$((n + 1))
-    fl_op_json_v doc "$rec"
+    fl_op_json_v doc "$rec" "" "$eff"
     docs="${docs}${sep}${doc%$'\n'}"; sep=","
     fl_op_field_v cmd "$rec" command; fl_op_ago_v ago "$rec"; fl_op_field_v step "$rec" id
     rows+=("${id}|${cmd:-?}|${eff}|${ago}|${step:--}")
@@ -401,20 +478,19 @@ fl_op_wait_cmd() {
   [[ "$timeout" =~ ^[0-9]+$ ]] || fl_die "--timeout takes a number of seconds." "Example: benchbar op wait ${id} --timeout 600"
   fl_op_id_ok "$id" || fl_die "Not an op id: ${id}" "An op id looks like op-20261119-101500-4242; benchbar op list shows them."
   while :; do
-    fl_op_read_v rec "$id"
+    fl_op_now_v rec eff "$id"
     [[ -n "$rec" ]] || fl_die "No operation ${id}." "benchbar op list shows the operations this machine remembers (the newest 100)."
-    fl_op_effective_v eff "$rec"
     case "$eff" in running|starting) ;; *) break ;; esac
     if [[ "$timeout" -gt 0 && $((SECONDS - start)) -ge "$timeout" ]]; then timed_out=1; break; fi
     sleep "$poll"
   done
   case "$eff" in done|failed|interrupted) fl_op_result_v result "$id" ;; esac
   if [[ "$OPT_JSON" == "1" ]]; then
-    fl_op_json_v doc "$rec" "$result"
+    fl_op_json_v doc "$rec" "$result" "$eff"
     [[ "$timed_out" != "1" ]] || doc="${doc%\}},\"timed_out\":true}"
     printf '%s\n' "$doc"
   else
-    fl_op_text "$rec"
+    fl_op_text "$rec" "$eff"
     [[ "$timed_out" != "1" ]] || printf 'Still running after %ss; benchbar op wait %s goes on.\n' "$timeout" "$id"
   fi
   [[ "$timed_out" != "1" ]] || return 1
@@ -461,8 +537,7 @@ fl_op_launch_wait() {
   tries=$(( ${FL_OP_LAUNCH_WAIT:-5} * 5 ))
   [[ "${FL_TESTING:-}" == "1" ]] || tries=25
   while :; do
-    fl_op_read_v rec "$id"
-    fl_op_effective_v st "$rec"
+    fl_op_now_v rec st "$id"
     [[ "$st" == "starting" && "$i" -lt "$tries" ]] || break
     sleep 0.2
     i=$((i + 1))
@@ -545,9 +620,8 @@ fl_op_prune() {
     [[ -n "$id" ]] || continue
     n=$((n + 1))
     [[ "$n" -gt "$keep" && "$id" != "${FL_OP_ID:-}" ]] || continue
-    fl_op_read_v rec "$id"
+    fl_op_now_v rec eff "$id"
     if [[ -n "$rec" ]]; then
-      fl_op_effective_v eff "$rec"
       [[ "$eff" != "running" && "$eff" != "starting" ]] || continue
     fi
     for f in "${dir}/${id}.json" "${dir}/${id}.jsonl" "${dir}/${id}.err"; do

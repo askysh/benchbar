@@ -282,7 +282,7 @@ public class AppsViewTests
         PageKit.Wait(view.Pending);
         PageKit.Click(PageKit.ButtonNamed(view.OpenPanel!, "Run the update of erpnext"));
         PageKit.Wait(view.Pending);
-        Assert.Contains("erpnext has diverged from its remote.", PageKit.Texts(view.OpenPanel!));
+        Assert.Contains("erpnext has diverged from its remote. git -C apps/erpnext status", PageKit.Texts(view.OpenPanel!));
         Assert.Equal(0, kit.Refreshes);
         Assert.False(view.IsBusy);
     });

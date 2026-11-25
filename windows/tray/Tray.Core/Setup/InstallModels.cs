@@ -148,9 +148,10 @@ public static class InstallJson
                 else if (JsonRead.Str(item, "id") is { Length: > 0 } sid) skipped.Add(sid);
             }
         }
+        var e = ResultEnvelope.From(o);
         return new InstallDone(
-            JsonRead.Int(o, "exit") ?? 1, JsonRead.Str(o, "bench"), JsonRead.Str(o, "site"), JsonRead.Str(o, "url"), skipped,
-            JsonRead.Str(o, "fix"), JsonRead.Str(o, "log"), JsonRead.Str(o, "error"),
-            JsonRead.Str(o, "error_id") ?? JsonRead.Str(o, "code"));
+            e?.Exit ?? 1, JsonRead.Str(o, "bench"), JsonRead.Str(o, "site"), JsonRead.Str(o, "url"), skipped,
+            e?.Fix ?? JsonRead.Str(o, "fix"), e?.Log ?? JsonRead.Str(o, "log"), e?.Error ?? JsonRead.Str(o, "error"),
+            e?.ErrorId ?? JsonRead.Str(o, "code"));
     }
 }

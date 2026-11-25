@@ -1,0 +1,2 @@
+{"schema_version":1,"cli_version":"0.9.4","event":"step","id":"x","name":"X","status":"done","future_field":{"a":1}}
+{"schema_version":1,"cli_version":"0.9.4","event":"done","exit":1,"error":"Something broke.","op_id":7,"warnings":{"a":1},"changed":3,"next_actions":["benchbar doctor",{"command":"benchbar repair --dry-run","why":"See the plan","quoted":"yes"},{"why":"no command"}],"missing":["--yes"],"timings":{"total":1.5},"future_list":[1,2]}

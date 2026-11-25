@@ -159,6 +159,51 @@ assert_eq "failed 3" "$(printf '%s' "$OUT" | jget - 'd["state"] + " " + str(d["e
 run_json op wait op-20260101-000002-12 --json
 assert_eq "1" "$CODE" "(an interrupted run: exit 1)"
 assert_eq "interrupted" "$(printf '%s' "$OUT" | jget - 'd["state"]')"
+# A run that ends between a reader's look at its record and the reader's check of its pid is done, not
+# interrupted (macOS CI, run 45633459351: op wait on a background site backup said interrupted, its
+# output held the done line). The run finishes its record before it exits, so a reader that finds the
+# pid gone reads the record once more. The kill below is that moment: it finishes the record, then says
+# the pid is gone.
+fake_op op-20260101-000007-17 running "$DEAD"
+race_out="$(FL_STATE_DIR="$FL_STATE_DIR" OPS="$OPS" DEAD="$DEAD" bash -c '
+  set -euo pipefail
+  . "$1/lib/frappe-local/ops.sh"
+  OPT_JSON=1
+  kill() {
+    if [[ "${1:-}" == "-0" ]]; then
+      local f="$OPS/op-20260101-000007-17.json" r
+      IFS= read -r r <"$f"; r="${r/\"state\":\"running\"/\"state\":\"done\"}"; r="${r/\"exit\":null/\"exit\":0}"
+      printf "%s\n" "$r" >"$f.tmp" && mv -f "$f.tmp" "$f"
+      return 1
+    fi
+    builtin kill "$@"
+  }
+  for c in "fl_op_wait_cmd op-20260101-000007-17" "fl_op_one op-20260101-000007-17"; do
+    $c | sed -n "s/.*\"state\":\"\([a-z]*\)\".*/\1/p"
+    # back to running for the next reader
+    IFS= read -r r <"$OPS/op-20260101-000007-17.json"; r="${r/\"state\":\"done\"/\"state\":\"running\"}"; printf "%s\n" "$r" >"$OPS/op-20260101-000007-17.json"
+  done
+' _ "$ROOT" 2>&1)" || fail "the race probe failed to run: $race_out"
+assert_eq "done"$'\n'"done" "$race_out" "(op wait and op status on a run that finished as the reader looked: done, not interrupted)"
+# the document shows the state the reader settled on: no second look at the pid that could say otherwise
+fake_op op-20260101-000008-18 running "$LIVE"
+race_out="$(FL_STATE_DIR="$FL_STATE_DIR" OPS="$OPS" bash -c '
+  set -euo pipefail
+  . "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/ops.sh"
+  OPT_JSON=1; n=0
+  kill() {
+    if [[ "${1:-}" == "-0" ]]; then
+      n=$((n + 1)); [[ "$n" -ge 2 ]] || return 0
+      return 1
+    fi
+    builtin kill "$@"
+  }
+  fl_op_one op-20260101-000008-18 | sed -n "s/.*\"state\":\"\([a-z]*\)\".*/\1/p"
+  OPT_JSON=0; n=0
+  fl_op_one op-20260101-000008-18 | sed -n "1s/.*  \([a-z]*\)$/\1/p"
+' _ "$ROOT" 2>&1)" || fail "the second race probe failed to run: $race_out"
+assert_eq "running"$'\n'"running" "$race_out" "(op status JSON and text show the state the reader found, not a second pid check)"
+fake_op op-20260101-000007-17 running "$DEAD"
 run_json op wait op-20260101-000001-11 --timeout 1 --json
 assert_eq "1" "$CODE" "$OUT"
 assert_eq "running True" "$(printf '%s' "$OUT" | jget - 'd["state"] + " " + str(d["timed_out"])')" "(gave up waiting, the run goes on)"
@@ -190,6 +235,157 @@ assert_no_file "$OPS/op-20200101-000003-3.json"
 assert_file "$OPS/op-20200101-000005-5.json" "(the newest stay)"
 assert_file "$OPS/op-20190101-000000-9.json" "(a run that still runs is never pruned)"
 assert_eq "3" "$(find "$OPS" -name 'op-*.json' | wc -l | tr -d ' ')" "(the new run, the newest of the others and the running one)"
+
+# ---- 5b. newest first is a number order: pid 10001 started after pid 9998, a "-N" run after its bare name, and N
+# before the pid (the ids are text; as text "9998" came after "10001", and "...-5.json" after "...-5-1.json")
+rm -rf "$OPS"
+for id in op-20200101-000000-77777 op-20200101-000001-99 op-20200101-000001-9998 op-20200101-000001-10001 \
+  op-20200101-000001-10001-1 op-20200101-000001-10001-2 op-20200101-000001-10001-10 op-20200101-000001-5-3 op-20200101-000002-5; do
+  fake_op "$id" "done" "$DEAD" 0
+done
+EXPECT_ORDER="op-20200101-000002-5 op-20200101-000001-10001-10 op-20200101-000001-5-3 op-20200101-000001-10001-2 op-20200101-000001-10001-1 op-20200101-000001-10001 op-20200101-000001-9998 op-20200101-000001-99 op-20200101-000000-77777"
+run_json op list --json
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "$EXPECT_ORDER" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(op list: newest first, by number)"
+run_json op status --json
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "$EXPECT_ORDER" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(op status: the same order)"
+run_fm op list
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$EXPECT_ORDER" "$(printf '%s\n' "$OUT" | grep -o 'op-2020[0-9-]*' | tr '\n' ' ' | sed 's/ $//')" "(the text table too)"
+# the prune keeps the newest by the same order: a new run (today) and the three newest of these
+FL_KEEP_OPS=4 run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_file "$OPS/op-20200101-000002-5.json" "(the newest stay)"
+assert_file "$OPS/op-20200101-000001-10001-10.json"
+assert_file "$OPS/op-20200101-000001-5-3.json"
+assert_no_file "$OPS/op-20200101-000001-10001-2.json" "(older than the three newest)"
+assert_no_file "$OPS/op-20200101-000001-10001.json"
+assert_no_file "$OPS/op-20200101-000001-9998.json"
+assert_no_file "$OPS/op-20200101-000001-99.json"
+assert_no_file "$OPS/op-20200101-000000-77777.json"
+
+# ---- 5c. a clock that steps back does not put a later run before an earlier one (a VM that syncs its time steps
+# back by seconds: WSL by 2.5 s every 30 s). A `date` that answers the id's stamp from a file stands for the clock.
+rm -rf "$OPS"
+CLOCKBIN="$TMP_DIR/clockbin"; mkdir -p "$CLOCKBIN"
+# shellcheck disable=SC2016  # the wrapper's own text, nothing to expand here
+printf '#!/bin/bash\nif [[ "${1:-}" == "+%%Y%%m%%d-%%H%%M%%S" ]]; then cat "$CLOCK_FILE"; else exec "%s" "$@"; fi\n' "$(type -P date)" >"$CLOCKBIN/date"
+chmod +x "$CLOCKBIN/date"
+export CLOCK_FILE="$TMP_DIR/clock"
+step_clock() { printf '%s' "$1" >"$CLOCK_FILE"; }
+step_clock 20300102-030405
+PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+CA="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+step_clock 20300102-030403   # two seconds back
+# (a failed run prints no document on stdout: its id is the one file that is new)
+ids_now() { local f; for f in "$OPS"/op-*.json; do f="${f##*/}"; printf '%s
+' "${f%.json}"; done | sort; }
+ids_before="$(ids_now)"
+PATH="$CLOCKBIN:$PATH" MOCK_BENCH_BACKUP_EXIT=1 run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+CB="$(comm -13 <(printf '%s
+' "$ids_before") <(ids_now))"
+# the flake: the run that just failed is ops[0], though the clock says it started before the one that is done
+PATH="$CLOCKBIN:$PATH" run_json op status --json
+assert_eq "failed 1 site backup" "$(printf '%s' "$OUT" | jget - 'd["ops"][0]["state"] + " " + str(d["ops"][0]["exit"]) + " " + d["ops"][0]["command"]')" "(ops[0] after a step back)"
+PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"   # the clock is still back
+assert_eq "0" "$CODE" "$OUT"
+CC="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+step_clock 20300102-030406   # it passed the newest stamp: its own stamp again
+PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+CD="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+PATH="$CLOCKBIN:$PATH" run_json op list --json
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "$CD $CC $CB $CA" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(newest first, whatever the pids)"
+PATH="$CLOCKBIN:$PATH" run_json op status --json
+assert_eq "$CD" "$(printf '%s' "$OUT" | jget - 'd["ops"][0]["op_id"]')"
+# and the ids say how: the stamp of the newest one, the next N
+case "$CA" in op-20300102-030405-*) ;; *) fail "the first run has the clock's stamp: $CA" ;; esac
+case "$CB" in op-20300102-030405-*-1) ;; *) fail "a run after a step back takes the newest stamp and the next N: $CB" ;; esac
+case "$CC" in op-20300102-030405-*-2) ;; *) fail "the next one takes the next N: $CC" ;; esac
+case "$CD" in op-20300102-030406-*) ;; *) fail "a clock past the newest stamp is used as it is: $CD" ;; esac
+
+# ---- 5d. the stamp of a step back is reused only when it is at most 10 minutes (600 s) ahead of the clock: one op a
+# year ahead (a resumed VM, a snapshot, a bad RTC) does not hold the stamp of every op after it. Such an op is ignored
+# when the next id is made, and listed last (5e). The readers use the same clock: an id past it by 600 s is far.
+rm -rf "$OPS"
+step_clock 20300102-030405
+fake_op op-20310102-030405-111 "done" "$DEAD" 0
+FYS=""
+for n in 1 2 3; do
+  PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT"
+  FYS="$FYS $(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+done
+read -r FY1 FY2 FY3 <<<"$FYS"
+[[ "$FY1" =~ ^op-20300102-030405-[0-9]+$ ]] || fail "a stamp a year ahead is not reused: $FY1"
+[[ "$FY2" =~ ^op-20300102-030405-[0-9]+-1$ ]] || fail "the next run takes the clock's stamp and the next N: $FY2"
+[[ "$FY3" =~ ^op-20300102-030405-[0-9]+-2$ ]] || fail "and the next: $FY3"
+PATH="$CLOCKBIN:$PATH" run_json op list --json
+assert_eq "$FY3 $FY2 $FY1 op-20310102-030405-111" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(the far op is last, the new ones newest first)"
+# the edge: 600 s ahead is reused, 601 s is not (the clock is 20300102-030405)
+rm -rf "$OPS"
+fake_op op-20300102-031405-5 "done" "$DEAD" 0
+PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+EDGE_IN="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+[[ "$EDGE_IN" =~ ^op-20300102-031405-[0-9]+-1$ ]] || fail "600 s ahead is still a step back: $EDGE_IN"
+rm -rf "$OPS"
+fake_op op-20300102-031406-5 "done" "$DEAD" 0
+PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+EDGE_OUT="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+[[ "$EDGE_OUT" =~ ^op-20300102-030405-[0-9]+$ ]] || fail "601 s ahead is not a step back: $EDGE_OUT"
+unset CLOCK_FILE
+
+# ---- 5e. a record far ahead of the clock (more than 600 s) sorts last, not first: ops[0] is the newest real run, and
+# the prune (which keeps the first FL_KEEP_OPS ids of the list) takes the far ones, the furthest first. Several far
+# ones sort among themselves from the nearest to the furthest (by stamp, then -N, then pid, all ascending).
+rm -rf "$OPS"
+fake_op op-20990101-000000-333 "done" "$DEAD" 0
+fake_op op-20990101-000000-111 "done" "$DEAD" 0
+fake_op op-20980101-000000-222 "done" "$DEAD" 0
+run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+FR1="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+FR2="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+FAR_ORDER="op-20980101-000000-222 op-20990101-000000-111 op-20990101-000000-333"
+run_json op list --json
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "$FR2 $FR1 $FAR_ORDER" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(op list: the real runs newest first, then the far ones, nearest first)"
+run_json op status --json
+assert_eq "$FR2" "$(printf '%s' "$OUT" | jget - 'd["ops"][0]["op_id"]')" "(ops[0] is the newest real run)"
+# six records and a limit of five: the prune takes the furthest one only
+FL_KEEP_OPS=5 run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_no_file "$OPS/op-20990101-000000-333.json" "(the furthest goes first)"
+assert_file "$OPS/op-20990101-000000-111.json"
+assert_file "$OPS/op-20980101-000000-222.json"
+# then a limit of three: the three newest real runs stay, the far ones go
+FL_KEEP_OPS=3 run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_no_file "$OPS/op-20990101-000000-111.json"
+assert_no_file "$OPS/op-20980101-000000-222.json"
+assert_eq "3" "$(find "$OPS" -name 'op-*.json' | wc -l | tr -d ' ')" "(the new run and the two before it)"
+# the edge, with the clock of 5c (20300102-030405): 600 s ahead keeps its place on top, 601 s goes last
+export CLOCK_FILE="$TMP_DIR/clock"
+step_clock 20300102-030405
+rm -rf "$OPS"
+fake_op op-20300102-030400-7 "done" "$DEAD" 0
+fake_op op-20300102-031405-5 "done" "$DEAD" 0
+PATH="$CLOCKBIN:$PATH" run_json op list --json
+assert_eq "op-20300102-031405-5 op-20300102-030400-7" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(600 s ahead is a step back: on top)"
+rm -rf "$OPS"
+fake_op op-20300102-030400-7 "done" "$DEAD" 0
+fake_op op-20300102-031406-5 "done" "$DEAD" 0
+PATH="$CLOCKBIN:$PATH" run_json op list --json
+assert_eq "op-20300102-030400-7 op-20300102-031406-5" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(601 s ahead is not: last)"
+unset CLOCK_FILE
 
 # ---- 6. --background: refused before it starts, or started detached with an op_id at once
 rm -rf "$OPS"

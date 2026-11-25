@@ -127,7 +127,7 @@ public class SitesViewTests
         kit.Runner.On("site", "default").Print(PageKit.Fixture("sites-default-fail.jsonl")).Fail(1);
         PageKit.ClickMenu(view, "More actions for two.localhost", "Make Default");
         PageKit.Wait(view.Pending);
-        Assert.Equal("two.localhost is not a site of this bench.", view.Message);
+        Assert.Equal("two.localhost is not a site of this bench. benchbar site list", view.Message);
         Assert.True(view.MessageIsError);
         Assert.Equal(0, kit.Refreshes);
     });

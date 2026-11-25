@@ -74,7 +74,7 @@ generated() {
     "recorded/list.json|list --json" \
     "recorded/status.json|status --json --bench-dir $BENCH" \
     "cli/ports-check-clean.json|ports check --json --bench-dir $BENCH" \
-    "cli/scan-empty.json|scan --json $HOME/empty"
+    "cli/scan-empty.json|scan --json $HOME/empty"     "cli/envelope-read-failure.json|!status --for-agent --bench-dir $HOME/no-such-bench"     "cli/envelope-usage-error.jsonl|!install --bogus --jsonl"     "cli/envelope-run-refused.jsonl|!run --jsonl --bench-dir $BENCH -- bogus"
 }
 
 # GENERATED_TEXT: fixture file, then the command; commands that print no JSON (autostart) or are
@@ -157,9 +157,19 @@ status=0
 
 # ---- generated files
 while IFS='|' read -r file cmd; do
+  # a leading "!" allows a non zero exit: a refusal prints its envelope all the same
+  allow=0; [[ "$cmd" == "!"* ]] && { allow=1; cmd="${cmd#!}"; }
   # shellcheck disable=SC2086  # the command is one word per argument, none has a space
-  cli_out $cmd >"$TMP_OUT/new.json"
-  python3 -I -c 'import json, sys; json.load(open(sys.argv[1]))' "$TMP_OUT/new.json" || fail "$file: the CLI did not print JSON"
+  ALLOW_EXIT="$allow" cli_out $cmd >"$TMP_OUT/new.json"
+  # a refusal also prints its [FAIL] text (stderr is merged here): the envelope is the JSON lines
+  [[ "$allow" == 0 ]] || { grep '^{' "$TMP_OUT/new.json" >"$TMP_OUT/lines.json" || true; mv "$TMP_OUT/lines.json" "$TMP_OUT/new.json"; }
+  python3 -I -c '
+import json, sys
+text = open(sys.argv[1]).read()
+try:
+    json.loads(text)
+except ValueError:
+    [json.loads(l) for l in text.splitlines() if l.strip()]' "$TMP_OUT/new.json" || fail "$file: the CLI did not print JSON"
   if [[ "$CHECK" == 1 ]]; then
     if ! cmp -s "$TMP_OUT/new.json" "$FIXTURES/$file"; then
       printf 'windows/tray/fixtures/%s differs from what the CLI prints now:\n' "$file" >&2
