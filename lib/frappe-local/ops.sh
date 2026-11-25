@@ -329,7 +329,30 @@ fl_op_result_v() {
 # fl_op_ids: every op id, newest first. An id is op-DATE-TIME-PID[-N]: the date and the time are fixed width text,
 # the N (the run's place within one stamp, see fl_op_new_id_v) and the pid are numbers, compared in that order. Sorted
 # as text, pid 9998 came after 10001 and "-5" after "-5-1". One sort for the whole list, no fork per op.
+# An id whose stamp is more than FL_OP_CLOCK_SKEW seconds ahead of the clock (a resumed VM, a bad RTC) is not the
+# newest run: it goes LAST, so ops[0] is a real run and the prune (it keeps the first FL_KEEP_OPS ids of this list)
+# takes it. Several of them follow each other from the nearest stamp to the furthest, the furthest is pruned first.
+# These have the newest stamps, so they are the first lines of the sort: the clock's stamp is made once per call
+# (one date call) and an id is converted to seconds (fl__op_stamp_secs_v) only while it is text greater than that.
 fl_op_ids() {
+  local __now __nowsecs="" __sec __id __far="" __past=0
+  __now="$(date +%Y%m%d-%H%M%S)"
+  while IFS= read -r __id; do
+    if [[ "$__past" != "1" ]]; then
+      if [[ "${__id:3:15}" > "$__now" ]]; then
+        [[ -n "$__nowsecs" ]] || fl__op_stamp_secs_v __nowsecs "$__now"
+        fl__op_stamp_secs_v __sec "${__id:3:15}"
+        if [[ $((__sec - __nowsecs)) -gt "$FL_OP_CLOCK_SKEW" ]]; then __far="${__id}"$'\n'"${__far}"; continue; fi
+      fi
+      __past=1
+    fi
+    printf '%s\n' "$__id"
+  done < <(fl__op_ids_sorted)
+  printf '%s' "$__far"
+}
+
+# fl__op_ids_sorted: the op ids, newest stamp first (see fl_op_ids)
+fl__op_ids_sorted() {
   # shellcheck disable=SC2010  # names this tool made, matched by a strict pattern
   ls -1 "$(fl_ops_dir)" 2>/dev/null | grep -E '^op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?\.json$' | sed 's/\.json$//' \
     | sort -t- -k2,2r -k3,3r -k5,5nr -k4,4nr || true

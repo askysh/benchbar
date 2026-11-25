@@ -1728,7 +1728,8 @@ newest first: by the date and time of the op_id, then its `-N` and its pid as
 numbers. A new op_id is never below one that exists, even when the clock steps
 back by up to 10 minutes, so the order is the order the runs started in (its
 time can then be a few seconds ahead of `started_at`). An op whose stamp is
-further ahead than that stays on top until the records are pruned. `benchbar op wait OP_ID --json` prints the same document as
+further ahead than that (a clock that was wrong) is listed last, so the first
+record is always the newest real run, and the pruning takes it first. `benchbar op wait OP_ID --json` prints the same document as
 `op status` when the run is not running any more, or when `--timeout` ran
 out (then with `"timed_out": true`).
 
