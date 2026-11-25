@@ -288,7 +288,7 @@ assert_eq "1" "$CODE" "$OUT"
 CB="$(comm -13 <(printf '%s
 ' "$ids_before") <(ids_now))"
 # the flake: the run that just failed is ops[0], though the clock says it started before the one that is done
-run_json op status --json
+PATH="$CLOCKBIN:$PATH" run_json op status --json
 assert_eq "failed 1 site backup" "$(printf '%s' "$OUT" | jget - 'd["ops"][0]["state"] + " " + str(d["ops"][0]["exit"]) + " " + d["ops"][0]["command"]')" "(ops[0] after a step back)"
 PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"   # the clock is still back
 assert_eq "0" "$CODE" "$OUT"
@@ -297,10 +297,10 @@ step_clock 20300102-030406   # it passed the newest stamp: its own stamp again
 PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 CD="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
-run_json op list --json
+PATH="$CLOCKBIN:$PATH" run_json op list --json
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "$CD $CC $CB $CA" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(newest first, whatever the pids)"
-run_json op status --json
+PATH="$CLOCKBIN:$PATH" run_json op status --json
 assert_eq "$CD" "$(printf '%s' "$OUT" | jget - 'd["ops"][0]["op_id"]')"
 # and the ids say how: the stamp of the newest one, the next N
 case "$CA" in op-20300102-030405-*) ;; *) fail "the first run has the clock's stamp: $CA" ;; esac
@@ -309,8 +309,8 @@ case "$CC" in op-20300102-030405-*-2) ;; *) fail "the next one takes the next N:
 case "$CD" in op-20300102-030406-*) ;; *) fail "a clock past the newest stamp is used as it is: $CD" ;; esac
 
 # ---- 5d. the stamp of a step back is reused only when it is at most 10 minutes (600 s) ahead of the clock: one op a
-# year ahead (a resumed VM, a snapshot, a bad RTC) does not hold the stamp of every op after it. Such an op stays on
-# top of the list (it is the newest by its name) and is ignored when the next id is made.
+# year ahead (a resumed VM, a snapshot, a bad RTC) does not hold the stamp of every op after it. Such an op is ignored
+# when the next id is made, and listed last (5e). The readers use the same clock: an id past it by 600 s is far.
 rm -rf "$OPS"
 step_clock 20300102-030405
 fake_op op-20310102-030405-111 "done" "$DEAD" 0
@@ -324,8 +324,8 @@ read -r FY1 FY2 FY3 <<<"$FYS"
 [[ "$FY1" =~ ^op-20300102-030405-[0-9]+$ ]] || fail "a stamp a year ahead is not reused: $FY1"
 [[ "$FY2" =~ ^op-20300102-030405-[0-9]+-1$ ]] || fail "the next run takes the clock's stamp and the next N: $FY2"
 [[ "$FY3" =~ ^op-20300102-030405-[0-9]+-2$ ]] || fail "and the next: $FY3"
-run_json op list --json
-assert_eq "op-20310102-030405-111 $FY3 $FY2 $FY1" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(the far op stays on top, the new ones follow newest first)"
+PATH="$CLOCKBIN:$PATH" run_json op list --json
+assert_eq "$FY3 $FY2 $FY1 op-20310102-030405-111" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(the far op is last, the new ones newest first)"
 # the edge: 600 s ahead is reused, 601 s is not (the clock is 20300102-030405)
 rm -rf "$OPS"
 fake_op op-20300102-031405-5 "done" "$DEAD" 0
