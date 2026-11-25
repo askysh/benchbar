@@ -12,7 +12,33 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT_DIR="$ROOT"
 # resolved (/var is /private/var on macOS): the CLI resolves bench paths too
 TMP_DIR="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/benchbar-test.XXXXXX")" && pwd -P)"
-trap 'rm -rf "$TMP_DIR"' EXIT
+# Soft assertions (see soft_asserts below) count their failures in a file, so a failure inside
+# a $(...) subshell counts too. The trap cleans up, then turns a test that recorded failures
+# and otherwise ended well into a failing one.
+SOFT_FILE="$TMP_DIR/soft-fails"
+SOFT_ASSERTS="${BENCHBAR_SOFT_ASSERTS:-0}"
+# on_exit CMD: cleanup the test needs (kill a listener, stop a server); runs in order, each in a
+# subshell, before the folder is removed. So an "exit" or a set -u abort in one cleanup ends only
+# that cleanup, and nothing it does changes the test's status. A cleanup that must change the
+# shell of the test itself is not supported. A test never sets its own EXIT trap: that replaces
+# harness_exit and a soft failure then passes (test-harness checks for it).
+ON_EXIT_CMDS=""
+on_exit() { ON_EXIT_CMDS="${ON_EXIT_CMDS}${1}"$'\n'; }
+harness_exit() {
+  local code="$?" n=0 c
+  while IFS= read -r c; do
+    [[ -z "$c" ]] || ( eval "$c" ) || true
+  done <<<"$ON_EXIT_CMDS"
+  [[ -f "$SOFT_FILE" ]] && n="$(wc -l <"$SOFT_FILE" | tr -d ' ')"
+  cd / 2>/dev/null || true
+  rm -rf "$TMP_DIR"
+  if [[ "$code" == "0" && "$n" != "0" ]]; then
+    printf 'FAIL: %s assertion(s) failed (listed above)\n' "$n" >&2
+    code=1
+  fi
+  exit "$code"
+}
+trap harness_exit EXIT
 
 export HOME="$TMP_DIR/home"
 # the platform the CLI sees: a Mac, whatever the host (use_linux, or
@@ -184,7 +210,25 @@ if [[ "${BENCHBAR_TEST_PLATFORM:-}" == "linux" ]]; then use_linux; fi
 
 # ---------------------------------------------------------------- asserts
 
-fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+# fail MSG: stops the test. After "soft_asserts on" it records the failure and carries on, so
+# the later assertions of the file report too; the test then exits 1 at its end.
+fail() {
+  printf 'FAIL: %s\n' "$*" >&2
+  if [[ "${SOFT_ASSERTS:-0}" == "1" ]]; then printf 'x\n' >>"$SOFT_FILE"; return 0; fi
+  exit 1
+}
+# fail_now MSG: stops the test even in soft mode (a later step depends on this one)
+fail_now() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+# soft_asserts on|off: a block of independent checks reports all its failures; turn it off
+# (or call soft_checkpoint) before a step that needs the checks above it to hold.
+# BENCHBAR_SOFT_ASSERTS=1 turns it on for every test, to see everything a change broke.
+soft_asserts() { if [[ "$1" == "on" ]]; then SOFT_ASSERTS=1; else SOFT_ASSERTS=0; fi; }
+# soft_checkpoint: stops the test now if a soft assertion failed before this line
+soft_checkpoint() {
+  [[ -s "$SOFT_FILE" ]] || return 0
+  printf 'FAIL: %s assertion(s) failed before this point\n' "$(wc -l <"$SOFT_FILE" | tr -d ' ')" >&2
+  exit 1
+}
 assert_eq() { [[ "$1" == "$2" ]] || fail "expected [$1], got [$2] ${3:-}"; }
 assert_contains() { case "$1" in *"$2"*) ;; *) fail "expected output to contain [$2] ${3:-}"$'\n'"--- output ---"$'\n'"$1" ;; esac; }
 assert_not_contains() { case "$1" in *"$2"*) fail "expected output NOT to contain [$2] ${3:-}"$'\n'"--- output ---"$'\n'"$1" ;; esac; }
@@ -203,6 +247,15 @@ run_fm() {
   set +e
   OUT="$("$FM" "$@" 2>&1)"
   CODE="$?"
+  set -e
+}
+# run_fm_split ARGS...: as run_fm, with the streams kept apart: OUT is stdout, ERR is stderr
+# (also in $MOCK_STATE/stderr), no terminal on stdin. For JSON, and to assert where a message went.
+run_fm_split() {
+  set +e
+  OUT="$("$FM" "$@" 2>"$MOCK_STATE/stderr" </dev/null)"
+  CODE="$?"
+  ERR="$(cat "$MOCK_STATE/stderr")"
   set -e
 }
 # run_fm_tty ARGS...: as run_fm, with a terminal (a pty) on stdin, the one thing a

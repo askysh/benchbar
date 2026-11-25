@@ -1,0 +1,42 @@
+# PR text: the pull request title and every commit message follow
+# CONTRIBUTING.md ("What a pull request needs", Commits): no em dash or en
+# dash in the title, and no tool trailer (a Co-Authored-By that names a tool or
+# a bot, or a "Generated with" line) in the title, the description or any commit.
+# scripts/check-pr-text.sh holds the rule, tests/test-pr-text.sh tests it.
+# The description is checked for a tool trailer too (dashes: the title only).
+# The title and the description come through the environment, never into the shell text.
+name: PR text
+
+on:
+  pull_request:
+    branches: [next-release, main]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-text-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-text:
+    name: PR title and commit text
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The merge commit GitHub makes for the pull request (the checkout default), not its head:
+      # a branch cut before scripts/check-pr-text.sh existed has no script (exit 127 on #342).
+      # fetch-depth 0 brings the base and head commits that the range names.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the title and the commits
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/check-pr-text.sh "$PR_TITLE" "$BASE_SHA..$HEAD_SHA"

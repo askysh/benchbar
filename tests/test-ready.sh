@@ -11,16 +11,26 @@ PIDS=()
 cleanup() {
   local p
   for p in ${PIDS[@]+"${PIDS[@]}"}; do kill "$p" 2>/dev/null || true; { wait "$p"; } 2>/dev/null || true; done
-  rm -rf "$TMP_DIR"
 }
-trap cleanup EXIT
+on_exit cleanup
 
 cat >"$TMP_DIR/listen.py" <<'PY'
-import socket, sys
+import random, socket, sys
 if sys.argv[1] == "ports":
+    # Not port 0: that is the system's ephemeral range, where a test running beside this one can
+    # take the number before the listener binds it. A random port below that range, three distinct.
     out = []
-    for _ in range(3):
-        s = socket.socket(); s.bind(("127.0.0.1", 0)); out.append(s.getsockname()[1]); s.close()
+    while len(out) < 3:
+        port = random.randrange(20000, 30000)
+        s = socket.socket()
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            continue
+        finally:
+            s.close()
+        if port not in out:
+            out.append(port)
     print(*out)
 else:
     s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("127.0.0.1", int(sys.argv[1]))); s.listen(5)
