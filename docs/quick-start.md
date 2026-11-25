@@ -49,7 +49,7 @@ The steps below use the macOS commands. On Linux and in WSL, use
 `~/.bashrc` where they say `~/.zshrc`, and the site above in place of
 `macdev`. If an install stops, see [First run problems](first-run-problems.md).
 
-A few words first. A **bench** is the folder that holds a Frappe
+A few words first (the [Glossary](glossary.md) has the rest). A **bench** is the folder that holds a Frappe
 installation: the apps in `apps/`, a Python environment in `env/` and
 the sites in `sites/`. A **site** is one Frappe instance in that bench,
 with its own database and its own address, such as `http://macdev:8000`.

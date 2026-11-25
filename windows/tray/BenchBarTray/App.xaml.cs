@@ -22,7 +22,7 @@ public partial class App : Application, ITrayHost
     /// and the next start reports no crash. <c>CloseMainWindow</c> cannot do it: the tray usually has no visible window to close.
     /// </summary>
     internal const string QuitEventName = @"Local\BenchBarTray.Quit";
-    private const string HelpUrl = "https://benchbar.akashmishra.com/windows/";
+    private const string HelpUrl = "https://benchbar.akashmishra.com/windows-tray/";
 
     private readonly ErrorLog _log = new();
     private readonly NoticeBoard _notices = new();

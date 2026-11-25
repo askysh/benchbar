@@ -21,13 +21,15 @@ hero:
       variant: minimal
 ---
 
-Local Frappe and ERPNext development benches on macOS, Linux and Windows
-(through WSL). The `benchbar` command line tool installs a bench, runs it
-in the background under launchd (macOS) or systemd (Linux and WSL) and
-keeps it healthy. On a Mac, the BenchBar menu bar app shows each bench as
-a small runner with start, stop and a health check one click away, and a
-window for each bench's sites, apps and health. On Windows, a tray app
-does the same.
+BenchBar runs local Frappe and ERPNext development benches on macOS,
+Linux and Windows (through WSL). A [bench](glossary.md#bench) is the
+folder that holds one Frappe installation and its sites. The `benchbar`
+command line tool installs a bench, runs it in the background under
+launchd (macOS) or systemd (Linux and WSL) and keeps it healthy. On a
+Mac, BenchBar.app shows each bench as a small runner in the menu bar,
+with start, stop and a health check one click away, and a window for each
+bench's sites, apps and health. On Windows, the BenchBar tray does the
+same. The [Glossary](glossary.md) explains the other words.
 
 ![The BenchBar popover: a running bench with Start, Stop, Restart, its sites and a health summary](images/popover-light.png)
 
@@ -101,7 +103,7 @@ are the main ones.
   work and the app is skipped; an Intel Mac has not been checked on real
   hardware yet (see [supported platforms](install.md#supported-platforms)). On Linux, Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them); on Windows, WSL 2 with such a
   distro.
-- On a Mac, Homebrew and the Xcode Command Line Tools. The installer offers both.
+- On a Mac, Homebrew and the Xcode Command Line Tools. Install them first for the Homebrew command. The one line installer offers both.
 - About 5 GB of free disk under your home folder, and internet access.
 
 No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
@@ -147,10 +149,15 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 
 - [What's new](whats-new.md): what changed in each release, and what to do when you update.
 - [Features](features.md): every feature by platform, with the version it came in.
-- [Install](install.md): Homebrew, the one line installer, the DMG,
-  building from source, moving to Homebrew, and uninstalling.
+- [Install](install.md): Homebrew, the one line installer, the DMG and
+  building from source. [Update and migrate](upgrade.md) and
+  [Uninstall](uninstall.md) have their own pages.
 - [Quick start](quick-start.md): adopt a bench or install a new one.
-- [Windows](windows.md): benches in WSL, `benchbar.exe` and the tray.
+- Start here for your system: [macOS](macos.md), [Linux](linux.md) or
+  [Windows](windows.md) (benches in WSL, `benchbar.exe` and the tray).
+- [FAQ](faq.md) and [Glossary](glossary.md): short answers, and what
+  bench, site, bench agent and the other words mean.
+- [BenchBar compared with other ways to run a bench](concepts/alternatives.md).
 - [Benches and sites](guides/benches-and-sites.md): daily use, sites,
   several benches, ports and the scheduler.
 - [CLI reference](reference/cli/install.md): every command, flag and exit

@@ -77,9 +77,16 @@ export default defineConfig({
             { label: 'Features', slug: 'features' },
             { label: 'Install', slug: 'install' },
             { label: 'Quick start', slug: 'quick-start' },
-            { label: 'First run problems', slug: 'first-run-problems' },
-            { label: 'Privacy of this site', slug: 'privacy' },
-            { label: 'Test a build', slug: 'testing' },
+          ],
+        },
+        {
+          label: 'Platforms',
+          items: [
+            { label: 'macOS', slug: 'macos' },
+            { label: 'Linux', slug: 'linux' },
+            { label: 'Windows', slug: 'windows' },
+            { label: 'The BenchBar tray on Windows', slug: 'windows-tray' },
+            { label: 'The menu bar app', slug: 'app' },
           ],
         },
         {
@@ -92,12 +99,13 @@ export default defineConfig({
             { label: 'Share a site on your network', slug: 'guides/share-on-your-network' },
             { label: 'Labs', slug: 'guides/labs' },
             { label: 'Quick Switch', slug: 'guides/quick-switch' },
-            { label: 'Troubleshooting', slug: 'troubleshooting' },
+            { label: 'Draw your own runner', slug: 'runners' },
           ],
         },
         {
           label: 'Concepts',
           items: [
+            { label: 'Compared with other ways to run a bench', slug: 'concepts/alternatives' },
             { label: 'Port blocks', slug: 'concepts/port-blocks' },
             { label: 'How sharing keeps your bench safe', slug: 'concepts/sharing-safety' },
           ],
@@ -134,15 +142,17 @@ export default defineConfig({
           ],
         },
         {
-          label: 'App',
+          label: 'Help',
           items: [
-            { label: 'The menu bar app', slug: 'app' },
-            { label: 'Runners', slug: 'runners' },
+            { label: 'Troubleshooting', slug: 'troubleshooting' },
+            { label: 'First run problems', slug: 'first-run-problems' },
+            { label: 'FAQ', slug: 'faq' },
+            { label: 'Glossary', slug: 'glossary' },
+            { label: 'Update and migrate', slug: 'upgrade' },
+            { label: 'Uninstall', slug: 'uninstall' },
+            { label: 'Test a build', slug: 'testing' },
+            { label: 'Privacy of this site', slug: 'privacy' },
           ],
-        },
-        {
-          label: 'Windows',
-          items: [{ label: 'BenchBar for Windows', slug: 'windows' }],
         },
         {
           label: 'For contributors',

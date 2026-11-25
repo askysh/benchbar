@@ -24,7 +24,7 @@ or `~/frappe-bench`); `console` and `db` open Windows Terminal inside the
 distro; `editor` opens VS Code, Cursor or VS Code Insiders, the one chosen
 in Settings; and share links show a note, because rooms are not on Windows
 yet. **Settings, Ask before a link acts** is there too. See
-[Windows](../windows.md#benchbar-links).
+[Windows](../windows-tray.md#benchbar-links).
 
 ## Routes
 
