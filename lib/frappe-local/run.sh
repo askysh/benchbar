@@ -445,7 +445,7 @@ fl__timer_stop() {
 # after the timeout (ssh included), so nothing is left running.
 
 FL_GIT_CONNECT_SECS="${FL_GIT_CONNECT_SECS:-5}"
-FL_GR_CODE=0     # exit code of the last fl_git_remote_run: 124 after a timeout
+FL_GR_CODE=0     # exit code of the last fl_git_timed (fl_git_remote_run, the plan, profiles): 124 after a timeout
 FL_GR_ERR=""     # its first line of stderr (without warnings), "timed out after Ns" on 124
 FL_GR_OUT=""     # its stdout
 FL_GR_DEFAULT="" # fl_git_remote_default: the branch HEAD points at
