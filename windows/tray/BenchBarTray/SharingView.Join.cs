@@ -34,7 +34,12 @@ internal sealed partial class SharingView
         if (_guest is null)
         {
             _guest = _newGuest();
-            _guest.Changed += Render;
+            // the shared catalogue is read on a pool thread, so the change may arrive there: drawing is the UI thread's
+            _guest.Changed += () =>
+            {
+                if (Dispatcher.CheckAccess()) Render();
+                else Dispatcher.Invoke(Render);
+            };
         }
         return LoadGuestAsync(_guest);
     }
