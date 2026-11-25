@@ -620,21 +620,13 @@ fl_profile_offline_msg() {
   return 1
 }
 
-# fl_profile_timed SECS OUT COMMAND...: stdout to OUT, the first line of
-# stderr in FL_PROFILE_ERR; exit 124 after SECS. The command runs in a process
-# group of its own that a timeout ends whole (fl_run_capture_timeout): git and
-# the ssh it started do not outlive it.
+# fl_profile_timed SECS OUT COMMAND...: fl_git_timed, with the first line of
+# stderr in FL_PROFILE_ERR without its "fatal:" prefix; exit 124 after SECS
 fl_profile_timed() {
-  local secs="$1" out="$2" err code=0
+  local secs="$1" out="$2" code=0
   shift 2
-  err="$(mktemp "${TMPDIR:-/tmp}/benchbar-net.XXXXXX")"
-  { fl_run_capture_timeout "$secs" "$out" "$err" "$@" || code=$?; } 2>/dev/null
-  if [[ "$code" == "124" ]]; then
-    FL_PROFILE_ERR="timed out after ${secs}s"
-  else
-    FL_PROFILE_ERR="$(grep -v '^[[:space:]]*$' "$err" | awk 'NR==1' | sed -E 's/^(fatal|remote|error): *//' || true)"
-  fi
-  rm -f "$err"
+  fl_git_timed "$secs" "$out" "$@" || code=$?
+  FL_PROFILE_ERR="$(printf '%s' "$FL_GR_ERR" | sed -E 's/^(fatal|remote|error): *//')"
   return "$code"
 }
 
