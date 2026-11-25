@@ -283,6 +283,7 @@ internal sealed class PlanReviewSheet : Window
     {
         panel.Children.Add(Ui.Text(result.Headline, 18, FontWeights.SemiBold));
         if (result.Error is { Length: > 0 } error) panel.Children.Add(Ui.CriticalText(error));
+        if (result.Hint is { Length: > 0 } hint) panel.Children.Add(Ui.Text(hint, 13, margin: new Thickness(0, 4, 0, 0)));
         if (result.Missing.Count > 0) panel.Children.Add(Ui.Text(UiText.Format("PlanItNeeds", string.Join(", ", result.Missing)), 13, margin: new Thickness(0, 6, 0, 0)));
         if (result.Changed.Count > 0)
         {

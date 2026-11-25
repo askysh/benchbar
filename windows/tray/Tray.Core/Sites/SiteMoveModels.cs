@@ -21,8 +21,7 @@ public static class SiteMoveJson
         var address = o["hosts"] as JsonObject is { } h
             ? new SiteMoveAddress(JsonRead.Str(h, "line") ?? "", JsonRead.Str(h, "url_before") ?? "", JsonRead.Str(h, "url_after") ?? "", JsonRead.Bool(h, "port_changes"))
             : null;
-        var next = (o["next_actions"] as JsonArray ?? []).OfType<JsonObject>().Where(a => JsonRead.Str(a, "command") is { Length: > 0 })
-            .Select(a => new CliNextAction(JsonRead.Str(a, "command")!, JsonRead.Str(a, "why"))).ToList();
+        var next = ResultEnvelope.Next(o);
         var migrate = o["migrate"] is not JsonValue m || !m.TryGetValue<bool>(out var on) || on;
         return new SiteMovePlan(JsonRead.Str(o, "bench") ?? "", JsonRead.Str(o, "site") ?? "", JsonRead.Str(o, "to_bench") ?? "", JsonRead.Strings(o, "apps"),
             JsonRead.Strings(o, "missing_apps"), migrate, JsonRead.Strings(o, "stays"), address, next);
