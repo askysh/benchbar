@@ -42,14 +42,18 @@ nonisolated final class MoveLines: @unchecked Sendable {
 
     var text: String { lock.withLock { all.joined(separator: "\n") } }
 
-    /// The steps as they last stood: a step's end line replaces its start line.
+    /// The steps as they last stood: a step's end line replaces its start line. A sub-step
+    /// (`parent` set) can share its id with the step it belongs to (`restore` under `restore`),
+    /// so a step is told by parent and id, never by id alone: a sub-step's end must not close
+    /// or fail the top-level step.
     var steps: [InstallStep] {
         var order: [String] = []
         var latest: [String: InstallStep] = [:]
         for line in lock.withLock({ all }) {
             guard case .step(let step)? = try? InstallEvent.decode(line) else { continue }
-            if latest[step.id] == nil { order.append(step.id) }
-            latest[step.id] = step
+            let key = "\(step.parent ?? "")/\(step.id)"
+            if latest[key] == nil { order.append(key) }
+            latest[key] = step
         }
         return order.compactMap { latest[$0] }
     }
