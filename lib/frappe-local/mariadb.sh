@@ -478,7 +478,7 @@ fl_mariadb_restart_if_running() {
 
 fl_mariadb_service_formula() {
   local f
-  f="$(brew services list 2>/dev/null | awk '$1 ~ /^mariadb/ && $2 == "started" && !f {print $1; f = 1}' || true)"
+  f="$(fl_brew_services_list | awk '$1 ~ /^mariadb/ && $2 == "started" && !f {print $1; f = 1}' || true)"
   printf '%s' "${f:-${FL_MARIADB_FORMULA:-mariadb}}"
 }
 
