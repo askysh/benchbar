@@ -17,13 +17,13 @@ internal sealed partial class OverviewView
     private void AddTidyItems(BenchStatus bench, CommandCatalogue cli, bool needsService, Func<string, string, bool, Action, MenuItem> item)
     {
         if (cli.Has("bench scratch") || cli.Has("bench gc") || cli.Has("db orphans"))
-            item("Tidy Up...", "Scratch benches, the ones that expired and the databases no site refers to", true, () => TidyAsync().Forget());
+            item(UiText.Get("TidyMenuTidyUp"), UiText.Get("TidyMenuTidyUpTip"), true, () => TidyAsync().Forget());
         if (cli.Has("uninstall-service") && !needsService)
-            item("Remove Service...", "uninstall-service for this bench: stops it and removes its background service; shows its plan first", true, () => RemoveServiceAsync().Forget());
+            item(UiText.Get("TidyMenuRemoveService"), UiText.Get("TidyMenuRemoveServiceTip"), true, () => RemoveServiceAsync().Forget());
         if (cli.Has("bench forget"))
-            item("Forget Bench...", "bench forget: takes the bench out of benchbar's list; the folder, sites and databases stay", true, () => ForgetBenchAsync().Forget());
+            item(UiText.Get("TidyMenuForget"), UiText.Get("TidyMenuForgetTip"), true, () => ForgetBenchAsync().Forget());
         if (cli.Has("bench remove"))
-            item("Remove Bench...", "bench remove: backs up and drops its sites, then moves the folder aside; asks for the folder name", true, () => RemoveBenchAsync().Forget());
+            item(UiText.Get("TidyMenuRemoveBench"), UiText.Get("TidyMenuRemoveBenchTip"), true, () => RemoveBenchAsync().Forget());
     }
 
     /// <summary>Tidy Up: the dialog reads and lists; Remove Expired comes back here and goes through the plan sheet of <c>bench gc</c>.</summary>
@@ -44,9 +44,9 @@ internal sealed partial class OverviewView
     {
         if (_services is null || _bench is not { } bench) return;
         var name = TidyCommands.FolderName(bench.Path);
-        var typed = _services.ConfirmTyped(new TypedConfirmRequest($"Remove {name}",
-            $"This backs up each site of {name}, drops its database and moves the folder {bench.Path} to a trash folder next to it. Nothing is deleted, and the plan comes next.",
-            name, "Remove Bench"));
+        var typed = _services.ConfirmTyped(new TypedConfirmRequest(UiText.Format("TidyRemoveTitle", name),
+            UiText.Format("TidyRemoveBody", name, bench.Path),
+            name, UiText.Get("TidyRemoveBenchConfirm")));
         if (typed is null || !TypedConfirm.Matches(name, typed)) return;
         await ReviewAsync(TidyCommands.RemoveReview(bench.Path)).ConfigureAwait(true);
     }

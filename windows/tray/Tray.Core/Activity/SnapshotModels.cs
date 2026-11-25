@@ -63,11 +63,11 @@ public static class SnapshotCommands
     public static string? LabelProblem(string? label)
     {
         if (label is null) return null;
-        if (label.Trim().Length > MaxLabel) return $"At most {MaxLabel} characters.";
-        return label.Any(c => c is '"' or '\'' or '\\' || char.IsControl(c)) ? "No quotes, backslashes or line breaks." : null;
+        if (label.Trim().Length > MaxLabel) return UiText.Format("SnapshotLabelMax", MaxLabel);
+        return label.Any(c => c is '"' or '\'' or '\\' || char.IsControl(c)) ? UiText.Get("SnapshotLabelChars") : null;
     }
 
-    public const string DefaultSiteNote = "This is the default site of the bench. BenchBar runs the rollback as you, not as an agent, after you typed its name. The data of the site is replaced, as for any rollback.";
+    public static string DefaultSiteNote => UiText.Get("SnapshotDefaultNote");
 
     /// <summary>
     /// The review of a rollback: the plan by <c>--dry-run --json</c>, the apply by <c>--apply TOKEN --yes --jsonl</c> with that plan's token. Run as the
@@ -75,11 +75,11 @@ public static class SnapshotCommands
     /// site name before it and the confirmation of the sheet are that person's decision, and the plan says so for the default site.
     /// </summary>
     public static PlanReviewRequest Review(string site, SiteSnapshot snapshot, string bench) =>
-        PlanReviewRequest.Tokened($"Roll {site} back", Rollback(site, snapshot.Id, bench)) with
+        PlanReviewRequest.Tokened(UiText.Format("SnapshotReviewTitle", site), Rollback(site, snapshot.Id, bench)) with
         {
-            ConfirmLabel = "Roll Back",
+            ConfirmLabel = UiText.Get("SnapshotRollButton"),
             CanStop = false, // a restore is not safe to kill part way
-            Summary = $"Puts {snapshot.Title} back into {site}. A snapshot of {site} as it is now is taken first, so the rollback can be undone.",
+            Summary = UiText.Format("SnapshotReviewSummary", snapshot.Title, site),
             ConfigureEnv = env => env.Set(SetupEnv.NonInteractive, "0"),
             Describe = Describe,
             ExplainFailure = ShareText.RootPasswordHelp,
@@ -91,15 +91,15 @@ public static class SnapshotCommands
         var lines = new List<string>();
         var rollback = plan.Raw["rollback"] as JsonObject;
         if (rollback is not null && JsonRead.Bool(rollback, "default_site")) lines.Add(DefaultSiteNote);
-        lines.Add("Replaced: the database and the public and private files of " + (JsonRead.Str(plan.Raw, "site") ?? "the site") + ".");
+        lines.Add(UiText.Format("SnapshotReplaced", JsonRead.Str(plan.Raw, "site") ?? UiText.Get("SnapshotTheSite")));
         if (rollback is not null && rollback["apps_match"] is JsonValue m && m.TryGetValue<bool>(out var match))
         {
             var changed = JsonRead.Strings(rollback, "changed_apps");
-            lines.Add(match ? "Apps: the same apps as when the snapshot was taken."
-                : "Apps: the bench's apps changed since this snapshot" + (changed.Count > 0 ? $" ({string.Join(", ", changed)})" : "") + ". Its data goes into the bench's current code.");
+            lines.Add(match ? UiText.Get("SnapshotAppsSame")
+                : changed.Count > 0 ? UiText.Format("SnapshotAppsChangedList", string.Join(", ", changed)) : UiText.Get("SnapshotAppsChanged"));
         }
-        lines.Add(plan.Steps.Any(s => s.Id == "migrate") ? "Migrate: bench migrate runs after the restore." : "Migrate: not run, the site stays on the schema of the snapshot.");
-        lines.Add("Left alone: every other site and the Windows hosts file.");
+        lines.Add(plan.Steps.Any(s => s.Id == "migrate") ? UiText.Get("MoveMigrateRuns") : UiText.Get("SnapshotMigrateSkipped"));
+        lines.Add(UiText.Get("SnapshotLeftAlone"));
         return lines;
     }
 }
@@ -108,21 +108,26 @@ public static class SnapshotCommands
 public static class SnapshotText
 {
     /// <summary>"3 hours ago, 5.2 MB, with files".</summary>
-    public static string Line(SiteSnapshot snapshot, DateTimeOffset now) =>
-        $"{(snapshot.Time is { } t ? ActivityText.Age(t, now) : snapshot.Stamp)}, {ByteSize.Format(snapshot.SizeBytes)}, {(snapshot.WithFiles ? "with files" : "database only")}";
+    public static string Line(SiteSnapshot snapshot, DateTimeOffset now)
+    {
+        var age = snapshot.Time is { } t ? ActivityText.Age(t, now) : snapshot.Stamp;
+        return snapshot.WithFiles
+            ? UiText.Format("SnapshotLineFiles", age, ByteSize.Format(snapshot.SizeBytes))
+            : UiText.Format("SnapshotLineDb", age, ByteSize.Format(snapshot.SizeBytes));
+    }
 
     public static string? Apps(SiteSnapshot snapshot) => snapshot.AppsMatch switch
     {
-        true => "Same apps as now",
-        false => snapshot.ChangedApps.Count == 0 ? "The apps changed since" : "Apps changed since: " + string.Join(", ", snapshot.ChangedApps),
+        true => UiText.Get("SnapshotAppsNow"),
+        false => snapshot.ChangedApps.Count == 0 ? UiText.Get("SnapshotAppsShort") : UiText.Format("SnapshotAppsSince", string.Join(", ", snapshot.ChangedApps)),
         _ => null,
     };
 
     public static string Summary(SiteSnapshotList list)
     {
-        var parts = new List<string> { $"The snapshots hold {ByteSize.Format(list.TotalBytes)}." };
-        if (list.FreeBytes is { } free) parts.Add($"{ByteSize.Format(free)} are free on this volume.");
-        if (list.OverLimit.Count > 0) parts.Add($"{list.OverLimit.Count} are beyond the newest {list.Keep}; nothing is removed on its own.");
+        var parts = new List<string> { UiText.Format("SnapshotHold", ByteSize.Format(list.TotalBytes)) };
+        if (list.FreeBytes is { } free) parts.Add(UiText.Format("SnapshotFree", ByteSize.Format(free)));
+        if (list.OverLimit.Count > 0) parts.Add(UiText.Format("SnapshotBeyond", list.OverLimit.Count, list.Keep));
         return string.Join(' ', parts);
     }
 

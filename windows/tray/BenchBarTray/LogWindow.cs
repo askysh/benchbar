@@ -46,8 +46,8 @@ internal sealed class LogWindow : ToolWindow
     private readonly ComboBox _process = new() { Width = 150, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _search = new() { MinWidth = 140, Padding = new Thickness(6, 3, 6, 3), VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _searchSummary = new() { Opacity = 0.7, Margin = new Thickness(8, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, MinWidth = 60 };
-    private readonly CheckBox _previous = new() { Content = "Previous log", Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-    private readonly CheckBox _follow = new() { Content = "Follow", Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+    private readonly CheckBox _previous = new() { Content = UiText.Get("LogsPrevious"), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+    private readonly CheckBox _follow = new() { Content = UiText.Get("LogsFollow"), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _status = new() { Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
     private int _drawnChanges = -1;
     private int _drawnThrough = -1;
@@ -57,16 +57,16 @@ internal sealed class LogWindow : ToolWindow
     private string? _notice;
 
     public LogWindow(PageServices services, BenchStatus bench, ResolvedTheme theme, LogViewModel? model = null)
-        : base($"{bench.Name} log", 780, 460, theme)
+        : base(UiText.Format("LogsTitle", bench.Name), 780, 460, theme)
     {
         _services = services;
         _bench = bench;
         Model = model ?? new LogViewModel(services.Cli, bench.Path, bench.Name) { DistroProbe = new WslDistroProbe(), Distro = services.Distro };
         MinWidth = 620;
         MinHeight = 320;
-        Ui.Name(this, $"{bench.Name} log");
+        Ui.Name(this, UiText.Format("LogsTitle", bench.Name));
 
-        _process.Items.Add("All processes");
+        _process.Items.Add(UiText.Get("LogsAllProcesses"));
         foreach (var process in LogQuery.Processes) _process.Items.Add(process);
         _process.SelectedIndex = 0;
         _process.SelectionChanged += (_, _) =>
@@ -74,8 +74,8 @@ internal sealed class LogWindow : ToolWindow
             if (_syncing) return;
             Model.SetProcess(_process.SelectedIndex <= 0 ? null : (string)_process.SelectedItem);
         };
-        Ui.Name(_process, "Process filter");
-        Ui.Name(_search, "Search the log");
+        Ui.Name(_process, UiText.Get("LogsProcessFilter"));
+        Ui.Name(_search, UiText.Get("LogsSearchName"));
         _search.TextChanged += (_, _) =>
         {
             if (!_syncing) Model.SetSearch(_search.Text);
@@ -86,9 +86,9 @@ internal sealed class LogWindow : ToolWindow
             e.Handled = true;
             Model.Step(forward: !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
         };
-        Ui.Name(_searchSummary, "Search result");
-        Ui.Name(_previous, "Previous log", "logs/bench.previous.log: the end of the log before the last start");
-        Ui.Name(_follow, "Follow", "Stick to the newest line; scrolling up turns it off");
+        Ui.Name(_searchSummary, UiText.Get("LogsSearchResult"));
+        Ui.Name(_previous, UiText.Get("LogsPrevious"), UiText.Get("LogsPreviousHint"));
+        Ui.Name(_follow, UiText.Get("LogsFollow"), UiText.Get("LogsFollowHint"));
         _previous.Checked += (_, _) => OnPrevious(true);
         _previous.Unchecked += (_, _) => OnPrevious(false);
         _follow.IsChecked = true;
@@ -102,8 +102,8 @@ internal sealed class LogWindow : ToolWindow
         _search.Margin = new Thickness(8, 0, 0, 0);
         left.Children.Add(_search);
         left.Children.Add(_searchSummary);
-        PreviousMatch = Ui.Button("Previous", () => Model.Step(forward: false), "Previous match", minWidth: 0);
-        NextMatch = Ui.Button("Next", () => Model.Step(forward: true), "Next match", minWidth: 0);
+        PreviousMatch = Ui.Button(UiText.Get("LogsPreviousMatch"), () => Model.Step(forward: false), UiText.Get("LogsPreviousMatchName"), minWidth: 0);
+        NextMatch = Ui.Button(UiText.Get("LogsNextMatch"), () => Model.Step(forward: true), UiText.Get("LogsNextMatchName"), minWidth: 0);
         PreviousMatch.Margin = new Thickness(0, 0, 4, 0);
         PreviousMatch.Padding = NextMatch.Padding = new Thickness(8, 2, 8, 2);
         left.Children.Add(PreviousMatch);
@@ -113,16 +113,16 @@ internal sealed class LogWindow : ToolWindow
         var right = new StackPanel { Orientation = Orientation.Horizontal };
         right.Children.Add(_previous);
         right.Children.Add(_follow);
-        ClearButton = Ui.Button("Clear", () => Model.Clear(), "Clear view", minWidth: 0);
-        CopyButton = Ui.Button("Copy", CopyAll, "Copy the visible lines", minWidth: 0);
-        TerminalButton = Ui.Button("Open in Terminal", OpenInTerminal, "Open in Terminal", minWidth: 0);
+        ClearButton = Ui.Button(UiText.Get("LogsClear"), () => Model.Clear(), UiText.Get("LogsClearName"), minWidth: 0);
+        CopyButton = Ui.Button(UiText.Get("Copy"), CopyAll, UiText.Get("LogsCopyName"), minWidth: 0);
+        TerminalButton = Ui.Button(UiText.Get("LogsTerminal"), OpenInTerminal, UiText.Get("LogsTerminal"), minWidth: 0);
         foreach (var b in new[] { ClearButton, CopyButton, TerminalButton })
         {
             b.Margin = new Thickness(8, 0, 0, 0);
             b.Padding = new Thickness(10, 2, 10, 2);
             right.Children.Add(b);
         }
-        ClearButton.ToolTip = "Empty the view; the file is not touched";
+        ClearButton.ToolTip = UiText.Get("LogsClearTip");
         right.Margin = new Thickness(0, 0, 0, 4);
         bar.Children.Add(right);
 
@@ -147,7 +147,7 @@ internal sealed class LogWindow : ToolWindow
         VirtualizingPanel.SetIsVirtualizing(_list, true);
         VirtualizingPanel.SetVirtualizationMode(_list, VirtualizationMode.Recycling);
         ScrollViewer.SetHorizontalScrollBarVisibility(_list, ScrollBarVisibility.Auto);
-        Ui.Name(_list, "Log lines");
+        Ui.Name(_list, UiText.Get("LogsLines"));
 
         var statusBar = new DockPanel { Margin = new Thickness(10, 6, 10, 6) };
         statusBar.Children.Add(_status);
@@ -304,9 +304,11 @@ internal sealed class LogWindow : ToolWindow
     {
         if (_notice is not null) return _notice;
         if (Model.Error is { Length: > 0 } error) return error;
-        if (Model.IsLoading) return "Loading...";
+        if (Model.IsLoading) return UiText.Get("LogsLoading");
         var count = Model.LineCount;
-        return $"{count} {(count == 1 ? "line" : "lines")} from {Model.File ?? "the bench log"}{(Model.Follow ? ", following" : "")}";
+        var source = Model.File ?? UiText.Get("LogsBenchLog");
+        var status = count == 1 ? UiText.Format("LogsLineOne", source) : UiText.Format("LogsLineMany", count, source);
+        return Model.Follow ? UiText.Format("LogsFollowing", status) : status;
     }
 
     private void CopyAll()

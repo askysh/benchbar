@@ -57,9 +57,9 @@ public sealed class PortSetupModel : IDisposable
     {
         get
         {
-            if (StartAfterSetup) return "Resolve Port Conflict";
-            if (OpensSettings) return "Port Settings";
-            return Benches.Count == 1 ? $"Set Up {Benches[0].Name}" : "Set Up Selected Benches";
+            if (StartAfterSetup) return UiText.Get("PortsResolveTitle");
+            if (OpensSettings) return UiText.Get("PortsSettingsTitle");
+            return Benches.Count == 1 ? UiText.Format("PortsSetUpBench", Benches[0].Name) : UiText.Get("PortsSetUpSelected");
         }
     }
 
@@ -69,11 +69,11 @@ public sealed class PortSetupModel : IDisposable
     public bool CanApply => Phase == PortSetupPhase.Review && Plan is { CanApply: true } && !NothingToSetUp;
 
     /// <summary>"Resolve and Start", "Set Up Bench" or "Set Up Selected Benches".</summary>
-    public string ApplyLabel => StartAfterSetup ? "Resolve and Start" : OpensSettings || Benches.Count == 1 ? "Set Up Bench" : "Set Up Selected Benches";
+    public string ApplyLabel => StartAfterSetup ? UiText.Get("PortsResolveStart") : OpensSettings || Benches.Count == 1 ? UiText.Get("PortsSetUpBenchButton") : UiText.Get("PortsSetUpSelected");
 
     public string SuccessText => StartAfterSetup
-        ? "Setup completed and the start command succeeded."
-        : "Management is set up. Start the benches when you are ready.";
+        ? UiText.Get("PortsSuccessStarted")
+        : UiText.Get("PortsSuccess");
 
     public async Task LoadPlanAsync(CancellationToken ct = default)
     {
@@ -85,13 +85,13 @@ public sealed class PortSetupModel : IDisposable
         if (_disposed) return;
         if (result.Value is not { } plan)
         {
-            Error = result.Error ?? "The ports could not be planned.";
+            Error = result.Error ?? UiText.Get("PortsNotPlanned");
             Phase = PortSetupPhase.Failed;
         }
         else if (plan.CanApply && plan.Entries.Any(e => string.IsNullOrWhiteSpace(e.SetupPlan)))
         {
             Plan = plan;
-            Error = "The CLI did not provide a service-change preview. Upgrade benchbar and refresh the preview before applying.";
+            Error = UiText.Get("PortsNoPreview");
             Phase = PortSetupPhase.Failed;
         }
         else
@@ -112,7 +112,7 @@ public sealed class PortSetupModel : IDisposable
         Raise();
         var result = await _cli.RunStreamAsync(PortArgs.Mode(mode, path), null, CliTimeouts.Read, _ => { }, Link(default)).ConfigureAwait(true);
         if (_disposed) return;
-        if (!result.Ok) ModeError = result.Problem ?? $"The mode could not be saved (exit {result.Exit}).";
+        if (!result.Ok) ModeError = result.Problem ?? UiText.Format("PortsModeNotSaved", result.Exit);
         await LoadPlanAsync().ConfigureAwait(true);
     }
 
@@ -129,7 +129,7 @@ public sealed class PortSetupModel : IDisposable
         if (!apply.Ok)
         {
             // a batch may have finished earlier entries: the page polls again to show what exists
-            Error = PortSetupHints.Failures(apply.TextLines) ?? apply.Problem ?? $"ports apply failed (exit {apply.Exit}).";
+            Error = PortSetupHints.Failures(apply.TextLines) ?? apply.Problem ?? UiText.Format("PortsApplyFailed", apply.Exit);
             Phase = PortSetupPhase.Failed;
             Raise();
             return;
@@ -141,8 +141,8 @@ public sealed class PortSetupModel : IDisposable
             if (!guard.Allowed)
             {
                 Error = guard.Conflict
-                    ? "Setup completed, but a port is now occupied. The bench was not started. " + string.Join(" ", guard.Check?.Conflicts ?? [])
-                    : "Setup completed, but the bench was not started. " + guard.Refusal;
+                    ? UiText.Format("PortsOccupied", string.Join(" ", guard.Check?.Conflicts ?? []))
+                    : UiText.Format("PortsNotStarted", guard.Refusal ?? "");
                 Phase = PortSetupPhase.Failed;
                 Raise();
                 return;
@@ -151,7 +151,7 @@ public sealed class PortSetupModel : IDisposable
             if (_disposed) return;
             if (!start.Ok)
             {
-                Error = "Setup completed, but the bench did not start. " + (start.Problem ?? $"up failed (exit {start.Exit}).");
+                Error = UiText.Format("PortsDidNotStart", start.Problem ?? UiText.Format("PortsUpFailed", start.Exit));
                 Phase = PortSetupPhase.Failed;
                 Raise();
                 return;

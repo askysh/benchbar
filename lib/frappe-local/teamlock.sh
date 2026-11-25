@@ -466,7 +466,7 @@ fl_cmd_lock_apply() {
   done
   # the approval token: the lockfile (its bytes), the plan and what is skipped; --apply recomputes it here, under the lock
   la_data="$(printf 'lock apply\n%s\n%s\n%s\n' "$FL_BENCH_DIR" "$FL_LOCK_FILE" "$(shasum -a 256 <"$FL_LOCK_FILE" | awk '{print $1}')"
-    printf 'plan\n'; printf '%s\n' ${plan[@]+"${plan[@]}"}; printf 'skipped\n'; printf '%s\n' ${skipped[@]+"${skipped[@]}"})"
+    printf 'plan\n'; printf '%s\n' ${plan[@]+"${plan[@]}"}; printf 'skipped\n'; printf '%s\n' ${skipped[@]+"${skipped[@]}"}; printf 'heads\n%s\n' "$(fl__apps_heads)")"
   [[ "${#plan[@]}" == "0" ]] || fl_plan_token_v la_token "$la_data"
   if [[ "$LOCK_APPLY" == "1" ]]; then
     tcode=0

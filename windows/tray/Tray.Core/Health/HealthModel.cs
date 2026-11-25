@@ -72,7 +72,7 @@ public sealed class HealthModel : IDisposable
     {
         AckError = null;
         var result = await _cli.RunJsonAsync(HealthArgs.Ack(check.Id, on, BenchPath), null, CliTimeouts.Read, ct).ConfigureAwait(true);
-        if (!result.Ok) AckError = result.Error ?? $"The acknowledgement could not be {(on ? "saved" : "removed")}.";
+        if (!result.Ok) AckError = result.Error ?? (on ? UiText.Get("HealthAckNotSaved") : UiText.Get("HealthAckNotRemoved"));
         await RunAsync(ct).ConfigureAwait(true);
     }
 
@@ -100,7 +100,7 @@ public sealed class HealthModel : IDisposable
             else
             {
                 Report = null;
-                Error = report.Error ?? "Doctor gave no report.";
+                Error = report.Error ?? UiText.Get("HealthNoReport");
             }
             if (rows.Value is { } setup)
             {
@@ -109,7 +109,7 @@ public sealed class HealthModel : IDisposable
             else
             {
                 Shim = null;
-                ShimError = rows.Error ?? "The Windows checks gave no answer.";
+                ShimError = rows.Error ?? UiText.Get("HealthShimNoAnswer");
             }
         }
         catch (OperationCanceledException)

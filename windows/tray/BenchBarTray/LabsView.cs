@@ -20,13 +20,13 @@ internal sealed class LabsView : UserControl
     {
         _model = model;
         var root = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
-        root.Children.Add(Ui.Title("Labs"));
-        root.Children.Add(Ui.Text("Experiments are off until you turn one on. Each one has a warning, and the CLI keeps the switch, so benchbar.exe labs shows the same state.",
+        root.Children.Add(Ui.Title(UiText.Get("LabsTitle")));
+        root.Children.Add(Ui.Text(UiText.Get("LabsIntro"),
             14, opacity: 0.75, margin: new Thickness(0, 6, 0, 12)));
         root.Children.Add(_body);
         root.Children.Add(Ui.Text(LabsText.Footer, 12, opacity: 0.7, margin: new Thickness(0, 14, 0, 0)));
         Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 12, 0) };
-        Ui.Name(this, "Labs");
+        Ui.Name(this, UiText.Get("LabsTitle"));
         _model.Changed += Render;
         Render();
     }
@@ -64,14 +64,14 @@ internal sealed class LabsView : UserControl
         }
         else if (_model.Availability == LabsAvailability.CliMissing)
         {
-            Line(_model.RefreshError ?? "BenchBar cannot find benchbar.exe", 14, 0.8);
+            Line(_model.RefreshError ?? UiText.Get("LabsNoCli"), 14, 0.8);
         }
         else
         {
             if (_model.RefreshError is { } problem) Line(problem, 13, brush: Ui.CriticalBrush);
-            if (_model.Availability == LabsAvailability.Unknown && _model.IsLoading) Line("Reading the experiments...", 14, 0.8);
+            if (_model.Availability == LabsAvailability.Unknown && _model.IsLoading) Line(UiText.Get("LabsReading"), 14, 0.8);
             foreach (var entry in _model.Entries) _body.Children.Add(Row(entry, lines));
-            if (_model.Availability == LabsAvailability.Available && _model.Entries.Count == 0) Line("This version of BenchBar has no experiments.", 14, 0.8);
+            if (_model.Availability == LabsAvailability.Available && _model.Entries.Count == 0) Line(UiText.Get("LabsNone"), 14, 0.8);
         }
         Lines = lines;
     }
@@ -106,11 +106,11 @@ internal sealed class LabsView : UserControl
         if (entry.Warning.Length > 0)
         {
             // an experiment that is on keeps its warning in the caution color, as the Mac's Settings does
-            if (entry.Enabled) Add("Warning: " + entry.Warning, 13, brush: Ui.CautionTextBrush);
+            if (entry.Enabled) Add(UiText.Format("LabsWarning", entry.Warning), 13, brush: Ui.CautionTextBrush);
             else Add(entry.Warning, 13, 0.75);
         }
-        if (entry.Since.Length > 0) Add("since " + entry.Since, 12, 0.65);
-        if (busy) Add(entry.Enabled ? "Turning it off..." : "Turning it on...", 12, 0.8);
+        if (entry.Since.Length > 0) Add(UiText.Format("LabsSince", entry.Since), 12, 0.65);
+        if (busy) Add(entry.Enabled ? UiText.Get("LabsTurningOff") : UiText.Get("LabsTurningOn"), 12, 0.8);
         if (_model.ErrorOf(entry.Name) is { } error) Add(error, 13, brush: Ui.CriticalBrush);
         return card;
     }

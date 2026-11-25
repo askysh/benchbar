@@ -137,7 +137,7 @@ public partial class App
                 }
                 else
                 {
-                    SayAboutLink("Finish or close the setup first, then open the link again.");
+                    SayAboutLink(UiText.Get("MainFinishSetupLink"));
                 }
                 break;
             case LinkOutcome.Run run:
@@ -212,8 +212,8 @@ public partial class App
         var row = SiteRows.From(bench).FirstOrDefault(r => string.Equals(r.Name, site, StringComparison.OrdinalIgnoreCase));
         if (row is { CanOpen: true, Url: { } url }) OpenUrl(url);
         else SayAboutLink(row is { NeedsSetUp: true }
-            ? $"{site} is not a *.localhost name, so Windows cannot reach it yet. Open the Sites tab and choose Set Up."
-            : $"{bench.Name} is not running, so {site} cannot open.");
+            ? UiText.Format("MainLinkNotLocalhost", site)
+            : UiText.Format("MainLinkNotRunning", bench.Name, site));
     }
 
     private void SelectInMain(BenchStatus bench)
@@ -244,7 +244,7 @@ public partial class App
         }
         if (site is not null && !SiteNames.IsValid(site))
         {
-            SayAboutLink($"{site} is not a name the terminal can take.");
+            SayAboutLink(UiText.Format("MainLinkBadName", site));
             return;
         }
         var command = route == LinkRoute.Console ? WslCommands.Console(site) : WslCommands.Database(site);

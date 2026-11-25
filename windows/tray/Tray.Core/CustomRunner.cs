@@ -105,9 +105,9 @@ public static class RunnerLoader
     public static CustomRunner Load(string folder, string id)
     {
         if (BuiltInRunners.IsReserved(id))
-            throw new RunnerException($"\"{id}\" is the name of a built in runner. Rename the folder.");
+            throw new RunnerException(UiText.Format("CommonRunnerReserved", id));
         if (IsReparsePoint(folder))
-            throw new RunnerException("The runner folder is a link; links are not allowed.");
+            throw new RunnerException(UiText.Get("CommonRunnerFolderLink"));
 
         // the folder first: no link is followed and nothing is read before the size and reparse rules hold
         CheckFolder(folder);
@@ -124,7 +124,7 @@ public static class RunnerLoader
             {
                 var path = Path.Combine(folder, name);
                 var (width, height) = CheckPng(path, name);
-                if (size is { } first && first != (width, height)) throw new RunnerException($"{name} is not the same size as the other frames.");
+                if (size is { } first && first != (width, height)) throw new RunnerException(UiText.Format("CommonRunnerFrameSize", name));
                 size = (width, height);
                 files.Add(path);
             }
@@ -141,46 +141,46 @@ public static class RunnerLoader
     private static Manifest ReadManifest(string folder)
     {
         var path = Path.Combine(folder, ManifestName);
-        if (!File.Exists(path)) throw new RunnerException("There is no manifest.json in the runner folder.");
+        if (!File.Exists(path)) throw new RunnerException(UiText.Get("CommonRunnerNoManifest"));
         // the size is checked before a single byte is read
-        if (new FileInfo(path).Length > MaxManifestBytes) throw new RunnerException("manifest.json could not be read: it is larger than 64 KB.");
+        if (new FileInfo(path).Length > MaxManifestBytes) throw new RunnerException(UiText.Get("CommonRunnerManifestBig"));
         var bytes = File.ReadAllBytes(path);
 
         JsonObject root;
         try
         {
             var text = new UTF8Encoding(false).GetString(bytes).TrimStart('﻿');
-            root = JsonStrict.Parse(text) as JsonObject ?? throw new RunnerException("manifest.json could not be read: it is not a JSON object.");
+            root = JsonStrict.Parse(text) as JsonObject ?? throw new RunnerException(UiText.Get("CommonRunnerManifestNotObject"));
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException)
         {
             // ArgumentException: a duplicate key
-            throw new RunnerException("manifest.json could not be read: it is not valid JSON.");
+            throw new RunnerException(UiText.Get("CommonRunnerManifestNotJson"));
         }
 
         var name = (RequiredString(root, "name") ?? "").Trim();
-        if (name.Length is < 1 or > 40) throw new RunnerException("manifest.json could not be read: \"name\" must be 1 to 40 characters.");
+        if (name.Length is < 1 or > 40) throw new RunnerException(UiText.Get("CommonRunnerNameLength"));
         var author = root.ContainsKey("author") && root["author"] is not null ? RequiredString(root, "author") : null;
-        if (!root.ContainsKey("template")) throw new RunnerException("manifest.json could not be read: \"template\" is missing.");
+        if (!root.ContainsKey("template")) throw new RunnerException(UiText.Get("CommonRunnerTemplateMissing"));
         if (root["template"] is not JsonValue t || !t.TryGetValue<bool>(out var template))
-            throw new RunnerException("manifest.json could not be read: \"template\" has the wrong type.");
+            throw new RunnerException(UiText.Get("CommonRunnerTemplateType"));
 
         var order = root["frame_order"] is null ? "forward" : RequiredString(root, "frame_order");
         if (order is not ("forward" or "ping_pong"))
-            throw new RunnerException("manifest.json could not be read: \"frame_order\" must be forward or ping_pong.");
+            throw new RunnerException(UiText.Get("CommonRunnerFrameOrder"));
 
-        if (!root.ContainsKey("states")) throw new RunnerException("manifest.json could not be read: \"states\" is missing.");
+        if (!root.ContainsKey("states")) throw new RunnerException(UiText.Get("CommonRunnerStatesMissing"));
         if (root["states"] is not JsonObject statesNode)
-            throw new RunnerException("manifest.json could not be read: \"states\" has the wrong type.");
+            throw new RunnerException(UiText.Get("CommonRunnerStatesType"));
         var states = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var (key, value) in statesNode)
         {
-            if (value is not JsonArray array) throw new RunnerException($"manifest.json could not be read: \"states.{key}\" has the wrong type.");
+            if (value is not JsonArray array) throw new RunnerException(UiText.Format("CommonRunnerStateType", key));
             var list = new List<string>();
             foreach (var item in array)
             {
                 if (item is not JsonValue v || !v.TryGetValue<string>(out var s))
-                    throw new RunnerException($"manifest.json could not be read: \"states.{key}\" has the wrong type.");
+                    throw new RunnerException(UiText.Format("CommonRunnerStateType", key));
                 list.Add(s);
             }
             states[key] = list;
@@ -190,10 +190,10 @@ public static class RunnerLoader
 
     private static string? RequiredString(JsonObject node, string key)
     {
-        if (!node.ContainsKey(key) || node[key] is null) throw new RunnerException($"manifest.json could not be read: \"{key}\" is missing.");
+        if (!node.ContainsKey(key) || node[key] is null) throw new RunnerException(UiText.Format("CommonRunnerKeyMissing", key));
         return node[key] is JsonValue v && v.TryGetValue<string>(out var s)
             ? s
-            : throw new RunnerException($"manifest.json could not be read: \"{key}\" has the wrong type.");
+            : throw new RunnerException(UiText.Format("CommonRunnerKeyType", key));
     }
 
     private static void CheckStates(Manifest manifest)
@@ -201,19 +201,19 @@ public static class RunnerLoader
         foreach (var key in manifest.States.Keys)
         {
             if (!PoseNames.Contains(key))
-                throw new RunnerException($"\"{key}\" is not a state. Use sleeping, starting, running, crashed, alert or unknown.");
+                throw new RunnerException(UiText.Format("CommonRunnerNotState", key));
         }
         if (!manifest.States.TryGetValue("running", out var running) || running.Count == 0)
-            throw new RunnerException("The running state is required: every other state falls back to it.");
+            throw new RunnerException(UiText.Get("CommonRunnerRunningRequired"));
         foreach (var pose in PoseNames)
         {
             if (!manifest.States.TryGetValue(pose, out var names)) continue;
-            if (names.Count == 0) throw new RunnerException($"The {pose} state lists no frames. Leave it out instead.");
-            if (names.Count > MaxFrames) throw new RunnerException($"The {pose} state has {names.Count} frames; the limit is {MaxFrames}.");
+            if (names.Count == 0) throw new RunnerException(UiText.Format("CommonRunnerNoFrames", pose));
+            if (names.Count > MaxFrames) throw new RunnerException(UiText.Format("CommonRunnerTooManyFrames", pose, names.Count, MaxFrames));
             foreach (var name in names)
             {
                 if (!IsSafeFileName(name))
-                    throw new RunnerException($"\"{name}\" is not an allowed frame name: use a plain .png file name, no folders.");
+                    throw new RunnerException(UiText.Format("CommonRunnerFrameName", name));
             }
         }
     }
@@ -239,31 +239,31 @@ public static class RunnerLoader
             foreach (var entry in new DirectoryInfo(pending.Pop()).EnumerateFileSystemInfos())
             {
                 if (entry.Attributes.HasFlag(FileAttributes.ReparsePoint))
-                    throw new RunnerException($"\"{entry.Name}\" is a link; links are not allowed.");
+                    throw new RunnerException(UiText.Format("CommonRunnerEntryLink", entry.Name));
                 if (entry is DirectoryInfo dir) pending.Push(dir.FullName);
                 else if (entry is FileInfo file) total += file.Length;
             }
         }
-        if (total > MaxBytes) throw new RunnerException($"The runner is {total / 1024} KB; the limit is {MaxBytes / 1024 / 1024} MB.");
+        if (total > MaxBytes) throw new RunnerException(UiText.Format("CommonRunnerTooBig", total / 1024, MaxBytes / 1024 / 1024));
     }
 
     private static (int Width, int Height) CheckPng(string path, string name)
     {
         var info = new FileInfo(path);
         if (!info.Exists || info.Attributes.HasFlag(FileAttributes.Directory) || info.Attributes.HasFlag(FileAttributes.ReparsePoint))
-            throw new RunnerException($"{name} is listed in manifest.json but is not in the folder.");
+            throw new RunnerException(UiText.Format("CommonRunnerFrameMissing", name));
         try
         {
             using var stream = new MemoryStream(File.ReadAllBytes(path));
             using var image = Image.FromStream(stream);
-            if (image.RawFormat.Guid != ImageFormat.Png.Guid) throw new RunnerException($"{name} is not a PNG image.");
+            if (image.RawFormat.Guid != ImageFormat.Png.Guid) throw new RunnerException(UiText.Format("CommonRunnerNotPng", name));
             if (image.Height != PixelHeight || image.Width is < MinWidth or > MaxWidth)
-                throw new RunnerException($"{name} is {image.Width} x {image.Height} px; frames must be {PixelHeight} px tall and {MinWidth} to {MaxWidth} px wide.");
+                throw new RunnerException(UiText.Format("CommonRunnerFrameDimensions", name, image.Width, image.Height, PixelHeight, MinWidth, MaxWidth));
             return (image.Width, image.Height);
         }
         catch (Exception ex) when (ex is ArgumentException or OutOfMemoryException or ExternalException)
         {
-            throw new RunnerException($"{name} is not a PNG image.");
+            throw new RunnerException(UiText.Format("CommonRunnerNotPng", name));
         }
     }
 

@@ -20,6 +20,9 @@ nonisolated enum SharePrimary: Equatable, Sendable {
         return .start(enabled: SharePresentation.canStart(status))
     }
 
+    /// Nothing set up yet or a setup half done: the checks list waits for after setup.
+    var isSetUp: Bool { self == .setUp || self == .finishSetup }
+
     var title: String {
         switch self {
         case .setUp: "Set up sharing"

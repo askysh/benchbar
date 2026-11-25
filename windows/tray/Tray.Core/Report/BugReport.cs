@@ -9,10 +9,10 @@ namespace BenchBar.Tray.Core;
 /// <summary>The words of Report a Bug, shared by the app and the tests.</summary>
 public static class BugReportText
 {
-    public const string Working = "Writing the report...";
-    public const string StillWorking = "Still writing the report. A distro that does not answer can take up to a minute.";
-    public const string ReadyMessage = "Your report is ready. 1. Click Open GitHub Issue. 2. Click Show Zip in Explorer and drag the zip into the issue. 3. Say what happened and submit.";
-    public const string ReadyTitle = "Report a Bug";
+    public static string Working => UiText.Get("ReportWorking");
+    public static string StillWorking => UiText.Get("ReportStillWorking");
+    public static string ReadyMessage => UiText.Get("ReportReady");
+    public static string ReadyTitle => UiText.Get("MenuReportBug");
     public const string IssueTemplate = "bug_report_windows.yml";
     public const string IssueBase = "https://github.com/askysh/benchbar/issues/new?template=" + IssueTemplate;
 

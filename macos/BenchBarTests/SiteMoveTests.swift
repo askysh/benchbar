@@ -117,10 +117,46 @@ struct SiteMoveTests {
         #expect(apply.environment["BENCHBAR_SUDO"] == "gui" && apply.environment["BENCHBAR_CALLER"] == "app")
         #expect(apply.environment["BENCHBAR_NONINTERACTIVE"] == nil, "the CLI does not gate this on a person; the typed name is the decision")
         #expect(workbench.result?.succeeded == true && workbench.result?.title == "Move acme.localhost to frappe-bench")
-        #expect(seen.ids == ["backup", "backup", "restore", "restore", "drop"] && outcome.steps.map(\.id) == ["backup", "restore", "drop"])
+        #expect(seen.ids == ["backup", "backup", "restore", "restore", "restore", "restore", "drop"])
+        // the restore's own sub-step shares its id: it is a row of its own, not the top-level restore
+        #expect(outcome.steps.map(\.id) == ["backup", "restore", "restore", "drop"])
+        #expect(outcome.steps.map(\.parent) == [nil, nil, "restore", nil])
         #expect(outcome.steps.allSatisfy { $0.status == .done } && outcome.envelope.exit == 0)
         // the target bench and both backup lists are read again
         #expect(base.cli.calls.contains { $0.first == "status" && $0.contains(main) })
+    }
+
+    @Test func aSubStepWithTheSameIdNeverMarksTheTopLevelStepDoneOrFailedEarly() {
+        func line(_ id: String, parent: String?, _ status: String) -> String {
+            let parentField = parent.map { #""parent":"\#($0)","# } ?? ""
+            return #"{"schema_version":1,"event":"step","n":null,"id":"\#(id)",\#(parentField)"name":"\#(parent == nil ? "Restore" : "Restore the database")","status":"\#(status)"}"#
+        }
+        let lines = MoveLines()
+        lines.add(line("restore", parent: nil, "running"))
+        lines.add(line("restore", parent: "restore", "running"))
+        lines.add(line("restore", parent: "restore", "done"))
+        // the sub-step ended; the restore itself has not
+        var steps = lines.steps
+        #expect(steps.count == 2)
+        #expect(steps.first { $0.parent == nil }?.status == .running)
+        #expect(steps.first { $0.parent == "restore" }?.status == .done)
+
+        lines.add(line("restore", parent: "restore", "failed"))
+        steps = lines.steps
+        #expect(steps.first { $0.parent == nil }?.status == .running, "a failed sub-step is not the restore failing")
+        #expect(steps.first { $0.parent == "restore" }?.status == .failed)
+
+        lines.add(line("restore", parent: nil, "failed"))
+        steps = lines.steps
+        #expect(steps.first { $0.parent == nil }?.status == .failed)
+        #expect(steps.count == 2)
+    }
+
+    @Test func stopBenchIsOneClickAndShowsProgressWhileItRuns() {
+        #expect(SiteMoveText.canStop(canChange: true, stopping: false))
+        #expect(!SiteMoveText.canStop(canChange: true, stopping: true), "disabled while the stop runs")
+        #expect(!SiteMoveText.canStop(canChange: false, stopping: false))
+        #expect(SiteMoveText.stopping("frappe-bench") == "Stopping frappe-bench…")
     }
 
     @Test func theEndShowsTheCLIsNextActionsWithTheNewAddress() throws {

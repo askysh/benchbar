@@ -263,7 +263,10 @@ else
   fi
   # (on Linux the systemd unit counts too)
   fl_process_running mariadbd || { fl_is_linux && fl_brew_service_running mariadb; } || fl_die "mariadbd is not running." "$(fl_service_start_hint "${FL_MARIADB_FORMULA}")"
-  fl_process_running redis-server || { fl_is_linux && fl_brew_service_running redis; } || fl_die "redis-server is not running." "$(fl_service_start_hint redis)"
+  # on macOS no Homebrew redis service runs (phase 00 does not start it): the bench's own Redis starts below
+  if fl_is_linux; then
+    fl_process_running redis-server || fl_brew_service_running redis || fl_die "redis-server is not running." "$(fl_service_start_hint redis)"
+  fi
   fl_ok "system services are running"
 fi
 
