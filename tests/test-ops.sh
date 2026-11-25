@@ -262,6 +262,38 @@ case "$CA" in op-20300102-030405-*) ;; *) fail "the first run has the clock's st
 case "$CB" in op-20300102-030405-*-1) ;; *) fail "a run after a step back takes the newest stamp and the next N: $CB" ;; esac
 case "$CC" in op-20300102-030405-*-2) ;; *) fail "the next one takes the next N: $CC" ;; esac
 case "$CD" in op-20300102-030406-*) ;; *) fail "a clock past the newest stamp is used as it is: $CD" ;; esac
+
+# ---- 5d. the stamp of a step back is reused only when it is at most 10 minutes (600 s) ahead of the clock: one op a
+# year ahead (a resumed VM, a snapshot, a bad RTC) does not hold the stamp of every op after it. Such an op stays on
+# top of the list (it is the newest by its name) and is ignored when the next id is made.
+rm -rf "$OPS"
+step_clock 20300102-030405
+fake_op op-20310102-030405-111 "done" "$DEAD" 0
+FYS=""
+for n in 1 2 3; do
+  PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT"
+  FYS="$FYS $(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+done
+read -r FY1 FY2 FY3 <<<"$FYS"
+[[ "$FY1" =~ ^op-20300102-030405-[0-9]+$ ]] || fail "a stamp a year ahead is not reused: $FY1"
+[[ "$FY2" =~ ^op-20300102-030405-[0-9]+-1$ ]] || fail "the next run takes the clock's stamp and the next N: $FY2"
+[[ "$FY3" =~ ^op-20300102-030405-[0-9]+-2$ ]] || fail "and the next: $FY3"
+run_json op list --json
+assert_eq "op-20310102-030405-111 $FY3 $FY2 $FY1" "$(printf '%s' "$OUT" | jget - '" ".join(o["op_id"] for o in d["ops"])')" "(the far op stays on top, the new ones follow newest first)"
+# the edge: 600 s ahead is reused, 601 s is not (the clock is 20300102-030405)
+rm -rf "$OPS"
+fake_op op-20300102-031405-5 "done" "$DEAD" 0
+PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+EDGE_IN="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+[[ "$EDGE_IN" =~ ^op-20300102-031405-[0-9]+-1$ ]] || fail "600 s ahead is still a step back: $EDGE_IN"
+rm -rf "$OPS"
+fake_op op-20300102-031406-5 "done" "$DEAD" 0
+PATH="$CLOCKBIN:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+EDGE_OUT="$(printf '%s' "$OUT" | jget - 'd["op_id"]')"
+[[ "$EDGE_OUT" =~ ^op-20300102-030405-[0-9]+$ ]] || fail "601 s ahead is not a step back: $EDGE_OUT"
 unset CLOCK_FILE
 
 # ---- 6. --background: refused before it starts, or started detached with an op_id at once
