@@ -220,12 +220,62 @@ nonisolated enum SharePresentation {
         }
     }
 
-    /// The seats `person` can move to: known seats nobody holds, by name.
-    static func moveTargets(for person: SharePerson, people: [SharePerson], known: [String: String]) -> [(id: String, name: String)] {
+    /// The seats `person` can move to: known seats nobody holds, by name. `seats` (the room's own
+    /// list) adds each seat's roles to its name, so the host sees what a seat may do before giving it.
+    static func moveTargets(for person: SharePerson, people: [SharePerson], known: [String: String],
+                            seats: [ShareSeat] = []) -> [(id: String, name: String)] {
         let held = Set(people.compactMap(\.seatID))
+        let roles = Dictionary(seats.map { ($0.id, $0.roles) }, uniquingKeysWith: { first, _ in first })
         return known.filter { !held.contains($0.key) && $0.key != person.seatID }
-            .map { (id: $0.key, name: $0.value) }
+            .map { (id: $0.key, name: seatTitle($0.value, roles: roles[$0.key] ?? [])) }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    static func seatTitle(_ name: String, roles: [String]) -> String {
+        guard !roles.isEmpty else { return name }
+        let shown = roles.prefix(3).joined(separator: ", ")
+        return roles.count > 3 ? "\(name) · \(shown) and \(roles.count - 3) more" : "\(name) · \(shown)"
+    }
+
+    // MARK: Who gives out the seats (#159 SHARE-5)
+
+    static let assignSeatsToggle = "I give out the seats"
+    static let assignSeatsHelp = "On: a guest who joins waits until you give them a seat, and cannot take or change one. Off: anyone with the room code takes any free seat."
+
+    /// Whether a room that is started again gives out its seats through the host: as the room that
+    /// ran said, and by the stored switch when it did not say. Unknown never means open seats.
+    static func restartAssignsSeats(mode: ShareSeatMode?, stored: Bool) -> Bool {
+        switch mode {
+        case .host?: true
+        case .open?: false
+        case nil: stored
+        }
+    }
+
+    static func seatModeLine(hostGivesSeats: Bool) -> String {
+        hostGivesSeats ? "You give out the seats: a guest who joins waits until you give them one."
+            : "Guests pick their own seat: the room code lets them take any free one."
+    }
+
+    static func startDetail(site: String, assignSeats: Bool) -> String {
+        "People on this Wi-Fi who have the room code can join a copy of \(site) until you stop. "
+            + (assignSeats ? "They wait until you give each of them a seat." : "Each of them can take any free seat.")
+    }
+
+    static func seatCaption(_ person: SharePerson, hostGivesSeats: Bool) -> String {
+        person.seatFullName ?? (hostGivesSeats ? "Waits for a seat from you" : "No seat yet")
+    }
+
+    static func seatMenuTitle(_ person: SharePerson) -> String {
+        person.seatID == nil ? "Give a Seat" : "Move to"
+    }
+
+    /// The line above the people while somebody waits for the host.
+    static func waitingNotice(people: [SharePerson], hostGivesSeats: Bool) -> String? {
+        let waiting = people.filter { $0.seatID == nil }.count
+        guard hostGivesSeats, waiting > 0 else { return nil }
+        return waiting == 1 ? "1 person waits for a seat. Choose Give a Seat next to their name."
+            : "\(waiting) people wait for a seat. Choose Give a Seat next to each name."
     }
 
     static func removeConfirm(_ person: SharePerson, site: String) -> String {

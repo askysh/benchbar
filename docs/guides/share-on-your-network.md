@@ -74,8 +74,12 @@ The room code lets a person into the room, and by default it also lets
 them take any free seat. To decide yourself who gets which seat, start
 the room in a terminal with `benchbar share start --assign-seats`, then
 give each person a seat with `benchbar share assign`
-(`benchbar share people` lists the people and the free seats). The app's
-**Start** button starts a room where guests pick their own seat.
+(`benchbar share people` lists the people and the free seats). In the Mac
+app, turn on **I give out the seats** on the **Sharing** tab before you
+click **Start**. A guest who joins then shows as "Waits for a seat from
+you": choose **Give a Seat** next to their name and pick the seat. The
+menu lists every free seat with its roles. The Windows tray starts a room
+where guests pick their own seat.
 
 Network protection is a separate step: `benchbar lan-guard install`
 asks for your password. Run it yourself. An agent or a script cannot
