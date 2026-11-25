@@ -113,6 +113,8 @@ test("a join: the host's key is read without a certificate, the join is pinned t
 test("a host that shows another key is refused before a byte is written; a wrong code costs one try, a stale or foreign invite none", async () => {
     await withGateway({}, async (gw) => {
         await assert.rejects(guest.dial({ host: LOOPBACK, port: gw.port, pin: crypto.randomBytes(32) }), refused("identity_changed"));
+        // the gateway sees the end of the connection a moment after this side closed it
+        for (let i = 0; i < 80 && (await gw.control({ op: "status" })).conns !== 0; i++) await H.sleep(25);
         assert.strictEqual((await gw.control({ op: "status" })).conns, 0, "the refused connection stayed open");
         await assert.rejects(guest.dial({ host: LOOPBACK, port: await H.freePort(), timeoutMs: 2000 }), refused("unreachable"));
 
