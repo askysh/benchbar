@@ -5301,4 +5301,469 @@ BenchBar opens again after you sign in and carries on with the setup.</value>
   <data name="GuestStateUnknown" xml:space="preserve">
     <value>state unknown</value>
   </data>
+  <data name="ShareLabOff" xml:space="preserve">
+    <value>Sharing is an experiment. Turn on "Share with people on the same Wi-Fi" in Labs to use it.</value>
+  </data>
+  <data name="ShareNewerCli" xml:space="preserve">
+    <value>Sharing needs a newer BenchBar command line tool.</value>
+  </data>
+  <data name="ShareSetUpIntro" xml:space="preserve">
+    <value>Share a copy of this site with people on the same Wi-Fi. Setup makes the copy; nothing is shared until you press Start sharing.</value>
+  </data>
+  <data name="ShareLiveUpdates" xml:space="preserve">
+    <value>Guests see changes after a page refresh.</value>
+  </data>
+  <data name="ShareCodeNote" xml:space="preserve">
+    <value>Anyone on this Wi-Fi with the code can join. Remove people anytime.</value>
+  </data>
+  <data name="ShareCodeProves" xml:space="preserve">
+    <value>The code proves someone may join; it does not prove to them that this computer is the host.</value>
+  </data>
+  <data name="ShareInviteCopied" xml:space="preserve">
+    <value>Invite copied. Paste it in your team channel. New code or Stop makes it stop working.</value>
+  </data>
+  <data name="ShareCopyInviteHelp" xml:space="preserve">
+    <value>Copies a message with a link that joins this room in one click, code included.</value>
+  </data>
+  <data name="ShareLocked" xml:space="preserve">
+    <value>Room locked: nobody new can join.</value>
+  </data>
+  <data name="ShareFull" xml:space="preserve">
+    <value>Room full: every seat is taken.</value>
+  </data>
+  <data name="ShareBudgetLocked" xml:space="preserve">
+    <value>Too many wrong codes; the room is locked. New code to reopen.</value>
+  </data>
+  <data name="ShareJoinTrouble" xml:space="preserve">
+    <value>Someone is having trouble joining. Check the code.</value>
+  </data>
+  <data name="ShareWipeOwed" xml:space="preserve">
+    <value>A sign-out is still owed in the copy. BenchBar retries it on the next room action.</value>
+  </data>
+  <data name="ShareSetupInterrupted" xml:space="preserve">
+    <value>Sharing setup was interrupted, so Start does not work yet. Choose Finish setup to refresh the copy (the command line: benchbar share setup --refresh).</value>
+  </data>
+  <data name="ShareDriftWarning" xml:space="preserve">
+    <value>Your apps changed since the copy was made. Guests see the copy's code, not your working tree; Refresh copy to catch up.</value>
+  </data>
+  <data name="ShareRefreshConfirm" xml:space="preserve">
+    <value>Replaces the copy. Anything guests changed in it is lost.</value>
+  </data>
+  <data name="ShareAcknowledgement" xml:space="preserve">
+    <value>This copy contains real customer and employee data that your colleagues will be able to read.</value>
+  </data>
+  <data name="ShareRemoveDetail" xml:space="preserve">
+    <value>They can't join again with the current code. Everyone else stays. To let them back in, copy a new invite and send it to them.</value>
+  </data>
+  <data name="ShareCheckedAtStart" xml:space="preserve">
+    <value>Checked when sharing starts</value>
+  </data>
+  <data name="ShareLanGuardAsk" xml:space="preserve">
+    <value>Network protection changes the firewall rules that keep the bench's ports closed to other computers while sharing. It asks for your password, and only after you confirm here.</value>
+  </data>
+  <data name="ShareLanGuardAllowAsk" xml:space="preserve">
+    <value>This lets sharing through the firewall. It asks for your password, and only after you confirm here.</value>
+  </data>
+  <data name="SharePeopleTitle" xml:space="preserve">
+    <value>People in the room</value>
+  </data>
+  <data name="ShareLanGuardUnavailable" xml:space="preserve">
+    <value>Network protection is not available on Windows yet, so sharing cannot start here.</value>
+  </data>
+  <data name="ShareRootPasswordAdvice" xml:space="preserve">
+    <value>The tray cannot ask for it. In a terminal, run `benchbar mariadb-password` to read the one BenchBar saved, or run the same command there with MARIADB_ROOT_PASSWORD set.</value>
+  </data>
+  <data name="ShareHostKeyHelp" xml:space="preserve">
+    <value>A guest who joins from your invite link sees these digits before they join. Read them out when asked.</value>
+  </data>
+  <data name="ShareAssignSeatsToggle" xml:space="preserve">
+    <value>I give out the seats</value>
+  </data>
+  <data name="ShareSeatsNeedNewerCli" xml:space="preserve">
+    <value>Guests pick their own seat: the BenchBar command line tool in WSL is older than 0.9.0 and cannot start a room where you give out the seats.</value>
+  </data>
+  <data name="ShareTitleSetUp" xml:space="preserve">
+    <value>Set up sharing</value>
+  </data>
+  <data name="ShareTitleFinishSetup" xml:space="preserve">
+    <value>Finish setup</value>
+  </data>
+  <data name="ShareTitleTurnOnProtection" xml:space="preserve">
+    <value>Turn on network protection</value>
+  </data>
+  <data name="ShareTitleStart" xml:space="preserve">
+    <value>Start sharing</value>
+  </data>
+  <data name="ShareTitleStop" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="ShareTitleUpdate" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="ShareCountdownLessThanAMinute" xml:space="preserve">
+    <value>less than a minute</value>
+  </data>
+  <data name="ShareCountdownMinutes" xml:space="preserve">
+    <value>{0} min</value>
+  </data>
+  <data name="ShareCountdownHours" xml:space="preserve">
+    <value>{0} h</value>
+  </data>
+  <data name="ShareCountdownHoursMinutes" xml:space="preserve">
+    <value>{0} h {1} min</value>
+  </data>
+  <data name="ShareIndicator" xml:space="preserve">
+    <value>Sharing on your network · {0} online · {1} left</value>
+  </data>
+  <data name="ShareExtend30" xml:space="preserve">
+    <value>+30 min</value>
+  </data>
+  <data name="ShareExtend60" xml:space="preserve">
+    <value>+1 hour</value>
+  </data>
+  <data name="ShareStopConfirmNobody" xml:space="preserve">
+    <value>Stop sharing?</value>
+  </data>
+  <data name="ShareStopConfirmOne" xml:space="preserve">
+    <value>Stop sharing? 1 person is connected and will be signed out.</value>
+  </data>
+  <data name="ShareStopConfirmMany" xml:space="preserve">
+    <value>Stop sharing? {0} people are connected and will be signed out.</value>
+  </data>
+  <data name="ShareStartConfirm" xml:space="preserve">
+    <value>Start sharing {0} on this network? People on this Wi-Fi who have the room code can join a copy of {0} until you stop.</value>
+  </data>
+  <data name="ShareStartConfirmHostGives" xml:space="preserve">
+    <value> They wait until you give each of them a seat.</value>
+  </data>
+  <data name="ShareStartConfirmOpen" xml:space="preserve">
+    <value> Each of them can take any free seat.</value>
+  </data>
+  <data name="ShareHostKeyLine" xml:space="preserve">
+    <value>Host key: {0} {1} {2} {3}</value>
+  </data>
+  <data name="ShareSeatModeHost" xml:space="preserve">
+    <value>You give out the seats: a guest who joins waits until you give them one.</value>
+  </data>
+  <data name="ShareSeatModeOpen" xml:space="preserve">
+    <value>Guests pick their own seat: the room code lets them take any free one.</value>
+  </data>
+  <data name="ShareSeatCaptionHostWaits" xml:space="preserve">
+    <value>Waits for a seat from you</value>
+  </data>
+  <data name="ShareSeatCaptionNone" xml:space="preserve">
+    <value>No seat yet</value>
+  </data>
+  <data name="ShareWaitingOne" xml:space="preserve">
+    <value>1 person waits for a seat. Pick a seat under their name, then Give.</value>
+  </data>
+  <data name="ShareWaitingMany" xml:space="preserve">
+    <value>{0} people wait for a seat. Pick a seat under each name, then Give.</value>
+  </data>
+  <data name="ShareSeatTitleRoles" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="ShareSeatTitleMore" xml:space="preserve">
+    <value>{0} · {1} and {2} more</value>
+  </data>
+  <data name="ShareAssignGive" xml:space="preserve">
+    <value>Give {0} this seat</value>
+  </data>
+  <data name="ShareAssignMove" xml:space="preserve">
+    <value>Move {0} to this seat</value>
+  </data>
+  <data name="ShareRemoveConfirm" xml:space="preserve">
+    <value>Remove {0}? Closes their connections and signs them out of {1}.</value>
+  </data>
+  <data name="ShareProtectionOn" xml:space="preserve">
+    <value>Network protection is on.</value>
+  </data>
+  <data name="ShareProtectionOutdated" xml:space="preserve">
+    <value>Network protection needs an update.</value>
+  </data>
+  <data name="ShareProtectionOff" xml:space="preserve">
+    <value>Network protection is off. It keeps the bench's own ports closed to the network.</value>
+  </data>
+  <data name="ShareFixInstall" xml:space="preserve">
+    <value>Turn on network protection</value>
+  </data>
+  <data name="ShareFixAllow" xml:space="preserve">
+    <value>Allow...</value>
+  </data>
+  <data name="ShareFixUpdate" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="ShareFixRerun" xml:space="preserve">
+    <value>Set up again</value>
+  </data>
+  <data name="ShareFixRefresh" xml:space="preserve">
+    <value>Refresh copy</value>
+  </data>
+  <data name="ShareFixRestart" xml:space="preserve">
+    <value>Start again</value>
+  </data>
+  <data name="ShareCheckPfActive" xml:space="preserve">
+    <value>Network protection</value>
+  </data>
+  <data name="ShareCheckFirewallNode" xml:space="preserve">
+    <value>The firewall lets sharing through</value>
+  </data>
+  <data name="ShareCheckBenchRedis" xml:space="preserve">
+    <value>The bench is running</value>
+  </data>
+  <data name="ShareCheckLanIp" xml:space="preserve">
+    <value>This computer has a network address</value>
+  </data>
+  <data name="ShareCheckGateway" xml:space="preserve">
+    <value>The gateway answers on the network</value>
+  </data>
+  <data name="ShareCheckTraceback" xml:space="preserve">
+    <value>Error traces are hidden in the copy</value>
+  </data>
+  <data name="ShareCheckDebugger" xml:space="preserve">
+    <value>The debugger is off in the copy</value>
+  </data>
+  <data name="ShareCheckCopyPresent" xml:space="preserve">
+    <value>The shared copy is there</value>
+  </data>
+  <data name="ShareCheckWebClosed" xml:space="preserve">
+    <value>The copy is reachable only through BenchBar</value>
+  </data>
+  <data name="ShareCheckPassed" xml:space="preserve">
+    <value>Passed</value>
+  </data>
+  <data name="ShareCheckFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="ShareCheckSkipped" xml:space="preserve">
+    <value>Skipped</value>
+  </data>
+  <data name="ShareCheckWarning" xml:space="preserve">
+    <value>Warning</value>
+  </data>
+  <data name="ShareCopyLine" xml:space="preserve">
+    <value>Copy made {0} from {1}. Guests' changes stay in the copy.</value>
+  </data>
+  <data name="ShareCopyAgo" xml:space="preserve">
+    <value>{0} ago</value>
+  </data>
+  <data name="ShareCopyEarlier" xml:space="preserve">
+    <value>earlier</value>
+  </data>
+  <data name="ShareCopyYourSite" xml:space="preserve">
+    <value>your site</value>
+  </data>
+  <data name="ShareRemovedNotice" xml:space="preserve">
+    <value>{0} was removed. To let them back in, send a new invite.</value>
+  </data>
+  <data name="ShareNeedsDisk" xml:space="preserve">
+    <value>Needs about {0} GB free</value>
+  </data>
+  <data name="ShareDataNone" xml:space="preserve">
+    <value>none counted</value>
+  </data>
+  <data name="ShareSourceNow" xml:space="preserve">
+    <value>Copy my site as it is now (about {0} min)</value>
+  </data>
+  <data name="ShareSourceBackupAge" xml:space="preserve">
+    <value>Use the backup from {0} ago</value>
+  </data>
+  <data name="ShareSourceNewest" xml:space="preserve">
+    <value>Use the newest backup</value>
+  </data>
+  <data name="ShareReviewRefreshTitle" xml:space="preserve">
+    <value>Refresh the shared copy</value>
+  </data>
+  <data name="ShareReviewSetUpTitle" xml:space="preserve">
+    <value>Set up sharing</value>
+  </data>
+  <data name="ShareReviewRefreshConfirm" xml:space="preserve">
+    <value>Refresh copy</value>
+  </data>
+  <data name="ShareReviewMakeConfirm" xml:space="preserve">
+    <value>Make the copy</value>
+  </data>
+  <data name="ShareReviewSummary" xml:space="preserve">
+    <value>Makes a hardened copy of {0} in share.localhost, about {1} GB and {2} min. The copy holds: {3}. {4}</value>
+  </data>
+  <data name="ShareErrorRead" xml:space="preserve">
+    <value>Sharing could not be read.</value>
+  </data>
+  <data name="ShareErrorUsers" xml:space="preserve">
+    <value>The site's users could not be read.</value>
+  </data>
+  <data name="ShareErrorPlan" xml:space="preserve">
+    <value>The setup could not be planned.</value>
+  </data>
+  <data name="ShareErrorCode" xml:space="preserve">
+    <value>The room code could not be read.</value>
+  </data>
+  <data name="ShareErrorInvite" xml:space="preserve">
+    <value>The invite could not be made.</value>
+  </data>
+  <data name="ShareErrorStopped" xml:space="preserve">
+    <value>Stopped.</value>
+  </data>
+  <data name="ShareErrorExit" xml:space="preserve">
+    <value>The command failed (exit {0}).</value>
+  </data>
+  <data name="ShareBusyNewCode" xml:space="preserve">
+    <value>Drawing a new code...</value>
+  </data>
+  <data name="ShareBusyReadCode" xml:space="preserve">
+    <value>Reading the room code...</value>
+  </data>
+  <data name="ShareBusyInvite" xml:space="preserve">
+    <value>Making the invite...</value>
+  </data>
+  <data name="ShareBusyStart" xml:space="preserve">
+    <value>Starting sharing...</value>
+  </data>
+  <data name="ShareBusyAssign" xml:space="preserve">
+    <value>Giving {0} the seat {1}...</value>
+  </data>
+  <data name="ShareBusyStop" xml:space="preserve">
+    <value>Stopping sharing...</value>
+  </data>
+  <data name="ShareBusyExtend" xml:space="preserve">
+    <value>Extending...</value>
+  </data>
+  <data name="ShareBusyLock" xml:space="preserve">
+    <value>Locking the room...</value>
+  </data>
+  <data name="ShareBusyUnlock" xml:space="preserve">
+    <value>Unlocking the room...</value>
+  </data>
+  <data name="ShareBusyRemove" xml:space="preserve">
+    <value>Removing {0}...</value>
+  </data>
+  <data name="ShareBusyAllowNode" xml:space="preserve">
+    <value>Allowing sharing through the firewall...</value>
+  </data>
+  <data name="ShareBusyProtection" xml:space="preserve">
+    <value>Turning on network protection...</value>
+  </data>
+  <data name="ShareTabTitle" xml:space="preserve">
+    <value>Sharing</value>
+  </data>
+  <data name="ShareReading" xml:space="preserve">
+    <value>Reading sharing...</value>
+  </data>
+  <data name="ShareHoursOption" xml:space="preserve">
+    <value>{0} h</value>
+  </data>
+  <data name="ShareHoursName" xml:space="preserve">
+    <value>Hours to share</value>
+  </data>
+  <data name="ShareConfirmProtectionTitle" xml:space="preserve">
+    <value>Turn on network protection?</value>
+  </data>
+  <data name="ShareConfirmContinue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="ShareRoomCodeHeading" xml:space="preserve">
+    <value>Room code</value>
+  </data>
+  <data name="ShareCodeHidden" xml:space="preserve">
+    <value>••• •••</value>
+  </data>
+  <data name="ShareCodeShownLine" xml:space="preserve">
+    <value>Room code: shown</value>
+  </data>
+  <data name="ShareCodeHiddenLine" xml:space="preserve">
+    <value>Room code: hidden</value>
+  </data>
+  <data name="ShareCodeName" xml:space="preserve">
+    <value>Room code</value>
+  </data>
+  <data name="ShareCodeNameHidden" xml:space="preserve">
+    <value>Room code, hidden</value>
+  </data>
+  <data name="ShareButtonHide" xml:space="preserve">
+    <value>Hide</value>
+  </data>
+  <data name="ShareButtonShow" xml:space="preserve">
+    <value>Show</value>
+  </data>
+  <data name="ShareButtonCopy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="ShareButtonCopyInvite" xml:space="preserve">
+    <value>Copy invite</value>
+  </data>
+  <data name="ShareButtonNewCode" xml:space="preserve">
+    <value>New code</value>
+  </data>
+  <data name="ShareButtonUnlock" xml:space="preserve">
+    <value>Unlock</value>
+  </data>
+  <data name="ShareButtonLock" xml:space="preserve">
+    <value>Lock room</value>
+  </data>
+  <data name="ShareChecksHeading" xml:space="preserve">
+    <value>Checks</value>
+  </data>
+  <data name="ShareLabelValue" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="ShareConfirmAllowTitle" xml:space="preserve">
+    <value>Allow sharing through the firewall?</value>
+  </data>
+  <data name="ShareConfirmAllow" xml:space="preserve">
+    <value>Allow</value>
+  </data>
+  <data name="ShareConfirmRestartTitle" xml:space="preserve">
+    <value>Restart sharing?</value>
+  </data>
+  <data name="ShareConfirmRestartDetail" xml:space="preserve">
+    <value>Everyone in the room is disconnected and needs the new room code to join again.</value>
+  </data>
+  <data name="ShareConfirmRestart" xml:space="preserve">
+    <value>Restart</value>
+  </data>
+  <data name="ShareCopyHeading" xml:space="preserve">
+    <value>The copy</value>
+  </data>
+  <data name="ShareConfirmRefreshTitle" xml:space="preserve">
+    <value>Refresh the copy?</value>
+  </data>
+  <data name="ShareConfirmRefresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="ShareNobody" xml:space="preserve">
+    <value>Nobody has joined yet.</value>
+  </data>
+  <data name="ShareOnline" xml:space="preserve">
+    <value>Online</value>
+  </data>
+  <data name="ShareOffline" xml:space="preserve">
+    <value>Offline</value>
+  </data>
+  <data name="SharePersonRow" xml:space="preserve">
+    <value>{0}: {1} · {2}</value>
+  </data>
+  <data name="ShareButtonRemove" xml:space="preserve">
+    <value>Remove {0}</value>
+  </data>
+  <data name="ShareSeatFor" xml:space="preserve">
+    <value>Seat for {0}</value>
+  </data>
+  <data name="ShareConfirmRemove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="ShareFormSite" xml:space="preserve">
+    <value>Site: {0}</value>
+  </data>
+  <data name="ShareFormPeople" xml:space="preserve">
+    <value>People (one seat each)</value>
+  </data>
+  <data name="ShareFormRoleRemoved" xml:space="preserve">
+    <value>{0} (removed in the copy)</value>
+  </data>
+  <data name="ShareFormAcknowledgeName" xml:space="preserve">
+    <value>Acknowledge the copy holds real data</value>
+  </data>
+  <data name="ShareFormCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
 </root>
