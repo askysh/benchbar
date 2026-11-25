@@ -326,7 +326,7 @@ fl_cmd_wait() {
     fl_jsonl_progress "waiting on ${waited_on}" "$elapsed"
     sleep 1
   done
-  elapsed=$((SECONDS - start))
+  fl_elapsed_v elapsed "$start"
   [[ "$json" == "1" ]] || fl_spinner_stop
   if [[ "$ok" == "1" ]]; then
     fl_step_end "done"

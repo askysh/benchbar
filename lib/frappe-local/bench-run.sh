@@ -285,7 +285,7 @@ fl_run_bench_command() {
   done
   [[ "$RUN_CODE" != "0" ]] || wait "$pid" || RUN_CODE=$?
   FL_RUN_PGID=""
-  RUN_ELAPSED=$((SECONDS - start))
+  fl_elapsed_v RUN_ELAPSED "$start"
   fl_spinner_stop
   fl_log_file_append "$FL_RUN_OUT"
 }

@@ -76,6 +76,14 @@ fl_pm_running() {
 }
 # The caller captures this function with $(...), isolating the real planner: profile/port/render globals do
 # not escape, dry-run guards all writes, and logging goes only to /dev/null.
+# fl_pm_untimed: stdin without the time of a step line, in every form fl_fmt_secs
+# prints ("12s", "1m 05s", "2h 01m") and with a sign (a line an older CLI wrote while the clock
+# stepped back). A time that stays in the text is part of the plan's token: the same plan then
+# has two tokens, and apply says "The port plan changed".
+fl_pm_untimed() {
+  sed -E 's/ \(-?[0-9]+(s|m [0-9]+s|h [0-9]+m)\)//g'
+}
+
 fl_pm_setup_preview() {
   local offset=""
   if [[ "$2" != "$3" ]]; then read -r offset _ <<<"$3"; offset=$((offset - FL_PORT_BASE_WEB)); fi
@@ -157,7 +165,7 @@ fl_pm_build() {
       preview_code=0
       preview="$(fl_pm_setup_preview "$d" "$current" "$proposed" 2>&1)" || preview_code=$?
       # Step timings are presentation only, not an input to the approved plan.
-      preview="$(printf '%s' "$preview" | sed -E 's/ \([0-9]+s\)//g')"
+      preview="$(printf '%s' "$preview" | fl_pm_untimed)"
       [[ "$preview_code" == 0 ]] || blocked='Management setup preview failed. Follow the errors below before applying.'
     fi
     [[ -z "$blocked" ]] || PM_CAN_APPLY=0
