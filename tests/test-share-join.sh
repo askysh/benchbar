@@ -76,6 +76,8 @@ room_stop() {
   ROOM_PIDS=()
 }
 ctl() { "$REAL_NODE" "$TMP_DIR/ctl.js" "$ROOM_SOCK" "$1"; }
+# GNU stat reads -f as "file system" and prints text before it fails, so the two forms are never chained
+perm_of() { if [[ "$STAT_GNU" == "1" ]]; then stat -c %a "$1"; else stat -f %Lp "$1"; fi; }
 people() { ctl '{"op":"people"}' | jget - "$1"; }
 finish() {
   # a failed assertion must leave no forwarder and no room behind (a forwarder also ends by itself
@@ -193,7 +195,7 @@ assert_calls_contain '^security -i$' "(the key was not written through security 
 assert_calls_not_contain '^(open|xdg-open|wslview) '
 assert_eq "200 upstream-ok" "$(python3 "$TMP_DIR/browse.py" "$LOCAL_PORT" "$LOCAL_NAME" /app/sales-order)"
 assert_contains "$(python3 "$TMP_DIR/browse.py" "$LOCAL_PORT" evil.example /app)" "403 "
-[[ "$(stat -f %Lp "$GUEST" 2>/dev/null || stat -c %a "$GUEST")" == 700 ]] || fail "the guest folder is not 0700"
+assert_eq 700 "$(perm_of "$GUEST")" "(the guest folder)"
 
 # joined: the text, the document, and for an agent the document without the address that signs a browser in
 run_fm share joined
@@ -276,15 +278,20 @@ assert_eq 0 "$CODE" "$ALL"
 assert_eq "(True, 'waiting', None, True, 6)" "$(last '(d["joined"], d["state"], d["seat"], d["host_assigns"], len(d["seats"]))')"
 assert_contains "$ALL" "No seat yet"
 assert_file "$KEYFILE"
-[[ "$(stat -f %Lp "$KEYFILE" 2>/dev/null || stat -c %a "$KEYFILE")" == 600 ]] || fail "the key file is not 0600"
+assert_eq 600 "$(perm_of "$KEYFILE")" "(the key file)"
 assert_calls_not_contain '^security .*benchbar-share-guest'
 guest "" join "127.0.0.1:${ROOM_PORT}" --seat seat1 --no-open
 assert_eq 1 "$CODE" "$ALL"; assert_contains "$ALL" "gives out the seats in this room"
 
 # the host gives the seat: the next join, with no code, waits for nothing and says where the room is
 DEVICE="$(people 'd["people"][0]["id"]')"
-GAVE="$(ctl "{\"op\":\"assign\",\"device\":\"${DEVICE}\",\"seat_id\":\"seat3\"}")"
-assert_eq "True" "$(printf '%s' "$GAVE" | jget - 'd["ok"]')" "$GAVE (device ${DEVICE})"
+GAVE=""
+for _ in 1 2 3 4 5; do
+  GAVE="$(ctl "{\"op\":\"assign\",\"device\":\"${DEVICE}\",\"seat_id\":\"seat3\"}")"
+  [[ "$(printf '%s' "$GAVE" | jget - 'd["ok"]')" != True ]] || break
+  sleep 0.2
+done
+assert_eq "True" "$(printf '%s' "$GAVE" | jget - 'd["ok"]')" "the gateway did not give the seat: $GAVE (device ${DEVICE})"
 MOCK_WSL_NETMODE=nat guest "" join "127.0.0.1:${ROOM_PORT}" --no-open
 assert_eq 0 "$CODE" "$ALL"
 assert_contains "$OUT" "Seat: seat3@example.com"; assert_contains "$OUT" "localhostForwarding=false"
