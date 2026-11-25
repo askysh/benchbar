@@ -58,6 +58,12 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
 
     public IReadOnlyList<SharePerson> People { get; private set; } = [];
 
+    /// <summary>Every seat of the room that is on, so a seat can be given before anybody held it.</summary>
+    public IReadOnlyList<ShareSeat> Seats { get; private set; } = [];
+
+    /// <summary>The host gives out the seats of the room that is on: a guest who joins waits for <see cref="AssignAsync"/>.</summary>
+    public bool HostGivesSeats { get; private set; }
+
     public IReadOnlyList<ShareUser> Users { get; private set; } = [];
 
     /// <summary>The room code, in memory only. Null until the host asked for it, and again once the room is off.</summary>
@@ -90,7 +96,9 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
 
     public string[] InviteArgs() => Bench("share", "invite", "--json");
 
-    public string[] StartArgs(int hours) => Bench("share", "start", "--for", $"{hours}h", "--json");
+    /// <summary><paramref name="assignSeats"/>: the host gives out the seats (<c>--assign-seats</c>).</summary>
+    public string[] StartArgs(int hours, bool assignSeats = false) =>
+        Bench(["share", "start", "--for", $"{hours}h", .. assignSeats ? new[] { "--assign-seats" } : [], "--json"]);
 
     public string[] StopArgs() => Bench("share", "stop", "--json");
 
@@ -99,6 +107,8 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
     public string[] LockArgs(bool locked) => Bench("share", locked ? "lock" : "unlock", "--json");
 
     public string[] RemoveArgs(string person) => Bench("share", "remove", person, "--yes", "--json");
+
+    public string[] AssignArgs(string person, string seat) => Bench("share", "assign", person, seat, "--json");
 
     public string[] SetupPlanArgs(ShareSetupRequest request) => Bench(["share", "setup", .. request.Arguments, "--dry-run", "--json"]);
 
@@ -142,7 +152,7 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
                 Status = fresh;
                 if (_errorIsFromRead) LastError = null; // a failed action's sentence stays until the next action
                 _errorIsFromRead = false;
-                if (!fresh.IsLive) { Code = null; People = []; }
+                if (!fresh.IsLive) { Code = null; People = []; Seats = []; HostGivesSeats = false; }
             }
             else
             {
@@ -151,8 +161,8 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
             }
             if (Status is { IsLive: true })
             {
-                var people = await cli.RunJsonAsync(PeopleArgs(), null, CliTimeouts.Read, ShareJson.People, ct).ConfigureAwait(true);
-                if (people.Value is { } list) People = list;
+                var room = await cli.RunJsonAsync(PeopleArgs(), null, CliTimeouts.Read, ShareJson.Room, ct).ConfigureAwait(true);
+                if (room.Value is { } read) { People = read.People; Seats = read.Seats; HostGivesSeats = read.HostGivesSeats; }
             }
         }
         finally
@@ -222,7 +232,21 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
 
     // --- room commands ---
 
-    public Task<bool> StartAsync(int hours, CancellationToken ct = default) => RunAsync("Starting sharing...", StartArgs(hours), PersonEnvironment(), CliTimeouts.Apply, ct);
+    /// <summary>
+    /// The time a change to the room may take: none is cut short. Assign and remove wait for the gateway to end the seat's sessions
+    /// (a wipe in the copy), and a kill part way leaves a seat whose sessions are owed; extend rewrites the deadline. The 3 minutes
+    /// of a plan are a kill, not a wait.
+    /// </summary>
+    public static TimeSpan RoomChangeTimeout => CliTimeouts.Apply;
+
+    public Task<bool> StartAsync(int hours, CancellationToken ct = default) => StartAsync(hours, false, ct);
+
+    public Task<bool> StartAsync(int hours, bool assignSeats, CancellationToken ct = default) =>
+        RunAsync("Starting sharing...", StartArgs(hours, assignSeats), PersonEnvironment(), CliTimeouts.Apply, ct);
+
+    /// <summary>Gives a person a free seat, or moves them to it (<c>share assign</c>); the old seat's sessions end first.</summary>
+    public Task<bool> AssignAsync(SharePerson person, ShareSeat seat, CancellationToken ct = default) =>
+        RunAsync($"Giving {person.Name} the seat {seat.Name}...", AssignArgs(person.Id, seat.Id), null, RoomChangeTimeout, ct);
 
     public async Task<bool> StopAsync(CancellationToken ct = default)
     {
@@ -231,13 +255,13 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
         return ok;
     }
 
-    public Task<bool> ExtendAsync(int minutes, CancellationToken ct = default) => RunAsync("Extending...", ExtendArgs(minutes), null, CliTimeouts.Plan, ct);
+    public Task<bool> ExtendAsync(int minutes, CancellationToken ct = default) => RunAsync("Extending...", ExtendArgs(minutes), null, RoomChangeTimeout, ct);
 
     public Task<bool> SetLockedAsync(bool locked, CancellationToken ct = default) => RunAsync(locked ? "Locking the room..." : "Unlocking the room...", LockArgs(locked), null, CliTimeouts.Plan, ct);
 
     public async Task<bool> RemoveAsync(SharePerson person, CancellationToken ct = default)
     {
-        var ok = await RunAsync($"Removing {person.Name}...", RemoveArgs(person.Id), null, CliTimeouts.Plan, ct).ConfigureAwait(true);
+        var ok = await RunAsync($"Removing {person.Name}...", RemoveArgs(person.Id), null, RoomChangeTimeout, ct).ConfigureAwait(true);
         if (ok)
         {
             RemovedName = person.Name;

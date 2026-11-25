@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using BenchBar.Tray.Core;
 using Xunit;
 using static Tray.Core.Tests.CliFixture;
@@ -213,6 +214,11 @@ public class ShareTests
         Assert.Equal(["share", "extend", "--by", "30m", "--json", "--bench-dir", Bench], model.ExtendArgs(30));
         Assert.Equal(["share", "unlock", "--json", "--bench-dir", Bench], model.LockArgs(false));
         Assert.Equal(["share", "remove", "d_0a1b2c3d", "--yes", "--json", "--bench-dir", Bench], model.RemoveArgs("d_0a1b2c3d"));
+        Assert.Equal(Timeout.InfiniteTimeSpan, ShareModel.RoomChangeTimeout); // assign, remove and extend are never killed part way
+        // #159 SHARE-5: the host gives out the seats
+        Assert.Equal(["share", "assign", "d_0a1b2c3d", "s_33333333", "--json", "--bench-dir", Bench], model.AssignArgs("d_0a1b2c3d", "s_33333333"));
+        Assert.Equal(["share", "start", "--for", "2h", "--assign-seats", "--json", "--bench-dir", Bench], model.StartArgs(2, assignSeats: true));
+        Assert.Equal(["share", "start", "--for", "2h", "--json", "--bench-dir", Bench], model.StartArgs(2));
     }
 
     [Fact]
@@ -345,5 +351,42 @@ public class ShareTests
         Assert.False(await model.RunLanGuardAsync(true, TestContext.Current.CancellationToken));
         Assert.Empty(runner.Runs);
         Assert.Equal(ShareText.LanGuardUnavailable, model.LastError);
+    }
+
+    // --- #159 SHARE-5: the seats of the room, and who gives them out ---
+
+    [Fact]
+    public void TheRoomListsEverySeatAndSaysWhoGivesThemOut()
+    {
+        var room = ShareJson.Room(Doc("share-people-waiting.json"));
+        Assert.True(room.HostGivesSeats);
+        Assert.Equal(["s_11111111", "s_22222222", "s_33333333"], room.Seats.Select(s => s.Id));
+        Assert.Equal("d_4e5f6a7b", room.Seats[1].HeldBy);
+        Assert.Null(room.Seats[2].HeldBy);
+        Assert.Equal(["Sales Manager", "Accounts User"], room.Seats[2].Roles);
+        Assert.Equal(["s_33333333", "s_11111111"], ShareText.FreeSeats(room.Seats, room.People).Select(s => s.Id)); // by name: Mgr Seat, Sam Seat
+        Assert.Equal("Mgr Seat · Sales Manager, Accounts User", ShareText.SeatTitle(room.Seats[2]));
+        Assert.Equal("Lee", ShareText.SeatTitle(new ShareSeat("s_1", "Lee", [], null)));
+        Assert.Equal("Lee · A, B, C and 2 more", ShareText.SeatTitle(new ShareSeat("s_1", "Lee", ["A", "B", "C", "D", "E"], null)));
+
+        var sam = room.People.Single(p => p.Name == "Sam");
+        var priya = room.People.Single(p => p.Name == "Priya");
+        Assert.Equal("Waits for a seat from you", ShareText.SeatCaption(sam, hostGivesSeats: true));
+        Assert.Equal("No seat yet", ShareText.SeatCaption(sam, hostGivesSeats: false));
+        Assert.Equal("Priya N", ShareText.SeatCaption(priya, hostGivesSeats: true));
+        Assert.Equal("1 person waits for a seat. Pick a seat under their name, then Give.", ShareText.WaitingNotice(room.People, true));
+        Assert.Null(ShareText.WaitingNotice(room.People, false));
+        Assert.Null(ShareText.WaitingNotice([priya], true));
+        Assert.Equal("Give Sam this seat", ShareText.AssignButton(sam));
+        Assert.Equal("Move Priya to this seat", ShareText.AssignButton(priya));
+        Assert.EndsWith("They wait until you give each of them a seat.", ShareText.StartConfirm("one.localhost", assignSeats: true));
+        Assert.EndsWith("Each of them can take any free seat.", ShareText.StartConfirm("one.localhost", assignSeats: false));
+
+        // a CLI before 0.9.0: no seats, no mode
+        var old = ShareJson.Room(JsonNode.Parse("{\"state\":\"on\",\"people\":[]}")!.AsObject());
+        Assert.False(old.HostGivesSeats);
+        Assert.Empty(old.Seats);
+        // a seat somebody in the room holds is never free, whatever held_by says
+        Assert.Empty(ShareText.FreeSeats([new ShareSeat("s_22222222", "Priya N", [], null)], room.People));
     }
 }

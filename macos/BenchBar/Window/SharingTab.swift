@@ -92,6 +92,14 @@ struct SharingTab: View {
                     .help(SharePresentation.assignSeatsHelp)
                 Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
             }
+            if status.isOn {
+                Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
+                Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
+            } else if case .start = SharePrimary.from(status) {
+                Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                    .help(SharePresentation.assignSeatsHelp)
+                Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+            }
             if let busy = share.busy { Label(busy, systemImage: "hourglass").foregroundStyle(.secondary) }
         }
     }
