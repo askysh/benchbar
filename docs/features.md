@@ -129,6 +129,7 @@ BenchBar for Windows is a beta. The benches run in WSL 2. See
 | `benchbar.exe` | Runs the CLI inside WSL from PowerShell, with the same input, output and exit code. | 0.8.0 | Windows | [Windows](windows.md) |
 | Installer | Sets up WSL, an Ubuntu 24.04 distro and the CLI from one script. | 0.8.0 | Windows | [Windows](windows.md#install) |
 | Tray app | Shows the benches in the notification area. | 0.8.0 | Windows | [The tray](windows.md#the-tray) |
+| Result envelope in the tray | The tray reads the result of every command the same way: a refusal shows the CLI's error with its hint, and the CLI's next steps can be copied. | 0.9.0 | Windows | [The tray](windows.md#the-tray) |
 | Agent mode | `--for-agent` and `mcp` pass through to the CLI. `benchbar.exe doctor --for-agent` prints the Windows checks as text before the JSON, so its output is not one JSON document yet. | 0.8.0 | Windows (partial) | [Coding agents and MCP](guides/agents.md) |
 | Window: Sites, Apps, Health | A page per bench: Overview, Sites (backups, restore, drop), Apps and Health with Repair. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Ports | Port Settings and Setup in a bench's Overview. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |

@@ -2,8 +2,8 @@
 #
 # cmd-repair.sh: the body of "benchbar repair". Moved out of the entry point as it was
 # (CORE-18, issue 151). The engine is repair.sh; fl_repair_done, the done line of
-# repair --json, stays in the entry point for now because the exit trap calls it
-# on a lean start too. A lean start does not load this file.
+# repair --json, is in stream.sh, which every start loads, because the exit trap
+# calls it on a lean start too. A lean start does not load this file.
 
 # repair --json: events on stdout (docs/json-schema.md), the human text in
 # the run's log. Without --yes or --dry-run nothing is applied: a reader
