@@ -34,8 +34,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `bench remove` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
 | `bench remove` | `--confirm-bench` | `NAME` | Repeat the bench folder's name exactly. |
 | `bench scratch` | `--ttl` | `DAYS` | Days until the bench expires. |
-| `bench scratch` | `--yes` |  | Required to mark (it asks otherwise): marking is what lets bench gc remove the bench and its databases, and gc shows who marked it and when. |
-| `bench scratch` | `--clear` |  | Not scratch any more. |
+| `bench scratch` | `--yes` |  | Required to mark where nothing can ask (it asks otherwise): marking is what lets bench gc remove the bench and its databases, and gc shows who marked it and when. |
+| `bench scratch` | `--clear` |  | Not scratch any more: the bench does not expire. |
 | `bench gc` | `--dry-run` |  | Print the plan (expired, pending, skipped) and its token, change nothing. |
 | `bench gc` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
 
