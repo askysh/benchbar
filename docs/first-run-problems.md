@@ -171,7 +171,7 @@ macOS, Linux and WSL.
   `benchbar listen local` undoes it. `benchbar listen` tells you which one
   the bench has. See [listen](reference/cli/other.md#listen).
 - `benchbar doctor` has a `bench_listen` check: see
-  [bench_listen](guides/doctor-and-repair.md#bench_listen).
+  [bench_listen](reference/doctor/service-checks.md#bench_listen).
 
 **On 0.8.x.** Update to 0.9.0. Until then, block ports 8000 and 9000 for
 other machines with your firewall, or work only on a network you trust.

@@ -4,7 +4,8 @@ description: "benchbar doctor, the read only health report, and benchbar repair,
 ---
 
 What each check means, and its fix, is in the
-[Doctor and repair guide](../../guides/doctor-and-repair.md). Both
+[Doctor and repair guide](../../guides/doctor-and-repair.md) and the
+[doctor checks](../doctor-checks.md). Both
 commands take the [options for every command](install.md#options-for-every-command).
 
 ## doctor
@@ -21,7 +22,7 @@ the network unless you pass `--fetch`.
 
 | Flag | What it does |
 |---|---|
-| `--json` | Every check with its `id`, `level`, `fix_command` and `action` ([schema](../../json-schema.md#benchbar-doctor---json)) |
+| `--json` | Every check with its `id`, `level`, `fix_command` and `action` ([schema](../json/install-and-doctor.md#benchbar-doctor---json)) |
 | `--fix-hints` | Only the fix commands of FAIL and WARN checks, failures first, one per line, each once; nothing else on stdout |
 | `--quick` | Skip the slow checks (those that start brew, python, node, bench or git, or ask the site) and name them. `--json` has `quick: true` and `skipped_checks` |
 | `--ack CHECK` | Silence one named WARN for this bench until its message changes. The check stays in `--json` with `acked: true`; the text output and `--fix-hints` leave out its fix. A FAIL cannot be acknowledged |
@@ -55,7 +56,7 @@ the first call.
 | `--dry-run` | Print the plan, change nothing. With `--json` the plan line carries a `token` |
 | `--apply TOKEN` | Run exactly the plan that token was made for, with `--yes`. Refused, with nothing changed, when the plan is another one now (`The repair plan changed since it was shown`) or the token is older than an hour. Without a token the run is as before |
 | `-y`, `--yes` | Apply without asking (a `sudo` step still asks for the password) |
-| `--json` | Events as JSON lines on stdout, the text in the run's log ([schema](../../json-schema.md#benchbar-repair---json)). Without `--yes` or `--dry-run` nothing is applied |
+| `--json` | Events as JSON lines on stdout, the text in the run's log ([schema](../json/install-and-doctor.md#benchbar-repair---json)). Without `--yes` or `--dry-run` nothing is applied |
 | `--profile NAME` | Repair toward another release profile |
 
 Exit codes: 0 repaired, or nothing to do; 1 a step failed or the plan was

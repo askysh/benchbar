@@ -661,7 +661,7 @@ The one other program it starts is `xcode-select --install`, from Check
 Your Mac, which only opens Apple's installer. It never asks for your
 password itself: for an install, a repair or a hosts line you confirmed,
 the CLI shows macOS's own password dialog (`BENCHBAR_SUDO=gui`, see the
-[JSON schema](json-schema.md#the-privileged-steps-and-benchbar_sudogui)). That
+[JSON schema](reference/json/install-and-doctor.md#the-privileged-steps-and-benchbar_sudogui)). That
 JSON is a documented API: [JSON schema](json-schema.md).
 
 ## Energy
