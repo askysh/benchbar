@@ -2,7 +2,7 @@ import Foundation
 
 /// The counts of the sheets and of the tidy and profile surfaces (UI-18). The plural forms
 /// are in the String Catalog, next to the ones in Wording.swift.
-extension Wording {
+nonisolated extension Wording {
     /// "Exported 1 app", "Exported 3 apps": the result of a profile export.
     static func exportedApps(_ n: Int) -> String { String(localized: "Exported \(n) apps") }
 
