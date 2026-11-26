@@ -1,4 +1,4 @@
-### macOS app
+### Mac app
 
 - The app sends the Administrator and MariaDB root passwords of an install,
   and the Administrator password of Add Site, to the command line tool on
