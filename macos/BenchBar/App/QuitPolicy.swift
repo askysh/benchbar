@@ -45,7 +45,7 @@ nonisolated enum QuitPolicy {
                             detail: "Quitting now stops it halfway; the copy will need setup again.")
         }
         if let bench = facts.hostedBench {
-            let who = facts.people == 1 ? "1 person is" : "\(facts.people) people are"
+            let who = Wording.peopleAre(facts.people)
             return Question(title: "People are in your room.",
                             detail: "\(who) in the room on \(URL(fileURLWithPath: bench).lastPathComponent). Quitting disconnects them.")
         }

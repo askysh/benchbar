@@ -183,7 +183,7 @@ nonisolated enum LeaseText {
     /// "Site acme.localhost is held by claude-qa until 3:20 PM: running the QA suite".
     static func line(_ lease: LeaseInfo, now: Date = .now) -> String {
         var text = "\(place(lease)) is held by \(lease.holder)"
-        if let end = lease.expiresAt { text += " until \(end.formatted(date: Calendar.current.isDate(end, inSameDayAs: now) ? .omitted : .abbreviated, time: .shortened))" }
+        if let end = lease.expiresAt { text += " until \(Wording.timeOrDayAndTime(end, now: now))" }
         if let note = lease.note, !note.isEmpty { text += ": \(note)" }
         return text
     }
@@ -218,7 +218,7 @@ nonisolated struct LeaseRefusal: Equatable, Sendable {
     var sentence: String {
         var text = "Held by \(holder)"
         if let until {
-            text += " until \(until.formatted(date: .abbreviated, time: .shortened))"
+            text += " until \(Wording.dayAndTime(until))"
         } else if !untilText.isEmpty {
             text += " until \(untilText)"
         }

@@ -383,16 +383,13 @@ nonisolated struct DoctorSummary: Codable, Sendable, Equatable {
     /// "1 failure · 2 warnings", nil when nothing needs attention: the
     /// popover and the Health tab say it the same way.
     var attention: String? {
-        let parts = [Self.count(fail, "failure"), Self.count(warn, "warning")].compactMap { $0 }
+        let counted: [String?] = [fail > 0 ? Wording.failures(fail) : nil, warn > 0 ? Wording.warnings(warn) : nil]
+        let parts = counted.compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// "45 passing · 1 failure · 2 warnings", for the Health tab's header.
     var text: String { (["\(ok) passing"] + [attention].compactMap { $0 }).joined(separator: " · ") }
-
-    private static func count(_ n: Int, _ word: String) -> String? {
-        n > 0 ? "\(n) \(word)\(n == 1 ? "" : "s")" : nil
-    }
 }
 
 nonisolated extension DoctorSummary {

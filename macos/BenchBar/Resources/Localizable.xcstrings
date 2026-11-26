@@ -1,0 +1,4437 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "%lld apps": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld app"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld apps"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Sheets: the title of an Add of several apps."
+    },
+    "%lld benches": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld bench"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld benches"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld commits": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld commit"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld commits"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Count of commits an app is behind its remote."
+    },
+    "%lld commits behind": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld commit behind"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld commits behind"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Sheets: tag of an app in the profile export."
+    },
+    "%lld databases of %lld have no site in any bench benchbar knows.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@databases@ of %#@checked@ %#@verb@ no site in any bench benchbar knows."
+          },
+          "substitutions": {
+            "databases": {
+              "argNum": 1,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg database"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg databases"
+                    }
+                  }
+                }
+              }
+            },
+            "checked": {
+              "argNum": 2,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg"
+                    }
+                  }
+                }
+              }
+            },
+            "verb": {
+              "argNum": 1,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "has"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "have"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Sheets: Tidy Up, orphan databases. The first number counts the orphans, the second the databases checked."
+    },
+    "%lld days": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld day"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld days"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Count of days."
+    },
+    "%lld failures": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld failure"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld failures"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Doctor summary."
+    },
+    "%lld guests": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld guest"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld guests"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Guests online in a shared room."
+    },
+    "%lld h": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld h"
+          }
+        }
+      },
+      "comment": "Compact duration; keep it short."
+    },
+    "%lld h %@ min": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld h %@ min"
+          }
+        }
+      },
+      "comment": "Compact duration; keep it short. The second number is zero padded."
+    },
+    "%lld h %lld min": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld h %lld min"
+          }
+        }
+      },
+      "comment": "Compact duration; keep it short."
+    },
+    "%lld h %lld min left": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld h %lld min left"
+          }
+        }
+      }
+    },
+    "%lld lines in /etc/hosts name no site of any bench:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld line in /etc/hosts names no site of any bench:"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld lines in /etc/hosts name no site of any bench:"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Sheets: Tidy Up. The singular verb is fixed; it used to read '1 line ... name'."
+    },
+    "%lld min": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld min"
+          }
+        }
+      },
+      "comment": "Compact duration; keep it short."
+    },
+    "%lld min %@ s": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld min %@ s"
+          }
+        }
+      },
+      "comment": "Compact duration; keep it short. The second number is zero padded."
+    },
+    "%lld min left": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld min left"
+          }
+        }
+      }
+    },
+    "%lld minutes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld minute"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld minutes"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "A command time limit."
+    },
+    "%lld of %lld seats taken": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@taken@ of %#@seats@ taken"
+          },
+          "substitutions": {
+            "taken": {
+              "argNum": 1,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg"
+                    }
+                  }
+                }
+              }
+            },
+            "seats": {
+              "argNum": 2,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg seat"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg seats"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Network: seats of a nearby room. The first number is the people, the second the seats; the noun follows the seats. The singular used to read '1 of 1 seats taken'."
+    },
+    "%lld people are": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld person is"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld people are"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Start of a sentence: 'N people are in the room'."
+    },
+    "%lld people are connected and will be signed out.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld person is connected and will be signed out."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld people are connected and will be signed out."
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Share: the end of the message that turns sharing off."
+    },
+    "%lld people wait for a seat. Choose Give a Seat next to each name.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld person waits for a seat. Choose Give a Seat next to their name."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld people wait for a seat. Choose Give a Seat next to each name."
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Share: the line above the people while somebody waits."
+    },
+    "%lld repositories are not reachable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld repository is not reachable"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld repositories are not reachable"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Sheets: result of a profile check."
+    },
+    "%lld s": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld s"
+          }
+        }
+      },
+      "comment": "Compact duration; keep it short."
+    },
+    "%lld seconds": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld second"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld seconds"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "A command time limit."
+    },
+    "%lld sites": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld site"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld sites"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld warnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld warning"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld warnings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Doctor summary."
+    },
+    "%lldd %lldh": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lldd %lldh"
+          }
+        }
+      },
+      "comment": "Uptime: days and hours."
+    },
+    "%lldh %@m": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lldh %@m"
+          }
+        }
+      },
+      "comment": "Uptime: hours and zero padded minutes."
+    },
+    "%lldm": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lldm"
+          }
+        }
+      },
+      "comment": "Uptime: minutes."
+    },
+    "%llds": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%llds"
+          }
+        }
+      },
+      "comment": "Uptime: seconds."
+    },
+    "482 913": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "482 913"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "A downloaded backup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A downloaded backup"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "A new site (a copy)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A new site (a copy)"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "A redacted diagnostics zip and a new issue with your versions": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A redacted diagnostics zip and a new issue with your versions"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "A server over SSH": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A server over SSH"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "About BenchBar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About BenchBar"
+          }
+        }
+      },
+      "comment": "Menu item."
+    },
+    "Acknowledge": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acknowledge"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Activity": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activity"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Add Hosts Lines": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Hosts Lines"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Address": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Address"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "All checks passed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All checks passed"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "All processes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All processes"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Allow Notifications": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow Notifications"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Allowed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allowed"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Apple's installer is open. This row updates when it finishes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple's installer is open. This row updates when it finishes."
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Apps, sites and settings in the BenchBar window": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apps, sites and settings in the BenchBar window"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Ask before a link acts": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask before a link acts"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Automatic": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Automatic uses the command line tool inside BenchBar, then Homebrew's (/opt/homebrew/bin, then /usr/local/bin), then ~/.local/bin (the one line installer's link). Every change the app makes runs this command, the same one you use in Terminal.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic uses the command line tool inside BenchBar, then Homebrew's (/opt/homebrew/bin, then /usr/local/bin), then ~/.local/bin (the one line installer's link). Every change the app makes runs this command, the same one you use in Terminal."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Backup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Backup folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup folder"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Based on": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Based on"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Bench": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bench"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Bench is not running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bench is not running"
+          }
+        }
+      },
+      "comment": "Popover: subtitle of a site row."
+    },
+    "BenchBar Documentation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar Documentation"
+          }
+        }
+      },
+      "comment": "Help menu."
+    },
+    "BenchBar cannot find the benchbar command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar cannot find the benchbar command"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "BenchBar: %@ %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar: %@ %@"
+          }
+        }
+      },
+      "comment": "Menu bar item tooltip: bench name and state word."
+    },
+    "BenchBar: %lld benches, %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar: %lld benches, %@"
+          }
+        }
+      },
+      "comment": "Menu bar item tooltip; the second part says how many are up."
+    },
+    "BenchBar: benchbar CLI not found": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar: benchbar CLI not found"
+          }
+        }
+      },
+      "comment": "Menu bar item tooltip and VoiceOver label."
+    },
+    "BenchBar: no bench": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar: no bench"
+          }
+        }
+      },
+      "comment": "Menu bar item tooltip."
+    },
+    "Change Seat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change Seat"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Check for Updates…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for Updates…"
+          }
+        }
+      },
+      "comment": "Menu item."
+    },
+    "Check for updates automatically": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for updates automatically"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Checks": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Choose File…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose File…"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Choose benchbar…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose benchbar…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Choose…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose…"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Clear": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Close": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      },
+      "comment": "Window menu."
+    },
+    "Command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Command output": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command output"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Conflict details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conflict details"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Continue": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Copied": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copied"
+          }
+        }
+      },
+      "comment": "Popover: the invite button after a copy."
+    },
+    "Copy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy"
+          }
+        }
+      },
+      "comment": "Edit menu."
+    },
+    "Copy Command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Command"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Copy Fix": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Fix"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Copy brew Command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy brew Command"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Copy from": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy from"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Copy the failed step, its message and the fix": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the failed step, its message and the fix"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Crashed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crashed"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Crashed (exit %lld), restarting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crashed (exit %lld), restarting"
+          }
+        }
+      },
+      "comment": "Popover: state; the number is the exit code."
+    },
+    "Crashed, restarting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crashed, restarting"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Current address": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current address"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Cut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cut"
+          }
+        }
+      },
+      "comment": "Edit menu."
+    },
+    "Databases no site refers to": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Databases no site refers to"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Days until it expires": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Days until it expires"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Do not run migrate afterwards": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do not run migrate afterwards"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Documentation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Documentation"
+          }
+        }
+      },
+      "comment": "Status menu."
+    },
+    "Drop Site": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drop Site"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Edit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit"
+          }
+        }
+      },
+      "comment": "Main menu title."
+    },
+    "Editor": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Empty the view; the file is not touched": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty the view; the file is not touched"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Every check, with its fix": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every check, with its fix"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Every line in benchbar's block of /etc/hosts belongs to a site.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every line in benchbar's block of /etc/hosts belongs to a site."
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Experiments can change or disappear. Turning one off stops what it started.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experiments can change or disappear. Turning one off stops what it started."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Exported %lld apps": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Exported %lld app"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Exported %lld apps"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Sheets: result of a profile export."
+    },
+    "Extend": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extend"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "File or https URL": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File or https URL"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Find User…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find User…"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Find the benches in a folder and set them up": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find the benches in a folder and set them up"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Fixed keeps the current ports. Automatic can propose new ports for your approval.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fixed keeps the current ports. Automatic can propose new ports for your approval."
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Flags": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flags"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Follow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Follow bench.log": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow bench.log"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "For": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Four short steps: the runner, the popover, the window and Terminal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Four short steps: the runner, the popover, the window and Terminal"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "From": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Git repository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git repository"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Got an invite from a colleague?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Got an invite from a colleague?"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Health": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Health refresh failed. Previous results may be out of date.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health refresh failed. Previous results may be out of date."
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Help"
+          }
+        }
+      },
+      "comment": "Main menu title."
+    },
+    "Hold ⌃ or ⌥ and press a key. Escape cancels.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hold ⌃ or ⌥ and press a key. Escape cancels."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Homebrew": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Host and site": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Host and site"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Hosted file": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hosted file"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Hosts lines no bench uses": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hosts lines no bench uses"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "I Already Have a Bench": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I Already Have a Bench"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "In Terminal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Terminal"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "In Terminal: benchbar install, or benchbar adopt PATH for a bench you have.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Terminal: benchbar install, or benchbar adopt PATH for a bench you have."
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "In order:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In order:"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Incomplete: a part is missing, so it cannot be rolled back to": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incomplete: a part is missing, so it cannot be rolled back to"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Install Command Line Tools…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install Command Line Tools…"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Install benchbar without the app's wizard: the Homebrew line and the one line installer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install benchbar without the app's wizard: the Homebrew line and the one line installer"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Install guide": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install guide"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Its folder moves from the Runners folder to the Trash, so you can take it back from there. The menu bar goes back to the default runner.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Its folder moves from the Runners folder to the Trash, so you can take it back from there. The menu bar goes back to the default runner."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Join": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Join"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Just the Command Line Tool": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Just the Command Line Tool"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Keep production's passwords and integrations": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep production's passwords and integrations"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Keyboard Shortcuts": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard Shortcuts"
+          }
+        }
+      },
+      "comment": "Help menu."
+    },
+    "Keyboard shortcuts": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard shortcuts"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Label (optional)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Label (optional)"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Label, e.g. NE": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Label, e.g. NE"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Labs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Labs"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Later": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Left out": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left out"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Links": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Links"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Loading benches": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading benches"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Location": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Location"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Logs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logs"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Looking for benchbar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Looking for benchbar"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Manage Bench…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage Bench…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Manage Sites…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage Sites…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Mark %@ scratch for %lld days": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Mark %@ scratch for %lld day"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Mark %@ scratch for %lld days"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Sheets: title of the result of Mark Scratch; the bench name comes first."
+    },
+    "Mark Scratch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark Scratch"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Menu Bar Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu Bar Settings"
+          }
+        }
+      },
+      "comment": "Window menu."
+    },
+    "Menu bar runner": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu bar runner"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Minimize": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimize"
+          }
+        }
+      },
+      "comment": "Window menu."
+    },
+    "Motion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Motion"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Move": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Move to": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move to"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Needs about %@ GB free": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs about %@ GB free"
+          }
+        }
+      },
+      "comment": "The number is formatted for the locale."
+    },
+    "Needs restart (code changed)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs restart (code changed)"
+          }
+        }
+      },
+      "comment": "Popover: state of a running bench."
+    },
+    "Neither VS Code nor Cursor is installed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neither VS Code nor Cursor is installed."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "New Bench": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Bench"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "New code": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New code"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "New default site": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New default site"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "New local site": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New local site"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "New site name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New site name"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Next match": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next match"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Next match (⌘G)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next match (⌘G)"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "No bench found": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No bench found"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "No scratch bench has expired.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No scratch bench has expired."
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "No users match": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No users match"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Nobody has joined yet.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nobody has joined yet."
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Not Scratch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not Scratch"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Not checked yet.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not checked yet."
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Not on this platform": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not on this platform"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Notifications": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Notifications for BenchBar are off in System Settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications for BenchBar are off in System Settings."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Notify me when a bench crashes or recovers": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notify me when a bench crashes or recovers"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "OK": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Off by default so Raycast and Shortcuts keep working. Any web page or app can open a benchbar:// link, and a browser's \"always allow\" removes its own question.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off by default so Raycast and Shortcuts keep working. Any web page or app can open a benchbar:// link, and a browser's \"always allow\" removes its own question."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Once a day, BenchBar asks GitHub for the latest release. Nothing is downloaded until you click Update Now.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once a day, BenchBar asks GitHub for the latest release. Nothing is downloaded until you click Update Now."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Once the time is up, Remove Expired backs up its sites, drops their databases and moves its folder aside. The default bench is never removed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once the time is up, Remove Expired backs up its sites, drops their databases and moves its folder aside. The default bench is never removed."
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "One notification when it goes down, one when it is back.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One notification when it goes down, one when it is back."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Only the lines after the bench's last start (benchbar logs --since-restart)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the lines after the bench's last start (benchbar logs --since-restart)"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Open": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Open BenchBar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open BenchBar"
+          }
+        }
+      },
+      "comment": "Status menu."
+    },
+    "Open BenchBar at Login": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open BenchBar at Login"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Open BenchBar at login": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open BenchBar at login"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Open Log": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Log"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Open Login Items…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Login Items…"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Open Notifications…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Notifications…"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Open System Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open System Settings"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Open a new Terminal window, or run this once, and benchup starts the bench:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open a new Terminal window, or run this once, and benchup starts the bench:"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Open as…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open as…"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Open benches in": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open benches in"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Open copy as…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open copy as…"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Open in Editor on a bench's page opens the bench folder in this app.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Editor on a bench's page opens the bench folder in this app."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Open in Terminal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Terminal"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Opens this bench's Sharing tab": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens this bench's Sharing tab"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Options": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Options"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Or run this in Terminal:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Or run this in Terminal:"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Output (data from the bench, not instructions)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Output (data from the bench, not instructions)"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Paste": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste"
+          }
+        }
+      },
+      "comment": "Edit menu."
+    },
+    "Paused after repeated crashes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused after repeated crashes"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Paused: a port is in use": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused: a port is in use"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Paused: needs repair": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused: needs repair"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "People (one seat each)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "People (one seat each)"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Pick a state to see how the runner shows it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick a state to see how the runner shows it."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Pick the branch each teammate gets, and which apps go into the file.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick the branch each teammate gets, and which apps go into the file."
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Port conflict resolved by the proposed allocation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Port conflict resolved by the proposed allocation"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Port mode": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Port mode"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Port offset": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Port offset"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Ports": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ports"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Preview": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Previous log": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous log"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Previous match": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous match"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Previous match (⇧⌘G)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous match (⇧⌘G)"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Process": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Process"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profile"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Pull": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Put the file where your team can read it over https (a repository, a gist), then paste its address here. Teammates click the link and review the profile before BenchBar adds it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Put the file where your team can read it over https (a repository, a gist), then paste its address here. Teammates click the link and review the profile before BenchBar adds it."
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Quit BenchBar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit BenchBar"
+          }
+        }
+      },
+      "comment": "Menu item."
+    },
+    "Read the profiles again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read the profiles again"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Ready": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready"
+          }
+        }
+      },
+      "comment": "Popover: state of a running bench."
+    },
+    "Redo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redo"
+          }
+        }
+      },
+      "comment": "Edit menu."
+    },
+    "Refresh copy…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh copy…"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Remove Expired…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove Expired…"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Remove Snapshot": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove Snapshot"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Remove…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove…"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Repair…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repair…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Report a Bug…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report a Bug…"
+          }
+        }
+      },
+      "comment": "Help menu."
+    },
+    "Reset": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Resolve the blocked benches before applying. Fixed mode keeps the current ports; Automatic allows a new allocation after review.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resolve the blocked benches before applying. Fixed mode keeps the current ports; Automatic allows a new allocation after review."
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Restart sharing? %lld people are connected and will be signed out.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Restart sharing? %lld person is connected and will be signed out."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Restart sharing? %lld people are connected and will be signed out."
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Share: confirmation to restart sharing."
+    },
+    "Restore into": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore into"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Restore the files too": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore the files too"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Review Plan": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review Plan"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Review Port Conflict…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review Port Conflict…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Roll Back": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Roll Back"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Roll Back…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Roll Back…"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Room code": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Room code"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Run": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Run faster when the bench is busy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run faster when the bench is busy"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Runner": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runner"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Running, not ready": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running, not ready"
+          }
+        }
+      },
+      "comment": "Popover: state of a running bench."
+    },
+    "Runs doctor, which only reads": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs doctor, which only reads"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Save as": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save as"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Scan Folder…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan Folder…"
+          }
+        }
+      },
+      "comment": "Status menu."
+    },
+    "Scratch benches": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scratch benches"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Search": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Search by name or email": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search by name or email"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Select All": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select All"
+          }
+        }
+      },
+      "comment": "Edit menu."
+    },
+    "Service changes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Service changes"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Set Up Management…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Up Management…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Set Up a New Bench…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Up a New Bench…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Settings…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings…"
+          }
+        }
+      },
+      "comment": "Menu item; the shortcut is Command comma."
+    },
+    "Setup output": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setup output"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Share an import link": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share an import link"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Sharing ends in %lld minutes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Sharing ends in %lld minute"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Sharing ends in %lld minutes"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Notification title."
+    },
+    "Sharing on your network": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharing on your network"
+          }
+        }
+      },
+      "comment": "VoiceOver help of the menu bar item."
+    },
+    "Sharing…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharing…"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Shortcut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcut"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Show": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Show Folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Folder"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Show Walkthrough": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Walkthrough"
+          }
+        }
+      },
+      "comment": "Help menu."
+    },
+    "Show the bench folder in Finder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the bench folder in Finder"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Show the last 50": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the last 50"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Show this warning again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show this warning again"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Shows the plan of bench gc first: it backs up each site, drops its database and moves the folder aside": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows the plan of bench gc first: it backs up each site, drops its database and moves the folder aside"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Shows the repair plan in the BenchBar window; nothing changes until you confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows the repair plan in the BenchBar window; nothing changes until you confirm"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Silence this warning for this bench until its message changes. Doctor still checks it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Silence this warning for this bench until its message changes. Doctor still checks it."
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Since last start": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Since last start"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Site": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Site"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Site folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Site folder"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Sites": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sites"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Sites in the BenchBar window": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sites in the BenchBar window"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Skip migrate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skip migrate"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Source": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Speed follows the CPU use of the bench's processes, sampled every 2 seconds.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speed follows the CPU use of the bench's processes, sampled every 2 seconds."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Starting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Startup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Startup"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "State unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "State unknown"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Status": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Steps": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steps"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Stick to the newest line; scrolling up turns it off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stick to the newest line; scrolling up turns it off"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Stop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Stop Bench": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop Bench"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Stop sharing? %lld people are connected and will be signed out.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Stop sharing? %lld person is connected and will be signed out."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Stop sharing? %lld people are connected and will be signed out."
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Share: confirmation to stop sharing."
+    },
+    "Stopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Stopped: needs repair": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped: needs repair"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Stops the install; steps already done stay done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stops the install; steps already done stay done"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Subscribe": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subscribe"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Take Snapshot": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take Snapshot"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Take the Tour": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take the Tour"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Terminal instructions": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminal instructions"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "The %lld rooms you opened close on this Mac.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "The room you opened closes on this Mac."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "The %lld rooms you opened close on this Mac."
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Share: part of the message that turns sharing off; the singular has no number."
+    },
+    "The BenchBar window sets up a new bench step by step, or finds one you already have.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The BenchBar window sets up a new bench step by step, or finds one you already have."
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "The bench this popover shows; its shortcuts act on it": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bench this popover shows; its shortcuts act on it"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "The code lets anyone on this Wi-Fi join. Hide it while you share your screen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The code lets anyone on this Wi-Fi join. Hide it while you share your screen."
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "The copy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The copy"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "The one line installer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The one line installer"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "The password dialog was cancelled, so the hosts lines are not in. Run this in Terminal instead:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The password dialog was cancelled, so the hosts lines are not in. Run this in Terminal instead:"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "The undo point of the last rollback": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The undo point of the last rollback"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Try Again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try Again"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Turn on network protection": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on network protection"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Type to filter": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type to filter"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Undo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo"
+          }
+        }
+      },
+      "comment": "Edit menu."
+    },
+    "Unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Update": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Update the CLI to use Labs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update the CLI to use Labs"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Update to %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update to %@…"
+          }
+        }
+      },
+      "comment": "Status menu: the version number follows."
+    },
+    "Use Automatic": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Automatic"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Use a .toml file on this Mac or an https URL.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use a .toml file on this Mac or an https URL."
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "Use an https, ssh or git@host:owner/repo URL.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use an https, ssh or git@host:owner/repo URL."
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "User to open as, type to filter": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "User to open as, type to filter"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "View All %lld…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View All %lld…"
+          }
+        }
+      },
+      "comment": "Popover: the count of sites follows."
+    },
+    "View Health…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View Health…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "What happens": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What happens"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "What's New": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What's New"
+          }
+        }
+      },
+      "comment": "Help menu."
+    },
+    "When a benchbar:// link starts, stops or restarts a bench or opens a console, BenchBar asks first.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When a benchbar:// link starts, stops or restarts a bench or opens a console, BenchBar asks first."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Window": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Window"
+          }
+        }
+      },
+      "comment": "Main menu title."
+    },
+    "With Reduce Motion on in System Settings, the runner shows a still pose.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With Reduce Motion on in System Settings, the runner shows a still pose."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Your benches run as their own login agents, so they keep running when BenchBar is closed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your benches run as their own login agents, so they keep running when BenchBar is closed."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Your name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your name"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Your runners": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your runners"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "as %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "as %@"
+          }
+        }
+      },
+      "comment": "Popover: subtitle of a site row after Open as; the name of the person follows."
+    },
+    "before the upgrade": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "before the upgrade"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "crashed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "crashed"
+          }
+        }
+      },
+      "comment": "Lower case state word in the tooltip."
+    },
+    "erp.local": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "erp.local"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "exported as": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "exported as"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "less than a minute": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "less than a minute"
+          }
+        }
+      }
+    },
+    "logs/bench.previous.log: the end of the log before the last start": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "logs/bench.previous.log: the end of the log before the last start"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "macOS cannot register this copy. Install BenchBar in Applications (scripts/macos-install-local.sh) and try again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS cannot register this copy. Install BenchBar in Applications (scripts/macos-install-local.sh) and try again."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "macOS needs your approval in Login Items.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS needs your approval in Login Items."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "macdev": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macdev"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "optional: the name in the file": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "optional: the name in the file"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "paused after crashes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "paused after crashes"
+          }
+        }
+      },
+      "comment": "Lower case state word in the tooltip."
+    },
+    "running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "running"
+          }
+        }
+      },
+      "comment": "Lower case state word in the tooltip."
+    },
+    "starting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "starting"
+          }
+        }
+      },
+      "comment": "Lower case state word in the tooltip."
+    },
+    "state unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "state unknown"
+          }
+        }
+      },
+      "comment": "Lower case state word in the tooltip."
+    },
+    "stopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "stopped"
+          }
+        }
+      },
+      "comment": "Lower case state word in the tooltip."
+    },
+    "~/frappe-bench": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "~/frappe-bench"
+          }
+        }
+      },
+      "comment": "Sheets."
+    },
+    "⇥ next site": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⇥ next site"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    }
+  },
+  "version": "1.0"
+}

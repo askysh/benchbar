@@ -75,7 +75,7 @@ struct SharingTab: View {
                     .disabled(extendOptions.isEmpty)
                 } else if case .start = primary {
                     Picker("For", selection: $hours) {
-                        ForEach(SharePresentation.durations, id: \.self) { Text("\($0) h").tag($0) }
+                        ForEach(SharePresentation.durations, id: \.self) { Text(Wording.hoursShort($0)).tag($0) }
                     }
                     .fixedSize()
                     Spacer()

@@ -206,7 +206,7 @@ nonisolated struct RunPlan: ReviewablePlan, Decodable {
 
     /// "5 minutes", "30 seconds".
     var deadlineText: String? {
-        timeoutSeconds.map { $0 >= 120 ? "\($0 / 60) minutes" : "\($0) seconds" }
+        timeoutSeconds.map { Wording.timeout(seconds: $0) }
     }
 }
 

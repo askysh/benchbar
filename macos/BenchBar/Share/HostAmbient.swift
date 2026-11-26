@@ -37,7 +37,7 @@ nonisolated enum HostAmbient {
             return Notice(title: "Someone is having trouble joining", body: "Check the code. Someone is trying to join and not finishing.",
                           identifier: "benchbar.share.trouble.\(bench)")
         case .reminder(let minutes):
-            return Notice(title: minutes == 1 ? "Sharing ends in 1 minute" : "Sharing ends in \(minutes) minutes",
+            return Notice(title: Wording.sharingEndsIn(minutes: minutes),
                           body: "Extend it from the Sharing tab to keep the room open.", identifier: "benchbar.share.reminder.\(bench)")
         case .networkChanged:
             return Notice(title: "Your network changed", body: "Checks are running again.", identifier: "benchbar.share.network.\(bench)")
@@ -49,7 +49,7 @@ nonisolated enum HostAmbient {
     /// The extra line of the bench Stop or Restart confirmation; nil when not sharing.
     static func benchConfirm(_ status: ShareStatus?, restart: Bool) -> String? {
         guard let status, status.isOn else { return nil }
-        let guests = status.devicesOnline > 0 ? " (\(status.devicesOnline) \(status.devicesOnline == 1 ? "guest" : "guests") online)" : ""
+        let guests = status.devicesOnline > 0 ? " (\(Wording.guests(status.devicesOnline)) online)" : ""
         return restart
             ? "Sharing stays on, but guests see a short pause while the copy restarts\(guests)."
             : "This also ends sharing\(guests)."

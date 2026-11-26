@@ -32,7 +32,7 @@ extension Workbench {
     /// Marks the bench scratch for `days`, or not scratch (nil). The CLI's message when it failed, nil when it worked.
     @discardableResult
     func markScratch(days: Int?, on bench: BenchModel) async -> String? {
-        let title = days.map { "Mark \(bench.name) scratch for \($0) day\($0 == 1 ? "" : "s")" } ?? "Mark \(bench.name) not scratch"
+        let title = days.map { Wording.markScratch(bench.name, days: $0) } ?? "Mark \(bench.name) not scratch"
         return await change(title, on: bench) { client throws(CLIError) in try await client.markScratch(bench: bench.path, days: days) }
     }
 
