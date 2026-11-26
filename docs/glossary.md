@@ -36,7 +36,7 @@ can read and drive a bench through `benchbar mcp` or the CLI. See
 
 `benchbar doctor` checks a bench and a machine and changes
 nothing. Every failed check names the exact fix. See
-[Doctor checks](guides/doctor-and-repair.md).
+[Doctor checks](reference/doctor-checks.md).
 
 ## frappe-mac
 
