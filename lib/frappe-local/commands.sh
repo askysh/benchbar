@@ -73,7 +73,8 @@ flag~service~--dry-run~~Print the plan and its token, change nothing.
 flag~service~--apply~TOKEN~Run exactly that plan (with --yes).
 env~service~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~service~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
-cmd~mariadb-password~benchbar mariadb-password [--yes]~Print the MariaDB root password to a person at a terminal (asks first). Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal, whatever --yes says.~yes~no~no~no~none
+cmd~mariadb-password~benchbar mariadb-password [--yes]~Print the MariaDB root password (Keychain; a 0600 file on Linux) to a person at a terminal, after asking.~yes~no~no~no~none
+note~mariadb-password~Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal.
 flag~mariadb-password~--yes~~Do not ask (still refused without a person at a terminal).
 cmd~doctor~benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack CHECK] [--prerequisites] [--fetch]~Read only health report. Exit 1 when something FAILs.~no~no~no~no~document
 flag~doctor~--json~~One JSON document.
@@ -133,8 +134,8 @@ flag~uninstall-service~--yes~~Do not ask; required without a terminal.
 cmd~path~benchbar path~Print the bench directory (benchcd uses it).~no~no~no~no~none
 env~path~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~console~benchbar console [--site S]~bench --site SITE console: a Python shell with frappe.~yes~no~no~no~none
-cmd~db~benchbar db [--site S] | benchbar db orphans [--json]~bench --site SITE mariadb: the site's database.~yes~no~no~no~none
-cmd~db orphans~benchbar db orphans [--json]~Databases of frappe's shape (an underscore and 16 hex digits) that no site of any bench benchbar knows (or was told to forget, while its folder is there) refers to. A listed database may belong to a bench or program benchbar does not know. Read only: benchbar never drops them. Needs the MariaDB root password.~no~no~no~no~document
+cmd~db orphans~benchbar db orphans [--json]~Databases of frappe's shape (an underscore and 16 hex digits) that no site of any bench benchbar knows refers to. Read only: benchbar never drops them.~no~no~no~no~document
+note~db orphans~A site that benchbar was told to forget still counts while its folder is there. A listed database may belong to a bench or program benchbar does not know. Needs the MariaDB root password.
 flag~db orphans~--json~~One document: checked and orphans, each with the archived site folder that names it, if any.
 env~db orphans~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~run~benchbar run [--site S] [--timeout SECS] [--dry-run --json | --apply TOKEN --yes] -- COMMAND [FLAGS]~Run one command of the allow list (migrate, clear-cache, clear-website-cache, build, run-tests, doctor, list-apps, version) with bench's own environment, in the right bench and site, under a deadline. A command that changes things: --dry-run --json prints the plan and its token, --apply TOKEN --yes runs exactly that plan; migrate backs the site up first. Anything else is refused with exit 64 and the list.~yes~no~no~yes~document
@@ -142,7 +143,7 @@ flag~run~--timeout~SECS~Stop the bench command after this many seconds (1 to 720
 flag~run~--dry-run~~Print the plan and its token, run nothing.
 flag~run~--apply~TOKEN~Run exactly that plan (with --yes).
 flag~run~--yes~~Do not ask before a change; with --apply it confirms the plan was reviewed.
-cmd~db~benchbar db [--site S]~bench --site SITE mariadb: the site's database.~yes~no~no~no~none
+cmd~db~benchbar db [--site S]~bench --site SITE mariadb: the site's database, with its own user.~yes~no~no~no~none
 cmd~open~benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]~Open a site in the browser, or open it signed in as USER (developer_mode sites that were opted in with site open-as on).~no~no~no~no~document
 flag~open~--as~USER~Sign in as this user, no password. Refused unless site open-as is on for the site and developer_mode is on. A sign in runs the apps' on_login and on_session_creation hooks as a real login does: last_login, an Activity Log entry, a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User, and Frappe may end the user's oldest session (simultaneous_sessions).
 flag~open~--path~P~Where to land, for example /app/todo. Default: /app, or / for a Website User.
@@ -219,7 +220,7 @@ flag~ports check~--json~~The conflicts as one JSON document.
 cmd~ports mode~benchbar ports mode automatic|fixed~Keep automatic or fixed ports for the bench.~no~no~no~yes~stream
 cmd~site~benchbar site list|add|default|hosts|backup|backups|restore|snapshot|snapshots|rollback|drop|open-as ...~The sites of a bench.~no~no~no~no~none
 cmd~site list~benchbar site list [--json]~The bench's sites; the default one is what benchup waits for.~no~no~no~no~document
-cmd~site add~benchbar site add NAME [--bundle NAME|--apps "a b"] [--dry-run|--apply TOKEN] [--yes] [--json]~bench new-site, the hosts line and apps from apps/. The default site stays.~yes~yes~no~yes~stream
+cmd~site add~benchbar site add NAME [--bundle NAME|--apps "a b"] [--dry-run|--apply TOKEN] [--yes] [--json]~bench new-site (MariaDB password from the Keychain, a file on Linux), the hosts line and the apps you pick from apps/. The default site stays.~yes~yes~no~yes~stream
 flag~site add~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site add~--bundle~NAME~App bundle to install.
 flag~site add~--apps~"a b"~Apps of apps/ to install.
@@ -231,12 +232,13 @@ env~site add~ADMIN_PASSWORD~The new site's Administrator password.
 env~site add~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 env~site add~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~site add~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
-cmd~site default~benchbar site default NAME [--json]~Make NAME the default site.~no~no~no~yes~stream
+cmd~site default~benchbar site default NAME [--json]~Make NAME the default site (bench use, runner, benchup, the app).~no~no~no~yes~stream
 cmd~site open-as~benchbar site open-as on|off|status [NAME] [--json]~Turn password-less sign in (open --as) on or off for a site, or show it. Changes benchbar's state only. on needs a person at a terminal.~yes~no~no~yes~stream
 flag~site open-as~--yes~~Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1).
 flag~site open-as~--json~~JSON lines for on and off, one document for status.
 cmd~share~benchbar share setup|users|preflight|start|stop|extend|status|code|invite|lock|unlock|people|remove|assign|log|open-as|teardown ...~Share a hardened copy of a site with people on your network: setup makes the copy and the identity, start and stop run the share.~no~no~no~no~none
-cmd~share setup~benchbar share setup [--site S] [--from STAMP|latest] [--backup-now] [--users A,B] [--name LABEL] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]~Prepare sharing: the host identity and a hardened share copy of a site.~yes~no~no~yes~stream
+cmd~share setup~benchbar share setup [--site S] [--from STAMP|latest] [--backup-now] [--users A,B] [--name LABEL] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]~Make a hardened copy of a site (share.localhost) and the host identity for sharing it on your network.~yes~no~no~yes~stream
+note~share setup~It needs a person at a terminal and the MariaDB root password (Keychain, MARIADB_ROOT_PASSWORD or typed). The copy holds the site's real data: --acknowledge-data says you know.
 flag~share setup~--users~A,B~The Frappe users who may sign in to the copy, one seat each. They must be enabled System Users; each loses the roles that can run code or change settings, in the copy only. Default: the last setup's.
 flag~share setup~--from~STAMP|latest~The backup set of the site to copy (benchbar site backups S lists them). Default: the newest complete one.
 flag~share setup~--backup-now~~Take a backup of the site first (benchbar site backup S) and copy that.
@@ -249,7 +251,8 @@ flag~share setup~--yes~~Do not ask before replacing the copy or the identity.
 flag~share setup~--json~~JSON lines: plan, steps, done.
 env~share setup~MARIADB_ROOT_PASSWORD~Making the copy restores it as MariaDB's root user: the password from the Keychain, this variable, or typed at a terminal. With none of them, setup and its dry run exit 2 before any change.
 cmd~share users~benchbar share users [--site S] [--json]~The users of a site who can take a seat in a shared copy, and which roles each would lose there.~no~no~no~no~document
-cmd~share preflight~benchbar share preflight [--static|--critical] [--quiet] [--json]~The checks that prove this Mac is safe to share the hardened copy on the LAN; exits 1 when one fails.~no~no~no~no~document
+cmd~share preflight~benchbar share preflight [--static|--critical] [--quiet] [--json]~The checks that say whether this Mac is safe to share the copy: the pf block probed from the LAN address, the share web process, the firewall, the copy and its seats.~no~no~no~no~document
+note~share preflight~Exit 1 when a check fails.
 flag~share preflight~--static~~Only the checks that run before anything starts: the copy, its seats, node, the firewall.
 flag~share preflight~--critical~~Only the fast checks a running share repeats: the pf block (probed from this Mac's LAN address with its own listener and a control), the share web process, the bench's Redis.
 flag~share preflight~--quiet~~List only the checks that are not ok.
@@ -272,7 +275,8 @@ flag~share status~--json~~One document (never the room code).
 cmd~share code~benchbar share code [--new] [--json]~The room code, on the terminal only: the one way it leaves the gateway (--json is the app's read). Refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.~no~no~no~no~document
 flag~share code~--new~~Draw a new code first: the failure budget resets, the people in the room stay, a code already handed out stops working.
 flag~share code~--json~~One document with the code: never logged, never stored.
-cmd~share invite~benchbar share invite [--install-url URL] [--json]~A ready-to-paste invite for the team channel: a benchbar://share/join link with the room, this Mac's key fingerprint, the code's salt, the code, the LAN address and the deadline. It carries the code, so it is refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp. Needs a running share.~no~no~no~no~document
+cmd~share invite~benchbar share invite [--install-url URL] [--json]~A ready-to-paste invite for the team channel: a benchbar://share/join link with the room, this Mac's key fingerprint, the code's salt, the code, the LAN address and the deadline.~no~no~no~no~document
+note~share invite~It carries the code, so it is refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp. It needs a running share.
 flag~share invite~--install-url~URL~Where people download BenchBar, added to the invite text; one http:// or https:// address.
 flag~share invite~--json~~One document with the invite text and its link: the code is in it, never logged, never stored.
 cmd~share lock~benchbar share lock [--json]~Lock the room: nobody new can join until share unlock.~no~no~no~yes~stream
@@ -298,13 +302,15 @@ flag~share log~--device~ID~Only this Mac (an id of share people).
 flag~share log~--since~TIME~Only entries at or after it: ISO 8601, YYYY-MM-DD HH:MM:SS, a date, or HH:MM:SS today.
 flag~share log~--limit~N~The newest N entries, 1 to 5000. Default: 200.
 flag~share log~--json~~One document: entries (ts, device, user, method, path, status) and truncated. user is the seat's name (the seat's id when the room no longer has the seat), never an e-mail address but in a line written by 0.8.3.
-cmd~share open-as~benchbar share open-as USER [--print-url] [--json]~Open the shared copy in this Mac's browser signed in as a seat, the way open --as does. Needs sharing on; never a user who is not a seat or can run code. Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal (the app passes BENCHBAR_SUDO=gui).~yes~no~no~yes~document
+cmd~share open-as~benchbar share open-as USER [--print-url] [--json]~Open the shared copy in this Mac's browser signed in as a seat, the way open --as does.~yes~no~no~yes~document
+note~share open-as~It needs sharing on, and never signs in a user who is not a seat or can run code. Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal (the app passes BENCHBAR_SUDO=gui).
 flag~share open-as~--print-url~~Print the sign-in link instead of opening it; it holds the session.
 flag~share open-as~--json~~One document without the link (never the session).
 cmd~share teardown~benchbar share teardown [--yes] [--json]~Stop sharing, drop the copy (backed up first), and delete the share folder with the host identity and the room; the Time Machine exclusions go too. Asks first (--yes); only a person runs it.~yes~no~no~yes~stream
 flag~share teardown~--yes~~Do not ask first.
 flag~share teardown~--json~~JSON lines: steps, done with copy_dropped, archived_path and state_removed.
-cmd~share join~benchbar share join [ADDRESS[:PORT]] [--host-key HEX] [--name NAME] [--seat SEAT_ID] [--no-wait] [--no-open] [--dry-run] [--yes] [--json]~Join somebody's room as a guest. With ADDRESS it asks for the room code, without one for the invite link: neither is ever an argument. It shows the room and the host key first, waits for a seat, and opens the room on a localhost address of this computer. Refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.~yes~no~yes~yes~document
+cmd~share join~benchbar share join [ADDRESS[:PORT]] [--host-key HEX] [--name NAME] [--seat SEAT_ID] [--no-wait] [--no-open] [--dry-run] [--yes] [--json]~Join somebody's room as a guest. With ADDRESS (the host's IPv4 address) it asks for the room code, without one for the invite link: neither is ever an argument.~yes~no~yes~yes~document
+note~share join~It shows the room and the host key first, waits for a seat, and opens the room on a localhost address of this computer. share joined lists the rooms, share leave gives the seat back, share forget also deletes this computer's key for that host. Refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.
 flag~share join~--host-key~HEX~Join only if the host shows this key (the 64 hex digits: host_pin of a look with --dry-run --json). Another key is refused before any request, with exit code 3. Public, so an argument is fine.
 flag~share join~--name~NAME~The name the host sees for this computer (default: the computer's name).
 flag~share join~--seat~SEAT_ID~Take this seat, in a room where guests pick theirs (the host started it with --open-seats).
@@ -314,27 +320,33 @@ flag~share join~--dry-run~~Show the room, its address and the host key, and stop
 flag~share join~--yes~~Do not ask "Join this room?" after an invite link.
 env~share join~BENCHBAR_SUDO~gui: the app or the tray made the run after its own window; the code or the invite link is then the first line of stdin.
 cmd~share joined~benchbar share joined [--json]~The rooms this computer joined: id (16 digits of the host key), room, host, address, whether it is open here, the seat and the local address. Reads only, and dials no room.~no~no~no~no~document
-cmd~share leave~benchbar share leave [ROOM] [--json]~Leave a room: the host is told, so the seat is free and its sessions end, and the local address closes. The room and this computer's key for its host stay. ROOM is the id from share joined; not needed with one room. Only a person runs it.~no~no~yes~yes~stream
+cmd~share leave~benchbar share leave [ROOM] [--json]~Leave a room: the host is told, so the seat is free and its sessions end, and the local address closes.~no~no~yes~yes~stream
+note~share leave~The room and this computer's key for its host stay. ROOM is the id from share joined; it is not needed with one room. Only a person runs it.
 cmd~share forget~benchbar share forget [ROOM] [--json]~Leave a room and delete it from this computer with the key made for its host: to that host, a later join is a new computer. Only a person runs it.~no~no~yes~yes~stream
-cmd~lan-guard~benchbar lan-guard install|status|remove|allow-node ...~The LAN guard: on macOS a pf anchor (com.apple/250.benchbar), on Linux an nftables table (inet benchbar), that refuses the bench ports (8000:8099 9000:9099 11000:11099 13000:13099 3306) to anything but this machine, and on macOS the firewall allow for the share gateway's node.~yes~yes~no~yes~stream
-cmd~lan-guard install~benchbar lan-guard install [--dry-run] [--yes] [--json]~Write the pf anchor and the launch daemon (macOS), or the nftables rules file and the systemd unit (Linux), that load it at boot, with sudo once, then probe the block from the LAN address. Unchanged, with no sudo, when the guard already matches. A person's decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal (macOS: unless BENCHBAR_SUDO=gui).~yes~yes~no~yes~stream
+cmd~lan-guard~benchbar lan-guard install|status|remove|allow-node ...~The LAN guard: on macOS a pf anchor (com.apple/250.benchbar), on Linux an nftables table (inet benchbar), that refuses the bench ports to anything but this machine.~yes~yes~no~yes~stream
+note~lan-guard~The ports are 8000:8099 9000:9099 11000:11099 13000:13099 3306. On macOS the guard also holds the firewall allow for the share gateway's node.
+cmd~lan-guard install~benchbar lan-guard install [--dry-run] [--yes] [--json]~Write the pf anchor and the launch daemon (macOS), or the nftables rules file and the systemd unit (Linux), that load the guard at boot, with sudo once.~yes~yes~no~yes~stream
+note~lan-guard install~Then it probes the block from the LAN address. Unchanged, with no sudo, when the guard already matches. A person's decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal (macOS: unless BENCHBAR_SUDO=gui).
 flag~lan-guard install~--dry-run~~Print what would be written and run, with no sudo.
 flag~lan-guard install~--yes~~Do not ask first (sudo still asks for the password).
 flag~lan-guard install~--json~~JSON lines: done, with state, active, ports, anchor and lan_ip.
 cmd~lan-guard status~benchbar lan-guard status [--json]~Whether the guard is installed, missing or outdated, and whether the bench ports are refused on this machine's LAN address (a probe with its own listener). Reads only; never refused.~no~no~no~no~document
 flag~lan-guard status~--json~~One document: state, active (null with no LAN address), ports, anchor, lan_ip.
-cmd~lan-guard remove~benchbar lan-guard remove [--yes] [--json]~Unload and delete the pf anchor and its daemon (macOS), or the nftables table, its systemd unit and its rules file (Linux, nothing else in nftables), with sudo once. On macOS it also takes the node that lan-guard allow-node added out of the firewall's allowed apps. Sharing refuses to start without the guard. Asks first. Runs while the lan-rooms Lab is off too.~yes~yes~no~yes~stream
+cmd~lan-guard remove~benchbar lan-guard remove [--yes] [--json]~Unload and delete the pf anchor and its daemon (macOS), or the nftables table, its systemd unit and its rules file (Linux, nothing else in nftables), with sudo once.~yes~yes~no~yes~stream
+note~lan-guard remove~On macOS it also takes the node that lan-guard allow-node added out of the firewall's allowed apps. Sharing refuses to start without the guard. It asks first, and runs while the lan-rooms Lab is off too.
 flag~lan-guard remove~--yes~~Do not ask first.
 flag~lan-guard remove~--json~~JSON lines: done, with the guard's state.
-cmd~lan-guard allow-node~benchbar lan-guard allow-node [--yes] [--json]~Add the realpath of the node the share gateway runs on to the macOS firewall's allowed apps, with sudo once. Unchanged when the firewall is off or already allows it; needed again after a Homebrew upgrade of node (the older entry then goes). The entry is per program: every script that node runs can then accept incoming connections; lan-guard remove takes it out again. macOS only: refused on Linux.~yes~yes~no~yes~stream
+cmd~lan-guard allow-node~benchbar lan-guard allow-node [--yes] [--json]~Add the realpath of the node the share gateway runs on to the macOS firewall's allowed apps, with sudo once.~yes~yes~no~yes~stream
+note~lan-guard allow-node~Unchanged when the firewall is off or already allows it; needed again after a Homebrew upgrade of node (the older entry then goes). The entry is per program: every script that node runs can then accept incoming connections; lan-guard remove takes it out again. macOS only: refused on Linux.
 flag~lan-guard allow-node~--yes~~Do not ask first.
 flag~lan-guard allow-node~--json~~JSON lines: done, with node (the realpath).
-cmd~site hosts~benchbar site hosts [--prune] [--dry-run]~Add a 127.0.0.1 line for every site to /etc/hosts. On Linux it edits nothing: a *.localhost name already resolves, and any other name gets the sudo line to run yourself. --prune removes instead the lines in benchbar's block whose site no bench benchbar knows has (one backup, one sudo; without a terminal it prints the command).~yes~yes~no~yes~stream
-flag~site hosts~--prune~~Remove the stale lines of benchbar's block instead of adding the missing ones (sites of a forgotten bench whose folder is still there count as sites). The printed fallback command keeps a .bak copy. macOS only.
+cmd~site hosts~benchbar site hosts [--prune] [--dry-run]~Add a 127.0.0.1 line for every site to /etc/hosts (sudo, once).~yes~yes~no~yes~stream
+note~site hosts~On Linux it edits nothing: a *.localhost name already resolves, and any other name gets the sudo line to run yourself.
+flag~site hosts~--prune~~Remove the stale lines of benchbar's block instead of adding the missing ones (sites of a forgotten bench whose folder is still there count as sites). One backup and one sudo; without a terminal it prints the command, which keeps a .bak copy. macOS only.
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
 flag~site backup~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site backup~--with-files~~Include the uploads.
-cmd~site backups~benchbar site backups NAME [--json]~The site's backups, newest first.~no~no~no~no~document
+cmd~site backups~benchbar site backups NAME [--json]~The site's backups, newest first: time, size, with files.~no~no~no~no~document
 cmd~site restore~benchbar site restore NAME --from STAMP|PATH [--from-site S] [--new] [--neutralise] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes~Restore a local backup set into a site (a new one with --new), after a backup of the target; a reviewed plan.~no~yes~no~yes~document
 flag~site restore~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site restore~--from~STAMP|PATH~The backup set: its stamp in the target's (or --from-site's) backup folder, or the database file's path.
@@ -347,32 +359,36 @@ flag~site restore~--with-files~~Restore the uploads too.
 flag~site restore~--dry-run~~Print the plan and its token.
 flag~site restore~--apply~TOKEN~Run exactly that plan (with --yes).
 env~site restore~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
-cmd~site move~benchbar site move NAME --to-bench PATH [--no-migrate] --dry-run --json, then --apply TOKEN --yes~Move a site to another registered bench on this machine: a backup with files, the restore there under the same name, migrate, a check that it lists the same apps there, then the drop here (a second backup first; the backups stay in archived/sites). The source bench must be stopped (benchbar down), or writes made after the first backup would be lost. Never the default site of either bench; a failed step before the drop leaves the site here as it was. A reviewed plan.~no~yes~no~yes~document
+cmd~site move~benchbar site move NAME --to-bench PATH [--no-migrate] --dry-run --json, then --apply TOKEN --yes~Move a site to another registered bench on this machine: a backup with files, the restore there, migrate, a check, then the drop here. A reviewed plan.~no~yes~no~yes~document
+note~site move~The restore keeps the site's name, and the check lists the same apps there. The drop takes a second backup first; the backups stay in archived/sites. The source bench must be stopped (benchbar down), or writes made after the first backup would be lost. Never the default site of either bench. A failed step before the drop leaves the site here as it was.
 flag~site move~--to-bench~PATH~The bench the site goes to: a bench benchbar knows (benchbar register PATH), not this one.
 flag~site move~--no-migrate~~Stop after the restore, before bench migrate.
 flag~site move~--dry-run~~Print the plan and its token.
 flag~site move~--apply~TOKEN~Run exactly that plan (with --yes).
 env~site move~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
-cmd~site snapshot~benchbar site snapshot NAME [--label TEXT] [--json]~Save the state of a site (database, files, site_config, the apps and their commits) in sites/NAME/snapshots, which frappe's backup pruning never touches. Changes nothing in the site. To remove snapshots: benchbar site snapshot drop.~no~no~no~yes~document
+cmd~site snapshot~benchbar site snapshot NAME [--label TEXT] [--json]~Save the state of a site (database, files, site_config, the apps and their commits) in sites/NAME/snapshots, which frappe's backup pruning never touches.~no~no~no~yes~document
+note~site snapshot~It changes nothing in the site. To remove snapshots: benchbar site snapshot drop.
 flag~site snapshot~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site snapshot~--label~TEXT~What the snapshot is for (up to 120 characters, no quotes); it is part of the folder name.
 flag~site snapshot~--dry-run~~Print what would happen, change nothing.
-cmd~site snapshot drop~benchbar site snapshot drop NAME SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run] [--json]~Remove one snapshot of a site, or with --prune the ones beyond the newest N. A person's choice: refused for an agent (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1); its --dry-run says what would go and is open to an agent. Never the undo point of a rollback unless --force-undo-point.~no~no~no~yes~document
+cmd~site snapshot drop~benchbar site snapshot drop NAME SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run] [--json]~Remove one snapshot of a site, or with --prune the ones beyond the newest N.~no~no~no~yes~document
+note~site snapshot drop~A person's choice: refused for an agent (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1). Never the undo point of a rollback unless --force-undo-point.
 flag~site snapshot drop~--prune~~Remove the snapshots beyond the newest N (never an undo point of a rollback).
 flag~site snapshot drop~--keep~N~With --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's state file).
 flag~site snapshot drop~--force-undo-point~~With one named snapshot: also remove an undo point of a rollback (a plain drop refuses it).
 flag~site snapshot drop~--yes~~Do not ask. Refused for an agent: drop is a person's choice.
-flag~site snapshot drop~--dry-run~~Print what would be removed, change nothing.
+flag~site snapshot drop~--dry-run~~Print what would be removed, change nothing. It is open to an agent.
 cmd~site snapshots~benchbar site snapshots NAME [--keep N] [--json]~The site's snapshots, newest first: label, time, size, apps with their commits, and whether the bench's apps still match.~no~no~no~no~document
 flag~site snapshots~--keep~N~Say which snapshots are beyond the newest N (default 10, or SNAPSHOT_KEEP in the bench's state file). Nothing is removed.
-cmd~site rollback~benchbar site rollback NAME --to SNAPSHOT|latest [--no-migrate] --dry-run --json, then --apply TOKEN --yes~Put a snapshot back into the site: its database and files. The current state is snapshotted first (label before rollback), so a rollback can be undone. Migrates only when the bench's apps differ from the snapshot's; a reviewed plan.~no~yes~no~yes~document
+cmd~site rollback~benchbar site rollback NAME --to SNAPSHOT|latest [--no-migrate] --dry-run --json, then --apply TOKEN --yes~Put a snapshot back into the site: its database and files. The current state is snapshotted first (label before rollback), so a rollback can be undone.~no~yes~no~yes~document
+note~site rollback~It migrates only when the bench's apps differ from the snapshot's.
 flag~site rollback~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site rollback~--to~SNAPSHOT~The snapshot: its name, its stamp, or latest (benchbar site snapshots NAME lists them).
 flag~site rollback~--no-migrate~~Stop after the restore, before bench migrate.
 flag~site rollback~--dry-run~~Print the plan and its token.
 flag~site rollback~--apply~TOKEN~Run exactly that plan (with --yes).
 env~site rollback~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
-cmd~site drop~benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run|--apply TOKEN --yes] [--json]~bench drop-site: a backup with files first, the folder moved to archived/sites.~no~yes~no~yes~document
+cmd~site drop~benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run|--apply TOKEN --yes] [--json]~bench drop-site: a backup with files first, the folder moved to archived/sites, the hosts line removed.~no~yes~no~yes~document
 flag~site drop~--confirm-site~NAME~Repeat the site name exactly.
 flag~site drop~--new-default~OTHER~Required when NAME is the default site.
 flag~site drop~--dry-run~~Print the plan, change nothing. With --json the plan carries a token.
@@ -420,19 +436,23 @@ flag~lock apply~--lock~PATH~Apply this lockfile, and remember it for this bench.
 flag~lock apply~--dry-run~~Print the plan as one JSON document with --json; it carries a token (null when the apps match).
 flag~lock apply~--apply~TOKEN~Run exactly that plan (with --yes); refused when the lockfile, an app or the plan changed since the token was made.
 cmd~bench~benchbar bench forget|remove|scratch|gc ...~The end of a bench's life: forget it, remove it, mark it scratch, collect the scratch benches that expired.~no~no~no~no~none
-cmd~bench forget~benchbar bench forget PATH --dry-run --json, then --apply TOKEN --yes~Unregister a bench: its service files are backed up and moved aside, its settings are set aside, the default bench is cleared when it was this one. The folder, sites, apps, databases and hosts lines stay (only the service files benchbar made in it go, each backed up first). An agent may run it with the plan and token.~yes~no~no~yes~document
+cmd~bench forget~benchbar bench forget PATH --dry-run --json, then --apply TOKEN --yes~Unregister a bench: its service files are backed up and moved aside, its settings are set aside, the default bench is cleared when it was this one.~yes~no~no~yes~document
+note~bench forget~The folder, sites, apps, databases and hosts lines stay (only the service files benchbar made in it go, each backed up first). An agent may run it with the plan and token.
 flag~bench forget~--dry-run~~Print the plan and its token, change nothing.
 flag~bench forget~--apply~TOKEN~Run exactly that plan (with --yes).
-cmd~bench remove~benchbar bench remove PATH --dry-run --json, then --confirm-bench NAME --apply TOKEN --yes~Forget a bench, back up each site and drop its database (bench drop-site), then move the folder to <parent>/.benchbar-trash/ (never deleted). A person's decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal. Its plan (--dry-run) is open to agents. Never the default bench.~yes~no~no~yes~document
+cmd~bench remove~benchbar bench remove PATH --dry-run --json, then --confirm-bench NAME --apply TOKEN --yes~Forget a bench, back up each site and drop its database (bench drop-site), then move the folder to <parent>/.benchbar-trash/ (never deleted).~yes~no~no~yes~document
+note~bench remove~A person's decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal. Its plan (--dry-run) is open to agents. Never the default bench.
 flag~bench remove~--dry-run~~Print the plan and its token, change nothing.
 flag~bench remove~--apply~TOKEN~Run exactly that plan (with --yes).
 flag~bench remove~--confirm-bench~NAME~Repeat the bench folder's name exactly.
 env~bench remove~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
-cmd~bench scratch~benchbar bench scratch PATH [--ttl DAYS] [--clear] [--json]~Mark an existing bench scratch (asks; --yes in a mode that cannot ask): it expires after DAYS (default 7, 1 to 90), or --clear keeps it. bench gc only collects benches benchbar knows (benchbar register PATH). install --scratch marks a new one.~no~no~no~yes~document
+cmd~bench scratch~benchbar bench scratch PATH [--ttl DAYS] [--clear] [--json]~Mark an existing bench scratch: it expires after DAYS (default 7, 1 to 90).~no~no~no~yes~document
+note~bench scratch~bench gc only collects benches benchbar knows (benchbar register PATH). install --scratch marks a new one.
 flag~bench scratch~--ttl~DAYS~Days until the bench expires.
-flag~bench scratch~--yes~~Required to mark (it asks otherwise): marking is what lets bench gc remove the bench and its databases, and gc shows who marked it and when.
-flag~bench scratch~--clear~~Not scratch any more.
-cmd~bench gc~benchbar bench gc --dry-run --json, then --apply TOKEN --yes~List the scratch benches that expired (never the default bench) and remove each as bench remove does. Applying is a person's decision (refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal); the plan is open to agents.~yes~no~no~yes~document
+flag~bench scratch~--yes~~Required to mark where nothing can ask (it asks otherwise): marking is what lets bench gc remove the bench and its databases, and gc shows who marked it and when.
+flag~bench scratch~--clear~~Not scratch any more: the bench does not expire.
+cmd~bench gc~benchbar bench gc --dry-run --json, then --apply TOKEN --yes~List the scratch benches that expired (never the default bench) and remove each as bench remove does.~yes~no~no~yes~document
+note~bench gc~Applying is a person's decision (refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal); the plan is open to agents.
 flag~bench gc~--dry-run~~Print the plan (expired, pending, skipped) and its token, change nothing.
 flag~bench gc~--apply~TOKEN~Run exactly that plan (with --yes).
 env~bench gc~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.

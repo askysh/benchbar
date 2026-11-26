@@ -472,7 +472,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site add` | `--secrets-stdin` |  | Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal. |
 | `site open-as` | `--yes` |  | Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1). |
 | `site open-as` | `--json` |  | JSON lines for on and off, one document for status. |
-| `site hosts` | `--prune` |  | Remove the stale lines of benchbar's block instead of adding the missing ones (sites of a forgotten bench whose folder is still there count as sites). The printed fallback command keeps a .bak copy. macOS only. |
+| `site hosts` | `--prune` |  | Remove the stale lines of benchbar's block instead of adding the missing ones (sites of a forgotten bench whose folder is still there count as sites). One backup and one sudo; without a terminal it prints the command, which keeps a .bak copy. macOS only. |
 | `site backup` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `site backup` | `--with-files` |  | Include the uploads. |
 | `site restore` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
@@ -496,7 +496,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site snapshot drop` | `--keep` | `N` | With --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's state file). |
 | `site snapshot drop` | `--force-undo-point` |  | With one named snapshot: also remove an undo point of a rollback (a plain drop refuses it). |
 | `site snapshot drop` | `--yes` |  | Do not ask. Refused for an agent: drop is a person's choice. |
-| `site snapshot drop` | `--dry-run` |  | Print what would be removed, change nothing. |
+| `site snapshot drop` | `--dry-run` |  | Print what would be removed, change nothing. It is open to an agent. |
 | `site snapshots` | `--keep` | `N` | Say which snapshots are beyond the newest N (default 10, or SNAPSHOT_KEEP in the bench's state file). Nothing is removed. |
 | `site rollback` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `site rollback` | `--to` | `SNAPSHOT` | The snapshot: its name, its stamp, or latest (benchbar site snapshots NAME lists them). |

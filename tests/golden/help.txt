@@ -1156,9 +1156,9 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar mariadb-password --help [labs: none] (exit 0)
-benchbar mariadb-password: Print the MariaDB root password to a person at a terminal (asks first).
-  Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal, whatever --yes
-  says.
+benchbar mariadb-password: Print the MariaDB root password (Keychain; a 0600 file on Linux) to a
+  person at a terminal, after asking. Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and
+  without a terminal.
 
 Usage: benchbar mariadb-password [--yes]
 
@@ -1433,20 +1433,11 @@ Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --pl
 Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
-=== benchbar db --help [labs: none] (exit 0)
-benchbar db: bench --site SITE mariadb: the site's database.
-
-Usage: benchbar db [--site S]
-
-Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
-Needs: a terminal to ask questions: yes; sudo: no; the network: no.
-Changes things: no. JSON: none.
-All commands: benchbar commands --json
 === benchbar db orphans --help [labs: none] (exit 0)
 benchbar db orphans: Databases of frappe's shape (an underscore and 16 hex digits) that no site of
-  any bench benchbar knows (or was told to forget, while its folder is there) refers to. A listed
-  database may belong to a bench or program benchbar does not know. Read only: benchbar never drops
-  them. Needs the MariaDB root password.
+  any bench benchbar knows refers to. Read only: benchbar never drops them. A site that benchbar was
+  told to forget still counts while its folder is there. A listed database may belong to a bench or
+  program benchbar does not know. Needs the MariaDB root password.
 
 Usage: benchbar db orphans [--json]
 
@@ -1483,7 +1474,7 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar db --help [labs: none] (exit 0)
-benchbar db: bench --site SITE mariadb: the site's database.
+benchbar db: bench --site SITE mariadb: the site's database, with its own user.
 
 Usage: benchbar db [--site S]
 
@@ -1870,7 +1861,8 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar site add --help [labs: none] (exit 0)
-benchbar site add: bench new-site, the hosts line and apps from apps/. The default site stays.
+benchbar site add: bench new-site (MariaDB password from the Keychain, a file on Linux), the hosts
+  line and the apps you pick from apps/. The default site stays.
 
 Usage: benchbar site add NAME [--bundle NAME|--apps "a b"] [--dry-run|--apply TOKEN] [--yes]
        [--json]
@@ -1903,7 +1895,7 @@ Needs: a terminal to ask questions: yes; sudo: yes; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar site default --help [labs: none] (exit 0)
-benchbar site default: Make NAME the default site.
+benchbar site default: Make NAME the default site (bench use, runner, benchup, the app).
 
 Usage: benchbar site default NAME [--json]
 
@@ -2047,7 +2039,7 @@ Aborting. Turn it on: benchbar labs on lan-rooms
 === benchbar share leave --help [labs: none] (exit 0)
 benchbar share leave: Leave a room: the host is told, so the seat is free and its sessions end, and
   the local address closes. The room and this computer's key for its host stay. ROOM is the id from
-  share joined; not needed with one room. Only a person runs it.
+  share joined; it is not needed with one room. Only a person runs it.
 
 Usage: benchbar share leave [ROOM] [--json]
 
@@ -2092,7 +2084,8 @@ All commands: benchbar commands --json
 benchbar lan-guard remove: Unload and delete the pf anchor and its daemon (macOS), or the nftables
   table, its systemd unit and its rules file (Linux, nothing else in nftables), with sudo once. On
   macOS it also takes the node that lan-guard allow-node added out of the firewall's allowed apps.
-  Sharing refuses to start without the guard. Asks first. Runs while the lan-rooms Lab is off too.
+  Sharing refuses to start without the guard. It asks first, and runs while the lan-rooms Lab is off
+  too.
 
 Usage: benchbar lan-guard remove [--yes] [--json]
 
@@ -2109,17 +2102,17 @@ All commands: benchbar commands --json
 
 Aborting. Turn it on: benchbar labs on lan-rooms
 === benchbar site hosts --help [labs: none] (exit 0)
-benchbar site hosts: Add a 127.0.0.1 line for every site to /etc/hosts. On Linux it edits nothing: a
-  *.localhost name already resolves, and any other name gets the sudo line to run yourself. --prune
-  removes instead the lines in benchbar's block whose site no bench benchbar knows has (one backup,
-  one sudo; without a terminal it prints the command).
+benchbar site hosts: Add a 127.0.0.1 line for every site to /etc/hosts (sudo, once). On Linux it
+  edits nothing: a *.localhost name already resolves, and any other name gets the sudo line to run
+  yourself.
 
 Usage: benchbar site hosts [--prune] [--dry-run]
 
 Options:
   --prune                Remove the stale lines of benchbar's block instead of adding the missing
                          ones (sites of a forgotten bench whose folder is still there count as
-                         sites). The printed fallback command keeps a .bak copy. macOS only.
+                         sites). One backup and one sudo; without a terminal it prints the command,
+                         which keeps a .bak copy. macOS only.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: yes; the network: no.
@@ -2141,7 +2134,7 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar site backups --help [labs: none] (exit 0)
-benchbar site backups: The site's backups, newest first.
+benchbar site backups: The site's backups, newest first: time, size, with files.
 
 Usage: benchbar site backups NAME [--json]
 
@@ -2184,11 +2177,11 @@ Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar site move --help [labs: none] (exit 0)
 benchbar site move: Move a site to another registered bench on this machine: a backup with files,
-  the restore there under the same name, migrate, a check that it lists the same apps there, then
-  the drop here (a second backup first; the backups stay in archived/sites). The source bench must
-  be stopped (benchbar down), or writes made after the first backup would be lost. Never the default
-  site of either bench; a failed step before the drop leaves the site here as it was. A reviewed
-  plan.
+  the restore there, migrate, a check, then the drop here. A reviewed plan. The restore keeps the
+  site's name, and the check lists the same apps there. The drop takes a second backup first; the
+  backups stay in archived/sites. The source bench must be stopped (benchbar down), or writes made
+  after the first backup would be lost. Never the default site of either bench. A failed step before
+  the drop leaves the site here as it was.
 
 Usage: benchbar site move NAME --to-bench PATH [--no-migrate] --dry-run --json, then --apply TOKEN
        --yes
@@ -2209,8 +2202,8 @@ Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar site snapshot --help [labs: none] (exit 0)
 benchbar site snapshot: Save the state of a site (database, files, site_config, the apps and their
-  commits) in sites/NAME/snapshots, which frappe's backup pruning never touches. Changes nothing in
-  the site. To remove snapshots: benchbar site snapshot drop.
+  commits) in sites/NAME/snapshots, which frappe's backup pruning never touches. It changes nothing
+  in the site. To remove snapshots: benchbar site snapshot drop.
 
 Usage: benchbar site snapshot NAME [--label TEXT] [--json]
 
@@ -2229,8 +2222,7 @@ All commands: benchbar commands --json
 === benchbar site snapshot drop --help [labs: none] (exit 0)
 benchbar site snapshot drop: Remove one snapshot of a site, or with --prune the ones beyond the
   newest N. A person's choice: refused for an agent (--for-agent, benchbar mcp,
-  BENCHBAR_NONINTERACTIVE=1); its --dry-run says what would go and is open to an agent. Never the
-  undo point of a rollback unless --force-undo-point.
+  BENCHBAR_NONINTERACTIVE=1). Never the undo point of a rollback unless --force-undo-point.
 
 Usage: benchbar site snapshot drop NAME SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes]
        [--dry-run] [--json]
@@ -2243,7 +2235,7 @@ Options:
   --force-undo-point     With one named snapshot: also remove an undo point of a rollback (a plain
                          drop refuses it).
   --yes                  Do not ask. Refused for an agent: drop is a person's choice.
-  --dry-run              Print what would be removed, change nothing.
+  --dry-run              Print what would be removed, change nothing. It is open to an agent.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -2265,8 +2257,8 @@ Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar site rollback --help [labs: none] (exit 0)
 benchbar site rollback: Put a snapshot back into the site: its database and files. The current state
-  is snapshotted first (label before rollback), so a rollback can be undone. Migrates only when the
-  bench's apps differ from the snapshot's; a reviewed plan.
+  is snapshotted first (label before rollback), so a rollback can be undone. It migrates only when
+  the bench's apps differ from the snapshot's.
 
 Usage: benchbar site rollback NAME --to SNAPSHOT|latest [--no-migrate] --dry-run --json, then
        --apply TOKEN --yes
@@ -2289,7 +2281,8 @@ Needs: a terminal to ask questions: no; sudo: yes; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar site drop --help [labs: none] (exit 0)
-benchbar site drop: bench drop-site: a backup with files first, the folder moved to archived/sites.
+benchbar site drop: bench drop-site: a backup with files first, the folder moved to archived/sites,
+  the hosts line removed.
 
 Usage: benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run|--apply TOKEN
        --yes] [--json]
@@ -2515,17 +2508,18 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar bench scratch --help [labs: none] (exit 0)
-benchbar bench scratch: Mark an existing bench scratch (asks; --yes in a mode that cannot ask): it
-  expires after DAYS (default 7, 1 to 90), or --clear keeps it. bench gc only collects benches
-  benchbar knows (benchbar register PATH). install --scratch marks a new one.
+benchbar bench scratch: Mark an existing bench scratch: it expires after DAYS (default 7, 1 to 90).
+  bench gc only collects benches benchbar knows (benchbar register PATH). install --scratch marks a
+  new one.
 
 Usage: benchbar bench scratch PATH [--ttl DAYS] [--clear] [--json]
 
 Options:
   --ttl DAYS             Days until the bench expires.
-  --yes                  Required to mark (it asks otherwise): marking is what lets bench gc remove
-                         the bench and its databases, and gc shows who marked it and when.
-  --clear                Not scratch any more.
+  --yes                  Required to mark where nothing can ask (it asks otherwise): marking is what
+                         lets bench gc remove the bench and its databases, and gc shows who marked
+                         it and when.
+  --clear                Not scratch any more: the bench does not expire.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -3954,7 +3948,10 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar share setup --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share setup: Prepare sharing: the host identity and a hardened share copy of a site.
+benchbar share setup: Make a hardened copy of a site (share.localhost) and the host identity for
+  sharing it on your network. It needs a person at a terminal and the MariaDB root password
+  (Keychain, MARIADB_ROOT_PASSWORD or typed). The copy holds the site's real data:
+  --acknowledge-data says you know.
 
 Usage: benchbar share setup [--site S] [--from STAMP|latest] [--backup-now] [--users A,B] [--name
        LABEL] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]
@@ -3999,8 +3996,9 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar share preflight --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share preflight: The checks that prove this Mac is safe to share the hardened copy on the
-  LAN; exits 1 when one fails.
+benchbar share preflight: The checks that say whether this Mac is safe to share the copy: the pf
+  block probed from the LAN address, the share web process, the firewall, the copy and its seats.
+  Exit 1 when a check fails.
 
 Usage: benchbar share preflight [--static|--critical] [--quiet] [--json]
 
@@ -4073,7 +4071,7 @@ All commands: benchbar commands --json
 benchbar share invite: A ready-to-paste invite for the team channel: a benchbar://share/join link
   with the room, this Mac's key fingerprint, the code's salt, the code, the LAN address and the
   deadline. It carries the code, so it is refused under BENCHBAR_NONINTERACTIVE, --for-agent and
-  mcp. Needs a running share.
+  mcp. It needs a running share.
 
 Usage: benchbar share invite [--install-url URL] [--json]
 
@@ -4204,8 +4202,8 @@ Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar share open-as --help [labs: lan-rooms,quick-switch] (exit 0)
 benchbar share open-as: Open the shared copy in this Mac's browser signed in as a seat, the way open
-  --as does. Needs sharing on; never a user who is not a seat or can run code. Refused under
-  BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal (the app passes
+  --as does. It needs sharing on, and never signs in a user who is not a seat or can run code.
+  Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal (the app passes
   BENCHBAR_SUDO=gui).
 
 Usage: benchbar share open-as USER [--print-url] [--json]
@@ -4219,10 +4217,11 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar share join --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share join: Join somebody's room as a guest. With ADDRESS it asks for the room code,
-  without one for the invite link: neither is ever an argument. It shows the room and the host key
-  first, waits for a seat, and opens the room on a localhost address of this computer. Refused under
-  BENCHBAR_NONINTERACTIVE, --for-agent and mcp.
+benchbar share join: Join somebody's room as a guest. With ADDRESS (the host's IPv4 address) it asks
+  for the room code, without one for the invite link: neither is ever an argument. It shows the room
+  and the host key first, waits for a seat, and opens the room on a localhost address of this
+  computer. share joined lists the rooms, share leave gives the seat back, share forget also deletes
+  this computer's key for that host. Refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.
 
 Usage: benchbar share join [ADDRESS[:PORT]] [--host-key HEX] [--name NAME] [--seat SEAT_ID]
        [--no-wait] [--no-open] [--dry-run] [--yes] [--json]
@@ -4260,9 +4259,9 @@ Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar lan-guard --help [labs: lan-rooms,quick-switch] (exit 0)
 benchbar lan-guard: The LAN guard: on macOS a pf anchor (com.apple/250.benchbar), on Linux an
-  nftables table (inet benchbar), that refuses the bench ports (8000:8099 9000:9099 11000:11099
-  13000:13099 3306) to anything but this machine, and on macOS the firewall allow for the share
-  gateway's node.
+  nftables table (inet benchbar), that refuses the bench ports to anything but this machine. The
+  ports are 8000:8099 9000:9099 11000:11099 13000:13099 3306. On macOS the guard also holds the
+  firewall allow for the share gateway's node.
 
 Usage: benchbar lan-guard install|status|remove|allow-node ...
 
@@ -4272,10 +4271,10 @@ Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar lan-guard install --help [labs: lan-rooms,quick-switch] (exit 0)
 benchbar lan-guard install: Write the pf anchor and the launch daemon (macOS), or the nftables rules
-  file and the systemd unit (Linux), that load it at boot, with sudo once, then probe the block from
-  the LAN address. Unchanged, with no sudo, when the guard already matches. A person's decision:
-  refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal (macOS: unless
-  BENCHBAR_SUDO=gui).
+  file and the systemd unit (Linux), that load the guard at boot, with sudo once. Then it probes the
+  block from the LAN address. Unchanged, with no sudo, when the guard already matches. A person's
+  decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal
+  (macOS: unless BENCHBAR_SUDO=gui).
 
 Usage: benchbar lan-guard install [--dry-run] [--yes] [--json]
 

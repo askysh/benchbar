@@ -2,7 +2,7 @@
 # The commands table (lib/frappe-local/commands.sh), what its readers rely on (#371):
 #   1. a table that cannot be read stops the run with a sentence: commands.sh sourced from a pipe
 #      has no file to read the records from, and used to give no record and no error
-#   2. a note record (note~KEY~TEXT) stands directly after the cmd record of its key, and a summary
+#   2. no key is twice in the table (a cmd, a note, a flag of a command, an environment variable of a command), and a note record (note~KEY~TEXT) stands directly after the cmd record of its key, and a summary
 #      (the short part: what `benchbar commands` and the global help print) is at most 200 characters,
 #      except the commands in tests/golden/long-summaries.txt (the groups of #371 not done yet)
 #   3. the notes about flags that left a summary are still somewhere: tests/golden/dropped-flag-notes.tsv
@@ -45,9 +45,17 @@ def tsv(path):
 dropped = tsv("dropped-flag-notes.tsv")
 old_mentions = tsv("old-help-flags.tsv")
 cmds, flags, notes, last_cmd = {}, {}, {}, None
+seen = set()
 errors = []
 for line in table:
     f = line.split("~")
+    # a key of the table is there once: fl_cmd_help takes the last record of a key, `commands --json` lists every one, and
+    # the readers that stop at a match take the first (two records of `db` made a reworded summary land in the one nobody reads)
+    ident = (f[0], f[1]) if f[0] in ("cmd", "note") else (f[0], f[1], f[2]) if f[0] in ("flag", "env") and len(f) > 2 else None
+    if ident is not None:
+        if ident in seen:
+            errors.append("the table has %s twice (%s)" % (" ".join(ident[1:]), f[0]))
+        seen.add(ident)
     if f[0] == "cmd":
         last_cmd = f[1]
         cmds[f[1]] = f

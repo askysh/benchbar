@@ -43,3 +43,51 @@ logs	--process	Flags: --worker, --worker-error, --previous, -n50, --no-follow, -
 logs	--json	with --json: the lines as JSON, --since TIME or --since-restart for the newer ones only
 logs	--since	with --json: the lines as JSON, --since TIME or --since-restart for the newer ones only
 logs	--since-restart	with --json: the lines as JSON, --since TIME or --since-restart for the newer ones only
+site add	--bundle	MariaDB password from the Keychain, a file on Linux), the hosts line, and --bundle NAME or --apps "a b" from apps/
+site add	--apps	MariaDB password from the Keychain, a file on Linux), the hosts line, and --bundle NAME or --apps "a b" from apps/
+site backup	--site	site backup NAME bench --site NAME backup (--with-files for the uploads too
+site backup	--with-files	--with-files for the uploads too
+site backup	--json	--json
+site backups	--json	--json
+site snapshot	--label	site snapshot NAME [--label TEXT] Save the state of a site (database, files, site_config
+site rollback	--to	site rollback NAME --to SNAPSHOT Put a snapshot back (a reviewed plan
+site move	--to-bench	site move NAME --to-bench PATH Move a site to another registered bench (a reviewed plan: backup, restore there, migrate, check, then the drop here
+site restore	--from	--from STAMP or the database file's PATH, --from-site S
+site restore	--from-site	--from STAMP or the database file's PATH, --from-site S
+site restore	--new	--from STAMP or the database file's PATH, --from-site S) into a site: it is backed up first, or --new creates it
+site restore	--no-migrate	--no-migrate, --before-migrate SCRIPT, --with-files
+site restore	--before-migrate	--no-migrate, --before-migrate SCRIPT, --with-files
+site restore	--with-files	--no-migrate, --before-migrate SCRIPT, --with-files
+site restore	--neutralise	--neutralise switches the restored site's integrations off and clears its stored secrets (for a set that is not this bench's own
+site restore	--dry-run	--dry-run --json prints the plan with its token
+site restore	--json	--dry-run --json prints the plan with its token
+site restore	--apply	--apply TOKEN --yes [--json] runs exactly that plan.
+site restore	--yes	--apply TOKEN --yes [--json] runs exactly that plan.
+site drop	--confirm-site	Needs --confirm-site NAME
+site drop	--new-default	the default site also needs --new-default OTHER (--dry-run, --json
+site drop	--dry-run	--dry-run, --json
+site drop	--json	--dry-run, --json
+console	--site	console bench --site SITE console: a Python shell with frappe (--site S
+db	--site	db bench --site SITE mariadb: the site's database with its own user (--site S
+open	--site	--site S, --path /app/...
+open	--path	--site S, --path /app/...
+open	--as	--as USER signs in as that user, no password
+open	--print-url	--print-url prints the link instead.
+users	--as	users Enabled users of a site for open --as (--site S, --search TEXT, --limit N
+users	--site	--site S, --search TEXT, --limit N
+users	--search	--site S, --search TEXT, --limit N
+users	--limit	--site S, --search TEXT, --limit N
+share setup	--acknowledge-data	Needs a person at a terminal and --acknowledge-data: the copy holds the site's real data, and the MariaDB root password (Keychain, MARIADB_ROOT_PASSWORD or typed
+share setup	--users	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--name	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--from	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--backup-now	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--refresh	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--regenerate-identity	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--dry-run	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--json	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share preflight	--static	--static or --critical for half, --quiet, --json
+share preflight	--critical	--static or --critical for half, --quiet, --json
+share preflight	--quiet	--static or --critical for half, --quiet, --json
+share preflight	--json	--static or --critical for half, --quiet, --json
+lan-guard install	--json	--json

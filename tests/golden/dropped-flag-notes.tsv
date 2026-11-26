@@ -43,3 +43,48 @@ logs	--since-restart	after the bench's last start
 logs	-n	the last n lines (default 50)
 logs	--json	the lines as json
 scan	--json	one document for a command that reads
+open	--path	where to land, for example
+open	--print-url	print the link (it holds the session id)
+open	--as	sign in as this user, no password|developer_mode is on
+users	--search	only users whose id or full name
+users	--limit	at most n users (1 to 500
+site add	--bundle	app bundle to install
+site add	--apps	apps of apps/ to install
+site hosts	--prune	one backup and one sudo|without a terminal it prints the command
+site backup	--with-files	include the uploads
+site restore	--from	the backup set: its stamp in the target's
+site restore	--from-site	read the stamp from this site's backups
+site restore	--new	create the site (bench new-site) first
+site restore	--neutralise	switch the restored site's integrations off|clear its stored secrets
+site restore	--before-migrate	an executable run after the restore, before migrate
+site restore	--dry-run	print the plan and its token
+site restore	--apply	run exactly that plan (with --yes)
+site restore	--yes	with --yes	--apply
+site drop	--confirm-site	repeat the site name exactly
+site drop	--new-default	required when name is the default site
+share setup	--users	the frappe users who may sign in to the copy, one seat each
+share setup	--from	the backup set of the site to copy
+share setup	--acknowledge-data	agree that the copy holds the site's real data
+share preflight	--static	only the checks that run before anything starts
+share preflight	--critical	only the fast checks a running share repeats
+share preflight	--quiet	list only the checks that are not ok
+site backup	--json	json: one document for a
+site backups	--json	json: one document for a
+site snapshot	--label	what the snapshot is for
+site rollback	--to	the snapshot: its name, its
+site move	--to-bench	the bench the site goes
+site restore	--no-migrate	stop after the restore, before
+site restore	--with-files	restore the uploads too
+site restore	--json	json: one document for a
+site drop	--dry-run	print the plan, change nothing.
+site drop	--json	json: one document for a
+open	--site	site name (default: remembered, or
+users	--site	site name (default: remembered, or
+share setup	--name	the room's label, at most
+share setup	--backup-now	take a backup of the
+share setup	--refresh	replace the existing copy (it
+share setup	--regenerate-identity	replace the host's key and
+share setup	--dry-run	print the plan (size, time,
+share setup	--json	json lines: plan, steps, done
+share preflight	--json	one document: protocol, ok, lan_ip
+lan-guard install	--json	json lines: done, with state,
