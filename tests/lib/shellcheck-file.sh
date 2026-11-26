@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# shellcheck-file.sh FILE: shellcheck -x over one file, with a deadline and a memory cap.
+# Usage: shellcheck-file.sh FILE. Runs shellcheck -x over one file, with a deadline and a memory cap.
 #
-# shellcheck -x follows every sourced file, so one process over benchbar needs about 4 GB and
+# The -x option of shellcheck follows every sourced file, so one process over benchbar needs about 4 GB and
 # 30 s, and the pool run-tests.sh runs several at a time. Five CI runs on 2026-11-25 and 26 sat
 # in that step until the job's timeout and left no log at all. One file per process, so a stuck
 # or runaway one names itself:

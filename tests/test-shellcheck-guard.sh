@@ -54,6 +54,7 @@ if kill -0 "$pid" 2>/dev/null; then kill -9 "$pid" 2>/dev/null || true; fail "th
 
 # ---- run-tests.sh: one file per process, through the wrapper, with a bounded pool
 runner="$(cat "$ROOT/tests/run-tests.sh")"
+# shellcheck disable=SC2016  # the text to find has literal $ signs
 assert_contains "$runner" 'xargs -0 -n 1 -P "$jobs" bash "$ROOT/tests/lib/shellcheck-file.sh"'
 assert_not_contains "$runner" "xargs -0 -n 12" "(a batch of files per process: one hang then hides which file)"
 assert_contains "$runner" 'SC_JOBS_MAX:-3'
@@ -68,6 +69,17 @@ RC=0
 OUT="$(PATH="$TMP_DIR/bin:$PATH" FAKE_MODE=hang FAKE_PIDFILE="$TMP_DIR/pid2" SC_FILE_TIMEOUT=1 SHELLCHECK_FILES="$TMP_DIR/a.sh" SC_JOBS=1 bash "$ROOT/tests/run-tests.sh" shellcheck 2>&1)" || RC=$?
 [[ "$RC" != 0 ]] || fail "a hung shellcheck did not fail the pool run"
 assert_contains "$OUT" "a.sh still running after 1s"
+
+# ---- the pool width: CPUs, at most SC_JOBS_MAX, and what the memory holds (4500 MB per process)
+pool() { # SC_MEM_MB PARALLEL [SC_JOBS]: the "N at a time" the lint reports
+  PATH="$TMP_DIR/bin:$PATH" SHELLCHECK_FILES="$TMP_DIR/a.sh" SC_MEM_MB="$1" PARALLEL="$2" SC_JOBS="${3:-}" \
+    bash "$ROOT/tests/run-tests.sh" shellcheck 2>&1 | sed -n 's/^shellcheck: 1 files, \([0-9]*\) at a time$/\1/p'
+}
+assert_eq "3" "$(pool 64000 16)" "(plenty of memory and CPUs: the cap)"
+assert_eq "2" "$(pool 64000 2)" "(two CPUs)"
+assert_eq "1" "$(pool 7500 16)" "(a 7.5 GB machine holds one 4 GB process)"
+assert_eq "2" "$(pool 10000 16)" "(10 GB holds two)"
+assert_eq "5" "$(pool 7500 16 5)" "(an explicit SC_JOBS is the caller's word)"
 
 # ---- the CI job: a per-file deadline, and a job timeout above it
 wf="$(cat "$ROOT/.github/workflows/ci.yml")"
