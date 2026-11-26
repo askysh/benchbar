@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# tests/lib/pin.sh: the smoke and full modes of a pin test. A tiny pin test runs here against a golden file of its own:
-# PIN_UPDATE=1 must write every scenario (never only the smoke ones), a smoke run compares each scenario it ran with its
-# part of the golden file, and a full run compares the whole file.
+# tests/lib/pin.sh: the full and smoke modes of a pin test. A tiny pin test runs here against a golden file of its own:
+# nothing set runs every scenario, PIN_SMOKE=1 (or a list with its name) only the smoke ones, PIN_UPDATE=1 writes
+# every scenario whatever PIN_SMOKE says, a smoke run compares each scenario it ran with its part of the golden file,
+# and a full run compares the whole file.
 set -euo pipefail
 
 ROOT="$(cd "${BASH_SOURCE[0]%/*}/.." && pwd)"
@@ -41,59 +42,61 @@ EOF
 mini() { OUT="$(env -i PATH="$PATH" HOME="$HOME" ROOT="$ROOT" TMP_DIR="$TMP_DIR" PIN_GOLDEN_DIR="$GOLD" "$@" bash "$TMP_DIR/mini.sh" 2>&1)" && CODE=0 || CODE=$?; }
 names() { sed -n 's/^=== //p' "$GOLD/mini.txt" | tr '\n' ' '; }
 
-# PIN_UPDATE=1 alone writes the whole file, smoke scenarios or not
+# PIN_UPDATE=1 alone writes the whole file, and also with PIN_SMOKE=1 and with a list that names this test
 mini PIN_UPDATE=1
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "a b c d " "$(names)" "(PIN_UPDATE=1 writes every scenario)"
-# PIN_UPDATE=1 and PIN_FULL=0 too
-mini PIN_UPDATE=1 PIN_FULL=0
-assert_eq "a b c d " "$(names)" "(PIN_UPDATE=1 with PIN_FULL=0)"
+mini PIN_UPDATE=1 PIN_SMOKE=1
+assert_eq "a b c d " "$(names)" "(PIN_UPDATE=1 with PIN_SMOKE=1)"
+mini PIN_UPDATE=1 PIN_SMOKE=mini
+assert_eq "a b c d " "$(names)" "(PIN_UPDATE=1 with PIN_SMOKE naming the test)"
 
-# a full run passes, and says nothing about smoke
-mini PIN_FULL=1
-assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "mini: ok"; assert_not_contains "$OUT" "smoke"
-# PIN_FULL can name the tests that run in full: this one by name, among others; another name leaves it in smoke
-mini PIN_FULL=mini
-assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "mini: ok"; assert_not_contains "$OUT" "smoke"
-mini "PIN_FULL=test-other mini"
-assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "mini: ok"; assert_not_contains "$OUT" "smoke"
-mini PIN_FULL=test-other
-assert_contains "$OUT" "pin: smoke, 2 of 4 scenarios"
-mini PIN_FULL=min
-assert_contains "$OUT" "pin: smoke, 2 of 4 scenarios" "(a name is a whole word)"
-mini PIN_FULL=0
-assert_contains "$OUT" "pin: smoke, 2 of 4 scenarios"
-# a smoke run passes: a and c ran, b is skipped, d is never reached
+# nothing set (a person, a push, a release build, a job nobody told about pins) runs every scenario
 mini
-assert_eq "0" "$CODE" "$OUT"
-assert_contains "$OUT" "pin: smoke, 2 of 4 scenarios of mini.txt"; assert_contains "$OUT" "mini.sh: ok (smoke)"
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "mini: ok"; assert_not_contains "$OUT" "smoke"
+# so do an empty PIN_SMOKE, 0, and a list that does not name this test (a name is a whole word)
+for v in "" 0 test-other min minimal "test-a-pin test-b-pin"; do
+  mini "PIN_SMOKE=$v"
+  assert_eq "0" "$CODE" "$OUT (PIN_SMOKE=$v)"; assert_contains "$OUT" "mini: ok" "(PIN_SMOKE=$v)"; assert_not_contains "$OUT" "smoke"
+done
+
+# PIN_SMOKE=1 and a list with this test: a and c ran, b is skipped, d is never reached
+for v in 1 mini "test-other mini" "mini test-other"; do
+  mini "PIN_SMOKE=$v"
+  assert_eq "0" "$CODE" "$OUT (PIN_SMOKE=$v)"
+  assert_contains "$OUT" "pin: smoke, 2 of 4 scenarios of mini.txt"; assert_contains "$OUT" "mini.sh: ok (smoke)"
+done
 # a smoke run does not write the golden file, whatever it ran
 assert_eq "a b c d " "$(names)" "(a smoke run leaves the file alone)"
 
 # a scenario outside the smoke set that changed: only a full run sees it
 cp "$GOLD/mini.txt" "$TMP_DIR/mini.good"
 sed 's/^out two$/out TWO/' "$TMP_DIR/mini.good" >"$GOLD/mini.txt"
-mini
+mini PIN_SMOKE=1
 assert_eq "0" "$CODE" "$OUT (a smoke run does not look at b)"
-mini PIN_FULL=1
+mini
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "the output of the pinned scenarios changed: mini.txt"
 # a smoke scenario that changed: both see it
 sed 's/^out one$/out ONE/' "$TMP_DIR/mini.good" >"$GOLD/mini.txt"
-mini
+mini PIN_SMOKE=1
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "the output of the pinned scenarios changed: mini.txt"
-mini PIN_FULL=1
+mini
 assert_eq "1" "$CODE" "$OUT"
 # a scenario the golden file lacks (a smoke one): the run fails, it does not pass on nothing
 awk '/^=== c$/ { skip = 1 } /^=== d$/ { skip = 0 } !skip' "$TMP_DIR/mini.good" >"$GOLD/mini.txt"
-mini
+mini PIN_SMOKE=1
 assert_eq "1" "$CODE" "$OUT"
 # no golden file at all
-rm -f "$GOLD/mini.txt"
-mini
+unlink "$GOLD/mini.txt"
+mini PIN_SMOKE=1
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "no golden file"
-# two scenarios with one name: the name is how a smoke run finds its part
+# a golden file that holds a name twice (a stale file): the smoke run says which, it does not just fail the compare
+{ cat "$TMP_DIR/mini.good"; awk '/^=== a$/ { on = 1 } /^=== b$/ { on = 0 } on' "$TMP_DIR/mini.good"; } >"$GOLD/mini.txt"
+mini PIN_SMOKE=1
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "has two blocks called 'a'"
+# two scenarios with one name in a run: the name is how a smoke run finds its part
 cp "$TMP_DIR/mini.good" "$GOLD/mini.txt"
-mini PIN_FULL=1 MINI_DUP=1
+mini MINI_DUP=1
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "two scenarios are called 'a'"
 
 printf 'test-pin-lib: ok\n'
