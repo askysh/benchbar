@@ -138,7 +138,8 @@ cmd~db orphans~benchbar db orphans [--json]~Databases of frappe's shape (an unde
 note~db orphans~A site that benchbar was told to forget still counts while its folder is there. A listed database may belong to a bench or program benchbar does not know. Needs the MariaDB root password.
 flag~db orphans~--json~~One document: checked and orphans, each with the archived site folder that names it, if any.
 env~db orphans~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
-cmd~run~benchbar run [--site S] [--timeout SECS] [--dry-run --json | --apply TOKEN --yes] -- COMMAND [FLAGS]~Run one command of the allow list (migrate, clear-cache, clear-website-cache, build, run-tests, doctor, list-apps, version) with bench's own environment, in the right bench and site, under a deadline. A command that changes things: --dry-run --json prints the plan and its token, --apply TOKEN --yes runs exactly that plan; migrate backs the site up first. Anything else is refused with exit 64 and the list.~yes~no~no~yes~document
+cmd~run~benchbar run [--site S] [--timeout SECS] [--dry-run --json | --apply TOKEN --yes] -- COMMAND [FLAGS]~Run one command of the allow list (migrate, clear-cache, clear-website-cache, build, run-tests, doctor, list-apps, version) with bench's own environment, in the right bench and site, under a deadline.~yes~no~no~yes~document
+note~run~A command that changes things goes through a plan (see --dry-run and --apply); migrate backs the site up first. Anything else is refused with exit 64 and the list.
 flag~run~--timeout~SECS~Stop the bench command after this many seconds (1 to 7200; each command has a default, 60 to 1800). The backup before migrate is not counted.
 flag~run~--dry-run~~Print the plan and its token, run nothing.
 flag~run~--apply~TOKEN~Run exactly that plan (with --yes).
@@ -154,13 +155,14 @@ cmd~users~benchbar users [--site S] [--search Q] [--limit N] [--json]~Enabled us
 flag~users~--search~TEXT~Only users whose id or full name contains TEXT.
 flag~users~--limit~N~At most N users (1 to 500, default 50).
 flag~users~--json~~One JSON document.
-cmd~pull~benchbar pull HOST:SITE [--as NAME] [--from-dir DIR] [--replace] [--dry-run|--apply TOKEN --yes] [--json]~Copy a production site over SSH into a new local site.~yes~no~yes~yes~stream
+cmd~pull~benchbar pull HOST:SITE [--as NAME] [--from-dir DIR] [--replace] [--dry-run|--apply TOKEN --yes] [--json]~Copy a production site over SSH into a new local site, from the latest backup on the server (nothing is written there).~yes~no~yes~yes~stream
+note~pull~The copy gets the encryption key, muted email and a paused scheduler, and it is neutralised: integrations off, stored secrets cleared. HOST is a name from your SSH config. The local site is created when it does not exist.
 flag~pull~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~pull~--as~NAME~Local site name (default SITE.local).
-flag~pull~--from-dir~DIR~A backup set downloaded by hand, no SSH.
-flag~pull~--remote-bench~DIR~The bench folder on the server.
-flag~pull~--new-backup~~Run bench backup on the server first.
-flag~pull~--keep-secrets~~Keep the copy's integrations and stored secrets (by default they are switched off and cleared). A person's decision: refused under --for-agent, benchbar mcp and BENCHBAR_NONINTERACTIVE=1.
+flag~pull~--from-dir~DIR~A backup set downloaded by hand (Frappe Cloud), no SSH.
+flag~pull~--remote-bench~DIR~The bench folder on the server (default ~/frappe-bench).
+flag~pull~--new-backup~~Run bench backup on the server first. It also deletes older backups there, and it asks for the site name (or takes --confirm-site).
+flag~pull~--keep-secrets~~Keep the copy's integrations and stored secrets (by default they are switched off and cleared, and tokens and queued mail are dropped; the Administrator login is kept). A person's decision: refused under --for-agent, benchbar mcp and BENCHBAR_NONINTERACTIVE=1.
 flag~pull~--replace~~Restore over an existing local site, after backing it up.
 flag~pull~--confirm-site~SITE~With --new-backup: the site name, instead of typing it.
 flag~pull~--skip-app~APP~Restore without APP (its tables stay behind as orphans); repeat for more apps.
@@ -177,7 +179,7 @@ cmd~report~benchbar report [--print] [--json]~Redacted diagnostics zip on the De
 flag~report~--print~~Print to the terminal instead of writing the zip.
 flag~report~--out~DIR~Write the zip into this folder (default: the Desktop).
 flag~report~--json~~Print {"zip": path, "redactions": n}, for the app and scripts.
-cmd~docs~benchbar docs [TOPIC] [--print]~Open the documentation, or one topic's page.~no~no~no~no~none
+cmd~docs~benchbar docs [TOPIC] [--print]~Open the documentation, or one topic's page (benchbar docs --help lists the topics).~no~no~no~no~none
 flag~docs~--print~~Print the page's address instead of opening it.
 cmd~self-update~benchbar self-update [--check] [--dry-run] [--json]~Update the benchbar CLI and the BenchBar app with the one line installer, after asking.~yes~no~yes~yes~document
 note~self-update~A Homebrew install runs brew upgrade askysh/tap/benchbar instead. It never touches a bench and never runs bench update.
@@ -185,19 +187,23 @@ flag~self-update~--check~~This version against the latest.
 flag~self-update~--dry-run~~Print the plan, change nothing.
 cmd~where~benchbar where [--json]~How this CLI was installed (homebrew, managed, checkout, other), the path it records for itself, its state folder and the BenchBar app.~no~no~no~no~document
 env~where~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
-cmd~mcp~benchbar mcp [--print-agents-md] [--calls [N]] [--allow-bench PATH]~Model Context Protocol server on stdio for coding agents.~no~no~no~no~none
+cmd~mcp~benchbar mcp [--print-agents-md] [--calls [N]] [--allow-bench PATH]~Model Context Protocol server on stdio for coding agents (claude mcp add benchbar -- benchbar mcp).~no~no~no~no~none
+note~mcp~It offers read tools, up, down, restart, and changes made from a reviewed plan.
 flag~mcp~--print-agents-md~~Print a snippet for a project's AGENTS.md or CLAUDE.md and exit.
 flag~mcp~--calls~[N]~Print the last N (default 50) lines of the audit log of MCP calls (mcp-calls.jsonl in the state folder) and exit.
 flag~mcp~--allow-bench~PATH~Let the changing tools act on this bench folder although benchbar does not know it (repeatable; the environment variable BENCHBAR_MCP_ALLOW_BENCH holds a : separated list). A person's choice, never a tool argument.
 env~mcp~BENCHBAR_MCP_APPLY_DELAY~Seconds a plan must have been returned before its apply is accepted (default 5; 0 turns the wait off).
 cmd~op~benchbar op status|list|wait ...~The long runs: every run that changes things has an op_id (in its plan, step, progress and done lines) and a record that benchbar remembers (the newest 100).~no~no~no~no~none
-cmd~op status~benchbar op status [OP_ID] [--json]~One operation (its command, bench, site, state, last step, last progress, exit, log), or the ten newest. A run that died without a done line is interrupted. --json adds the run's done line as result once it ended.~no~no~no~no~document
+cmd~op status~benchbar op status [OP_ID] [--json]~One operation (its command, bench, site, state, last step, last progress, exit, log), or the ten newest.~no~no~no~no~document
+note~op status~A run that died without a done line is interrupted.
+flag~op status~--json~~One JSON document. It adds the run's done line as result once the run ended.
 cmd~op list~benchbar op list [--running] [--limit N] [--json]~The operations, newest first.~no~no~no~no~document
 flag~op list~--running~~Only the ones that run now.
 flag~op list~--limit~N~At most N (1 to 100, default 20).
 cmd~op wait~benchbar op wait OP_ID [--timeout SECS] [--json]~Wait until the operation is not running, then print it. Exit 0 when it ended with exit 0, else 1 (failed, interrupted or still running at the timeout: --json says which).~no~no~no~no~document
 flag~op wait~--timeout~SECS~Give up after SECS seconds (the operation goes on); default: wait for it.
-cmd~history~benchbar history [--bench PATH] [--since TIME] [--limit N] [--json]~What ran on this machine, newest first: every run that changed things, with its op_id, command line (secrets as ***), who started it, bench, site, times, exit, what it changed and its log. A run an agent started through benchbar mcp also names the MCP tool and the client that made the call. Kept in history.jsonl in the state folder, 1 MB and three older files.~no~no~no~no~document
+cmd~history~benchbar history [--bench PATH] [--since TIME] [--limit N] [--json]~What ran on this machine, newest first: every run that changed things, with its op_id, command line (secrets as ***), who started it, bench, site, times, exit, what it changed and its log.~no~no~no~no~document
+note~history~Who started it is a terminal, the app, the tray, an agent through MCP or a script. A run an agent started through benchbar mcp also names the MCP tool and the client that made the call. Kept in history.jsonl in the state folder, 1 MB and three older files.
 flag~history~--bench~PATH~Only the runs on this bench.
 flag~history~--since~TIME~Only the runs that started since 90m, 12h, 7d, 2w ago, a date (2026-11-19, UTC) or a time (2026-11-19T10:15:00Z).
 flag~history~--limit~N~At most N runs (1 to 1000, default 20).
@@ -397,8 +403,9 @@ flag~site drop~--secrets-stdin~~Read the passwords from standard input, not the 
 env~site drop~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~app~benchbar app list|add|install|update|focus|unfocus ...~The apps of a bench.~no~no~no~no~none
 cmd~app list~benchbar app list [--json] [--no-sites]~Every app: branch, commit, local changes, the sites that have it.~no~no~no~no~document
-flag~app list~--no-sites~~Leave out the sites that have each app (faster).
-cmd~app add~benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME|URL ...] [--site S|--all-sites] --dry-run --json, then --apply TOKEN --yes~bench get-app from config/apps.tsv or any git URL, as a reviewed plan.~no~no~yes~yes~document
+flag~app list~--no-sites~~Leave out the sites that have each app (faster): the last site lists are read instead of asking bench.
+cmd~app add~benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME|URL ...] [--site S|--all-sites] --dry-run --json, then --apply TOKEN --yes~bench get-app from config/apps.tsv or any git URL (GitHub, SSH, a host alias), after checking access, as a reviewed plan. It never replaces an app.~no~no~yes~yes~document
+note~app add~Several apps go in one plan: app add A --commit SHA B --install-on s1,s2 (--branch, --name, --commit and --install-on belong to the app before them). The plan reads the required apps from hooks.py.
 flag~app add~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~app add~--branch~B~Branch or tag.
 flag~app add~--name~N~The app's package name.
@@ -413,25 +420,27 @@ cmd~app install~benchbar app install NAME --site S [--skip-backup] [--dry-run --
 flag~app install~--skip-backup~~Install without a backup of the site first.
 flag~app install~--dry-run~~Print the plan as one JSON document with --json; it carries a token.
 flag~app install~--apply~TOKEN~Run exactly that plan (with --yes); refused when the plan changed since the token was made.
-cmd~app update~benchbar app update NAME [--skip-backup] [--dry-run --json | --apply TOKEN --yes]~Fast forward one app with a changelog first, back up its sites, migrate, build.~yes~no~yes~yes~stream
+cmd~app update~benchbar app update NAME [--skip-backup] [--dry-run --json | --apply TOKEN --yes]~Fast forward one app with a changelog first, back up the sites that have it, then requirements, migrate and build.~yes~no~yes~yes~stream
+note~app update~A run that stopped half way is finished by the next one (only the steps left).
 flag~app update~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~app update~--skip-backup~~Migrate without a backup first.
 flag~app update~--dry-run~~Print the plan as one JSON document with --json; it carries a token (null when there is nothing to do).
 flag~app update~--apply~TOKEN~Run exactly that plan (with --yes); the plan is made again after a fetch, under the lock, and refused when it changed.
 flag~app update~--discard-pending~~Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs.
-cmd~app focus~benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]~Focus apps: the ones you work on.~no~no~no~no~document
+cmd~app focus~benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]~Focus apps: the ones you work on (local changes, another branch, a commit of yours in 14 days). Doctor warns when an app they need falls behind.~no~no~no~no~document
+note~app focus~With no NAME it lists them; with NAME it pins that app as focus.
 flag~app focus~--list~~List the focus apps (the default without a name).
 flag~app focus~--auto~~With NAME: let benchbar decide again (undo a pin).
 flag~app focus~--fetch~~git fetch the branches of the focus apps first.
 cmd~app unfocus~benchbar app unfocus NAME~Pin NAME as not a focus app.~no~no~no~yes~document
 cmd~lock~benchbar lock write|check|apply ...~The team lockfile benchbar.toml.~no~no~no~no~none
-cmd~lock write~benchbar lock write [--lock PATH] [--no-commits] [--allow-dirty]~Write benchbar.toml from this bench.~yes~no~no~yes~stream
+cmd~lock write~benchbar lock write [--lock PATH] [--no-commits] [--allow-dirty]~Write benchbar.toml from this bench: it asks, shows the diff and backs up the old one.~yes~no~no~yes~stream
 flag~lock write~--lock~PATH~Write this lockfile, and remember it for this bench.
 flag~lock write~--no-commits~~Leave the commit hashes out (branches only).
 flag~lock write~--allow-dirty~~Write it although an app has local changes.
-cmd~lock check~benchbar lock check [--json]~Compare the bench with benchbar.toml. Exit 1 on any difference.~no~no~no~no~document
+cmd~lock check~benchbar lock check [--json]~Compare the bench with benchbar.toml: read only, no network, no database. Exit 1 on any difference.~no~no~no~no~document
 flag~lock check~--lock~PATH~Compare with this lockfile, and remember it for this bench.
-cmd~lock apply~benchbar lock apply [--dry-run --json | --apply TOKEN --yes]~Clone missing apps, switch branches, fast forward to pinned commits.~yes~no~yes~yes~stream
+cmd~lock apply~benchbar lock apply [--dry-run --json | --apply TOKEN --yes]~Clone missing apps, switch branches, fast forward to pinned commits, then requirements and build. It never touches a site or local work.~yes~no~yes~yes~stream
 flag~lock apply~--lock~PATH~Apply this lockfile, and remember it for this bench.
 flag~lock apply~--dry-run~~Print the plan as one JSON document with --json; it carries a token (null when the apps match).
 flag~lock apply~--apply~TOKEN~Run exactly that plan (with --yes); refused when the lockfile, an app or the plan changed since the token was made.
@@ -457,24 +466,24 @@ flag~bench gc~--dry-run~~Print the plan (expired, pending, skipped) and its toke
 flag~bench gc~--apply~TOKEN~Run exactly that plan (with --yes).
 env~bench gc~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~profile~benchbar profile list|show|create|export|import|subscribe|update|remove|check ...~Team profiles.~no~no~no~no~none
-cmd~profile list~benchbar profile list [--json]~Built in and team profiles.~no~no~no~no~document
-cmd~profile show~benchbar profile show NAME~What a profile installs.~no~no~no~no~none
-cmd~profile create~benchbar profile create NAME --from-bench PATH [--dir DIR]~Write a team profile from a bench.~no~no~no~yes~stream
+cmd~profile list~benchbar profile list [--json]~Built in and team profiles, with where each comes from.~no~no~no~no~document
+cmd~profile show~benchbar profile show NAME~What a profile installs: base, Python, Node, MariaDB, apps.~no~no~no~no~none
+cmd~profile create~benchbar profile create NAME --from-bench PATH [--dir DIR]~Write a team profile from a bench (read only: app repos and branches, the base from its frappe version). install --profile NAME then builds the same bench on another Mac.~no~no~no~yes~stream
 flag~profile create~--from-bench~PATH~The bench to read the apps from.
 flag~profile create~--dir~DIR~Write the profile into this folder (default ~/.config/benchbar/profiles).
-cmd~profile export~benchbar profile export NAME [--out FILE] [--plan] [--json]~A copy to share.~no~no~yes~yes~document
+cmd~profile export~benchbar profile export NAME [--out FILE] [--plan] [--json]~A copy to share: SSH aliases resolved, each repo's default branch, access (public, private, personal) and requires per app.~no~no~yes~yes~document
 flag~profile export~--out~FILE~Where to write (default ./NAME.toml).
 flag~profile export~--branch~APP=BR~Export APP on BR instead of its default branch; repeatable.
 flag~profile export~--drop~APP~Leave APP out of the copy; repeatable. Refused when a kept app requires it.
 flag~profile export~--plan~~Print the review only, write nothing.
 flag~profile export~--expect~DIGEST~Refuse unless the profile's digest is this (the one the plan showed).
-cmd~profile import~benchbar profile import FILE|URL [--as NAME] [--plan] [--json]~Add a profile someone sent.~yes~no~yes~yes~document
+cmd~profile import~benchbar profile import FILE|URL [--as NAME] [--plan] [--json]~Add a profile someone sent (https only, 64 KB at most); checks which repos you can read. A GitHub page URL is fetched raw.~yes~no~yes~yes~document
 flag~profile import~--as~NAME~Save it under this name.
 flag~profile import~--plan~~Print the review only, write nothing.
 flag~profile import~--expect~DIGEST~Refuse unless the profile's digest is this (the one the plan showed).
-cmd~profile subscribe~benchbar profile subscribe GIT_URL [--plan|--yes] [--json]~Clone a team's config repo.~yes~no~yes~yes~document
+cmd~profile subscribe~benchbar profile subscribe GIT_URL [--plan|--yes] [--json]~Clone a team's config repo; its profiles join the lookup path.~yes~no~yes~yes~document
 flag~profile subscribe~--plan~~Print the review only, clone nothing.
-cmd~profile update~benchbar profile update NAME|--all [--plan] [--json]~Fetch an import or subscription again.~yes~no~yes~yes~document
+cmd~profile update~benchbar profile update NAME|--all [--plan] [--json]~Fetch an import or subscription again, show the diff, ask.~yes~no~yes~yes~document
 flag~profile update~--all~~Every import and subscription.
 flag~profile update~--plan~~Print the review only, change nothing.
 flag~profile update~--expect~DIGEST~Refuse unless the fetched profile's digest is this (the one the plan showed).
@@ -494,7 +503,8 @@ flag~labs off~--json~~JSON lines, ending in a done line.
 cmd~labs status~benchbar labs status NAME [--json]~Whether an experiment is on. Exit 0 on, 1 off.~no~no~no~no~document
 flag~labs status~--json~~One JSON document.
 cmd~lease~benchbar lease take|release|renew|list ...~Leases: a bench or a site held for a while, so that restart, down, migrate, drop and restore by another agent or the app wait.~no~no~no~no~none
-cmd~lease take~benchbar lease take (--bench PATH | --site NAME) [--for MINUTES] [--note TEXT] [--json]~Take a lease on a bench, or on one site of it, and return its id. Commands that change what it covers refuse, naming the holder and the end, unless they pass --lease ID. Reads are never refused. Benchbar's own state only.~no~no~no~yes~stream
+cmd~lease take~benchbar lease take (--bench PATH | --site NAME) [--for MINUTES] [--note TEXT] [--json]~Take a lease on a bench, or on one site of it, and return its id. Commands that change what it covers refuse, naming the holder and the end, unless they pass --lease ID.~no~no~no~yes~stream
+note~lease take~Reads are never refused. It touches benchbar's own state only. Set BENCHBAR_CALLER to a name for the holder: an agent run without one cannot take a lease.
 flag~lease take~--bench~PATH~Lease the whole bench (every site of it).
 flag~lease take~--site~NAME~Lease one site (global option; the bench is --bench-dir or the default one).
 flag~lease take~--for~MINUTES~How long, from 1 to 480. Default: 30.

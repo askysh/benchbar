@@ -54,3 +54,51 @@ share setup	--acknowledge-data	real data
 share preflight	--static	before anything starts
 share preflight	--critical	fast checks
 share preflight	--quiet	not ok
+run	--dry-run	plan and its token
+run	--apply	exactly that plan
+pull	--as	default site.local
+pull	--from-dir	frappe cloud
+pull	--remote-bench	default
+pull	--new-backup	deletes older backups
+pull	--confirm-site	site name
+pull	--replace	after backing it up
+pull	--skip-app	orphans
+pull	--no-files	database only
+pull	--keep-secrets	administrator login
+pull	--no-migrate	before bench migrate
+pull	--before-migrate	benchbar_site|failing script
+docs	--print	address
+mcp	--calls	audit log
+op status	--json	done line|result
+history	--bench	only the runs on this bench
+history	--since	ago
+history	--limit	at most n runs
+app list	--no-sites	last site lists
+app add	--branch	branch or tag
+app add	--name	package name
+app add	--commit	pin the app
+app add	--site	install it on this site
+app add	--all-sites	every site
+app add	--install-on	these sites only
+app add	--dry-run	plan and its token
+app add	--apply	exactly that plan
+app install	--dry-run	token
+app install	--apply	exactly that plan
+app update	--skip-backup	without a backup
+app update	--discard-pending	stopped part way
+app update	--dry-run	token
+app update	--apply	exactly that plan
+app focus	--list	list the focus apps
+app focus	--auto	decide again
+app focus	--fetch	git fetch
+lock write	--lock	remember it
+lock write	--no-commits	leave the commit hashes out
+lock write	--allow-dirty	local changes
+lock apply	--dry-run	token
+lock apply	--apply	exactly that plan
+lease take	--for	480
+lease take	--note	why
+lease take	--bench	whole bench
+lease take	--site	one site
+notices	--dismiss	hide one notice|app
+notices	--all	hide every notice
