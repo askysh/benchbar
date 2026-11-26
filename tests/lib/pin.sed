@@ -22,3 +22,8 @@ s# +$##
 s#-{4,}#---#g
 # a long folder is cut with ... inside the header box (macOS temp folders are long): the line is one
 s#^\| bench .* \|$#| bench <PATH> |#
+# the version of the CLI moves with every release, and a plan digest holds the path of the test's folder
+s#"cli_version":"[^"]*"#"cli_version":"<V>"#g
+s#"digest":"[0-9a-f]{64}"#"digest":"<DIGEST>"#g
+# a backup folder is named by its time and process
+s#/backups/[0-9]{8}-[0-9]{6}-[0-9]+/#/backups/<BK>/#g

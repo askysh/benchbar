@@ -262,4 +262,40 @@ for j in cli-macos app; do
   grep -Fxq -- "$PR_GUARD" <<<"$body" || fail "$j: the pull request guard changed"$'\n'"$body"
 done
 
+# ---- the pin tests (tests/lib/pin.sh): every scenario on a push, the nightly run and a dispatch, the smoke set on a
+# pull request unless the change could move a scenario the smoke set leaves out
+for e in push schedule workflow_dispatch; do
+  plan EVENT="$e" FILES="lib/frappe-local/apps.sh"
+  assert_eq "1" "$(val pin_full)" "($e)"
+done
+plan EVENT=workflow_dispatch INPUT_TESTS="test-app-update-pin" INPUT_LEGS="linux"
+assert_eq "1" "$(val pin_full)" "(dispatch of one pin test)"
+plan EVENT=pull_request FILES="lib/frappe-local/apps.sh lib/frappe-local/app-plan.sh lib/frappe-local/teamlock.sh lib/frappe-local/profiles.sh"
+assert_eq "0" "$(val pin_full)" "(the pinned functions' files only)"
+assert_contains "$(val tests)" "test-app-update-pin"
+plan EVENT=pull_request FILES="docs/a.md"
+assert_eq "0" "$(val pin_full)" "(docs)"
+for f in tests/test-lock-apply-pin.sh tests/test-profile-update-pin.sh tests/golden/app-add.txt tests/lib/pin.sh tests/lib/pin.sed tests/lib/harness.sh; do
+  plan EVENT=pull_request FILES="$f lib/frappe-local/apps.sh"
+  assert_eq "1" "$(val pin_full)" "($f)"
+done
+plan EVENT=pull_request FILES="lib/frappe-local/apps.sh" LABELS="bug test-pin-full"
+assert_eq "1" "$(val pin_full)" "(the label test-pin-full)"
+plan EVENT=pull_request FILES="lib/frappe-local/apps.sh" LABELS="bug"
+assert_eq "0" "$(val pin_full)" "(another label)"
+plan EVENT=pull_request
+assert_eq "1" "$(val pin_full)" "(no base to diff against: everything)"
+plan EVENT=pull_request FILES="lib/frappe-local/apps.sh" PLAN_SUMMARY="$TMP_DIR/summary2.md"
+assert_contains "$(cat "$TMP_DIR/summary2.md")" "Pin tests: smoke scenarios."
+# every CLI job hands the plan's answer to its tests, and the container passes it on
+# shellcheck disable=SC2016  # the ${{ }} is GitHub's, not the shell's
+assert_contains "$(sed -n '/^    outputs:/,/^    steps:/p' .github/workflows/ci.yml)" 'pin_full: ${{ steps.plan.outputs.pin_full }}'
+for j in cli-macos cli-linux cli-bash32; do
+  body="$(job_of "$j")"
+  [[ -n "$body" ]] || fail "job $j not found in ci.yml"
+  # shellcheck disable=SC2016
+  assert_contains "$body" 'PIN_FULL: ${{ needs.changes.outputs.pin_full }}' "($j sets PIN_FULL)"
+done
+assert_contains "$(job_of cli-bash32)" "-e PIN_FULL" "(the container gets PIN_FULL)"
+
 printf 'test-ci-plan: ok\n'

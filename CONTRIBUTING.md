@@ -53,7 +53,14 @@ A pin test (`tests/test-*-pin.sh`, `tests/lib/pin.sh`) compares the whole
 output of a command, in every way it can end, with a file in
 `tests/golden/`. After an intended change of that output, write the file
 again with `PIN_UPDATE=1 bash tests/test-NAME-pin.sh` and read its diff
-before you commit it.
+before you commit it. A pull request runs only the smoke scenarios of a pin
+test, about five of them, each compared with its part of the golden file;
+CI runs every scenario on a push to `next-release`, in the nightly run, on a
+manual dispatch and on a pull request that changes a pin test, a golden file
+or `tests/lib/pin.*`, or that has the label `test-pin-full`. On your own
+machine, run all of them with `PIN_FULL=1 bash tests/test-NAME-pin.sh`. In a
+pin test a scenario inside `if pin_full; then ... fi` is outside the smoke
+set: the setup the next scenario needs stays outside the block.
 
 ### What CI will do with your pull request
 

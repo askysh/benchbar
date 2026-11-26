@@ -96,6 +96,7 @@ jobs:
     outputs:
       code: ${{ steps.plan.outputs.code }}
       full: ${{ steps.plan.outputs.full }}
+      pin_full: ${{ steps.plan.outputs.pin_full }}
       tests: ${{ steps.plan.outputs.tests }}
       linux_skip: ${{ steps.plan.outputs.linux_skip }}
       linux_n: ${{ steps.plan.outputs.linux_n }}
@@ -180,6 +181,8 @@ jobs:
           SKIP_TESTS: ${{ needs.changes.outputs.macos_skip }}
           # a flake passes the rerun, and fails the run here: green runs in a row must hold none
           STRICT_FLAKY: ${{ (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/next-release')) && '1' || '' }}
+          # every scenario of the pin tests on a push, the nightly run and a dispatch; their smoke scenarios on a pull request (scripts/ci-plan.sh)
+          PIN_FULL: ${{ needs.changes.outputs.pin_full }}
           # these have node here: a skip would be a pass that ran nothing
           NO_SKIP: test-share-gateway
         run: /bin/bash tests/run-tests.sh
@@ -216,6 +219,8 @@ jobs:
           SKIP_TESTS: ${{ needs.changes.outputs.linux_skip }}
           # a flake passes the rerun, and fails the run here: green runs in a row must hold none
           STRICT_FLAKY: ${{ (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/next-release')) && '1' || '' }}
+          # every scenario of the pin tests on a push, the nightly run and a dispatch; their smoke scenarios on a pull request (scripts/ci-plan.sh)
+          PIN_FULL: ${{ needs.changes.outputs.pin_full }}
           NO_SKIP: test-share-gateway
         run: bash tests/run-tests.sh
 
@@ -264,6 +269,8 @@ jobs:
           SKIP_TESTS: ${{ needs.changes.outputs.bash32_skip }}
           # a flake passes the rerun, and fails the run here: green runs in a row must hold none
           STRICT_FLAKY: ${{ (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/next-release')) && '1' || '' }}
+          # every scenario of the pin tests on a push, the nightly run and a dispatch; their smoke scenarios on a pull request (scripts/ci-plan.sh)
+          PIN_FULL: ${{ needs.changes.outputs.pin_full }}
           # bash 3.2.57 by its digest, not only its tag: a tag can be moved.
           # The digest is of the multi-architecture index of the official
           # image; a new base image is a change to this line.
@@ -278,7 +285,7 @@ jobs:
           B32_OUT="$RUNNER_TEMP/bash32-summary"
           mkdir -p "$B32_OUT" && chmod 777 "$B32_OUT"
           rc=0
-          docker run --rm -v "$PWD:/w:ro" -v "$B32_OUT:/summary" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS -e CI -e STRICT_FLAKY -e GITHUB_ACTIONS -e GITHUB_STEP_SUMMARY=/summary/summary.md "$BASH32_IMAGE" sh -euc '
+          docker run --rm -v "$PWD:/w:ro" -v "$B32_OUT:/summary" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS -e CI -e STRICT_FLAKY -e PIN_FULL -e GITHUB_ACTIONS -e GITHUB_STEP_SUMMARY=/summary/summary.md "$BASH32_IMAGE" sh -euc '
             for attempt in 1 2 3; do
               apk add --no-cache coreutils findutils diffutils grep sed gawk procps git python3 zip unzip curl perl-utils musl-locales >/dev/null && break
               [ "$attempt" = 3 ] && exit 1

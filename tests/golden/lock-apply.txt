@@ -226,7 +226,7 @@ git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 === in sync, dry run json
 exit: 0
 --- stdout
-{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","lock_file":"<TMP>/home/frappe-bench/benchbar.toml","dry_run":true,"can_apply":false,"steps":[],"skipped":[],"runs_code_from":[],"token":null}
+{"schema_version":1,"cli_version":"<V>","bench":"<TMP>/home/frappe-bench","lock_file":"<TMP>/home/frappe-bench/benchbar.toml","dry_run":true,"can_apply":false,"steps":[],"skipped":[],"runs_code_from":[],"token":null}
 --- stderr
 
 +- benchbar lock apply ---+
@@ -504,7 +504,7 @@ git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 === behind, dry run json
 exit: 0
 --- stdout
-{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","lock_file":"<TMP>/home/frappe-bench/benchbar.toml","dry_run":true,"can_apply":true,"steps":[{"kind":"commit","app":"acme_crm","detail":"fast forward to 85b2330"}],"skipped":[],"runs_code_from":[],"token":"<TOKEN>"}
+{"schema_version":1,"cli_version":"<V>","bench":"<TMP>/home/frappe-bench","lock_file":"<TMP>/home/frappe-bench/benchbar.toml","dry_run":true,"can_apply":true,"steps":[{"kind":"commit","app":"acme_crm","detail":"fast forward to 85b2330"}],"skipped":[],"runs_code_from":[],"token":"<TOKEN>"}
 --- stderr
 
 +- benchbar lock apply ---+
@@ -1083,7 +1083,7 @@ git -C <TMP>/home/frappe-bench/apps/acme_base rev-parse -q --verify HEAD^{commit
 === behind, apply with its token
 exit: 0
 --- stdout
-{"schema_version":1,"cli_version":"0.8.3","event":"done","op_id":"op-<ID>","bench":"<TMP>/home/frappe-bench","exit":0,"changed":[],"warnings":[],"next_actions":[],"state_after":{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","name":"frappe-bench","site":"macdev","label":"com.benchbar.frappe-bench","state":"stopped","stop_reason":null,"pid":null,"started_at":null,"last_exit_code":null,"web_url":"http://macdev:8000","web_ping_code":null,"ports":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_socketio":13000,"redis_cache":13000},"sites":[{"name":"macdev","default":true,"hosts_entry":false,"ping_code":null,"developer_mode":false,"open_as_enabled":false,"open_as":false,"served":null}],"scheduler":false,"autostart":true,"listen":"local","redis":{"queue":{"port":11000,"running":false},"cache":{"port":13000,"running":false}},"bench_bin":null,"state_file":"<TMP>/home/frappe-bench/logs/.benchbar/state.json","log":"<TMP>/home/frappe-bench/logs/bench.log","agent_loaded":false,"agent_state":null,"processes_running":false,"url":"http://macdev:8000","agent":"com.benchbar.frappe-bench","loaded":"no","stop_flag":"none","ping":"000","pending_operations":[],"ready":{"ready":false,"deep":false,"agent":false,"processes":false,"web":false,"socketio":false,"redis":false,"workers":null,"stale":null,"stale_file":null,"waiting_on":["agent","processes","web","socketio","redis"],"fix":"<ROOT>/benchbar up --bench-dir <TMP>/home/frappe-bench"},"labs":[],"notices":[],"leases":[]},"log":"<TMP>/state/logs/<LOG>.log"}
+{"schema_version":1,"cli_version":"<V>","event":"done","op_id":"op-<ID>","bench":"<TMP>/home/frappe-bench","exit":0,"changed":[],"warnings":[],"next_actions":[],"state_after":{"schema_version":1,"cli_version":"<V>","bench":"<TMP>/home/frappe-bench","name":"frappe-bench","site":"macdev","label":"com.benchbar.frappe-bench","state":"stopped","stop_reason":null,"pid":null,"started_at":null,"last_exit_code":null,"web_url":"http://macdev:8000","web_ping_code":null,"ports":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_socketio":13000,"redis_cache":13000},"sites":[{"name":"macdev","default":true,"hosts_entry":false,"ping_code":null,"developer_mode":false,"open_as_enabled":false,"open_as":false,"served":null}],"scheduler":false,"autostart":true,"listen":"local","redis":{"queue":{"port":11000,"running":false},"cache":{"port":13000,"running":false}},"bench_bin":null,"state_file":"<TMP>/home/frappe-bench/logs/.benchbar/state.json","log":"<TMP>/home/frappe-bench/logs/bench.log","agent_loaded":false,"agent_state":null,"processes_running":false,"url":"http://macdev:8000","agent":"com.benchbar.frappe-bench","loaded":"no","stop_flag":"none","ping":"000","pending_operations":[],"ready":{"ready":false,"deep":false,"agent":false,"processes":false,"web":false,"socketio":false,"redis":false,"workers":null,"stale":null,"stale_file":null,"waiting_on":["agent","processes","web","socketio","redis"],"fix":"<ROOT>/benchbar up --bench-dir <TMP>/home/frappe-bench"},"labs":[],"notices":[],"leases":[]},"log":"<TMP>/state/logs/<LOG>.log"}
 --- stderr
 
 +- benchbar lock apply ---+
@@ -1429,7 +1429,7 @@ git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 === ahead, dry run json
 exit: 0
 --- stdout
-{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","lock_file":"<TMP>/home/frappe-bench/benchbar.toml","dry_run":true,"can_apply":false,"steps":[],"skipped":["acme_crm: apps/acme_crm is ahead of the pinned 85b2330; local work outranks the lock (benchbar lock write pins it)"],"runs_code_from":[],"token":null}
+{"schema_version":1,"cli_version":"<V>","bench":"<TMP>/home/frappe-bench","lock_file":"<TMP>/home/frappe-bench/benchbar.toml","dry_run":true,"can_apply":false,"steps":[],"skipped":["acme_crm: apps/acme_crm is ahead of the pinned 85b2330; local work outranks the lock (benchbar lock write pins it)"],"runs_code_from":[],"token":null}
 --- stderr
 
 +- benchbar lock apply ---+
@@ -2190,7 +2190,7 @@ git -C <TMP>/home/frappe-bench/apps/frappe remote get-url upstream
 === missing, dry run json
 exit: 0
 --- stdout
-{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","lock_file":"<TMP>/home/frappe-bench/benchbar.toml","dry_run":true,"can_apply":true,"steps":[{"kind":"clone","app":"acme_new","detail":"NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_new.git, then e47191c"}],"skipped":[],"runs_code_from":["file://<TMP>/remotes/acme_new.git"],"token":"<TOKEN>"}
+{"schema_version":1,"cli_version":"<V>","bench":"<TMP>/home/frappe-bench","lock_file":"<TMP>/home/frappe-bench/benchbar.toml","dry_run":true,"can_apply":true,"steps":[{"kind":"clone","app":"acme_new","detail":"NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_new.git, then e47191c"}],"skipped":[],"runs_code_from":["file://<TMP>/remotes/acme_new.git"],"token":"<TOKEN>"}
 --- stderr
 
 +- benchbar lock apply ---+

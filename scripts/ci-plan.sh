@@ -20,7 +20,9 @@
 # n (the shard count) and shards (a JSON array for the matrix, [] when the leg
 # does not run); shellcheck and shellcheck_files; app, shim, shim_win,
 # shim_arm, wsl, real,
-# full (every leg runs everything) and code (anything beyond docs changed).
+# full (every leg runs everything), pin_full (1: the pin tests run every scenario,
+# 0: only their smoke scenarios; CI hands it to the tests as PIN_FULL) and code
+# (anything beyond docs changed).
 #
 # The rules (maintainers/DECISIONS.md, "CI tiering"):
 #   pull request   the tests tests/affected.sh picks, on Linux and in the
@@ -34,6 +36,10 @@
 #                  themselves run everything everywhere.
 #   push, schedule everything everywhere (push: unless only docs, site or *.md changed)
 #   dispatch       what INPUT_TESTS and INPUT_LEGS say
+# The pin tests (tests/lib/pin.sh) run all their scenarios on a push, the nightly
+# run and a dispatch, and on a pull request that runs everything everywhere, that
+# changes a pin test, a golden file or the pin helper, or that has the label
+# test-pin-full. Any other pull request runs their smoke scenarios only.
 # The shard count of a leg follows its weight in tests/timings.tsv (run-tests.sh
 # reads it): one shard per TARGET table seconds, at most MAX.
 
@@ -64,6 +70,7 @@ TARGET_MACOS=900 MAX_MACOS=4
 macos_paths='^(lib/frappe-local/(platform|launchd|lan-guard|mariadb|sudo|wkhtmltopdf|share[a-z-]*)\.sh|lib/frappe-local/share/.*|00-mac-system-deps\.sh|install\.sh|packaging/.*|templates/(launchagent|share)\.plist\.tmpl|tests/test-(platform|lan-guard|share[a-z-]*|hygiene|service|templates|shellrc|install-sh|homebrew|packaging)\.sh)$'
 app_paths='^(macos/.*|examples/.*|scripts/(macos-[a-z-]+|release-local|app-[a-z-]+|ci-annotate|ci-install-tool)\.sh|scripts/app-[a-z-]+\.py)$'
 shim_paths='^(windows/shim/.*|lib/frappe-local/commands\.sh)$'
+pin_paths='^tests/(test-[a-z0-9-]+-pin\.sh|golden/.*|lib/pin\.(sh|sed))$'
 ci_paths='^(\.github/workflows/ci\.yml|scripts/ci-plan\.sh)$'
 docs_paths='^(docs/.*|site/.*|.*\.md|LICENSE)$'
 
@@ -112,7 +119,7 @@ if [[ "$files_known" == 1 && -n "${files// /}" ]] && all_match "$docs_paths"; th
 if [[ "$files_known" == 1 && -z "${files// /}" && "$EVENT" != schedule && "$EVENT" != workflow_dispatch ]]; then code=false; fi
 
 # ---- the scope
-full=false mode=none tests="" shellcheck=false shellcheck_files=""
+full=false mode=none tests="" shellcheck=false shellcheck_files="" pin_full=1
 macos=false app=false shim=false real=false
 run_linux=false run_bash32=false run_macos=false
 
@@ -173,6 +180,9 @@ case "$EVENT" in
       any_match "$app_paths" && app=true
       any_match "$shim_paths" && shim=true
     fi
+    # a pull request runs the smoke scenarios of the pin tests, unless the change could move one the smoke leaves out
+    pin_full=0
+    if [[ "$mode" == full ]] || any_match "$pin_paths" || has_word "$LABELS" test-pin-full; then pin_full=1; fi
     ;;
 esac
 has_word "$LABELS" test-linux && [[ "$EVENT" == pull_request && "$code" == true ]] && real=true
@@ -228,6 +238,7 @@ shim_arm="$shim"
 
 out code "$code"
 out full "$full"
+out pin_full "$pin_full"
 out tests "$tests"
 out linux_skip "$SKIP_LINUX"
 out linux_n "$n_linux"
@@ -251,7 +262,8 @@ if [[ -n "${PLAN_SUMMARY:-}" ]]; then
   # shellcheck disable=SC2016  # the backticks are markdown
   {
     printf '### CI plan\n\n'
-    printf 'Event `%s`, mode `%s`, %s changed file(s).\n\n' "$EVENT" "$mode" "$(printf '%s\n' "$files" | tr ' ' '\n' | grep -c . || true)"
+    printf 'Event `%s`, mode `%s`, %s changed file(s). Pin tests: %s.\n\n' "$EVENT" "$mode" "$(printf '%s\n' "$files" | tr ' ' '\n' | grep -c . || true)" \
+      "$([[ "$pin_full" == 1 ]] && printf 'every scenario' || printf 'smoke scenarios')"
     printf '| Leg | Runs | Shards |\n|---|---|---|\n'
     printf '| Linux (bash 5) | %s | %s |\n' "$run_linux" "$n_linux"
     printf '| bash 3.2 container | %s | %s |\n' "$run_bash32" "$n_bash32"
