@@ -269,7 +269,7 @@ exit: 0
 === imported, the source no longer parses
 exit: 0
 --- stdout
-  [WARN] shared: <TMP>/src/shared.toml no longer parses (benchbar-profile.Rf9ef9:3: not supported: unknown key plugin); keeping <TMP>/home/.config/benchbar/profiles/shared.toml
+  [WARN] shared: <TMP>/src/shared.toml no longer parses (benchbar-profile.<R>:3: not supported: unknown key plugin); keeping <TMP>/home/.config/benchbar/profiles/shared.toml
 --- stderr
 --- calls
 [state] imported, the source no longer parses shared.toml: description = "Shared 3"

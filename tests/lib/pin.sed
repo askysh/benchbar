@@ -27,3 +27,5 @@ s#"cli_version":"[^"]*"#"cli_version":"<V>"#g
 s#"digest":"[0-9a-f]{64}"#"digest":"<DIGEST>"#g
 # a backup folder is named by its time and process
 s#/backups/[0-9]{8}-[0-9]{6}-[0-9]+/#/backups/<BK>/#g
+# the name of a temp file inside a message (benchbar-profile.Rf9ef9:3: not supported), when no folder comes before it
+s#benchbar-([a-z]+)\.[A-Za-z0-9]{6}([^A-Za-z0-9])#benchbar-\1.<R>\2#g

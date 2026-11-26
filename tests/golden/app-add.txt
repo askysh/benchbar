@@ -2278,9 +2278,9 @@ bench --site macdev list-apps --format json
 git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
-[state] again after the retry apps.txt: frappe acme_crm
-[state] again after the retry site apps: frappe 15.0.0 acme_crm 1.0.0
-[state] again after the retry folders: acme_crm frappe
+[state] again after the retry, get-app apps.txt: frappe acme_crm
+[state] again after the retry, get-app site apps: frappe 15.0.0 acme_crm 1.0.0
+[state] again after the retry, get-app folders: acme_crm frappe
 === fails at get-app, early
 exit: 1
 --- stdout
@@ -2520,9 +2520,9 @@ bench --site macdev list-apps --format json
 git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
-[state] again after the retry apps.txt: frappe acme_crm
-[state] again after the retry site apps: frappe 15.0.0 acme_crm 1.0.0
-[state] again after the retry folders: acme_crm frappe
+[state] again after the retry, get-app, early apps.txt: frappe acme_crm
+[state] again after the retry, get-app, early site apps: frappe 15.0.0 acme_crm 1.0.0
+[state] again after the retry, get-app, early folders: acme_crm frappe
 === fails at build
 exit: 1
 --- stdout
@@ -2749,9 +2749,9 @@ bench --site macdev list-apps --format json
 git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
-[state] again after the retry apps.txt: frappe acme_crm
-[state] again after the retry site apps: frappe 15.0.0 acme_crm 1.0.0
-[state] again after the retry folders: acme_crm frappe
+[state] again after the retry, build apps.txt: frappe acme_crm
+[state] again after the retry, build site apps: frappe 15.0.0 acme_crm 1.0.0
+[state] again after the retry, build folders: acme_crm frappe
 === fails at backup
 exit: 1
 --- stdout
@@ -2969,9 +2969,9 @@ bench --site macdev list-apps --format json
 git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
-[state] again after the retry apps.txt: frappe acme_crm
-[state] again after the retry site apps: frappe 15.0.0 acme_crm 1.0.0
-[state] again after the retry folders: acme_crm frappe
+[state] again after the retry, backup apps.txt: frappe acme_crm
+[state] again after the retry, backup site apps: frappe 15.0.0 acme_crm 1.0.0
+[state] again after the retry, backup folders: acme_crm frappe
 === fails at install
 exit: 1
 --- stdout
@@ -3195,9 +3195,9 @@ bench --site macdev list-apps --format json
 git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
-[state] again after the retry apps.txt: frappe acme_crm
-[state] again after the retry site apps: frappe 15.0.0 acme_crm 1.0.0
-[state] again after the retry folders: acme_crm frappe
+[state] again after the retry, install apps.txt: frappe acme_crm
+[state] again after the retry, install site apps: frappe 15.0.0 acme_crm 1.0.0
+[state] again after the retry, install folders: acme_crm frappe
 === fails at python
 exit: 0
 --- stdout
@@ -3375,9 +3375,9 @@ bench --site macdev list-apps --format json
 git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
-[state] again after the retry apps.txt: frappe acme_crm
-[state] again after the retry site apps: frappe 15.0.0 acme_crm 1.0.0
-[state] again after the retry folders: acme_crm frappe
+[state] again after the retry, python apps.txt: frappe acme_crm
+[state] again after the retry, python site apps: frappe 15.0.0 acme_crm 1.0.0
+[state] again after the retry, python folders: acme_crm frappe
 === plan json for a failing apply
 exit: 0
 --- stdout
