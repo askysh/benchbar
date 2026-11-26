@@ -3945,9 +3945,8 @@ Documentation: @DOCS@/
 benchbar share: Share a hardened copy of a site with people on your network: setup makes the copy
   and the identity, start and stop run the share.
 
-Usage: benchbar share
-       setup|users|preflight|start|stop|extend|status|code|invite|lock|unlock|people|remove|assign|log|open-as|teardown
-       ...
+Usage: benchbar share setup|users|preflight|start|stop|extend|status|code|invite|lock|unlock|people|
+       remove|assign|log|open-as|teardown ...
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
