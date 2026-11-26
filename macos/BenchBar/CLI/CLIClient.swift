@@ -240,15 +240,17 @@ nonisolated struct CLIClient: Sendable {
 
     /// benchbar site add NAME --apply TOKEN: runs the plan the person saw. The
     /// CLI recomputes it and refuses a token that no longer matches the bench.
-    /// The Administrator password goes in the environment of that one process
-    /// (ADMIN_PASSWORD, as the CLI reads it), never on a command line. The
+    /// The Administrator password goes to that one process on its standard input
+    /// when the CLI lists `--secrets-stdin` for `site add`, and in its environment
+    /// (ADMIN_PASSWORD) for an older CLI, never on a command line. The
     /// hosts line needs sudo, which a process without a terminal cannot ask
     /// for: the CLI skips it and says so (the Sites tab's Add Hosts Lines
     /// sheet runs `site hosts` for that).
     @discardableResult
     func addSite(_ name: String, adminPassword: String, token: String, bench: String) async throws(CLIError) -> CommandOutput {
-        try await run(["site", "add", name, "--apply", token, "--yes", "--plain", "--bench-dir", bench],
-                      timeout: Timeout.long, acceptExitCodes: [0], extraEnvironment: ["ADMIN_PASSWORD": adminPassword])
+        let stdinBytes = await takesSecretsStdin("site add") ? Self.secretList([("ADMIN_PASSWORD", adminPassword)]) : nil
+        return try await run(["site", "add", name, "--apply", token, "--yes", "--plain", "--bench-dir", bench] + (stdinBytes == nil ? [] : ["--secrets-stdin"]),
+                             timeout: Timeout.long, acceptExitCodes: [0], extraEnvironment: stdinBytes == nil ? ["ADMIN_PASSWORD": adminPassword] : [:], input: stdinBytes)
     }
 
     @discardableResult
@@ -388,13 +390,13 @@ nonisolated struct CLIClient: Sendable {
     /// list), so the processes the app starts on its own run below the work
     /// a person waits for; `.default` for everything a person asked for.
     func run(_ arguments: [String], timeout: Duration, acceptExitCodes: Set<Int32>,
-             extraEnvironment: [String: String] = [:], qos: QualityOfService = .default) async throws(CLIError) -> CommandOutput {
+             extraEnvironment: [String: String] = [:], qos: QualityOfService = .default, input: [UInt8]? = nil) async throws(CLIError) -> CommandOutput {
         let arguments = breakLease ? Self.withBreakLease(arguments) : arguments
         let extraEnvironment = breakLease ? extraEnvironment.merging(Self.person) { _, new in new } : extraEnvironment
         var env = environment().merging(extraEnvironment) { _, new in new }
         // a run that says it is a person's click (BENCHBAR_NONINTERACTIVE=0, open --as) also says which app
         if extraEnvironment["BENCHBAR_NONINTERACTIVE"] == "0" { env.merge(Self.appCaller) { _, new in new } }
-        let output = try await runner.run(executable: executable, arguments: arguments, environment: env, timeout: timeout, qos: qos)
+        let output = try await runner.run(executable: executable, arguments: arguments, environment: env, timeout: timeout, qos: qos, input: input)
         guard acceptExitCodes.contains(output.exitCode) else {
             // the CLI's own sentence (the envelope's error) when it sent one, else the last lines of its text
             let message = output.envelope.error.flatMap { $0.isEmpty ? nil : CLIText.plain($0) } ?? Self.summarize(output)

@@ -960,6 +960,22 @@ nonisolated final class HeldCLI: CommandRunning, @unchecked Sendable {
 
     func answer(_ command: String, _ json: String) { lock.withLock { answers[command] = json } }
 
+    /// The standard input of every call that sent some (`--secrets-stdin`), in order.
+    var inputs: [[UInt8]] { lock.withLock { sentInputs } }
+    private var sentInputs: [[UInt8]] = []
+
+    func run(executable: URL, arguments: [String], environment: [String: String], timeout: Duration,
+             qos: QualityOfService, input: [UInt8]?) async throws(CLIError) -> CommandOutput {
+        if let input { lock.withLock { sentInputs.append(input) } }
+        return try await run(executable: executable, arguments: arguments, environment: environment, timeout: timeout)
+    }
+
+    func stream(executable: URL, arguments: [String], environment: [String: String], timeout: Duration, input: [UInt8]?,
+                onLine: @escaping @Sendable (String) -> Void) async throws(CLIError) -> Int32 {
+        if let input { lock.withLock { sentInputs.append(input) } }
+        return try await stream(executable: executable, arguments: arguments, environment: environment, timeout: timeout, onLine: onLine)
+    }
+
     func release() {
         let held = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
             holding = false
