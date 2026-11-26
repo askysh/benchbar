@@ -92,7 +92,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | Command | Flag | Value | What it does |
 |---|---|---|---|
 | `doctor` | `--json` |  | One JSON document. |
-| `doctor` | `--fix-hints` |  | Only the fix commands, one per line. |
+| `doctor` | `--fix-hints` |  | Only the fix commands of the FAIL and WARN checks, one per line. |
 | `doctor` | `--quick` |  | Skip the slow checks and say which. |
 | `doctor` | `--ack` | `CHECK` | Silence one named WARN for this bench until its message changes. |
 | `doctor` | `--unack` | `CHECK` | Undo --ack. |
