@@ -8,7 +8,7 @@ struct NewBenchPage: View {
 
     var body: some View {
         let state = run.state
-        WizardScaffold("New Bench", explanation: "Where it goes, what it runs on and which apps it starts with.",
+        WizardScaffold(String(localized: "New Bench"), explanation: String(localized: "Where it goes, what it runs on and which apps it starts with."),
                        phase: state.profilesError.map { .failed($0, title: String(localized: "Could not read the profiles")) } ?? .ready) {
             Form {
                 LabeledContent("Folder") {

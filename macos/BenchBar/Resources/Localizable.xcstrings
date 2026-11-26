@@ -9469,6 +9469,17 @@
       },
       "comment": "Settings and the other windows."
     },
+    "Where it goes, what it runs on and which apps it starts with.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Where it goes, what it runs on and which apps it starts with."
+          }
+        }
+      }
+    },
     "While a lease stands, restart, stop, app changes, site drop and restore, and the lockfile wait for the holder. Starting and reading are never stopped.": {
       "extractionState": "manual",
       "localizations": {
