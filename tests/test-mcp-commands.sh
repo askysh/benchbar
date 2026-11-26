@@ -68,11 +68,14 @@ for t, tool in sorted(mcp.TOOLS.items()):
     key = tool_command.get(t)
     props = tool.props if isinstance(tool.props, dict) else {}
     if key == "":
-        # a tool that runs no command builds no argv (nothing maps to "" today: this keeps it so)
+        # a tool that runs no command builds no argv (nothing maps to "" today: this keeps it so). The same sample
+        # arguments as below: a build that raises is reported, it does not pass for "builds nothing"
+        args = OVERRIDE.get(t) or {k: sample(k, v) for k, v in props.items()}
         try:
-            argv = tool.build({k: sample(k, v) for k, v in props.items()})
-        except Exception:
-            argv = None
+            argv = tool.build(args)
+        except Exception as e:
+            errors.append("%s: could not build an argv with sample arguments (%s: %s); add them to SAMPLE or OVERRIDE" % (t, type(e).__name__, e))
+            continue
         if argv:
             errors.append("%s is mapped to \"\" (it runs no command) but builds the argv %s" % (t, argv[:4]))
         continue
