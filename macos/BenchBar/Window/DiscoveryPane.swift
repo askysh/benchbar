@@ -65,7 +65,7 @@ struct DiscoveryPane: View {
             }
             if !discovery.warnings.isEmpty {
                 let lines = discovery.warningLines
-                DisclosureGroup(lines.count == 1 ? "1 scan warning" : "\(lines.count) scan warnings") {
+                DisclosureGroup(Wording.scanWarnings(lines.count)) {
                     VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                         ForEach(lines, id: \.self) {
                             Text($0).font(.caption).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
