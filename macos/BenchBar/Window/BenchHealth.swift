@@ -112,14 +112,14 @@ extension RepairRun {
     /// it and after a failure, so nothing that happened scrolls away.
     var sheetPhase: SheetPhase {
         switch phase {
-        case .planning: .loading("Reading the plan (benchbar repair --dry-run)…")
+        case .planning: .loading(String(localized: "Reading the plan (benchbar repair --dry-run)…"))
         case .review: .ready
-        case .running: .running("Repairing…")
+        case .running: .running(String(localized: "Repairing…"))
         case .finished(let code):
-            .done(code == 0 ? .success("Repair finished; every check passes.")
-                  : .warning("Repair finished with problems left", "See the steps below and the log."))
-        case .failed(let message): .failed(message, title: steps.isEmpty ? "No repair plan" : "Repair stopped")
-        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown")
+            .done(code == 0 ? .success(String(localized: "Repair finished; every check passes."))
+                  : .warning(String(localized: "Repair finished with problems left"), String(localized: "See the steps below and the log.")))
+        case .failed(let message): .failed(message, title: steps.isEmpty ? String(localized: "No repair plan") : String(localized: "Repair stopped"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench changed since this plan was shown"))
         }
     }
 }
@@ -130,22 +130,22 @@ struct RepairSheet: View {
     let close: () -> Void
 
     var body: some View {
-        SheetScaffold("Repair \(run.bench.name)",
-                      explanation: "Runs the fixes doctor found, in order, with a backup before each change.",
+        SheetScaffold(String(localized: "Repair \(run.bench.name)"),
+                      explanation: String(localized: "Runs the fixes doctor found, in order, with a backup before each change."),
                       phase: run.sheetPhase) {
             if run.phase != .planning, !run.isStale {
                 if run.steps.isEmpty {
                     if run.phase == .review {
-                        SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: "Nothing to repair.")
+                        SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: String(localized: "Nothing to repair."))
                     }
                 } else {
                     stepList
                 }
             }
             if run.phase == .review {
-                SheetNote("A backup is taken before every change (.benchbar/backups). Broken folders are moved aside, never deleted.")
+                SheetNote(String(localized: "A backup is taken before every change (.benchbar/backups). Broken folders are moved aside, never deleted."))
                 if run.hasSudoSteps {
-                    SheetNote("Steps that ask for your password show macOS's own dialog; BenchBar never sees the password. Cancel it and that step is skipped, with the command to run yourself.", tint: .orange)
+                    SheetNote(String(localized: "Steps that ask for your password show macOS's own dialog; BenchBar never sees the password. Cancel it and that step is skipped, with the command to run yourself."), tint: .orange)
                 }
             }
             if let log = run.log, run.phase != .review {

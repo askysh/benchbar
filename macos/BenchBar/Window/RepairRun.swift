@@ -50,7 +50,7 @@ final class RepairRun {
     var unreviewedSteps: [StepState] { steps.filter(\.unreviewed) }
 
     func loadPlan() async {
-        guard let client = store.cliClient else { phase = .failed("The benchbar command line tool is not available."); return }
+        guard let client = store.cliClient else { phase = .failed(String(localized: "The benchbar command line tool is not available.")); return }
         phase = .planning
         do {
             let plan = try await client.repairPlan(bench: bench.path)

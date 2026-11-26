@@ -46,8 +46,8 @@ struct PullPlanView: View {
                 Text("a copy of \(plan.source)").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
             }
             if !plan.neutralise {
-                SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .orange, title: "The copy keeps production's secrets",
-                             detail: "Do not start its scheduler or workers unless you mean to reach the same services as production.")
+                SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .orange, title: String(localized: "The copy keeps production's secrets"),
+                             detail: String(localized: "Do not start its scheduler or workers unless you mean to reach the same services as production."))
             }
             PlanFacts(facts: facts)
             if !plan.steps.isEmpty {
@@ -108,19 +108,18 @@ struct PullSheet: View {
     private var phase: SheetPhase {
         switch flow.stage {
         case .form:
-            if let error = flow.readError { .failed(error, title: "No plan to pull \(name)") } else { .ready }
-        case .reading: .loading(fromFolder ? "Reading the backup and the bench…" : "Checking the server and the bench…")
+            if let error = flow.readError { .failed(error, title: String(localized: "No plan to pull \(name)")) } else { .ready }
+        case .reading: .loading(fromFolder ? String(localized: "Reading the backup and the bench…") : String(localized: "Checking the server and the bench…"))
         case .reviewing: .ready
-        case .applying: .running("Pulling \(name): download, restore and migrate can take a while…")
-        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The plan changed since it was shown")
+        case .applying: .running(String(localized: "Pulling \(name): download, restore and migrate can take a while…"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The plan changed since it was shown"))
         }
     }
 
     var body: some View {
-        SheetScaffold("Pull a Site into \(bench.name)",
+        SheetScaffold(String(localized: "Pull a Site into \(bench.name)"),
                       explanation: flow.plan == nil
-                          ? "Copies a production site, or a backup you downloaded, into a new site of this bench. Production is only read. You see the plan first."
-                          : "Nothing has run yet. These are the steps; Pull runs this plan.",
+                          ? String(localized: "Copies a production site, or a backup you downloaded, into a new site of this bench. Production is only read. You see the plan first.") : String(localized: "Nothing has run yet. These are the steps; Pull runs this plan."),
                       phase: phase, width: flow.plan == nil ? .regular : .wide) {
             if let plan = flow.plan {
                 PullPlanView(plan: plan)
@@ -184,8 +183,7 @@ struct PullSheet: View {
             SheetNote(PullText.neutralisedText)
         }
         SheetNote(fromFolder
-                  ? "The folder holds the backup set Frappe Cloud or bench gave you. Nothing is read from a server."
-                  : "The host is a Host of your ~/.ssh/config. The latest backup on the server is used and nothing is written there.")
+                  ? String(localized: "The folder holds the backup set Frappe Cloud or bench gave you. Nothing is read from a server.") : String(localized: "The host is a Host of your ~/.ssh/config. The latest backup on the server is used and nothing is written there."))
     }
 
     private func review() {

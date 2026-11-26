@@ -482,7 +482,8 @@ struct ShareSetupSheet: View {
         }
         running = false
         if ok {
-            ShareNotices.post(title: "Shared copy ready", body: "\(site) can now be shared on your network.", bench: share.bench)
+            ShareNotices.post(title: String(localized: "Shared copy ready"),
+                              body: String(localized: "\(site) can now be shared on your network."), bench: share.bench)
             close()
         }
     }

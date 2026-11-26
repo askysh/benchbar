@@ -3,13 +3,12 @@ import SwiftUI
 extension PortSetupRun {
     var sheetPhase: SheetPhase {
         switch phase {
-        case .planning: .loading("Checking ports and preparing the selection…")
+        case .planning: .loading(String(localized: "Checking ports and preparing the selection…"))
         case .review: .ready
-        case .running: .running("Applying changes…")
+        case .running: .running(String(localized: "Applying changes…"))
         case .finished:
-            .done(.success(startAfterSetup ? "Setup completed and the start command succeeded."
-                           : "Management is set up. Start the benches when you are ready."))
-        case .failed(let error): .failed(error, title: "Setup did not finish")
+            .done(.success(startAfterSetup ? String(localized: "Setup completed and the start command succeeded.") : String(localized: "Management is set up. Start the benches when you are ready.")))
+        case .failed(let error): .failed(error, title: String(localized: "Setup did not finish"))
         }
     }
 }
@@ -21,14 +20,13 @@ struct PortSetupSheet: View {
     var body: some View {
         let calm = run.nothingToSetUp
         SheetScaffold(run.title,
-                      explanation: calm ? "The ports this bench uses, and whether BenchBar may move them. Nothing needs setting up."
-                          : "Review the addresses and service changes before applying. Existing apps and databases are preserved.",
+                      explanation: calm ? String(localized: "The ports this bench uses, and whether BenchBar may move them. Nothing needs setting up.") : String(localized: "Review the addresses and service changes before applying. Existing apps and databases are preserved."),
                       phase: run.sheetPhase, width: .wide) {
             if let error = run.modeError {
                 Text(error).foregroundStyle(.red).textSelection(.enabled)
             }
             if run.phase == .review && !calm {
-                SheetNote("Stop any previous manager's automatic startup first.")
+                SheetNote(String(localized: "Stop any previous manager's automatic startup first."))
             }
             if let plan = run.plan {
                 VStack(alignment: .leading, spacing: 16) {
@@ -98,13 +96,13 @@ struct PortSetupSheet: View {
                 VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
                     Text("The password dialog was cancelled, so the hosts lines are not in. Run this in Terminal instead:")
                         .font(.callout).foregroundStyle(.secondary)
-                    ForEach(run.hostsFallbacks, id: \.self) { CopyableCommand(command: $0, copyLabel: "Copy the command that adds the hosts lines") }
+                    ForEach(run.hostsFallbacks, id: \.self) { CopyableCommand(command: $0, copyLabel: String(localized: "Copy the command that adds the hosts lines")) }
                 }
             }
             if calm {
-                SheetNote("Fixed keeps these ports. Automatic lets BenchBar propose new ones, for your approval, when another bench or app takes them. A change of mode is saved at once.")
+                SheetNote(String(localized: "Fixed keeps these ports. Automatic lets BenchBar propose new ones, for your approval, when another bench or app takes them. A change of mode is saved at once."))
             } else {
-                SheetNote("Changing the mode saves your preference immediately; ports change only when you apply. A hosts line asks for your password in macOS's own dialog, after you apply; cancel it and the line is left for you to add.")
+                SheetNote(String(localized: "Changing the mode saves your preference immediately; ports change only when you apply. A hosts line asks for your password in macOS's own dialog, after you apply; cancel it and the line is left for you to add."))
             }
         } leading: {
             if !run.isBusy && run.phase != .finished {

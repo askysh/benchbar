@@ -32,7 +32,7 @@ same rules.
 | Flag | What it does |
 |---|---|
 | `--print` | Print the same contents to the terminal instead |
-| `--json` | Write the zip and print `{"zip": path, "redactions": n}`, the [report schema](../../json-schema.md#benchbar-report---json) the app reads |
+| `--json` | Write the zip and print `{"zip": path, "redactions": n}`, the [report schema](../json/state-and-diagnostics.md#benchbar-report---json) the app reads |
 
 Exit codes: 0; 1 when the zip could not be written.
 
@@ -118,7 +118,7 @@ bench.
 
 | Flag | What it does |
 |---|---|
-| `--json` | The same as JSON, the [where schema](../../json-schema.md#benchbar-where---json) |
+| `--json` | The same as JSON, the [where schema](../json/state-and-diagnostics.md#benchbar-where---json) |
 
 Exit codes: 0; 1 for another argument.
 
@@ -168,7 +168,7 @@ benchbar list [--json]
 
 Every bench benchbar knows about: path, default site, sites, ports, and
 whether its service is installed. It never pings a site. With `--json`,
-the [list schema](../../json-schema.md#benchbar-list---json).
+the [list schema](../json/list-and-status.md#benchbar-list---json).
 
 Exit codes: 0.
 
@@ -498,7 +498,7 @@ belongs to another process now), so the run was killed and wrote no `done` line.
 failed run, an interrupted one, a timeout: `--json` says which, with
 `timed_out: true` for a timeout). The `op` commands only read; they take no
 lock and need no bench. The fields are in the
-[JSON schema](../../json-schema.md#operation-handles-09).
+[JSON schema](../json/operations.md#operation-handles-09).
 
 ### --background
 
@@ -586,7 +586,7 @@ and the one line installer, `~/.local/state/benchbar/history.jsonl`; mode
 older files kept (`history.jsonl.old.1` to `.3`), like the MCP audit log,
 so it reaches back further than the newest 100 operation records. The MCP
 tool is `benchbar_history`. It only reads: no lock, no bench needed. The
-fields are in the [JSON schema](../../json-schema.md#action-history-09).
+fields are in the [JSON schema](../json/operations.md#action-history-09).
 
 ## commands
 
