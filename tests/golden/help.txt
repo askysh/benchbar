@@ -1558,8 +1558,8 @@ Options:
   --no-files             Database only.
   --no-migrate           Stop after the restore and the dev safety, before bench migrate.
   --before-migrate SCRIPT An executable run after the restore, before migrate, in the bench folder,
-                         with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME; a failing script
-                         stops the run.
+                         with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME (no secret in its
+                         environment); a failing script stops the run.
   --keep-scheduler       Leave the scheduler as production has it.
   --keep-staging         Keep the downloaded backup in the bench's .benchbar/pulls/ after a
                          successful run.
@@ -1693,7 +1693,8 @@ Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar op status --help [labs: none] (exit 0)
 benchbar op status: One operation (its command, bench, site, state, last step, last progress, exit,
-  log), or the ten newest. A run that died without a done line is interrupted.
+  log), or the ten newest. Every command that changes things has an op_id (in its JSON lines too). A
+  run that died without a done line is interrupted.
 
 Usage: benchbar op status [OP_ID] [--json]
 

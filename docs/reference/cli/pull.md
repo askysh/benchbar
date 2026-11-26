@@ -149,7 +149,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `pull` | `--skip-app` | `APP` | Restore without APP (its tables stay behind as orphans); repeat for more apps. |
 | `pull` | `--no-files` |  | Database only. |
 | `pull` | `--no-migrate` |  | Stop after the restore and the dev safety, before bench migrate. |
-| `pull` | `--before-migrate` | `SCRIPT` | An executable run after the restore, before migrate, in the bench folder, with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME; a failing script stops the run. |
+| `pull` | `--before-migrate` | `SCRIPT` | An executable run after the restore, before migrate, in the bench folder, with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME (no secret in its environment); a failing script stops the run. |
 | `pull` | `--keep-scheduler` |  | Leave the scheduler as production has it. |
 | `pull` | `--keep-staging` |  | Keep the downloaded backup in the bench's .benchbar/pulls/ after a successful run. |
 | `pull` | `--dry-run` |  | Print the plan and its token, change nothing. |
