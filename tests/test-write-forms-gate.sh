@@ -73,41 +73,87 @@ check_form "doctor --unack" ACK_hosts absent doctor --ack hosts -- doctor --unac
 
 # app unfocus NAME is a different case: its table record says "mutating yes" (it only writes, it has no reading
 # form), so the dispatch gates it and the write does not (part 1 leaves it out of the write gates). Pin that:
-# the same four situations as above, one notice and not two, and --for-agent gives the stream with one done.
+# the same four situations as above, then the refusal in every output mode, for it and for the three forms above.
 check_form "app unfocus NAME" APP_FOCUS present -- app unfocus frappe
 
-# the refused agent leaves the bench state byte for byte as it was
-state_sum() { (cd "$FL_STATE_DIR" && find . -type f ! -name plan-key -print | LC_ALL=C sort | while IFS= read -r f; do printf '%s
-' "$f"; cat "$f"; done) | cksum; }
-fresh
-run_fm app focus frappe --bench-dir "$BENCH"; assert_eq "0" "$CODE" "(the starting pin) $OUT"
-before="$(state_sum)"
-BENCHBAR_NONINTERACTIVE=1 run_fm app unfocus frappe
-assert_eq "1" "$CODE" "(app unfocus, an agent) $OUT"
-assert_contains "$OUT" "More than one bench is possible" "(app unfocus, an agent)"
-assert_eq "$before" "$(state_sum)" "(app unfocus, an agent: the state is as it was)"
+# the whole state folder (the state file, each bench's own file, the plan key the plan tokens are signed with, and
+# anything else a run leaves there) as one number: a refused run must leave it byte for byte as it was
+state_sum() { (cd "$FL_STATE_DIR" && find . -type f -print | LC_ALL=C sort | while IFS= read -r f; do printf '%s\n' "$f"; cat "$f"; done) | cksum; }
+# count_lines TEXT PATTERN: the lines of TEXT that match PATTERN (a basic regular expression)
+count_lines() { printf '%s\n' "$1" | grep -c -- "$2" || true; }
+
+# refusal_checks NAME HINT START-ARGS... -- ARGS...: the refusal of a form that writes, for an agent, in every output mode
+#   HINT is the command the refusal tells the agent to run instead ("" when it is not asserted)
+#   START-ARGS (before --) writes the starting state with --bench-dir, or is empty
+refusal_checks() {
+  local name="$1" hint="$2" start=() form=() before
+  shift 2
+  while [[ "$1" != "--" ]]; do start+=("$1"); shift; done
+  shift
+  form=("$@")
+  fresh
+  if [[ "${#start[@]}" -gt 0 ]]; then run_fm "${start[@]}" --bench-dir "$BENCH"; assert_eq "0" "$CODE" "(${name}: the starting state) $OUT"; fi
+  before="$(state_sum)"
+
+  # plain text: refused, one [FAIL] line (the refusal), no check ran, the state is as it was
+  BENCHBAR_NONINTERACTIVE=1 run_fm "${form[@]}"
+  assert_eq "1" "$CODE" "(${name}, an agent) $OUT"
+  assert_eq "1" "$(count_lines "$OUT" '\[FAIL\]')" "(${name}, an agent: the refusal is the only [FAIL] line) $OUT"
+  assert_not_contains "$OUT" "[OK]" "(${name}, an agent: no check ran)"
+  assert_not_contains "$OUT" "[WARN]" "(${name}, an agent: no check ran)"
+  assert_eq "$before" "$(state_sum)" "(${name}, an agent: the state is as it was)"
+  [[ -z "$hint" ]] || assert_contains "$OUT" "$hint" "(${name}: the hint is the form that was typed, with the bench)"
+
+  # --json: a read that is refused prints nothing on stdout (docs/json-schema.md, the result envelope); the
+  # refusal is text on stderr, the exit code is 1. The document the doctor forms open first must not leak.
+  BENCHBAR_NONINTERACTIVE=1 run_fm_split "${form[@]}" --json
+  assert_eq "1" "$CODE" "(${name} --json) $OUT $ERR"
+  assert_eq "" "$OUT" "(${name} --json: nothing on stdout)"
+  assert_contains "$ERR" "More than one bench is possible" "(${name} --json: the refusal is on stderr)"
+  assert_eq "1" "$(count_lines "$ERR" '\[FAIL\]')" "(${name} --json: one refusal) $ERR"
+  assert_not_contains "$ERR" "[OK]" "(${name} --json: no check ran)"
+  assert_not_contains "$ERR" "[WARN]" "(${name} --json: no check ran)"
+  assert_eq "$before" "$(state_sum)" "(${name} --json: the state is as it was)"
+
+  # --for-agent: stdout is one line, one JSON object that ends the run with exit 1 and the refusal as its error
+  BENCHBAR_NONINTERACTIVE=1 run_fm_split "${form[@]}" --for-agent
+  assert_eq "1" "$CODE" "(${name} --for-agent) $OUT $ERR"
+  assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c .)" "(${name} --for-agent: one line on stdout) $OUT"
+  assert_eq "1 True True" "$(printf '%s' "$OUT" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(d["exit"], "More than one bench is possible" in d["error"], "checks" not in d)')" "(${name} --for-agent: one error object, no checks) $OUT"
+  assert_eq "$before" "$(state_sum)" "(${name} --for-agent: the state is as it was)"
+
+  # --bench-dir with --json: the write goes on and stdout is one JSON document
+  run_fm_split "${form[@]}" --json --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "(${name} --json --bench-dir) $OUT $ERR"
+  assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c .)" "(${name} --json --bench-dir: one line on stdout) $OUT"
+  assert_eq "ok" "$(printf '%s' "$OUT" | python3 -c 'import json,sys; json.loads(sys.stdin.read()); print("ok")')" "(${name} --json --bench-dir: a JSON document) $OUT"
+}
+
+refusal_checks "app focus NAME" "benchbar app focus frappe --bench-dir PATH" -- app focus frappe
+refusal_checks "doctor --ack" "benchbar doctor --ack hosts --bench-dir PATH" -- doctor --ack hosts
+refusal_checks "doctor --unack" "benchbar doctor --unack hosts --bench-dir PATH" doctor --ack hosts -- doctor --unack hosts
+# app unfocus: gated by the dispatch, so its refusal is the one of every command that changes things: under
+# --for-agent a stream that ends with one done line. (Its hint names `benchbar app unfocus --bench-dir PATH`, without
+# NAME, as that of every command that goes through the dispatch gate does: not asserted here.)
+refusal_checks "app unfocus NAME" "" -- app unfocus frappe
 
 # a person gets the notice once
+fresh
 run_fm app unfocus frappe
 assert_eq "0" "$CODE" "(app unfocus, a person) $OUT"
-assert_eq "1" "$(printf '%s
-' "$OUT" | grep -c 'acting on')" "(app unfocus, a person: one notice, not two)"
-# and the same for the forms that gate at the write
+assert_eq "1" "$(count_lines "$OUT" 'acting on')" "(app unfocus, a person: one notice, not two)"
 run_fm app focus frappe
-assert_eq "1" "$(printf '%s
-' "$OUT" | grep -c 'acting on')" "(app focus NAME, a person: one notice)"
+assert_eq "1" "$(count_lines "$OUT" 'acting on')" "(app focus NAME, a person: one notice)"
 
-# --for-agent: the JSON lines stream, one done line, and (with no bench named, two known) the refusal comes first
-fresh
-run_fm_split app unfocus frappe --for-agent
-assert_eq "1" "$CODE" "(app unfocus --for-agent) $OUT $ERR"
-assert_contains "$ERR$OUT" "More than one bench is possible" "(app unfocus --for-agent, no bench named)"
+# app unfocus --for-agent: the stream ends with one done line, with a bench and with the refusal
 fresh
 run_fm_split app unfocus frappe --for-agent --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "(app unfocus --for-agent --bench-dir) $OUT $ERR"
-assert_eq "1" "$(printf '%s
-' "$OUT" | grep -c '"event":"done"')" "(app unfocus --for-agent: one done line)"
+assert_eq "1" "$(count_lines "$OUT" '"event":"done"')" "(app unfocus --for-agent: one done line)"
 assert_not_contains "$OUT$ERR" "acting on" "(app unfocus --for-agent --bench-dir)"
+BENCHBAR_NONINTERACTIVE=1 run_fm_split app unfocus frappe --for-agent
+assert_eq "1" "$CODE" "(app unfocus --for-agent, refused) $OUT"
+assert_eq "1" "$(count_lines "$OUT" '"event":"done"')" "(app unfocus --for-agent, refused: one done line) $OUT"
 
 # the forms that only read: no notice, no refusal, for an agent and for a person
 fresh
