@@ -18,6 +18,18 @@ fl_wrap_v() {
   __words=($5)
   [[ "$__noglob" == *f* ]] || set +f
   for __word in ${__words[@]+"${__words[@]}"}; do
+    if [[ "$__word" != *"|"* ]]; then
+      # the usual word: no array, no inner loop (the global help wraps 90 texts)
+      if [[ "$__fresh" == 1 ]]; then
+        __line="${__line}${__word}"; __fresh=0
+      elif [[ $((${#__line} + 1 + ${#__word})) -gt "$__width" ]]; then
+        __out="${__out}${__line}"$'
+'; __line="${__rest}${__word}"
+      else
+        __line="${__line} ${__word}"
+      fi
+      continue
+    fi
     __pieces=("$__word")
     # a word that cannot fit on a line of its own, and lists alternatives (setup|users|...), breaks after a |
     if [[ "$__word" == *"|"* && $((${#__rest} + ${#__word})) -gt "$__width" ]]; then
