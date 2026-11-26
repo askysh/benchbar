@@ -77,6 +77,12 @@ nonisolated enum LocalizedKeys {
     /// The text of a string literal that starts after its opening quote, and the index after its
     /// closing quote. nil when it ends early or holds an escape this does not know.
     private static func literal(_ line: [Unicode.Scalar], from start: Int) -> (key: String, end: Int)? {
+        var ignored: [String] = []
+        return literal(line, from: start, exprs: &ignored)
+    }
+
+    /// The same, and the text of each interpolation in order.
+    private static func literal(_ line: [Unicode.Scalar], from start: Int, exprs: inout [String]) -> (key: String, end: Int)? {
         var out = String.UnicodeScalarView()
         var i = start
         while i < line.count {
@@ -91,6 +97,9 @@ nonisolated enum LocalizedKeys {
                 let next = line[i + 1]
                 if next == "(" {
                     guard let after = endOfInterpolation(line, from: i + 2) else { return nil }
+                    var inner = String.UnicodeScalarView()
+                    inner.append(contentsOf: line[(i + 2)..<(after - 1)])
+                    exprs.append(String(inner))
                     out.append(slot)
                     i = after
                     continue
@@ -153,7 +162,87 @@ nonisolated enum LocalizedKeys {
         return nil
     }
 
+    // MARK: interpolation types
+
+    private static func isInteger(_ expr: String) -> Bool {
+        let text = expr.trimmingCharacters(in: .whitespaces)
+        return text.hasSuffix(".count") || text.hasPrefix("Int(") || text.hasSuffix(" + 1")
+    }
+
+    private static func isText(_ expr: String) -> Bool {
+        expr.trimmingCharacters(in: .whitespaces).hasPrefix("String(")
+    }
+
+    /// Interpolations whose argument is plainly an `Int` (`x.count`, `Int(...)`, `... + 1`) beside a `%@`
+    /// in the key, or plainly a `String` (`String(...)`) beside a number. The key then never matches
+    /// what the code looks up, so a translation would not apply. Arguments the scanner cannot type
+    /// (closure parameters, properties) are not checked.
+    static func slotProblems(in text: String, specifiers: [String: [[String]]], file: String) -> [String] {
+        var problems: [String] = []
+        var number = 0
+        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            number += 1
+            let line = Array(rawLine.unicodeScalars)
+            if isComment(line) { continue }
+            var i = 0
+            while i < line.count {
+                guard begins(line, at: i, with: marker) else {
+                    i += 1
+                    continue
+                }
+                var exprs: [String] = []
+                guard let parsed = literal(line, from: i + marker.count, exprs: &exprs) else {
+                    i += marker.count
+                    continue
+                }
+                i = parsed.end
+                guard !exprs.isEmpty, let candidates = specifiers[parsed.key] else { continue }
+                let fine = candidates.contains { specs in
+                    for (position, expr) in exprs.enumerated() where position < specs.count {
+                        if isInteger(expr) && specs[position] == "%@" { return false }
+                        if isText(expr) && specs[position] != "%@" { return false }
+                    }
+                    return true
+                }
+                if !fine { problems.append("\(file):\(number): \(exprs.joined(separator: ", "))") }
+            }
+        }
+        return problems
+    }
+
+    static func slotProblems(in folder: URL, specifiers: [String: [[String]]]) throws -> [String] {
+        var problems: [String] = []
+        guard let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil) else { return problems }
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            problems += slotProblems(in: text, specifiers: specifiers, file: url.lastPathComponent)
+        }
+        return problems
+    }
+
     // MARK: catalogue
+
+    /// Each normal form key with the format specifiers of the catalogue keys that read like it, in order.
+    static func catalogueSpecifiers(_ file: URL) throws -> [String: [[String]]] {
+        let data = try Data(contentsOf: file)
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let strings = root["strings"] as? [String: Any] else { return [:] }
+        let specifier = try NSRegularExpression(
+            pattern: #"%(?:[0-9]+\$)?[-+ #0]*[0-9]*(?:\.[0-9]+)?(?:hh|h|ll|l|q|z|t|j|L)?[diouxXeEfFgGaAcCsSpDU@]"#)
+        var result: [String: [[String]]] = [:]
+        for key in strings.keys {
+            let text = key.replacingOccurrences(of: "%%", with: "\u{2}")
+            let range = NSRange(text.startIndex..., in: text)
+            var specs: [String] = []
+            for match in specifier.matches(in: text, range: range) {
+                if let found = Range(match.range, in: text) { specs.append(String(text[found])) }
+            }
+            let normal = specifier.stringByReplacingMatches(in: text, range: range, withTemplate: "\u{1}")
+                .replacingOccurrences(of: "\u{2}", with: "%%")
+            result[normal, default: []].append(specs)
+        }
+        return result
+    }
 
     /// The catalogue's keys in the same normal form: each format specifier is one slot.
     static func catalogueKeys(_ file: URL) throws -> Set<String> {
@@ -219,6 +308,21 @@ struct CatalogueKeysTests {
             return "\(item.file):\(item.line): \(key.replacingOccurrences(of: slot, with: "%@"))"
         }
         #expect(missing.isEmpty, "not in Localizable.xcstrings:\n\(missing.joined(separator: "\n"))")
+    }
+
+    @Test func interpolationTypesMatchTheKeysWhereTheScannerCanSee() {
+        let text = "let a = String(localized: \"\\(items.count) things\")"
+        #expect(LocalizedKeys.slotProblems(in: text, specifiers: ["\(slot) things": [["%@"]]], file: "x").count == 1)
+        #expect(LocalizedKeys.slotProblems(in: text, specifiers: ["\(slot) things": [["%lld"]]], file: "x").isEmpty)
+        let named = "let a = String(localized: \"\\(String(seconds)) s\")"
+        #expect(LocalizedKeys.slotProblems(in: named, specifiers: ["\(slot) s": [["%lld"]]], file: "x").count == 1)
+        #expect(LocalizedKeys.slotProblems(in: named, specifiers: ["\(slot) s": [["%@"]]], file: "x").isEmpty)
+    }
+
+    @Test func interpolationTypesInTheSourcesMatchTheirKeys() throws {
+        let specifiers = try LocalizedKeys.catalogueSpecifiers(Self.catalogue)
+        let problems = try LocalizedKeys.slotProblems(in: ShareRepo.macos.appendingPathComponent("BenchBar"), specifiers: specifiers)
+        #expect(problems.isEmpty, "an Int next to %@, or a String next to a number:\n\(problems.joined(separator: "\n"))")
     }
 
     private static var catalogue: URL {
