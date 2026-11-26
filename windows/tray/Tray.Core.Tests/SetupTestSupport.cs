@@ -122,6 +122,7 @@ internal sealed class RecordingStream : IStreamRunner
 {
     public List<(string File, string[] Args, Dictionary<string, string> Env)> Runs { get; } = [];
     public List<TimeSpan> Timeouts { get; } = [];
+    public List<string?> Stdins { get; } = [];
     public string[] Lines { get; set; } = [];
     public StreamResult Result { get; set; } = new(0, null);
 
@@ -130,6 +131,7 @@ internal sealed class RecordingStream : IStreamRunner
     {
         Runs.Add((fileName, [.. args], environment is null ? [] : new Dictionary<string, string>(environment)));
         Timeouts.Add(timeout);
+        Stdins.Add(stdin);
         foreach (var line in Lines) onLine(line);
         return Task.FromResult(Result);
     }

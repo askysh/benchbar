@@ -22,7 +22,7 @@
 #                           so on), and every test that names a function whose
 #                           definition the change touched
 #   lib/frappe-local/share/*  the LAN share tests
-#   lib/frappe-local/mcp.py test-mcp, test-mcp-parity, test-docs (the MCP tool table of the docs is generated from it), test-cli, test-agent-contracts
+#   lib/frappe-local/mcp.py test-mcp, test-mcp-parity, test-mcp-commands, test-docs (the MCP tool table of the docs is generated from it), test-cli, test-agent-contracts
 #   A test split into parts (test-X.sh, test-X-2.sh, ...) is picked whole.
 #   tests/test-X.sh         itself
 #   .claude/guard-*.sh, .claude/settings.json   test-guards
@@ -192,7 +192,7 @@ while IFS= read -r f; do
       fam="$(lib_family "$t" || true)"
       [[ -n "$fam" ]] || fam="$LIB_CORE"
       pick_family "$fam" ;;
-    lib/frappe-local/mcp.py) lib=1; pick_family "test-mcp test-mcp-parity test-docs" ;;
+    lib/frappe-local/mcp.py) lib=1; pick_family "test-mcp test-mcp-parity test-mcp-commands test-docs" ;;
     .claude/guard-*.sh | .claude/settings.json) pick test-guards; shell=1 ;;
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;

@@ -504,3 +504,40 @@ func TestExit127WithoutDistroNameOmitsDash(t *testing.T) {
 		}
 	}
 }
+
+// adopt PATH is the CLI's, not the shim's own adopt-distro: it is forwarded like any command. The passwords of
+// --secrets-stdin (askysh/benchbar#167) go through on stdin byte for byte, and the flag reaches the CLI.
+func TestSecretsStdinListAndFlagAreForwardedIntact(t *testing.T) {
+	in := []byte("BENCHBAR_SUDO_PASSWORD=p w#=x\nADMIN_PASSWORD=\xc3\xa9\n\n")
+	record := filepath.Join(t.TempDir(), "rec.jsonl")
+	r := runShimProc(t, []string{
+		"FAKE_WSL_MODE=echo-stdin", "FAKE_WSL_RECORD_STDIN=1", "FAKE_WSL_RECORD=" + record,
+	}, in, "adopt", "/home/u/bench", "--yes", "--json", "--secrets-stdin")
+	if r.code != 0 {
+		t.Fatalf("exit %d stderr %q", r.code, r.stderr)
+	}
+	sawStdin, sawFlag := false, false
+	for _, ev := range readEvents(t, record) {
+		if ev.Event == "stdin" {
+			got, _ := base64.StdEncoding.DecodeString(ev.Stdin)
+			if !bytes.Equal(got, in) {
+				t.Errorf("the CLI got %q, want %q", got, in)
+			}
+			sawStdin = true
+		}
+		for _, a := range ev.Exec {
+			if a == "--secrets-stdin" {
+				sawFlag = true
+			}
+			if strings.Contains(a, "p w#") {
+				t.Errorf("a password is in an argument: %q", a)
+			}
+		}
+	}
+	if !sawStdin {
+		t.Error("no stdin event recorded")
+	}
+	if !sawFlag {
+		t.Error("--secrets-stdin did not reach the CLI")
+	}
+}
