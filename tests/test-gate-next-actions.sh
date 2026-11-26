@@ -100,19 +100,24 @@ refused() {
 }
 
 # accepted NAME ARGS...: each runnable action of the last refusal passes the gate when it is run as it is: with
-# --dry-run where the typed line has one (so nothing is changed), and then it is not refused for the bench
+# --dry-run where the typed line has one (so nothing is changed), and then it is not refused for the bench.
+# These are real runs of the CLI of this checkout, and some change things (app unfocus writes the bench's state):
+# they write only under the temp HOME of the harness (the fake benches and FL_STATE_DIR are inside it), never
+# to a bench or a state folder of the machine.
 accepted() {
-  local name="$1" cmds c n=0 run=()
+  local name="$1" cmds c n=0 run=() sep=$'\x1f'
+  # the words of each command, split as a shell splits them (shlex: quotes and escapes) and never run through
+  # eval: a command from a JSON document is data. One command per line, its words joined by a unit separator.
   cmds="$(printf '%s' "$OUT" | python3 -I -c '
-import json, sys
+import json, shlex, sys
 for a in json.loads(sys.stdin.read())["next_actions"][:-1]:
-    print(a["command"])
+    print("\x1f".join(shlex.split(a["command"])))
 ')"
   while IFS= read -r c; do
     [[ -n "$c" ]] || continue
     n=$((n + 1))
-    # the command, read as the shell reads it (quotes and escapes), with the CLI of this checkout for benchbar
-    eval "run=($c)"
+    IFS="$sep" read -r -a run <<<"$c"
+    c="${run[*]}"
     [[ "${run[0]}" == benchbar ]] || fail "($name) an action does not start with benchbar: $c"
     BENCHBAR_NONINTERACTIVE=1 run_fm_split "${run[@]:1}"
     assert_not_contains "$OUT$ERR" "More than one bench is possible" "($name: action $n is accepted by the gate: $c)"
@@ -177,6 +182,27 @@ BENCHBAR_NONINTERACTIVE=1 run_fm app unfocus frappe
 assert_eq "1" "$CODE" "(plain) $OUT"
 assert_not_contains "$OUT" "next_actions" "(plain: no JSON)"
 assert_not_contains "$OUT" "Run it on this bench" "(plain: no actions)"
+
+# --- a bench whose path has a space: its action holds the path as one word (read as a shell reads it), and the
+#     action, run as it is, reaches that bench
+fresh
+SPACED="$HOME/my benches/bench one"
+make_fake_bench "$SPACED" spaced
+printf '%s\n' "$SPACED" >"$FL_STATE_DIR/registered-benches.txt"
+BENCHBAR_NONINTERACTIVE=1 run_fm_split app unfocus frappe --for-agent
+assert_eq "1" "$CODE" "(a bench path with a space) $OUT $ERR"
+paths="$(printf '%s' "$OUT" | python3 -I -c '
+import json, shlex, sys
+for a in json.loads(sys.stdin.read())["next_actions"][:-1]:
+    w = shlex.split(a["command"])
+    i = w.index("--bench-dir")
+    assert i == len(w) - 2, w
+    print(w[i + 1])
+')"
+assert_eq "1" "$(printf '%s\n' "$paths" | grep -c -F -x -- "$SPACED" || true)" "(a bench path with a space is one word after --bench-dir) $paths"
+assert_eq "3" "$(printf '%s\n' "$paths" | grep -c . || true)" "(one action per known bench: three) $paths"
+accepted "a bench path with a space"
+rm -f "$FL_STATE_DIR/registered-benches.txt"
 
 # --- more than five benches: the first five, then the list
 fresh
