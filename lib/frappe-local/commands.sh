@@ -169,7 +169,7 @@ flag~pull~--confirm-site~SITE~With --new-backup: the site name, instead of typin
 flag~pull~--skip-app~APP~Restore without APP (its tables stay behind as orphans); repeat for more apps.
 flag~pull~--no-files~~Database only.
 flag~pull~--no-migrate~~Stop after the restore and the dev safety, before bench migrate.
-flag~pull~--before-migrate~SCRIPT~An executable run after the restore, before migrate, in the bench folder, with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME; a failing script stops the run.
+flag~pull~--before-migrate~SCRIPT~An executable run after the restore, before migrate, in the bench folder, with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME (no secret in its environment); a failing script stops the run.
 flag~pull~--keep-scheduler~~Leave the scheduler as production has it.
 flag~pull~--keep-staging~~Keep the downloaded backup in the bench's .benchbar/pulls/ after a successful run.
 flag~pull~--dry-run~~Print the plan and its token, change nothing.
@@ -196,7 +196,7 @@ flag~mcp~--allow-bench~PATH~Let the changing tools act on this bench folder alth
 env~mcp~BENCHBAR_MCP_APPLY_DELAY~Seconds a plan must have been returned before its apply is accepted (default 5; 0 turns the wait off).
 cmd~op~benchbar op status|list|wait ...~The long runs: every run that changes things has an op_id (in its plan, step, progress and done lines) and a record that benchbar remembers (the newest 100).~no~no~no~no~none
 cmd~op status~benchbar op status [OP_ID] [--json]~One operation (its command, bench, site, state, last step, last progress, exit, log), or the ten newest.~no~no~no~no~document
-note~op status~A run that died without a done line is interrupted.
+note~op status~Every command that changes things has an op_id (in its JSON lines too). A run that died without a done line is interrupted.
 flag~op status~--json~~One JSON document. It adds the run's done line as result once the run ended.
 cmd~op list~benchbar op list [--running] [--limit N] [--json]~The operations, newest first.~no~no~no~no~document
 flag~op list~--running~~Only the ones that run now.
