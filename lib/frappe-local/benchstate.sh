@@ -599,13 +599,16 @@ fl_site_ping_code() {
   esac
 }
 
-# fl_bench_guess_gate: a command that changes things and was not told which
+# fl_bench_guess_gate [LINE]: a command that changes things and was not told which
 # bench (no --bench-dir, no BENCH_DIR, none remembered) acts on the first one
 # fl_bench_detect finds. Say which, and why; and where nobody can be asked
 # (--for-agent, BENCHBAR_NONINTERACTIVE=1) with more than one bench known,
 # refuse to guess. The note goes to stderr: a --json run keeps its stdout.
+# The refusal tells what to run instead: the command and its first argument with --bench-dir PATH,
+# or, with LINE (the whole command line that was typed), LINE with --bench-dir PATH.
 fl_bench_guess_gate() {
-  local d n=0 list="" sep=""
+  local d n=0 list="" sep="" line="${COMMAND}${ARGS[0]:+ ${ARGS[0]}}"
+  [[ -z "${1:-}" ]] || line="$1"
   fl_bench_detect "$OPT_BENCH_DIR"
   [[ "${FL_BENCH_SOURCE:-}" == "detected" ]] || return 0
   while IFS= read -r d; do
@@ -613,8 +616,36 @@ fl_bench_guess_gate() {
     n=$((n + 1)); list="${list}${sep}${d}"; sep=", "
   done < <(fl_known_benches)
   if [[ "$n" -gt 1 ]] && fl_noninteractive; then
-    fl_die "More than one bench is possible and none was chosen: ${list}." "Choose one: benchbar ${COMMAND}${ARGS[0]:+ ${ARGS[0]}} --bench-dir PATH (or set BENCH_DIR). benchbar list shows them."
+    fl_die "More than one bench is possible and none was chosen: ${list}." "Choose one: benchbar ${line} --bench-dir PATH (or set BENCH_DIR). benchbar list shows them."
   fi
   printf 'benchbar: acting on %s (auto-detected: no --bench-dir, BENCH_DIR or remembered bench%s; pass --bench-dir to choose)\n' \
     "$FL_BENCH_DIR" "$([[ "$n" -gt 1 ]] && printf '; %s benches are known: %s' "$n" "$list")" >&2
+}
+
+# fl_bench_write_gate: the guess gate for the forms that write benchbar's state while their command, in the commands
+# table, reads: app focus NAME, doctor --ack ID and doctor --unack ID. The table says "mutating no" for both keys (it is
+# per command, and "yes" would make doctor --json refuse for an agent with two benches), so the dispatch (benchbar)
+# calls this next to the gate of the table: before the run opens its log, takes the lock or writes anything, with the
+# same notice for a person and the same refusal for an agent. The refusal names the whole form that was typed.
+fl_bench_write_gate() {
+  local line="$COMMAND" i=1 a named=0
+  case "$COMMAND" in
+    doctor) [[ -n "$OPT_ACK$OPT_UNACK" ]] || return 0
+      [[ -z "$OPT_ACK" ]] || line="${line} --ack $(printf '%q' "$OPT_ACK")"
+      [[ -z "$OPT_UNACK" ]] || line="${line} --unack $(printf '%q' "$OPT_UNACK")" ;;
+    app) [[ "${ARGS[0]:-}" == focus ]] || return 0
+      line="${line} focus"
+      while [[ "$i" -lt "${#ARGS[@]}" ]]; do
+        a="${ARGS[$i]}"
+        # the first word that is not a flag is the app: the form that pins. The hint quotes the app and --auto and
+        # no other word: an unknown flag (BENCHBAR_LENIENT_FLAGS=1), a word after "--" or a second word stays in
+        # ARGS and can hold anything
+        if [[ "$a" != -* && "$named" == 0 ]]; then named=1; line="${line} $(printf '%q' "$a")"
+        elif [[ "$a" == --auto ]]; then line="${line} --auto"; fi
+        i=$((i + 1))
+      done
+      [[ "$named" == 1 ]] || return 0 ;;
+    *) return 0 ;;
+  esac
+  fl_bench_guess_gate "$line"
 }
