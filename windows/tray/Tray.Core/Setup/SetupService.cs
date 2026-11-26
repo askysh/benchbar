@@ -15,7 +15,7 @@ public sealed record SetupRunResult(int Exit, bool Changed, bool RebootRequired,
     public bool Ok => Exit == 0 && !Cancelled;
 }
 
-/// <summary>The passwords of one install or adopt run. They go in that process's environment and nowhere else.</summary>
+/// <summary>The passwords of one install or adopt run. They go to that one process, on its standard input when the CLI takes them there (<c>--secrets-stdin</c>) and in its environment when it does not.</summary>
 public sealed record InstallSecrets(Secret? Admin, Secret? LinuxPassword, Secret? RootPassword = null);
 
 /// <summary>How an install or adopt stream ended: the process's exit code, the <c>done</c> line when there was one.</summary>
@@ -90,12 +90,37 @@ public static class SetupEnv
     public const string NonInteractive = "BENCHBAR_NONINTERACTIVE";
 
     /// <summary>For an install or adopt run: sudo steps fed from the environment, nothing ever asks on a terminal.</summary>
-    public static SecretEnvironment ForInstall(InstallSecrets secrets)
+    public static SecretEnvironment ForInstall(InstallSecrets secrets, bool viaStdin = false)
     {
         var env = new SecretEnvironment().Set(Sudo, "env").Set(NonInteractive, "1");
+        if (viaStdin)
+        {
+            // the CLI reads them from its standard input (--secrets-stdin): in no environment of the child or of anything it starts
+            return env.StdinList((AdminPassword, secrets.Admin), (SudoPassword, secrets.LinuxPassword), (MariadbRootPassword, secrets.RootPassword));
+        }
         env.Set(AdminPassword, secrets.Admin).Set(SudoPassword, secrets.LinuxPassword).Set(MariadbRootPassword, secrets.RootPassword);
         return env;
     }
+
+    /// <summary>
+    /// The passwords can go on the CLI's standard input: there is one, and none holds a line break (a list is one line each, so the CLI would
+    /// read the rest as another line; the environment path keeps its own refusal for such a password).
+    /// </summary>
+    public static bool CanUseStdin(InstallSecrets secrets)
+    {
+        var any = false;
+        foreach (var s in new[] { secrets.Admin, secrets.LinuxPassword, secrets.RootPassword })
+        {
+            if (s is not { IsEmpty: false }) continue;
+            any = true;
+            var text = s.Reveal();
+            if (text.Contains(CharLf) || text.Contains(CharCr)) return false;
+        }
+        return any;
+    }
+
+    private const char CharLf = (char)10;
+    private const char CharCr = (char)13;
 }
 
 /// <summary>The real service: <c>benchbar.exe</c> and, for the lists that must not boot a distro, <c>wsl.exe</c>.</summary>
@@ -215,7 +240,10 @@ public sealed class ShimSetupService : ISetupService
 
     private async Task<InstallRunResult> StreamInstallAsync(IReadOnlyList<string> args, InstallSecrets secrets, Action<InstallEvent> onEvent, CancellationToken ct)
     {
-        var env = SetupEnv.ForInstall(secrets);
+        // a CLI that lists --secrets-stdin for this command gets the passwords on its standard input; an older one keeps the environment
+        var viaStdin = SetupEnv.CanUseStdin(secrets) && await CliTakesSecretsStdinAsync(args[0], ct).ConfigureAwait(false);
+        var env = SetupEnv.ForInstall(secrets, viaStdin);
+        if (viaStdin) args = [.. args, "--secrets-stdin"];
         var redact = new Redactor(env.Secrets);
         InstallDone? done = null;
         string? issue = null;
@@ -231,12 +259,30 @@ public sealed class ShimSetupService : ISetupService
         return new InstallRunResult(result.ExitCode, done, issue ?? (result.Error is null ? null : redact.Clean(result.Error)));
     }
 
-    private async Task<StreamResult> RunStreamAsync(IReadOnlyList<string> args, SecretEnvironment env, Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+    /// <summary>
+    /// <c>commands --json</c> lists <c>--secrets-stdin</c> for <paramref name="command"/>. Any trouble reading it (no CLI yet, an older one
+    /// without <c>commands</c>, a timeout) means no: the environment path then runs as before.
+    /// </summary>
+    private async Task<bool> CliTakesSecretsStdinAsync(string command, CancellationToken ct)
     {
-        // The values are placed in the child's environment here, at the last moment, and the dictionary is not kept.
         try
         {
-            return await _stream.RunAsync(Shim, args, env.Materialize(), onLine, timeout, ct).ConfigureAwait(false);
+            var result = await _runner.RunAsync(Shim, CommandCatalogue.Args, ct, TimeSpan.FromSeconds(60)).ConfigureAwait(false);
+            if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.Output)) return false;
+            return JsonNode.Parse(result.Output) is JsonObject o && CommandCatalogue.Parse(o).HasFlag(command, "--secrets-stdin");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
+
+    private async Task<StreamResult> RunStreamAsync(IReadOnlyList<string> args, SecretEnvironment env, Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+    {
+        // The values are placed in the child's environment (or on its standard input) here, at the last moment, and nothing is kept.
+        try
+        {
+            return await _stream.RunAsync(Shim, args, env.Materialize(), onLine, timeout, ct, env.MaterializeStdin()).ConfigureAwait(false);
         }
         catch (Win32Exception ex)
         {
