@@ -40,7 +40,7 @@ site add	--apps	apps of apps/
 site hosts	--prune	one backup|one sudo|prints the command
 site backup	--with-files	uploads
 site restore	--from	stamp
-site restore	--from-site	stamps from this site|read the stamp
+site restore	--from-site	read the stamp
 site restore	--new	create the site
 site restore	--neutralise	integrations off|stored secrets
 site restore	--before-migrate	after the restore|before migrate
