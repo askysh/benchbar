@@ -552,9 +552,7 @@ struct LastBackupLine: View {
 
     /// "2 hours ago"; a clock that is a little behind must not say "in 2 minutes".
     static func age(of time: Date, now: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.dateTimeStyle = .named
-        return formatter.localizedString(for: min(time, now), relativeTo: now)
+        Wording.relativeAge(of: time, now: now)
     }
 }
 
@@ -798,7 +796,7 @@ nonisolated enum LockText {
     static func badge(_ check: LockCheck) -> String {
         if check.inSync { return "In sync" }
         let n = check.drift.count
-        return n == 1 ? "1 difference" : "\(n) differences"
+        return Wording.differences(n)
     }
 
     static let noFile = "No lockfile for this bench yet."
