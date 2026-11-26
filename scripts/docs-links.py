@@ -23,7 +23,7 @@ SCAN_DIRS = ["lib", "macos", "windows", "scripts", "site/src", "templates", "pac
 SCAN_FILES = ["benchbar", "install.sh", "install.ps1", "AGENTS.md", "README.md", "CONTRIBUTING.md",
               "SECURITY.md", "SUPPORT.md", "ROADMAP.md"]
 SKIP_DIRS = {".git", "node_modules", "bin", "obj", ".build", "DerivedData", "dist", ".generated", ".astro"}
-SKIP_FILES = {"docs-links.py"}
+SKIP_FILES = {"docs-links.py", "test-docs.sh"}  # the test writes bad addresses on purpose
 TEXT_EXT = {".sh", ".swift", ".cs", ".py", ".md", ".ps1", ".mjs", ".js", ".ts", ".astro", ".tmpl", ".txt",
             ".json", ".yml", ".yaml", ".xaml", ".go", ".rb", ".toml", ".css", ".tsv", ""}
 
