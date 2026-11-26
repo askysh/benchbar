@@ -10,7 +10,7 @@
 #   env~KEY~NAME~HELP
 #   note~KEY~TEXT           (directly after the cmd record of KEY, at most one: what the SUMMARY
 #                            leaves out; no flag note, a flag has its own record)
-# The global help text is `use` records, in usage.sh.
+# The global help is printed from this table and from help-layout.txt (see help.sh).
 # KEY is the command ("install") or the command and subcommand ("site add").
 # TTY (may ask a question on a terminal), SUDO (may run sudo), NETWORK (may
 # reach the network) and MUTATING (changes the machine, a bench or its
@@ -491,7 +491,7 @@ cmd~profile remove~benchbar profile remove NAME [--yes] [--json] [--dry-run | --
 flag~profile remove~--dry-run~~Print the plan (what moves aside) as one JSON document with --json; it carries a token.
 flag~profile remove~--apply~TOKEN~Run exactly that plan (with --yes); refused when the file or the subscription changed since the token was made.
 cmd~profile check~benchbar profile check NAME [--json]~Can git read every repo with your credentials?~no~no~yes~no~document
-cmd~labs~benchbar labs [list|on NAME|off NAME|status NAME] [--yes] [--json]~Experiments: off until a person turns one on.~no~no~no~no~document
+cmd~labs~benchbar labs [list|on NAME|off NAME|status NAME] [--yes] [--json]~The experiments and whether each is on; every one is off until a person turns it on.~no~no~no~no~document
 flag~labs~--json~~One JSON document.
 cmd~labs list~benchbar labs list [--json]~The experiments, whether each is on, and the commands each gates.~no~no~no~no~document
 flag~labs list~--json~~One JSON document.
@@ -524,6 +524,7 @@ flag~notices~--json~~One JSON document: notices[] with id, title, text, switch_b
 flag~notices~--dismiss~ID~Hide one notice (also in the BenchBar app). An id that is already hidden is unchanged.
 flag~notices~--all~~Hide every notice.
 TABLE
+
 
 # fl_cmd_load: FL_CMD_TABLE, the records between the two marker lines above. The lines
 # before them are counted, the file is read whole (no program: `read -d ''` gets a file
@@ -1043,10 +1044,10 @@ fl_noninteractive_preflight() {
 }
 
 # ---------------------------------------------------------------- the global help
-# `benchbar --help`, `benchbar help` and `benchbar` alone print the `use` records of usage.sh,
-# which is read here, when the help prints, and not at every start (CORE-18, issue 151).
+# `benchbar --help`, `benchbar help` and `benchbar` alone print the commands table's summaries and the layout of help-layout.txt
+# (fl_usage_text in help.sh, which reads help-layout.txt: only when the help prints, never at a start; CORE-18, issue 151).
 usage() {
-  # shellcheck source=lib/frappe-local/usage.sh
-  . "${SCRIPT_DIR}/lib/frappe-local/usage.sh"
+  # shellcheck source=lib/frappe-local/help.sh
+  . "${FL_CMD_FILE%/*}/help.sh"
   fl_usage_text | fl_lab_usage_filter
 }
