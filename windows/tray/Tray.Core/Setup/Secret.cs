@@ -71,6 +71,7 @@ public sealed class SecretEnvironment
     private readonly Dictionary<string, string> _plain = [];
     private readonly Dictionary<string, Secret> _secrets = [];
     private Secret? _stdin;
+    private readonly List<Secret> _hidden = [];
 
     public SecretEnvironment Set(string name, string value)
     {
@@ -95,10 +96,34 @@ public sealed class SecretEnvironment
         return this;
     }
 
+    /// <summary>
+    /// The child's standard input as the CLI's secret list (<c>--secrets-stdin</c>): one <c>KEY=VALUE</c> line per secret, each ended by LF,
+    /// UTF-8 with no byte order mark. The stream runner adds one more LF, which is the empty line that ends the list and that the CLI requires.
+    /// Each value stays hidden in what the child prints back, like the others, and the keys are not in <see cref="Names"/>: nothing is in the
+    /// environment. Replaces <see cref="Stdin"/>; no list when every value is empty.
+    /// </summary>
+    public SecretEnvironment StdinList(params (string Key, Secret? Value)[] entries)
+    {
+        var kept = entries.Where(e => e.Value is { IsEmpty: false }).ToList();
+        if (kept.Count == 0)
+        {
+            _stdin = null;
+            return this;
+        }
+        var text = new System.Text.StringBuilder();
+        foreach (var (key, value) in kept)
+        {
+            text.Append(key).Append('=').Append(value!.Reveal()).Append('\n');
+            _hidden.Add(value);
+        }
+        _stdin = Secret.From(text.ToString());
+        return this;
+    }
+
     public IReadOnlyCollection<string> Names => [.. _plain.Keys, .. _secrets.Keys];
 
     /// <summary>The values to hide in anything the child prints back.</summary>
-    public IReadOnlyList<Secret> Secrets => [.. _secrets.Values, .. _stdin is null ? [] : new[] { _stdin }];
+    public IReadOnlyList<Secret> Secrets => [.. _secrets.Values, .. _hidden, .. _stdin is null ? [] : new[] { _stdin }];
 
     /// <summary>The line for the child's stdin, or null. Call it at the last moment and do not keep the result.</summary>
     public string? MaterializeStdin() => _stdin?.Reveal();
