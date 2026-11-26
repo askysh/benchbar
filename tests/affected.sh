@@ -206,6 +206,7 @@ while IFS= read -r f; do
     changelog.d/*) pick test-changelog ;;
     tests/timings.tsv) pick test-ci-plan; pick test-suite-hygiene ;;
     docs/* | maintainers/* | scripts/docs-reference.py) pick_family "test-docs test-docs-command" ;;
+    site/public/moved-anchors.js) pick test-moved-anchors ;;
     # no CLI test, by design: another job runs it (the app and the tray and shim jobs, the
     # Windows installer test of release-windows.yml for install.ps1, the workflow itself
     # for .github/, docs.yml for site/), or it is prose or agent tooling
