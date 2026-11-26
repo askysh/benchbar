@@ -1,56 +1,45 @@
-# command<TAB>flag<TAB>words (separated by |) that the flag record has to say: a note about the flag that left the summary (tests/test-commands-table.sh)
-install	--json	json lines|--yes|--dry-run
-install	--frappe-commit	frappe_commit|stops the install
-install	--erpnext-commit	erpnext_commit|stops the install
-adopt	--json	as install|--yes|--dry-run
-doctor	--fix-hints	fix commands|one per line
-doctor	--prerequisites	before an install|--bench-dir|new bench
-doctor	--fetch	focus apps|never touches the network
-doctor	--ack	until its message changes
+# command<TAB>flag<TAB>words (separated by |) that the flag record has to say<TAB>the flag whose record says it, when it is another one: a note about the flag that left a summary
+install	--json	json lines for the benchbar app|needs --yes or --dry-run
+install	--yes	do not ask
+install	--dry-run	print the plan, change nothing
+install	--frappe-commit	or frappe_commit in a team profile|stops the install before anything is built
+install	--erpnext-commit	or erpnext_commit in a team profile|stops the install before anything is built
+adopt	--json	json lines, as install|needs --yes or --dry-run
+adopt	--yes	do not ask
+adopt	--dry-run	print the plan, change nothing
+doctor	--fix-hints	only the fix commands of the fail and warn checks, one per line
+doctor	--prerequisites	what this machine needs before an install|no bench is needed
+doctor	--json	one json document
+doctor	--bench-dir	names the folder a new bench would go to	--prerequisites
+doctor	--fetch	focus apps need first|without it, doctor never touches the network
+doctor	--ack	silence one named warn for this bench until its message changes
 doctor	--unack	undo --ack
-doctor	--quick	skip the slow checks
-ports setup	--dry-run	preview|nothing
-ports plan	--json	token|json
-ports check	--json	conflicts|json
-report	--print	terminal
-report	--json	zip|redactions
-uninstall-service	--all	brew uninstall benchbar|cannot stop
-self-update	--check	latest
-self-update	--dry-run	change nothing
-where	--json	one document
-up	--services-only	redis|down stops it
-status	--json	redis|sites[].served|ready object
-wait	--for	one part
-wait	--timeout	give up after
-logs	--worker	worker.log
-logs	--worker-error	worker.error.log
-logs	--previous	bench.previous.log
+doctor	--quick	skip the slow checks and say which
+ports setup	--dry-run	show the preview and change nothing
+ports plan	--json	the plan and its token as one json document
+ports check	--json	the conflicts as one json document
+ports check	--bench-dir	bench to act on
+ports mode	--bench-dir	bench to act on
+ports apply	--yes	the plan was reviewed
+report	--print	print to the terminal instead of writing the zip
+report	--json	"zip": path, "redactions": n
+uninstall-service	--all	run it before brew uninstall benchbar|brew cannot stop the agents itself
+self-update	--check	this version against the latest
+self-update	--dry-run	print the plan, change nothing
+self-update	--json	one document for a command that reads
+where	--json	one document for a command that reads
+up	--services-only	start only the bench's redis|down stops it
+status	--json	it adds redis, sites[].served|the ready object
+wait	--for	wait for one part only
+wait	--timeout	give up after secs seconds
+wait	--json	one document for a command that reads
+logs	--worker	read logs/worker.log
+logs	--worker-error	read logs/worker.error.log
+logs	--previous	read logs/bench.previous.log
 logs	--no-follow	print and exit
-logs	--process	worker.log
-logs	--since	at or after
-logs	--since-restart	last start
-logs	-n	last n lines
-open	--path	where to land
-open	--print-url	print the link
-open	--as	no password|developer_mode|site open-as
-users	--search	users whose id or full name
-users	--limit	at most n users
-site add	--bundle	app bundle
-site add	--apps	apps of apps/
-site hosts	--prune	one backup|one sudo|prints the command
-site backup	--with-files	uploads
-site restore	--from	stamp
-site restore	--from-site	read the stamp
-site restore	--new	create the site
-site restore	--neutralise	integrations off|stored secrets
-site restore	--before-migrate	after the restore|before migrate
-site restore	--dry-run	plan|token
-site restore	--apply	exactly that plan
-site drop	--confirm-site	repeat the site name
-site drop	--new-default	default site
-share setup	--users	one seat each
-share setup	--from	backup set
-share setup	--acknowledge-data	real data
-share preflight	--static	before anything starts
-share preflight	--critical	fast checks
-share preflight	--quiet	not ok
+logs	--process	the worker one reads logs/worker.log
+logs	--since	only lines at or after it
+logs	--since-restart	after the bench's last start
+logs	-n	the last n lines (default 50)
+logs	--json	the lines as json
+scan	--json	one document for a command that reads

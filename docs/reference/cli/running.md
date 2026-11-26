@@ -253,6 +253,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `logs` | `--since-restart` |  | Only lines after the bench's last start (--json). |
 | `logs` | `--no-follow` |  | Print and exit. |
 | `logs` | `-n` | `N` | The last N lines (default 50); -nN, or a bare number, also works. |
+| `logs` | `--json` |  | The lines as JSON. |
 
 | Command | Environment variable | What it does |
 |---|---|---|

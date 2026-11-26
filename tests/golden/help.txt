@@ -1177,7 +1177,7 @@ Usage: benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack C
 
 Options:
   --json                 One JSON document.
-  --fix-hints            Only the fix commands, one per line.
+  --fix-hints            Only the fix commands of the FAIL and WARN checks, one per line.
   --quick                Skip the slow checks and say which.
   --ack CHECK            Silence one named WARN for this bench until its message changes.
   --unack CHECK          Undo --ack.
@@ -1352,6 +1352,7 @@ Options:
   --since-restart        Only lines after the bench's last start (--json).
   --no-follow            Print and exit.
   -n N                   The last N lines (default 50); -nN, or a bare number, also works.
+  --json                 The lines as JSON.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
