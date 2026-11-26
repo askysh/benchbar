@@ -25,22 +25,34 @@ kb="${SC_MEM_KB:-8000000}"
 capped=0
 if ( ulimit -v "$kb" 2>/dev/null && "$cmd" --version >/dev/null 2>&1 ); then capped=1; fi
 
+# stop_child: TERM, then KILL when it is still there after a second
+pid=""
+stop_child() {
+  [[ -n "$pid" ]] || return 0
+  kill "$pid" 2>/dev/null || return 0
+  local i
+  for i in 1 2 3 4 5; do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.2; done
+  kill -9 "$pid" 2>/dev/null || true
+}
+# set before the child starts, so no signal falls between the two
+trap 'stop_child; exit 130' INT
+trap 'stop_child; exit 143' TERM
+trap 'stop_child; exit 129' HUP
+
 if [[ "$capped" == 1 ]]; then
   ( ulimit -v "$kb"; exec "$cmd" -x "$file" ) &
 else
   "$cmd" -x "$file" &
 fi
 pid=$!
-trap 'kill "$pid" 2>/dev/null; sleep 1; kill -9 "$pid" 2>/dev/null; exit 143' INT TERM HUP
 
-# SECONDS, not a count of sleeps: the time each check takes counts too
+# SECONDS, not a count of sleeps: the time each check takes counts too. It counts whole
+# seconds from a start that is rounded down, so only more than LIMIT of them is LIMIT for sure.
 start=$SECONDS
 while kill -0 "$pid" 2>/dev/null; do
-  if [[ $((SECONDS - start)) -ge "$limit" ]]; then
+  if [[ $((SECONDS - start)) -gt "$limit" ]]; then
     printf 'shellcheck: %s still running after %ss; stopped\n' "$file" "$limit" >&2
-    kill "$pid" 2>/dev/null || true
-    sleep 1
-    kill -9 "$pid" 2>/dev/null || true
+    stop_child
     wait "$pid" 2>/dev/null || true
     exit 124
   fi
