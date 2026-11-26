@@ -19,6 +19,17 @@ mock_log() {
   if [[ -n "${MOCK_ENV_DUMP:-}" && -d "${MOCK_STATE:-/nonexistent}" ]]; then
     mkdir -p "${MOCK_STATE}/env"
     { printf 'call: %s\n' "$*"; env | grep -o -E '^(MARIADB_ROOT_PASSWORD|ADMIN_PASSWORD)=' || true; } >>"${MOCK_STATE}/env/${name}"
+    # Linux: the same for every process above this one (benchbar, a phase script, a detached run), read
+    # from /proc/PID/environ, which holds what the process was started with
+    if [[ -r /proc/self/environ ]]; then
+      pid="$PPID"
+      while [[ "$pid" =~ ^[0-9]+$ && "$pid" -gt 1 ]]; do
+        if [[ -n "$(tr '\0' '\n' <"/proc/${pid}/environ" 2>/dev/null | grep -E '^(MARIADB_ROOT_PASSWORD|ADMIN_PASSWORD|BENCHBAR_SUDO_PASSWORD)=' || true)" ]]; then
+          printf 'ancestor %s has a password in its environment\n' "$pid" >>"${MOCK_STATE}/env/${name}"
+        fi
+        pid="$(sed -n 's/^PPid:[[:space:]]*//p' "/proc/${pid}/status" 2>/dev/null || true)"
+      done
+    fi
   fi
   # MOCK_SUDO_PROBE=1: third party code trying "sudo -n true" (ok or denied),
   # so a test can assert that no cached credential was usable when it ran

@@ -569,7 +569,8 @@ fl_op_background() {
   [[ "$FL_DRY_RUN" != "1" ]] || fl_die "--background starts a change; a dry run prints its plan at once." "Run the plan without --background, then apply it with --background."
   [[ -z "${FL_SUDO_PW:-}" && "${FL_SUDO_PW_NEWLINE:-0}" != "1" ]] || fl_die "--background cannot carry BENCHBAR_SUDO_PASSWORD: a detached run has no pipe to read it from." \
     "Run the command in front, or cache the sudo credential first so that sudo -n works."
-  for a in "$@"; do [[ "$a" == "--background" ]] || args+=("$a"); done
+  # --secrets-stdin is put back below (the secrets were read from this run's stdin and go to the new one on a pipe)
+  for a in "$@"; do [[ "$a" == "--background" || "$a" == "--secrets-stdin" ]] || args+=("$a"); done
   args+=(--jsonl)
   # the detached run says who started it: the launcher's answer, not its own (it has no terminal)
   fl_caller_resolve
@@ -584,13 +585,24 @@ fl_op_background() {
   FL_OP_ID=""; FL_OP_BACKGROUND=0
   (
     export FL_OP_PRESET="$id" BENCHBAR_NONINTERACTIVE=1
-    [[ -z "${ADMIN_PASSWORD:-}" ]] || export ADMIN_PASSWORD
-    [[ -z "${MARIADB_ROOT_PASSWORD:-}" ]] || export MARIADB_ROOT_PASSWORD
-    if command -v setsid >/dev/null 2>&1; then
-      setsid "$BASH" "${SCRIPT_DIR}/benchbar" "${args[@]}" >"$out" 2>"$err" </dev/null &
+    if [[ "$OPT_SECRETS_STDIN" == "1" ]]; then
+      # --secrets-stdin: the detached run reads them from a pipe (its stdin), as this run did; they are
+      # not exported, so the detached process has no password in its environment either
+      if command -v setsid >/dev/null 2>&1; then
+        setsid "$BASH" "${SCRIPT_DIR}/benchbar" "${args[@]}" --secrets-stdin >"$out" 2>"$err" < <(fl__secrets_emit) &
+      else
+        set -m
+        nohup "$BASH" "${SCRIPT_DIR}/benchbar" "${args[@]}" --secrets-stdin >"$out" 2>"$err" < <(fl__secrets_emit) &
+      fi
     else
-      set -m
-      nohup "$BASH" "${SCRIPT_DIR}/benchbar" "${args[@]}" >"$out" 2>"$err" </dev/null &
+      [[ -z "${ADMIN_PASSWORD:-}" ]] || export ADMIN_PASSWORD
+      [[ -z "${MARIADB_ROOT_PASSWORD:-}" ]] || export MARIADB_ROOT_PASSWORD
+      if command -v setsid >/dev/null 2>&1; then
+        setsid "$BASH" "${SCRIPT_DIR}/benchbar" "${args[@]}" >"$out" 2>"$err" </dev/null &
+      else
+        set -m
+        nohup "$BASH" "${SCRIPT_DIR}/benchbar" "${args[@]}" >"$out" 2>"$err" </dev/null &
+      fi
     fi
   ) 2>/dev/null
   fl_op_launch_wait "$id"

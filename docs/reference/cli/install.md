@@ -91,6 +91,56 @@ System dependencies may be set up; no bench or site was created.
 MARIADB_ROOT_PASSWORD='...' ADMIN_PASSWORD='...' benchbar install --profile v16-lts --bundle common --yes
 ```
 
+### Passwords without the environment
+
+A program that starts `benchbar` without a terminal (an agent, the Windows
+tray) can pass the passwords on standard input with `--secrets-stdin`. An
+environment variable stays in `/proc/PID/environ` of the process (and, on
+Windows, in its memory) for the whole run, and an install lasts up to 90
+minutes. A password on standard input is read into a shell variable that is
+never exported, so no `benchbar` process, phase script or child of the
+install has it in its environment. The MariaDB client gets the root password
+in an option file that is a pipe (`--defaults-extra-file=<(...)`), not in
+`MYSQL_PWD`, and the file is never on disk. A run that took its passwords from
+standard input stops tracing itself once it holds them, so `bash -x` shows the
+start of the run and none of the passwords; a run that got them in the
+environment is traced as before, and a trace prints them.
+
+```bash
+printf 'ADMIN_PASSWORD=%s\nMARIADB_ROOT_PASSWORD=%s\n\n' "$ADMIN" "$ROOT" |
+  benchbar install --yes --json --secrets-stdin
+```
+
+- The format is `KEY=VALUE` lines, LF only, ended by an empty line (required: a closed
+  input or a timeout without it is refused). The value is everything after the first `=`. Nothing after
+  the empty line is read.
+- The keys are `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` and
+  `BENCHBAR_SUDO_PASSWORD` (the last one only counts with `BENCHBAR_SUDO=env`
+  on Linux). Any other key, a repeated key, a line without `=`, a line that
+  ends in a carriage return and more than 8 lines
+  are refused with exit 64 and `error_id` `secrets_stdin_invalid`, before
+  anything is changed. The message names the line number, never the line.
+- A read that times out (no line for 30 seconds), a last line with no LF, an
+  empty list, a line over 4096 characters and a key that is not exactly one of
+  the three are refused too, the same on every bash. A caller that keeps
+  standard input open must end the list with an empty line.
+- `BENCHBAR_SUDO_PASSWORD` is refused (not ignored) unless `BENCHBAR_SUDO=env`
+  is set on Linux.
+- A terminal on standard input is refused (`secrets_stdin_terminal`): the flag
+  is for programs, a person is asked at the prompt.
+- The commands that take it are `install`, `adopt`, `repair`, `pull`,
+  `site add` and `site drop`. `site restore`, `site move`, `bench remove`,
+  `db orphans` and `share setup` need `MARIADB_ROOT_PASSWORD` in the
+  environment, as before. `benchbar commands --json` lists the flag for
+  each; a caller can look there to find out whether this `benchbar` has it.
+- With `--background` the detached run gets the passwords on a pipe as its
+  standard input, not in its environment. `BENCHBAR_SUDO_PASSWORD` still
+  cannot go to a detached run.
+- The environment variables keep working. A password is never printed,
+  logged, put in the history, in an operation record or in `--json` output
+  by either way. A missing password is still named in the same refusal (exit
+  2 for the MariaDB root password).
+
 ## adopt
 
 ```
@@ -201,11 +251,13 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `install` | `--dry-run` |  | Print the plan, change nothing. With --json the plan line carries its token. |
 | `install` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before. |
 | `install` | `--yes` |  | Do not ask; secrets come from the environment. |
+| `install` | `--secrets-stdin` |  | Read ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD and BENCHBAR_SUDO_PASSWORD from standard input, not the environment: KEY=VALUE lines, LF only, ended by an empty line (required). For a program that has no terminal; a terminal is refused. |
 | `adopt` | `--port-offset` | `N` | Move the bench to port block N. |
 | `adopt` | `--make-default` |  | Make this the default bench. |
 | `adopt` | `--allow-windows-fs` |  | WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p), which is refused by default. |
 | `adopt` | `--dry-run` |  | Print the plan, change nothing. |
 | `adopt` | `--yes` |  | Do not ask. |
+| `adopt` | `--secrets-stdin` |  | Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal. |
 | `service` | `--with-schedule` |  | Add the scheduler to Procfile.lean. |
 | `service` | `--without-schedule` |  | Remove it again. |
 | `service` | `--port-offset` | `N` | Use port block N. |

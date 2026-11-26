@@ -141,7 +141,8 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
   On Windows, only `wsl.exe --install` is elevated, through the UAC prompt.
   The full list is in [AGENTS.md](../AGENTS.md) and [SECURITY.md](../SECURITY.md).
 - The MariaDB root password lives in the Keychain and reaches the client
-  through `MYSQL_PWD`, never on a command line.
+  in an option file that is a pipe (`--defaults-extra-file=<(...)`), never on
+  a command line, in its environment or in a file on disk.
 - Full logs of every mutating run: `logs/<date>-<time>-<pid>.log` in the same
   state folder.
 

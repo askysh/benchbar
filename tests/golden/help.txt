@@ -1064,6 +1064,7 @@ Options:
   --dry-run              Print the plan, change nothing. With --json the plan line carries its token.
   --apply TOKEN          Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before.
   --yes                  Do not ask; secrets come from the environment.
+  --secrets-stdin        Read ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD and BENCHBAR_SUDO_PASSWORD from standard input, not the environment: KEY=VALUE lines, LF only, ended by an empty line (required). For a program that has no terminal; a terminal is refused.
 
 Environment:
   ADMIN_PASSWORD         The new site's Administrator password.
@@ -1087,6 +1088,7 @@ Options:
   --allow-windows-fs     WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p), which is refused by default.
   --dry-run              Print the plan, change nothing.
   --yes                  Do not ask.
+  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
 
 Environment:
   BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
@@ -1156,6 +1158,7 @@ Options:
   --dry-run              Print the plan, change nothing. With --json the plan line carries its token.
   --apply TOKEN          Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before.
   --yes                  Do not ask.
+  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
 
 Environment:
   BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
@@ -1456,6 +1459,7 @@ Options:
   --keep-staging         Keep the downloaded backup in the bench's .benchbar/pulls/ after a successful run.
   --dry-run              Print the plan and its token, change nothing.
   --apply TOKEN          Run exactly that plan (with --yes); refused when the plan changed since the token was made.
+  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
 
 Environment:
   MARIADB_ROOT_PASSWORD  Only when MariaDB has a password benchbar does not know.
@@ -1731,6 +1735,7 @@ Options:
   --dry-run              Print the plan and its token, change nothing.
   --apply TOKEN          Run exactly that plan (with --yes).
   --yes                  Do not ask.
+  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
 
 Environment:
   ADMIN_PASSWORD         The new site's Administrator password.
@@ -2080,6 +2085,7 @@ Options:
   --new-default OTHER    Required when NAME is the default site.
   --dry-run              Print the plan, change nothing. With --json the plan carries a token.
   --apply TOKEN          Run the plan of a dry run; refused when the sites, the default or the hosts line changed since (needs --yes).
+  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
 
 Environment:
   MARIADB_ROOT_PASSWORD  Only when MariaDB has a password benchbar does not know.
