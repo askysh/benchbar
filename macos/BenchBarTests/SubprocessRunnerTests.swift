@@ -31,20 +31,13 @@ struct SubprocessRunnerTests {
     }
 
     @Test func theBytesOfAnInputReachTheChildOnStdinAndInNoVariable() async throws {
-        let input = Array("ADMIN_PASSWORD=pw one
-
-".utf8)
+        let sent = "ADMIN_PASSWORD=pw one\n\n"
         let output = try await SubprocessRunner().run(
             executable: sh, arguments: ["-c", "cat; echo ---; env; echo ---; echo \"$*\""],
-            environment: ["PATH": "/usr/bin:/bin", "KEEP": "1"], timeout: .seconds(10), qos: .default, input: input)
+            environment: ["PATH": "/usr/bin:/bin", "KEEP": "1"], timeout: .seconds(10), qos: .default, input: Array(sent.utf8))
         #expect(output.exitCode == 0)
-        #expect(output.stdout.hasPrefix("ADMIN_PASSWORD=pw one
-
----
-"))
-        let rest = output.stdout.dropFirst("ADMIN_PASSWORD=pw one
-
-".count)
+        #expect(output.stdout.hasPrefix(sent + "---\n"))
+        let rest = output.stdout.dropFirst(sent.count)
         #expect(!rest.contains("pw one"), "the child's environment and arguments have no password")
         #expect(rest.contains("KEEP=1"))
     }
@@ -53,10 +46,7 @@ struct SubprocessRunnerTests {
         let box = LinesBox()
         let code = try await SubprocessRunner().stream(
             executable: sh, arguments: ["-c", "read a; read b; read c; echo \"$a|$b|$c\""], environment: [:], timeout: .seconds(10),
-            input: Array("one
-two
-
-".utf8)) { box.add($0) }
+            input: Array("one\ntwo\n\n".utf8)) { box.add($0) }
         #expect(code == 0)
         #expect(box.lines == ["one|two|"])
     }

@@ -74,8 +74,9 @@ extension CommandRunning {
         try await run(executable: executable, arguments: arguments, environment: environment, timeout: timeout)
     }
 
-    /// Runners that cannot send standard input (the test fakes) run the call without it; a test that checks the
-    /// bytes uses a runner that records them (`InputRecordingRunner`).
+    /// A runner that cannot send standard input (a test fake that did not implement the input calls) refuses a call that has some,
+    /// instead of running it without: the passwords of an install would be lost and the CLI would fail on a missing input. A test
+    /// that checks the bytes uses a runner that records them (`InputRecordingRunner`).
     func run(
         executable: URL,
         arguments: [String],
@@ -84,7 +85,8 @@ extension CommandRunning {
         qos: QualityOfService,
         input: [UInt8]?
     ) async throws(CLIError) -> CommandOutput {
-        try await run(executable: executable, arguments: arguments, environment: environment, timeout: timeout, qos: qos)
+        if input != nil { throw .launchFailed(detail: "this runner cannot send standard input") }
+        return try await run(executable: executable, arguments: arguments, environment: environment, timeout: timeout, qos: qos)
     }
 
     func stream(
@@ -95,7 +97,8 @@ extension CommandRunning {
         input: [UInt8]?,
         onLine: @escaping @Sendable (String) -> Void
     ) async throws(CLIError) -> Int32 {
-        try await stream(executable: executable, arguments: arguments, environment: environment, timeout: timeout, onLine: onLine)
+        if input != nil { throw .launchFailed(detail: "this runner cannot send standard input") }
+        return try await stream(executable: executable, arguments: arguments, environment: environment, timeout: timeout, onLine: onLine)
     }
 
     /// For runners that cannot stream (the test fakes): run, then replay the lines.
