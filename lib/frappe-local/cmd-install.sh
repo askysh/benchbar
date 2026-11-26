@@ -333,7 +333,7 @@ cmd_install() {
   [[ -z "$OPT_ERPNEXT_COMMIT" ]] || args01+=(--erpnext-commit "$OPT_ERPNEXT_COMMIT")
 
   fl_step_begin 0
-  if MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}" BENCHBAR_PDF_STEP="$FL_INSTALL_PDF_STEP" FL_JSONL_PARENT=system_deps \
+  if BENCHBAR_PDF_STEP="$FL_INSTALL_PDF_STEP" FL_JSONL_PARENT=system_deps \
      fl_run_phase_script "${SCRIPT_DIR}/${phase00}" "${args00[@]}"; then
     phase_code=0
   else
@@ -370,8 +370,9 @@ cmd_install() {
   [[ -n "$port_block" ]] && web_port="${port_block%% *}"
   if BENCH_DIR="$FL_BENCH_DIR" SITE_NAME="$FL_SITE" APP_BUNDLE="${bundle:-minimal}" BENCHBAR_WEB_PORT="$web_port" \
      BENCHBAR_PORT_BLOCK="$port_block" FL_JSONL_PARENT=bench_site BENCHBAR_PLAN_STEP1="$([[ "$FL_DRY_RUN" == "1" ]] && printf '%s' "$phase00")" \
-     MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}" ADMIN_PASSWORD="${ADMIN_PASSWORD:-}" \
      fl_run_phase_script "${SCRIPT_DIR}/01-install-bench-and-site.sh" "${args01[@]}"; then
+    # the site exists: nothing after it needs the Administrator password
+    unset ADMIN_PASSWORD
     fl_step_end "done"
   else
     code=$?

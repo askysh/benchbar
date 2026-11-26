@@ -462,6 +462,13 @@ benchbar doctor --for-agent  # one JSON document
   ask) names all of them in one error before it takes the lock or touches
   the bench. It exits 2 when the MariaDB root password is one of them;
   then ask the person for it, do not look for it.
+- Pass those passwords on standard input, not in the environment, when
+  you can: `printf 'ADMIN_PASSWORD=%s\n' "$pw" | benchbar install --yes
+  --json --secrets-stdin` (`KEY=VALUE` lines; `install`, `adopt`, `repair`,
+  `pull`, `site add` and `site drop`). An environment variable stays
+  readable in `/proc/PID/environ` for the whole run; a password read from
+  standard input is in no process's environment. See
+  [install](../reference/cli/install.md#passwords-without-the-environment).
 - Two commands are a person's and refuse in this mode and under MCP:
   `benchbar mariadb-password` (the root password) and `benchbar open --as
   USER --print-url` (a login session), whatever `--yes` says; both also

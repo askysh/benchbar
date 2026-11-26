@@ -12,6 +12,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/install-kind.sh"
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
+# shellcheck source=lib/frappe-local/secrets.sh
+. "${SCRIPT_DIR}/lib/frappe-local/secrets.sh"
 # shellcheck source=lib/frappe-local/run.sh
 . "${SCRIPT_DIR}/lib/frappe-local/run.sh"
 # shellcheck source=lib/frappe-local/platform.sh
@@ -97,6 +99,7 @@ done
 export FL_DRY_RUN
 # the root password is read here (fl_mariadb_root_setup) and must not reach
 # brew, npm or the formulae's own scripts
+fl_secrets_fd_take
 export -n MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 
 if [[ "$LIST_PROFILES" == "1" ]]; then

@@ -14,6 +14,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/install-kind.sh"
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
+# shellcheck source=lib/frappe-local/secrets.sh
+. "${SCRIPT_DIR}/lib/frappe-local/secrets.sh"
 # shellcheck source=lib/frappe-local/run.sh
 . "${SCRIPT_DIR}/lib/frappe-local/run.sh"
 # shellcheck source=lib/frappe-local/platform.sh
@@ -111,6 +113,7 @@ done
 # the passwords are read by this process (the site is created with them on
 # stdin, see bench.sh) and must not reach pip, yarn, bench get-app or any
 # other child
+fl_secrets_fd_take
 export -n MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 # one line each: the site is created with them on stdin
 fl_secrets_single_line ADMIN_PASSWORD MARIADB_ROOT_PASSWORD
@@ -487,6 +490,8 @@ fi
 fl_bench_redis_up "$BENCH_DIR"
 trap 'fl_jsonl_section_exit "$?"; fl_bench_redis_down' EXIT
 fl_new_site_if_needed "$BENCH_DIR" "$SITE_NAME" "$MARIADB_ROOT_PASSWORD" "$ADMIN_PASSWORD"
+# used: nothing after the site needs it
+unset ADMIN_PASSWORD
 
 fl_section "INSTALL APPS ON SITE"
 for spec in "${FL_INSTALL_SPECS[@]}"; do

@@ -17,6 +17,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/sudo-env.sh"
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
+# shellcheck source=lib/frappe-local/secrets.sh
+. "${SCRIPT_DIR}/lib/frappe-local/secrets.sh"
 # shellcheck source=lib/frappe-local/run.sh
 . "${SCRIPT_DIR}/lib/frappe-local/run.sh"
 # shellcheck source=lib/frappe-local/platform.sh
@@ -124,6 +126,7 @@ done
 export FL_DRY_RUN
 # the root password is read here (fl_mariadb_root_setup) and must not reach
 # the uv and fnm installers, npm or apt
+fl_secrets_fd_take
 export -n MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 fl_secrets_single_line MARIADB_ROOT_PASSWORD
 

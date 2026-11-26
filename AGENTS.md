@@ -224,7 +224,11 @@ MARIADB_ROOT_PASSWORD='...' ADMIN_PASSWORD='...' ./benchbar install --yes
 ```
 
 `ADMIN_PASSWORD` is the site's Administrator login; ask the user for it,
-or run without `--yes` and let them type it. `MARIADB_ROOT_PASSWORD` is
+or run without `--yes` and let them type it. A program with no terminal
+can send the passwords on standard input instead of in the environment
+(`--secrets-stdin`, `KEY=VALUE` lines, see `docs/reference/cli/install.md`);
+an environment variable stays readable in `/proc/PID/environ` for the whole
+run, standard input does not. `MARIADB_ROOT_PASSWORD` is
 optional: a fresh MariaDB gets a generated password, an existing password
 is read from the Keychain, and no command hands it to an agent. Only
 when MariaDB already has a password that neither the environment nor the

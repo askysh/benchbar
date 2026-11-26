@@ -469,6 +469,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site add` | `--dry-run` |  | Print the plan and its token, change nothing. |
 | `site add` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
 | `site add` | `--yes` |  | Do not ask. |
+| `site add` | `--secrets-stdin` |  | Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line. For a program that has no terminal. |
 | `site open-as` | `--yes` |  | Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1). |
 | `site open-as` | `--json` |  | JSON lines for on and off, one document for status. |
 | `site hosts` | `--prune` |  | Remove the stale lines of benchbar's block instead of adding the missing ones (sites of a forgotten bench whose folder is still there count as sites). The printed fallback command keeps a .bak copy. macOS only. |
@@ -506,6 +507,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site drop` | `--new-default` | `OTHER` | Required when NAME is the default site. |
 | `site drop` | `--dry-run` |  | Print the plan, change nothing. With --json the plan carries a token. |
 | `site drop` | `--apply` | `TOKEN` | Run the plan of a dry run; refused when the sites, the default or the hosts line changed since (needs --yes). |
+| `site drop` | `--secrets-stdin` |  | Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line. For a program that has no terminal. |
 
 | Command | Environment variable | What it does |
 |---|---|---|
