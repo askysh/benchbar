@@ -775,7 +775,7 @@ fl_bench_hint_line_v() {
 # refuse to guess. The note goes to stderr: a --json run keeps its stdout.
 # The refusal tells what to run instead: the line that was typed (fl_bench_hint_line_v) with --bench-dir PATH.
 fl_bench_guess_gate() {
-  local d n=0 list="" sep="" line=""
+  local d n=0 list="" sep="" line="" gap=""
   fl_bench_detect "$OPT_BENCH_DIR"
   [[ "${FL_BENCH_SOURCE:-}" == "detected" ]] || return 0
   while IFS= read -r d; do
@@ -784,7 +784,9 @@ fl_bench_guess_gate() {
   done < <(fl_known_benches)
   if [[ "$n" -gt 1 ]] && fl_noninteractive; then
     fl_bench_hint_line_v line
-    fl_die "More than one bench is possible and none was chosen: ${list}." "Choose one: benchbar ${line} --bench-dir PATH (or set BENCH_DIR). benchbar list shows them."
+    # a hint with a word left out is not a line to paste: "..." would be taken for a word (an app's name for app add)
+    case " ${line} " in *" ... "*) gap=" Put back what ... stands for: a word that could hold a secret is not printed here." ;; esac
+    fl_die "More than one bench is possible and none was chosen: ${list}." "Choose one: benchbar ${line} --bench-dir PATH (or set BENCH_DIR).${gap} benchbar list shows them."
   fi
   printf 'benchbar: acting on %s (auto-detected: no --bench-dir, BENCH_DIR or remembered bench%s; pass --bench-dir to choose)\n' \
     "$FL_BENCH_DIR" "$([[ "$n" -gt 1 ]] && printf '; %s benches are known: %s' "$n" "$list")" >&2
