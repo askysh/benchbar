@@ -256,9 +256,10 @@ for j in cli-macos app; do
   [[ -n "$body" ]] || fail "job $j not found in ci.yml"
   assert_contains "$body" "needs: [changes, cli-linux, cli-bash32]" "($j waits for the Linux legs)"
   # the whole condition, line for line: a moved bracket changes what runs
-  printf '%s\n' "$body" | grep -Fxq "      \${{ !cancelled() && needs.changes.result == 'success' && $(guard_of "$j")" ||
+  # (a here-string, not a pipe: grep -q under pipefail can end the writer with SIGPIPE)
+  grep -Fxq -- "      \${{ !cancelled() && needs.changes.result == 'success' && $(guard_of "$j")" <<<"$body" ||
     fail "$j: the first line of its if: changed"$'\n'"$body"
-  printf '%s\n' "$body" | grep -Fxq "$PR_GUARD" || fail "$j: the pull request guard changed"$'\n'"$body"
+  grep -Fxq -- "$PR_GUARD" <<<"$body" || fail "$j: the pull request guard changed"$'\n'"$body"
 done
 
 printf 'test-ci-plan: ok\n'
