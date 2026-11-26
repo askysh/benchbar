@@ -82,13 +82,13 @@ struct ImportProfileSheet: View {
     let close: () -> Void
 
     var body: some View {
-        SheetScaffold("Import a Profile",
-                      explanation: "Adds a profile from a .toml file or an https link, after you review it.",
+        SheetScaffold(String(localized: "Import a Profile"),
+                      explanation: String(localized: "Adds a profile from a .toml file or an https link, after you review it."),
                       phase: phase, width: .wide) {
             if run.phase != .done {
                 form
                 if let plan = run.plan { review(plan) }
-                SheetNote("BenchBar reads the file, checks that it parses and whether this Mac can reach each repository, and shows it before anything is saved. Nothing is installed from here.")
+                SheetNote(String(localized: "BenchBar reads the file, checks that it parses and whether this Mac can reach each repository, and shows it before anything is saved. Nothing is installed from here."))
             }
         } leading: {
             if run.phase == .done, let result = run.result {
@@ -112,10 +112,10 @@ struct ImportProfileSheet: View {
     }
 
     private var phase: SheetPhase {
-        run.phase.sheetPhase(loading: "Reading the profile and checking its repositories…",
-                             running: "Adding the profile…",
-                             done: run.result.map { SheetResult.success("Added \($0.name)", "Set up a bench from it with benchbar install --profile \($0.name).") },
-                             failedTitle: "The profile was not imported")
+        run.phase.sheetPhase(loading: String(localized: "Reading the profile and checking its repositories…"),
+                             running: String(localized: "Adding the profile…"),
+                             done: run.result.map { SheetResult.success(String(localized: "Added \($0.name)"), String(localized: "Set up a bench from it with benchbar install --profile \($0.name).")) },
+                             failedTitle: String(localized: "The profile was not imported"))
     }
 
     private var form: some View {
@@ -186,8 +186,8 @@ struct SubscribeProfilesSheet: View {
     let close: () -> Void
 
     var body: some View {
-        SheetScaffold("Subscribe to a Team's Profiles",
-                      explanation: "Adds the profiles in a team's git repository to this Mac.",
+        SheetScaffold(String(localized: "Subscribe to a Team's Profiles"),
+                      explanation: String(localized: "Adds the profiles in a team's git repository to this Mac."),
                       phase: phase) {
             if run.phase != .done {
                 TextField("Git repository", text: $run.repo, prompt: Text(verbatim: "git@github.com:acme/benchbar-profiles.git"))
@@ -196,7 +196,7 @@ struct SubscribeProfilesSheet: View {
                 if !run.trimmedRepo.isEmpty && !ProfileSourceRule.isGitURL(run.trimmedRepo) {
                     Text("Use an https, ssh or git@host:owner/repo URL.").font(.caption).foregroundStyle(.red)
                 }
-                SheetNote("BenchBar clones the repository into ~/.config/benchbar/sources with your own git credentials and reads only its .toml files; no code from it runs. It never updates on its own: the list shows when it is behind, and Update shows the changes first.")
+                SheetNote(String(localized: "BenchBar clones the repository into ~/.config/benchbar/sources with your own git credentials and reads only its .toml files; no code from it runs. It never updates on its own: the list shows when it is behind, and Update shows the changes first."))
             }
         } leading: {
             if run.phase == .done, let result = run.result {
@@ -216,14 +216,14 @@ struct SubscribeProfilesSheet: View {
     }
 
     private var phase: SheetPhase {
-        run.phase.sheetPhase(loading: "Cloning…", running: "Cloning…",
+        run.phase.sheetPhase(loading: String(localized: "Cloning…"), running: String(localized: "Cloning…"),
                              done: run.result.map { Self.result($0) },
-                             failedTitle: "The repository was not added")
+                             failedTitle: String(localized: "The repository was not added"))
     }
 
     private static func result(_ result: ProfileSubscribeResult) -> SheetResult {
-        .success("Subscribed to \(ProfileInfo.shortRepo(result.repo))",
-                 result.profiles.isEmpty ? "The repository has no profile yet." : "Profiles: \(result.profiles.joined(separator: ", ")).")
+        .success(String(localized: "Subscribed to \(ProfileInfo.shortRepo(result.repo))"),
+                 result.profiles.isEmpty ? String(localized: "The repository has no profile yet.") : String(localized: "Profiles: \(result.profiles.joined(separator: ", "))."))
     }
 }
 
@@ -236,8 +236,8 @@ struct ExportProfileSheet: View {
     @State private var copied = false
 
     var body: some View {
-        SheetScaffold("Export \(run.name)",
-                      explanation: "Writes a profile file your team can import, with the branch each app is shared on.",
+        SheetScaffold(String(localized: "Export \(run.name)"),
+                      explanation: String(localized: "Writes a profile file your team can import, with the branch each app is shared on."),
                       phase: phase, width: .wide) {
             switch run.phase {
             case .ready, .running:
@@ -256,7 +256,7 @@ struct ExportProfileSheet: View {
             case .done:
                 DoneButton(action: close)
             case .failed:
-                DoneButton(title: "Close", action: close)
+                DoneButton(title: String(localized: "Close"), action: close)
             case .idle, .loading, .ready, .running:
                 CancelButton(action: close)
                     .disabled(run.phase == .running)
@@ -269,11 +269,11 @@ struct ExportProfileSheet: View {
     }
 
     private var phase: SheetPhase {
-        run.phase.sheetPhase(idle: .loading("Asking each repository for its default branch and access…"),
-                             loading: "Asking each repository for its default branch and access…",
-                             running: "Exporting…",
+        run.phase.sheetPhase(idle: .loading(String(localized: "Asking each repository for its default branch and access…")),
+                             loading: String(localized: "Asking each repository for its default branch and access…"),
+                             running: String(localized: "Exporting…"),
                              done: run.result.map { SheetResult.success(Wording.exportedApps($0.apps), $0.path) },
-                             failedTitle: "\(run.name) was not exported")
+                             failedTitle: String(localized: "\(run.name) was not exported"))
     }
 
     @ViewBuilder private func review(_ plan: ProfileExportPlan) -> some View {
@@ -289,7 +289,7 @@ struct ExportProfileSheet: View {
         ForEach(plan.warnings, id: \.self) { warning in
             Label(warning, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
         }
-        SheetNote("Repository addresses are written without your SSH host aliases or any login.")
+        SheetNote(String(localized: "Repository addresses are written without your SSH host aliases or any login."))
     }
 
     private func row(_ app: ProfileExportPlan.App) -> some View {
@@ -366,8 +366,8 @@ struct UpdateProfileSheet: View {
     let close: () -> Void
 
     var body: some View {
-        SheetScaffold("Update \(run.name)",
-                      explanation: "Shows what changed in the profile's source, then applies it.",
+        SheetScaffold(String(localized: "Update \(run.name)"),
+                      explanation: String(localized: "Shows what changed in the profile's source, then applies it."),
                       phase: phase, width: .wide) {
             switch run.phase {
             case .ready, .running, .done:
@@ -380,7 +380,7 @@ struct UpdateProfileSheet: View {
             case .done:
                 DoneButton(action: close)
             case .failed:
-                DoneButton(title: "Close", action: close)
+                DoneButton(title: String(localized: "Close"), action: close)
             case .loading, .ready, .running:
                 CancelButton(action: close)
                     .disabled(run.phase == .running)
@@ -395,13 +395,13 @@ struct UpdateProfileSheet: View {
     /// A plan without changes leaves nothing to confirm: it reads as done.
     private var phase: SheetPhase {
         if run.phase == .ready, let plan = run.plan, !plan.hasChanges {
-            return .done(.success("\(run.name) is up to date", "Nothing to change."))
+            return .done(.success(String(localized: "\(run.name) is up to date"), String(localized: "Nothing to change.")))
         }
-        return run.phase.sheetPhase(idle: .loading("Fetching the source…"),
-                                    loading: "Fetching the source…",
-                                    running: "Updating…",
-                                    done: .success("Updated \(run.name)"),
-                                    failedTitle: "\(run.name) was not updated")
+        return run.phase.sheetPhase(idle: .loading(String(localized: "Fetching the source…")),
+                                    loading: String(localized: "Fetching the source…"),
+                                    running: String(localized: "Updating…"),
+                                    done: .success(String(localized: "Updated \(run.name)")),
+                                    failedTitle: String(localized: "\(run.name) was not updated"))
     }
 
     @ViewBuilder private func updates(_ plan: ProfileUpdatePlan) -> some View {
@@ -427,8 +427,8 @@ struct CheckAccessSheet: View {
     let close: () -> Void
 
     var body: some View {
-        SheetScaffold("Check Access to \(run.name)",
-                      explanation: "Tries each repository of the profile with your git credentials.",
+        SheetScaffold(String(localized: "Check Access to \(run.name)"),
+                      explanation: String(localized: "Tries each repository of the profile with your git credentials."),
                       phase: phase) {
             if run.phase == .done, let check = run.check {
                 VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
@@ -447,14 +447,14 @@ struct CheckAccessSheet: View {
         let checking = String(localized: "Trying each repository with your git credentials…")
         return run.phase.sheetPhase(idle: .loading(checking), loading: checking, running: checking,
                                     done: run.check.map { Self.result($0) },
-                                    failedTitle: "Access was not checked")
+                                    failedTitle: String(localized: "Access was not checked"))
     }
 
     /// Every repository reachable, or how many are not and what a bench would skip.
     private static func result(_ check: ProfileCheck) -> SheetResult {
         let missing = check.repos.filter { $0.reachable != true }.count
         guard missing > 0 || !check.skippedApps.isEmpty else {
-            return .success("This Mac can reach every repository")
+            return .success(String(localized: "This Mac can reach every repository"))
         }
         let title = missing == 0 ? String(localized: "Some apps would be left out")
             : Wording.repositoriesNotReachable(missing)

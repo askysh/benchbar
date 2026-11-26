@@ -120,19 +120,20 @@ struct AppAddPlanView: View {
                 }
             }
             if !plan.errors.isEmpty {
-                SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: "This plan cannot run",
+                SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: String(localized: "This plan cannot run"),
                              detail: plan.errors.joined(separator: "\n"))
             }
             if let reason = plan.reason {
                 SheetNote(reason, tint: .orange)
             }
             if let error = plan.sitesError, !error.isEmpty {
-                SheetNote("The sites' app lists could not be read, so every chosen site is shown as not having the app: \(error)", tint: .orange)
+                SheetNote(String(localized: "The sites' app lists could not be read, so every chosen site is shown as not having the app: \(error)"), tint: .orange)
             }
             if plan.canApply && !plan.changes {
-                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: "Nothing to do",
-                             detail: plan.isBatch ? "Every app is already in the bench and on its chosen sites."
-                                 : "\(plan.app) is already in the bench\(plan.sites.isEmpty ? "" : " and on the chosen site").")
+                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: String(localized: "Nothing to do"),
+                             detail: plan.isBatch ? String(localized: "Every app is already in the bench and on its chosen sites.")
+                                 : plan.sites.isEmpty ? String(localized: "\(plan.app) is already in the bench.")
+                                 : String(localized: "\(plan.app) is already in the bench and on the chosen site."))
             }
             // a plan that cannot run shows why, not the steps it will not take
             if plan.canApply {
@@ -174,8 +175,9 @@ struct SiteAddPlanView: View {
         VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
             Text(plan.site).font(.headline)
             if !plan.changes {
-                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: "Nothing to do",
-                             detail: "\(plan.site) is already on the bench\(plan.hostsEntry ? " and in /etc/hosts" : "").")
+                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: String(localized: "Nothing to do"),
+                             detail: plan.hostsEntry ? String(localized: "\(plan.site) is already on the bench and in /etc/hosts.")
+                                 : String(localized: "\(plan.site) is already on the bench."))
             }
             PlanFacts(facts: facts)
             if !plan.steps.isEmpty {

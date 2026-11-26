@@ -17,7 +17,7 @@ Built in and team profiles, with where each comes from.
 
 | Flag | What it does |
 |---|---|
-| `--json` | The list as JSON ([schema](../../json-schema.md#benchbar-profile-list---json)) |
+| `--json` | The list as JSON ([schema](../json/teams.md#benchbar-profile-list---json)) |
 
 Exit codes: 0.
 
@@ -84,7 +84,7 @@ schema 2.
 | `--out FILE` | Where to write (default `./NAME.toml`) |
 | `--branch APP=BR` | Export APP on BR instead of its default branch; repeatable |
 | `--drop APP` | Leave APP out; repeatable. Refused when a kept app requires it |
-| `--plan` | Print the review only, write nothing (`--json`: [schema](../../json-schema.md#benchbar-profile-export-name---plan---json)) |
+| `--plan` | Print the review only, write nothing (`--json`: [schema](../json/teams.md#benchbar-profile-export-name---plan---json)) |
 
 Exit codes: 0; 1 when the profile does not exist, a drop is refused or
 you do not confirm.

@@ -46,19 +46,19 @@ struct SnapshotsSheet: View {
     private var labelProblem: String? { SnapshotText.labelProblem(label) }
 
     private var phase: SheetPhase {
-        if let loadError { return .failed(loadError, title: "The snapshots could not be read") }
-        if !loaded { return .loading("Reading the snapshots of \(site)…") }
+        if let loadError { return .failed(loadError, title: String(localized: "The snapshots could not be read")) }
+        if !loaded { return .loading(String(localized: "Reading the snapshots of \(site)…")) }
         if let activity = bench.activity { return .running(activity) }
         return .ready
     }
 
     var body: some View {
-        SheetScaffold("Snapshots of \(site)",
-                      explanation: "A snapshot is a backup with files that frappe's pruning never removes, with the apps it was taken with. Taking one changes nothing in the site.",
+        SheetScaffold(String(localized: "Snapshots of \(site)"),
+                      explanation: String(localized: "A snapshot is a backup with files that frappe's pruning never removes, with the apps it was taken with. Taking one changes nothing in the site."),
                       phase: phase, width: .wide) {
             if loaded { content }
         } actions: {
-            DoneButton(title: "Close", action: close)
+            DoneButton(title: String(localized: "Close"), action: close)
         }
         .task { await load() }
         .sheet(item: $rollingBack) { snapshot in
@@ -88,8 +88,8 @@ struct SnapshotsSheet: View {
             ForEach(list.snapshots) { snapshot in row(snapshot) }
             SheetNote(summary(list))
         } else {
-            SheetOutcome(symbol: "camera", tint: .secondary, title: "No snapshots of \(site) yet",
-                         detail: "Take one before an upgrade or a risky change; a rollback puts the site back as it was.")
+            SheetOutcome(symbol: "camera", tint: .secondary, title: String(localized: "No snapshots of \(site) yet"),
+                         detail: String(localized: "Take one before an upgrade or a risky change; a rollback puts the site back as it was."))
         }
     }
 
@@ -158,17 +158,17 @@ struct SiteRollbackSheet: View {
     private var phase: SheetPhase {
         switch flow.stage {
         case .form:
-            if let error = flow.readError { .failed(error, title: "No plan to roll \(site) back") } else { .loading("Reading the snapshot and the bench…") }
-        case .reading: .loading("Reading the snapshot and the bench…")
+            if let error = flow.readError { .failed(error, title: String(localized: "No plan to roll \(site) back")) } else { .loading(String(localized: "Reading the snapshot and the bench…")) }
+        case .reading: .loading(String(localized: "Reading the snapshot and the bench…"))
         case .reviewing: .ready
-        case .applying: .running("Snapshotting and rolling back \(site)…")
-        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench or the snapshot changed since this plan was shown")
+        case .applying: .running(String(localized: "Snapshotting and rolling back \(site)…"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench or the snapshot changed since this plan was shown"))
         }
     }
 
     var body: some View {
-        SheetScaffold("Roll \(site) back",
-                      explanation: "Puts \(snapshot.title) back into the site. You see the plan first; nothing runs before you confirm.",
+        SheetScaffold(String(localized: "Roll \(site) back"),
+                      explanation: String(localized: "Puts \(snapshot.title) back into the site. You see the plan first; nothing runs before you confirm."),
                       phase: phase, width: .wide) {
             if let plan = flow.plan { review(plan) }
         } actions: {
@@ -201,7 +201,7 @@ struct SiteRollbackSheet: View {
             Text("taken \(SnapshotText.line(snapshot, now: pinnedNow ?? .now)) (\(snapshot.stamp))").font(.caption).foregroundStyle(.secondary)
         }
         if !plan.errors.isEmpty {
-            SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: "This plan cannot run", detail: plan.errors.joined(separator: "\n"))
+            SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: String(localized: "This plan cannot run"), detail: plan.errors.joined(separator: "\n"))
         }
         if !plan.needs.isEmpty { SheetNote(RollbackText.needsText(plan.needs), tint: .orange) }
         if SnapshotText.isDefaultSite(plan, benchDefault: bench.status?.site ?? bench.summary.site) { SheetNote(SnapshotText.defaultSiteNote, tint: .orange) }
@@ -214,7 +214,7 @@ struct SiteRollbackSheet: View {
             }
             Toggle("Do not run migrate afterwards", isOn: $noMigrate)
             TextField("Type \(site) to confirm", text: $typed).textFieldStyle(.roundedBorder).autocorrectionDisabled()
-            SheetNote("The MariaDB password comes from your Keychain; BenchBar never reads it.")
+            SheetNote(String(localized: "The MariaDB password comes from your Keychain; BenchBar never reads it."))
         }
     }
 

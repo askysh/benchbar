@@ -35,15 +35,15 @@ struct TidySheet: View {
     private var expired: [ScratchBench] { (try? gc?.get())?.expired ?? [] }
 
     var body: some View {
-        SheetScaffold("Tidy Up",
-                      explanation: "Scratch benches, the ones that expired and what a removed bench leaves behind. Nothing here changes until you choose.",
-                      phase: marking ? .running("Marking \(bench.name)…") : .ready) {
+        SheetScaffold(String(localized: "Tidy Up"),
+                      explanation: String(localized: "Scratch benches, the ones that expired and what a removed bench leaves behind. Nothing here changes until you choose."),
+                      phase: marking ? .running(String(localized: "Marking \(bench.name)…")) : .ready) {
             if workbench.offersScratch { scratch }
             if workbench.offersGc { scratchBenches }
             if workbench.offersOrphans { orphanSection }
             if workbench.offersHostsPrune { hostsSection }
         } actions: {
-            DoneButton(title: "Close", action: close)
+            DoneButton(title: String(localized: "Close"), action: close)
             if workbench.offersGc {
                 Button("Remove Expired…", action: removeExpired)
                     .disabled(expired.isEmpty || !workbench.store.canChange(bench))
@@ -62,7 +62,7 @@ struct TidySheet: View {
     private var scratch: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
             Text(bench.name).font(.headline)
-            SheetNote("A scratch bench expires after the days you give. The default bench is never removed.")
+            SheetNote(String(localized: "A scratch bench expires after the days you give. The default bench is never removed."))
             HStack(spacing: WindowMetrics.rowSpacing) {
                 TextField("Days until it expires", text: $days).frame(width: 190)
                 Button("Mark Scratch") { confirming = true }
@@ -117,8 +117,8 @@ struct TidySheet: View {
                 } else {
                     Text(Wording.staleHostsLines(names.count)).font(.callout)
                     ForEach(names, id: \.self) { Text($0).font(.callout.monospaced()) }
-                    SheetNote("BenchBar does not edit /etc/hosts. Run this in Terminal: it shows the lines, backs the file up and asks for your password.")
-                    CopyableCommand(command: TidyCommands.hostsCommand, copyLabel: "Copy the command that removes the stale hosts lines")
+                    SheetNote(String(localized: "BenchBar does not edit /etc/hosts. Run this in Terminal: it shows the lines, backs the file up and asks for your password."))
+                    CopyableCommand(command: TidyCommands.hostsCommand, copyLabel: String(localized: "Copy the command that removes the stale hosts lines"))
                 }
             }
         }
@@ -164,21 +164,21 @@ struct TidyPlanSheet: View {
 
     private var phase: SheetPhase {
         switch flow.stage {
-        case .form: flow.readError.map { .failed($0, title: "No plan to \(action.title.lowercased())") } ?? .loading("Reading the plan…")
-        case .reading: .loading("Reading the plan…")
+        case .form: flow.readError.map { .failed($0, title: String(localized: "No plan to \(action.title.lowercased())")) } ?? .loading(String(localized: "Reading the plan…"))
+        case .reading: .loading(String(localized: "Reading the plan…"))
         case .reviewing: .ready
-        case .applying: .running("\(action.title)…")
-        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown")
+        case .applying: .running(String(localized: "\(action.title)…"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench changed since this plan was shown"))
         }
     }
 
     var body: some View {
-        SheetScaffold(action == .gc ? action.title : "\(action.title): \(bench.name)", explanation: explanation, phase: phase, width: .wide) {
+        SheetScaffold(action == .gc ? action.title : String(localized: "\(action.title): \(bench.name)"), explanation: explanation, phase: phase, width: .wide) {
             if let plan = flow.plan { planView(plan) }
         } actions: {
             switch flow.stage {
             case .form where flow.readError != nil:
-                CancelButton(title: "Close", action: close)
+                CancelButton(title: String(localized: "Close"), action: close)
                 Button("Try Again") { review() }.keyboardShortcut(.defaultAction)
             case .form, .reading:
                 CancelButton(action: close)
@@ -202,8 +202,8 @@ struct TidyPlanSheet: View {
             ForEach(plan.errors, id: \.self) { SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: $0) }
             ForEach(plan.warnings, id: \.self) { SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .orange, title: $0) }
             if plan.rows.isEmpty, plan.errors.isEmpty {
-                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: "Nothing to do",
-                             detail: action == .gc ? "No scratch bench has expired." : "The CLI listed no step.")
+                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: String(localized: "Nothing to do"),
+                             detail: action == .gc ? String(localized: "No scratch bench has expired.") : String(localized: "The CLI listed no step."))
             } else {
                 Text("In order:").font(.callout)
                 PlanStepList(rows: plan.rows.map { PlanStepList.Row(name: $0, command: nil, note: nil) })
@@ -211,7 +211,7 @@ struct TidyPlanSheet: View {
             if !plan.keeps.isEmpty { PlanFacts(facts: [(String(localized: "Stays"), plan.keeps.joined(separator: ", ") + ".")]) }
             if let trash = plan.trashIn { PlanFacts(facts: [(String(localized: "Trash"), String(localized: "The folder moves to \(trash). Empty it yourself when you are sure."))]) }
             if plan.token == nil, action.hasToken, plan.errors.isEmpty, !plan.rows.isEmpty {
-                SheetNote("This plan has no token, so BenchBar does not run it. Run it in Terminal with benchbar, or update benchbar.", tint: .orange)
+                SheetNote(String(localized: "This plan has no token, so BenchBar does not run it. Run it in Terminal with benchbar, or update benchbar."), tint: .orange)
             }
             if needsName, plan.canRun {
                 TextField("Type \(folder) to confirm", text: $typed).textFieldStyle(.roundedBorder).autocorrectionDisabled()

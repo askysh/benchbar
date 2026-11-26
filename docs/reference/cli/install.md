@@ -69,7 +69,7 @@ phase scripts: no other program started by the install sees them.
 | `--allow-unsupported-distro` | Linux only: try a system other than Ubuntu 24.04, the one the install is tested on and supports. Without it the install stops before it installs any package (also `BENCHBAR_ALLOW_UNSUPPORTED_DISTRO=1`, for `00-linux-system-deps.sh`) |
 | `--allow-windows-fs` | WSL only: accept a bench on the Windows file system (`/mnt/c`, drvfs, 9p). Refused by default: it is very slow, file watching does not work and permissions break |
 | `-y`, `--yes` | Accept every default and confirmation, including the `sudo` line for `/etc/hosts`; the passwords must be in the environment |
-| `--json` | JSON lines for the BenchBar app and agents: `plan`, `step`, `progress` and a closing `done` ([schema](../../json-schema.md#benchbar-install---json)). Needs `--yes` or `--dry-run`, takes every value from a flag or the environment and never asks |
+| `--json` | JSON lines for the BenchBar app and agents: `plan`, `step`, `progress` and a closing `done` ([schema](../json/install-and-doctor.md#benchbar-install---json)). Needs `--yes` or `--dry-run`, takes every value from a flag or the environment and never asks |
 
 `BENCH_INIT_TIMEOUT_SECONDS` sets how long `bench init` may run before it is
 stopped (default 2700, `0` for no limit). A half built bench left by a stopped
@@ -80,7 +80,7 @@ app or a site is never moved: `install` stops and names `benchbar repair`.
 With `--yes` the confirmation is skipped but the `sudo` password prompt
 is not. When the BenchBar app runs it, `BENCHBAR_SUDO=gui` is set, and each of
 the two steps that need root asks in macOS's own password dialog, at
-most two per run ([the privileged steps](../../json-schema.md#the-privileged-steps-and-benchbar_sudogui)).
+most two per run ([the privileged steps](../json/install-and-doctor.md#the-privileged-steps-and-benchbar_sudogui)).
 
 Exit codes: 0 success; 1 a step failed; 2 phase 00 or 01 stopped for a
 manual step, most often a MariaDB root password that neither the
@@ -168,7 +168,7 @@ warns and does not install it into the bench env.
 | `--allow-windows-fs` | WSL only: accept a bench on the Windows file system (`/mnt/c`, drvfs, 9p), which is refused by default |
 | `--dry-run` | Print the plan, change nothing |
 | `-y`, `--yes` | Apply without asking |
-| `--json` | JSON lines, as for `install` ([schema](../../json-schema.md#benchbar-install---json)); needs `--yes` or `--dry-run` |
+| `--json` | JSON lines, as for `install` ([schema](../json/install-and-doctor.md#benchbar-install---json)); needs `--yes` or `--dry-run` |
 
 A bench path with a double quote, backslash, `$`, backtick, `<`, `>`,
 `&` or a control character in it is refused before anything is written:

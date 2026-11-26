@@ -39,22 +39,21 @@ struct RunSheet: View {
     private var phase: SheetPhase {
         switch flow.stage {
         case .form:
-            if reading { return .loading("Running \(command.name)…") }
-            if let error = flow.readError { return .failed(error, title: "No plan to run \(command.name)") }
-            if let readFailure { return .failed(readFailure, title: "\(command.name) did not run") }
+            if reading { return .loading(String(localized: "Running \(command.name)…")) }
+            if let error = flow.readError { return .failed(error, title: String(localized: "No plan to run \(command.name)")) }
+            if let readFailure { return .failed(readFailure, title: String(localized: "\(command.name) did not run")) }
             return .ready
-        case .reading: return .loading("Reading the plan…")
+        case .reading: return .loading(String(localized: "Reading the plan…"))
         case .reviewing: return .ready
-        case .applying: return .running("Running \(command.name): it can take a while, and it is stopped at its deadline…")
-        case .stale: return .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench or the site changed since this plan was shown")
+        case .applying: return .running(String(localized: "Running \(command.name): it can take a while, and it is stopped at its deadline…"))
+        case .stale: return .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench or the site changed since this plan was shown"))
         }
     }
 
     var body: some View {
-        SheetScaffold("Run Bench Command",
+        SheetScaffold(String(localized: "Run Bench Command"),
                       explanation: flow.plan == nil
-                          ? "Runs one command of benchbar's allow list in \(bench.name), under a deadline. A read runs at once; a change shows its plan first."
-                          : "Nothing has run yet. This is the plan; Run runs exactly this.",
+                          ? String(localized: "Runs one command of benchbar's allow list in \(bench.name), under a deadline. A read runs at once; a change shows its plan first.") : String(localized: "Nothing has run yet. This is the plan; Run runs exactly this."),
                       phase: phase, width: .wide) {
             if let plan = flow.plan {
                 planView(plan)
@@ -106,7 +105,8 @@ struct RunSheet: View {
                 .disabled(command.flags.isEmpty)
         }
         .formStyle(.columns)
-        SheetNote(command.help + (command.flags.isEmpty ? " It takes no flags." : " Flags: " + command.flags.joined(separator: ", ") + ". Each value is one plain word."))
+        SheetNote(command.flags.isEmpty ? String(localized: "\(command.help) It takes no flags.")
+                  : String(localized: "\(command.help) Flags: \(command.flags.joined(separator: ", ")). Each value is one plain word."))
         if !options.trimmingCharacters(in: .whitespaces).isEmpty, let problem {
             SheetNote(problem, tint: .red)
         }
@@ -142,7 +142,7 @@ struct RunSheet: View {
                 PlanStepList(rows: plan.steps.map { PlanStepList.Row(name: $0.name, command: nil, note: $0.touches.isEmpty ? nil : "Touches: " + $0.touches.joined(separator: ", ")) })
             }
             if plan.token == nil && plan.errors.isEmpty {
-                SheetNote("This plan has no token, so BenchBar does not run it. Run it in Terminal with benchbar run, or update benchbar.", tint: .orange)
+                SheetNote(String(localized: "This plan has no token, so BenchBar does not run it. Run it in Terminal with benchbar run, or update benchbar."), tint: .orange)
             }
         }
     }

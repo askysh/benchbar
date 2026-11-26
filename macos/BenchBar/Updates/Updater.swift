@@ -14,7 +14,7 @@ final class Updater {
 
     /// "Check for Updates…", for the menus.
     func menuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Check for Updates…", action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
+        let item = NSMenuItem(title: String(localized: "Check for Updates…"), action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
         item.target = controller
         return item
     }

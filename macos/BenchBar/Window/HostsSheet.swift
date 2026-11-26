@@ -66,10 +66,10 @@ extension HostsRun {
     var sheetPhase: SheetPhase {
         switch phase {
         case .ready: .ready
-        case .running: .running("Waiting for macOS to ask for your password…")
-        case .added: .done(.success("The hosts lines are in.", "The site names resolve to this Mac now."))
-        case .skipped(let line): .done(.warning("Nothing was added", line))
-        case .failed(let message): .failed(message, title: "The hosts lines were not added")
+        case .running: .running(String(localized: "Waiting for macOS to ask for your password…"))
+        case .added: .done(.success(String(localized: "The hosts lines are in."), String(localized: "The site names resolve to this Mac now.")))
+        case .skipped(let line): .done(.warning(String(localized: "Nothing was added"), line))
+        case .failed(let message): .failed(message, title: String(localized: "The hosts lines were not added"))
         }
     }
 }
@@ -79,8 +79,8 @@ struct HostsSheet: View {
     let close: () -> Void
 
     var body: some View {
-        SheetScaffold("Add Hosts Lines",
-                      explanation: "Adds the site names of \(run.bench.name) to /etc/hosts, so they open in your browser.",
+        SheetScaffold(String(localized: "Add Hosts Lines"),
+                      explanation: String(localized: "Adds the site names of \(run.bench.name) to /etc/hosts, so they open in your browser."),
                       phase: run.sheetPhase) {
             if run.phase == .ready || run.phase == .running {
                 VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing + 2) {
@@ -88,10 +88,10 @@ struct HostsSheet: View {
                         Label(name, systemImage: "globe").font(.callout)
                     }
                 }
-                SheetNote("macOS asks for your password in its own dialog; BenchBar never sees it. Cancel the dialog and nothing changes.")
+                SheetNote(String(localized: "macOS asks for your password in its own dialog; BenchBar never sees it. Cancel the dialog and nothing changes."))
             } else if run.phase != .added {
                 Text("Or run this in Terminal:").font(.callout).foregroundStyle(.secondary)
-                CopyableCommand(command: run.command, copyLabel: "Copy the command that adds the hosts lines")
+                CopyableCommand(command: run.command, copyLabel: String(localized: "Copy the command that adds the hosts lines"))
             }
         } actions: {
             switch run.phase {
@@ -105,7 +105,7 @@ struct HostsSheet: View {
             case .added:
                 DoneButton(action: close)
             case .skipped, .failed:
-                CancelButton(title: "Close", action: close)
+                CancelButton(title: String(localized: "Close"), action: close)
                 Button("Try Again") { Task { await run.run() } }
                     .keyboardShortcut(.defaultAction)
             }

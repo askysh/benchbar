@@ -357,7 +357,7 @@ struct NoticeBanner: View {
     let dismiss: () -> Void
 
     var body: some View {
-        PaneBanner(symbol: "link", tint: .orange, title: "A BenchBar link did nothing", detail: text, dismiss: dismiss)
+        PaneBanner(symbol: "link", tint: .orange, title: String(localized: "A BenchBar link did nothing"), detail: text, dismiss: dismiss)
     }
 }
 
@@ -374,7 +374,7 @@ struct DefaultsNoticeBanner: View {
 
     var body: some View {
         PaneBanner(symbol: "info.circle.fill", tint: .orange, title: title, detail: notice.banner,
-                   dismissHelp: "Dismiss this notice", dismiss: dismiss) {
+                   dismissHelp: String(localized: "Dismiss this notice"), dismiss: dismiss) {
             HStack {
                 if let doc = notice.doc, let url = URL(string: doc) {
                     Button("Learn More") { NSWorkspace.shared.open(url) }
@@ -397,7 +397,7 @@ struct ChangeResultBanner: View {
         if let result = workbench.result, result.scope == scope {
             PaneBanner(symbol: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
                    tint: result.succeeded ? .green : .red,
-                   title: result.succeeded ? "\(result.title): done" : "\(result.title): failed",
+                   title: result.succeeded ? String(localized: "\(result.title): done") : String(localized: "\(result.title): failed"),
                    detail: result.error ?? result.note, dismiss: { workbench.result = nil }) {
                 if let lease = result.lease {
                     LeaseBreakRow(lease: lease, title: result.title, canBreak: workbench.leaseRetry != nil) { Task { await workbench.breakLease() } }

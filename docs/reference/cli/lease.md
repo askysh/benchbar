@@ -112,7 +112,7 @@ boundary.
 `status --json` has a `leases` array: the active leases of that bench (the
 bench's own and those of its sites), each with `scope`, `site`, `holder`,
 `note`, `since` and `expires_at`. It is one small file read; without leases it
-reads nothing. The JSON is in [the JSON reference](../../json-schema.md#benchbar-lease---json).
+reads nothing. The JSON is in [the JSON reference](../json/operations.md#benchbar-lease---json).
 The BenchBar app and the Windows tray do not show leases yet.
 
 ## Flags, needs and environment
