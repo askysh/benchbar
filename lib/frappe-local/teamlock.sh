@@ -661,7 +661,7 @@ fl_cmd_lock_apply() {
   fl_info "lockfile ${FL_LOCK_FILE}"
   fl_lock_drift
   [[ -n "$LK_PROFILE" && "$LK_PROFILE" != "$FL_PROFILE" ]] && fl_warn "the lock was written on profile ${LK_PROFILE}, this bench is ${FL_PROFILE}; apply changes apps only"
-  # the plan: one entry per app that needs something, "kind|app|dir|detail"
+  # the plan: one entry per app that needs something, "kind|index|app|detail"
   fl__la_plan
   # the approval token: the lockfile (its bytes), the plan and what is skipped; --apply recomputes it here, under the lock
   fl__la_token

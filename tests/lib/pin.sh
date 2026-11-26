@@ -76,6 +76,6 @@ pin_check() {
   [[ -f "$golden" ]] || fail "no golden file ${golden} (run with PIN_UPDATE=1 on a tree you trust)"
   if ! cmp -s "$norm" "$golden"; then
     diff -u "$golden" "$norm" | sed -n "1,80p" >&2 || true
-    fail "the output of the pinned scenarios changed: ${1}"
+    fail "the output of the pinned scenarios changed: ${1}. If the change is meant, write the golden again on a tree you trust: PIN_UPDATE=1 bash tests/${0##*/} (then read the diff of tests/golden/ before you commit it)."
   fi
 }

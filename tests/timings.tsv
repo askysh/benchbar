@@ -12,11 +12,13 @@ test-affected	10	5
 test-agent-contracts	127	83
 test-agent-contracts-2	92	113
 test-agent-contracts-3	103	112
+test-app-add-pin	199	101
 test-app-batch	227	164
 test-app-cli	93	73
 test-app-recovery	119	94
 test-app-recovery-2	148	166
 test-app-recovery-3	156	114
+test-app-update-pin	97	84
 test-apps	244	161
 test-apps-speed	35	27
 test-backup-safety	86	67
@@ -61,6 +63,7 @@ test-lifecycle-2	38	28
 test-linux-parity	17	12
 test-listen	39	46
 test-lock	171	180
+test-lock-apply-pin	100	60
 test-macos-appcast	2	1
 test-mcp	205	215
 test-mcp-2	55	33
