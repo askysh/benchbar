@@ -156,7 +156,7 @@ run_shellcheck() {
     files+=("$ROOT"/tests/*.sh "$ROOT"/tests/lib/*.sh "$ROOT"/tests/mocks/bin/* "$ROOT"/scripts/*.sh)
   fi
   [[ "${#files[@]}" -gt 0 ]] || { printf 'shellcheck: no files\n'; return 0; }
-  printf '%s\0' "${files[@]}" | xargs -0 -n 12 -P "$jobs" shellcheck -x || return 1
+  printf '%s\0' "${files[@]}" | xargs -0 -n 1 -P "$jobs" bash "$ROOT/tests/lib/shellcheck-file.sh" || return 1
   printf 'shellcheck: ok (%s files)\n' "${#files[@]}"
 }
 
