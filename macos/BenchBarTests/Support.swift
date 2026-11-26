@@ -53,6 +53,8 @@ nonisolated final class FakeRunner: CommandRunning, @unchecked Sendable {
         var executable: String
         var arguments: [String]
         var environment: [String: String]
+        /// The bytes sent on the child's standard input (`--secrets-stdin`), nil when the call sent none.
+        var input: [UInt8]?
     }
 
     private let lock = NSLock()
@@ -66,7 +68,24 @@ nonisolated final class FakeRunner: CommandRunning, @unchecked Sendable {
     var calls: [Call] { lock.withLock { _calls } }
 
     func run(executable: URL, arguments: [String], environment: [String: String], timeout: Duration) async throws(CLIError) -> CommandOutput {
-        lock.withLock { _calls.append(Call(executable: executable.path, arguments: arguments, environment: environment)) }
+        try perform(executable: executable, arguments: arguments, environment: environment, input: nil)
+    }
+
+    /// The input calls record the bytes with the call, so a test can see what a CLI that takes `--secrets-stdin` would have read.
+    func run(executable: URL, arguments: [String], environment: [String: String], timeout: Duration,
+             qos: QualityOfService, input: [UInt8]?) async throws(CLIError) -> CommandOutput {
+        try perform(executable: executable, arguments: arguments, environment: environment, input: input)
+    }
+
+    func stream(executable: URL, arguments: [String], environment: [String: String], timeout: Duration, input: [UInt8]?,
+                onLine: @escaping @Sendable (String) -> Void) async throws(CLIError) -> Int32 {
+        let output = try perform(executable: executable, arguments: arguments, environment: environment, input: input)
+        for line in output.stdout.split(separator: "\n", omittingEmptySubsequences: true) { onLine(String(line)) }
+        return output.exitCode
+    }
+
+    private func perform(executable: URL, arguments: [String], environment: [String: String], input: [UInt8]?) throws(CLIError) -> CommandOutput {
+        lock.withLock { _calls.append(Call(executable: executable.path, arguments: arguments, environment: environment, input: input)) }
         return try respond(arguments)
     }
 }
