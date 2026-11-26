@@ -2,7 +2,7 @@ import Foundation
 
 /// The counts of the Share and Network panes (UI-18). The plural forms are in the String
 /// Catalog, next to the ones in Wording.swift.
-extension Wording {
+nonisolated extension Wording {
     /// "1 person is connected and will be signed out.", "3 people are connected and will be ...".
     static func peopleConnected(_ n: Int) -> String { String(localized: "\(n) people are connected and will be signed out.") }
 
