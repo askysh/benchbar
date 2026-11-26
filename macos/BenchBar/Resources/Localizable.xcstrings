@@ -381,6 +381,222 @@
       },
       "comment": "Uptime: seconds."
     },
+    "About BenchBar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About BenchBar"
+          }
+        }
+      },
+      "comment": "Menu item."
+    },
+    "BenchBar Documentation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar Documentation"
+          }
+        }
+      },
+      "comment": "Help menu."
+    },
+    "BenchBar: %@ %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar: %@ %@"
+          }
+        }
+      },
+      "comment": "Menu bar item tooltip: bench name and state word."
+    },
+    "BenchBar: %lld benches, %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar: %lld benches, %@"
+          }
+        }
+      },
+      "comment": "Menu bar item tooltip; the second part says how many are up."
+    },
+    "BenchBar: benchbar CLI not found": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar: benchbar CLI not found"
+          }
+        }
+      },
+      "comment": "Menu bar item tooltip and VoiceOver label."
+    },
+    "BenchBar: no bench": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar: no bench"
+          }
+        }
+      },
+      "comment": "Menu bar item tooltip."
+    },
+    "Check for Updates…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for Updates…"
+          }
+        }
+      },
+      "comment": "Menu item."
+    },
+    "Close": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      },
+      "comment": "Window menu."
+    },
+    "Copy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy"
+          }
+        }
+      },
+      "comment": "Edit menu."
+    },
+    "Crashed (exit %lld), restarting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crashed (exit %lld), restarting"
+          }
+        }
+      },
+      "comment": "Popover: state; the number is the exit code."
+    },
+    "Crashed, restarting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crashed, restarting"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Cut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cut"
+          }
+        }
+      },
+      "comment": "Edit menu."
+    },
+    "Documentation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Documentation"
+          }
+        }
+      },
+      "comment": "Status menu."
+    },
+    "Edit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit"
+          }
+        }
+      },
+      "comment": "Main menu title."
+    },
+    "Help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Help"
+          }
+        }
+      },
+      "comment": "Main menu title."
+    },
+    "Keyboard Shortcuts": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard Shortcuts"
+          }
+        }
+      },
+      "comment": "Help menu."
+    },
+    "Menu Bar Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu Bar Settings"
+          }
+        }
+      },
+      "comment": "Window menu."
+    },
+    "Minimize": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimize"
+          }
+        }
+      },
+      "comment": "Window menu."
+    },
     "Needs about %@ GB free": {
       "extractionState": "manual",
       "localizations": {
@@ -392,6 +608,186 @@
         }
       },
       "comment": "The number is formatted for the locale."
+    },
+    "Needs restart (code changed)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs restart (code changed)"
+          }
+        }
+      },
+      "comment": "Popover: state of a running bench."
+    },
+    "Open BenchBar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open BenchBar"
+          }
+        }
+      },
+      "comment": "Status menu."
+    },
+    "Paste": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste"
+          }
+        }
+      },
+      "comment": "Edit menu."
+    },
+    "Paused after repeated crashes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused after repeated crashes"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Paused: a port is in use": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused: a port is in use"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Paused: needs repair": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused: needs repair"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Quit BenchBar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit BenchBar"
+          }
+        }
+      },
+      "comment": "Menu item."
+    },
+    "Ready": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready"
+          }
+        }
+      },
+      "comment": "Popover: state of a running bench."
+    },
+    "Redo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redo"
+          }
+        }
+      },
+      "comment": "Edit menu."
+    },
+    "Report a Bug…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report a Bug…"
+          }
+        }
+      },
+      "comment": "Help menu."
+    },
+    "Running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Running, not ready": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running, not ready"
+          }
+        }
+      },
+      "comment": "Popover: state of a running bench."
+    },
+    "Scan Folder…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan Folder…"
+          }
+        }
+      },
+      "comment": "Status menu."
+    },
+    "Select All": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select All"
+          }
+        }
+      },
+      "comment": "Edit menu."
+    },
+    "Settings…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings…"
+          }
+        }
+      },
+      "comment": "Menu item; the shortcut is Command comma."
     },
     "Sharing ends in %lld minutes": {
       "extractionState": "manual",
@@ -417,6 +813,138 @@
       },
       "comment": "Notification title."
     },
+    "Sharing on your network": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharing on your network"
+          }
+        }
+      },
+      "comment": "VoiceOver help of the menu bar item."
+    },
+    "Show Walkthrough": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Walkthrough"
+          }
+        }
+      },
+      "comment": "Help menu."
+    },
+    "Starting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "State unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "State unknown"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Stopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Stopped: needs repair": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped: needs repair"
+          }
+        }
+      },
+      "comment": "Popover: state."
+    },
+    "Undo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo"
+          }
+        }
+      },
+      "comment": "Edit menu."
+    },
+    "Update to %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update to %@…"
+          }
+        }
+      },
+      "comment": "Status menu: the version number follows."
+    },
+    "What's New": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What's New"
+          }
+        }
+      },
+      "comment": "Help menu."
+    },
+    "Window": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Window"
+          }
+        }
+      },
+      "comment": "Main menu title."
+    },
+    "crashed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "crashed"
+          }
+        }
+      },
+      "comment": "Lower case state word in the tooltip."
+    },
     "less than a minute": {
       "extractionState": "manual",
       "localizations": {
@@ -427,6 +955,66 @@
           }
         }
       }
+    },
+    "paused after crashes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "paused after crashes"
+          }
+        }
+      },
+      "comment": "Lower case state word in the tooltip."
+    },
+    "running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "running"
+          }
+        }
+      },
+      "comment": "Lower case state word in the tooltip."
+    },
+    "starting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "starting"
+          }
+        }
+      },
+      "comment": "Lower case state word in the tooltip."
+    },
+    "state unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "state unknown"
+          }
+        }
+      },
+      "comment": "Lower case state word in the tooltip."
+    },
+    "stopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "stopped"
+          }
+        }
+      },
+      "comment": "Lower case state word in the tooltip."
     }
   },
   "version": "1.0"
