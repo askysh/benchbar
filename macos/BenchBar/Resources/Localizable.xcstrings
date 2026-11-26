@@ -393,6 +393,66 @@
       },
       "comment": "Menu item."
     },
+    "Acknowledge": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acknowledge"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "All checks passed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All checks passed"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Apps, sites and settings in the BenchBar window": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apps, sites and settings in the BenchBar window"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Bench": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bench"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Bench is not running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bench is not running"
+          }
+        }
+      },
+      "comment": "Popover: subtitle of a site row."
+    },
     "BenchBar Documentation": {
       "extractionState": "manual",
       "localizations": {
@@ -465,6 +525,18 @@
       },
       "comment": "Menu item."
     },
+    "Choose benchbar…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose benchbar…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
     "Close": {
       "extractionState": "manual",
       "localizations": {
@@ -477,6 +549,18 @@
       },
       "comment": "Window menu."
     },
+    "Copied": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copied"
+          }
+        }
+      },
+      "comment": "Popover: the invite button after a copy."
+    },
     "Copy": {
       "extractionState": "manual",
       "localizations": {
@@ -488,6 +572,42 @@
         }
       },
       "comment": "Edit menu."
+    },
+    "Copy Command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Command"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Copy Fix": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Fix"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Copy brew Command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy brew Command"
+          }
+        }
+      },
+      "comment": "Popover."
     },
     "Crashed (exit %lld), restarting": {
       "extractionState": "manual",
@@ -549,6 +669,66 @@
       },
       "comment": "Main menu title."
     },
+    "Every check, with its fix": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every check, with its fix"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Follow bench.log": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow bench.log"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Health": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Health refresh failed. Previous results may be out of date.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health refresh failed. Previous results may be out of date."
+          }
+        }
+      },
+      "comment": "Popover."
+    },
     "Help": {
       "extractionState": "manual",
       "localizations": {
@@ -561,6 +741,30 @@
       },
       "comment": "Main menu title."
     },
+    "In Terminal: benchbar install, or benchbar adopt PATH for a bench you have.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Terminal: benchbar install, or benchbar adopt PATH for a bench you have."
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Install guide": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install guide"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
     "Keyboard Shortcuts": {
       "extractionState": "manual",
       "localizations": {
@@ -572,6 +776,66 @@
         }
       },
       "comment": "Help menu."
+    },
+    "Loading benches": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading benches"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Logs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logs"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Looking for benchbar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Looking for benchbar"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Manage Bench…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage Bench…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Manage Sites…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage Sites…"
+          }
+        }
+      },
+      "comment": "Popover."
     },
     "Menu Bar Settings": {
       "extractionState": "manual",
@@ -621,6 +885,42 @@
       },
       "comment": "Popover: state of a running bench."
     },
+    "No bench found": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No bench found"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Not checked yet.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not checked yet."
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Open": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
     "Open BenchBar": {
       "extractionState": "manual",
       "localizations": {
@@ -632,6 +932,18 @@
         }
       },
       "comment": "Status menu."
+    },
+    "Opens this bench's Sharing tab": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens this bench's Sharing tab"
+          }
+        }
+      },
+      "comment": "Popover."
     },
     "Paste": {
       "extractionState": "manual",
@@ -717,6 +1029,18 @@
       },
       "comment": "Edit menu."
     },
+    "Repair…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repair…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
     "Report a Bug…": {
       "extractionState": "manual",
       "localizations": {
@@ -728,6 +1052,18 @@
         }
       },
       "comment": "Help menu."
+    },
+    "Review Port Conflict…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review Port Conflict…"
+          }
+        }
+      },
+      "comment": "Popover."
     },
     "Running": {
       "extractionState": "manual",
@@ -753,6 +1089,18 @@
       },
       "comment": "Popover: state of a running bench."
     },
+    "Runs doctor, which only reads": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs doctor, which only reads"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
     "Scan Folder…": {
       "extractionState": "manual",
       "localizations": {
@@ -776,6 +1124,30 @@
         }
       },
       "comment": "Edit menu."
+    },
+    "Set Up Management…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Up Management…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Set Up a New Bench…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Up a New Bench…"
+          }
+        }
+      },
+      "comment": "Popover."
     },
     "Settings…": {
       "extractionState": "manual",
@@ -837,6 +1209,78 @@
       },
       "comment": "Help menu."
     },
+    "Show the bench folder in Finder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the bench folder in Finder"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Show this warning again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show this warning again"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Shows the repair plan in the BenchBar window; nothing changes until you confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows the repair plan in the BenchBar window; nothing changes until you confirm"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Silence this warning for this bench until its message changes. Doctor still checks it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Silence this warning for this bench until its message changes. Doctor still checks it."
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Sites": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sites"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Sites in the BenchBar window": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sites in the BenchBar window"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
     "Starting": {
       "extractionState": "manual",
       "localizations": {
@@ -860,6 +1304,18 @@
         }
       },
       "comment": "Popover: state."
+    },
+    "Stop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
+          }
+        }
+      },
+      "comment": "Popover."
     },
     "Stopped": {
       "extractionState": "manual",
@@ -885,6 +1341,54 @@
       },
       "comment": "Popover: state."
     },
+    "Terminal instructions": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminal instructions"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "The BenchBar window sets up a new bench step by step, or finds one you already have.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The BenchBar window sets up a new bench step by step, or finds one you already have."
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "The bench this popover shows; its shortcuts act on it": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bench this popover shows; its shortcuts act on it"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
+    "Try Again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try Again"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
     "Undo": {
       "extractionState": "manual",
       "localizations": {
@@ -909,6 +1413,30 @@
       },
       "comment": "Status menu: the version number follows."
     },
+    "View All %lld…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View All %lld…"
+          }
+        }
+      },
+      "comment": "Popover: the count of sites follows."
+    },
+    "View Health…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View Health…"
+          }
+        }
+      },
+      "comment": "Popover."
+    },
     "What's New": {
       "extractionState": "manual",
       "localizations": {
@@ -932,6 +1460,18 @@
         }
       },
       "comment": "Main menu title."
+    },
+    "as %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "as %@"
+          }
+        }
+      },
+      "comment": "Popover: subtitle of a site row after Open as; the name of the person follows."
     },
     "crashed": {
       "extractionState": "manual",

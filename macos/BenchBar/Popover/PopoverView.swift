@@ -282,8 +282,8 @@ struct SitesSection: View {
     /// "as Priya" after an Open as, while the bench runs. A missing hosts line
     /// is not said here: the Sites tab in the window has it, with Set Up….
     private func subtitle(_ row: SiteRow) -> String {
-        guard bench.state == .running else { return "Bench is not running" }
-        return store.openAsIfStarted?.currentLabel(bench: bench.path, site: row.name).map { "as \($0)" } ?? "Running"
+        guard bench.state == .running else { return String(localized: "Bench is not running") }
+        return store.openAsIfStarted?.currentLabel(bench: bench.path, site: row.name).map { String(localized: "as \($0)") } ?? String(localized: "Running")
     }
 
     /// Open, where the name resolves: with a hosts line, or a `*.localhost`
