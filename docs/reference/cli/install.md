@@ -69,7 +69,7 @@ phase scripts: no other program started by the install sees them.
 | `--allow-unsupported-distro` | Linux only: try a system other than Ubuntu 24.04, the one the install is tested on and supports. Without it the install stops before it installs any package (also `BENCHBAR_ALLOW_UNSUPPORTED_DISTRO=1`, for `00-linux-system-deps.sh`) |
 | `--allow-windows-fs` | WSL only: accept a bench on the Windows file system (`/mnt/c`, drvfs, 9p). Refused by default: it is very slow, file watching does not work and permissions break |
 | `-y`, `--yes` | Accept every default and confirmation, including the `sudo` line for `/etc/hosts`; the passwords must be in the environment |
-| `--json` | JSON lines for the BenchBar app and agents: `plan`, `step`, `progress` and a closing `done` ([schema](../../json-schema.md#benchbar-install---json)). Needs `--yes` or `--dry-run`, takes every value from a flag or the environment and never asks |
+| `--json` | JSON lines for the BenchBar app and agents: `plan`, `step`, `progress` and a closing `done` ([schema](../json/install-and-doctor.md#benchbar-install---json)). Needs `--yes` or `--dry-run`, takes every value from a flag or the environment and never asks |
 
 `BENCH_INIT_TIMEOUT_SECONDS` sets how long `bench init` may run before it is
 stopped (default 2700, `0` for no limit). A half built bench left by a stopped
@@ -80,7 +80,7 @@ app or a site is never moved: `install` stops and names `benchbar repair`.
 With `--yes` the confirmation is skipped but the `sudo` password prompt
 is not. When the BenchBar app runs it, `BENCHBAR_SUDO=gui` is set, and each of
 the two steps that need root asks in macOS's own password dialog, at
-most two per run ([the privileged steps](../../json-schema.md#the-privileged-steps-and-benchbar_sudogui)).
+most two per run ([the privileged steps](../json/install-and-doctor.md#the-privileged-steps-and-benchbar_sudogui)).
 
 Exit codes: 0 success; 1 a step failed; 2 phase 00 or 01 stopped for a
 manual step, most often a MariaDB root password that neither the
@@ -168,7 +168,7 @@ warns and does not install it into the bench env.
 | `--allow-windows-fs` | WSL only: accept a bench on the Windows file system (`/mnt/c`, drvfs, 9p), which is refused by default |
 | `--dry-run` | Print the plan, change nothing |
 | `-y`, `--yes` | Apply without asking |
-| `--json` | JSON lines, as for `install` ([schema](../../json-schema.md#benchbar-install---json)); needs `--yes` or `--dry-run` |
+| `--json` | JSON lines, as for `install` ([schema](../json/install-and-doctor.md#benchbar-install---json)); needs `--yes` or `--dry-run` |
 
 A bench path with a double quote, backslash, `$`, backtick, `<`, `>`,
 `&` or a control character in it is refused before anything is written:
@@ -246,18 +246,20 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `install` | `--ttl` | `DAYS` | With --scratch: days until the bench expires, 1 to 90 (default 7). |
 | `install` | `--allow-unsupported-distro` |  | Linux only: try a system other than Ubuntu 24.04, the one the install is tested on and supports. Without it the install stops before it installs any package. |
 | `install` | `--offline` |  | Skip the remote branch checks. |
-| `install` | `--frappe-commit` | `SHA` | Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile). |
-| `install` | `--erpnext-commit` | `SHA` | Pin the erpnext clone to this commit. |
+| `install` | `--frappe-commit` | `SHA` | Pin the frappe clone to this commit (or FRAPPE_COMMIT, or frappe_commit in a team profile). A commit the clone does not reach stops the install before anything is built. |
+| `install` | `--erpnext-commit` | `SHA` | Pin the erpnext clone to this commit (or erpnext_commit in a team profile). A commit the clone does not reach stops the install before anything is built. |
 | `install` | `--dry-run` |  | Print the plan, change nothing. With --json the plan line carries its token. |
 | `install` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before. |
 | `install` | `--yes` |  | Do not ask; secrets come from the environment. |
 | `install` | `--secrets-stdin` |  | Read ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD and BENCHBAR_SUDO_PASSWORD from standard input, not the environment: KEY=VALUE lines, LF only, ended by an empty line (required). For a program that has no terminal; a terminal is refused. |
+| `install` | `--json` |  | JSON lines for the BenchBar app. Needs --yes or --dry-run: no question can be answered on the stream. |
 | `adopt` | `--port-offset` | `N` | Move the bench to port block N. |
 | `adopt` | `--make-default` |  | Make this the default bench. |
 | `adopt` | `--allow-windows-fs` |  | WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p), which is refused by default. |
 | `adopt` | `--dry-run` |  | Print the plan, change nothing. |
 | `adopt` | `--yes` |  | Do not ask. |
 | `adopt` | `--secrets-stdin` |  | Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal. |
+| `adopt` | `--json` |  | JSON lines, as install. Needs --yes or --dry-run. |
 | `service` | `--with-schedule` |  | Add the scheduler to Procfile.lean. |
 | `service` | `--without-schedule` |  | Remove it again. |
 | `service` | `--port-offset` | `N` | Use port block N. |

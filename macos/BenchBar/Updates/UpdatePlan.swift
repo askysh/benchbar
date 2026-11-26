@@ -61,16 +61,16 @@ nonisolated struct UpdatePlan: Equatable, Sendable {
     var summary: String {
         switch channel {
         case .sparkle:
-            "BenchBar's updater downloads and installs the new version, with its command line tool. Your benches keep running."
+            String(localized: "BenchBar's updater downloads and installs the new version, with its command line tool. Your benches keep running.")
         case .releasePage:
-            "This build of BenchBar has no updater: Update Now opens the release page."
+            String(localized: "This build of BenchBar has no updater: Update Now opens the release page.")
         }
     }
 
     /// Things the person should know, one sentence each.
     var notes: [String] {
         guard cask != nil else { return [] }
-        return ["Homebrew installed BenchBar, so \(Homebrew.upgradeApp) works too; it skips an app that is already up to date."]
+        return [String(localized: "Homebrew installed BenchBar, so \(Homebrew.upgradeApp) works too; it skips an app that is already up to date.")]
     }
 
     /// Where the app is, as the plan needs it. `live` reads the disk.

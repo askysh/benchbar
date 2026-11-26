@@ -181,7 +181,7 @@ struct SheetStatus: View {
             SheetOutcome(symbol: result.kind == .success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
                          tint: result.kind == .success ? .green : .orange, title: result.title, detail: result.detail)
         case .failed(let message, let title):
-            SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .red, title: title ?? "That did not work",
+            SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .red, title: title ?? String(localized: "That did not work"),
                          detail: message, monospaced: message.contains("\n"))
         case .ready, .running:
             EmptyView()
@@ -239,7 +239,7 @@ struct SheetNote: View {
 
 /// Cancel: on the left of the primary action, Esc.
 struct CancelButton: View {
-    var title = "Cancel"
+    var title = String(localized: "Cancel")
     let action: () -> Void
 
     var body: some View {
@@ -250,7 +250,7 @@ struct CancelButton: View {
 /// Done or Close, when there is nothing left to confirm: Return and Esc.
 /// A button takes one shortcut, so an invisible twin carries Esc.
 struct DoneButton: View {
-    var title = "Done"
+    var title = String(localized: "Done")
     let action: () -> Void
 
     var body: some View {
@@ -268,7 +268,7 @@ struct DoneButton: View {
 /// Mac's password, which BenchBar never asks for.
 struct CopyableCommand: View {
     let command: String
-    var copyLabel = "Copy the command"
+    var copyLabel = String(localized: "Copy the command")
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.rowSpacing) {
@@ -311,7 +311,7 @@ struct PaneBanner<Actions: View>: View {
     let tint: Color
     let title: String
     var detail: String?
-    var dismissHelp = "Dismiss"
+    var dismissHelp = String(localized: "Dismiss")
     var dismiss: (() -> Void)?
     @ViewBuilder var actions: Actions
 
@@ -341,7 +341,7 @@ struct PaneBanner<Actions: View>: View {
 }
 
 extension PaneBanner where Actions == EmptyView {
-    init(symbol: String, tint: Color, title: String, detail: String? = nil, dismissHelp: String = "Dismiss", dismiss: (() -> Void)? = nil) {
+    init(symbol: String, tint: Color, title: String, detail: String? = nil, dismissHelp: String = String(localized: "Dismiss"), dismiss: (() -> Void)? = nil) {
         self.init(symbol: symbol, tint: tint, title: title, detail: detail, dismissHelp: dismissHelp, dismiss: dismiss) { EmptyView() }
     }
 }

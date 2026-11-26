@@ -34,24 +34,23 @@ nonisolated enum QuitPolicy {
     /// then people in a room, then a connection.
     static func question(_ facts: Facts) -> Question? {
         if let change = facts.changeRunning {
-            return Question(title: "\(change) is still running.",
-                            detail: "Quitting now ends it halfway and can leave the bench half installed or half migrated. "
-                                + "BenchBar can quit as soon as it has finished.",
+            return Question(title: String(localized: "\(change) is still running."),
+                            detail: String(localized: "Quitting now ends it halfway and can leave the bench half installed or half migrated. BenchBar can quit as soon as it has finished."),
                             canWaitForIt: true)
         }
         guard facts.labOn else { return nil }
         if facts.setupRunning {
-            return Question(title: "Sharing setup is still running.",
-                            detail: "Quitting now stops it halfway; the copy will need setup again.")
+            return Question(title: String(localized: "Sharing setup is still running."),
+                            detail: String(localized: "Quitting now stops it halfway; the copy will need setup again."))
         }
         if let bench = facts.hostedBench {
             let who = Wording.peopleAre(facts.people)
-            return Question(title: "People are in your room.",
-                            detail: "\(who) in the room on \(URL(fileURLWithPath: bench).lastPathComponent). Quitting disconnects them.")
+            return Question(title: String(localized: "People are in your room."),
+                            detail: String(localized: "\(who) in the room on \(URL(fileURLWithPath: bench).lastPathComponent). Quitting disconnects them."))
         }
         if facts.guestForwarder {
-            return Question(title: "You are connected to a room.",
-                            detail: "Quitting closes the connection to the site you opened from it.")
+            return Question(title: String(localized: "You are connected to a room."),
+                            detail: String(localized: "Quitting closes the connection to the site you opened from it."))
         }
         return nil
     }

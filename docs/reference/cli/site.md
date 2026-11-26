@@ -17,7 +17,7 @@ Every site of the bench; the default one, the site `benchup` waits for,
 is marked. `benchbar site` alone does the same. With `--json`: each
 site's name, whether it is the default, whether `/etc/hosts` has it, its
 ping code, its `db_name` and its `db_port` (never the password)
-([schema](../../json-schema.md#sites)).
+([schema](../json/sites-and-backups.md#sites)).
 
 Exit codes: 0; 1 when no bench is found.
 
@@ -159,7 +159,7 @@ and for how long](../../guides/benches-and-sites.md#backing-up-and-dropping-a-si
 | Flag | What it does |
 |---|---|
 | `--with-files` | Also back up the uploaded files (public and private) |
-| `--json` | Print the new backup as JSON ([schema](../../json-schema.md#site-backups)); the progress goes to stderr |
+| `--json` | Print the new backup as JSON ([schema](../json/sites-and-backups.md#site-backups)); the progress goes to stderr |
 | `--dry-run` | Print the command, change nothing |
 
 Exit codes: 0 the backup exists; 1 the site does not exist or the backup
@@ -217,7 +217,7 @@ Run `--dry-run --json` first: it prints the plan, what it touches, the
 backup it takes first and a `token`. `--apply TOKEN --yes` then runs exactly
 that plan without a question, and refuses it when the sites, the default
 site, the hook or the set changed meanwhile
-([schema](../../json-schema.md#benchbar-site-restore---json)).
+([schema](../json/sites-and-backups.md#benchbar-site-restore---json)).
 A plain `--yes` from a terminal shows the plan and runs it.
 
 | Flag | What it does |
@@ -271,7 +271,7 @@ never takes it, and dropping it by name needs `--force-undo-point`.
 | Flag | What it does |
 |---|---|
 | `--label TEXT` | What the snapshot is for (up to 120 characters, no quotes or backslashes); it is part of the folder name |
-| `--json` | Print the snapshot as JSON ([schema](../../json-schema.md#site-snapshots)) |
+| `--json` | Print the snapshot as JSON ([schema](../json/sites-and-backups.md#site-snapshots)) |
 | `--dry-run` | Print what would happen, change nothing |
 
 Exit codes: 0; 1 when the site does not exist, the backup failed or did not
@@ -413,7 +413,7 @@ output says which command removes it by hand.
 | `--new-default OTHER` | For the default site: the site that becomes the default |
 | `--dry-run` | Print the plan, change nothing (with `--json`: the steps and a `token`) |
 | `--apply TOKEN` | Run the plan of a dry run, with `--yes`; refused, before anything changes, when the sites, the default site, the hosts line or the site's database name (`database` in the plan) changed since the plan |
-| `--json` | The result as JSON: the backup, the archived folder, the hosts line ([schema](../../json-schema.md#site-backups)) |
+| `--json` | The result as JSON: the backup, the archived folder, the hosts line ([schema](../json/sites-and-backups.md#site-backups)) |
 
 Exit codes: 0 the site is dropped; 1 a refusal or a failed step; 2 the
 MariaDB root password is unknown (pass `MARIADB_ROOT_PASSWORD`).
@@ -472,7 +472,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site add` | `--secrets-stdin` |  | Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal. |
 | `site open-as` | `--yes` |  | Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1). |
 | `site open-as` | `--json` |  | JSON lines for on and off, one document for status. |
-| `site hosts` | `--prune` |  | Remove the stale lines of benchbar's block instead of adding the missing ones (sites of a forgotten bench whose folder is still there count as sites). The printed fallback command keeps a .bak copy. macOS only. |
+| `site hosts` | `--prune` |  | Remove the stale lines of benchbar's block instead of adding the missing ones (sites of a forgotten bench whose folder is still there count as sites). One backup and one sudo; without a terminal it prints the command, which keeps a .bak copy. macOS only. |
 | `site backup` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `site backup` | `--with-files` |  | Include the uploads. |
 | `site restore` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
@@ -496,7 +496,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site snapshot drop` | `--keep` | `N` | With --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's state file). |
 | `site snapshot drop` | `--force-undo-point` |  | With one named snapshot: also remove an undo point of a rollback (a plain drop refuses it). |
 | `site snapshot drop` | `--yes` |  | Do not ask. Refused for an agent: drop is a person's choice. |
-| `site snapshot drop` | `--dry-run` |  | Print what would be removed, change nothing. |
+| `site snapshot drop` | `--dry-run` |  | Print what would be removed, change nothing. It is open to an agent. |
 | `site snapshots` | `--keep` | `N` | Say which snapshots are beyond the newest N (default 10, or SNAPSHOT_KEEP in the bench's state file). Nothing is removed. |
 | `site rollback` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `site rollback` | `--to` | `SNAPSHOT` | The snapshot: its name, its stamp, or latest (benchbar site snapshots NAME lists them). |

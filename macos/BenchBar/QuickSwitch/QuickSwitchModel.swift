@@ -62,7 +62,7 @@ nonisolated struct QuickSwitchRow: Equatable, Sendable, Identifiable {
 
     /// Shown next to the ✓. It is BenchBar's own record of its last switch, not
     /// the browser's live user: a manual logout or a relaunch makes it stale.
-    var hint: String? { isCurrent ? "last opened" : nil }
+    var hint: String? { isCurrent ? String(localized: "last opened") : nil }
 
     /// What VoiceOver reads: the title, the user id under it, and the state.
     var spokenLabel: String {
@@ -80,10 +80,10 @@ nonisolated struct QuickSwitchModel: Equatable, Sendable {
     static let minSearchLength = 2
     static let searchDebounce: Duration = .milliseconds(250)
     static let searchLimit = 8
-    static let noMatches = "No users match"
-    static let searchFailedCopy = "Could not search users"
+    static let noMatches = String(localized: "No users match")
+    static let searchFailedCopy = String(localized: "Could not search users")
 
-    static let alreadySwitchingCopy = "Already switching…"
+    static let alreadySwitchingCopy = String(localized: "Already switching…")
     static let searchingCopy = "Searching…"
 
     /// Why there is nothing to switch on, each with its own fix.
@@ -99,12 +99,12 @@ nonisolated struct QuickSwitchModel: Equatable, Sendable {
 
         var text: String {
             switch self {
-            case .loading: "Loading benches…"
-            case .noCLI: "The benchbar command line tool is not available."
-            case .noBench: "No bench to open as a user on. Add one in BenchBar."
-            case .noDefaultSite(let bench): "\(bench) has no default site. Make one the default in its Sites tab."
-            case .notTurnedOn(let site): "Open as is off for \(site). Turn it on with Allow Open as… in its Sites tab."
-            case .hostsMissing(let site): "Add the hosts line for \(site) in the BenchBar window"
+            case .loading: String(localized: "Loading benches…")
+            case .noCLI: String(localized: "The benchbar command line tool is not available.")
+            case .noBench: String(localized: "No bench to open as a user on. Add one in BenchBar.")
+            case .noDefaultSite(let bench): String(localized: "\(bench) has no default site. Make one the default in its Sites tab.")
+            case .notTurnedOn(let site): String(localized: "Open as is off for \(site). Turn it on with Allow Open as… in its Sites tab.")
+            case .hostsMissing(let site): String(localized: "Add the hosts line for \(site) in the BenchBar window")
             case .unavailable(let reason): reason
             }
         }
@@ -194,9 +194,9 @@ nonisolated struct QuickSwitchModel: Equatable, Sendable {
 
     var target: QuickSwitchTarget? { targets.indices.contains(siteIndex) ? targets[siteIndex] : nil }
 
-    var title: String { target.map { "Open \($0.site) as…" } ?? "Open as…" }
+    var title: String { target.map { String(localized: "Open \($0.site) as…") } ?? String(localized: "Open as…") }
 
-    var spokenTitle: String { target.map { "Open \($0.site) as" } ?? "Open as" }
+    var spokenTitle: String { target.map { String(localized: "Open \($0.site) as") } ?? String(localized: "Open as") }
 
     var canCycleSites: Bool { targets.count > 1 }
 
@@ -254,7 +254,10 @@ nonisolated struct QuickSwitchModel: Equatable, Sendable {
     /// The keys that do something now: the digits only while they would switch.
     var footerHint: String {
         let digitsActive = digitsSwitch && rows.contains { $0.digit != nil }
-        return (["↑↓ select", "↩ switch"] + (digitsActive ? ["0 to 9 quick pick"] : []) + ["esc close"]).joined(separator: "   ")
+        var hints = [String(localized: "↑↓ select"), String(localized: "↩ switch")]
+        if digitsActive { hints.append(String(localized: "0 to 9 quick pick")) }
+        hints.append(String(localized: "esc close"))
+        return hints.joined(separator: "   ")
     }
 
     /// True when `other` would show the same sites and the same reason for none.

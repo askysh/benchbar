@@ -1,0 +1,177 @@
+# command<TAB>flag<TAB>the clause of the old global help (usage.sh at 604de57a) that named it: the flags of the commands of the groups done (#371)
+install	--json	--json (with --yes or --dry-run
+install	--yes	with --yes or --dry-run
+install	--dry-run	with --yes or --dry-run
+install	--frappe-commit	--frappe-commit SHA, --erpnext-commit SHA: pin the clones (or frappe_commit and erpnext_commit in a team profile
+install	--erpnext-commit	--frappe-commit SHA, --erpnext-commit SHA: pin the clones (or frappe_commit and erpnext_commit in a team profile
+adopt	--json	--json (with --yes or --dry-run
+adopt	--yes	with --yes or --dry-run
+adopt	--dry-run	with --yes or --dry-run
+doctor	--fix-hints	--fix-hints: only the fix commands of FAIL and WARN checks, one per line
+doctor	--prerequisites	--prerequisites: what this Mac needs before an install, no bench needed (--json
+doctor	--json	--json
+doctor	--bench-dir	--bench-dir names the folder a new bench would go to
+doctor	--fetch	--fetch: git fetch the branches of the apps your focus apps need first (without it doctor never touches the network
+doctor	--ack	--ack CHECK / --unack CHECK: silence one warning until its message changes, or undo that
+doctor	--unack	--ack CHECK / --unack CHECK: silence one warning until its message changes, or undo that
+doctor	--quick	--quick: skip the slow checks and say which.
+ports setup	--dry-run	--dry-run: preview only
+ports plan	--json	--json: machine-readable plan and token
+ports check	--bench-dir	ports check Check conflicts for --bench-dir PATH (--json
+ports check	--json	--json
+ports mode	--bench-dir	ports mode automatic|fixed Keep automatic or fixed ports for --bench-dir PATH
+ports apply	--yes	ports apply TOKEN --yes -- PATH ..
+report	--print	--print: to the terminal, --json: {"zip": path, "redactions": n} for the app and scripts
+report	--json	--print: to the terminal, --json: {"zip": path, "redactions": n} for the app and scripts
+uninstall-service	--all	--all: every bench with a benchbar agent, after one question (before brew uninstall benchbar: brew cannot stop the agents itself
+self-update	--check	--check: this version against the latest, --json, --dry-run
+self-update	--json	--check: this version against the latest, --json, --dry-run
+self-update	--dry-run	--check: this version against the latest, --json, --dry-run
+where	--json	--json
+up	--services-only	--services-only: only its Redis, for a restore or a migrate (down stops it
+status	--json	--json adds redis and sites[].served (does the running bench serve the site
+stats	--json	--json
+wait	--for	--for PART for one part, --timeout SECS, --json.
+wait	--timeout	--for PART for one part, --timeout SECS, --json.
+wait	--json	--for PART for one part, --timeout SECS, --json.
+scan	--json	--json
+logs	--worker	Flags: --worker, --worker-error, --previous, -n50, --no-follow, --process web|socketio|schedule|worker (worker reads logs/worker.log
+logs	--worker-error	Flags: --worker, --worker-error, --previous, -n50, --no-follow, --process web|socketio|schedule|worker (worker reads logs/worker.log
+logs	--previous	Flags: --worker, --worker-error, --previous, -n50, --no-follow, --process web|socketio|schedule|worker (worker reads logs/worker.log
+logs	--no-follow	Flags: --worker, --worker-error, --previous, -n50, --no-follow, --process web|socketio|schedule|worker (worker reads logs/worker.log
+logs	--process	Flags: --worker, --worker-error, --previous, -n50, --no-follow, --process web|socketio|schedule|worker (worker reads logs/worker.log
+logs	--json	with --json: the lines as JSON, --since TIME or --since-restart for the newer ones only
+logs	--since	with --json: the lines as JSON, --since TIME or --since-restart for the newer ones only
+logs	--since-restart	with --json: the lines as JSON, --since TIME or --since-restart for the newer ones only
+site add	--bundle	MariaDB password from the Keychain, a file on Linux), the hosts line, and --bundle NAME or --apps "a b" from apps/
+site add	--apps	MariaDB password from the Keychain, a file on Linux), the hosts line, and --bundle NAME or --apps "a b" from apps/
+site backup	--site	site backup NAME bench --site NAME backup (--with-files for the uploads too
+site backup	--with-files	--with-files for the uploads too
+site backup	--json	--json
+site backups	--json	--json
+site snapshot	--label	site snapshot NAME [--label TEXT] Save the state of a site (database, files, site_config
+site rollback	--to	site rollback NAME --to SNAPSHOT Put a snapshot back (a reviewed plan
+site move	--to-bench	site move NAME --to-bench PATH Move a site to another registered bench (a reviewed plan: backup, restore there, migrate, check, then the drop here
+site restore	--from	--from STAMP or the database file's PATH, --from-site S
+site restore	--from-site	--from STAMP or the database file's PATH, --from-site S
+site restore	--new	--from STAMP or the database file's PATH, --from-site S) into a site: it is backed up first, or --new creates it
+site restore	--no-migrate	--no-migrate, --before-migrate SCRIPT, --with-files
+site restore	--before-migrate	--no-migrate, --before-migrate SCRIPT, --with-files
+site restore	--with-files	--no-migrate, --before-migrate SCRIPT, --with-files
+site restore	--neutralise	--neutralise switches the restored site's integrations off and clears its stored secrets (for a set that is not this bench's own
+site restore	--dry-run	--dry-run --json prints the plan with its token
+site restore	--json	--dry-run --json prints the plan with its token
+site restore	--apply	--apply TOKEN --yes [--json] runs exactly that plan.
+site restore	--yes	--apply TOKEN --yes [--json] runs exactly that plan.
+site drop	--confirm-site	Needs --confirm-site NAME
+site drop	--new-default	the default site also needs --new-default OTHER (--dry-run, --json
+site drop	--dry-run	--dry-run, --json
+site drop	--json	--dry-run, --json
+console	--site	console bench --site SITE console: a Python shell with frappe (--site S
+db	--site	db bench --site SITE mariadb: the site's database with its own user (--site S
+open	--site	--site S, --path /app/...
+open	--path	--site S, --path /app/...
+open	--as	--as USER signs in as that user, no password
+open	--print-url	--print-url prints the link instead.
+users	--as	users Enabled users of a site for open --as (--site S, --search TEXT, --limit N
+users	--site	--site S, --search TEXT, --limit N
+users	--search	--site S, --search TEXT, --limit N
+users	--limit	--site S, --search TEXT, --limit N
+share setup	--acknowledge-data	Needs a person at a terminal and --acknowledge-data: the copy holds the site's real data, and the MariaDB root password (Keychain, MARIADB_ROOT_PASSWORD or typed
+share setup	--users	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--name	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--from	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--backup-now	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--refresh	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--regenerate-identity	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--dry-run	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share setup	--json	--users A,B, --name LABEL, --from STAMP|latest, --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
+share preflight	--static	--static or --critical for half, --quiet, --json
+share preflight	--critical	--static or --critical for half, --quiet, --json
+share preflight	--quiet	--static or --critical for half, --quiet, --json
+share preflight	--json	--static or --critical for half, --quiet, --json
+lan-guard install	--json	--json
+mcp	--calls	--calls [N] prints the audit log.
+op status	--timeout	or the ten newest) with its step and last progress, list shows the recent ones, wait OP_ID [--timeout SECS] waits for one to end
+history	--bench	--bench PATH, --since 7d, --limit N, --json.
+history	--since	--bench PATH, --since 7d, --limit N, --json.
+history	--limit	--bench PATH, --since 7d, --limit N, --json.
+history	--json	--bench PATH, --since 7d, --limit N, --json.
+docs	--help	benchbar docs --help lists them: install, doctor, apps, mcp, json ...
+docs	--print	--print prints the URL.
+app list	--json	--json
+app list	--no-sites	--no-sites reads the last site lists instead of asking bench
+app add	--branch	--branch B, --name N, --commit SHA (pin the clone to a commit
+app add	--name	--branch B, --name N, --commit SHA (pin the clone to a commit
+app add	--commit	--branch B, --name N, --commit SHA (pin the clone to a commit
+app add	--site	pin the clone to a commit), and --site S or --all-sites to install it
+app add	--all-sites	pin the clone to a commit), and --site S or --all-sites to install it
+app add	--install-on	Several apps in one plan: app add A --commit SHA B --install-on s1,s2 (--branch, --name, --commit and --install-on belong to the app before them
+app add	--dry-run	--dry-run --json: the plan with its token (required apps read from hooks.py
+app add	--json	--dry-run --json: the plan with its token (required apps read from hooks.py
+app add	--apply	--apply TOKEN --yes runs exactly that plan, no questions.
+app add	--yes	--apply TOKEN --yes runs exactly that plan, no questions.
+app install	--site	--site S
+app install	--dry-run	--dry-run --json: the plan with its token
+app install	--json	--dry-run --json: the plan with its token
+app install	--apply	--apply TOKEN --yes runs exactly that plan.
+app install	--yes	--apply TOKEN --yes runs exactly that plan.
+app update	--skip-backup	--skip-backup
+app update	--discard-pending	--discard-pending drops that record and stops (nothing runs
+app update	--dry-run	--dry-run --json: the plan with its token
+app update	--json	--dry-run --json: the plan with its token
+app update	--apply	--apply TOKEN --yes runs it.
+app update	--yes	--apply TOKEN --yes runs it.
+app focus	--list	--list, --json, --fetch
+app focus	--json	--list, --json, --fetch
+app focus	--fetch	--list, --json, --fetch
+app focus	--auto	NAME pins it as focus, --auto infers again.
+lock write	--lock	--lock PATH (remembered
+lock write	--no-commits	remembered), --no-commits, --allow-dirty.
+lock write	--allow-dirty	remembered), --no-commits, --allow-dirty.
+lock check	--json	--json
+lock apply	--dry-run	--dry-run --json: the plan with its token
+lock apply	--json	--dry-run --json: the plan with its token
+lock apply	--apply	--apply TOKEN --yes runs it.
+lock apply	--yes	--apply TOKEN --yes runs it.
+profile list	--json	--json
+profile create	--from-bench	profile create NAME --from-bench PATH [--dir DIR] Write a team profile from a bench (read only: app repos and branches, the base from its frappe version
+profile create	--dir	profile create NAME --from-bench PATH [--dir DIR] Write a team profile from a bench (read only: app repos and branches, the base from its frappe version
+profile create	--profile	install --profile NAME then builds the same bench on another Mac.
+profile export	--out	profile export NAME [--out FILE] [--branch APP=BR]..
+profile export	--branch	profile export NAME [--out FILE] [--branch APP=BR]..
+profile export	--drop	[--drop APP]..
+profile export	--plan	[--plan] A copy to share: SSH aliases resolved, each repo's default branch, access (public, private, personal
+profile import	--as	profile import FILE|URL [--as NAME] [--plan] Add a profile someone sent (https only, 64 KB at most
+profile import	--plan	profile import FILE|URL [--as NAME] [--plan] Add a profile someone sent (https only, 64 KB at most
+profile subscribe	--plan	profile subscribe GIT_URL [--plan] Clone a team's config repo
+profile update	--all	profile update NAME|--all [--plan] Fetch an import or subscription again, show the diff, ask.
+profile update	--plan	profile update NAME|--all [--plan] Fetch an import or subscription again, show the diff, ask.
+profile check	--json	--json
+labs	--json	--json
+lease take	--bench	lease take --bench PATH or --site NAME, --for MINUTES (default 30, at most 480
+lease take	--site	lease take --bench PATH or --site NAME, --for MINUTES (default 30, at most 480
+lease take	--for	lease take --bench PATH or --site NAME, --for MINUTES (default 30, at most 480
+lease take	--note	default 30, at most 480), --note TEXT
+lease take	--json	--json
+lease renew	--for	--for MINUTES
+lease list	--bench	--bench PATH, --json
+lease list	--json	--bench PATH, --json
+lease list	--lease	Pass --lease ID to a command that changes what a lease covers
+lease list	--break-lease	--break-lease is for a person at a terminal only.
+notices	--json	a new default and its way back), --json
+notices	--dismiss	--dismiss ID or --all hides them (also in the BenchBar app
+notices	--all	--dismiss ID or --all hides them (also in the BenchBar app
+pull	--as	--as NAME Local site name (default: SITE.local
+pull	--from-dir	default: SITE.local) --from-dir DIR A backup set downloaded by hand (Frappe Cloud
+pull	--remote-bench	Frappe Cloud), no SSH --remote-bench D The bench folder on the server (default ~/frappe-bench
+pull	--new-backup	default ~/frappe-bench) --new-backup Run bench backup on the server first (it also deletes older backups there
+pull	--confirm-site	asks for the site name, or --confirm-site SITE --replace Restore over an existing local site, after backing it up --skip-app APP Restore without APP (its tables stay behind as orphans
+pull	--replace	asks for the site name, or --confirm-site SITE --replace Restore over an existing local site, after backing it up --skip-app APP Restore without APP (its tables stay behind as orphans
+pull	--skip-app	asks for the site name, or --confirm-site SITE --replace Restore over an existing local site, after backing it up --skip-app APP Restore without APP (its tables stay behind as orphans
+pull	--no-files	its tables stay behind as orphans) --no-files Database only
+pull	--keep-scheduler	--keep-scheduler, --keep-staging --keep-secrets Leave the copy as production had it
+pull	--keep-staging	--keep-scheduler, --keep-staging --keep-secrets Leave the copy as production had it
+pull	--keep-secrets	--keep-scheduler, --keep-staging --keep-secrets Leave the copy as production had it
+pull	--no-migrate	A person's decision: refused for agents and benchbar mcp --no-migrate Stop after the restore, before bench migrate --before-migrate S Run the executable SCRIPT after the restore, before migrate (with BENCHBAR_SITE, BENCHBAR_BENCH, BENCHBAR_DB_NAME
+pull	--before-migrate	A person's decision: refused for agents and benchbar mcp --no-migrate Stop after the restore, before bench migrate --before-migrate S Run the executable SCRIPT after the restore, before migrate (with BENCHBAR_SITE, BENCHBAR_BENCH, BENCHBAR_DB_NAME

@@ -52,7 +52,7 @@ terminal is asked as before.
 | `--dry-run` | Print the plan and its token, change nothing |
 | `--apply TOKEN` | Run exactly the plan whose token `--dry-run --json` printed (with `--yes`); refused when the plan changed since, for example a newer backup on the server |
 | `-y`, `--yes` | Do not ask |
-| `--json` | JSON lines while it runs ([schema](../../json-schema.md#benchbar-pull---json)) |
+| `--json` | JSON lines while it runs ([schema](../json/teams.md#benchbar-pull---json)) |
 
 ## What the copy loses
 
@@ -140,16 +140,16 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 |---|---|---|---|
 | `pull` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `pull` | `--as` | `NAME` | Local site name (default SITE.local). |
-| `pull` | `--from-dir` | `DIR` | A backup set downloaded by hand, no SSH. |
-| `pull` | `--remote-bench` | `DIR` | The bench folder on the server. |
-| `pull` | `--new-backup` |  | Run bench backup on the server first. |
-| `pull` | `--keep-secrets` |  | Keep the copy's integrations and stored secrets (by default they are switched off and cleared). A person's decision: refused under --for-agent, benchbar mcp and BENCHBAR_NONINTERACTIVE=1. |
+| `pull` | `--from-dir` | `DIR` | A backup set downloaded by hand (Frappe Cloud), no SSH. |
+| `pull` | `--remote-bench` | `DIR` | The bench folder on the server (default ~/frappe-bench). |
+| `pull` | `--new-backup` |  | Run bench backup on the server first. It also deletes older backups there, and it asks for the site name (or takes --confirm-site). |
+| `pull` | `--keep-secrets` |  | Keep the copy's integrations and stored secrets (by default they are switched off and cleared, and tokens and queued mail are dropped; the Administrator login is kept). A person's decision: refused under --for-agent, benchbar mcp and BENCHBAR_NONINTERACTIVE=1. |
 | `pull` | `--replace` |  | Restore over an existing local site, after backing it up. |
 | `pull` | `--confirm-site` | `SITE` | With --new-backup: the site name, instead of typing it. |
 | `pull` | `--skip-app` | `APP` | Restore without APP (its tables stay behind as orphans); repeat for more apps. |
 | `pull` | `--no-files` |  | Database only. |
 | `pull` | `--no-migrate` |  | Stop after the restore and the dev safety, before bench migrate. |
-| `pull` | `--before-migrate` | `SCRIPT` | An executable run after the restore, before migrate, in the bench folder, with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME; a failing script stops the run. |
+| `pull` | `--before-migrate` | `SCRIPT` | An executable run after the restore, before migrate, in the bench folder, with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME (no secret in its environment); a failing script stops the run. |
 | `pull` | `--keep-scheduler` |  | Leave the scheduler as production has it. |
 | `pull` | `--keep-staging` |  | Keep the downloaded backup in the bench's .benchbar/pulls/ after a successful run. |
 | `pull` | `--dry-run` |  | Print the plan and its token, change nothing. |

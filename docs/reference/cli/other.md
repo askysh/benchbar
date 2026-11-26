@@ -32,7 +32,7 @@ same rules.
 | Flag | What it does |
 |---|---|
 | `--print` | Print the same contents to the terminal instead |
-| `--json` | Write the zip and print `{"zip": path, "redactions": n}`, the [report schema](../../json-schema.md#benchbar-report---json) the app reads |
+| `--json` | Write the zip and print `{"zip": path, "redactions": n}`, the [report schema](../json/state-and-diagnostics.md#benchbar-report---json) the app reads |
 
 Exit codes: 0; 1 when the zip could not be written.
 
@@ -118,7 +118,7 @@ bench.
 
 | Flag | What it does |
 |---|---|
-| `--json` | The same as JSON, the [where schema](../../json-schema.md#benchbar-where---json) |
+| `--json` | The same as JSON, the [where schema](../json/state-and-diagnostics.md#benchbar-where---json) |
 
 Exit codes: 0; 1 for another argument.
 
@@ -168,7 +168,7 @@ benchbar list [--json]
 
 Every bench benchbar knows about: path, default site, sites, ports, and
 whether its service is installed. It never pings a site. With `--json`,
-the [list schema](../../json-schema.md#benchbar-list---json).
+the [list schema](../json/list-and-status.md#benchbar-list---json).
 
 Exit codes: 0.
 
@@ -440,7 +440,7 @@ deleted) but its agent is still installed, it removes only that agent:
 every `com.benchbar.*` agent whose working directory is the path is
 booted out and its plist moved aside. Such an agent otherwise restarts
 every 20 seconds, exits with code 127 and fills the log; doctor's
-[`dead_agents`](../../guides/doctor-and-repair.md#dead_agents) check
+[`dead_agents`](../doctor/service-checks.md#dead_agents) check
 points here.
 
 With `--all` it does the same for every bench that has a benchbar agent
@@ -498,7 +498,7 @@ belongs to another process now), so the run was killed and wrote no `done` line.
 failed run, an interrupted one, a timeout: `--json` says which, with
 `timed_out: true` for a timeout). The `op` commands only read; they take no
 lock and need no bench. The fields are in the
-[JSON schema](../../json-schema.md#operation-handles-09).
+[JSON schema](../json/operations.md#operation-handles-09).
 
 ### --background
 
@@ -586,7 +586,7 @@ and the one line installer, `~/.local/state/benchbar/history.jsonl`; mode
 older files kept (`history.jsonl.old.1` to `.3`), like the MCP audit log,
 so it reaches back further than the newest 100 operation records. The MCP
 tool is `benchbar_history`. It only reads: no lock, no bench needed. The
-fields are in the [JSON schema](../../json-schema.md#action-history-09).
+fields are in the [JSON schema](../json/operations.md#action-history-09).
 
 ## commands
 
@@ -667,7 +667,6 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar listen [local\|all] [--dry-run] [--yes]` | yes | no | no | yes | stream |
 | `benchbar uninstall-service [--all] [--yes] [--dry-run]` | yes | no | no | yes | stream |
 | `benchbar console [--site S]` | yes | no | no | no | none |
-| `benchbar db [--site S] \| benchbar db orphans [--json]` | yes | no | no | no | none |
 | `benchbar db orphans [--json]` | no | no | no | no | document |
 | `benchbar db [--site S]` | yes | no | no | no | none |
 | `benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]` | no | no | no | no | document |
@@ -691,7 +690,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | Command | Flag | Value | What it does |
 |---|---|---|---|
 | `mariadb-password` | `--yes` |  | Do not ask (still refused without a person at a terminal). |
-| `uninstall-service` | `--all` |  | Every bench with a benchbar agent, after one question. |
+| `uninstall-service` | `--all` |  | Every bench with a benchbar agent, after one question. Run it before brew uninstall benchbar: brew cannot stop the agents itself. |
 | `uninstall-service` | `--yes` |  | Do not ask; required without a terminal. |
 | `db orphans` | `--json` |  | One document: checked and orphans, each with the archived site folder that names it, if any. |
 | `open` | `--as` | `USER` | Sign in as this user, no password. Refused unless site open-as is on for the site and developer_mode is on. A sign in runs the apps' on_login and on_session_creation hooks as a real login does: last_login, an Activity Log entry, a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User, and Frappe may end the user's oldest session (simultaneous_sessions). |
@@ -704,8 +703,11 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `users` | `--json` |  | One JSON document. |
 | `report` | `--print` |  | Print to the terminal instead of writing the zip. |
 | `report` | `--out` | `DIR` | Write the zip into this folder (default: the Desktop). |
+| `report` | `--json` |  | Print {"zip": path, "redactions": n}, for the app and scripts. |
 | `docs` | `--print` |  | Print the page's address instead of opening it. |
 | `self-update` | `--check` |  | This version against the latest. |
+| `self-update` | `--dry-run` |  | Print the plan, change nothing. |
+| `op status` | `--json` |  | One JSON document. It adds the run's done line as result once the run ended. |
 | `op list` | `--running` |  | Only the ones that run now. |
 | `op list` | `--limit` | `N` | At most N (1 to 100, default 20). |
 | `op wait` | `--timeout` | `SECS` | Give up after SECS seconds (the operation goes on); default: wait for it. |

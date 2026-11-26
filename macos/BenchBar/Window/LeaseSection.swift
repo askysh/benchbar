@@ -29,9 +29,9 @@ nonisolated extension CLIClient.Action {
     /// The button's word, for the alert that asks before a lease is broken.
     var title: String {
         switch self {
-        case .up: "Start"
-        case .down: "Stop"
-        case .restart: "Restart"
+        case .up: String(localized: "Start")
+        case .down: String(localized: "Stop")
+        case .restart: String(localized: "Restart")
         }
     }
 }

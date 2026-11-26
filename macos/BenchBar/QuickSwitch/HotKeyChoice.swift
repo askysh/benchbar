@@ -52,7 +52,7 @@ struct HotKeyChoice: Equatable, Codable, Sendable {
     }
 
     var keyName: String {
-        Self.fixedNames[Int(keyCode)] ?? HotKey.layoutLabel(keyCode: keyCode) ?? "Key \(keyCode)"
+        Self.fixedNames[Int(keyCode)] ?? HotKey.layoutLabel(keyCode: keyCode) ?? String(localized: "Key \(String(keyCode))")
     }
 }
 
@@ -128,7 +128,7 @@ final class QuickSwitchShortcut {
             choice = wanted
             store.save(wanted)
         } else {
-            message = "\(wanted.name) is used by another app. \(choice.name) stays."
+            message = String(localized: "\(wanted.name) is used by another app. \(choice.name) stays.")
         }
     }
 

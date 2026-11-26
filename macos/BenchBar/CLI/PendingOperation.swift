@@ -34,16 +34,16 @@ nonisolated struct PendingOperation: Codable, Sendable, Equatable, Identifiable 
 
     /// "Update of erpnext stopped at migrate" (the step kinds are the CLI's words).
     var title: String {
-        let what = isUpdate ? "Update of \(app)" : op == "app_add" ? "Adding \(app)" : "\(op) of \(app)"
-        guard let failed = failedStep, !failed.isEmpty else { return "\(what) did not finish" }
-        return "\(what) stopped at \(failed.replacingOccurrences(of: "_", with: " "))"
+        let what = isUpdate ? String(localized: "Update of \(app)") : op == "app_add" ? String(localized: "Adding \(app)") : String(localized: "\(op) of \(app)")
+        guard let failed = failedStep, !failed.isEmpty else { return String(localized: "\(what) did not finish") }
+        return String(localized: "\(what) stopped at \(failed.replacingOccurrences(of: "_", with: " "))")
     }
 
     /// The reason, then what is left: "bench migrate failed. Left to run: Migrate macdev, Build."
     var detail: String {
         var parts: [String] = []
         if let reason, !reason.isEmpty { parts.append(reason) }
-        if !steps.isEmpty { parts.append("Left to run: " + steps.map(\.name).joined(separator: ", ") + ".") }
+        if !steps.isEmpty { parts.append(String(localized: "Left to run: \(steps.map(\.name).joined(separator: ", ")).")) }
         return parts.joined(separator: ". ").replacingOccurrences(of: "..", with: ".")
     }
 }

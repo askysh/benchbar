@@ -28,9 +28,9 @@ struct BenchApps: View {
                     ForEach(list.apps) { app in row(app, sitesKnown: list.sitesKnown) }
                     if list.apps.isEmpty { Text("No apps").foregroundStyle(.secondary) }
                     if list.apps.filter({ $0.name != "frappe" }).isEmpty {
-                        EmptyStateBlock(symbol: "square.stack.3d.up", title: "Only Frappe so far",
-                                        line: "Add ERPNext or any app from the registry or a git repository.",
-                                        actions: [("Add App…", { adding = true })], disabled: busy)
+                        EmptyStateBlock(symbol: "square.stack.3d.up", title: String(localized: "Only Frappe so far"),
+                                        line: String(localized: "Add ERPNext or any app from the registry or a git repository."),
+                                        actions: [(String(localized: "Add App…"), { adding = true })], disabled: busy)
                     }
                 } else if workbench.loadingApps.contains(bench.path) {
                     HStack { ProgressView().controlSize(.small); Text("Reading apps…").foregroundStyle(.secondary) }
@@ -46,7 +46,7 @@ struct BenchApps: View {
                 HStack(spacing: WindowMetrics.rowSpacing) {
                     Text("Apps")
                     Spacer()
-                    MoreMenu(help: "Refresh the site lists or check the remotes") {
+                    MoreMenu(help: String(localized: "Refresh the site lists or check the remotes")) {
                         Button { Task { await workbench.loadApps(bench, liveSites: true) } } label: {
                             Label("Refresh Site Lists", systemImage: "arrow.clockwise")
                         }
@@ -102,29 +102,29 @@ struct BenchApps: View {
                 HStack(spacing: 6) {
                     Text(app.name).font(.body.weight(.medium))
                     if let version = app.version { Text(version).font(.caption).foregroundStyle(.secondary) }
-                    if app.dirty { Tag(text: "local changes", color: .orange) }
-                    if !app.inAppsTxt { Tag(text: "not in apps.txt", color: .red) }
+                    if app.dirty { Tag(text: String(localized: "local changes"), color: .orange) }
+                    if !app.inAppsTxt { Tag(text: String(localized: "not in apps.txt"), color: .red) }
                     if let branch = app.branch, let policy = app.policyBranch, branch != policy {
-                        Tag(text: "expected \(policy)", color: .orange)
+                        Tag(text: String(localized: "expected \(policy)"), color: .orange)
                     }
-                    if app.isFocus { Tag(text: "focus", color: .accentColor) }
-                    if app.pin == .ignore { Tag(text: "ignored", color: .secondary) }
-                    if app.isStaleDependency { Tag(text: "behind", color: .orange) }
+                    if app.isFocus { Tag(text: String(localized: "focus"), color: .accentColor) }
+                    if app.pin == .ignore { Tag(text: String(localized: "ignored"), color: .secondary) }
+                    if app.isStaleDependency { Tag(text: String(localized: "behind"), color: .orange) }
                 }
                 if let words = app.focusSummary ?? app.dependencySummary {
                     Text(words).font(.caption).foregroundStyle(app.isStaleDependency ? .orange : .secondary)
                 }
-                Text([app.branch.map { "branch \($0)" } ?? "detached", app.repo].compactMap { $0 }.joined(separator: "  ·  "))
+                Text([app.branch.map { String(localized: "branch \($0)") } ?? String(localized: "detached"), app.repo].compactMap { $0 }.joined(separator: "  ·  "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                 if sitesKnown {
-                    Text(app.sites.isEmpty ? "on no site yet" : "on \(app.sites.joined(separator: ", "))")
+                    Text(app.sites.isEmpty ? String(localized: "on no site yet") : String(localized: "on \(app.sites.joined(separator: ", "))"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer()
             Button("Update…") { updating = app }
                 .disabled(busy || app.branch == nil || app.dirty)
-                .help(app.dirty ? "The app has local changes; commit or stash them first" : "Shows the changelog before anything changes")
+                .help(app.dirty ? String(localized: "The app has local changes; commit or stash them first") : String(localized: "Shows the changelog before anything changes"))
             AppMenu(app: app, missingSites: app.name == "frappe" || !sitesKnown ? [] : AppSource.sitesWithout(app, among: siteNames), busy: busy) { site in
                 Task { await workbench.installApp(app.name, site: site, on: bench) }
             } setFocus: { pin in
@@ -180,19 +180,18 @@ struct AddAppSheet: View {
     private var phase: SheetPhase {
         switch flow.stage {
         case .form:
-            if let error = flow.readError { .failed(error, title: "No plan for \(title)") } else { .ready }
-        case .reading: .loading(several ? "Reading the repositories and the bench…" : "Reading the repository and the bench…")
+            if let error = flow.readError { .failed(error, title: String(localized: "No plan for \(title)")) } else { .ready }
+        case .reading: .loading(several ? String(localized: "Reading the repositories and the bench…") : String(localized: "Reading the repository and the bench…"))
         case .reviewing: .ready
-        case .applying: .running("Adding \(title)…")
-        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown")
+        case .applying: .running(String(localized: "Adding \(title)…"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench changed since this plan was shown"))
         }
     }
 
     var body: some View {
-        SheetScaffold(several || flow.plan?.isBatch == true ? "Add Apps to \(bench.name)" : "Add an App to \(bench.name)",
+        SheetScaffold(several || flow.plan?.isBatch == true ? String(localized: "Add Apps to \(bench.name)") : String(localized: "Add an App to \(bench.name)"),
                       explanation: flow.plan == nil
-                          ? "Clones apps from the app registry or git repositories and installs them. You see the plan first."
-                          : "Nothing has run yet. These are the steps; \(runTitle) runs exactly this plan.",
+                          ? String(localized: "Clones apps from the app registry or git repositories and installs them. You see the plan first.") : String(localized: "Nothing has run yet. These are the steps; \(runTitle) runs exactly this plan."),
                       phase: phase, width: flow.plan == nil ? .regular : .wide) {
             if let plan = flow.plan {
                 AppAddPlanView(plan: plan)
@@ -224,7 +223,7 @@ struct AddAppSheet: View {
         }
     }
 
-    private var runTitle: String { flow.plan?.isBatch == true ? "Add \(flow.plan?.apps?.count ?? 0) Apps" : "Add App" }
+    private var runTitle: String { flow.plan?.isBatch == true ? String(localized: "Add \(flow.plan?.apps?.count ?? 0) Apps") : String(localized: "Add App") }
     private var isStale: Bool { if case .stale = flow.stage { true } else { false } }
 
     @ViewBuilder private var form: some View {
@@ -240,7 +239,7 @@ struct AddAppSheet: View {
                 Form {
                     // verbatim: a string literal Text reads markdown and turns the URL into a link
                     TextField("App or repository", text: $entry.source, prompt: Text(verbatim: "erpnext or https://github.com/org/app"))
-                    TextField("Branch", text: $entry.branch, prompt: Text(AppSource.isURL(entry.source) ? "the repository's default" : "the profile's branch"))
+                    TextField("Branch", text: $entry.branch, prompt: Text(AppSource.isURL(entry.source) ? String(localized: "the repository's default") : String(localized: "the profile's branch")))
                     TextField("Commit", text: $entry.commit, prompt: Text("optional: pin to a commit, 7 to 40 hex characters"))
                     Picker("Install on", selection: $entry.site) {
                         Text("No site yet").tag("")
@@ -255,9 +254,8 @@ struct AddAppSheet: View {
             .help("Several apps are one plan with one token; an app another one needs is cloned once")
         if let problem, entries.contains(where: { !$0.isEmpty }) { SheetNote(problem, tint: .orange) }
         SheetNote(entries.contains { AppSource.isURL($0.source) }
-                  ? "Private repositories work when your SSH key (or a git credential helper) can read them; BenchBar checks access first, so a missing key fails in seconds."
-                  : "A name from the app registry gets the branch that matches this bench's profile.")
-        SheetNote("Review reads the repositories and shows the steps. Adding runs bench get-app, installs each app's requirements and builds the assets, which can take several minutes; the bench keeps running.")
+                  ? String(localized: "Private repositories work when your SSH key (or a git credential helper) can read them; BenchBar checks access first, so a missing key fails in seconds.") : String(localized: "A name from the app registry gets the branch that matches this bench's profile."))
+        SheetNote(String(localized: "Review reads the repositories and shows the steps. Adding runs bench get-app, installs each app's requirements and builds the assets, which can take several minutes; the bench keeps running."))
     }
 
     private func review() {
@@ -287,22 +285,22 @@ struct UpdateAppSheet: View {
     @State private var error: String?
 
     private var phase: SheetPhase {
-        if let error { return .failed(error, title: "No changelog for \(app)") }
-        guard let plan else { return .loading("Fetching the changes…") }
-        return plan.isUpToDate ? .done(.success("\(app) is up to date on \(plan.branch ?? "its branch").")) : .ready
+        if let error { return .failed(error, title: String(localized: "No changelog for \(app)")) }
+        guard let plan else { return .loading(String(localized: "Fetching the changes…")) }
+        return plan.isUpToDate ? .done(.success(plan.branch.map { String(localized: "\(app) is up to date on \($0).") }
+                                              ?? String(localized: "\(app) is up to date on its branch."))) : .ready
     }
 
     var body: some View {
-        SheetScaffold("\(plan?.pending == nil ? "Update" : "Finish the Update of") \(app)",
+        SheetScaffold(plan?.pending == nil ? String(localized: "Update \(app)") : String(localized: "Finish the Update of \(app)"),
                       explanation: plan?.pending == nil
-                          ? "Shows the new commits and the steps before anything changes."
-                          : "An earlier update stopped part way. Only the steps that are left run.",
+                          ? String(localized: "Shows the new commits and the steps before anything changes.") : String(localized: "An earlier update stopped part way. Only the steps that are left run."),
                       phase: phase) {
             if let pending = plan?.pending {
                 SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .orange, title: pending.title, detail: pending.detail)
             }
             if let plan, !plan.isUpToDate {
-                Text("\(plan.commitsTotal) new commit\(plan.commitsTotal == 1 ? "" : "s") on \(plan.branch ?? "the branch"):")
+                Text(Wording.newCommits(plan.commitsTotal, on: plan.branch ?? String(localized: "the branch")))
                     .font(.callout)
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(plan.commits) { commit in
@@ -322,13 +320,13 @@ struct UpdateAppSheet: View {
                     }
                 }
                 if !plan.sites.isEmpty && plan.pending == nil {
-                    SheetNote("Each site is backed up before it is migrated: \(plan.sites.joined(separator: ", ")).")
+                    SheetNote(String(localized: "Each site is backed up before it is migrated: \(plan.sites.joined(separator: ", "))."))
                 }
             }
         } actions: {
             if let plan, !plan.isUpToDate {
                 CancelButton(action: close)
-                Button(plan.pending == nil ? "Update" : "Finish Update") {
+                Button(plan.pending == nil ? String(localized: "Update") : String(localized: "Finish Update")) {
                     close()
                     Task { await workbench.updateApp(app, on: bench) }
                 }

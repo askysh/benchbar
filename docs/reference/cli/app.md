@@ -18,7 +18,7 @@ Every app: branch, commit, local changes, and the sites that have it.
 
 | Flag | What it does |
 |---|---|
-| `--json` | The list as JSON ([schema](../../json-schema.md#benchbar-app-list---json)) |
+| `--json` | The list as JSON ([schema](../json/apps.md#benchbar-app-list---json)) |
 | `--no-sites` | Read the last site lists instead of asking bench (faster) |
 
 Exit codes: 0; 1 when no bench is found.
@@ -93,7 +93,7 @@ shallow clone in a temp folder, then removed; at the pinned commit with
 through `config/apps.tsv` or the team profile, the steps, and a `token`.
 `commit_source` says whether `commit` is the `pin` or the `branch` tip,
 and with several apps `apps[]` has one entry each.
-See the [JSON schema](../../json-schema.md#benchbar-app-add-url---dry-run---json).
+See the [JSON schema](../json/apps.md#benchbar-app-add-url---dry-run---json).
 
 `--apply TOKEN --yes`, with the same arguments, recomputes the plan
 under the CLI lock and runs exactly that plan, including the planned
@@ -161,7 +161,7 @@ leaves one too (`app_add_pending`).
 | `--skip-backup` | Do not back up the sites first |
 | `--discard-pending` | Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs |
 | `--dry-run` | Show the changelog and the plan, change nothing |
-| `--json` | With `--dry-run`: the plan as JSON ([schema](../../json-schema.md#benchbar-app-update-name---dry-run---json)). Without it: JSON lines, the plan, a line per step and a `done` with `updated` and the [done fields](../../json-schema.md#the-done-fields-08) |
+| `--json` | With `--dry-run`: the plan as JSON ([schema](../json/apps.md#benchbar-app-update-name---dry-run---json)). Without it: JSON lines, the plan, a line per step and a `done` with `updated` and the [done fields](../../json-schema.md#the-done-fields-08) |
 
 Exit codes: 0 updated or already current; 1 refused or a step failed.
 
@@ -189,7 +189,7 @@ the pin so it is inferred again. The pin is kept in the bench's state.
 | Flag | What it does |
 |---|---|
 | `--list` | List the apps (the same as no NAME) |
-| `--json` | As JSON ([schema](../../json-schema.md#benchbar-app-focus---json)) |
+| `--json` | As JSON ([schema](../json/apps.md#benchbar-app-focus---json)) |
 | `--fetch` | Fetch the focus apps' dependencies first (20 seconds each, no prompt; not with `OFFLINE=1` or `--dry-run`) |
 | `--auto` | With NAME: remove the pin, infer again |
 
@@ -223,7 +223,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
-| `app list` | `--no-sites` |  | Leave out the sites that have each app (faster). |
+| `app list` | `--no-sites` |  | Leave out the sites that have each app (faster): the last site lists are read instead of asking bench. |
 | `app add` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `app add` | `--branch` | `B` | Branch or tag. |
 | `app add` | `--name` | `N` | The app's package name. |

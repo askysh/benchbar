@@ -93,7 +93,7 @@ final class AppLinkEffects: LinkEffects {
         if let editor = settings.editor {
             Workspace.openInEditor(bench, editor: editor)
         } else {
-            showNotice("Neither VS Code nor Cursor is installed, so there is no editor to open \(bench.name) in.")
+            showNotice(String(localized: "Neither VS Code nor Cursor is installed, so there is no editor to open \(bench.name) in."))
         }
     }
 

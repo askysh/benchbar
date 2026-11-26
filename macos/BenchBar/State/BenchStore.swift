@@ -291,12 +291,12 @@ final class BenchStore {
     var runningChangeLabel: String? {
         guard let bench = busyBench else { return nil }
         if let activity = bench.activity { return activity }
-        if bench.isChangingScheduler { return "Changing the scheduler on \(bench.name)" }
+        if bench.isChangingScheduler { return String(localized: "Changing the scheduler on \(bench.name)") }
         switch bench.pending {
-        case .up?: return "Starting \(bench.name)"
-        case .down?: return "Stopping \(bench.name)"
-        case .restart?: return "Restarting \(bench.name)"
-        case nil: return "A change on \(bench.name)"
+        case .up?: return String(localized: "Starting \(bench.name)")
+        case .down?: return String(localized: "Stopping \(bench.name)")
+        case .restart?: return String(localized: "Restarting \(bench.name)")
+        case nil: return String(localized: "A change on \(bench.name)")
         }
     }
 

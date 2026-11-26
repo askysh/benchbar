@@ -26,7 +26,7 @@ nonisolated enum ProfileRunPhase: Equatable, Sendable {
     }
 }
 
-private let noCLI = "The benchbar command line tool is not available."
+private let noCLI = String(localized: "The benchbar command line tool is not available.")
 
 /// Export: the plan first, the user's choices, then the file.
 @Observable
@@ -230,14 +230,14 @@ extension Workbench {
     /// Remove, after the user confirmed: the outcome goes to the pane's banner.
     func removeProfile(_ name: String) async {
         guard let client = store.cliClient else {
-            result = ChangeResult(title: "Remove \(name)", error: noCLI, scope: Self.profilesScope)
+            result = ChangeResult(title: String(localized: "Remove \(name)"), error: noCLI, scope: Self.profilesScope)
             return
         }
         do {
             let removed = try await client.removeProfile(name)
-            result = ChangeResult(title: "Remove \(name), moved to \(removed.movedTo)", error: nil, scope: Self.profilesScope)
+            result = ChangeResult(title: String(localized: "Remove \(name), moved to \(removed.movedTo)"), error: nil, scope: Self.profilesScope)
         } catch {
-            result = ChangeResult(title: "Remove \(name)", error: error.localizedDescription, scope: Self.profilesScope)
+            result = ChangeResult(title: String(localized: "Remove \(name)"), error: error.localizedDescription, scope: Self.profilesScope)
         }
         await loadProfiles()
     }

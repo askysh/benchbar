@@ -78,7 +78,7 @@ lib_family() {
     doctor-linux|preflight-linux) echo "test-doctor-linux test-doctor test-repair test-wsl-preflight test-install-linux test-install-failures test-prerequisites-linux" ;;
     repair|cmd-repair) echo "test-repair test-repair-json test-doctor test-doctor-hardening test-install-json" ;;
     docs) echo "test-docs test-docs-command" ;;
-    commands) echo "test-help-golden test-docs test-docs-command test-labs test-json test-unknown-flags test-envelope test-install-json test-agent-contracts" ;;
+    commands) echo "test-commands-table test-commands-cost test-help-golden test-docs test-docs-command test-labs test-json test-unknown-flags test-envelope test-install-json test-agent-contracts" ;;
     apps|app-plan) echo "test-apps test-app-cli test-app-batch test-app-recovery test-pull test-apps-git test-lock" ;;
     bench|benchinfo|benchstate|discovery|freshness) echo "test-write-forms-gate test-bench-flow test-status-cost test-discovery test-multi-bench test-adopt test-json test-freshness test-ports test-port-management test-install-json" ;;
     bench-run) echo "test-bench-run test-bench-run-mcp test-site-backups test-docs test-agent-contracts" ;;
@@ -86,6 +86,7 @@ lib_family() {
     ports|port-management) echo "test-ports test-port-management test-multi-bench test-adopt" ;;
     cmd-install) echo "test-install-json test-install-json-2 test-install-failures test-install-linux test-phases test-fresh-install test-wsl-preflight test-prerequisites-linux test-ports test-service test-adopt test-json" ;;
     cmd-where) echo "test-lean-load test-status-cost test-mcp test-docs-command test-homebrew test-cli test-json test-version-sources" ;;
+    help) echo "test-help-golden test-commands-table test-docs-command test-cli test-agent-contracts" ;;
     usage) echo "test-help-golden test-docs-command test-cli test-labs test-lean-load test-agent-contracts" ;;
     cmd-service) echo "test-service test-adopt test-install-json test-phases test-platform test-platform-linux test-json" ;;
     cmd-adopt) echo "test-adopt test-service test-ports test-port-management test-multi-bench test-install-json" ;;
@@ -206,6 +207,7 @@ while IFS= read -r f; do
     changelog.d/*) pick test-changelog ;;
     tests/timings.tsv) pick test-ci-plan; pick test-suite-hygiene ;;
     docs/* | maintainers/* | scripts/docs-reference.py) pick_family "test-docs test-docs-command" ;;
+    site/public/moved-anchors.js) pick test-moved-anchors ;;
     # no CLI test, by design: another job runs it (the app and the tray and shim jobs, the
     # Windows installer test of release-windows.yml for install.ps1, the workflow itself
     # for .github/, docs.yml for site/), or it is prose or agent tooling

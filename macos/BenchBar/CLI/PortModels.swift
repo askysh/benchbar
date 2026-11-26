@@ -2,7 +2,7 @@ import Foundation
 
 nonisolated enum PortMode: String, Codable, Sendable, CaseIterable {
     case automatic, fixed
-    var title: String { self == .automatic ? "Automatic" : "Fixed" }
+    var title: String { self == .automatic ? String(localized: "Automatic") : String(localized: "Fixed") }
 }
 
 nonisolated struct PortCheck: Codable, Sendable {

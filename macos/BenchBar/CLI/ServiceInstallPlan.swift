@@ -41,7 +41,7 @@ nonisolated struct ServiceInstallPlan: ReviewablePlan, Codable {
         for line in stream.split(separator: "\n") where line.contains("\"event\":\"plan\"") {
             return try BenchJSON.decode(ServiceInstallPlan.self, from: Data(line.utf8))
         }
-        throw CLIError.failed(command: "service", exitCode: 0, message: "benchbar service printed no plan.")
+        throw CLIError.failed(command: "service", exitCode: 0, message: String(localized: "benchbar service printed no plan."))
     }
 }
 

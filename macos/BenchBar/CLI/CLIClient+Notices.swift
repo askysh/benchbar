@@ -28,7 +28,7 @@ nonisolated extension BenchNotice {
 
     /// What the banner says under its title: the text, then the way back.
     var banner: String {
-        switchBack.isEmpty ? text : "\(text)\n\nSwitch back: \(switchBack)"
+        switchBack.isEmpty ? text : String(localized: "\(text)\n\nSwitch back: \(switchBack)")
     }
 }
 

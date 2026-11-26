@@ -62,6 +62,47 @@ nonisolated enum SnapshotCompare {
         case differs(String)
     }
 
+    /// How often `settle` measures before it gives up.
+    static let settlePasses = 5
+
+    enum Settled: Equatable {
+        case size(CGSize)
+        case unsettled(String)
+    }
+
+    /// The size two layout passes in a row agree on. A sheet sizes its
+    /// scrolling content after its first layout, on a later turn of the run
+    /// loop. With one fixed wait, a busy Mac measured before that turn and
+    /// rendered the sheet a few points short (profile-import-light was 623
+    /// points high and its dark render 626, run 45798391475). `measure` lays
+    /// out and gives the size, `wait` lets the run loop turn.
+    static func settle(passes: Int = settlePasses, measure: () -> CGSize, wait: () -> Void) -> Settled {
+        var last = measure()
+        var seen = [last]
+        for _ in 1..<max(2, passes) {
+            wait()
+            let next = measure()
+            if next == last { return .size(next) }
+            seen.append(next)
+            last = next
+        }
+        let sizes = seen.map(text(of:)).joined(separator: " then ")
+        return .unsettled("the layout did not settle: \(sizes)")
+    }
+
+    /// Nil when every render of one view has the same size; otherwise the
+    /// sentence for the failure. Light and dark differ in colour only, so two
+    /// sizes mean that one of them was measured too early.
+    static func sizeMismatch(of name: String, _ renders: [(look: String, size: CGSize)]) -> String? {
+        guard let first = renders.first, let other = renders.dropFirst().first(where: { $0.size != first.size }) else { return nil }
+        let sizes = "the \(first.look) render is \(text(of: first.size)) and the \(other.look) render is \(text(of: other.size))"
+        return "\(name): \(sizes). One of them was taken before its layout settled."
+    }
+
+    static func text(of size: CGSize) -> String {
+        String(format: "%g x %g", Double(size.width), Double(size.height))
+    }
+
     /// A raw RGBA bitmap, `width` by `height`.
     struct Pixels: Equatable {
         var width: Int

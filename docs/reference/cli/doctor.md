@@ -4,7 +4,8 @@ description: "benchbar doctor, the read only health report, and benchbar repair,
 ---
 
 What each check means, and its fix, is in the
-[Doctor and repair guide](../../guides/doctor-and-repair.md). Both
+[Doctor and repair guide](../../guides/doctor-and-repair.md) and the
+[doctor checks](../doctor-checks.md). Both
 commands take the [options for every command](install.md#options-for-every-command).
 
 ## doctor
@@ -21,7 +22,7 @@ the network unless you pass `--fetch`.
 
 | Flag | What it does |
 |---|---|
-| `--json` | Every check with its `id`, `level`, `fix_command` and `action` ([schema](../../json-schema.md#benchbar-doctor---json)) |
+| `--json` | Every check with its `id`, `level`, `fix_command` and `action` ([schema](../json/install-and-doctor.md#benchbar-doctor---json)) |
 | `--fix-hints` | Only the fix commands of FAIL and WARN checks, failures first, one per line, each once; nothing else on stdout |
 | `--quick` | Skip the slow checks (those that start brew, python, node, bench or git, or ask the site) and name them. `--json` has `quick: true` and `skipped_checks` |
 | `--ack CHECK` | Silence one named WARN for this bench until its message changes. The check stays in `--json` with `acked: true`; the text output and `--fix-hints` leave out its fix. A FAIL cannot be acknowledged |
@@ -55,7 +56,7 @@ the first call.
 | `--dry-run` | Print the plan, change nothing. With `--json` the plan line carries a `token` |
 | `--apply TOKEN` | Run exactly the plan that token was made for, with `--yes`. Refused, with nothing changed, when the plan is another one now (`The repair plan changed since it was shown`) or the token is older than an hour. Without a token the run is as before |
 | `-y`, `--yes` | Apply without asking (a `sudo` step still asks for the password) |
-| `--json` | Events as JSON lines on stdout, the text in the run's log ([schema](../../json-schema.md#benchbar-repair---json)). Without `--yes` or `--dry-run` nothing is applied |
+| `--json` | Events as JSON lines on stdout, the text in the run's log ([schema](../json/install-and-doctor.md#benchbar-repair---json)). Without `--yes` or `--dry-run` nothing is applied |
 | `--profile NAME` | Repair toward another release profile |
 
 Exit codes: 0 repaired, or nothing to do; 1 a step failed or the plan was
@@ -92,12 +93,12 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | Command | Flag | Value | What it does |
 |---|---|---|---|
 | `doctor` | `--json` |  | One JSON document. |
-| `doctor` | `--fix-hints` |  | Only the fix commands, one per line. |
+| `doctor` | `--fix-hints` |  | Only the fix commands of the FAIL and WARN checks, one per line. |
 | `doctor` | `--quick` |  | Skip the slow checks and say which. |
 | `doctor` | `--ack` | `CHECK` | Silence one named WARN for this bench until its message changes. |
 | `doctor` | `--unack` | `CHECK` | Undo --ack. |
-| `doctor` | `--prerequisites` |  | What this machine needs before an install, no bench needed. |
-| `doctor` | `--fetch` |  | git fetch the branches of the apps your focus apps need first. |
+| `doctor` | `--prerequisites` |  | What this machine needs before an install; no bench is needed. With --json it prints a document; --bench-dir names the folder a new bench would go to. |
+| `doctor` | `--fetch` |  | git fetch the branches of the apps your focus apps need first. Without it, doctor never touches the network. |
 | `repair` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `repair` | `--dry-run` |  | Print the plan, change nothing. With --json the plan line carries its token. |
 | `repair` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before. |

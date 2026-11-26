@@ -243,7 +243,7 @@ nonisolated final class ShareForwarder: @unchecked Sendable {
                 upstream.cancel()
                 let seen = capture?.spkiHash
                 let changed = self.pin != nil && seen != nil && seen != self.pin
-                let page: ForwarderPage = changed ? .identityChanged(host: self.hostLabel) : .hostOffline(host: self.hostLabel, lastSeen: "a moment ago")
+                let page: ForwarderPage = changed ? .identityChanged(host: self.hostLabel) : .hostOffline(host: self.hostLabel, lastSeen: String(localized: "a moment ago"))
                 self.respond(local, page, acceptsHTML: acceptsHTML)
             default:
                 break

@@ -14,7 +14,7 @@ nonisolated enum SiteRestoreText {
 
     /// What an input the CLI would ask for in a terminal means here.
     static func needsText(_ needs: [String]) -> String {
-        "benchbar needs \(needs.joined(separator: ", ")), which it does not have, and BenchBar never asks for or reads it. Run this restore in Terminal, where benchbar can ask."
+        String(localized: "benchbar needs \(needs.joined(separator: ", ")), which it does not have, and BenchBar never asks for or reads it. Run this restore in Terminal, where benchbar can ask.")
     }
 }
 
@@ -25,27 +25,27 @@ struct SiteRestorePlanView: View {
 
     private var facts: [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
-        if !plan.touchesText.isEmpty { out.append(("Changes", plan.touchesText.joined(separator: "\n"))) }
+        if !plan.touchesText.isEmpty { out.append((String(localized: "Changes"), plan.touchesText.joined(separator: "\n"))) }
         if plan.backupFirst.willRun {
-            out.append(("Backed up first", "\(plan.site) is backed up with its files before anything is overwritten. The restore can be undone from that backup."))
+            out.append((String(localized: "Backed up first"), String(localized: "\(plan.site) is backed up with its files before anything is overwritten. The restore can be undone from that backup.")))
         }
-        out.append(("Files", plan.source.restoresFiles ? "The public and private files come back with the database." : "Database only: the site's files stay as they are."))
-        if plan.source.encryptionKey { out.append(("Encryption key", "The one in the backup is carried over, so stored passwords still decrypt.")) }
-        out.append(("Migrate", plan.migrate ? "bench migrate runs after the restore." : "Not run: the site stays on the schema of the backup."))
-        out.append(("Left alone", "The default site, /etc/hosts and every other site."))
+        out.append((String(localized: "Files"), plan.source.restoresFiles ? String(localized: "The public and private files come back with the database.") : String(localized: "Database only: the site's files stay as they are.")))
+        if plan.source.encryptionKey { out.append((String(localized: "Encryption key"), String(localized: "The one in the backup is carried over, so stored passwords still decrypt."))) }
+        out.append((String(localized: "Migrate"), plan.migrate ? String(localized: "bench migrate runs after the restore.") : String(localized: "Not run: the site stays on the schema of the backup.")))
+        out.append((String(localized: "Left alone"), String(localized: "The default site, /etc/hosts and every other site.")))
         return out
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
             VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
-                Text(plan.new ? "A new site, \(plan.site)" : plan.site).font(.headline)
+                Text(plan.new ? String(localized: "A new site, \(plan.site)") : plan.site).font(.headline)
                 if let set = plan.source.set {
                     Text("from the backup made \(SiteRestoreText.label(set, now: pinnedNow ?? .now)) (\(set.stamp))").font(.caption).foregroundStyle(.secondary)
                 }
             }
             if !plan.errors.isEmpty {
-                SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: "This plan cannot run", detail: plan.errors.joined(separator: "\n"))
+                SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: String(localized: "This plan cannot run"), detail: plan.errors.joined(separator: "\n"))
             }
             if !plan.needs.isEmpty {
                 SheetNote(SiteRestoreText.needsText(plan.needs), tint: .orange)
@@ -117,19 +117,18 @@ struct SiteRestoreSheet: View {
     private var phase: SheetPhase {
         switch flow.stage {
         case .form:
-            if let error = flow.readError { .failed(error, title: "No plan to restore \(target)") } else { .ready }
-        case .reading: .loading("Reading the backup and the bench…")
+            if let error = flow.readError { .failed(error, title: String(localized: "No plan to restore \(target)")) } else { .ready }
+        case .reading: .loading(String(localized: "Reading the backup and the bench…"))
         case .reviewing: .ready
-        case .applying: .running(asNew ? "Copying \(site) to \(copyName)…" : "Backing up and restoring \(site)…")
-        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench or the backup changed since this plan was shown")
+        case .applying: .running(asNew ? String(localized: "Copying \(site) to \(copyName)…") : String(localized: "Backing up and restoring \(site)…"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench or the backup changed since this plan was shown"))
         }
     }
 
     var body: some View {
-        SheetScaffold(asNew ? "Copy \(site) to a New Site" : "Restore \(site)",
+        SheetScaffold(asNew ? String(localized: "Copy \(site) to a New Site") : String(localized: "Restore \(site)"),
                       explanation: flow.plan == nil
-                          ? "Puts a backup back, into this site or into a copy of it. You see the plan first; nothing runs before you confirm."
-                          : "Nothing has run yet. These are the steps; Restore runs exactly this plan.",
+                          ? String(localized: "Puts a backup back, into this site or into a copy of it. You see the plan first; nothing runs before you confirm.") : String(localized: "Nothing has run yet. These are the steps; Restore runs exactly this plan."),
                       phase: phase, width: flow.plan == nil ? .regular : .wide) {
             if let plan = flow.plan {
                 SiteRestorePlanView(plan: plan)
@@ -147,7 +146,7 @@ struct SiteRestoreSheet: View {
                     .disabled(!formValid || flow.stage == .reading)
             case .reviewing(let plan):
                 CancelButton(action: close)
-                Button(asNew ? "Make Copy" : "Restore", role: asNew ? nil : .destructive) { apply() }
+                Button(asNew ? String(localized: "Make Copy") : String(localized: "Restore"), role: asNew ? nil : .destructive) { apply() }
                     .keyboardShortcut(asNew ? .defaultAction : nil)
                     .disabled(!plan.canRun)
             case .applying:
@@ -161,8 +160,8 @@ struct SiteRestoreSheet: View {
 
     @ViewBuilder private var form: some View {
         if backups.isEmpty {
-            SheetOutcome(symbol: "tray", tint: .orange, title: "No backup of \(site) to restore",
-                         detail: "Back it up from the site's menu first. Encrypted and partial backups are not restored here.")
+            SheetOutcome(symbol: "tray", tint: .orange, title: String(localized: "No backup of \(site) to restore"),
+                         detail: String(localized: "Back it up from the site's menu first. Encrypted and partial backups are not restored here."))
         } else {
             Form {
                 Picker("Backup", selection: $stamp) {
@@ -175,7 +174,7 @@ struct SiteRestoreSheet: View {
                 if asNew {
                     TextField("New site name", text: $copyName, prompt: Text("\(site)-copy"))
                     if !copyName.isEmpty && !nameValid {
-                        Text(SiteName.isValid(copyName) ? "A site with that name exists." : SiteName.rule).font(.caption).foregroundStyle(.red)
+                        Text(SiteName.isValid(copyName) ? String(localized: "A site with that name exists.") : SiteName.rule).font(.caption).foregroundStyle(.red)
                     }
                 } else {
                     TextField("Type \(site) to confirm", text: $typed)
@@ -185,9 +184,8 @@ struct SiteRestoreSheet: View {
             }
             .formStyle(.columns)
             SheetNote(asNew
-                      ? "The copy is a new site on this bench with the backup's data. \(site) is not touched."
-                      : "The data of \(site) is replaced by the backup. \(site) is backed up with its files first, and that backup is listed on the Sites tab afterwards.")
-            SheetNote("The MariaDB password comes from your Keychain; BenchBar never reads it.")
+                      ? String(localized: "The copy is a new site on this bench with the backup's data. \(site) is not touched.") : String(localized: "The data of \(site) is replaced by the backup. \(site) is backed up with its files first, and that backup is listed on the Sites tab afterwards."))
+            SheetNote(String(localized: "The MariaDB password comes from your Keychain; BenchBar never reads it."))
         }
     }
 

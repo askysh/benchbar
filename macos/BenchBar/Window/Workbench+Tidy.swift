@@ -4,7 +4,7 @@ import Foundation
 /// Bench and Remove Service. Every entry shows only when the CLI lists its command. A read takes no change slot; a change goes through
 /// the CLI's plan and its token and takes the one slot.
 extension Workbench {
-    private var noTidyCLI: ChangeError { ChangeError(message: "The benchbar command line tool is not available.") }
+    private var noTidyCLI: ChangeError { ChangeError(message: String(localized: "The benchbar command line tool is not available.")) }
 
     var offersScratch: Bool { commandState.catalog?.has("bench scratch") == true }
     var offersGc: Bool { commandState.catalog?.has("bench gc") == true }
@@ -32,7 +32,7 @@ extension Workbench {
     /// Marks the bench scratch for `days`, or not scratch (nil). The CLI's message when it failed, nil when it worked.
     @discardableResult
     func markScratch(days: Int?, on bench: BenchModel) async -> String? {
-        let title = days.map { "Mark \(bench.name) scratch for \($0) day\($0 == 1 ? "" : "s")" } ?? "Mark \(bench.name) not scratch"
+        let title = days.map { Wording.markScratch(bench.name, days: $0) } ?? String(localized: "Mark \(bench.name) not scratch")
         return await change(title, on: bench) { client throws(CLIError) in try await client.markScratch(bench: bench.path, days: days) }
     }
 
@@ -41,10 +41,10 @@ extension Workbench {
     func tidyChange(_ plan: TidyPlan, on bench: BenchModel) async -> String? {
         let title: String
         switch plan.action {
-        case .gc: title = "Remove expired scratch benches"
-        case .forget: title = "Forget \(bench.name)"
-        case .remove: title = "Remove \(bench.name)"
-        case .removeService: title = "Remove the service of \(bench.name)"
+        case .gc: title = String(localized: "Remove expired scratch benches")
+        case .forget: title = String(localized: "Forget \(bench.name)")
+        case .remove: title = String(localized: "Remove \(bench.name)")
+        case .removeService: title = String(localized: "Remove the service of \(bench.name)")
         }
         return await change(title, on: bench) { client throws(CLIError) in
             try await client.tidyApply(plan.action, bench: bench.path, token: plan.token)

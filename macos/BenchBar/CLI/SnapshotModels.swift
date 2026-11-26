@@ -190,25 +190,23 @@ nonisolated enum SnapshotText {
 
     /// "2 hours ago"; a clock that is a little behind must not say "in 2 minutes".
     static func relativeAge(of time: Date, now: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.dateTimeStyle = .named
-        return formatter.localizedString(for: min(time, now), relativeTo: now)
+        Wording.relativeAge(of: time, now: now)
     }
 
     /// Whether the bench's apps are the ones the snapshot was taken with.
     static func apps(_ snapshot: SiteSnapshot) -> String? {
         switch snapshot.appsMatch {
-        case true?: "Same apps as now"
-        case false?: snapshot.changedApps.isEmpty ? "The apps changed since" : "Apps changed since: \(snapshot.changedApps.joined(separator: ", "))"
+        case true?: String(localized: "Same apps as now")
+        case false?: snapshot.changedApps.isEmpty ? String(localized: "The apps changed since") : String(localized: "Apps changed since: \(snapshot.changedApps.joined(separator: ", "))")
         case nil: nil
         }
     }
 
     /// A label the CLI takes: up to 120 characters, no quotes, backslashes or control characters.
     static func labelProblem(_ label: String) -> String? {
-        if label.count > 120 { return "At most 120 characters." }
+        if label.count > 120 { return String(localized: "At most 120 characters.") }
         if label.contains(where: { $0 == "\"" || $0 == "'" || $0 == "\\" || $0.unicodeScalars.contains { $0.value < 0x20 || $0.value == 0x7F } }) {
-            return "No quotes, backslashes or line breaks."
+            return String(localized: "No quotes, backslashes or line breaks.")
         }
         return nil
     }
@@ -219,5 +217,5 @@ nonisolated enum SnapshotText {
     }
 
     /// The warning that goes with rolling the default site back (the CLI allows it to a person only).
-    static let defaultSiteNote = "This is the default site of the bench. BenchBar runs the rollback as you, not as an agent. The data of the site is replaced, as for any rollback."
+    static let defaultSiteNote = String(localized: "This is the default site of the bench. BenchBar runs the rollback as you, not as an agent. The data of the site is replaced, as for any rollback.")
 }

@@ -25,12 +25,12 @@ nonisolated enum SharePrimary: Equatable, Sendable {
 
     var title: String {
         switch self {
-        case .setUp: "Set up sharing"
-        case .finishSetup: "Finish setup"
-        case .turnOnProtection: "Turn on network protection"
-        case .start: "Start sharing"
-        case .stop: "Stop"
-        case .updateCLI: "Update"
+        case .setUp: String(localized: "Set up sharing")
+        case .finishSetup: String(localized: "Finish setup")
+        case .turnOnProtection: String(localized: "Turn on network protection")
+        case .start: String(localized: "Start sharing")
+        case .stop: String(localized: "Stop")
+        case .updateCLI: String(localized: "Update")
         }
     }
 }
@@ -38,26 +38,26 @@ nonisolated enum SharePrimary: Equatable, Sendable {
 /// Every word the host side shows. Pure, so it is tested without views.
 nonisolated enum SharePresentation {
     static let durations = [1, 2, 4, 8, 12]
-    static let newerCLI = "Sharing needs a newer BenchBar command line tool."
-    static let shareNearby = "Share with people nearby…"
-    static let copyInvite = "Copy invite"
-    static let copyInviteHelp = "Copies a message with a link that joins this room in one click, code included."
-    static let inviteCopied = "Invite copied. Paste it in your team channel. New code or Stop makes it stop working."
-    static let codeNote = "Anyone on this Wi-Fi with the code can join. Remove people anytime."
-    static let codeProves = "The code proves someone may join; it does not prove to them that this Mac is the host."
-    static let setUpIntro = "Share a copy of this site with people on the same Wi-Fi. Setup makes the copy; nothing is shared until you press Start sharing."
-    static let liveUpdates = "Guests see changes after a page refresh."
-    static let awake = "Keeping this Mac awake while sharing; closing the lid still ends it."
-    static let locked = "Room locked: nobody new can join."
-    static let full = "Room full: every seat is taken."
-    static let budgetLocked = "Too many wrong codes; the room is locked. New code to reopen."
-    static let joinTrouble = "Someone is having trouble joining. Check the code."
-    static let wipeOwed = "A sign-out is still owed in the copy. BenchBar retries it on the next room action."
-    static let acknowledgement = "This copy contains real customer and employee data that your colleagues will be able to read."
-    static let refreshConfirm = "Replaces the copy. Anything guests changed in it is lost."
-    static let removedInCopy = "removed in the copy"
-    static let peopleTitle = "People in the room"
-    static let activityNote = "Guests are told this log exists."
+    static let newerCLI = String(localized: "Sharing needs a newer BenchBar command line tool.")
+    static let shareNearby = String(localized: "Share with people nearby…")
+    static let copyInvite = String(localized: "Copy invite")
+    static let copyInviteHelp = String(localized: "Copies a message with a link that joins this room in one click, code included.")
+    static let inviteCopied = String(localized: "Invite copied. Paste it in your team channel. New code or Stop makes it stop working.")
+    static let codeNote = String(localized: "Anyone on this Wi-Fi with the code can join. Remove people anytime.")
+    static let codeProves = String(localized: "The code proves someone may join; it does not prove to them that this Mac is the host.")
+    static let setUpIntro = String(localized: "Share a copy of this site with people on the same Wi-Fi. Setup makes the copy; nothing is shared until you press Start sharing.")
+    static let liveUpdates = String(localized: "Guests see changes after a page refresh.")
+    static let awake = String(localized: "Keeping this Mac awake while sharing; closing the lid still ends it.")
+    static let locked = String(localized: "Room locked: nobody new can join.")
+    static let full = String(localized: "Room full: every seat is taken.")
+    static let budgetLocked = String(localized: "Too many wrong codes; the room is locked. New code to reopen.")
+    static let joinTrouble = String(localized: "Someone is having trouble joining. Check the code.")
+    static let wipeOwed = String(localized: "A sign-out is still owed in the copy. BenchBar retries it on the next room action.")
+    static let acknowledgement = String(localized: "This copy contains real customer and employee data that your colleagues will be able to read.")
+    static let refreshConfirm = String(localized: "Replaces the copy. Anything guests changed in it is lost.")
+    static let removedInCopy = String(localized: "removed in the copy")
+    static let peopleTitle = String(localized: "People in the room")
+    static let activityNote = String(localized: "Guests are told this log exists.")
 
     /// Start is allowed only with no red check (a missing check list counts as not red), leaving out
     /// the checks of the running share: `share start` gates on its static checks alone.
@@ -69,7 +69,7 @@ nonisolated enum SharePresentation {
     /// probe (the web checks read the last share's port and fail); the job runs them, failing closed,
     /// before it lets anyone in.
     static let checksOfTheRunningShare: Set<String> = ["gateway_reachable", "share_web_lan_closed", "share_traceback_off", "share_debugger_off"]
-    static let checkedAtStart = "Checked when sharing starts"
+    static let checkedAtStart = String(localized: "Checked when sharing starts")
 
     static func waitsForStart(_ check: ShareCheck, _ status: ShareStatus) -> Bool {
         !status.isOn && checksOfTheRunningShare.contains(check.id)
@@ -82,11 +82,11 @@ nonisolated enum SharePresentation {
 
     /// The popover and menu row while sharing is on.
     static func indicator(_ status: ShareStatus) -> String {
-        "Sharing on your network · \(status.devicesOnline) online · \(countdown(status.secondsLeft)) left"
+        String(localized: "Sharing on your network · \(status.devicesOnline) online · \(countdown(status.secondsLeft)) left")
     }
 
     /// The notice while a setup stopped halfway; the CLI says the same ("benchbar share setup --refresh").
-    static let setupInterrupted = "Sharing setup was interrupted, so Start does not work yet. Choose Finish setup to refresh the copy (the command line: benchbar share setup --refresh)."
+    static let setupInterrupted = String(localized: "Sharing setup was interrupted, so Start does not work yet. Choose Finish setup to refresh the copy (the command line: benchbar share setup --refresh).")
 
     /// Turning the lan-rooms lab off ends what it started: asks first only while something is live.
     /// `hosted` counts the benches sharing now, `online` the people connected to them, `joined` the
@@ -96,16 +96,15 @@ nonisolated enum SharePresentation {
         var ends: [String] = []
         if hosted > 0 {
             let people = switch online {
-            case 0: "Nobody is connected now."
-            case 1: "1 person is connected and will be signed out."
-            default: "\(online) people are connected and will be signed out."
+            case 0: String(localized: "Nobody is connected now.")
+            default: Wording.peopleConnected(online)
             }
-            ends.append("Sharing stops and the room code stops working. \(people)")
+            ends.append(String(localized: "Sharing stops and the room code stops working. \(people)"))
         }
         if joined > 0 {
-            ends.append(joined == 1 ? "The room you opened closes on this Mac." : "The \(joined) rooms you opened close on this Mac.")
+            ends.append(Wording.roomsClose(joined))
         }
-        return ("Turn off sharing on your network?", ends.joined(separator: " "))
+        return (String(localized: "Turn off sharing on your network?"), ends.joined(separator: " "))
     }
 
     /// The room code on the Sharing tab: dots until the host asks to see it.
@@ -116,32 +115,30 @@ nonisolated enum SharePresentation {
 
     static func stopConfirm(online: Int) -> String {
         switch online {
-        case 0: "Stop sharing?"
-        case 1: "Stop sharing? 1 person is connected and will be signed out."
-        default: "Stop sharing? \(online) people are connected and will be signed out."
+        case 0: String(localized: "Stop sharing?")
+        default: Wording.stopSharing(online: online)
         }
     }
 
     /// The restart fix ends the room (every device is deleted, R3.5) and starts one with a new code.
     static func restartConfirm(online: Int) -> (message: String, detail: String) {
         let message = switch online {
-        case 0: "Restart sharing?"
-        case 1: "Restart sharing? 1 person is connected and will be signed out."
-        default: "Restart sharing? \(online) people are connected and will be signed out."
+        case 0: String(localized: "Restart sharing?")
+        default: Wording.restartSharing(online: online)
         }
-        return (message, "Everyone in the room is disconnected and needs the new room code to join again.")
+        return (message, String(localized: "Everyone in the room is disconnected and needs the new room code to join again."))
     }
 
     /// Extend choices in minutes, none past `canExtendS`.
     static func extendOptions(canExtendS: Int) -> [(label: String, minutes: Int)] {
-        [("+30 min", 30), ("+1 hour", 60)].filter { $0.minutes * 60 <= canExtendS }
+        [(String(localized: "+30 min"), 30), (String(localized: "+1 hour"), 60)].filter { $0.minutes * 60 <= canExtendS }
     }
 
     static func protectionText(_ state: LanGuardState) -> String {
         switch state {
-        case .installed: "Network protection is on."
-        case .missing: "Network protection is off. It keeps the bench's own ports closed to the network."
-        case .outdated: "Network protection needs an update."
+        case .installed: String(localized: "Network protection is on.")
+        case .missing: String(localized: "Network protection is off. It keeps the bench's own ports closed to the network.")
+        case .outdated: String(localized: "Network protection needs an update.")
         }
     }
 
@@ -149,29 +146,29 @@ nonisolated enum SharePresentation {
     static func fixLabel(_ action: ShareFixAction) -> String? {
         switch action {
         case .none: nil
-        case .installNetworkProtection: "Turn on network protection"
-        case .allowNodeFirewall: "Allow…"
-        case .openLocalNetworkSettings: "Open System Settings"
-        case .updateCLI: "Update"
-        case .rerunSetup: "Set up again"
-        case .refreshCopy: "Refresh copy…"
-        case .restartSharing: "Start again"
+        case .installNetworkProtection: String(localized: "Turn on network protection")
+        case .allowNodeFirewall: String(localized: "Allow…")
+        case .openLocalNetworkSettings: String(localized: "Open System Settings")
+        case .updateCLI: String(localized: "Update")
+        case .rerunSetup: String(localized: "Set up again")
+        case .refreshCopy: String(localized: "Refresh copy…")
+        case .restartSharing: String(localized: "Start again")
         }
     }
 
     /// A check's own words where the app has them; the CLI's message otherwise.
     static func checkTitle(_ check: ShareCheck) -> String {
         switch check.id {
-        case "pf_active": "Network protection"
-        case "local_network": "Local Network access for BenchBar"
-        case "firewall_node": "The firewall lets sharing through"
-        case "bench_redis_up": "The bench is running"
-        case "lan_ip": "This Mac has a network address"
-        case "gateway_reachable": "The gateway answers on the network"
-        case "share_traceback_off": "Error traces are hidden in the copy"
-        case "share_debugger_off": "The debugger is off in the copy"
-        case "copy_present": "The shared copy is there"
-        case "share_web_lan_closed": "The copy is reachable only through BenchBar"
+        case "pf_active": String(localized: "Network protection")
+        case "local_network": String(localized: "Local Network access for BenchBar")
+        case "firewall_node": String(localized: "The firewall lets sharing through")
+        case "bench_redis_up": String(localized: "The bench is running")
+        case "lan_ip": String(localized: "This Mac has a network address")
+        case "gateway_reachable": String(localized: "The gateway answers on the network")
+        case "share_traceback_off": String(localized: "Error traces are hidden in the copy")
+        case "share_debugger_off": String(localized: "The debugger is off in the copy")
+        case "copy_present": String(localized: "The shared copy is there")
+        case "share_web_lan_closed": String(localized: "The copy is reachable only through BenchBar")
         default: check.id.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
@@ -185,23 +182,24 @@ nonisolated enum SharePresentation {
     }
 
     static func copyLine(_ copy: ShareCopy, relativeTo now: Date = Date()) -> String {
-        let when = copy.ageS.map { "\(countdown($0)) ago" } ?? "earlier"
-        return "Copy made \(when) from \(copy.sourceSite ?? "your site"). Guests' changes stay in the copy."
+        let when = copy.ageS.map { String(localized: "\(countdown($0)) ago") } ?? String(localized: "earlier")
+        let source = copy.sourceSite ?? String(localized: "your site")
+        return String(localized: "Copy made \(when) from \(source). Guests' changes stay in the copy.")
     }
 
-    static let driftWarning = "Your apps changed since the copy was made. Guests see the copy's code, not your working tree; Refresh copy… to catch up."
+    static let driftWarning = String(localized: "Your apps changed since the copy was made. Guests see the copy's code, not your working tree; Refresh copy… to catch up.")
 
     /// "Sam · MacBook Air · 192.168.1.31" (J18: name and model tell two Sams apart).
     /// What the green or grey presence dot says in words.
-    static func presenceText(online: Bool) -> String { online ? "Online" : "Offline" }
+    static func presenceText(online: Bool) -> String { online ? String(localized: "Online") : String(localized: "Offline") }
 
     /// What the check's icon says in words.
     static func checkStatusText(_ status: ShareCheckStatus) -> String {
         switch status {
-        case .ok: "Passed"
-        case .warn: "Warning"
-        case .fail: "Failed"
-        case .skip: "Skipped"
+        case .ok: String(localized: "Passed")
+        case .warn: String(localized: "Warning")
+        case .fail: String(localized: "Failed")
+        case .skip: String(localized: "Skipped")
         }
     }
 
@@ -231,7 +229,7 @@ nonisolated enum SharePresentation {
     static func seatTitle(_ name: String, roles: [String]) -> String {
         guard !roles.isEmpty else { return name }
         let shown = roles.prefix(3).joined(separator: ", ")
-        return roles.count > 3 ? "\(name) · \(shown) and \(roles.count - 3) more" : "\(name) · \(shown)"
+        return roles.count > 3 ? String(localized: "\(name) · \(shown) and \(roles.count - 3) more") : String(localized: "\(name) · \(shown)")
     }
 
     // MARK: The host's key (#159 SHARE-8)
@@ -241,17 +239,18 @@ nonisolated enum SharePresentation {
     static func hostKeyLine(_ status: ShareStatus) -> String? {
         guard let key = status.hostKey, key.count == 16, key.allSatisfy({ $0.isHexDigit && $0.isASCII }) else { return nil }
         let digits = Array(key)
-        return "Host key: " + stride(from: 0, to: 16, by: 4).map { String(digits[$0..<$0 + 4]) }.joined(separator: " ")
+        let groups = stride(from: 0, to: 16, by: 4).map { String(digits[$0..<$0 + 4]) }.joined(separator: " ")
+        return String(localized: "Host key: \(groups)")
     }
-    static let hostKeyHelp = "A guest who joins from your invite link sees these digits before they join. Read them out when asked: a link that only uses your room's name shows other digits."
+    static let hostKeyHelp = String(localized: "A guest who joins from your invite link sees these digits before they join. Read them out when asked: a link that only uses your room's name shows other digits.")
 
     // MARK: Who gives out the seats (#159 SHARE-5)
 
-    static let assignSeatsToggle = "I give out the seats"
+    static let assignSeatsToggle = String(localized: "I give out the seats")
     /// On until the host turns it off: a guest waits for the host, as `share start` does by default.
     static let assignSeatsDefault = true
-    static let seatsNeedNewerCLI = "Guests pick their own seat: this BenchBar command line tool is older than 0.9.0 and cannot start a room where you give out the seats."
-    static let assignSeatsHelp = "On: a guest who joins waits until you give them a seat, and cannot take or change one. Off: anyone with the room code takes any free seat."
+    static let seatsNeedNewerCLI = String(localized: "Guests pick their own seat: this BenchBar command line tool is older than 0.9.0 and cannot start a room where you give out the seats.")
+    static let assignSeatsHelp = String(localized: "On: a guest who joins waits until you give them a seat, and cannot take or change one. Off: anyone with the room code takes any free seat.")
 
     /// Whether a room that is started again gives out its seats through the host: as the room that
     /// ran said, and by the stored switch when it did not say. Unknown never means open seats.
@@ -264,44 +263,44 @@ nonisolated enum SharePresentation {
     }
 
     static func seatModeLine(hostGivesSeats: Bool) -> String {
-        hostGivesSeats ? "You give out the seats: a guest who joins waits until you give them one."
-            : "Guests pick their own seat: the room code lets them take any free one."
+        hostGivesSeats ? String(localized: "You give out the seats: a guest who joins waits until you give them one.")
+            : String(localized: "Guests pick their own seat: the room code lets them take any free one.")
     }
 
     static func startDetail(site: String, assignSeats: Bool) -> String {
-        "People on this Wi-Fi who have the room code can join a copy of \(site) until you stop. "
-            + (assignSeats ? "They wait until you give each of them a seat." : "Each of them can take any free seat.")
+        assignSeats
+            ? String(localized: "People on this Wi-Fi who have the room code can join a copy of \(site) until you stop. They wait until you give each of them a seat.")
+            : String(localized: "People on this Wi-Fi who have the room code can join a copy of \(site) until you stop. Each of them can take any free seat.")
     }
 
     static func seatCaption(_ person: SharePerson, hostGivesSeats: Bool) -> String {
-        person.seatFullName ?? (hostGivesSeats ? "Waits for a seat from you" : "No seat yet")
+        person.seatFullName ?? (hostGivesSeats ? String(localized: "Waits for a seat from you") : String(localized: "No seat yet"))
     }
 
     static func seatMenuTitle(_ person: SharePerson) -> String {
-        person.seatID == nil ? "Give a Seat" : "Move to"
+        person.seatID == nil ? String(localized: "Give a Seat") : String(localized: "Move to")
     }
 
     /// The line above the people while somebody waits for the host.
     static func waitingNotice(people: [SharePerson], hostGivesSeats: Bool) -> String? {
         let waiting = people.filter { $0.seatID == nil }.count
         guard hostGivesSeats, waiting > 0 else { return nil }
-        return waiting == 1 ? "1 person waits for a seat. Choose Give a Seat next to their name."
-            : "\(waiting) people wait for a seat. Choose Give a Seat next to each name."
+        return Wording.peopleWaiting(waiting)
     }
 
     static func removeConfirm(_ person: SharePerson, site: String) -> String {
-        "Remove \(person.name)? Closes their connections and signs them out of \(site)."
+        String(localized: "Remove \(person.name)? Closes their connections and signs them out of \(site).")
     }
-    static let removeDetail = "They can't join again with the current code. Everyone else stays. To let them back in, copy a new invite and send it to them."
-    static let copyNewInvite = "Copy new invite"
+    static let removeDetail = String(localized: "They can't join again with the current code. Everyone else stays. To let them back in, copy a new invite and send it to them.")
+    static let copyNewInvite = String(localized: "Copy new invite")
 
     static func removedNotice(_ name: String) -> String {
-        "\(name) was removed. To let them back in, send a new invite."
+        String(localized: "\(name) was removed. To let them back in, send a new invite.")
     }
 
     /// "Sam · sales-invoice · 09:30" from one activity line.
     static func activityLine(_ entry: ShareLogEntry, names: [String: String]) -> String {
-        let who = entry.device.flatMap { names[$0] } ?? entry.user ?? "Someone"
+        let who = entry.device.flatMap { names[$0] } ?? entry.user ?? String(localized: "Someone")
         let parts = entry.path.split(separator: "/")
         let doctype = parts.count >= 2 && parts[0] == "app" ? String(parts[1]) : entry.path
         let time = entry.ts.map { Wording.time($0) } ?? ""
@@ -330,8 +329,8 @@ nonisolated struct ShareSetupForm: Equatable, Sendable {
     }
 
     static func sourceLabel(backupNow: Bool, estMinutes: Int?, backupAgeS: Int?) -> String {
-        if backupNow { return "Copy my site as it is now (about \(estMinutes ?? 1) min)" }
-        return "Use the backup from \(SharePresentation.countdown(backupAgeS ?? 0)) ago"
+        if backupNow { return String(localized: "Copy my site as it is now (about \(estMinutes ?? 1) min)") }
+        return String(localized: "Use the backup from \(SharePresentation.countdown(backupAgeS ?? 0)) ago")
     }
 
     static func needs(_ gb: Double) -> String { Wording.needs(gigabytes: gb) }

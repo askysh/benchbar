@@ -65,7 +65,7 @@ final class BugReport {
     func create() async {
         guard state != .running else { return }
         guard let client = store.cliClient else {
-            state = .failed("The benchbar command line tool was not found, so there is no report. The issue page still opens with your versions.",
+            state = .failed(String(localized: "The benchbar command line tool was not found, so there is no report. The issue page still opens with your versions."),
                             issue: issueURL(cli: nil))
             return
         }
@@ -90,7 +90,7 @@ final class BugReport {
     /// and prints text, which does not decode.
     static func message(for error: CLIError) -> String {
         if case .invalidJSON = error {
-            return "This benchbar is older than the app and cannot report to it. Run benchbar report in Terminal: it writes the zip to your Desktop."
+            return String(localized: "This benchbar is older than the app and cannot report to it. Run benchbar report in Terminal: it writes the zip to your Desktop.")
         }
         return error.localizedDescription
     }
@@ -159,7 +159,7 @@ struct AboutPane: View {
                 // the path under the row, not inside it: a long path pushed the
                 // value far below its label
                 LabeledContent("Command line tool") {
-                    Text(model.cliVersion ?? (cliPath == nil ? "not found" : "…")).textSelection(.enabled)
+                    Text(model.cliVersion ?? (cliPath == nil ? String(localized: "not found") : "…")).textSelection(.enabled)
                 }
                 if let cliPath {
                     Text(cliPath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
@@ -173,9 +173,9 @@ struct AboutPane: View {
                 Text("Versions")
             }
             Section {
-                LinkRow(title: "Documentation", address: "benchbar.akashmishra.com", url: BenchBarLinks.docs)
-                LinkRow(title: "What's new", detail: "What changed in each version", address: "benchbar.akashmishra.com/whats-new", url: BenchBarLinks.whatsNew)
-                LinkRow(title: "Source code", address: "github.com/askysh/benchbar", url: BenchBarLinks.repository)
+                LinkRow(title: String(localized: "Documentation"), address: "benchbar.akashmishra.com", url: BenchBarLinks.docs)
+                LinkRow(title: String(localized: "What's new"), detail: String(localized: "What changed in each version"), address: "benchbar.akashmishra.com/whats-new", url: BenchBarLinks.whatsNew)
+                LinkRow(title: String(localized: "Source code"), address: "github.com/askysh/benchbar", url: BenchBarLinks.repository)
                 LabeledContent {
                     Button("Report a Bug…") { showBugReport = true }
                 } label: {
@@ -188,7 +188,7 @@ struct AboutPane: View {
             Section {
                 Text("benchbar mcp lets Claude Code, Cursor and other agents list your benches, read status, doctor and logs, and start, stop or restart them. Add it once:")
                     .font(.callout)
-                CopyableCommand(command: MCPSnippet.claude, copyLabel: "Copy the command that adds benchbar mcp")
+                CopyableCommand(command: MCPSnippet.claude, copyLabel: String(localized: "Copy the command that adds benchbar mcp"))
             } header: {
                 Text("For coding agents")
             }
@@ -205,7 +205,7 @@ struct AboutPane: View {
     /// Two or more minor versions apart, the app may ask for things this CLI cannot do.
     private func cliBehindRow(_ command: String) -> some View {
         LabeledContent {
-            CopyableCommand(command: command, copyLabel: "Copy the command that updates the command line tool")
+            CopyableCommand(command: command, copyLabel: String(localized: "Copy the command that updates the command line tool"))
         } label: {
             Label("The command line tool is behind", systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
@@ -231,7 +231,7 @@ struct AboutPane: View {
                         Button("Update Now") { offer.updateNow() }
                             .primaryAction()
                     }
-                    MoreMenu(help: "More update actions") {
+                    MoreMenu(help: String(localized: "More update actions")) {
                         if let offer = model.offer, offer.version != nil, let command = offer.command {
                             Button("Copy Update Command") { offer.copyCommand() }.help(command)
                         }
@@ -247,8 +247,8 @@ struct AboutPane: View {
         } label: {
             Text("Updates")
             Text(model.offer == nil || Updater.isAvailable
-                 ? "Asks GitHub for the latest release."
-                 : "Asks GitHub for the latest release, and once a day when Check for updates automatically is on in General.")
+                 ? String(localized: "Asks GitHub for the latest release.")
+                 : String(localized: "Asks GitHub for the latest release, and once a day when Check for updates automatically is on in General."))
         }
     }
 }
@@ -279,8 +279,8 @@ struct BugReportSheet: View {
     let close: () -> Void
 
     var body: some View {
-        SheetScaffold("Report a Bug",
-                      explanation: "BenchBar writes a redacted diagnostics zip and opens a new GitHub issue for it.",
+        SheetScaffold(String(localized: "Report a Bug"),
+                      explanation: String(localized: "BenchBar writes a redacted diagnostics zip and opens a new GitHub issue for it."),
                       phase: phase, width: .regular) {
             switch report.state {
             case .ready, .running:
@@ -309,7 +309,7 @@ struct BugReportSheet: View {
             case .done:
                 DoneButton(action: close)
             case .failed:
-                CancelButton(title: "Close", action: close)
+                CancelButton(title: String(localized: "Close"), action: close)
                 Button("Try Again") { Task { await report.create() } }
                     .keyboardShortcut(.defaultAction)
             }
@@ -321,12 +321,12 @@ struct BugReportSheet: View {
         case .ready:
             .ready
         case .running:
-            .running("Running benchbar report…")
+            .running(String(localized: "Running benchbar report…"))
         case .done(let file, _):
             .done(.success(URL(fileURLWithPath: file.zip).lastPathComponent,
-                           "\(file.redactions) lines redacted. The zip is selected in Finder and the issue page is open in your browser: describe what happened and attach the zip."))
+                           String(localized: "\(file.redactions) lines redacted. The zip is selected in Finder and the issue page is open in your browser: describe what happened and attach the zip.")))
         case .failed(let message, _):
-            .failed(message, title: "No report")
+            .failed(message, title: String(localized: "No report"))
         }
     }
 
@@ -336,7 +336,7 @@ struct BugReportSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             Text("It has no secrets, no personal paths and no names: passwords, keys and tokens are masked, your home folder, username and the names of this Mac are replaced, and site configs are reduced to their key names. REDACTIONS.txt inside lists every replacement.")
                 .fixedSize(horizontal: false, vertical: true)
-            SheetNote("Then Finder shows the zip and GitHub opens a new issue with your macOS and BenchBar versions filled in. Nothing is sent until you attach the zip yourself.")
+            SheetNote(String(localized: "Then Finder shows the zip and GitHub opens a new issue with your macOS and BenchBar versions filled in. Nothing is sent until you attach the zip yourself."))
         }
     }
 }

@@ -1228,6 +1228,8 @@ for _name in list(TOOLS):
 # (lib/frappe-local/commands.sh), or "" for a tool that runs no command. Two tools may run one command (a plan and
 # its apply, the three doctor tools). tests/test-mcp-commands.sh checks that every tool has an entry, that every
 # entry is a command of the table, and that the argv a tool builds starts with the words of its command.
+# The reads a tool makes after an action (AFTER_TOOL: the apps, status and sites it shows once it is done) go through
+# another tool and are not mapped here: only the command a tool itself runs is.
 TOOL_COMMAND = {
     "benchbar_list": "list",
     "benchbar_status": "status",
