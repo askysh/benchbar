@@ -8,7 +8,7 @@ Aborting. Usage: benchbar lock apply [--dry-run --json | --apply TOKEN --yes]. E
 --- calls
 [state] unknown option acme_crm: 4dbe61d main
 [state] unknown option acme_base: b6399ac version-15
-[state] unknown option apps.txt: frappe acme_crm acme_base 
+[state] unknown option apps.txt: frappe acme_crm acme_base
 === apply, bad token
 exit: 1
 --- stdout
@@ -21,7 +21,7 @@ brew --prefix
 pipx environment --value PIPX_HOME
 [state] apply, bad token acme_crm: 4dbe61d main
 [state] apply, bad token acme_base: b6399ac version-15
-[state] apply, bad token apps.txt: frappe acme_crm acme_base 
+[state] apply, bad token apps.txt: frappe acme_crm acme_base
 === apply, no --yes
 exit: 1
 --- stdout
@@ -34,7 +34,7 @@ brew --prefix
 pipx environment --value PIPX_HOME
 [state] apply, no --yes acme_crm: 4dbe61d main
 [state] apply, no --yes acme_base: b6399ac version-15
-[state] apply, no --yes apps.txt: frappe acme_crm acme_base 
+[state] apply, no --yes apps.txt: frappe acme_crm acme_base
 === apply with dry run
 exit: 1
 --- stdout
@@ -47,17 +47,17 @@ brew --prefix
 pipx environment --value PIPX_HOME
 [state] apply with dry run acme_crm: 4dbe61d main
 [state] apply with dry run acme_base: b6399ac version-15
-[state] apply with dry run apps.txt: frappe acme_crm acme_base 
+[state] apply with dry run apps.txt: frappe acme_crm acme_base
 === apply, nothing to do, token of nothing
 exit: 1
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
   [FAIL] The lock apply plan changed since it was shown (the lockfile, an app or its branch or commit, or nothing is left to do). Nothing was changed.
 
@@ -101,7 +101,7 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] apply, nothing to do, token of nothing acme_crm: 4dbe61d main
 [state] apply, nothing to do, token of nothing acme_base: b6399ac version-15
-[state] apply, nothing to do, token of nothing apps.txt: frappe acme_crm acme_base 
+[state] apply, nothing to do, token of nothing apps.txt: frappe acme_crm acme_base
 === no lockfile at the path
 exit: 1
 --- stdout
@@ -114,17 +114,17 @@ brew --prefix
 pipx environment --value PIPX_HOME
 [state] no lockfile at the path acme_crm: 4dbe61d main
 [state] no lockfile at the path acme_base: b6399ac version-15
-[state] no lockfile at the path apps.txt: frappe acme_crm acme_base 
+[state] no lockfile at the path apps.txt: frappe acme_crm acme_base
 === in sync
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -168,17 +168,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] in sync acme_crm: 4dbe61d main
 [state] in sync acme_base: b6399ac version-15
-[state] in sync apps.txt: frappe acme_crm acme_base 
+[state] in sync apps.txt: frappe acme_crm acme_base
 === in sync, dry run
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     dry-run                                     |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -222,19 +222,19 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] in sync, dry run acme_crm: 4dbe61d main
 [state] in sync, dry run acme_base: b6399ac version-15
-[state] in sync, dry run apps.txt: frappe acme_crm acme_base 
+[state] in sync, dry run apps.txt: frappe acme_crm acme_base
 === in sync, dry run json
 exit: 0
 --- stdout
 {"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","lock_file":"<TMP>/home/frappe-bench/benchbar.toml","dry_run":true,"can_apply":false,"steps":[],"skipped":[],"runs_code_from":[],"token":null}
 --- stderr
 
-+- benchbar lock apply --------------------------------+
-| mode     dry-run                                     |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -276,17 +276,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] in sync, dry run json acme_crm: 4dbe61d main
 [state] in sync, dry run json acme_base: b6399ac version-15
-[state] in sync, dry run json apps.txt: frappe acme_crm acme_base 
+[state] in sync, dry run json apps.txt: frappe acme_crm acme_base
 === in sync, other profile in the lock
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -330,17 +330,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] in sync, other profile in the lock acme_crm: 4dbe61d main
 [state] in sync, other profile in the lock acme_base: b6399ac version-15
-[state] in sync, other profile in the lock apps.txt: frappe acme_crm acme_base 
+[state] in sync, other profile in the lock apps.txt: frappe acme_crm acme_base
 === in sync, the lock names another profile
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
   [WARN] the lock was written on profile v16-lts, this bench is v15-lts; apply changes apps only
 
@@ -385,17 +385,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] in sync, the lock names another profile acme_crm: 4dbe61d main
 [state] in sync, the lock names another profile acme_base: b6399ac version-15
-[state] in sync, the lock names another profile apps.txt: frappe acme_crm acme_base 
+[state] in sync, the lock names another profile apps.txt: frappe acme_crm acme_base
 === in sync, --lock given
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -440,22 +440,22 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] in sync, --lock given acme_crm: 4dbe61d main
 [state] in sync, --lock given acme_base: b6399ac version-15
-[state] in sync, --lock given apps.txt: frappe acme_crm acme_base 
+[state] in sync, --lock given apps.txt: frappe acme_crm acme_base
 === behind, dry run
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     dry-run                                     |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App       Change                   
-  1  acme_crm  fast forward to 85b2330  
+  # App Change
+  1 acme_crm fast forward to 85b2330
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
 
   .. dry-run: nothing was changed
@@ -500,19 +500,19 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] behind, dry run acme_crm: 4dbe61d main
 [state] behind, dry run acme_base: b6399ac version-15
-[state] behind, dry run apps.txt: frappe acme_crm acme_base 
+[state] behind, dry run apps.txt: frappe acme_crm acme_base
 === behind, dry run json
 exit: 0
 --- stdout
 {"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","lock_file":"<TMP>/home/frappe-bench/benchbar.toml","dry_run":true,"can_apply":true,"steps":[{"kind":"commit","app":"acme_crm","detail":"fast forward to 85b2330"}],"skipped":[],"runs_code_from":[],"token":"<TOKEN>"}
 --- stderr
 
-+- benchbar lock apply --------------------------------+
-| mode     dry-run                                     |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -556,22 +556,22 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] behind, dry run json acme_crm: 4dbe61d main
 [state] behind, dry run json acme_base: b6399ac version-15
-[state] behind, dry run json apps.txt: frappe acme_crm acme_base 
+[state] behind, dry run json apps.txt: frappe acme_crm acme_base
 === behind, cancelled at the prompt
 exit: 1
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App       Change                   
-  1  acme_crm  fast forward to 85b2330  
+  # App Change
+  1 acme_crm fast forward to 85b2330
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   [WARN] Not a terminal and --yes not given; treating 'Apply 1 change(s) to the apps?' as no.
   [WARN] Cancelled. Nothing was changed.
@@ -616,17 +616,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] behind, cancelled at the prompt acme_crm: 4dbe61d main
 [state] behind, cancelled at the prompt acme_base: b6399ac version-15
-[state] behind, cancelled at the prompt apps.txt: frappe acme_crm acme_base 
+[state] behind, cancelled at the prompt apps.txt: frappe acme_crm acme_base
 === behind, apply with an expired token
 exit: 1
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
   [FAIL] The plan token expired: a token is good for about an hour after its plan was made, and this one is older. Nothing was changed.
 
@@ -672,17 +672,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] behind, apply with an expired token acme_crm: 4dbe61d main
 [state] behind, apply with an expired token acme_base: b6399ac version-15
-[state] behind, apply with an expired token apps.txt: frappe acme_crm acme_base 
+[state] behind, apply with an expired token apps.txt: frappe acme_crm acme_base
 === behind, apply with a token of another plan
 exit: 1
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
   [FAIL] The lock apply plan changed since it was shown (the lockfile, an app or its branch or commit, or nothing is left to do). Nothing was changed.
 
@@ -728,22 +728,22 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] behind, apply with a token of another plan acme_crm: 4dbe61d main
 [state] behind, apply with a token of another plan acme_base: b6399ac version-15
-[state] behind, apply with a token of another plan apps.txt: frappe acme_crm acme_base 
+[state] behind, apply with a token of another plan apps.txt: frappe acme_crm acme_base
 === behind, requirements fail
 exit: 1
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App       Change                   
-  1  acme_crm  fast forward to 85b2330  
+  # App Change
+  1 acme_crm fast forward to 85b2330
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
 
@@ -767,9 +767,9 @@ Plan
 Verify
 
 Summary
-  #  Step                    Status  Time  
-  1  acme_crm                done    <N>s    
-  2  Requirements and build  failed  <N>s    
+  # Step Status Time
+  1 acme_crm done <N>s
+  2 Requirements and build failed <N>s
   total <N>s
   .. the code changed: migrate the sites that have these apps (bench --site SITE migrate), then benchbar restart
 --- stderr
@@ -847,22 +847,22 @@ git -C <TMP>/home/frappe-bench/apps/acme_base rev-parse -q --verify HEAD^{commit
 git -C <TMP>/home/frappe-bench/apps/acme_base rev-parse -q --verify HEAD^{commit}
 [state] behind, requirements fail acme_crm: 85b2330 main
 [state] behind, requirements fail acme_base: b6399ac version-15
-[state] behind, requirements fail apps.txt: frappe acme_crm acme_base 
+[state] behind, requirements fail apps.txt: frappe acme_crm acme_base
 === behind, build fails
 exit: 1
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App       Change                   
-  1  acme_crm  fast forward to 85b2330  
+  # App Change
+  1 acme_crm fast forward to 85b2330
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
 
@@ -890,9 +890,9 @@ Plan
 Verify
 
 Summary
-  #  Step                    Status  Time  
-  1  acme_crm                done    <N>s    
-  2  Requirements and build  failed  <N>s    
+  # Step Status Time
+  1 acme_crm done <N>s
+  2 Requirements and build failed <N>s
   total <N>s
   .. the code changed: migrate the sites that have these apps (bench --site SITE migrate), then benchbar restart
 --- stderr
@@ -968,22 +968,22 @@ git -C <TMP>/home/frappe-bench/apps/acme_base rev-parse -q --verify HEAD^{commit
 git -C <TMP>/home/frappe-bench/apps/acme_base rev-parse -q --verify HEAD^{commit}
 [state] behind, build fails acme_crm: 85b2330 main
 [state] behind, build fails acme_base: b6399ac version-15
-[state] behind, build fails apps.txt: frappe acme_crm acme_base 
+[state] behind, build fails apps.txt: frappe acme_crm acme_base
 === behind, the fast forward fails
 exit: 1
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App       Change                   
-  1  acme_crm  fast forward to 85b2330  
+  # App Change
+  1 acme_crm fast forward to 85b2330
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
 
@@ -1003,9 +1003,9 @@ Verify
   [WARN] commit_behind: acme_crm (lock: 85b2330, bench: 4dbe61d)
 
 Summary
-  #  Step                    Status  Time  
-  1  acme_crm                failed  <N>s    
-  2  Requirements and build  done    <N>s    
+  # Step Status Time
+  1 acme_crm failed <N>s
+  2 Requirements and build done <N>s
   total <N>s
 --- stderr
 --- calls
@@ -1079,24 +1079,24 @@ git -C <TMP>/home/frappe-bench/apps/acme_base rev-parse -q --verify HEAD^{commit
 git -C <TMP>/home/frappe-bench/apps/acme_base rev-parse -q --verify HEAD^{commit}
 [state] behind, the fast forward fails acme_crm: 4dbe61d main
 [state] behind, the fast forward fails acme_base: b6399ac version-15
-[state] behind, the fast forward fails apps.txt: frappe acme_crm acme_base 
+[state] behind, the fast forward fails apps.txt: frappe acme_crm acme_base
 === behind, apply with its token
 exit: 0
 --- stdout
 {"schema_version":1,"cli_version":"0.8.3","event":"done","op_id":"op-<ID>","bench":"<TMP>/home/frappe-bench","exit":0,"changed":[],"warnings":[],"next_actions":[],"state_after":{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","name":"frappe-bench","site":"macdev","label":"com.benchbar.frappe-bench","state":"stopped","stop_reason":null,"pid":null,"started_at":null,"last_exit_code":null,"web_url":"http://macdev:8000","web_ping_code":null,"ports":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_socketio":13000,"redis_cache":13000},"sites":[{"name":"macdev","default":true,"hosts_entry":false,"ping_code":null,"developer_mode":false,"open_as_enabled":false,"open_as":false,"served":null}],"scheduler":false,"autostart":true,"listen":"local","redis":{"queue":{"port":11000,"running":false},"cache":{"port":13000,"running":false}},"bench_bin":null,"state_file":"<TMP>/home/frappe-bench/logs/.benchbar/state.json","log":"<TMP>/home/frappe-bench/logs/bench.log","agent_loaded":false,"agent_state":null,"processes_running":false,"url":"http://macdev:8000","agent":"com.benchbar.frappe-bench","loaded":"no","stop_flag":"none","ping":"000","pending_operations":[],"ready":{"ready":false,"deep":false,"agent":false,"processes":false,"web":false,"socketio":false,"redis":false,"workers":null,"stale":null,"stale_file":null,"waiting_on":["agent","processes","web","socketio","redis"],"fix":"<ROOT>/benchbar up --bench-dir <TMP>/home/frappe-bench"},"labs":[],"notices":[],"leases":[]},"log":"<TMP>/state/logs/<LOG>.log"}
 --- stderr
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App       Change                   
-  1  acme_crm  fast forward to 85b2330  
+  # App Change
+  1 acme_crm fast forward to 85b2330
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
 
@@ -1117,9 +1117,9 @@ Plan
 Verify
 
 Summary
-  #  Step                    Status  Time  
-  1  acme_crm                done    <N>s    
-  2  Requirements and build  done    <N>s    
+  # Step Status Time
+  1 acme_crm done <N>s
+  2 Requirements and build done <N>s
   total <N>s
   .. the code changed: migrate the sites that have these apps (bench --site SITE migrate), then benchbar restart
 --- calls
@@ -1196,22 +1196,22 @@ launchctl print gui/<UID>/com.benchbar.frappe-bench
 pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
 [state] behind, apply with its token acme_crm: 85b2330 main
 [state] behind, apply with its token acme_base: b6399ac version-15
-[state] behind, apply with its token apps.txt: frappe acme_crm acme_base 
+[state] behind, apply with its token apps.txt: frappe acme_crm acme_base
 === behind, text apply
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App       Change                   
-  1  acme_crm  fast forward to 85b2330  
+  # App Change
+  1 acme_crm fast forward to 85b2330
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
 
@@ -1232,9 +1232,9 @@ Plan
 Verify
 
 Summary
-  #  Step                    Status  Time  
-  1  acme_crm                done    <N>s    
-  2  Requirements and build  done    <N>s    
+  # Step Status Time
+  1 acme_crm done <N>s
+  2 Requirements and build done <N>s
   total <N>s
   .. the code changed: migrate the sites that have these apps (bench --site SITE migrate), then benchbar restart
 --- stderr
@@ -1310,17 +1310,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_base rev-parse -q --verify HEAD^{commit
 git -C <TMP>/home/frappe-bench/apps/acme_base rev-parse -q --verify HEAD^{commit}
 [state] behind, text apply acme_crm: 85b2330 main
 [state] behind, text apply acme_base: b6399ac version-15
-[state] behind, text apply apps.txt: frappe acme_crm acme_base 
+[state] behind, text apply apps.txt: frappe acme_crm acme_base
 === behind, after the apply
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -1364,17 +1364,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] behind, after the apply acme_crm: 85b2330 main
 [state] behind, after the apply acme_base: b6399ac version-15
-[state] behind, after the apply apps.txt: frappe acme_crm acme_base 
+[state] behind, after the apply apps.txt: frappe acme_crm acme_base
 === ahead, skipped
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -1425,19 +1425,19 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] ahead, skipped acme_crm: 98661af main
 [state] ahead, skipped acme_base: b6399ac version-15
-[state] ahead, skipped apps.txt: frappe acme_crm acme_base 
+[state] ahead, skipped apps.txt: frappe acme_crm acme_base
 === ahead, dry run json
 exit: 0
 --- stdout
 {"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","lock_file":"<TMP>/home/frappe-bench/benchbar.toml","dry_run":true,"can_apply":false,"steps":[],"skipped":["acme_crm: apps/acme_crm is ahead of the pinned 85b2330; local work outranks the lock (benchbar lock write pins it)"],"runs_code_from":[],"token":null}
 --- stderr
 
-+- benchbar lock apply --------------------------------+
-| mode     dry-run                                     |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -1486,17 +1486,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] ahead, dry run json acme_crm: 98661af main
 [state] ahead, dry run json acme_base: b6399ac version-15
-[state] ahead, dry run json apps.txt: frappe acme_crm acme_base 
+[state] ahead, dry run json apps.txt: frappe acme_crm acme_base
 === diverged, skipped
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -1547,17 +1547,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] diverged, skipped acme_crm: 66ad24a main
 [state] diverged, skipped acme_base: b6399ac version-15
-[state] diverged, skipped apps.txt: frappe acme_crm acme_base 
+[state] diverged, skipped apps.txt: frappe acme_crm acme_base
 === dirty, nothing else to do
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -1601,17 +1601,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] dirty, nothing else to do acme_crm: 85b2330 main
 [state] dirty, nothing else to do acme_base: b6399ac version-15
-[state] dirty, nothing else to do apps.txt: frappe acme_crm acme_base 
+[state] dirty, nothing else to do apps.txt: frappe acme_crm acme_base
 === dirty and behind, skipped
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -1660,17 +1660,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] dirty and behind, skipped acme_crm: b0ece2f main
 [state] dirty and behind, skipped acme_base: b6399ac version-15
-[state] dirty and behind, skipped apps.txt: frappe acme_crm acme_base 
+[state] dirty and behind, skipped apps.txt: frappe acme_crm acme_base
 === a folder that is not a git app
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -1704,23 +1704,23 @@ git -C <TMP>/home/frappe-bench/apps/acme_base rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] a folder that is not a git app acme_crm: 85b2330 main
-[state] a folder that is not a git app acme_base:  detached
-[state] a folder that is not a git app apps.txt: frappe acme_crm acme_base 
+[state] a folder that is not a git app acme_base: detached
+[state] a folder that is not a git app apps.txt: frappe acme_crm acme_base
 === branch, dry run
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     dry-run                                     |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App        Change              
-  1  acme_base  version-15 -> main  
+  # App Change
+  1 acme_base version-15 -> main
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
 
   .. dry-run: nothing was changed
@@ -1760,22 +1760,22 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] branch, dry run acme_crm: 85b2330 main
 [state] branch, dry run acme_base: b6399ac version-15
-[state] branch, dry run apps.txt: frappe acme_crm acme_base 
+[state] branch, dry run apps.txt: frappe acme_crm acme_base
 === branch, apply
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App        Change              
-  1  acme_base  version-15 -> main  
+  # App Change
+  1 acme_base version-15 -> main
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
 
@@ -1796,9 +1796,9 @@ Plan
 Verify
 
 Summary
-  #  Step                    Status  Time  
-  1  acme_base               done    <N>s    
-  2  Requirements and build  done    <N>s    
+  # Step Status Time
+  1 acme_base done <N>s
+  2 Requirements and build done <N>s
   total <N>s
   .. the code changed: migrate the sites that have these apps (bench --site SITE migrate), then benchbar restart
 --- stderr
@@ -1867,17 +1867,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_base status --porcelain -uno
 git -C <TMP>/home/frappe-bench/apps/acme_base symbolic-ref --short -q HEAD
 [state] branch, apply acme_crm: 85b2330 main
 [state] branch, apply acme_base: b6399ac main
-[state] branch, apply apps.txt: frappe acme_crm acme_base 
+[state] branch, apply apps.txt: frappe acme_crm acme_base
 === branch, again
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -1918,22 +1918,22 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] branch, again acme_crm: 85b2330 main
 [state] branch, again acme_base: b6399ac main
-[state] branch, again apps.txt: frappe acme_crm acme_base 
+[state] branch, again apps.txt: frappe acme_crm acme_base
 === detached with work, skipped step
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App        Change                  
-  1  acme_base  detached -> version-15  
+  # App Change
+  1 acme_base detached -> version-15
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
 
@@ -1948,9 +1948,9 @@ Verify
   [WARN] branch_mismatch: acme_base (lock: version-15, bench: detached)
 
 Summary
-  #  Step                    Status   Time  
-  1  acme_base               skipped  <N>s    
-  2  Requirements and build  done     <N>s    
+  # Step Status Time
+  1 acme_base skipped <N>s
+  2 Requirements and build done <N>s
   total <N>s
 --- stderr
 --- calls
@@ -2009,22 +2009,22 @@ git -C <TMP>/home/frappe-bench/apps/acme_base status --porcelain -uno
 git -C <TMP>/home/frappe-bench/apps/acme_base symbolic-ref --short -q HEAD
 [state] detached with work, skipped step acme_crm: 85b2330 main
 [state] detached with work, skipped step acme_base: 5552b8f detached
-[state] detached with work, skipped step apps.txt: frappe acme_crm acme_base 
+[state] detached with work, skipped step apps.txt: frappe acme_crm acme_base
 === branch back, after the detached work was kept
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App        Change                       
-  1  acme_base  detached-work -> version-15  
+  # App Change
+  1 acme_base detached-work -> version-15
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
 
@@ -2045,9 +2045,9 @@ Plan
 Verify
 
 Summary
-  #  Step                    Status  Time  
-  1  acme_base               done    <N>s    
-  2  Requirements and build  done    <N>s    
+  # Step Status Time
+  1 acme_base done <N>s
+  2 Requirements and build done <N>s
   total <N>s
   .. the code changed: migrate the sites that have these apps (bench --site SITE migrate), then benchbar restart
 --- stderr
@@ -2118,22 +2118,22 @@ git -C <TMP>/home/frappe-bench/apps/acme_base status --porcelain -uno
 git -C <TMP>/home/frappe-bench/apps/acme_base symbolic-ref --short -q HEAD
 [state] branch back, after the detached work was kept acme_crm: 85b2330 main
 [state] branch back, after the detached work was kept acme_base: b6399ac version-15
-[state] branch back, after the detached work was kept apps.txt: frappe acme_crm acme_base 
+[state] branch back, after the detached work was kept apps.txt: frappe acme_crm acme_base
 === missing, dry run
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     dry-run                                     |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App       Change                                                                                                                                      
-  1  acme_new  NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_new.git, then e47191c  
+  # App Change
+  1 acme_new NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_new.git, then e47191c
   [WARN] apply will run code from these repos: local (get-app runs pip install and a build; an installed app's hooks run on the site)
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
 
@@ -2186,19 +2186,19 @@ git -C <TMP>/home/frappe-bench/apps/frappe config --get branch.version-15.remote
 git -C <TMP>/home/frappe-bench/apps/frappe remote get-url upstream
 [state] missing, dry run acme_crm: 85b2330 main
 [state] missing, dry run acme_base: b6399ac version-15
-[state] missing, dry run apps.txt: frappe acme_crm acme_base 
+[state] missing, dry run apps.txt: frappe acme_crm acme_base
 === missing, dry run json
 exit: 0
 --- stdout
 {"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","lock_file":"<TMP>/home/frappe-bench/benchbar.toml","dry_run":true,"can_apply":true,"steps":[{"kind":"clone","app":"acme_new","detail":"NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_new.git, then e47191c"}],"skipped":[],"runs_code_from":["file://<TMP>/remotes/acme_new.git"],"token":"<TOKEN>"}
 --- stderr
 
-+- benchbar lock apply --------------------------------+
-| mode     dry-run                                     |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -2240,22 +2240,22 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] missing, dry run json acme_crm: 85b2330 main
 [state] missing, dry run json acme_base: b6399ac version-15
-[state] missing, dry run json apps.txt: frappe acme_crm acme_base 
+[state] missing, dry run json apps.txt: frappe acme_crm acme_base
 === missing, apply
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App       Change                                                                                                                                      
-  1  acme_new  NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_new.git, then e47191c  
+  # App Change
+  1 acme_new NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_new.git, then e47191c
   [WARN] apply will run code from these repos: local (get-app runs pip install and a build; an installed app's hooks run on the site)
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
@@ -2273,9 +2273,9 @@ Plan
 Verify
 
 Summary
-  #  Step                    Status  Time  
-  1  acme_new                done    <N>s    
-  2  Requirements and build  done    <N>s    
+  # Step Status Time
+  1 acme_new done <N>s
+  2 Requirements and build done <N>s
   total <N>s
   .. the code changed: migrate the sites that have these apps (bench --site SITE migrate), then benchbar restart
 --- stderr
@@ -2361,17 +2361,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_new rev-parse -q --verify HEAD^{commit}
 [state] missing, apply acme_crm: 85b2330 main
 [state] missing, apply acme_base: b6399ac version-15
 [state] missing, apply acme_new: e47191c main
-[state] missing, apply apps.txt: frappe acme_crm acme_base acme_new 
+[state] missing, apply apps.txt: frappe acme_crm acme_base acme_new
 === missing, after the clone
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -2427,22 +2427,22 @@ git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] missing, after the clone acme_crm: 85b2330 main
 [state] missing, after the clone acme_base: b6399ac version-15
 [state] missing, after the clone acme_new: e47191c main
-[state] missing, after the clone apps.txt: frappe acme_crm acme_base acme_new 
+[state] missing, after the clone apps.txt: frappe acme_crm acme_base acme_new
 === missing, the pin is behind the tip
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App       Change                                                                                                                                      
-  1  acme_old  NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_old.git, then 124ca26  
+  # App Change
+  1 acme_old NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_old.git, then 124ca26
   [WARN] apply will run code from these repos: local (get-app runs pip install and a build; an installed app's hooks run on the site)
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
@@ -2467,9 +2467,9 @@ Plan
 Verify
 
 Summary
-  #  Step                    Status  Time  
-  1  acme_old                done    <N>s    
-  2  Requirements and build  done    <N>s    
+  # Step Status Time
+  1 acme_old done <N>s
+  2 Requirements and build done <N>s
   total <N>s
   .. the code changed: migrate the sites that have these apps (bench --site SITE migrate), then benchbar restart
 --- stderr
@@ -2594,22 +2594,22 @@ git -C <TMP>/home/frappe-bench/apps/acme_old rev-parse -q --verify HEAD^{commit}
 [state] missing, the pin is behind the tip acme_base: b6399ac version-15
 [state] missing, the pin is behind the tip acme_new: e47191c main
 [state] missing, the pin is behind the tip acme_old: 124ca26 main
-[state] missing, the pin is behind the tip apps.txt: frappe acme_crm acme_base acme_new acme_old 
+[state] missing, the pin is behind the tip apps.txt: frappe acme_crm acme_base acme_new acme_old
 === missing, the pin is not on the remote
 exit: 1
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App       Change                                                                                                                                      
-  1  acme_pin  NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_pin.git, then 0123456  
+  # App Change
+  1 acme_pin NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_pin.git, then 0123456
   [WARN] apply will run code from these repos: local (get-app runs pip install and a build; an installed app's hooks run on the site)
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
@@ -2627,9 +2627,9 @@ Verify
   [WARN] commit_unknown: acme_pin (lock: 0123456, bench: 6302b60)
 
 Summary
-  #  Step                    Status  Time  
-  1  acme_pin                failed  <N>s    
-  2  Requirements and build  done    <N>s    
+  # Step Status Time
+  1 acme_pin failed <N>s
+  2 Requirements and build done <N>s
   total <N>s
 --- stderr
 --- calls
@@ -2772,17 +2772,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_pin rev-parse -q --verify HEAD^{commit}
 [state] missing, the pin is not on the remote acme_new: e47191c main
 [state] missing, the pin is not on the remote acme_old: 124ca26 main
 [state] missing, the pin is not on the remote acme_pin: 6302b60 main
-[state] missing, the pin is not on the remote apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin 
+[state] missing, the pin is not on the remote apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin
 === missing, the pin is corrected
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -2862,17 +2862,17 @@ git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] missing, the pin is corrected acme_new: e47191c main
 [state] missing, the pin is corrected acme_old: 124ca26 main
 [state] missing, the pin is corrected acme_pin: 6302b60 main
-[state] missing, the pin is corrected apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin 
+[state] missing, the pin is corrected apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin
 === missing, a clone that fails
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -2952,22 +2952,22 @@ git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] missing, a clone that fails acme_new: e47191c main
 [state] missing, a clone that fails acme_old: 124ca26 main
 [state] missing, a clone that fails acme_pin: 6302b60 main
-[state] missing, a clone that fails apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin 
+[state] missing, a clone that fails apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin
 === missing, get-app fails
 exit: 1
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App        Change                                                                                                                         
-  1  acme_late  NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_late.git  
+  # App Change
+  1 acme_late NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_late.git
   [WARN] apply will run code from these repos: local (get-app runs pip install and a build; an installed app's hooks run on the site)
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
@@ -2988,9 +2988,9 @@ Verify
   [WARN] app_missing: acme_late (lock: main, bench: -)
 
 Summary
-  #  Step                    Status  Time  
-  1  acme_late               failed  <N>s    
-  2  Requirements and build  done    <N>s    
+  # Step Status Time
+  1 acme_late failed <N>s
+  2 Requirements and build done <N>s
   total <N>s
 --- stderr
 --- calls
@@ -3130,22 +3130,22 @@ git -C <TMP>/home/frappe-bench/apps/acme_pin rev-parse -q --verify HEAD^{commit}
 [state] missing, get-app fails acme_new: e47191c main
 [state] missing, get-app fails acme_old: 124ca26 main
 [state] missing, get-app fails acme_pin: 6302b60 main
-[state] missing, get-app fails apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin 
+[state] missing, get-app fails apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin
 === missing, no pin, clone works
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
-  #  App        Change                                                                                                                         
-  1  acme_late  NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_late.git  
+  # App Change
+  1 acme_late NEW REPO, not in this bench: bench get-app --skip-assets --branch main file://<TMP>/remotes/acme_late.git
   [WARN] apply will run code from these repos: local (get-app runs pip install and a build; an installed app's hooks run on the site)
   .. then bench setup requirements and bench build --app for each changed app; no site is touched
   .. auto-confirmed: Apply 1 change(s) to the apps?
@@ -3163,9 +3163,9 @@ Plan
 Verify
 
 Summary
-  #  Step                    Status  Time  
-  1  acme_late               done    <N>s    
-  2  Requirements and build  done    <N>s    
+  # Step Status Time
+  1 acme_late done <N>s
+  2 Requirements and build done <N>s
   total <N>s
   .. the code changed: migrate the sites that have these apps (bench --site SITE migrate), then benchbar restart
 --- stderr
@@ -3313,17 +3313,17 @@ git -C <TMP>/home/frappe-bench/apps/acme_late symbolic-ref --short -q HEAD
 [state] missing, no pin, clone works acme_new: e47191c main
 [state] missing, no pin, clone works acme_old: 124ca26 main
 [state] missing, no pin, clone works acme_pin: 6302b60 main
-[state] missing, no pin, clone works apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin acme_late 
+[state] missing, no pin, clone works apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin acme_late
 === extra app stays
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -3413,17 +3413,17 @@ git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] extra app stays acme_new: e47191c main
 [state] extra app stays acme_old: 124ca26 main
 [state] extra app stays acme_pin: 6302b60 main
-[state] extra app stays apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin acme_late acme_extra 
+[state] extra app stays apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin acme_late acme_extra
 === a site the bench lacks
 exit: 0
 --- stdout
 
-+- benchbar lock apply --------------------------------+
-| mode     lock                                        |
-| profile  v15-lts                                     |
-| bench    <TMP>/home/frappe-bench |
-| site     macdev                                      |
-+------------------------------------------------------+
++- benchbar lock apply ---+
+| mode lock |
+| profile v15-lts |
+| bench <TMP>/home/frappe-bench |
+| site macdev |
++---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
 
 Plan
@@ -3516,4 +3516,4 @@ git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
 [state] a site the bench lacks acme_new: e47191c main
 [state] a site the bench lacks acme_old: 124ca26 main
 [state] a site the bench lacks acme_pin: 6302b60 main
-[state] a site the bench lacks apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin acme_late acme_extra 
+[state] a site the bench lacks apps.txt: frappe acme_crm acme_base acme_new acme_old acme_pin acme_late acme_extra
