@@ -177,6 +177,28 @@
         }
       }
     },
+    "%@ KB": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ KB"
+          }
+        }
+      }
+    },
+    "%@ MB": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ MB"
+          }
+        }
+      }
+    },
     "%@ already has a site named %@. Cookies ignore the port, so logging in to one bench logs you out of the other. Choose another name.": {
       "extractionState": "manual",
       "localizations": {
@@ -276,24 +298,24 @@
         }
       }
     },
-    "%@ is %lld x %lld px; frames must be %lld px tall and %lld to %lld px wide.": {
+    "%@ is %@ x %@ px; frames must be %lld px tall and %lld to %lld px wide.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ is %lld x %lld px; frames must be %lld px tall and %lld to %lld px wide."
+            "value": "%@ is %@ x %@ px; frames must be %lld px tall and %lld to %lld px wide."
           }
         }
       }
     },
-    "%@ is a scratch bench for %@ day(s).": {
+    "%@ is a scratch bench for %lld day(s).": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ is a scratch bench for %@ day(s)."
+            "value": "%@ is a scratch bench for %lld day(s)."
           }
         }
       }
@@ -540,6 +562,17 @@
         }
       }
     },
+    "%@%%": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@%%"
+          }
+        }
+      }
+    },
     "%@%@": {
       "extractionState": "manual",
       "localizations": {
@@ -624,28 +657,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@: bench.log"
-          }
-        }
-      }
-    },
-    "%lld KB": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld KB"
-          }
-        }
-      }
-    },
-    "%lld MB": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld MB"
           }
         }
       }
@@ -1461,17 +1472,6 @@
         }
       },
       "comment": "Doctor summary."
-    },
-    "%lld%%": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld%%"
-          }
-        }
-      }
     },
     "%lld.": {
       "extractionState": "manual",
@@ -12645,6 +12645,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "focus"
+          }
+        }
+      }
+    },
+    "focus app": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "focus app"
           }
         }
       }

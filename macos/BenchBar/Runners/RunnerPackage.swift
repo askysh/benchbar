@@ -61,7 +61,7 @@ nonisolated enum RunnerError: Error, Equatable, Sendable, LocalizedError {
         case .missingFile(let name): String(localized: "\(name) is listed in manifest.json but is not in the folder.")
         case .notPNG(let name): String(localized: "\(name) is not a PNG image.")
         case .badSize(let file, let width, let height):
-            String(localized: "\(file) is \(width) x \(height) px; frames must be \(RunnerLoader.pixelHeight) px tall and \(RunnerLoader.widthRange.lowerBound) to \(RunnerLoader.widthRange.upperBound) px wide.")
+            String(localized: "\(file) is \(String(width)) x \(String(height)) px; frames must be \(RunnerLoader.pixelHeight) px tall and \(RunnerLoader.widthRange.lowerBound) to \(RunnerLoader.widthRange.upperBound) px wide.")
         case .mixedSizes(let file): String(localized: "\(file) is not the same size as the other frames.")
         case .tooLarge(let bytes): String(localized: "The runner is \(String(bytes / 1024)) KB; the limit is \(RunnerLoader.maxBytes / 1024 / 1024) MB.")
         case .badArchive(let detail): String(localized: "The zip file could not be used: \(detail).")

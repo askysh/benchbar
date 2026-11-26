@@ -45,7 +45,7 @@ extension AppInfo {
     nonisolated var focusSummary: String? {
         guard isFocus else { return nil }
         let reasons = (focusReasons ?? []).joined(separator: ", ")
-        return reasons.isEmpty ? "focus app" : String(localized: "focus app: \(reasons)")
+        return reasons.isEmpty ? String(localized: "focus app") : String(localized: "focus app: \(reasons)")
     }
 
     /// "needed by exponent_ecr, 30 commits / 12 days behind upstream/develop",
