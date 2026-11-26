@@ -162,6 +162,6 @@ moved is in [Port blocks](../concepts/port-blocks.md).
 - The logs and backups of every mutating run are in the same folder:
   `logs/<timestamp>.log` and `backups/<timestamp>/`.
 - The runner writes `<bench>/logs/.benchbar/state.json` on every state
-  change ([schema](../json-schema.md#logsbenchbarstatejson)).
+  change ([schema](json/state-and-diagnostics.md#logsbenchbarstatejson)).
 - Everything else benchbar writes is listed in
   [Troubleshooting](../troubleshooting.md#what-benchbar-writes).

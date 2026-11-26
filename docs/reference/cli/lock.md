@@ -41,7 +41,7 @@ database.
 
 | Flag | What it does |
 |---|---|
-| `--json` | The differences as JSON ([schema](../../json-schema.md#benchbar-lock-check---json)) |
+| `--json` | The differences as JSON ([schema](../json/teams.md#benchbar-lock-check---json)) |
 
 Exit codes: 0 the bench matches; 1 any difference, or no readable
 lockfile.

@@ -12,7 +12,7 @@ and `bench setup redis`. `--port-offset N` picks a block, for example
 `benchbar service --port-offset 1 --bench-dir ~/dev/v16-bench`.
 
 The default bench never moves on its own. Doctor's
-[`port_clash`](../guides/doctor-and-repair.md#port_clash) check warns when two
+[`port_clash`](../reference/doctor/service-checks.md#port_clash) check warns when two
 benches share ports.
 
 To sort out the ports of several benches at once, preview first, then
