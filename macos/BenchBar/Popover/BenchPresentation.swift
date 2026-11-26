@@ -41,28 +41,28 @@ nonisolated enum BenchText {
     /// and one whose site answers but whose realtime server or Redis does not is not ready yet.
     static func headline(_ state: BenchState, reason: StopReason?, exitCode: Int?, ready: ReadyInfo? = nil) -> String {
         if state == .running, let ready {
-            if ready.stale == true { return "Needs restart (code changed)" }
-            return ready.ready ? "Ready" : "Running, not ready"
+            if ready.stale == true { return String(localized: "Needs restart (code changed)") }
+            return ready.ready ? String(localized: "Ready") : String(localized: "Running, not ready")
         }
         switch state {
         case .stopped:
-            return reason == .broken ? "Stopped: needs repair" : "Stopped"
+            return reason == .broken ? String(localized: "Stopped: needs repair") : String(localized: "Stopped")
         case .starting:
-            return "Starting"
+            return String(localized: "Starting")
         case .running:
-            return "Running"
+            return String(localized: "Running")
         case .crashed:
-            if let exitCode { return "Crashed (exit \(exitCode)), restarting" }
-            return "Crashed, restarting"
+            if let exitCode { return String(localized: "Crashed (exit \(exitCode)), restarting") }
+            return String(localized: "Crashed, restarting")
         case .paused:
             switch reason {
-            case .broken: return "Paused: needs repair"
-            case .portConflict: return "Paused: a port is in use"
-            case .manual: return "Stopped"
-            default: return "Paused after repeated crashes"
+            case .broken: return String(localized: "Paused: needs repair")
+            case .portConflict: return String(localized: "Paused: a port is in use")
+            case .manual: return String(localized: "Stopped")
+            default: return String(localized: "Paused after repeated crashes")
             }
         case .unknown:
-            return "State unknown"
+            return String(localized: "State unknown")
         }
     }
 
