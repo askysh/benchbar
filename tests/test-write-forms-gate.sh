@@ -71,6 +71,44 @@ check_form "app focus NAME" APP_FOCUS present -- app focus frappe
 check_form "doctor --ack" ACK_hosts present -- doctor --ack hosts
 check_form "doctor --unack" ACK_hosts absent doctor --ack hosts -- doctor --unack hosts
 
+# app unfocus NAME is a different case: its table record says "mutating yes" (it only writes, it has no reading
+# form), so the dispatch gates it and the write does not (part 1 leaves it out of the write gates). Pin that:
+# the same four situations as above, one notice and not two, and --for-agent gives the stream with one done.
+check_form "app unfocus NAME" APP_FOCUS present -- app unfocus frappe
+
+# the refused agent leaves the bench state byte for byte as it was
+state_sum() { (cd "$FL_STATE_DIR" && find . -type f ! -name plan-key -print | LC_ALL=C sort | while IFS= read -r f; do printf '%s
+' "$f"; cat "$f"; done) | cksum; }
+fresh
+run_fm app focus frappe --bench-dir "$BENCH"; assert_eq "0" "$CODE" "(the starting pin) $OUT"
+before="$(state_sum)"
+BENCHBAR_NONINTERACTIVE=1 run_fm app unfocus frappe
+assert_eq "1" "$CODE" "(app unfocus, an agent) $OUT"
+assert_contains "$OUT" "More than one bench is possible" "(app unfocus, an agent)"
+assert_eq "$before" "$(state_sum)" "(app unfocus, an agent: the state is as it was)"
+
+# a person gets the notice once
+run_fm app unfocus frappe
+assert_eq "0" "$CODE" "(app unfocus, a person) $OUT"
+assert_eq "1" "$(printf '%s
+' "$OUT" | grep -c 'acting on')" "(app unfocus, a person: one notice, not two)"
+# and the same for the forms that gate at the write
+run_fm app focus frappe
+assert_eq "1" "$(printf '%s
+' "$OUT" | grep -c 'acting on')" "(app focus NAME, a person: one notice)"
+
+# --for-agent: the JSON lines stream, one done line, and (with no bench named, two known) the refusal comes first
+fresh
+run_fm_split app unfocus frappe --for-agent
+assert_eq "1" "$CODE" "(app unfocus --for-agent) $OUT $ERR"
+assert_contains "$ERR$OUT" "More than one bench is possible" "(app unfocus --for-agent, no bench named)"
+fresh
+run_fm_split app unfocus frappe --for-agent --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "(app unfocus --for-agent --bench-dir) $OUT $ERR"
+assert_eq "1" "$(printf '%s
+' "$OUT" | grep -c '"event":"done"')" "(app unfocus --for-agent: one done line)"
+assert_not_contains "$OUT$ERR" "acting on" "(app unfocus --for-agent --bench-dir)"
+
 # the forms that only read: no notice, no refusal, for an agent and for a person
 fresh
 for form in "doctor" "doctor --json" "doctor --fix-hints" "app focus" "app focus --list" "app focus --json"; do
