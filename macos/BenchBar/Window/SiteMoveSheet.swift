@@ -59,7 +59,7 @@ struct SiteMoveSheet: View {
         case .form: return flow.readError.map { .failed($0, title: String(localized: "No plan to move \(site)")) } ?? .ready
         case .reading: return .loading(String(localized: "Reading the plan…"))
         case .reviewing: return .ready
-        case .applying: return .running(step.isEmpty ? "Moving \(site)…" : step)
+        case .applying: return .running(step.isEmpty ? String(localized: "Moving \(site)…") : step)
         case .stale: return .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "A bench or a site changed since this plan was shown"))
         }
     }

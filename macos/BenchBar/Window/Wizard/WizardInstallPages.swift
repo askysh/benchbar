@@ -52,7 +52,7 @@ struct InstallPage: View {
     private func phase(_ state: WizardState) -> SheetPhase {
         guard state.installPhase == .running else { return .ready }
         if state.stopRequested { return .running(String(localized: "Stopping…")) }
-        return .running(state.progress.running.map { "\($0.name)…" } ?? "Starting…")
+        return .running(state.progress.running.map { String(localized: "\($0.name)…") } ?? String(localized: "Starting…"))
     }
 
     @ViewBuilder private func outcome(_ state: WizardState) -> some View {

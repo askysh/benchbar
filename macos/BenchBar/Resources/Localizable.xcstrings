@@ -4850,6 +4850,17 @@
       },
       "comment": "Main window."
     },
+    "Moving %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moving %@…"
+          }
+        }
+      }
+    },
     "Needs about %@ GB free": {
       "extractionState": "manual",
       "localizations": {
@@ -8077,6 +8088,17 @@
         }
       },
       "comment": "Popover: state."
+    },
+    "Starting…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting…"
+          }
+        }
+      }
     },
     "Startup": {
       "extractionState": "manual",
