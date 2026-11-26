@@ -39,6 +39,7 @@ test-facts	18	21
 test-fresh-install	68	56
 test-freshness	91	92
 test-guards	23	11
+test-help-golden	150	60
 test-homebrew	135	104
 test-hygiene	58	51
 test-input-hygiene	56	51

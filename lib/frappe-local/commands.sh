@@ -8,6 +8,7 @@
 #   cmd~KEY~USAGE~SUMMARY~TTY~SUDO~NETWORK~MUTATING~JSON
 #   flag~KEY~--name~VALUE~HELP
 #   env~KEY~NAME~HELP
+# The global help text is `use` records, in usage.sh.
 # KEY is the command ("install") or the command and subcommand ("site add").
 # TTY (may ask a question on a terminal), SUDO (may run sudo), NETWORK (may
 # reach the network) and MUTATING (changes the machine, a bench or its
@@ -936,4 +937,13 @@ fl_noninteractive_preflight() {
       fl_need_mariadb_password ;;
   esac
   fl_need_check
+}
+
+# ---------------------------------------------------------------- the global help
+# `benchbar --help`, `benchbar help` and `benchbar` alone print the `use` records of usage.sh,
+# which is read here, when the help prints, and not at every start (CORE-18, issue 151).
+usage() {
+  # shellcheck source=lib/frappe-local/usage.sh
+  . "${SCRIPT_DIR}/lib/frappe-local/usage.sh"
+  fl_usage_text | fl_lab_usage_filter
 }
