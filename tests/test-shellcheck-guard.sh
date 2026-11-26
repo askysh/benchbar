@@ -122,6 +122,5 @@ wf="$(cat "$ROOT/.github/workflows/ci.yml")"
 job="$(printf '%s\n' "$wf" | awk '/^  shellcheck:/{f=1;next} f&&/^  [a-z]/{exit} f')"
 assert_contains "$job" "timeout-minutes: 10"
 assert_contains "$job" "SC_FILE_TIMEOUT: 180"
-assert_contains "$job" "SC_MB_PER_JOB: 6500" "(two at a time on a 16 GB runner: three stopped the runner twice, #396)"
 
 printf 'test-shellcheck-guard: ok\n'

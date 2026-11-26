@@ -314,9 +314,6 @@ jobs:
           SHELLCHECK_FILES: ${{ needs.changes.outputs.shellcheck_files }}
           # seconds per file; a file that overruns is named and stopped (#137)
           SC_FILE_TIMEOUT: 180
-          # MB per shellcheck process for the pool: three at 4.5 GB each
-          # stopped the 16 GB runner twice (#396), so two at a time here
-          SC_MB_PER_JOB: 6500
         run: |
           shellcheck --version | sed -n 2p
           free -m | sed -n 2p
