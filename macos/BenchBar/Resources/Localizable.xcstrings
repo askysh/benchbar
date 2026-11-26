@@ -372,6 +372,60 @@
       },
       "comment": "A command time limit."
     },
+    "%lld of %lld seats taken": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@taken@ of %#@seats@ taken"
+          },
+          "substitutions": {
+            "taken": {
+              "argNum": 1,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg"
+                    }
+                  }
+                }
+              }
+            },
+            "seats": {
+              "argNum": 2,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg seat"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg seats"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Network: seats of a nearby room. The first number is the people, the second the seats; the noun follows the seats. The singular used to read '1 of 1 seats taken'."
+    },
     "%lld people are": {
       "extractionState": "manual",
       "localizations": {
@@ -395,6 +449,54 @@
         }
       },
       "comment": "Start of a sentence: 'N people are in the room'."
+    },
+    "%lld people are connected and will be signed out.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld person is connected and will be signed out."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld people are connected and will be signed out."
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Share: the end of the message that turns sharing off."
+    },
+    "%lld people wait for a seat. Choose Give a Seat next to each name.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld person waits for a seat. Choose Give a Seat next to their name."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld people wait for a seat. Choose Give a Seat next to each name."
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Share: the line above the people while somebody waits."
     },
     "%lld repositories are not reachable": {
       "extractionState": "manual",
@@ -551,6 +653,18 @@
       },
       "comment": "Uptime: seconds."
     },
+    "482 913": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "482 913"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
     "A downloaded backup": {
       "extractionState": "manual",
       "localizations": {
@@ -622,6 +736,18 @@
         }
       },
       "comment": "Popover."
+    },
+    "Activity": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activity"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "Add Hosts Lines": {
       "extractionState": "manual",
@@ -827,6 +953,18 @@
       },
       "comment": "Menu bar item tooltip."
     },
+    "Change Seat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change Seat"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
     "Check for Updates…": {
       "extractionState": "manual",
       "localizations": {
@@ -838,6 +976,18 @@
         }
       },
       "comment": "Menu item."
+    },
+    "Checks": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "Choose File…": {
       "extractionState": "manual",
@@ -922,6 +1072,18 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Continue": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "Copied": {
       "extractionState": "manual",
@@ -1175,6 +1337,18 @@
       },
       "comment": "Sheets: result of a profile export."
     },
+    "Extend": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extend"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
     "File or https URL": {
       "extractionState": "manual",
       "localizations": {
@@ -1247,6 +1421,18 @@
       },
       "comment": "Popover."
     },
+    "For": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
     "Four short steps: the runner, the popover, the window and Terminal": {
       "extractionState": "manual",
       "localizations": {
@@ -1282,6 +1468,18 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Got an invite from a colleague?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Got an invite from a colleague?"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "Health": {
       "extractionState": "manual",
@@ -1463,6 +1661,18 @@
       },
       "comment": "Popover."
     },
+    "Join": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Join"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
     "Just the Command Line Tool": {
       "extractionState": "manual",
       "localizations": {
@@ -1522,6 +1732,18 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Later": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "Left out": {
       "extractionState": "manual",
@@ -1727,6 +1949,18 @@
       },
       "comment": "Sheets."
     },
+    "New code": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New code"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
     "New default site": {
       "extractionState": "manual",
       "localizations": {
@@ -1799,6 +2033,18 @@
       },
       "comment": "Sheets."
     },
+    "Nobody has joined yet.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nobody has joined yet."
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
     "Not Scratch": {
       "extractionState": "manual",
       "localizations": {
@@ -1834,6 +2080,18 @@
         }
       },
       "comment": "Sheets."
+    },
+    "OK": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "Once the time is up, Remove Expired backs up its sites, drops their databases and moves its folder aside. The default bench is never removed.": {
       "extractionState": "manual",
@@ -1907,6 +2165,18 @@
       },
       "comment": "Sheets."
     },
+    "Open System Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open System Settings"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
     "Open a new Terminal window, or run this once, and benchup starts the bench:": {
       "extractionState": "manual",
       "localizations": {
@@ -1918,6 +2188,18 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Open copy as…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open copy as…"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "Opens this bench's Sharing tab": {
       "extractionState": "manual",
@@ -2014,6 +2296,18 @@
         }
       },
       "comment": "Popover: state."
+    },
+    "People (one seat each)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "People (one seat each)"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "Pick the branch each teammate gets, and which apps go into the file.": {
       "extractionState": "manual",
@@ -2159,6 +2453,18 @@
       },
       "comment": "Edit menu."
     },
+    "Refresh copy…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh copy…"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
     "Remove Expired…": {
       "extractionState": "manual",
       "localizations": {
@@ -2231,6 +2537,30 @@
       },
       "comment": "Sheets."
     },
+    "Restart sharing? %lld people are connected and will be signed out.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Restart sharing? %lld person is connected and will be signed out."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Restart sharing? %lld people are connected and will be signed out."
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Share: confirmation to restart sharing."
+    },
     "Restore into": {
       "extractionState": "manual",
       "localizations": {
@@ -2302,6 +2632,18 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Room code": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Room code"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "Run": {
       "extractionState": "manual",
@@ -2531,6 +2873,30 @@
       },
       "comment": "VoiceOver help of the menu bar item."
     },
+    "Sharing…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharing…"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "Show": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
     "Show Walkthrough": {
       "extractionState": "manual",
       "localizations": {
@@ -2554,6 +2920,18 @@
         }
       },
       "comment": "Popover."
+    },
+    "Show the last 50": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the last 50"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "Show this warning again": {
       "extractionState": "manual",
@@ -2663,6 +3041,18 @@
       },
       "comment": "Sheets."
     },
+    "Source": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source"
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
     "Starting": {
       "extractionState": "manual",
       "localizations": {
@@ -2722,6 +3112,30 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Stop sharing? %lld people are connected and will be signed out.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Stop sharing? %lld person is connected and will be signed out."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Stop sharing? %lld people are connected and will be signed out."
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Share: confirmation to stop sharing."
     },
     "Stopped": {
       "extractionState": "manual",
@@ -2807,6 +3221,30 @@
       },
       "comment": "Popover."
     },
+    "The %lld rooms you opened close on this Mac.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "The room you opened closes on this Mac."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "The %lld rooms you opened close on this Mac."
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Share: part of the message that turns sharing off; the singular has no number."
+    },
     "The BenchBar window sets up a new bench step by step, or finds one you already have.": {
       "extractionState": "manual",
       "localizations": {
@@ -2830,6 +3268,30 @@
         }
       },
       "comment": "Popover."
+    },
+    "The code lets anyone on this Wi-Fi join. Hide it while you share your screen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The code lets anyone on this Wi-Fi join. Hide it while you share your screen."
+          }
+        }
+      },
+      "comment": "Share and Network."
+    },
+    "The copy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The copy"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "The one line installer": {
       "extractionState": "manual",
@@ -2878,6 +3340,18 @@
         }
       },
       "comment": "Popover."
+    },
+    "Turn on network protection": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on network protection"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "Undo": {
       "extractionState": "manual",
@@ -2998,6 +3472,18 @@
         }
       },
       "comment": "Main menu title."
+    },
+    "Your name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your name"
+          }
+        }
+      },
+      "comment": "Share and Network."
     },
     "as %@": {
       "extractionState": "manual",
