@@ -77,10 +77,7 @@ nonisolated enum SharePresentation {
 
     /// 3540 s → "59 min", 7260 → "2 h 1 min", 30 → "less than a minute".
     static func countdown(_ seconds: Int) -> String {
-        guard seconds >= 60 else { return "less than a minute" }
-        let hours = seconds / 3600, minutes = (seconds % 3600) / 60
-        if hours == 0 { return "\(minutes) min" }
-        return minutes == 0 ? "\(hours) h" : "\(hours) h \(minutes) min"
+        Wording.countdown(seconds)
     }
 
     /// The popover and menu row while sharing is on.
@@ -307,7 +304,7 @@ nonisolated enum SharePresentation {
         let who = entry.device.flatMap { names[$0] } ?? entry.user ?? "Someone"
         let parts = entry.path.split(separator: "/")
         let doctype = parts.count >= 2 && parts[0] == "app" ? String(parts[1]) : entry.path
-        let time = entry.ts.map { $0.formatted(date: .omitted, time: .shortened) } ?? ""
+        let time = entry.ts.map { Wording.time($0) } ?? ""
         return [who, doctype, time].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
@@ -337,5 +334,5 @@ nonisolated struct ShareSetupForm: Equatable, Sendable {
         return "Use the backup from \(SharePresentation.countdown(backupAgeS ?? 0)) ago"
     }
 
-    static func needs(_ gb: Double) -> String { "Needs about \(String(format: "%.1f", gb)) GB free" }
+    static func needs(_ gb: Double) -> String { Wording.needs(gigabytes: gb) }
 }

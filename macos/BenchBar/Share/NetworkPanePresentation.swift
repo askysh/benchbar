@@ -210,7 +210,7 @@ nonisolated enum NetworkPanePresentation {
 
     static func timeLeft(until deadline: Date, now: Date) -> String {
         let minutes = max(0, Int(deadline.timeIntervalSince(now) / 60))
-        return minutes >= 60 ? "\(minutes / 60) h \(minutes % 60) min left" : "\(minutes) min left"
+        return Wording.timeLeft(minutes: minutes)
     }
 
     /// A saved room's headline. The site's name is there once the room told it (after the join).
@@ -250,6 +250,6 @@ nonisolated enum NetworkPanePresentation {
     }
 
     private static func clock(_ date: Date) -> String {
-        date.formatted(date: .omitted, time: .shortened)
+        Wording.time(date)
     }
 }

@@ -117,7 +117,7 @@ final class BenchDiscovery {
             try await client.register(benches: paths)
             await store.reloadBenches()
             selected.subtract(paths)
-            message = "Added \(paths.count) \(paths.count == 1 ? "bench" : "benches") to BenchBar."
+            message = "Added \(Wording.benches(paths.count)) to BenchBar."
         } catch {
             self.error = error.localizedDescription
         }
