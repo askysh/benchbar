@@ -34,10 +34,10 @@ nonisolated enum NetworkPanePresentation {
 
     static func nearbyStateText(_ state: NearbyState) -> String {
         switch state {
-        case .checking: return "Checking…"
-        case .open: return "Open"
-        case .locked: return "Locked"
-        case .full: return "Full"
+        case .checking: return String(localized: "Checking…")
+        case .open: return String(localized: "Open")
+        case .locked: return String(localized: "Locked")
+        case .full: return String(localized: "Full")
         case .notAnswering: return String(localized: "Not answering")
         }
     }
@@ -162,7 +162,7 @@ nonisolated enum NetworkPanePresentation {
 
     static func health(_ state: GuestRoomStore.RoomHealth, host: String, now: Date) -> String {
         switch state {
-        case .unknown: return "Connecting…"
+        case .unknown: return String(localized: "Connecting…")
         case .ready(let deadline): return String(localized: "Ready · \(timeLeft(until: deadline, now: now))")
         case .hostGone(let seen): return String(localized: "\(host) isn't sharing right now (last seen \(clock(seen))).")
         case .offline: return String(localized: "\(host) isn't sharing right now.")

@@ -2392,6 +2392,17 @@
         }
       }
     },
+    "Checking…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking…"
+          }
+        }
+      }
+    },
     "Checks": {
       "extractionState": "manual",
       "localizations": {
@@ -2627,6 +2638,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Connecting…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting…"
+          }
+        }
+      }
     },
     "Continue": {
       "extractionState": "manual",
@@ -3653,6 +3675,17 @@
       },
       "comment": "Main window."
     },
+    "Full": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full"
+          }
+        }
+      }
+    },
     "General": {
       "extractionState": "manual",
       "localizations": {
@@ -4399,6 +4432,17 @@
         }
       },
       "comment": "Settings and the other windows."
+    },
+    "Locked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Locked"
+          }
+        }
+      }
     },
     "Lockfile": {
       "extractionState": "manual",
