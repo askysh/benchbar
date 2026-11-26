@@ -129,7 +129,7 @@ struct BenchOverview: View {
                 LabeledContent("Default site", value: bench.summary.site)
                 LabeledContent("Web", value: bench.status?.webURL ?? bench.summary.webURL)
                 LabeledContent("Socket.IO port", value: String(ports.socketio))
-                LabeledContent("Redis ports", value: String(localized: "\(ports.redisQueue) (queue), \(ports.redisCache) (cache)"))
+                LabeledContent("Redis ports", value: String(localized: "\(String(ports.redisQueue)) (queue), \(String(ports.redisCache)) (cache)"))
                 LabeledContent("Agent", value: bench.summary.label)
             } header: {
                 HStack {

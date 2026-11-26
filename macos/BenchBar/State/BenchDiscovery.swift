@@ -39,7 +39,7 @@ final class BenchDiscovery {
         guard let first = deep.first else { return others }
         let depth = first.dropFirst("Stopped at ".count).prefix { $0.isNumber }
         let summary = deep.count == 1 ? first
-            : String(localized: "Stopped at \(depth) folders deep in \(deep.count) folders: a bench deeper than that is not found. Choose a folder closer to it.")
+            : String(localized: "Stopped at \(String(depth)) folders deep in \(String(deep.count)) folders: a bench deeper than that is not found. Choose a folder closer to it.")
         return [summary] + others
     }
 

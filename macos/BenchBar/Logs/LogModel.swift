@@ -145,8 +145,8 @@ nonisolated enum SearchText {
     static func describe(current: Int?, total: Int, searching: Bool) -> String {
         guard searching else { return "" }
         guard total > 0 else { return String(localized: "no matches") }
-        if let current { return String(localized: "\(current + 1) of \(total)") }
-        return String(localized: "\(total) matches")
+        if let current { return String(localized: "\(String(current + 1)) of \(String(total))") }
+        return String(localized: "\(String(total)) matches")
     }
 
     /// The next (or previous) match index, wrapping around.

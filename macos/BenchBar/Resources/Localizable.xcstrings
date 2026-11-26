@@ -122,6 +122,17 @@
         }
       }
     },
+    "%@ (queue), %@ (cache)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (queue), %@ (cache)"
+          }
+        }
+      }
+    },
     "%@ (team)": {
       "extractionState": "manual",
       "localizations": {
@@ -474,6 +485,17 @@
         }
       }
     },
+    "%@ matches": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ matches"
+          }
+        }
+      }
+    },
     "%@ now, highest %@ in the chart": {
       "extractionState": "manual",
       "localizations": {
@@ -602,17 +624,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@: bench.log"
-          }
-        }
-      }
-    },
-    "%lld (queue), %lld (cache)": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld (queue), %lld (cache)"
           }
         }
       }
@@ -1066,17 +1077,6 @@
         }
       },
       "comment": "Sheets: Tidy Up. The singular verb is fixed; it used to read '1 line ... name'."
-    },
-    "%lld matches": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld matches"
-          }
-        }
-      }
     },
     "%lld min": {
       "extractionState": "manual",
@@ -10390,13 +10390,13 @@
       },
       "comment": "Popover: state."
     },
-    "Stopped at %lld folders deep in %lld folders: a bench deeper than that is not found. Choose a folder closer to it.": {
+    "Stopped at %@ folders deep in %@ folders: a bench deeper than that is not found. Choose a folder closer to it.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stopped at %lld folders deep in %lld folders: a bench deeper than that is not found. Choose a folder closer to it."
+            "value": "Stopped at %@ folders deep in %@ folders: a bench deeper than that is not found. Choose a folder closer to it."
           }
         }
       }
@@ -11103,13 +11103,13 @@
         }
       }
     },
-    "The runner is %lld KB; the limit is %lld MB.": {
+    "The runner is %@ KB; the limit is %lld MB.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The runner is %lld KB; the limit is %lld MB."
+            "value": "The runner is %@ KB; the limit is %lld MB."
           }
         }
       }

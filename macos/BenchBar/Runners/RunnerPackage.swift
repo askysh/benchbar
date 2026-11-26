@@ -63,7 +63,7 @@ nonisolated enum RunnerError: Error, Equatable, Sendable, LocalizedError {
         case .badSize(let file, let width, let height):
             String(localized: "\(file) is \(width) x \(height) px; frames must be \(RunnerLoader.pixelHeight) px tall and \(RunnerLoader.widthRange.lowerBound) to \(RunnerLoader.widthRange.upperBound) px wide.")
         case .mixedSizes(let file): String(localized: "\(file) is not the same size as the other frames.")
-        case .tooLarge(let bytes): String(localized: "The runner is \(bytes / 1024) KB; the limit is \(RunnerLoader.maxBytes / 1024 / 1024) MB.")
+        case .tooLarge(let bytes): String(localized: "The runner is \(String(bytes / 1024)) KB; the limit is \(RunnerLoader.maxBytes / 1024 / 1024) MB.")
         case .badArchive(let detail): String(localized: "The zip file could not be used: \(detail).")
         case .reservedID(let id): String(localized: "\"\(id)\" is the name of a built in runner. Rename the folder.")
         }
