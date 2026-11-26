@@ -111,6 +111,57 @@ public class SecretsStdinTests
     }
 
     [Fact]
+    public async Task TheDryRunUsesTheChannelToo()
+    {
+        var (service, stream, _) = Make(Catalogue(install: true, adopt: true));
+        await service.PlanInstallAsync(Request(), Secret.From(Admin), TestContext.Current.CancellationToken);
+        var run = Assert.Single(stream.Runs);
+        Assert.Equal(["install", "--dry-run", "--json", .. Request().Flags, "--secrets-stdin"], run.Args);
+        Assert.Equal("ADMIN_PASSWORD=" + Admin + (char)10, Assert.Single(stream.Stdins));
+        Assert.DoesNotContain("ADMIN_PASSWORD", run.Env.Keys);
+        Assert.DoesNotContain("BENCHBAR_SUDO", run.Env.Keys); // nothing runs as root in a dry run
+        Assert.Equal("1", run.Env["BENCHBAR_NONINTERACTIVE"]);
+    }
+
+    [Fact]
+    public async Task TheDryRunOfAnOlderCliKeepsTheEnvironment()
+    {
+        var (service, stream, _) = Make(Catalogue(install: false, adopt: false));
+        await service.PlanInstallAsync(Request(), Secret.From(Admin), TestContext.Current.CancellationToken);
+        var run = Assert.Single(stream.Runs);
+        Assert.DoesNotContain("--secrets-stdin", run.Args);
+        Assert.Equal(Admin, run.Env["ADMIN_PASSWORD"]);
+        Assert.Null(Assert.Single(stream.Stdins));
+    }
+
+    [Fact]
+    public async Task TheFallbackToTheEnvironmentIsInTheTraceWithoutAValue()
+    {
+        var listener = new CapturingTraceListener();
+        System.Diagnostics.Trace.Listeners.Add(listener);
+        try
+        {
+            var (service, _, _) = Make("not json");
+            await service.PlanInstallAsync(Request(), Secret.From(Admin), TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            System.Diagnostics.Trace.Listeners.Remove(listener);
+        }
+        var text = listener.Text;
+        Assert.Contains("the passwords go in the environment", text);
+        Assert.DoesNotContain(Admin, text);
+    }
+
+    private sealed class CapturingTraceListener : System.Diagnostics.TraceListener
+    {
+        private readonly System.Text.StringBuilder _text = new();
+        public string Text { get { lock (_text) return _text.ToString(); } }
+        public override void Write(string? message) { lock (_text) _text.Append(message); }
+        public override void WriteLine(string? message) { lock (_text) _text.AppendLine(message); }
+    }
+
+    [Fact]
     public async Task WhatTheChildPrintsBackHidesEveryPassword()
     {
         var (service, stream, _) = Make(Catalogue(install: true, adopt: true));

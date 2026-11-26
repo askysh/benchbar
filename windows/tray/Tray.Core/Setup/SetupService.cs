@@ -209,8 +209,12 @@ public sealed class ShimSetupService : ISetupService
 
     public async Task<PlanResult> PlanInstallAsync(InstallRequest request, Secret admin, CancellationToken ct)
     {
-        // The admin password is in the environment too: a CLI that checks its inputs before the dry run refuses the plan without it.
-        var env = new SecretEnvironment().Set(SetupEnv.AdminPassword, admin).Set(SetupEnv.NonInteractive, "1");
+        // The admin password goes to the dry run too: a CLI that checks its inputs before the dry run refuses the plan without it. On the
+        // standard input when the CLI takes it there, as for the install, else in the environment. No sudo mode: nothing runs as root here.
+        var viaStdin = SetupEnv.CanUseStdin(new InstallSecrets(admin, null)) && await CliTakesSecretsStdinAsync("install", ct).ConfigureAwait(false);
+        var env = new SecretEnvironment().Set(SetupEnv.NonInteractive, "1");
+        if (viaStdin) env.StdinList((SetupEnv.AdminPassword, admin));
+        else env.Set(SetupEnv.AdminPassword, admin);
         var redact = new Redactor(env.Secrets);
         InstallPlan? plan = null;
         InstallDone? done = null;
@@ -226,7 +230,8 @@ public sealed class ShimSetupService : ISetupService
             }
             catch (UnsupportedSchemaException) { }
         }
-        var result = await RunStreamAsync(["install", "--dry-run", "--json", .. request.Flags], env, OnLine, PlanTimeout, ct).ConfigureAwait(false);
+        string[] planArgs = ["install", "--dry-run", "--json", .. request.Flags, .. viaStdin ? (string[])["--secrets-stdin"] : []];
+        var result = await RunStreamAsync(planArgs, env, OnLine, PlanTimeout, ct).ConfigureAwait(false);
         if (done is { Exit: not 0 } failed) return new PlanResult(null, failed.Error ?? failed.Fix ?? UiText.Get("CommonPlanNotMade"), failed.Fix, plan?.Blockers);
         if (plan is null) return new PlanResult(null, redact.Clean(result.Error ?? UiText.Get("CommonPlanNotMade")));
         return new PlanResult(plan, null);
@@ -268,14 +273,25 @@ public sealed class ShimSetupService : ISetupService
         try
         {
             var result = await _runner.RunAsync(Shim, CommandCatalogue.Args, ct, TimeSpan.FromSeconds(60)).ConfigureAwait(false);
-            if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.Output)) return false;
-            return JsonNode.Parse(result.Output) is JsonObject o && CommandCatalogue.Parse(o).HasFlag(command, "--secrets-stdin");
+            if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.Output))
+            {
+                NoteEnvironmentPath(command, "commands --json gave no answer (exit " + result.ExitCode.ToString(CultureInfo.InvariantCulture) + ")");
+                return false;
+            }
+            var takes = JsonNode.Parse(result.Output) is JsonObject o && CommandCatalogue.Parse(o).HasFlag(command, "--secrets-stdin");
+            if (!takes) NoteEnvironmentPath(command, "the command line tool does not list --secrets-stdin: it is older");
+            return takes;
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
+            NoteEnvironmentPath(command, "commands --json could not be read: " + ex.GetType().Name);
             return false;
         }
     }
+
+    /// <summary>Where a run falls back to the environment, the trace says why (never a value): the passwords are readable by the same user for the run.</summary>
+    private static void NoteEnvironmentPath(string command, string why) =>
+        System.Diagnostics.Trace.TraceWarning("benchbar " + command + ": the passwords go in the environment, not on standard input (" + why + ")");
 
     private async Task<StreamResult> RunStreamAsync(IReadOnlyList<string> args, SecretEnvironment env, Action<string> onLine, TimeSpan timeout, CancellationToken ct)
     {

@@ -309,7 +309,8 @@ process's environment, not for the 90 minutes an install can last. An older
 command line tool does not have the flag: the tray then keeps the old way and
 puts them in the environment of `benchbar.exe` (`ADMIN_PASSWORD`,
 `BENCHBAR_SUDO_PASSWORD`, `MARIADB_ROOT_PASSWORD`), where another program of
-your own user can read them for the length of the run. Update the command line
+your own user can read them for the length of the run. The plan (the dry run) is sent the same way. When the tray falls back to the
+environment it writes why, never a value, to its trace. Update the command line
 tool to get the safer way. A password with a line break cannot go on standard
 input and uses the environment, where the command line tool refuses it with its
 own message. The passwords are never on a command line, in a file or in the
