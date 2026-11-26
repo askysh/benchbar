@@ -66,9 +66,18 @@ def leading_key(argv):
 
 for t, tool in sorted(mcp.TOOLS.items()):
     key = tool_command.get(t)
+    props = tool.props if isinstance(tool.props, dict) else {}
+    if key == "":
+        # a tool that runs no command builds no argv (nothing maps to "" today: this keeps it so)
+        try:
+            argv = tool.build({k: sample(k, v) for k, v in props.items()})
+        except Exception:
+            argv = None
+        if argv:
+            errors.append("%s is mapped to \"\" (it runs no command) but builds the argv %s" % (t, argv[:4]))
+        continue
     if not key:
         continue
-    props = tool.props if isinstance(tool.props, dict) else {}
     args = OVERRIDE.get(t) or {k: sample(k, v) for k, v in props.items()}
     try:
         argv = tool.build(args)
