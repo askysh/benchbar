@@ -11,7 +11,12 @@
 fl_wrap_v() {
   local __var="$1" __width="$2" __line="$3" __rest="$4" __out="" __word __fresh=1 __glue __piece __rem
   local __words=() __pieces=()
-  read -ra __words <<<"$5" || true
+  local IFS=$' 	
+' __noglob=$-
+  set -f
+  # shellcheck disable=SC2206  # split on purpose, globbing is off
+  __words=($5)
+  [[ "$__noglob" == *f* ]] || set +f
   for __word in ${__words[@]+"${__words[@]}"}; do
     __pieces=("$__word")
     # a word that cannot fit on a line of its own, and lists alternatives (setup|users|...), breaks after a |
@@ -61,54 +66,57 @@ fl_cmd_help() {
   printf 'All commands: benchbar commands --json\n'
 }
 
-# fl_help_block_v VAR: the records of the HELP block of commands.sh (the lines between `: <<'HELP'` and `HELP`)
-fl_help_block_v() {
-  local LC_ALL=C t head=$'\n: <<\'HELP\'\n' tail=$'\nHELP\n'
-  t="$(<"$FL_CMD_FILE")"
-  t="${t#*"$head"}"
-  printf -v "$1" '%s' "${t%%"$tail"*}"
-}
-
-# fl_usage_text: the global help. The HELP block says what is in it and in which order; a command is a label (the
-# usage form up to its first " [", or the label of the record) and its short summary, wrapped at 100 columns with
-# the text 22 columns in, below the label when that is 20 characters or more. The lines of no command are text.
+# fl_usage_text: the global help. One pass over commands.sh: the cmd records of TABLE give each command's usage form
+# and summary (kept in variables named after the key), then the records of the HELP block say what is printed and in
+# which order. A command is a label (the usage form up to its first " [", or the label of the record) and its short
+# summary, wrapped at 100 columns with the text 22 columns in, below the label when that is 20 characters or more.
+# The lines of no command are text. No here string and no subshell per line: a here string is a temporary file or a
+# pipe each (on WSL that cost 1.7 s for the help).
 fl_usage_text() {
-  local block line kind sec key label ulab text tilde='~' docs="" w id u s fname indent="                      "
+  local LC_ALL=C line state=0 rest key u s label id fname text w docs="" tilde='~' indent="                      "
   local p_tilde='{tilde}' p_version='{version}' p_docs='{docs}'
-  local LC_ALL=C
-  # one pass over the table: the usage form and the summary of every command, in variables named after the key
   while IFS= read -r line; do
-    [[ "$line" == cmd~* ]] || continue
-    IFS='~' read -r kind key u s _ <<<"$line"
-    id="${key//[^A-Za-z0-9]/_}"
-    printf -v "__fl_u_${id}" '%s' "$u"
-    printf -v "__fl_s_${id}" '%s' "$s"
-  done <<<"$FL_CMD_TABLE"
-  fl_help_block_v block
-  while IFS= read -r line; do
-    IFS='~' read -r kind sec key label <<<"$line"
-    case "$kind" in
-      text)
-        text="$key"
-        text=${text//$p_tilde/$tilde}
-        text=${text//$p_version/$FL_VERSION}
-        if [[ "$text" == *"$p_docs"* ]]; then docs="$(fl_docs_url /)"; text=${text//$p_docs/$docs}; fi
-        printf '%s\n' "$text" ;;
-      help)
-        id="${key//[^A-Za-z0-9]/_}"
-        fname="__fl_u_${id}"; u="${!fname}"
-        fname="__fl_s_${id}"; s="${!fname}"
-        u="${u#benchbar }"
-        ulab="${u%% \[*}"
-        label="${label:-$ulab}"
-        if [[ "${#label}" -ge 20 ]]; then
-          printf '  %s\n' "$label"
-          fl_wrap_v w 100 "$indent" "$indent" "$s"
-        else
-          printf -v fname '%-20s' "$label"
-          fl_wrap_v w 100 "  ${fname}" "$indent" "$s"
-        fi
-        printf '%s\n' "$w" ;;
+    case "$state" in
+      0) [[ "$line" != ": <<'TABLE'" ]] || state=1 ;;
+      1)
+        case "$line" in
+          TABLE) state=2 ;;
+          cmd~*)
+            rest="${line#cmd~}"; key="${rest%%~*}"; rest="${rest#*~}"; u="${rest%%~*}"; rest="${rest#*~}"; s="${rest%%~*}"
+            id="${key//[^A-Za-z0-9]/_}"
+            printf -v "__fl_u_${id}" '%s' "$u"
+            printf -v "__fl_s_${id}" '%s' "$s" ;;
+        esac ;;
+      2) [[ "$line" != ": <<'HELP'" ]] || state=3 ;;
+      3)
+        case "$line" in
+          HELP) break ;;
+          text~*)
+            text="${line#text~}"; text="${text#*~}"
+            text=${text//$p_tilde/$tilde}
+            text=${text//$p_version/$FL_VERSION}
+            if [[ "$text" == *"$p_docs"* ]]; then docs="$(fl_docs_url /)"; text=${text//$p_docs/$docs}; fi
+            printf '%s
+' "$text" ;;
+          help~*)
+            rest="${line#help~}"; rest="${rest#*~}"; key="${rest%%~*}"
+            label=""; [[ "$rest" != *"~"* ]] || label="${rest#*~}"
+            id="${key//[^A-Za-z0-9]/_}"
+            fname="__fl_u_${id}"; u="${!fname}"
+            fname="__fl_s_${id}"; s="${!fname}"
+            u="${u#benchbar }"
+            label="${label:-${u%% \[*}}"
+            if [[ "${#label}" -ge 20 ]]; then
+              printf '  %s
+' "$label"
+              fl_wrap_v w 100 "$indent" "$indent" "$s"
+            else
+              printf -v fname '%-20s' "$label"
+              fl_wrap_v w 100 "  ${fname}" "$indent" "$s"
+            fi
+            printf '%s
+' "$w" ;;
+        esac ;;
     esac
-  done <<<"$block"
+  done <"$FL_CMD_FILE"
 }
