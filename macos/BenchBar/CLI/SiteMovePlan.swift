@@ -165,16 +165,16 @@ nonisolated enum SiteMoveText {
 
     static func facts(_ plan: SiteMovePlan) -> [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
-        out.append(("From", plan.bench))
-        out.append(("To", plan.toBench))
-        if !plan.apps.isEmpty { out.append(("Apps", plan.apps.joined(separator: ", "))) }
+        out.append((String(localized: "From"), plan.bench))
+        out.append((String(localized: "To"), plan.toBench))
+        if !plan.apps.isEmpty { out.append((String(localized: "Apps"), plan.apps.joined(separator: ", "))) }
         if let address = plan.address {
-            out.append(("Address", address.portChanges
+            out.append((String(localized: "Address"), address.portChanges
                         ? String(localized: "\(address.urlBefore) becomes \(address.urlAfter). The name stays, so its hosts line is kept.")
                         : String(localized: "\(address.urlAfter), as before.")))
         }
-        out.append(("Migrate", plan.migrate ? String(localized: "bench migrate runs after the restore.") : String(localized: "Not run: the site arrives on the schema it had.")))
-        if !plan.stays.isEmpty { out.append(("Stays", plan.stays.joined(separator: "\n"))) }
+        out.append((String(localized: "Migrate"), plan.migrate ? String(localized: "bench migrate runs after the restore.") : String(localized: "Not run: the site arrives on the schema it had.")))
+        if !plan.stays.isEmpty { out.append((String(localized: "Stays"), plan.stays.joined(separator: "\n"))) }
         out.append((String(localized: "Left alone"), String(localized: "The default site of both benches and every other site.")))
         return out
     }

@@ -4590,6 +4590,17 @@
       },
       "comment": "Sheets."
     },
+    "Migrate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Migrate"
+          }
+        }
+      }
+    },
     "Minimize": {
       "extractionState": "manual",
       "localizations": {
@@ -7628,6 +7639,17 @@
       },
       "comment": "Settings and the other windows."
     },
+    "Stays": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stays"
+          }
+        }
+      }
+    },
     "Steps": {
       "extractionState": "manual",
       "localizations": {
@@ -8428,6 +8450,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "To": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To"
+          }
+        }
+      }
     },
     "To share your own bench, turn on Sharing on its page.": {
       "extractionState": "manual",
