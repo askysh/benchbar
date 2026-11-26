@@ -27,6 +27,7 @@ case "${FAKE_MODE:-ok}" in
   crash) exit 251 ;;
   hang) printf '%s\n' "$$" >"$FAKE_PIDFILE"; exec /bin/sleep 60 ;;
   limit) printf 'vmem=%s\n' "$(ulimit -v)"; exit 0 ;;
+  args) printf 'args=%s\n' "$*"; exit 0 ;;
 esac
 FAKE_EOF
 chmod +x "$FAKE"
@@ -64,6 +65,16 @@ wait "$wrapper" 2>/dev/null || true
 pid="$(cat "$TMP_DIR/pid3")"
 for _ in 1 2 3 4 5 6 7 8; do kill -0 "$pid" 2>/dev/null || break; sleep 0.25; done
 if kill -0 "$pid" 2>/dev/null; then kill -9 "$pid" 2>/dev/null || true; fail "the shellcheck of a stopped wrapper (pid $pid) was left running"; fi
+
+# ---- benchbar, the entry point, is checked without dataflow analysis: with it, its -x graph (every
+# library) took 15 GB on a 16 GB runner and stopped it (#396). Its libraries are checked one by one
+# with the analysis; every other file keeps it too.
+RC=0; OUT="$(FAKE_MODE=args SHELLCHECK_CMD="$FAKE" bash "$ONE" "$TMP_DIR/benchbar" 2>&1)" || RC=$?
+assert_eq "0" "$RC" "(benchbar)"
+assert_contains "$OUT" "--extended-analysis=false" "(benchbar without dataflow analysis)"
+RC=0; OUT="$(FAKE_MODE=args SHELLCHECK_CMD="$FAKE" bash "$ONE" "$TMP_DIR/benchbar.sh" 2>&1)" || RC=$?
+assert_not_contains "$OUT" "--extended-analysis" "(another file keeps the analysis)"
+run_one args; assert_not_contains "$OUT" "--extended-analysis" "(x.sh keeps the analysis)"
 
 # ---- a deadline that is no number is refused, not dropped without a word
 RC=0
