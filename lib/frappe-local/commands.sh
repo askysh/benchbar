@@ -20,9 +20,15 @@
 # tests/test-agent-contracts.sh fails when a label of a dispatcher has no
 # cmd record here.
 
-# The table is read into a variable with the read builtin: status and list
-# are polled and start no process, and `cat` is one.
-read -r -d '' FL_CMD_TABLE <<'TABLE' || true
+# The records are plain text here, in a here document that bash only parses (`:`
+# ignores it): reading one into a variable with `read -d ''` costs 27 ms on every
+# start, on bash 3.2 and on bash 5, because the reader gets it byte by byte.
+# fl_cmd_load reads them from this file instead (1 to 2 ms, and no program: status
+# and list are polled and `cat` is one), and `commands --json` reads this file
+# again, line by line, as it writes. Edit the records here; the lines
+# `: <<'TABLE'` and `TABLE` mark where they start and end.
+case "${BASH_SOURCE[0]}" in /*) FL_CMD_FILE="${BASH_SOURCE[0]}" ;; *) FL_CMD_FILE="${PWD}/${BASH_SOURCE[0]}" ;; esac
+: <<'TABLE'
 cmd~install~benchbar install [--profile NAME] [--bundle NAME] [--dry-run|--apply TOKEN] [--yes] [--json]~Phase 00 (system dependencies), 01 (bench and site) and the background service, idempotent.~yes~yes~yes~yes~stream
 flag~install~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~install~--profile~NAME~Release profile (default v15-lts) or a team profile.
@@ -468,6 +474,24 @@ flag~notices~--dismiss~ID~Hide one notice (also in the BenchBar app). An id that
 flag~notices~--all~~Hide every notice.
 TABLE
 
+# fl_cmd_load: FL_CMD_TABLE, the records between the two marker lines above. The lines
+# before them are counted, the file is read whole (no program: `read -d ''` gets a file
+# byte by byte on bash 3.2, and a string built line by line is quadratic), and the
+# records are cut out with an offset and one pattern: % takes the last end marker, so
+# no other line of this file may be just TABLE (tests/test-commands-cost.sh checks).
+# LC_ALL=C: bytes, not characters.
+fl_cmd_load() {
+  local LC_ALL=C line off=0 t
+  while IFS= read -r line; do
+    off=$((off + ${#line} + 1))
+    [[ "$line" != ": <<'TABLE'" ]] || break
+  done <"$FL_CMD_FILE"
+  t="$(<"$FL_CMD_FILE")"
+  t="${t:off}"
+  FL_CMD_TABLE="${t%$'\nTABLE\n'*}"
+}
+fl_cmd_load
+
 fl_cmd_table() { printf '%s\n' "$FL_CMD_TABLE"; }
 # The readers below loop over the variable with a here string, never over a
 # pipe from fl_cmd_table: one that returns at its match closes the pipe on a
@@ -490,8 +514,7 @@ fl_cmd_visible_table() {
 }
 
 # Options every command takes, for the help text and `commands --json`.
-fl_cmd_global_flags() {
-  cat <<'FLAGS'
+read -r -d '' FL_CMD_GLOBAL_FLAGS <<'FLAGS' || true
 --bench-dir~DIR~Bench to act on (default: remembered, or auto-detected).
 --site~NAME~Site name (default: remembered, or from the bench).
 --json~~JSON: one document for a command that reads, JSON lines for one that changes things.
@@ -502,7 +525,7 @@ fl_cmd_global_flags() {
 --plain~~No colors or spinners.
 -h, --help~~Help for the command.
 FLAGS
-}
+fl_cmd_global_flags() { printf '%s\n' "$FL_CMD_GLOBAL_FLAGS"; }
 
 # fl_cmd_key_for COMMAND ARG: the table key: "COMMAND ARG" when the table has
 # that subcommand, else COMMAND; fails when the table knows neither
@@ -560,21 +583,36 @@ fl_cmd_help() {
 
 # fl_commands_json: benchbar commands --json. The commands of a lab that is
 # off are left out and named in "gated"; one of a lab that is on has "lab".
-# Built with the _v helpers and here strings: a subshell per value cost 1 s.
+# One pass over the records of this file, with builtins only (a subshell per
+# value cost 1 s, a call of fl_json_str_v per value 0.25 s). A record whose
+# fields have nothing to escape (all of them but a few) is quoted as it is; the
+# others go through fl_json_str_v, so the bytes are the same as before.
+# tests/test-commands-cost.sh holds the bytes and the cost.
 fl_commands_json() {
-  local line kind k a b c out="" body="" fsep="" esep="" envs="" open=0 gflags="" gsep="" tty sudo net mut json
-  local word="" lab="" skip=0 gated="" gsep2="" labs_on lab_on=0
+  local LC_ALL=C
+  local kind k a b c ctty csudo cnet cmut cjson on=0 out="" body="" fsep="" esep="" envs="" open=0 gflags="" gsep=""
+  local word="" lab="" skip=0 gated="" gsep2="" lab_on=0 enabled="" labmap="" labs_on="" lsep="" n
   local jk ja jb jc jt js jn jm jj jl jw
-  while IFS= read -r line; do
-    IFS='~' read -r kind k a b c <<<"$line"
+  fl_lab_enabled_v enabled
+  fl_lab_cmd_map_v labmap
+  for n in $enabled; do fl_json_str_v jl "$n"; labs_on="${labs_on}${lsep}${jl}"; lsep=","; done
+  while IFS='~' read -r kind k a b c; do
+    if [[ "$on" != 1 ]]; then
+      if [[ "$kind" == ": <<'TABLE'" ]]; then on=1; fi
+      continue
+    fi
+    [[ "$kind" != TABLE ]] || break
     case "$kind" in
       cmd)
         if [[ "$open" == "1" ]]; then out="${out}${out:+,}${body}],\"env\":[${envs}]}"; fi
         open=0; skip=0
         if [[ "${k%% *}" != "$word" ]]; then
-          word="${k%% *}"; fl_lab_of_cmd_v lab "$word"
-          lab_on=0
-          if [[ -n "$lab" ]] && fl_lab_on "$lab"; then lab_on=1; fi
+          word="${k%% *}"; lab=""; lab_on=0
+          case "$labmap" in
+            *" ${word}:"*)
+              lab="${labmap#*" ${word}:"}"; lab="${lab%% *}"
+              case " ${enabled} " in *" ${lab} "*) lab_on=1 ;; esac ;;
+          esac
         fi
         if [[ -n "$lab" && "$lab_on" != "1" ]]; then
           skip=1
@@ -582,32 +620,54 @@ fl_commands_json() {
           case ",${gated}" in *"\"name\":${jw},"*) ;; *) fl_json_str_v jl "$lab"; gated="${gated}${gsep2}{\"name\":${jw},\"lab\":${jl}}"; gsep2="," ;; esac
           continue
         fi
-        IFS='~' read -r _ _ _ _ tty sudo net mut json <<<"$line"
-        fl_json_str_v jk "$k"; fl_json_str_v ja "$a"; fl_json_str_v jb "$b"
-        fl_json_bool_v jt "$tty"; fl_json_bool_v js "$sudo"; fl_json_bool_v jn "$net"; fl_json_bool_v jm "$mut"; fl_json_str_v jj "$json"
+        # the rest of the record: tty~sudo~network~mutating~json
+        ctty="${c%%"~"*}"; c="${c#*"~"}"; csudo="${c%%"~"*}"; c="${c#*"~"}"; cnet="${c%%"~"*}"; c="${c#*"~"}"; cmut="${c%%"~"*}"; cjson="${c#*"~"}"
+        case "${k}${a}${b}${cjson}" in
+          *[\\\"]*|*[!\ -~]*) fl_json_str_v jk "$k"; fl_json_str_v ja "$a"; fl_json_str_v jb "$b"; fl_json_str_v jj "$cjson" ;;
+          *)
+            jk="\"${k}\""; ja="\"${a}\""; jb="\"${b}\""; jj="\"${cjson}\""
+            [[ -n "$k" ]] || jk=null
+            [[ -n "$a" ]] || ja=null
+            [[ -n "$b" ]] || jb=null
+            [[ -n "$cjson" ]] || jj=null ;;
+        esac
+        case "$ctty" in 1|yes|true) jt=true ;; *) jt=false ;; esac
+        case "$csudo" in 1|yes|true) js=true ;; *) js=false ;; esac
+        case "$cnet" in 1|yes|true) jn=true ;; *) jn=false ;; esac
+        case "$cmut" in 1|yes|true) jm=true ;; *) jm=false ;; esac
         body="{\"name\":${jk},\"usage\":${ja},\"summary\":${jb},\"tty\":${jt},\"sudo\":${js},\"network\":${jn},\"mutating\":${jm},\"json\":${jj},"
         if [[ -n "$lab" ]]; then fl_json_str_v jl "$lab"; body="${body}\"lab\":${jl},"; fi
         body="${body}\"flags\":["
         envs=""; open=1; fsep=""; esep="" ;;
       flag)
-        if [[ "$skip" != 1 ]]; then
-          fl_json_str_v ja "$a"; fl_json_str_v jb "$b"; fl_json_str_v jc "$c"
-          body="${body}${fsep}{\"name\":${ja},\"value\":${jb},\"help\":${jc}}"; fsep=","
-        fi ;;
+        [[ "$skip" != 1 ]] || continue
+        case "${a}${b}${c}" in
+          *[\\\"]*|*[!\ -~]*) fl_json_str_v ja "$a"; fl_json_str_v jb "$b"; fl_json_str_v jc "$c" ;;
+          *)
+            ja="\"${a}\""; jb="\"${b}\""; jc="\"${c}\""
+            [[ -n "$a" ]] || ja=null
+            [[ -n "$b" ]] || jb=null
+            [[ -n "$c" ]] || jc=null ;;
+        esac
+        body="${body}${fsep}{\"name\":${ja},\"value\":${jb},\"help\":${jc}}"; fsep="," ;;
       env)
-        if [[ "$skip" != 1 ]]; then
-          fl_json_str_v ja "$a"; fl_json_str_v jb "$b"
-          envs="${envs}${esep}{\"name\":${ja},\"help\":${jb}}"; esep=","
-        fi ;;
+        [[ "$skip" != 1 ]] || continue
+        case "${a}${b}" in
+          *[\\\"]*|*[!\ -~]*) fl_json_str_v ja "$a"; fl_json_str_v jb "$b" ;;
+          *)
+            ja="\"${a}\""; jb="\"${b}\""
+            [[ -n "$a" ]] || ja=null
+            [[ -n "$b" ]] || jb=null ;;
+        esac
+        envs="${envs}${esep}{\"name\":${ja},\"help\":${jb}}"; esep="," ;;
     esac
-  done <<<"$FL_CMD_TABLE"
+  done <"$FL_CMD_FILE"
   [[ "$open" != "1" ]] || out="${out}${out:+,}${body}],\"env\":[${envs}]}"
   while IFS='~' read -r a b c; do
     fl_json_str_v ja "$a"; fl_json_str_v jb "$b"; fl_json_str_v jc "$c"
     gflags="${gflags}${gsep}{\"name\":${ja},\"value\":${jb},\"help\":${jc}}"; gsep=","
-  done <<<"$(fl_cmd_global_flags)"
-  fl_lab_enabled_json_v labs_on
-  printf '{"schema_version":%d,"cli_version":"%s","labs":%s,"gated":[%s],"global_flags":[%s],"commands":[%s]}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$labs_on" "$gated" "$gflags" "$out"
+  done <<<"$FL_CMD_GLOBAL_FLAGS"
+  printf '{"schema_version":%d,"cli_version":"%s","labs":[%s],"gated":[%s],"global_flags":[%s],"commands":[%s]}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$labs_on" "$gated" "$gflags" "$out"
 }
 
 # fl_cmd_flag_check KEY ARG...: whether every option among ARG... (up to a

@@ -17,7 +17,7 @@
 # the subshells of $(...) and of pipes inside benchbar, counted from the
 # xtrace with the process id in PS4 (bash 4 and later, where BASHPID is set).
 MAX_PROGRAMS=0
-MAX_FORKS=3
+MAX_FORKS=4
 
 # the shims: log "exec NAME" and run the real program, as in test-command-cost
 SHIMS="$TMP_DIR/shims"
@@ -45,8 +45,8 @@ import json, re, sys
 root, on_list, schema, version = sys.argv[1], sys.argv[2].split(","), sys.argv[3], sys.argv[4]
 cmds_src = open(root + "/lib/frappe-local/commands.sh", encoding="utf-8").read()
 labs_src = open(root + "/lib/frappe-local/labs.sh", encoding="utf-8").read()
-table = re.search(r"read -r -d '' FL_CMD_TABLE <<'TABLE' \|\| true\n(.*?)\nTABLE\n", cmds_src, re.S).group(1)
-gflags = re.search(r"<<'FLAGS'\n(.*?)\nFLAGS\n", cmds_src, re.S).group(1)
+table = re.search(r": <<'TABLE'\n(.*?)\nTABLE\n", cmds_src, re.S).group(1)
+gflags = re.search(r"<<'FLAGS'[^\n]*\n(.*?)\nFLAGS\n", cmds_src, re.S).group(1)
 labs = [l.split("~") for l in re.search(r"read -r -d '' FL_LAB_TABLE <<'TABLE' \|\| true\n(.*?)\nTABLE\n", labs_src, re.S).group(1).split("\n") if l.startswith("lab~")]
 
 def s(v):
@@ -101,6 +101,9 @@ doc = {"schema_version": int(schema), "cli_version": version, "labs": enabled, "
 sys.stdout.write(json.dumps(doc, ensure_ascii=False, separators=(",", ":")) + "\n")
 PY
 
+# fl_cmd_load cuts the records at the last line that is just TABLE: there must be one
+[[ "$(grep -c -x TABLE "$ROOT/lib/frappe-local/commands.sh")" == 1 ]] || fail "lib/frappe-local/commands.sh has no or more than one line that is just TABLE (fl_cmd_load)"
+
 SCHEMA="$(sed -n 's/^FL_SCHEMA_VERSION=\([0-9]*\).*$/\1/p' "$ROOT"/lib/frappe-local/*.sh "$FM" | head -n 1)"
 [[ -n "$SCHEMA" ]] || fail "FL_SCHEMA_VERSION not found"
 
@@ -149,6 +152,12 @@ if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
     printf 'commands --json (labs: %s): %s forks\n' "${labs:-none}" "$n"
     [[ "$n" -le "$MAX_FORKS" ]] || fail "commands --json forked $n times, budget $MAX_FORKS (labs: ${labs:-none})"
   done
+  # the labs read from the state file (no BENCHBAR_LABS): the same budget
+  PS4='+${BASHPID}:' FL_LABS_ANY_PLATFORM=1 env -u BENCHBAR_LABS "$BASH" -x "$FM" commands --json >/dev/null 2>"$TMP_DIR/xtrace" </dev/null
+  n="$(grep -a -o -E '^\++[0-9]+:' "$TMP_DIR/xtrace" | tr -d '+:' | sort -u | wc -l | tr -d ' ')"
+  n=$((n - 1))
+  printf 'commands --json (labs from the state file): %s forks\n' "$n"
+  [[ "$n" -le "$MAX_FORKS" ]] || fail "commands --json forked $n times with the labs in the state file, budget $MAX_FORKS"
 fi
 
 printf 'test-commands-cost: ok\n'

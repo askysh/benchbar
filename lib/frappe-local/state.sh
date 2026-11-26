@@ -518,16 +518,23 @@ fl_kv_decode_v() {
   esac
 }
 
-fl_kv_get() {
-  local file="$1" key="$2" raw="" line v
-  [[ -f "$file" && -r "$file" ]] || return 0
+# fl_kv_get_v VAR FILE KEY: the value in VAR, with no subshell; returns 1 (VAR empty) when there is none
+fl_kv_get_v() {
+  local __file="$2" __key="$3" __raw="" __line
+  printf -v "$1" '%s' ""
+  [[ -f "$__file" && -r "$__file" ]] || return 1
   # the last line for KEY wins (fl_kv_set appends); read in bash, as status
   # and list do this a dozen times per call
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ "$line" == "${key}="* ]] && raw="${line#"${key}="}"
-  done <"$file"
-  [[ -n "$raw" ]] || return 0
-  fl_kv_decode_v v "$raw"
+  while IFS= read -r __line || [[ -n "$__line" ]]; do
+    [[ "$__line" == "${__key}="* ]] && __raw="${__line#"${__key}="}"
+  done <"$__file"
+  [[ -n "$__raw" ]] || return 1
+  fl_kv_decode_v "$1" "$__raw"
+}
+
+fl_kv_get() {
+  local v
+  fl_kv_get_v v "$1" "$2" || return 0
   printf '%s\n' "$v"
 }
 
