@@ -247,14 +247,18 @@ assert_eq "1" "$CODE"; assert_contains "$OUT" '"--- ok'
 # ---- the macOS jobs wait for the Linux legs on a pull request (#137, "CI load")
 # A run that is red on Linux, or replaced by the next push within minutes, must not queue for a
 # scarce macOS runner. A push or the nightly runs them whatever Linux says.
+# a Linux leg that passed or that the plan left out lets macOS run; a failed or cancelled one does not
+PR_GUARD="      && (github.event_name != 'pull_request' || ((needs.cli-linux.result == 'success' || needs.cli-linux.result == 'skipped') && (needs.cli-bash32.result == 'success' || needs.cli-bash32.result == 'skipped'))) }}"
+guard_of() { case "$1" in cli-macos) printf '%s' "needs.changes.outputs.macos_n != '0'" ;; app) printf '%s' "needs.changes.outputs.app == 'true'" ;; esac; }
 job_of() { awk -v j="  $1:" '$0 == j { f = 1; next } f && /^  [a-z]/ { exit } f' .github/workflows/ci.yml; }
 for j in cli-macos app; do
   body="$(job_of "$j")"
   [[ -n "$body" ]] || fail "job $j not found in ci.yml"
   assert_contains "$body" "needs: [changes, cli-linux, cli-bash32]" "($j waits for the Linux legs)"
-  assert_contains "$body" "needs.cli-linux.result != 'failure' && needs.cli-bash32.result != 'failure'" "($j is skipped when one failed)"
-  assert_contains "$body" "github.event_name != 'pull_request' ||" "($j runs on a push whatever Linux says)"
-  assert_contains "$body" "!cancelled()" "($j still runs when a Linux leg was left out)"
+  # the whole condition, line for line: a moved bracket changes what runs
+  printf '%s\n' "$body" | grep -Fxq "      \${{ !cancelled() && needs.changes.result == 'success' && $(guard_of "$j")" ||
+    fail "$j: the first line of its if: changed"$'\n'"$body"
+  printf '%s\n' "$body" | grep -Fxq "$PR_GUARD" || fail "$j: the pull request guard changed"$'\n'"$body"
 done
 
 printf 'test-ci-plan: ok\n'
