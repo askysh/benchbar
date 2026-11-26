@@ -24,21 +24,21 @@ enum AppMenus {
     static func statusMenu(target: AnyObject, actions: Actions, updateVersion: String?, updaterItem: NSMenuItem?) -> NSMenu {
         let menu = NSMenu()
         if let updateVersion {
-            menu.addItem(withTitle: "Update to \(updateVersion)…", action: actions.update, keyEquivalent: "").target = target
+            menu.addItem(withTitle: String(localized: "Update to \(updateVersion)…"), action: actions.update, keyEquivalent: "").target = target
             menu.addItem(.separator())
         }
-        menu.addItem(withTitle: "Open BenchBar", action: actions.openWindow, keyEquivalent: "").target = target
-        menu.addItem(withTitle: "Scan Folder…", action: actions.scanFolder, keyEquivalent: "").target = target
-        menu.addItem(withTitle: "Settings…", action: actions.openSettings, keyEquivalent: ",").target = target
-        menu.addItem(withTitle: "About BenchBar", action: actions.openAbout, keyEquivalent: "").target = target
-        menu.addItem(withTitle: "Documentation", action: actions.openDocs, keyEquivalent: "").target = target
+        menu.addItem(withTitle: String(localized: "Open BenchBar"), action: actions.openWindow, keyEquivalent: "").target = target
+        menu.addItem(withTitle: String(localized: "Scan Folder…"), action: actions.scanFolder, keyEquivalent: "").target = target
+        menu.addItem(withTitle: String(localized: "Settings…"), action: actions.openSettings, keyEquivalent: ",").target = target
+        menu.addItem(withTitle: String(localized: "About BenchBar"), action: actions.openAbout, keyEquivalent: "").target = target
+        menu.addItem(withTitle: String(localized: "Documentation"), action: actions.openDocs, keyEquivalent: "").target = target
         if let updaterItem {
             menu.addItem(updaterItem)
         } else {
-            menu.addItem(withTitle: "Check for Updates…", action: actions.checkForUpdates, keyEquivalent: "").target = target
+            menu.addItem(withTitle: String(localized: "Check for Updates…"), action: actions.checkForUpdates, keyEquivalent: "").target = target
         }
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: String(localized: "Quit BenchBar"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
     }
 
@@ -48,46 +48,46 @@ enum AppMenus {
         let main = NSMenu()
 
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About BenchBar", action: actions.openAbout, keyEquivalent: "").target = target
+        appMenu.addItem(withTitle: String(localized: "About BenchBar"), action: actions.openAbout, keyEquivalent: "").target = target
         if let updaterItem {
             appMenu.addItem(updaterItem)
         } else {
-            appMenu.addItem(withTitle: "Check for Updates…", action: actions.checkForUpdates, keyEquivalent: "").target = target
+            appMenu.addItem(withTitle: String(localized: "Check for Updates…"), action: actions.checkForUpdates, keyEquivalent: "").target = target
         }
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Settings…", action: actions.openSettings, keyEquivalent: ",").target = target
+        appMenu.addItem(withTitle: String(localized: "Settings…"), action: actions.openSettings, keyEquivalent: ",").target = target
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: String(localized: "Quit BenchBar"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(submenu(appMenu, title: "BenchBar"))
 
-        let edit = NSMenu(title: "Edit")
-        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
-        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        let edit = NSMenu(title: String(localized: "Edit"))
+        edit.addItem(withTitle: String(localized: "Undo"), action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: String(localized: "Redo"), action: Selector(("redo:")), keyEquivalent: "Z")
         edit.addItem(.separator())
-        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
-        main.addItem(submenu(edit, title: "Edit"))
+        edit.addItem(withTitle: String(localized: "Cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: String(localized: "Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: String(localized: "Paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: String(localized: "Select All"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        main.addItem(submenu(edit, title: String(localized: "Edit")))
 
-        let window = NSMenu(title: "Window")
+        let window = NSMenu(title: String(localized: "Window"))
         window.addItem(withTitle: "BenchBar", action: actions.openWindow, keyEquivalent: "").target = target
-        window.addItem(withTitle: "Menu Bar Settings", action: actions.openMenuBarSettings, keyEquivalent: "").target = target
+        window.addItem(withTitle: String(localized: "Menu Bar Settings"), action: actions.openMenuBarSettings, keyEquivalent: "").target = target
         window.addItem(.separator())
-        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
-        window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
-        main.addItem(submenu(window, title: "Window"))
+        window.addItem(withTitle: String(localized: "Close"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        window.addItem(withTitle: String(localized: "Minimize"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        main.addItem(submenu(window, title: String(localized: "Window")))
         NSApp.windowsMenu = window
 
         // Help last: macOS adds its search field to the menu set as helpMenu
-        let help = NSMenu(title: "Help")
-        help.addItem(withTitle: "BenchBar Documentation", action: actions.openDocs, keyEquivalent: "?").target = target
-        help.addItem(withTitle: "Keyboard Shortcuts", action: actions.showShortcuts, keyEquivalent: "").target = target
-        help.addItem(withTitle: "Show Walkthrough", action: actions.showWalkthrough, keyEquivalent: "").target = target
+        let help = NSMenu(title: String(localized: "Help"))
+        help.addItem(withTitle: String(localized: "BenchBar Documentation"), action: actions.openDocs, keyEquivalent: "?").target = target
+        help.addItem(withTitle: String(localized: "Keyboard Shortcuts"), action: actions.showShortcuts, keyEquivalent: "").target = target
+        help.addItem(withTitle: String(localized: "Show Walkthrough"), action: actions.showWalkthrough, keyEquivalent: "").target = target
         help.addItem(.separator())
-        help.addItem(withTitle: "What's New", action: actions.openWhatsNew, keyEquivalent: "").target = target
-        help.addItem(withTitle: "Report a Bug…", action: actions.reportBug, keyEquivalent: "").target = target
-        main.addItem(submenu(help, title: "Help"))
+        help.addItem(withTitle: String(localized: "What's New"), action: actions.openWhatsNew, keyEquivalent: "").target = target
+        help.addItem(withTitle: String(localized: "Report a Bug…"), action: actions.reportBug, keyEquivalent: "").target = target
+        main.addItem(submenu(help, title: String(localized: "Help")))
         NSApp.helpMenu = help
         return main
     }

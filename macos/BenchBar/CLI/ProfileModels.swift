@@ -23,8 +23,8 @@ nonisolated struct ProfileSubscription: Codable, Sendable, Equatable {
     /// "Outdated · 3 commits / 12 days"
     var outdatedText: String? {
         guard let behind, behind > 0 else { return nil }
-        var text = "Outdated · \(behind) commit\(behind == 1 ? "" : "s")"
-        if let days, days > 0 { text += " / \(days) day\(days == 1 ? "" : "s")" }
+        var text = "Outdated · \(Wording.commits(behind))"
+        if let days, days > 0 { text += " / \(Wording.days(days))" }
         return text
     }
 }
