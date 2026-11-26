@@ -29,7 +29,7 @@ a plan with a blocked bench cannot be applied.
 
 | Flag | What it does |
 |---|---|
-| `--json` | The plan with its approval `token` ([schema](../../json-schema.md#port-management)) |
+| `--json` | The plan with its approval `token` ([schema](../json/ports-and-windows.md#port-management)) |
 
 Exit codes: 0; 1 when a path is not a bench or no path is given.
 
@@ -105,7 +105,7 @@ ports, and asks when only a stopped bench shares them.
 | Flag | What it does |
 |---|---|
 | `--bench-dir DIR` | The bench to check |
-| `--json` | Accepted; the output is always JSON ([schema](../../json-schema.md#port-management)) |
+| `--json` | Accepted; the output is always JSON ([schema](../json/ports-and-windows.md#port-management)) |
 
 Exit codes: 0; 1 when no bench is found.
 

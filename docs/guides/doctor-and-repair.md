@@ -48,7 +48,7 @@ and a message. A `fix:` line with the exact command follows every WARN
 and FAIL. `benchbar doctor --json` prints the same checks with their `id`,
 `level`, `fix_command` and `action`: the id is the heading of each check
 below, and the action is what `repair` would run. The format is in the
-[JSON schema](../json-schema.md#benchbar-doctor---json).
+[JSON schema](../reference/json/install-and-doctor.md#benchbar-doctor---json).
 
 Doctor exits 1 when any check fails. Warnings alone exit 0. It never
 changes anything in a bench, never asks for a password and never reads

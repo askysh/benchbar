@@ -61,6 +61,11 @@ flag no command has.
   feature also gets a row in `features.md` (platform and version). A new
   Lab, a new top level command and a new MCP tool must be named in a row
   there, or `tests/test-docs.sh` fails.
+- The CLI, the apps and the README link to pages and anchors of the site.
+  When you split or rename a page, keep its old anchors working with a
+  data file in `site/public/moved/` (see `moved/json-schema.js`) that the
+  old page loads. `scripts/docs-links.py` checks every such address, and
+  `tests/test-docs.sh` runs it.
 - `ROADMAP.md` and `CONTRIBUTING.md` stay at the repo root; the build
   copies them in as `/roadmap/` and `/contributing/`.
 - A new doctor check needs a `### <check_id>` heading in

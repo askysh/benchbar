@@ -64,6 +64,31 @@ sed -i.bak 's/`benchbar_where`/benchbar_where/g' "$COPY/docs/reference/cli/mcp.m
 if OUT="$(python3 -I "$COPY/scripts/docs-reference.py" --check 2>&1)"; then fail "a tool the pages do not name passed the docs reference check"; fi
 assert_contains "$OUT" "mcp.md does not name the MCP tool benchbar_where"
 
+# ---- every docs address in the code and the apps names a page and a heading that exist (#169): the
+# CLI, the notices, the Mac app, the tray, the installers and the README link to the site, some with an
+# anchor, and a split or renamed page must not break one. Fix the link, or keep the old anchor working
+# in site/public/moved/ (the old page loads it).
+OUT="$(python3 -I "$ROOT/scripts/docs-links.py" --check 2>&1)" || fail "docs links check: ${OUT}"
+assert_contains "$OUT" "docs-links: ok"
+# the check really fails: a heading that an address points at is gone, and an anchor that never existed
+LINKS="$TMP_DIR/links-copy"
+mkdir -p "$LINKS/site" "$LINKS/macos/BenchBar/System"
+cp -R "$ROOT/docs" "$ROOT/lib" "$ROOT/scripts" "$LINKS/"
+cp -R "$ROOT/site/public" "$ROOT/site/astro.config.mjs" "$LINKS/site/"
+cp "$ROOT/macos/BenchBar/System/Links.swift" "$LINKS/macos/BenchBar/System/"
+cp "$ROOT/README.md" "$ROOT/ROADMAP.md" "$ROOT/CONTRIBUTING.md" "$LINKS/" 2>/dev/null || true
+OUT="$(python3 -I "$LINKS/scripts/docs-links.py" --check "$LINKS" 2>&1)" || fail "docs links check on a copy: ${OUT}"
+grep -rl '^### env_python$' "$LINKS/docs" | while IFS= read -r page; do sed_inplace 's/^### env_python$/### env_python_renamed/' "$page"; done
+if OUT="$(python3 -I "$LINKS/scripts/docs-links.py" --check "$LINKS" 2>&1)"; then fail "a doctor check without its heading passed the docs links check"; fi
+assert_contains "$OUT" "the doctor check env_python"
+printf '
+See https://benchbar.akashmishra.com/json-schema/#no-such-heading and https://benchbar.akashmishra.com/no-such-page/.
+' >>"$LINKS/README.md"
+if OUT="$(python3 -I "$LINKS/scripts/docs-links.py" --check "$LINKS" 2>&1)"; then fail "addresses of a missing heading and a missing page passed the docs links check"; fi
+assert_contains "$OUT" "README.md:"
+assert_contains "$OUT" "has no heading #no-such-heading"
+assert_contains "$OUT" "the page /no-such-page/ does not exist"
+
 # ---- frontmatter on every page
 while IFS= read -r f; do
   [[ "$(basename "$f")" == "README.md" ]] && continue
