@@ -167,14 +167,16 @@ struct CatalogueKeysTests {
         let d = String(localized: "tab\\there")
         """
         let found = LocalizedKeys.keys(in: text)
-        #expect(found.map { $0.key } == [
+        let readKeys: [String?] = found.map { $0.key }
+        let readLines: [Int] = found.map { $0.line }
+        #expect(readKeys == [
             "Plain text",
             "\(slot) of \(slot) done",
             "100%% sure, \"quoted\"",
             "second",
             "tab\there",
         ])
-        #expect(found.map { $0.line } == [1, 2, 3, 3, 5])
+        #expect(readLines == [1, 2, 3, 3, 5])
     }
 
     @Test func catalogueKeysAreNormalisedLikeTheScanner() throws {
