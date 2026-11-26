@@ -440,7 +440,7 @@ deleted) but its agent is still installed, it removes only that agent:
 every `com.benchbar.*` agent whose working directory is the path is
 booted out and its plist moved aside. Such an agent otherwise restarts
 every 20 seconds, exits with code 127 and fills the log; doctor's
-[`dead_agents`](../../guides/doctor-and-repair.md#dead_agents) check
+[`dead_agents`](../doctor/service-checks.md#dead_agents) check
 points here.
 
 With `--all` it does the same for every bench that has a benchbar agent

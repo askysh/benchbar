@@ -163,7 +163,7 @@ before `BENCHBAR_PROFILE_PATH`, in the order you subscribed; `profile
 list` warns when a name is hidden by an earlier file. Nothing updates on
 its own. When the bench's team profile comes from a subscription that is
 behind, doctor warns
-([`profile_outdated`](doctor-and-repair.md#profile_outdated)) as of the
+([`profile_outdated`](../reference/doctor/bench-checks.md#profile_outdated)) as of the
 last fetch; `benchbar doctor --fetch` checks the remote first.
 
 Every flag is in the [profile reference](../reference/cli/profile.md).
@@ -190,7 +190,7 @@ a lock is 12 to 40 hex characters: a short prefix is matched by prefix and
 can collide. A lock inside an app repo is read like a file from someone else: its repos must be `https://`, `ssh://` or `user@host:path`. A lock you keep outside `apps/` also takes a local path or `http://`, and `lock write` warns when an app's remote is one teammates cannot clone. It never touches a site (it prints the `site add`, `app install`
 and migrate steps instead) and never overwrites local work: an app with
 local changes or commits of its own is skipped with a warning. Doctor
-reports drift as a warning ([`lock_drift`](doctor-and-repair.md#lock_drift)).
+reports drift as a warning ([`lock_drift`](../reference/doctor/bench-checks.md#lock_drift)).
 
 The file pins each app's repo, branch and, optionally, commit, in the
 order of `sites/apps.txt`, plus the sites and the apps each one has:
