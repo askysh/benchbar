@@ -9,5 +9,5 @@ nonisolated enum SiteName {
     }
 
     /// What to tell the person when the name breaks the rule.
-    static let rule = "Lowercase letters, digits, '-' and '.' only."
+    static let rule = String(localized: "Lowercase letters, digits, '-' and '.' only.")
 }

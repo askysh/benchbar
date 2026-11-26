@@ -42,8 +42,8 @@ struct RepoCheckRow: View {
     private var accessibility: String {
         switch check?.reachable {
         case true?: return "reachable"
-        case false?: return "not reachable"
-        case nil: return "not checked"
+        case false?: return String(localized: "not reachable")
+        case nil: return String(localized: "not checked")
         }
     }
 }
@@ -103,7 +103,7 @@ struct ImportProfileSheet: View {
             } else {
                 CancelButton(action: close)
                     .disabled(run.phase == .running)
-                Button(run.plan?.exists == true ? "Replace Profile" : "Add Profile") { Task { await run.add() } }
+                Button(run.plan?.exists == true ? String(localized: "Replace Profile") : String(localized: "Add Profile")) { Task { await run.add() } }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!run.canAdd)
             }
@@ -172,7 +172,7 @@ struct ImportProfileSheet: View {
         panel.allowedContentTypes = [tomlType]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.message = "Choose a BenchBar profile (.toml)"
+        panel.message = String(localized: "Choose a BenchBar profile (.toml)")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         run.source = url.path
         Task { await run.review() }
@@ -310,7 +310,7 @@ struct ExportProfileSheet: View {
                 }
             }
             Spacer()
-            Text(app.currentBranch ?? "detached").font(.caption.monospaced()).foregroundStyle(.secondary)
+            Text(app.currentBranch ?? String(localized: "detached")).font(.caption.monospaced()).foregroundStyle(.secondary)
             Image(systemName: "arrow.right").font(.caption).foregroundStyle(.secondary).accessibilityLabel("exported as")
             TextField("Branch for \(app.name)", text: branch)
                 .labelsHidden()
@@ -318,7 +318,7 @@ struct ExportProfileSheet: View {
                 .font(.caption.monospaced())
                 .frame(width: 130)
                 .disabled(!keep.wrappedValue)
-                .help(app.branchVerified ? "The repository has this branch" : "Not verified on the remote")
+                .help(app.branchVerified ? String(localized: "The repository has this branch") : String(localized: "Not verified on the remote"))
         }
         .opacity(keep.wrappedValue ? 1 : 0.55)
     }
@@ -336,7 +336,7 @@ struct ExportProfileSheet: View {
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
                         .onChange(of: hostedURL) { copied = false }
-                    Button(copied ? "Copied" : "Copy Import Link") {
+                    Button(copied ? String(localized: "Copied") : String(localized: "Copy Import Link")) {
                         if let link = ProfileSourceRule.importLink(for: hostedURL) {
                             Workspace.copy(link)
                             copied = true
@@ -353,7 +353,7 @@ struct ExportProfileSheet: View {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [tomlType]
         panel.nameFieldStringValue = "\(run.name).toml"
-        panel.message = "Save the profile to share"
+        panel.message = String(localized: "Save the profile to share")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await run.export(to: url.path) }
     }
@@ -444,7 +444,7 @@ struct CheckAccessSheet: View {
     }
 
     private var phase: SheetPhase {
-        let checking = "Trying each repository with your git credentials…"
+        let checking = String(localized: "Trying each repository with your git credentials…")
         return run.phase.sheetPhase(idle: .loading(checking), loading: checking, running: checking,
                                     done: run.check.map { Self.result($0) },
                                     failedTitle: String(localized: "Access was not checked"))
@@ -456,10 +456,10 @@ struct CheckAccessSheet: View {
         guard missing > 0 || !check.skippedApps.isEmpty else {
             return .success(String(localized: "This Mac can reach every repository"))
         }
-        let title = missing == 0 ? "Some apps would be left out"
+        let title = missing == 0 ? String(localized: "Some apps would be left out")
             : Wording.repositoriesNotReachable(missing)
-        let detail = check.skippedApps.isEmpty ? "Ask the repository owner for access, then check again."
-            : "A bench set up from this profile now would skip: \(check.skippedApps.joined(separator: ", ")). Ask the repository owner for access, then check again."
+        let detail = check.skippedApps.isEmpty ? String(localized: "Ask the repository owner for access, then check again.")
+            : String(localized: "A bench set up from this profile now would skip: \(check.skippedApps.joined(separator: ", ")). Ask the repository owner for access, then check again.")
         return .warning(title, detail)
     }
 }

@@ -15,12 +15,12 @@ struct LockSheet: View {
 
         var id: Kind { self }
 
-        var title: String { self == .write ? "Write the Lock File" : "Apply the Lock File" }
-        var action: String { self == .write ? "Write Lock File" : "Apply" }
+        var title: String { self == .write ? String(localized: "Write the Lock File") : String(localized: "Apply the Lock File") }
+        var action: String { self == .write ? String(localized: "Write Lock File") : String(localized: "Apply") }
         var explanation: String {
             self == .write
-                ? "Writes benchbar.toml from this bench: the apps with their branches and commits, and the sites. You see what goes into the file first; an existing file is backed up."
-                : "Clones missing apps, switches branches and fast forwards the apps to the pinned commits, then builds the changed ones. No site is touched."
+                ? String(localized: "Writes benchbar.toml from this bench: the apps with their branches and commits, and the sites. You see what goes into the file first; an existing file is backed up.")
+                : String(localized: "Clones missing apps, switches branches and fast forwards the apps to the pinned commits, then builds the changed ones. No site is touched.")
         }
     }
 

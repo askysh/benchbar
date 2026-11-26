@@ -66,7 +66,7 @@ struct RunSheet: View {
             switch flow.stage {
             case .form, .reading:
                 CancelButton(action: close)
-                Button(command.changes ? "Review Plan" : "Run") { go() }
+                Button(command.changes ? String(localized: "Review Plan") : String(localized: "Run")) { go() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(problem != nil || reading || flow.stage == .reading)
             case .reviewing(let plan):

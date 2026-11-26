@@ -5,22 +5,22 @@ import AppKit
 nonisolated enum PullText {
     /// "20260925_020000-erp_example_com-database.sql.gz, 7.0 MB, 31 hours old"
     static func backupLine(_ backup: PullPlan.Backup) -> String {
-        guard let name = backup.name else { return "A new backup is taken on the server first." }
+        guard let name = backup.name else { return String(localized: "A new backup is taken on the server first.") }
         var parts = [name]
         if let bytes = backup.bytes { parts.append(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)) }
-        if let hours = backup.ageHours { parts.append(hours >= 48 ? "\(hours / 24) days old" : "\(hours) hours old") }
-        if backup.encrypted { parts.append("encrypted, decrypted here with gpg") }
+        if let hours = backup.ageHours { parts.append(hours >= 48 ? String(localized: "\(hours / 24) days old") : String(localized: "\(hours) hours old")) }
+        if backup.encrypted { parts.append(String(localized: "encrypted, decrypted here with gpg")) }
         return parts.joined(separator: ", ")
     }
 
     /// "erpnext: 15.30.0 here, 15.40.0 on production (local older)"
     static func appLine(_ app: PullPlan.AppStatus) -> String {
-        let versions = [app.localVersion.map { "\($0) here" }, app.productionVersion.map { "\($0) on production" }].compactMap { $0 }
+        let versions = [app.localVersion.map { String(localized: "\($0) here") }, app.productionVersion.map { String(localized: "\($0) on production") }].compactMap { $0 }
         return "\(app.app): " + (versions.isEmpty ? app.status : versions.joined(separator: ", ") + " (\(app.status))")
     }
 
-    static let neutralisedText = "Integrations are switched off and stored passwords are cleared on the copy; the Administrator login is kept. Email is muted and the scheduler paused. Customer data is not touched."
-    static let keptText = "Production's passwords, webhooks and integrations stay on the copy. Email is muted and the scheduler paused, but the copy can still talk to the outside."
+    static let neutralisedText = String(localized: "Integrations are switched off and stored passwords are cleared on the copy; the Administrator login is kept. Email is muted and the scheduler paused. Customer data is not touched.")
+    static let keptText = String(localized: "Production's passwords, webhooks and integrations stay on the copy. Email is muted and the scheduler paused, but the copy can still talk to the outside.")
 }
 
 /// The plan of a pull: where the copy comes from, what it loses, the apps that differ, the steps.
@@ -29,13 +29,13 @@ struct PullPlanView: View {
 
     private var facts: [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
-        if let backup = plan.backup { out.append(("Backup", PullText.backupLine(backup))) }
-        out.append(("Local site", plan.createSite ? "\(plan.site) is created on this bench." : "\(plan.site) is replaced, after a backup."))
-        out.append(("The copy", plan.neutralise ? PullText.neutralisedText : PullText.keptText))
-        if plan.encryptionKey { out.append(("Encryption key", "Production's key comes over, so stored passwords that are kept still decrypt.")) }
-        if !plan.differingApps.isEmpty { out.append(("Apps that differ", plan.differingApps.map(PullText.appLine).joined(separator: "\n"))) }
-        out.append(("Hosts line", "BenchBar never asks for your password, so /etc/hosts is not changed here. Sites has Add Hosts Lines."))
-        out.append(("Left alone", "Production (nothing is written there) and every other site of this bench."))
+        if let backup = plan.backup { out.append((String(localized: "Backup"), PullText.backupLine(backup))) }
+        out.append((String(localized: "Local site"), plan.createSite ? String(localized: "\(plan.site) is created on this bench.") : String(localized: "\(plan.site) is replaced, after a backup.")))
+        out.append((String(localized: "The copy"), plan.neutralise ? PullText.neutralisedText : PullText.keptText))
+        if plan.encryptionKey { out.append((String(localized: "Encryption key"), String(localized: "Production's key comes over, so stored passwords that are kept still decrypt."))) }
+        if !plan.differingApps.isEmpty { out.append((String(localized: "Apps that differ"), plan.differingApps.map(PullText.appLine).joined(separator: "\n"))) }
+        out.append((String(localized: "Hosts line"), String(localized: "BenchBar never asks for your password, so /etc/hosts is not changed here. Sites has Add Hosts Lines.")))
+        out.append((String(localized: "Left alone"), String(localized: "Production (nothing is written there) and every other site of this bench.")))
         return out
     }
 
@@ -168,7 +168,7 @@ struct PullSheet: View {
             }
             TextField("New local site", text: $name, prompt: Text("erp.local"))
             if !name.isEmpty && !nameValid {
-                Text(SiteName.isValid(name) ? "A site with that name exists. Pull never overwrites it here." : SiteName.rule)
+                Text(SiteName.isValid(name) ? String(localized: "A site with that name exists. Pull never overwrites it here.") : SiteName.rule)
                     .font(.caption).foregroundStyle(.red)
             }
             Toggle("Keep production's passwords and integrations", isOn: $keepSecrets)

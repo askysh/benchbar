@@ -14,7 +14,7 @@ nonisolated enum ServerRunnerArt {
     static func make() -> Runner {
         Runner(
             id: "server",
-            name: "Server rack",
+            name: String(localized: "Server rack"),
             author: "BenchBar",
             isTemplate: true,
             pointWidth: width,

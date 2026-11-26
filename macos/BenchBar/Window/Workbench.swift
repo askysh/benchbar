@@ -111,7 +111,7 @@ final class Workbench {
     /// The reviewed plan of an app add (one app or several), read only. Nothing is changed and no
     /// change slot is taken; the person looks at it before `addApp`.
     func addAppPlan(_ entries: [AppAddEntry], on bench: BenchModel) async -> Result<AppAddPlan, ChangeError> {
-        guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
+        guard let client = store.cliClient else { return .failure(ChangeError(message: String(localized: "The benchbar command line tool is not available."))) }
         do {
             return .success(try await client.addAppPlan(entries, bench: bench.path))
         } catch {
@@ -123,7 +123,7 @@ final class Workbench {
     /// when it failed (a stale token among them), nil when it worked.
     @discardableResult
     func addApp(_ entries: [AppAddEntry], token: String, on bench: BenchModel) async -> String? {
-        let error = await change("Add \(AppAddBatch.title(entries.map(\.displayName)))", on: bench) { client throws(CLIError) in
+        let error = await change(String(localized: "Add \(AppAddBatch.title(entries.map(\.displayName)))"), on: bench) { client throws(CLIError) in
             try await client.addApp(entries, token: token, bench: bench.path)
         }
         await loadApps(bench, liveSites: true)
@@ -131,7 +131,7 @@ final class Workbench {
     }
 
     func installApp(_ app: String, site: String, on bench: BenchModel) async {
-        await change("Install \(app) on \(site)", on: bench) { client throws(CLIError) in
+        await change(String(localized: "Install \(app) on \(site)"), on: bench) { client throws(CLIError) in
             try await client.installApp(app, site: site, bench: bench.path)
         }
         await loadApps(bench, liveSites: true)
@@ -139,7 +139,7 @@ final class Workbench {
 
     /// The plan of an update, read only (git fetch touches only the app's .git).
     func updatePlan(_ app: String, on bench: BenchModel) async -> Result<AppUpdatePlan, ChangeError> {
-        guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
+        guard let client = store.cliClient else { return .failure(ChangeError(message: String(localized: "The benchbar command line tool is not available."))) }
         do {
             return .success(try await client.updatePlan(app: app, bench: bench.path))
         } catch {
@@ -148,7 +148,7 @@ final class Workbench {
     }
 
     func updateApp(_ app: String, on bench: BenchModel) async {
-        await change("Update \(app)", on: bench) { client throws(CLIError) in
+        await change(String(localized: "Update \(app)"), on: bench) { client throws(CLIError) in
             try await client.updateApp(app, bench: bench.path)
         }
         await loadApps(bench, liveSites: true)
@@ -191,7 +191,7 @@ final class Workbench {
     /// The reviewed plan of a site add, read only. Nothing is created and no
     /// change slot is taken; the person looks at it before `addSite`.
     func addSitePlan(_ name: String, on bench: BenchModel) async -> Result<SiteAddPlan, ChangeError> {
-        guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
+        guard let client = store.cliClient else { return .failure(ChangeError(message: String(localized: "The benchbar command line tool is not available."))) }
         do {
             return .success(try await client.addSitePlan(name, bench: bench.path))
         } catch {
@@ -203,20 +203,20 @@ final class Workbench {
     /// when it failed (a stale token among them), nil when it worked.
     @discardableResult
     func addSite(_ name: String, adminPassword: String, token: String, on bench: BenchModel) async -> String? {
-        await change("Add site \(name)", on: bench) { client throws(CLIError) in
+        await change(String(localized: "Add site \(name)"), on: bench) { client throws(CLIError) in
             try await client.addSite(name, adminPassword: adminPassword, token: token, bench: bench.path)
         }
     }
 
     func setDefaultSite(_ name: String, on bench: BenchModel) async {
-        await change("Make \(name) the default site", on: bench) { client throws(CLIError) in
+        await change(String(localized: "Make \(name) the default site"), on: bench) { client throws(CLIError) in
             try await client.setDefaultSite(name, bench: bench.path)
         }
     }
 
     /// The per site Open as opt-in. The caller has shown the alert for `on`.
     func setOpenAs(_ on: Bool, site: String, on bench: BenchModel) async {
-        await change(on ? "Allow Open as on \(site)" : "Turn off Open as on \(site)", on: bench) { client throws(CLIError) in
+        await change(on ? String(localized: "Allow Open as on \(site)") : String(localized: "Turn off Open as on \(site)"), on: bench) { client throws(CLIError) in
             try await client.setOpenAs(on, site: site, bench: bench.path)
         }
     }
@@ -260,7 +260,7 @@ final class Workbench {
 
     /// The change slot's text while `site` is backed up.
     nonisolated static func backupActivity(_ site: String, withFiles: Bool) -> String {
-        withFiles ? "Back up \(site) with files" : "Back up \(site)"
+        withFiles ? String(localized: "Back up \(site) with files") : String(localized: "Back up \(site)")
     }
 
     /// Whether the bench's activity text is a backup of exactly `site`: `shop`
@@ -285,7 +285,7 @@ final class Workbench {
     }
 
     func dropPlan(_ site: String, newDefault: String?, on bench: BenchModel) async -> Result<SiteDropPlan, ChangeError> {
-        guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
+        guard let client = store.cliClient else { return .failure(ChangeError(message: String(localized: "The benchbar command line tool is not available."))) }
         do {
             return .success(try await client.dropPlan(site: site, newDefault: newDefault, bench: bench.path))
         } catch {
@@ -296,14 +296,14 @@ final class Workbench {
     /// Drops the site in the change slot; `confirm` is what the user typed.
     func dropSite(_ site: String, confirm: String, newDefault: String?, on bench: BenchModel) async -> Result<SiteDropResult, ChangeError> {
         var dropped: SiteDropResult?
-        await change("Drop site \(site)", on: bench) { client throws(CLIError) in
+        await change(String(localized: "Drop site \(site)"), on: bench) { client throws(CLIError) in
             dropped = try await client.dropSite(site, confirm: confirm, newDefault: newDefault, bench: bench.path)
         }
         if let dropped {
             backups[Self.backupKey(bench.path, site)] = nil
             return .success(dropped)
         }
-        return .failure(ChangeError(message: result?.error ?? "The site was not dropped."))
+        return .failure(ChangeError(message: result?.error ?? String(localized: "The site was not dropped.")))
     }
 
     // MARK: restore and pull
@@ -311,7 +311,7 @@ final class Workbench {
     /// The reviewed plan of a restore, read only. Nothing is backed up or restored
     /// and no change slot is taken; the person looks at it before `restoreSite`.
     func restorePlan(_ request: SiteRestoreRequest, on bench: BenchModel) async -> Result<SiteRestorePlan, ChangeError> {
-        guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
+        guard let client = store.cliClient else { return .failure(ChangeError(message: String(localized: "The benchbar command line tool is not available."))) }
         do {
             return .success(try await client.restorePlan(request, bench: bench.path))
         } catch {
@@ -324,7 +324,7 @@ final class Workbench {
     /// files first by the CLI, so its backup list is read again either way.
     @discardableResult
     func restoreSite(_ request: SiteRestoreRequest, token: String, on bench: BenchModel) async -> String? {
-        let title = request.asNew ? "Copy \(request.fromSite) to \(request.target)" : "Restore \(request.target)"
+        let title = request.asNew ? String(localized: "Copy \(request.fromSite) to \(request.target)") : String(localized: "Restore \(request.target)")
         let error = await change(title, on: bench) { client throws(CLIError) in
             try await client.restoreSite(request, token: token, bench: bench.path)
         }
@@ -335,7 +335,7 @@ final class Workbench {
     /// The plan of a pull (`pull --dry-run --json`), read only: the server and the bench are
     /// checked, nothing is downloaded or written.
     func pullPlan(_ request: PullRequest, on bench: BenchModel) async -> Result<PullPlan, ChangeError> {
-        guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
+        guard let client = store.cliClient else { return .failure(ChangeError(message: String(localized: "The benchbar command line tool is not available."))) }
         do {
             return .success(try await client.pullPlan(request, bench: bench.path))
         } catch {
@@ -348,7 +348,7 @@ final class Workbench {
     @discardableResult
     func pull(_ request: PullRequest, reviewed: PullPlan? = nil, on bench: BenchModel) async -> String? {
         var ran: PullRun?
-        let title = "Pull \(request.name)"
+        let title = String(localized: "Pull \(request.name)")
         let token = reviewed?.token
         let error = await change(title, on: bench) { client throws(CLIError) in
             ran = try await client.pull(request, token: token, bench: bench.path)
@@ -357,9 +357,9 @@ final class Workbench {
             let neutralised = ran.done.neutralised?.summary ?? ""
             // a CLI with a token has already refused a changed plan; only an older one is told after the run
             let changed = token != nil ? [] : (reviewed.flatMap { reviewed in ran.plan.map { $0.differences(from: reviewed) } } ?? [])
-            result?.note = [neutralised.isEmpty ? nil : "Neutralised: \(neutralised).",
-                            "Log in as Administrator. Its password is production's unless you set one in Terminal. If \(request.name) does not open, Sites has Add Hosts Lines.",
-                            changed.isEmpty ? nil : "The run differed from the plan you reviewed: \(changed.joined(separator: "; ")).",
+            result?.note = [neutralised.isEmpty ? nil : String(localized: "Neutralised: \(neutralised)."),
+                            String(localized: "Log in as Administrator. Its password is production's unless you set one in Terminal. If \(request.name) does not open, Sites has Add Hosts Lines."),
+                            changed.isEmpty ? nil : String(localized: "The run differed from the plan you reviewed: \(changed.joined(separator: "; "))."),
                             ran.done.warnings.isEmpty ? nil : ran.done.warnings.joined(separator: " ")].compactMap { $0 }.joined(separator: " ")
         }
         return error
@@ -368,7 +368,7 @@ final class Workbench {
     /// Drops the record of an update or add that stopped part way (`app update NAME --discard-pending`).
     /// None of its steps run. The change reads the status again, so the record leaves the page.
     func discardPending(_ operation: PendingOperation, on bench: BenchModel) async {
-        await change("Drop the unfinished \(operation.isUpdate ? "update" : "add") of \(operation.app)", on: bench) { client throws(CLIError) in
+        await change(operation.isUpdate ? String(localized: "Drop the unfinished update of \(operation.app)") : String(localized: "Drop the unfinished add of \(operation.app)"), on: bench) { client throws(CLIError) in
             try await client.discardPending(operation.app, bench: bench.path)
         }
     }
@@ -401,7 +401,7 @@ final class Workbench {
     /// The switch, on a click: `autostart on` or `off` writes one line of the bench's state and its agent file.
     func setAutostart(_ on: Bool, on bench: BenchModel) async {
         parityError[bench.path] = nil
-        let error = await change(on ? "Start \(bench.name) after login" : "Do not start \(bench.name) after login", on: bench) { client throws(CLIError) in
+        let error = await change(on ? String(localized: "Start \(bench.name) after login") : String(localized: "Do not start \(bench.name) after login"), on: bench) { client throws(CLIError) in
             try await client.setAutostart(on, bench: bench.path)
         }
         // the status is read again after the change and says it; the remembered value serves a CLI without the field
@@ -410,7 +410,7 @@ final class Workbench {
 
     /// Start Services Only (`up --services-only`) or Stop Services (`down`) on a stopped bench: no plan, the click is the decision.
     func setServices(_ start: Bool, on bench: BenchModel) async {
-        await change(start ? "Start the services of \(bench.name)" : "Stop the services of \(bench.name)", on: bench) { client throws(CLIError) in
+        await change(start ? String(localized: "Start the services of \(bench.name)") : String(localized: "Stop the services of \(bench.name)"), on: bench) { client throws(CLIError) in
             if start { try await client.startServicesOnly(bench: bench.path) } else { try await client.stopServices(bench: bench.path) }
         }
     }
@@ -430,7 +430,7 @@ final class Workbench {
 
     /// The plan of installing or refreshing the background service, read only.
     func servicePlan(on bench: BenchModel) async -> Result<ServiceInstallPlan, ChangeError> {
-        guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
+        guard let client = store.cliClient else { return .failure(ChangeError(message: String(localized: "The benchbar command line tool is not available."))) }
         do {
             return .success(try await client.servicePlan(bench: bench.path))
         } catch {
@@ -441,7 +441,7 @@ final class Workbench {
     /// Runs the service plan the person saw, by its token. The CLI's message when it failed (a stale token among them), nil when it worked.
     @discardableResult
     func installService(token: String, refresh: Bool, on bench: BenchModel) async -> String? {
-        await change(refresh ? "Refresh the service of \(bench.name)" : "Install the service of \(bench.name)", on: bench) { client throws(CLIError) in
+        await change(refresh ? String(localized: "Refresh the service of \(bench.name)") : String(localized: "Install the service of \(bench.name)"), on: bench) { client throws(CLIError) in
             try await client.installService(token: token, bench: bench.path)
         }
     }
@@ -459,7 +459,7 @@ final class Workbench {
     }
 
     func createProfile(_ name: String, from bench: BenchModel) async {
-        await change("Create team profile \(name)", on: bench, scope: Self.profilesScope) { client throws(CLIError) in
+        await change(String(localized: "Create team profile \(name)"), on: bench, scope: Self.profilesScope) { client throws(CLIError) in
             try await client.createProfile(name, fromBench: bench.path)
         }
         await loadProfiles()

@@ -14,7 +14,7 @@ nonisolated enum SiteRestoreText {
 
     /// What an input the CLI would ask for in a terminal means here.
     static func needsText(_ needs: [String]) -> String {
-        "benchbar needs \(needs.joined(separator: ", ")), which it does not have, and BenchBar never asks for or reads it. Run this restore in Terminal, where benchbar can ask."
+        String(localized: "benchbar needs \(needs.joined(separator: ", ")), which it does not have, and BenchBar never asks for or reads it. Run this restore in Terminal, where benchbar can ask.")
     }
 }
 
@@ -25,21 +25,21 @@ struct SiteRestorePlanView: View {
 
     private var facts: [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
-        if !plan.touchesText.isEmpty { out.append(("Changes", plan.touchesText.joined(separator: "\n"))) }
+        if !plan.touchesText.isEmpty { out.append((String(localized: "Changes"), plan.touchesText.joined(separator: "\n"))) }
         if plan.backupFirst.willRun {
-            out.append(("Backed up first", "\(plan.site) is backed up with its files before anything is overwritten. The restore can be undone from that backup."))
+            out.append((String(localized: "Backed up first"), String(localized: "\(plan.site) is backed up with its files before anything is overwritten. The restore can be undone from that backup.")))
         }
-        out.append(("Files", plan.source.restoresFiles ? "The public and private files come back with the database." : "Database only: the site's files stay as they are."))
-        if plan.source.encryptionKey { out.append(("Encryption key", "The one in the backup is carried over, so stored passwords still decrypt.")) }
-        out.append(("Migrate", plan.migrate ? "bench migrate runs after the restore." : "Not run: the site stays on the schema of the backup."))
-        out.append(("Left alone", "The default site, /etc/hosts and every other site."))
+        out.append((String(localized: "Files"), plan.source.restoresFiles ? String(localized: "The public and private files come back with the database.") : String(localized: "Database only: the site's files stay as they are.")))
+        if plan.source.encryptionKey { out.append((String(localized: "Encryption key"), String(localized: "The one in the backup is carried over, so stored passwords still decrypt."))) }
+        out.append((String(localized: "Migrate"), plan.migrate ? String(localized: "bench migrate runs after the restore.") : String(localized: "Not run: the site stays on the schema of the backup.")))
+        out.append((String(localized: "Left alone"), String(localized: "The default site, /etc/hosts and every other site.")))
         return out
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
             VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
-                Text(plan.new ? "A new site, \(plan.site)" : plan.site).font(.headline)
+                Text(plan.new ? String(localized: "A new site, \(plan.site)") : plan.site).font(.headline)
                 if let set = plan.source.set {
                     Text("from the backup made \(SiteRestoreText.label(set, now: pinnedNow ?? .now)) (\(set.stamp))").font(.caption).foregroundStyle(.secondary)
                 }
@@ -146,7 +146,7 @@ struct SiteRestoreSheet: View {
                     .disabled(!formValid || flow.stage == .reading)
             case .reviewing(let plan):
                 CancelButton(action: close)
-                Button(asNew ? "Make Copy" : "Restore", role: asNew ? nil : .destructive) { apply() }
+                Button(asNew ? String(localized: "Make Copy") : String(localized: "Restore"), role: asNew ? nil : .destructive) { apply() }
                     .keyboardShortcut(asNew ? .defaultAction : nil)
                     .disabled(!plan.canRun)
             case .applying:
@@ -174,7 +174,7 @@ struct SiteRestoreSheet: View {
                 if asNew {
                     TextField("New site name", text: $copyName, prompt: Text("\(site)-copy"))
                     if !copyName.isEmpty && !nameValid {
-                        Text(SiteName.isValid(copyName) ? "A site with that name exists." : SiteName.rule).font(.caption).foregroundStyle(.red)
+                        Text(SiteName.isValid(copyName) ? String(localized: "A site with that name exists.") : SiteName.rule).font(.caption).foregroundStyle(.red)
                     }
                 } else {
                     TextField("Type \(site) to confirm", text: $typed)

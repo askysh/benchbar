@@ -135,7 +135,7 @@ struct TidySheet: View {
         marking = true
         let error = await workbench.markScratch(days: count, on: bench)
         marking = false
-        scratchLine = error ?? count.map { "\(bench.name) is a scratch bench for \($0) day(s)." } ?? "\(bench.name) is not a scratch bench."
+        scratchLine = error ?? count.map { String(localized: "\(bench.name) is a scratch bench for \($0) day(s).") } ?? String(localized: "\(bench.name) is not a scratch bench.")
         if error == nil, workbench.offersGc { gc = await workbench.tidyGc() }
     }
 }
@@ -155,10 +155,10 @@ struct TidyPlanSheet: View {
 
     private var explanation: String {
         switch action {
-        case .gc: "Backs up each site of every expired scratch bench, drops its database and moves the bench folder aside. Nothing is deleted, and the default bench is never touched."
-        case .forget: "Takes \(bench.name) out of benchbar's list and removes its service files, each backed up first. The folder, its sites, apps, databases and hosts lines stay."
-        case .remove: "Backs up each site of \(bench.name) with its files, drops its database, takes the bench out of benchbar's list and moves the folder to a trash folder next to it. Nothing is deleted."
-        case .removeService: "Stops \(bench.name) and removes its background service: the unit, the runner and Procfile.lean, each backed up first. The bench, its sites, apps and databases are not touched."
+        case .gc: String(localized: "Backs up each site of every expired scratch bench, drops its database and moves the bench folder aside. Nothing is deleted, and the default bench is never touched.")
+        case .forget: String(localized: "Takes \(bench.name) out of benchbar's list and removes its service files, each backed up first. The folder, its sites, apps, databases and hosts lines stay.")
+        case .remove: String(localized: "Backs up each site of \(bench.name) with its files, drops its database, takes the bench out of benchbar's list and moves the folder to a trash folder next to it. Nothing is deleted.")
+        case .removeService: String(localized: "Stops \(bench.name) and removes its background service: the unit, the runner and Procfile.lean, each backed up first. The bench, its sites, apps and databases are not touched.")
         }
     }
 
@@ -208,8 +208,8 @@ struct TidyPlanSheet: View {
                 Text("In order:").font(.callout)
                 PlanStepList(rows: plan.rows.map { PlanStepList.Row(name: $0, command: nil, note: nil) })
             }
-            if !plan.keeps.isEmpty { PlanFacts(facts: [("Stays", plan.keeps.joined(separator: ", ") + ".")]) }
-            if let trash = plan.trashIn { PlanFacts(facts: [("Trash", "The folder moves to \(trash). Empty it yourself when you are sure.")]) }
+            if !plan.keeps.isEmpty { PlanFacts(facts: [(String(localized: "Stays"), plan.keeps.joined(separator: ", ") + ".")]) }
+            if let trash = plan.trashIn { PlanFacts(facts: [(String(localized: "Trash"), String(localized: "The folder moves to \(trash). Empty it yourself when you are sure."))]) }
             if plan.token == nil, action.hasToken, plan.errors.isEmpty, !plan.rows.isEmpty {
                 SheetNote(String(localized: "This plan has no token, so BenchBar does not run it. Run it in Terminal with benchbar, or update benchbar."), tint: .orange)
             }

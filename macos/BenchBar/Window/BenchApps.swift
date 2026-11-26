@@ -28,9 +28,9 @@ struct BenchApps: View {
                     ForEach(list.apps) { app in row(app, sitesKnown: list.sitesKnown) }
                     if list.apps.isEmpty { Text("No apps").foregroundStyle(.secondary) }
                     if list.apps.filter({ $0.name != "frappe" }).isEmpty {
-                        EmptyStateBlock(symbol: "square.stack.3d.up", title: "Only Frappe so far",
-                                        line: "Add ERPNext or any app from the registry or a git repository.",
-                                        actions: [("Add App…", { adding = true })], disabled: busy)
+                        EmptyStateBlock(symbol: "square.stack.3d.up", title: String(localized: "Only Frappe so far"),
+                                        line: String(localized: "Add ERPNext or any app from the registry or a git repository."),
+                                        actions: [(String(localized: "Add App…"), { adding = true })], disabled: busy)
                     }
                 } else if workbench.loadingApps.contains(bench.path) {
                     HStack { ProgressView().controlSize(.small); Text("Reading apps…").foregroundStyle(.secondary) }
@@ -102,29 +102,29 @@ struct BenchApps: View {
                 HStack(spacing: 6) {
                     Text(app.name).font(.body.weight(.medium))
                     if let version = app.version { Text(version).font(.caption).foregroundStyle(.secondary) }
-                    if app.dirty { Tag(text: "local changes", color: .orange) }
-                    if !app.inAppsTxt { Tag(text: "not in apps.txt", color: .red) }
+                    if app.dirty { Tag(text: String(localized: "local changes"), color: .orange) }
+                    if !app.inAppsTxt { Tag(text: String(localized: "not in apps.txt"), color: .red) }
                     if let branch = app.branch, let policy = app.policyBranch, branch != policy {
-                        Tag(text: "expected \(policy)", color: .orange)
+                        Tag(text: String(localized: "expected \(policy)"), color: .orange)
                     }
-                    if app.isFocus { Tag(text: "focus", color: .accentColor) }
-                    if app.pin == .ignore { Tag(text: "ignored", color: .secondary) }
-                    if app.isStaleDependency { Tag(text: "behind", color: .orange) }
+                    if app.isFocus { Tag(text: String(localized: "focus"), color: .accentColor) }
+                    if app.pin == .ignore { Tag(text: String(localized: "ignored"), color: .secondary) }
+                    if app.isStaleDependency { Tag(text: String(localized: "behind"), color: .orange) }
                 }
                 if let words = app.focusSummary ?? app.dependencySummary {
                     Text(words).font(.caption).foregroundStyle(app.isStaleDependency ? .orange : .secondary)
                 }
-                Text([app.branch.map { "branch \($0)" } ?? "detached", app.repo].compactMap { $0 }.joined(separator: "  ·  "))
+                Text([app.branch.map { String(localized: "branch \($0)") } ?? String(localized: "detached"), app.repo].compactMap { $0 }.joined(separator: "  ·  "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                 if sitesKnown {
-                    Text(app.sites.isEmpty ? "on no site yet" : "on \(app.sites.joined(separator: ", "))")
+                    Text(app.sites.isEmpty ? String(localized: "on no site yet") : String(localized: "on \(app.sites.joined(separator: ", "))"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer()
             Button("Update…") { updating = app }
                 .disabled(busy || app.branch == nil || app.dirty)
-                .help(app.dirty ? "The app has local changes; commit or stash them first" : "Shows the changelog before anything changes")
+                .help(app.dirty ? String(localized: "The app has local changes; commit or stash them first") : String(localized: "Shows the changelog before anything changes"))
             AppMenu(app: app, missingSites: app.name == "frappe" || !sitesKnown ? [] : AppSource.sitesWithout(app, among: siteNames), busy: busy) { site in
                 Task { await workbench.installApp(app.name, site: site, on: bench) }
             } setFocus: { pin in
@@ -223,7 +223,7 @@ struct AddAppSheet: View {
         }
     }
 
-    private var runTitle: String { flow.plan?.isBatch == true ? "Add \(flow.plan?.apps?.count ?? 0) Apps" : "Add App" }
+    private var runTitle: String { flow.plan?.isBatch == true ? String(localized: "Add \(flow.plan?.apps?.count ?? 0) Apps") : String(localized: "Add App") }
     private var isStale: Bool { if case .stale = flow.stage { true } else { false } }
 
     @ViewBuilder private var form: some View {
@@ -239,7 +239,7 @@ struct AddAppSheet: View {
                 Form {
                     // verbatim: a string literal Text reads markdown and turns the URL into a link
                     TextField("App or repository", text: $entry.source, prompt: Text(verbatim: "erpnext or https://github.com/org/app"))
-                    TextField("Branch", text: $entry.branch, prompt: Text(AppSource.isURL(entry.source) ? "the repository's default" : "the profile's branch"))
+                    TextField("Branch", text: $entry.branch, prompt: Text(AppSource.isURL(entry.source) ? String(localized: "the repository's default") : String(localized: "the profile's branch")))
                     TextField("Commit", text: $entry.commit, prompt: Text("optional: pin to a commit, 7 to 40 hex characters"))
                     Picker("Install on", selection: $entry.site) {
                         Text("No site yet").tag("")
@@ -300,7 +300,7 @@ struct UpdateAppSheet: View {
                 SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .orange, title: pending.title, detail: pending.detail)
             }
             if let plan, !plan.isUpToDate {
-                Text(Wording.newCommits(plan.commitsTotal, on: plan.branch ?? "the branch"))
+                Text(Wording.newCommits(plan.commitsTotal, on: plan.branch ?? String(localized: "the branch")))
                     .font(.callout)
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(plan.commits) { commit in
@@ -326,7 +326,7 @@ struct UpdateAppSheet: View {
         } actions: {
             if let plan, !plan.isUpToDate {
                 CancelButton(action: close)
-                Button(plan.pending == nil ? "Update" : "Finish Update") {
+                Button(plan.pending == nil ? String(localized: "Update") : String(localized: "Finish Update")) {
                     close()
                     Task { await workbench.updateApp(app, on: bench) }
                 }

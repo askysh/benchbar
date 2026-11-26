@@ -53,7 +53,7 @@ nonisolated struct SidebarModel: Equatable, Sendable {
             return Row(path: input.path, name: input.name,
                        hint: twins ? URL(fileURLWithPath: input.path).deletingLastPathComponent().lastPathComponent : nil,
                        state: input.state, isBusy: input.isBusy, sites: input.sites,
-                       guidance: input.guidance.map { [$0.reason, $0.action.map { "Next: \($0.title)" }].compactMap { $0 }.joined(separator: " ") },
+                       guidance: input.guidance.map { [$0.reason, $0.action.map { String(localized: "Next: \($0.title)") }].compactMap { $0 }.joined(separator: " ") },
                        statusText: input.statusText ?? BenchText.headline(input.state, reason: nil, exitCode: nil))
         }
     }
@@ -61,7 +61,7 @@ nonisolated struct SidebarModel: Equatable, Sendable {
     var isEmpty: Bool { benches.isEmpty }
 
     /// Shown instead of the bench rows.
-    static let emptyText = "No bench yet"
+    static let emptyText = String(localized: "No bench yet")
 }
 
 /// What a sidebar row opens.

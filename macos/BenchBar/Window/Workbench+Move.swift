@@ -12,7 +12,7 @@ extension Workbench {
 
     /// The reviewed plan of a move, read only. Nothing is backed up, restored or dropped and no change slot is taken.
     func movePlan(_ request: SiteMoveRequest, on bench: BenchModel) async -> Result<SiteMovePlan, ChangeError> {
-        guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
+        guard let client = store.cliClient else { return .failure(ChangeError(message: String(localized: "The benchbar command line tool is not available."))) }
         do {
             return .success(try await client.movePlan(request, bench: bench.path))
         } catch {
@@ -25,7 +25,7 @@ extension Workbench {
     func moveSite(_ request: SiteMoveRequest, token: String, on bench: BenchModel,
                   onStep: @escaping @Sendable (InstallStep) -> Void) async -> Result<SiteMoveOutcome, ChangeError> {
         var ended: SiteMoveOutcome?
-        let error = await change("Move \(request.site) to \(URL(fileURLWithPath: request.target).lastPathComponent)", on: bench) { client throws(CLIError) in
+        let error = await change(String(localized: "Move \(request.site) to \(URL(fileURLWithPath: request.target).lastPathComponent)"), on: bench) { client throws(CLIError) in
             ended = try await client.moveSite(request, token: token, bench: bench.path, onStep: onStep)
         }
         await loadBackups(bench)
@@ -34,7 +34,7 @@ extension Workbench {
             await loadBackups(target)
         }
         if let ended, error == nil { return .success(ended) }
-        return .failure(ChangeError(message: error ?? "The site was not moved."))
+        return .failure(ChangeError(message: error ?? String(localized: "The site was not moved.")))
     }
 
     /// Stop Bench on the sheet: the app's own stop, the one the Stop button runs. The CLI's message when it failed.

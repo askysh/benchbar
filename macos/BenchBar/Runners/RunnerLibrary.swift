@@ -157,7 +157,7 @@ final class RunnerLibrary {
                 try fm.moveItem(at: staging, to: destination)
             }
         } catch {
-            throw .badArchive("could not copy it into \(folder.path): \(error.localizedDescription)")
+            throw .badArchive(String(localized: "could not copy it into \(folder.path): \(error.localizedDescription)"))
         }
         reload()
         return id
@@ -199,20 +199,20 @@ final class RunnerLibrary {
     nonisolated static func unzip(_ zip: URL) throws(RunnerError) -> URL {
         let listing = run("/usr/bin/zipinfo", ["-t", zip.path])
         guard listing.status == 0, let totals = parseZipTotals(listing.output) else {
-            throw .badArchive("it is not a zip file")
+            throw .badArchive(String(localized: "it is not a zip file"))
         }
-        guard totals.files <= 200 else { throw .badArchive("it has \(totals.files) files") }
+        guard totals.files <= 200 else { throw .badArchive(String(localized: "it has \(totals.files) files")) }
         guard totals.bytes <= RunnerLoader.maxBytes * 2 else { throw .tooLarge(bytes: totals.bytes) }
 
         let out = FileManager.default.temporaryDirectory.appendingPathComponent("benchbar-runner-\(UUID().uuidString)")
         let result = run("/usr/bin/ditto", ["-x", "-k", zip.path, out.path])
-        guard result.status == 0 else { throw .badArchive("ditto could not unpack it") }
+        guard result.status == 0 else { throw .badArchive(String(localized: "ditto could not unpack it")) }
         // a zip keeps symlinks and ditto restores them: a link to a device, a FIFO or a file
         // elsewhere on the Mac has no place in a runner, so anything that is not a plain file
         // or a folder stops the import before a single file is read
         guard onlyPlainFiles(in: out) else {
             try? FileManager.default.removeItem(at: out)
-            throw .badArchive("it holds a link or another file that is not a plain file")
+            throw .badArchive(String(localized: "it holds a link or another file that is not a plain file"))
         }
         return out
     }

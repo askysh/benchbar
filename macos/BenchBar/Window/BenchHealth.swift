@@ -28,7 +28,7 @@ struct BenchHealth: View {
                             .foregroundStyle(.secondary)
                     }
                     if report.needsAttention.isEmpty {
-                        Label(report.acknowledged.isEmpty ? "Every check passes." : "Nothing needs attention.", systemImage: "checkmark.circle.fill")
+                        Label(report.acknowledged.isEmpty ? String(localized: "Every check passes.") : String(localized: "Nothing needs attention."), systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                     }
                     ForEach(report.needsAttention, id: \.rowKey) { check in row(check) }
@@ -69,7 +69,7 @@ struct BenchHealth: View {
                     Button("Repair…") { startRepair() }
                         .primaryAction(repairable)
                         .disabled(!repairable || !store.canChange(bench))
-                        .help(repairable ? "Shows the plan first; nothing changes until you confirm" : "Nothing repair can fix")
+                        .help(repairable ? String(localized: "Shows the plan first; nothing changes until you confirm") : String(localized: "Nothing repair can fix"))
                 }
             } footer: {
                 Text("Doctor is read only. Repair shows its plan, and runs only after you confirm, with a backup before each change. Acknowledge silences one warning for this bench until its message changes; failures cannot be acknowledged.")
@@ -184,8 +184,8 @@ struct RepairSheet: View {
                     VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                         HStack(spacing: 6) {
                             Text(step.label)
-                            if step.sudo { Tag(text: "Asks for your password", color: .orange) }
-                            if step.unreviewed { Tag(text: "Not in the plan you reviewed", color: .orange) }
+                            if step.sudo { Tag(text: String(localized: "Asks for your password"), color: .orange) }
+                            if step.unreviewed { Tag(text: String(localized: "Not in the plan you reviewed"), color: .orange) }
                         }
                         if !step.message.isEmpty, step.status != "done" {
                             Text(CLIText.plain(step.message)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
@@ -217,7 +217,7 @@ struct StepIcon: View {
         case "done": "done"
         case "skipped": "skipped"
         case "failed": "failed"
-        default: "not started"
+        default: String(localized: "not started")
         }
     }
 }

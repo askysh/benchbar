@@ -9,19 +9,19 @@ struct ServiceInstallPlanView: View {
     private var rows: [PlanStepList.Row] {
         plan.pending.map { step in
             PlanStepList.Row(name: step.name, command: nil,
-                             note: step.sudo ? "Needs your Mac's password. macOS asks in its own dialog; BenchBar never sees it. If you cancel it, this step is skipped." : nil)
+                             note: step.sudo ? String(localized: "Needs your Mac's password. macOS asks in its own dialog; BenchBar never sees it. If you cancel it, this step is skipped.") : nil)
         }
     }
 
     private var facts: [(label: String, text: String)] {
-        [("Writes", "Procfile.lean, the runner script and the launchd agent of this bench, and the helper block of your shell file."),
-         ("Left alone", "Your sites, apps and databases. This never runs migrate, build or update.")]
+        [(String(localized: "Writes"), String(localized: "Procfile.lean, the runner script and the launchd agent of this bench, and the helper block of your shell file.")),
+         (String(localized: "Left alone"), String(localized: "Your sites, apps and databases. This never runs migrate, build or update."))]
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
             VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
-                Text(refresh ? "Refresh the service" : "Install the service").font(.headline)
+                Text(refresh ? String(localized: "Refresh the service") : String(localized: "Install the service")).font(.headline)
                 Text("\(plan.bench)\(plan.site.map { ", site \($0)" } ?? "")").font(.caption).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
             }

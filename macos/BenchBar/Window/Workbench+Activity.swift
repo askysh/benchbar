@@ -3,7 +3,7 @@ import Foundation
 /// Part 3 of the Mac app parity (#177): snapshots and rollback, the history, leases and the team lockfile.
 /// A change goes through the CLI's plan and its token and takes the one change slot; a read takes none.
 extension Workbench {
-    private var noCLI: ChangeError { ChangeError(message: "The benchbar command line tool is not available.") }
+    private var noCLI: ChangeError { ChangeError(message: String(localized: "The benchbar command line tool is not available.")) }
 
     // MARK: snapshots
 
@@ -27,7 +27,7 @@ extension Workbench {
     @discardableResult
     func takeSnapshot(of site: String, label: String, on bench: BenchModel) async -> SiteSnapshot? {
         var made: SiteSnapshot?
-        await change("Take a snapshot of \(site)", on: bench) { client throws(CLIError) in
+        await change(String(localized: "Take a snapshot of \(site)"), on: bench) { client throws(CLIError) in
             made = try await client.takeSnapshot(site: site, label: label, bench: bench.path).snapshot
         }
         await loadSnapshots(of: site, on: bench)
@@ -49,11 +49,11 @@ extension Workbench {
     @discardableResult
     func rollBack(_ site: String, to snapshot: String, noMigrate: Bool, token: String, on bench: BenchModel) async -> String? {
         var ran = RollbackResult()
-        let error = await change("Roll back \(site)", on: bench) { client throws(CLIError) in
+        let error = await change(String(localized: "Roll back \(site)"), on: bench) { client throws(CLIError) in
             ran = try await client.rollback(site: site, snapshot: snapshot, noMigrate: noMigrate, token: token, bench: bench.path)
         }
         if error == nil {
-            result?.note = [ran.beforeRollback.map { "The state before is kept as \($0), so this can be undone." }, ran.warnings.joined(separator: " ")]
+            result?.note = [ran.beforeRollback.map { String(localized: "The state before is kept as \($0), so this can be undone.") }, ran.warnings.joined(separator: " ")]
                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
         }
         await loadSnapshots(of: site, on: bench)
@@ -64,7 +64,7 @@ extension Workbench {
     /// Removes one snapshot, after the app's own question. The CLI allows it to a person, and never for the undo point of a rollback here.
     @discardableResult
     func dropSnapshot(_ snapshot: SiteSnapshot, of site: String, on bench: BenchModel) async -> String? {
-        let error = await change("Remove the snapshot \(snapshot.title) of \(site)", on: bench) { client throws(CLIError) in
+        let error = await change(String(localized: "Remove the snapshot \(snapshot.title) of \(site)"), on: bench) { client throws(CLIError) in
             try await client.dropSnapshot(site: site, snapshot: snapshot.id, bench: bench.path)
         }
         await loadSnapshots(of: site, on: bench)
@@ -121,7 +121,7 @@ extension Workbench {
 
     @discardableResult
     func writeLock(on bench: BenchModel) async -> String? {
-        let error = await change("Write the lockfile of \(bench.name)", on: bench) { client throws(CLIError) in
+        let error = await change(String(localized: "Write the lockfile of \(bench.name)"), on: bench) { client throws(CLIError) in
             try await client.writeLock(bench: bench.path)
         }
         bench.markChanged()
@@ -138,7 +138,7 @@ extension Workbench {
     /// Runs the apply the person saw: by its token when the plan had one, else `lock apply --yes` after their OK.
     @discardableResult
     func applyLock(token: String?, on bench: BenchModel) async -> String? {
-        let error = await change("Apply the lockfile to \(bench.name)", on: bench) { client throws(CLIError) in
+        let error = await change(String(localized: "Apply the lockfile to \(bench.name)"), on: bench) { client throws(CLIError) in
             try await client.applyLock(token: token, bench: bench.path)
         }
         await loadApps(bench, liveSites: true)

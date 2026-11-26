@@ -17,9 +17,9 @@ struct ResourceSection: View {
             if history.samples.count >= 2, let latest = history.latest {
                 let cpu = history.samples.map(\.cpuPercent)
                 let memory = history.samples.map { Double($0.memoryBytes) }
-                Sparkline(title: "CPU", samples: history.samples, values: cpu, yDomain: ResourceScale.cpu(cpu), fill: true,
+                Sparkline(title: String(localized: "CPU"), samples: history.samples, values: cpu, yDomain: ResourceScale.cpu(cpu), fill: true,
                           current: ResourceText.cpu(latest.cpuPercent), format: ResourceText.cpu)
-                Sparkline(title: "Memory", samples: history.samples, values: memory, yDomain: ResourceScale.memory(memory), fill: false,
+                Sparkline(title: String(localized: "Memory"), samples: history.samples, values: memory, yDomain: ResourceScale.memory(memory), fill: false,
                           current: ResourceText.memory(latest.memoryBytes), format: { ResourceText.memory(UInt64(max(0, $0))) })
             } else {
                 HStack(spacing: 8) {
@@ -89,7 +89,7 @@ struct Sparkline: View {
             VStack(alignment: .trailing, spacing: 1) {
                 Text(hoveredIndex.map { format(values[$0]) } ?? current)
                     .monospacedDigit()
-                Text(hoveredIndex.map { samples[$0].time.formatted(date: .omitted, time: .standard) } ?? "now")
+                Text(hoveredIndex.map { samples[$0].time.formatted(date: .omitted, time: .standard) } ?? String(localized: "now"))
                     .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
             }
             .frame(width: 84, alignment: .trailing)

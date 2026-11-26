@@ -166,8 +166,8 @@ struct WelcomePage: View {
     let library: RunnerLibrary
 
     var body: some View {
-        WizardScaffold("Welcome to BenchBar",
-                       explanation: "Sets up a Frappe bench on this Mac, keeps it running and tells you when it crashes.") {
+        WizardScaffold(String(localized: "Welcome to BenchBar"),
+                       explanation: String(localized: "Sets up a Frappe bench on this Mac, keeps it running and tells you when it crashes.")) {
             VStack(spacing: WindowMetrics.spacing) {
                 RunnerPreview(runner: library.runner(settings.runnerID), state: .running, scale: 3)
                     .frame(height: Runner.pointHeight * 3)
@@ -184,19 +184,19 @@ struct WelcomePage: View {
                 // same; the lines used to be tooltips only)
                 VStack(spacing: WindowMetrics.rowSpacing) {
                     WizardPrimaryButton(run: run).controlSize(.large)
-                    choiceLine("Check this Mac, install what is missing, then set up Frappe.")
+                    choiceLine(String(localized: "Check this Mac, install what is missing, then set up Frappe."))
                     Button("I Already Have a Bench") { run.send(.chooseExistingBench) }
                         .controlSize(.large)
                         .help("Find the benches in a folder and set them up")
                         .padding(.top, WindowMetrics.rowSpacing)
-                    choiceLine("Find a bench BenchBar did not create. You review the plan before anything changes.")
+                    choiceLine(String(localized: "Find a bench BenchBar did not create. You review the plan before anything changes."))
                 }
                 .padding(.top, WindowMetrics.rowSpacing)
                 VStack(spacing: 2) {
                     Button("Just the Command Line Tool") { run.send(.chooseCLIOnly) }
                         .buttonStyle(.link)
                         .help("Install benchbar without the app's wizard: the Homebrew line and the one line installer")
-                    choiceLine("Only use benchbar from Terminal.")
+                    choiceLine(String(localized: "Only use benchbar from Terminal."))
                 }
             }
             .frame(maxWidth: .infinity)
@@ -220,8 +220,8 @@ struct CLIOnlyPage: View {
     static let installerLine = "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash"
 
     var body: some View {
-        WizardScaffold("Just the Command Line Tool",
-                       explanation: "benchbar works without the app. Run one of these in Terminal, then benchbar install.") {
+        WizardScaffold(String(localized: "Just the Command Line Tool"),
+                       explanation: String(localized: "benchbar works without the app. Run one of these in Terminal, then benchbar install.")) {
             VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
                 VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
                     Text("Homebrew").font(.headline)
@@ -249,8 +249,8 @@ struct CheckPage: View {
 
     var body: some View {
         let state = run.state
-        WizardScaffold("Check Your Mac",
-                       explanation: "A bench needs these on the Mac first. Anything missing shows what to do about it.",
+        WizardScaffold(String(localized: "Check Your Mac"),
+                       explanation: String(localized: "A bench needs these on the Mac first. Anything missing shows what to do about it."),
                        phase: phase) {
             VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
                 RunnerPreview(runner: library.runner(settings.runnerID), state: state.runnerState, scale: 2)

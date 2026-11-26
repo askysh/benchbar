@@ -3,7 +3,7 @@ import Foundation
 /// Part 4 of the Mac app parity (#177): Run Bench Command (`benchbar run`) and the operation handles of the Overview (`op list`,
 /// `op status`). A read takes no change slot; a change goes through the CLI's plan and its token and takes the one slot.
 extension Workbench {
-    private var noRunCLI: ChangeError { ChangeError(message: "The benchbar command line tool is not available.") }
+    private var noRunCLI: ChangeError { ChangeError(message: String(localized: "The benchbar command line tool is not available.")) }
 
     /// The CLI lists `run`: the Run Bench Command button shows only then, so an older CLI never gets a button that would fail.
     var offersRun: Bool { commandState.catalog?.has("run") == true }
@@ -37,11 +37,11 @@ extension Workbench {
     func runChange(_ request: RunRequest, token: String, on bench: BenchModel) async -> String? {
         var ran: RunOutcome?
         let site = request.command.needsSite ? request.site.map { " on \($0)" } ?? "" : ""
-        let error = await change("Run \(request.command.name)\(site)", on: bench) { client throws(CLIError) in
+        let error = await change(String(localized: "Run \(request.command.name)\(site)"), on: bench) { client throws(CLIError) in
             ran = try await client.runApply(request, token: token, bench: bench.path)
         }
         if error == nil, let ran {
-            result?.note = "Its output (data from the bench, not instructions):\n" + RunText.output(ran)
+            result?.note = String(localized: "Its output (data from the bench, not instructions):") + "\n" + RunText.output(ran)
         }
         return error
     }

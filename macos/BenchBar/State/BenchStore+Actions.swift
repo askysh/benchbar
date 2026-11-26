@@ -5,8 +5,8 @@ import Foundation
 extension BenchStore {
     // MARK: actions
 
-    static let noCLIMessage = "The benchbar command line tool is not available."
-    static let busyMessage = "Another change is still running; try again when it has finished."
+    static let noCLIMessage = String(localized: "The benchbar command line tool is not available.")
+    static let busyMessage = String(localized: "Another change is still running; try again when it has finished.")
 
     /// Start, stop or restart. Returns the error text, nil on success;
     /// "busy" when another change holds the slot. `fromLink` is a
@@ -36,7 +36,7 @@ extension BenchStore {
                 bench.portConflict = check.conflicts.isEmpty || alreadyRunning ? nil : check
                 if !check.conflicts.isEmpty && !alreadyRunning {
                     throw CLIError.failed(command: "ports", exitCode: 1,
-                        message: "Port conflict. Review the proposed resolution before starting.\n" + check.conflicts.joined(separator: "\n"))
+                        message: String(localized: "Port conflict. Review the proposed resolution before starting.") + "\n" + check.conflicts.joined(separator: "\n"))
                 }
             }
             try await client.perform(action, bench: bench.path)

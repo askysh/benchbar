@@ -16,9 +16,9 @@ struct HotKeyRecorder: View {
         VStack(alignment: .leading, spacing: 4) {
             LabeledContent("Shortcut") {
                 HStack {
-                    Button(recording ? "Press the new shortcut…" : key.choice.name) { recording ? stop() : start() }
+                    Button(recording ? String(localized: "Press the new shortcut…") : key.choice.name) { recording ? stop() : start() }
                         .font(.body.monospaced())
-                        .accessibilityLabel(recording ? "Recording a shortcut" : "Quick Switch shortcut \(key.choice.name)")
+                        .accessibilityLabel(recording ? String(localized: "Recording a shortcut") : String(localized: "Quick Switch shortcut \(key.choice.name)"))
                     if !key.isDefault && !recording {
                         Button("Reset") { key.reset() }
                     }
@@ -66,7 +66,7 @@ struct HotKeyRecorder: View {
                     return true
                 }
                 guard let choice = HotKeyChoice.make(keyCode: keyCode, flags: flags) else {
-                    key.refuse("A shortcut needs ⌃ or ⌥ (⌘ and ⇧ can come with them).")
+                    key.refuse(String(localized: "A shortcut needs ⌃ or ⌥ (⌘ and ⇧ can come with them)."))
                     return false
                 }
                 key.request(choice)

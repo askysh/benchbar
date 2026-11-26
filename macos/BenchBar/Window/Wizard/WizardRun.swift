@@ -200,7 +200,7 @@ final class WizardRun {
             var failure: String?
             // the install runs in a task of its own: Stop cancels that one, and
             // the change slot is still released and the bench list read after it
-            let busy = await store.runChange("Installing \(request.site)", on: anchor) { client throws(CLIError) in
+            let busy = await store.runChange(String(localized: "Installing \(request.site)"), on: anchor) { client throws(CLIError) in
                 // a Stop that came before this point: no process at all
                 if self.stopBeforeStart { return }
                 let work = Task { () async -> Result<Int32, CLIError> in
