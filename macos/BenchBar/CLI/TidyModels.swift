@@ -120,19 +120,19 @@ nonisolated enum TidyAction: String, Equatable, Sendable {
 
     var title: String {
         switch self {
-        case .gc: "Remove Expired Scratch Benches"
-        case .forget: "Forget Bench"
-        case .remove: "Remove Bench"
-        case .removeService: "Remove Service"
+        case .gc: String(localized: "Remove Expired Scratch Benches")
+        case .forget: String(localized: "Forget Bench")
+        case .remove: String(localized: "Remove Bench")
+        case .removeService: String(localized: "Remove Service")
         }
     }
 
     var confirmLabel: String {
         switch self {
-        case .gc: "Remove Benches"
-        case .forget: "Forget Bench"
-        case .remove: "Remove Bench"
-        case .removeService: "Remove Service"
+        case .gc: String(localized: "Remove Benches")
+        case .forget: String(localized: "Forget Bench")
+        case .remove: String(localized: "Remove Bench")
+        case .removeService: String(localized: "Remove Service")
         }
     }
 }
@@ -156,7 +156,7 @@ nonisolated struct TidyPlan: ReviewablePlan {
 
     /// The plan of `bench gc`: one row per expired bench.
     static func gc(_ plan: GcPlan) -> TidyPlan {
-        TidyPlan(action: .gc, bench: "", rows: plan.expired.map { "\($0.name): \(TidyText.sites($0.sites)), marked scratch by \($0.markedBy)" },
+        TidyPlan(action: .gc, bench: "", rows: plan.expired.map { String(localized: "\($0.name): \(TidyText.sites($0.sites)), marked scratch by \($0.markedBy)") },
                  keeps: [], trashIn: nil, warnings: [], errors: [], canApply: plan.canApply && !plan.expired.isEmpty, token: plan.token)
     }
 
@@ -236,7 +236,7 @@ nonisolated enum TidyCommands {
         return n
     }
 
-    static let daysProblem = "Whole days from 1 to \(maxDays)."
+    static let daysProblem = String(localized: "Whole days from 1 to \(maxDays).")
 
     /// Marking asks nothing more here: the click and the alert are the CLI's question, and `--yes` says so.
     static func scratch(bench: String, days: Int) -> [String] { ["bench", "scratch", bench, "--ttl", String(days), "--yes", "--json"] }
@@ -284,24 +284,25 @@ nonisolated enum TidyText {
     }
 
     static func orphan(_ d: OrphanDatabase) -> String {
-        d.archivedSite.map { "\(d.name), named by the archived site \(TidyCommands.folderName($0))" } ?? d.name
+        d.archivedSite.map { String(localized: "\(d.name), named by the archived site \(TidyCommands.folderName($0))") } ?? d.name
     }
 
     static func orphanSummary(_ list: OrphanList) -> String {
         let n = list.orphans.count
-        return n == 0 ? "No orphan database among \(list.checked) of frappe's shape."
+        return n == 0 ? String(localized: "No orphan database among \(String(list.checked)) of frappe's shape.")
             : Wording.orphanDatabases(n, checked: list.checked)
     }
 
     /// "expired 5 days ago", or "expires 2026-11-30" for a bench that waits.
     static func expiry(_ b: ScratchBench, now: Date) -> String {
-        guard let until = b.until else { return "no time known" }
-        return until > now ? "expires " + until.formatted(.iso8601.year().month().day()) : "expired " + SnapshotText.relativeAge(of: until, now: now)
+        guard let until = b.until else { return String(localized: "no time known") }
+        return until > now ? String(localized: "expires \(until.formatted(.iso8601.year().month().day()))")
+            : String(localized: "expired \(SnapshotText.relativeAge(of: until, now: now))")
     }
 
     /// One line of the scratch list: the expired ones say who marked them, a kept one says why.
     static func line(_ b: ScratchBench, expired: Bool, kept: Bool, now: Date) -> String {
-        if kept { return "\(b.name): kept, \(b.why.isEmpty ? "not removed" : b.why)" }
-        return expired ? "\(b.name): \(sites(b.sites)), \(expiry(b, now: now)), marked by \(b.markedBy)" : "\(b.name): \(expiry(b, now: now))"
+        if kept { return b.why.isEmpty ? String(localized: "\(b.name): kept, not removed") : String(localized: "\(b.name): kept, \(b.why)") }
+        return expired ? String(localized: "\(b.name): \(sites(b.sites)), \(expiry(b, now: now)), marked by \(b.markedBy)") : String(localized: "\(b.name): \(expiry(b, now: now))")
     }
 }

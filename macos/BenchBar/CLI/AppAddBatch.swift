@@ -23,10 +23,10 @@ nonisolated struct AppAddEntry: Equatable, Sendable, Identifiable {
 
     /// What the CLI would refuse before it reads anything: a pin that is not 7 to 40 hex characters.
     var problem: String? {
-        if isEmpty { return "Enter an app name or a git URL." }
+        if isEmpty { return String(localized: "Enter an app name or a git URL.") }
         let pin = commit.trimmingCharacters(in: .whitespaces)
         if !pin.isEmpty, !(7...40).contains(pin.count) || pin.contains(where: { !$0.isHexDigit }) {
-            return "The commit must be 7 to 40 hex characters."
+            return String(localized: "The commit must be 7 to 40 hex characters.")
         }
         return nil
     }
@@ -54,14 +54,14 @@ nonisolated enum AppAddBatch {
     /// The first problem of the form, naming the app when there are several; nil when a plan can be asked for.
     static func problem(_ entries: [AppAddEntry]) -> String? {
         let filled = entries.filter { !$0.isEmpty }
-        if filled.isEmpty { return "Enter an app name or a git URL." }
+        if filled.isEmpty { return String(localized: "Enter an app name or a git URL.") }
         for (index, entry) in entries.enumerated() {
             guard let problem = entry.problem, !(entry.isEmpty && entries.count > 1) else { continue }
-            return entries.count == 1 ? problem : "App \(index + 1): \(problem)"
+            return entries.count == 1 ? problem : String(localized: "App \(index + 1): \(problem)")
         }
         var seen = Set<String>()
         for entry in filled where !seen.insert(entry.displayName.lowercased()).inserted {
-            return "\(entry.displayName) is listed twice."
+            return String(localized: "\(entry.displayName) is listed twice.")
         }
         return nil
     }
@@ -71,7 +71,7 @@ nonisolated enum AppAddBatch {
         switch names.count {
         case 0: "apps"
         case 1: names[0]
-        case 2: "\(names[0]) and \(names[1])"
+        case 2: String(localized: "\(names[0]) and \(names[1])")
         default: Wording.apps(names.count)
         }
     }

@@ -90,7 +90,7 @@ nonisolated struct HistoryList: Decodable, Sendable, Equatable {
 nonisolated enum HistoryText {
     /// "site backup acme.localhost": the command and what it was aimed at.
     static func title(_ entry: HistoryEntry) -> String {
-        let command = entry.command ?? entry.argv.first ?? "a command"
+        let command = entry.command ?? entry.argv.first ?? String(localized: "a command")
         guard let site = entry.site, !site.isEmpty, !command.contains(site) else { return command }
         return "\(command) \(site)"
     }
@@ -98,25 +98,25 @@ nonisolated enum HistoryText {
     /// Who started it, as a person says it.
     static func who(_ entry: HistoryEntry) -> String {
         switch entry.caller {
-        case "app": return "BenchBar app"
-        case "terminal": return "Terminal"
-        case "tray": return "Windows tray"
-        case "script": return "A script"
-        case "agent": return "An agent"
+        case "app": return String(localized: "BenchBar app")
+        case "terminal": return String(localized: "Terminal")
+        case "tray": return String(localized: "Windows tray")
+        case "script": return String(localized: "A script")
+        case "agent": return String(localized: "An agent")
         case "mcp":
             let client = entry.mcpClient.map { " (\($0))" } ?? ""
-            return "An agent through MCP\(client)"
+            return String(localized: "An agent through MCP\(client)")
         default: return entry.caller
         }
     }
 
-    static func result(_ entry: HistoryEntry) -> String { entry.exit == 0 ? "Done" : "Failed (exit \(entry.exit))" }
+    static func result(_ entry: HistoryEntry) -> String { entry.exit == 0 ? String(localized: "Done") : String(localized: "Failed (exit \(entry.exit))") }
 
     /// "site acme.localhost, snapshot acme.localhost": what the run changed, as the CLI recorded it.
     static func changes(_ entry: HistoryEntry) -> String? {
         guard !entry.changed.isEmpty else { return nil }
         var parts = entry.changed.map { "\($0.kind) \($0.name)" }
-        if entry.changedMore > 0 { parts.append("\(entry.changedMore) more") }
+        if entry.changedMore > 0 { parts.append(String(localized: "\(entry.changedMore) more")) }
         return parts.joined(separator: ", ")
     }
 }
@@ -177,14 +177,15 @@ nonisolated struct LeaseList: Decodable, Sendable, Equatable {
 /// The words for a lease, and the reading of the sentence a command that a lease stops ends with.
 nonisolated enum LeaseText {
     static func place(_ lease: LeaseInfo) -> String {
-        lease.scope == "site" ? "Site \(lease.site ?? "?")" : "The whole bench"
+        guard lease.scope == "site" else { return String(localized: "The whole bench") }
+        return String(localized: "Site \(lease.site ?? "?")")
     }
 
     /// "Site acme.localhost is held by claude-qa until 3:20 PM: running the QA suite".
     static func line(_ lease: LeaseInfo, now: Date = .now) -> String {
-        var text = "\(place(lease)) is held by \(lease.holder)"
-        if let end = lease.expiresAt { text += " until \(Wording.timeOrDayAndTime(end, now: now))" }
-        if let note = lease.note, !note.isEmpty { text += ": \(note)" }
+        var text = String(localized: "\(place(lease)) is held by \(lease.holder)")
+        if let end = lease.expiresAt { text = String(localized: "\(text) until \(Wording.timeOrDayAndTime(end, now: now))") }
+        if let note = lease.note, !note.isEmpty { text = String(localized: "\(text): \(note)") }
         return text
     }
 }
@@ -216,14 +217,14 @@ nonisolated struct LeaseRefusal: Equatable, Sendable {
     }
 
     var sentence: String {
-        var text = "Held by \(holder)"
+        var text = String(localized: "Held by \(holder)")
         if let until {
-            text += " until \(Wording.dayAndTime(until))"
+            text = String(localized: "\(text) until \(Wording.dayAndTime(until))")
         } else if !untilText.isEmpty {
-            text += " until \(untilText)"
+            text = String(localized: "\(text) until \(untilText)")
         }
-        if let note, !note.isEmpty { text += " (\(note))" }
-        return text + "."
+        if let note, !note.isEmpty { text = String(localized: "\(text) (\(note))") }
+        return String(localized: "\(text).")
     }
 }
 
