@@ -4,7 +4,8 @@ description: "benchbar doctor, the read only health report, and benchbar repair,
 ---
 
 What each check means, and its fix, is in the
-[Doctor and repair guide](../../guides/doctor-and-repair.md). Both
+[Doctor and repair guide](../../guides/doctor-and-repair.md) and the
+[doctor checks](../doctor-checks.md). Both
 commands take the [options for every command](install.md#options-for-every-command).
 
 ## doctor
