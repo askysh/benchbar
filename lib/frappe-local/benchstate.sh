@@ -726,7 +726,13 @@ fl_bench_hint_line_v() {
         if fl_hist_secret_name_p "$name"; then
           # a secret flag goes with its value: the word after it, unless the table says the flag takes none
           case "$FL_HINT_KNOWN" in
-            *" ${name} "*) case "$FL_HINT_VALUED" in *" ${name} "*) nextval=1 ;; esac ;;
+            *" ${name} "*)
+              case "$FL_HINT_VALUED" in
+                *" ${name} "*) nextval=1 ;;
+                # a flag the command knows and that takes no value carries no secret, whatever its name
+                # (pull --keep-secrets): it is quoted, so the hint runs the form that was typed
+                *) if [[ "$hasval" == 0 ]]; then out="${out} ${name}"; keep=1; fi ;;
+              esac ;;
             *) nextval=1 ;;
           esac
         else
