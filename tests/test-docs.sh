@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The docs site's promises to the CLI and the app: every doctor check id
-# has a "### <id>" heading in docs/guides/doctor-and-repair.md (doctor FAIL
-# lines link to /guides/doctor-and-repair/#<id>), the generated tables of
+# has a "### <id>" heading on a page of docs/reference/doctor/ (doctor FAIL
+# lines link to /guides/doctor-and-repair/#<id>, which the old page sends on), the generated tables of
 # docs/reference/cli/ and the MCP tools are what the code says, and every markdown file
 # in docs/ has a title and a description in its frontmatter, every page
 # is in the sidebar (DOC-3), and every Lab, every top level command and every
@@ -9,15 +9,19 @@
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
-GUIDE="$ROOT/docs/guides/doctor-and-repair.md"
-assert_file "$GUIDE"
+CHECKS_DIR="$ROOT/docs/reference/doctor"
+assert_file "$CHECKS_DIR/system-checks.md"
+MOVED="$ROOT/site/public/moved/doctor-and-repair.js"
+assert_file "$MOVED"
 
 # ---- one heading per check id, port_block included (it shows in plans)
 ids="$(sed -n 's/^FL_CHECK_ORDER="\(.*\)"$/\1/p' "$ROOT/lib/frappe-local/checks.sh") port_block"
 n=0
 for id in $ids; do
   n=$((n + 1))
-  grep -qx "### ${id}" "$GUIDE" || fail "docs/guides/doctor-and-repair.md has no '### ${id}' heading"
+  grep -qx "### ${id}" "$CHECKS_DIR"/*.md || fail "docs/reference/doctor/ has no '### ${id}' heading"
+  # the old address the apps and the CLI use keeps working: the old page sends the id to its new page
+  grep -q "\"${id}\": \"/reference/doctor/" "$MOVED" || fail "site/public/moved/doctor-and-repair.js does not send #${id} to its page"
 done
 [[ "$n" -gt 30 ]] || fail "read only ${n} check ids from checks.sh"
 
@@ -63,6 +67,31 @@ cp "$ROOT/docs/json-schema.md" "$COPY/docs/json-schema.md"
 sed -i.bak 's/`benchbar_where`/benchbar_where/g' "$COPY/docs/reference/cli/mcp.md"
 if OUT="$(python3 -I "$COPY/scripts/docs-reference.py" --check 2>&1)"; then fail "a tool the pages do not name passed the docs reference check"; fi
 assert_contains "$OUT" "mcp.md does not name the MCP tool benchbar_where"
+
+# ---- every docs address in the code and the apps names a page and a heading that exist (#169): the
+# CLI, the notices, the Mac app, the tray, the installers and the README link to the site, some with an
+# anchor, and a split or renamed page must not break one. Fix the link, or keep the old anchor working
+# in site/public/moved/ (the old page loads it).
+OUT="$(python3 -I "$ROOT/scripts/docs-links.py" --check 2>&1)" || fail "docs links check: ${OUT}"
+assert_contains "$OUT" "docs-links: ok"
+# the check really fails: a heading that an address points at is gone, and an anchor that never existed
+LINKS="$TMP_DIR/links-copy"
+mkdir -p "$LINKS/site" "$LINKS/macos/BenchBar/System"
+cp -R "$ROOT/docs" "$ROOT/lib" "$ROOT/scripts" "$LINKS/"
+cp -R "$ROOT/site/public" "$ROOT/site/astro.config.mjs" "$LINKS/site/"
+cp "$ROOT/macos/BenchBar/System/Links.swift" "$LINKS/macos/BenchBar/System/"
+cp "$ROOT/README.md" "$ROOT/ROADMAP.md" "$ROOT/CONTRIBUTING.md" "$LINKS/" 2>/dev/null || true
+OUT="$(python3 -I "$LINKS/scripts/docs-links.py" --check "$LINKS" 2>&1)" || fail "docs links check on a copy: ${OUT}"
+grep -rl '^### env_python$' "$LINKS/docs" | while IFS= read -r page; do sed_inplace 's/^### env_python$/### env_python_renamed/' "$page"; done
+if OUT="$(python3 -I "$LINKS/scripts/docs-links.py" --check "$LINKS" 2>&1)"; then fail "a doctor check without its heading passed the docs links check"; fi
+assert_contains "$OUT" "the doctor check env_python"
+printf '
+See https://benchbar.akashmishra.com/json-schema/#no-such-heading and https://benchbar.akashmishra.com/no-such-page/.
+' >>"$LINKS/README.md"
+if OUT="$(python3 -I "$LINKS/scripts/docs-links.py" --check "$LINKS" 2>&1)"; then fail "addresses of a missing heading and a missing page passed the docs links check"; fi
+assert_contains "$OUT" "README.md:"
+assert_contains "$OUT" "has no heading #no-such-heading"
+assert_contains "$OUT" "the page /no-such-page/ does not exist"
 
 # ---- frontmatter on every page
 while IFS= read -r f; do

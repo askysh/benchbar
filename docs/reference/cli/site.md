@@ -17,7 +17,7 @@ Every site of the bench; the default one, the site `benchup` waits for,
 is marked. `benchbar site` alone does the same. With `--json`: each
 site's name, whether it is the default, whether `/etc/hosts` has it, its
 ping code, its `db_name` and its `db_port` (never the password)
-([schema](../../json-schema.md#sites)).
+([schema](../json/sites-and-backups.md#sites)).
 
 Exit codes: 0; 1 when no bench is found.
 
@@ -159,7 +159,7 @@ and for how long](../../guides/benches-and-sites.md#backing-up-and-dropping-a-si
 | Flag | What it does |
 |---|---|
 | `--with-files` | Also back up the uploaded files (public and private) |
-| `--json` | Print the new backup as JSON ([schema](../../json-schema.md#site-backups)); the progress goes to stderr |
+| `--json` | Print the new backup as JSON ([schema](../json/sites-and-backups.md#site-backups)); the progress goes to stderr |
 | `--dry-run` | Print the command, change nothing |
 
 Exit codes: 0 the backup exists; 1 the site does not exist or the backup
@@ -217,7 +217,7 @@ Run `--dry-run --json` first: it prints the plan, what it touches, the
 backup it takes first and a `token`. `--apply TOKEN --yes` then runs exactly
 that plan without a question, and refuses it when the sites, the default
 site, the hook or the set changed meanwhile
-([schema](../../json-schema.md#benchbar-site-restore---json)).
+([schema](../json/sites-and-backups.md#benchbar-site-restore---json)).
 A plain `--yes` from a terminal shows the plan and runs it.
 
 | Flag | What it does |
@@ -271,7 +271,7 @@ never takes it, and dropping it by name needs `--force-undo-point`.
 | Flag | What it does |
 |---|---|
 | `--label TEXT` | What the snapshot is for (up to 120 characters, no quotes or backslashes); it is part of the folder name |
-| `--json` | Print the snapshot as JSON ([schema](../../json-schema.md#site-snapshots)) |
+| `--json` | Print the snapshot as JSON ([schema](../json/sites-and-backups.md#site-snapshots)) |
 | `--dry-run` | Print what would happen, change nothing |
 
 Exit codes: 0; 1 when the site does not exist, the backup failed or did not
@@ -413,7 +413,7 @@ output says which command removes it by hand.
 | `--new-default OTHER` | For the default site: the site that becomes the default |
 | `--dry-run` | Print the plan, change nothing (with `--json`: the steps and a `token`) |
 | `--apply TOKEN` | Run the plan of a dry run, with `--yes`; refused, before anything changes, when the sites, the default site, the hosts line or the site's database name (`database` in the plan) changed since the plan |
-| `--json` | The result as JSON: the backup, the archived folder, the hosts line ([schema](../../json-schema.md#site-backups)) |
+| `--json` | The result as JSON: the backup, the archived folder, the hosts line ([schema](../json/sites-and-backups.md#site-backups)) |
 
 Exit codes: 0 the site is dropped; 1 a refusal or a failed step; 2 the
 MariaDB root password is unknown (pass `MARIADB_ROOT_PASSWORD`).

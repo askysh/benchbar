@@ -1433,15 +1433,6 @@ Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --pl
 Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
-=== benchbar db --help [labs: none] (exit 0)
-benchbar db: bench --site SITE mariadb: the site's database.
-
-Usage: benchbar db [--site S]
-
-Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
-Needs: a terminal to ask questions: yes; sudo: no; the network: no.
-Changes things: no. JSON: none.
-All commands: benchbar commands --json
 === benchbar db orphans --help [labs: none] (exit 0)
 benchbar db orphans: Databases of frappe's shape (an underscore and 16 hex digits) that no site of
   any bench benchbar knows refers to. Read only: benchbar never drops them. A site that benchbar was
@@ -1482,7 +1473,7 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar db --help [labs: none] (exit 0)
-benchbar db: bench --site SITE mariadb: the site's database.
+benchbar db: bench --site SITE mariadb: the site's database, with its own user.
 
 Usage: benchbar db [--site S]
 

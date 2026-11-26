@@ -43,7 +43,7 @@ test suite only, and a normal run ignores it.
 | `lan-rooms` | Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose. Commands: `share`, `lan-guard`. | 0.8.2 | macOS, Linux |
 | `quick-switch` | A panel on a global keyboard shortcut to open a site as any pinned user. | 0.8.2 | macOS |
 
-The JSON is in [the JSON reference](../../json-schema.md#benchbar-labs---json).
+The JSON is in [the JSON reference](../json/state-and-diagnostics.md#benchbar-labs---json).
 
 ## Flags, needs and environment
 

@@ -52,7 +52,7 @@ terminal is asked as before.
 | `--dry-run` | Print the plan and its token, change nothing |
 | `--apply TOKEN` | Run exactly the plan whose token `--dry-run --json` printed (with `--yes`); refused when the plan changed since, for example a newer backup on the server |
 | `-y`, `--yes` | Do not ask |
-| `--json` | JSON lines while it runs ([schema](../../json-schema.md#benchbar-pull---json)) |
+| `--json` | JSON lines while it runs ([schema](../json/teams.md#benchbar-pull---json)) |
 
 ## What the copy loses
 
