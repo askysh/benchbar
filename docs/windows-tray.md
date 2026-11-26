@@ -300,16 +300,22 @@ call, which would keep WSL awake); it reads the benches again after an
 unlock, an action or when the flyout opens, and at least every 20 minutes.
 
 The tray reads the passwords of an install or an adopt (the Administrator
-password, the Linux password for `sudo`) once and hands them to
-`benchbar.exe` in its environment for that one run, because the command
-line tool takes them from `ADMIN_PASSWORD`, `BENCHBAR_SUDO_PASSWORD` and
-`MARIADB_ROOT_PASSWORD` and nowhere else. They are never on a command
-line, in a file or in the tray's logs, and the output of the run is
-cleaned of them. An install can last up to 90 minutes, so for that time the
-values can be read by another program of your own user. The command line
-tool can now take them on standard input (`--secrets-stdin`, which
-`benchbar commands --json` lists); the tray moves to it in a later change.
-Until then it uses the environment.
+password, the MariaDB root password if one is needed, the Linux password for
+`sudo`) once and hands them to `benchbar.exe` for that one run. When the
+command line tool in the distro lists `--secrets-stdin` for the command
+(`benchbar commands --json`), the tray sends them on its standard input as
+`KEY=VALUE` lines (UTF-8, LF only, ended by an empty line), so they are in no
+process's environment, not for the 90 minutes an install can last. An older
+command line tool does not have the flag: the tray then keeps the old way and
+puts them in the environment of `benchbar.exe` (`ADMIN_PASSWORD`,
+`BENCHBAR_SUDO_PASSWORD`, `MARIADB_ROOT_PASSWORD`), where another program of
+your own user can read them for the length of the run. The plan (the dry run) is sent the same way. When the tray falls back to the
+environment it writes why, never a value, to its trace. Update the command line
+tool to get the safer way. A password with a line break cannot go on standard
+input and uses the environment, where the command line tool refuses it with its
+own message. The passwords are never on a command line, in a file or in the
+tray's logs, and the output of the run is cleaned of them. The room code of
+`share join` goes on standard input as before.
 
 Settings: Open BenchBar at logon, notifications, check for updates when the window
 opens, **Ask before a link acts** (see [benchbar:// links](#benchbar-links)), the distro (switching runs `benchbar.exe adopt-distro`), the editor

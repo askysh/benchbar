@@ -62,7 +62,7 @@ fl_lab_env_override() { [[ "${FL_TESTING:-}" == "1" && -n "${BENCHBAR_LABS+x}" ]
 # LABS key of the state file (or the tests' BENCHBAR_LABS)
 fl_lab_list_v() {
   local __v
-  if fl_lab_env_override; then __v="${BENCHBAR_LABS//,/ }"; else __v="$(fl_state_get LABS 2>/dev/null || true)"; fi
+  if fl_lab_env_override; then __v="${BENCHBAR_LABS//,/ }"; else fl_kv_get_v __v "$FL_STATE_FILE" LABS 2>/dev/null || __v=""; fi
   printf -v "$1" '%s' "$__v"
 }
 
@@ -88,10 +88,30 @@ fl_lab_saved() {
 }
 
 # fl_lab_enabled_v VAR: known labs that are on, space separated
+# (the list is read once: what fl_lab_on says for each name of the table)
 fl_lab_enabled_v() {
-  local __all __n __r=""
+  local __all __n __x __list __r=""
   fl_lab_names_v __all
-  for __n in $__all; do fl_lab_on "$__n" && __r="${__r}${__r:+ }${__n}"; done
+  fl_lab_list_v __list
+  for __n in $__all; do
+    fl_lab_available "$__n" || continue
+    for __x in $__list; do
+      if [[ "$__x" == "$__n" ]]; then __r="${__r}${__r:+ }${__n}"; break; fi
+    done
+  done
+  printf -v "$1" '%s' "$__r"
+}
+
+# fl_lab_cmd_map_v VAR: " word:lab word:lab " for the commands of every lab (the first lab
+# that names a word), the table fl_lab_of_cmd_v searches, read once
+fl_lab_cmd_map_v() {
+  local __k __n __c __x __r=" "
+  while IFS='~' read -r __k __n _ _ _ _ __c _; do
+    [[ "$__k" == lab ]] || continue
+    for __x in ${__c//,/ }; do
+      case "$__r" in *" ${__x}:"*) ;; *) __r="${__r}${__x}:${__n} " ;; esac
+    done
+  done <<<"$FL_LAB_TABLE"
   printf -v "$1" '%s' "$__r"
 }
 
@@ -243,9 +263,9 @@ fl_labs_json() {
 
 # fl_lab_enabled_json_v VAR: ["a","b"] of the enabled labs
 fl_lab_enabled_json_v() {
-  local __e __n __r="" __s=""
+  local __e __n __j __r="" __s=""
   fl_lab_enabled_v __e
-  for __n in $__e; do __r="${__r}${__s}$(fl_json_str "$__n")"; __s=","; done
+  for __n in $__e; do fl_json_str_v __j "$__n"; __r="${__r}${__s}${__j}"; __s=","; done
   printf -v "$1" '[%s]' "$__r"
 }
 
