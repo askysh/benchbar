@@ -72,7 +72,7 @@ nonisolated enum AppAddBatch {
         case 0: "apps"
         case 1: names[0]
         case 2: "\(names[0]) and \(names[1])"
-        default: "\(names.count) apps"
+        default: Wording.apps(names.count)
         }
     }
 }

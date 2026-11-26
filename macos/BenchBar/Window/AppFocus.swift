@@ -54,8 +54,8 @@ extension AppInfo {
         guard !isFocus, let neededBy, !neededBy.isEmpty else { return nil }
         let who = "needed by \(neededBy.joined(separator: ", "))"
         guard let behind, behind > 0 else { return who }
-        var words = "\(behind) commit\(behind == 1 ? "" : "s")"
-        if let days = behindDays, days > 0 { words += " / \(days) day\(days == 1 ? "" : "s")" }
+        var words = Wording.commits(behind)
+        if let days = behindDays, days > 0 { words += " / \(Wording.days(days))" }
         return "\(who), \(words) behind \(upstream ?? "its remote")"
     }
 
