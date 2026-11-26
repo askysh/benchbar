@@ -879,9 +879,9 @@ Plan
   > bench build --app acme_crm
   [FAIL] bench build --app acme_crm failed with exit code 1 after <N>s
      last 40 lines:
-     mkdir: <EEXIST>
+     mkdir: <ERR>
      <ROOT>/tests/mocks/bin/bench: line N: sites/assets/frappe/dist/js/desk.bundle.ABC123.js: No such file or directory
-     mkdir: <EEXIST>
+     mkdir: <ERR>
      <ROOT>/tests/mocks/bin/bench: line N: sites/assets/frappe/dist/css/desk.bundle.DEF456.css: No such file or directory
      full log: <TMP>/state/logs/<LOG>.log
      command: fl__in_dir <TMP>/home/frappe-bench bench build --app acme_crm
