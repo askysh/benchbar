@@ -406,6 +406,12 @@ struct ActivityTests {
         #expect(try BenchJSON.decode(BenchStatus.self, from: off).autostart == false)
         let (workbench, bench, _) = try await workbench()
         workbench.store.setWindow(WindowSight(isOpen: true, isVisible: true))
+        // opening the window queues a reload that replaces each bench's status; let it end before the steps below
+        // read or change the status, or it can land between setAutostart and the last showAutostart (#162)
+        for _ in 0..<500 where workbench.store.reloadRequested || workbench.store.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(!workbench.store.reloadRequested && !workbench.store.isLoading, "the reload the window queued has ended")
         base.cli.answer("commands", json: try Fixture.string("commands"))
         base.cli.answer("autostart", .ok(try Fixture.text("autostart-off", ext: "txt")))
         await workbench.loadCommands()
