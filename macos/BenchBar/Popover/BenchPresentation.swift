@@ -68,12 +68,7 @@ nonisolated enum BenchText {
 
     /// "45s", "12m", "3h 05m", "2d 4h".
     static func uptime(since start: Date, now: Date) -> String {
-        let seconds = max(0, Int(now.timeIntervalSince(start)))
-        let minutes = seconds / 60, hours = minutes / 60, days = hours / 24
-        if days > 0 { return "\(days)d \(hours % 24)h" }
-        if hours > 0 { return "\(hours)h " + String(format: "%02dm", minutes % 60) }
-        if minutes > 0 { return "\(minutes)m" }
-        return "\(seconds)s"
+        Wording.uptime(Int(now.timeIntervalSince(start)))
     }
 
     /// A CLI command line for a bench, as the user would type it.

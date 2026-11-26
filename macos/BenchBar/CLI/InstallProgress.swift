@@ -121,10 +121,7 @@ nonisolated enum InstallText {
 
     /// "41 s", "1 min 35 s", "1 h 05 min".
     static func duration(_ seconds: Int) -> String {
-        let s = max(0, seconds)
-        if s < 60 { return "\(s) s" }
-        if s < 3600 { return "\(s / 60) min \(String(format: "%02d", s % 60)) s" }
-        return "\(s / 3600) h \(String(format: "%02d", (s % 3600) / 60)) min"
+        Wording.elapsed(seconds)
     }
 
     /// "download wkhtmltopdf (about 50 MB), 10 s, 30 MB of 50 MB".

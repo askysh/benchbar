@@ -276,7 +276,7 @@ nonisolated enum HostsPrune {
 
 /// The words of the tidy surfaces, kept out of the views so a test can read them.
 nonisolated enum TidyText {
-    static func sites(_ n: Int) -> String { n == 1 ? "1 site" : "\(n) sites" }
+    static func sites(_ n: Int) -> String { Wording.sites(n) }
 
     static func time(_ text: String) -> Date? {
         let plain = ISO8601DateFormatter()
