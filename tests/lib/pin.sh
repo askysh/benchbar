@@ -10,11 +10,15 @@
 #   pin_state LABEL TEXT     add a line about the disk (a record, a commit)
 #   pin_check GOLDEN         compare with tests/golden/GOLDEN, or write it when PIN_UPDATE=1
 #   pin_full                 true when every scenario runs (see below)
+#   pin_smoke_end GOLDEN     the end of the smoke scenarios
 #   pin_date, pin_commit     commits with fixed dates and content, so a sha is the same on every machine
 #
-# Smoke and full. The golden file always holds every scenario. A pin test runs all of them with PIN_FULL=1 (CI sets it
-# on a push, the nightly run and a dispatch; a local run does not). Without it only the scenarios outside an
-# "if pin_full; then ... fi" block run, and pin_check compares each of them with its own part of the golden file by name.
+# Full and smoke. The golden file always holds every scenario, and a pin test runs all of them unless PIN_SMOKE says
+# otherwise: PIN_SMOKE=1 runs the smoke scenarios of every pin test, PIN_SMOKE="test-a-pin test-b-pin" those of the
+# tests named (their names without .sh), and nothing, 0 or PIN_UPDATE=1 all scenarios. CI sets PIN_SMOKE only on a
+# pull request whose plan says so (scripts/ci-plan.sh); every other caller (a push, the nightly run, a release build,
+# a person) gets the full set without knowing about it. The smoke scenarios are the ones outside an
+# "if pin_full; then ... fi" block; pin_check compares each of them with its own block of the golden file, by name.
 # What a skipped scenario leaves behind (a commit, a moved head, a record) must still be there for the next one, or
 # that one differs from the golden file: do the cheap setup outside the block, or put back by hand what the skipped
 # run would have left. PIN_UPDATE=1 always runs everything and writes the whole file. PIN_GOLDEN_DIR (default
@@ -72,8 +76,14 @@ pin_run() {
   PIN_STDOUT="$(cat "$MOCK_STATE/pin.stdout")"
 }
 
-# pin_full: every scenario runs (PIN_FULL=1, or PIN_UPDATE=1, which writes the whole golden file)
-pin_full() { [[ "${PIN_FULL:-0}" == "1" || "${PIN_UPDATE:-0}" == "1" ]]; }
+# pin_full: every scenario runs. Not with PIN_SMOKE=1, nor when PIN_SMOKE names this test; PIN_UPDATE=1 always does
+pin_full() {
+  [[ "${PIN_UPDATE:-0}" == "1" ]] && return 0
+  local me="${0##*/}"
+  case "${PIN_SMOKE:-}" in "" | 0) return 0 ;; 1) return 1 ;; esac
+  case " ${PIN_SMOKE} " in *" ${me%.sh} "*) return 1 ;; esac
+  return 0
+}
 
 pin_state() { printf '[state] %s: %s\n' "$1" "$2" >>"$PIN_FILE"; }
 
@@ -88,8 +98,7 @@ pin_check() {
   [[ -z "$dup" ]] || fail "two scenarios are called '${dup}': the name is how a smoke run finds its part of the golden file"
   if [[ "${PIN_UPDATE:-0}" == "1" ]]; then
     cp "$norm" "$golden"
-    printf 'pin: wrote %s
-' "$golden"
+    printf 'pin: wrote %s\n' "$golden"
     return 0
   fi
   [[ -f "$golden" ]] || fail "no golden file ${golden} (run with PIN_UPDATE=1 on a tree you trust)"
@@ -97,12 +106,13 @@ pin_check() {
     cp "$golden" "$want"
   else
     # smoke: the blocks of the golden file ("=== NAME" up to the next one) of the scenarios that ran, in the file's order
+    dup="$(pin_scenarios "$golden" | sort | uniq -d | sed -n '1p')"
+    [[ -z "$dup" ]] || fail "the golden file ${1} has two blocks called '${dup}': a smoke run cannot tell which one is its own. Write the file again (PIN_UPDATE=1 bash tests/${0##*/})."
     awk 'NR == FNR { keep["=== " $0] = 1; next } /^=== / { on = ($0 in keep) } on' "$names" "$golden" >"$want"
     n="$(awk 'END { print NR }' "$names")"
     total="$(pin_scenarios "$golden" | awk 'END { print NR }')"
     [[ "$n" -gt 0 ]] || fail "a smoke run with no scenario in it: ${1}"
-    printf 'pin: smoke, %s of %s scenarios of %s (PIN_FULL=1 bash tests/%s runs all of them)
-' "$n" "$total" "$1" "${0##*/}"
+    printf 'pin: smoke, %s of %s scenarios of %s (bash tests/%s runs all of them)\n' "$n" "$total" "$1" "${0##*/}"
   fi
   if ! cmp -s "$norm" "$want"; then
     diff -u "$want" "$norm" | sed -n "1,80p" >&2 || true

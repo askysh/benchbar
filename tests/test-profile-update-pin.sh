@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # profile update, pinned byte for byte (issue 146): the exit code, stdout, stderr and mock calls of every way
 # the command ends, in tests/golden/profile-update.txt. A change that only moves code (splitting
-# fl_cmd_profile_update into steps) leaves the file as it is. PIN_UPDATE=1 rewrites it, PIN_FULL=1 runs all scenarios.
+# fl_cmd_profile_update into steps) leaves the file as it is. PIN_UPDATE=1 rewrites it, PIN_SMOKE=1 runs the smoke scenarios only.
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 # shellcheck source=tests/lib/apps-fixtures.sh

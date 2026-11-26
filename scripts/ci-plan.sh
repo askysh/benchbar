@@ -20,9 +20,9 @@
 # n (the shard count) and shards (a JSON array for the matrix, [] when the leg
 # does not run); shellcheck and shellcheck_files; app, shim, shim_win,
 # shim_arm, wsl, real,
-# full (every leg runs everything), pin_full (1: the pin tests run every scenario,
-# 0: only their smoke scenarios; CI hands it to the tests as PIN_FULL) and code
-# (anything beyond docs changed).
+# full (every leg runs everything), pin_smoke (which pin tests run only their smoke
+# scenarios: 0 none, 1 all, or the names of the tests; CI hands it to the tests as
+# PIN_SMOKE) and code (anything beyond docs changed).
 #
 # The rules (maintainers/DECISIONS.md, "CI tiering"):
 #   pull request   the tests tests/affected.sh picks, on Linux and in the
@@ -36,10 +36,12 @@
 #                  themselves run everything everywhere.
 #   push, schedule everything everywhere (push: unless only docs, site or *.md changed)
 #   dispatch       what INPUT_TESTS and INPUT_LEGS say
-# The pin tests (tests/lib/pin.sh) run all their scenarios on a push, the nightly
-# run and a dispatch, and on a pull request that runs everything everywhere, that
-# changes a pin test, a golden file or the pin helper, or that has the label
-# test-pin-full. Any other pull request runs their smoke scenarios only.
+# The pin tests (tests/lib/pin.sh) run every scenario unless this plan says smoke, and
+# only a pull request can say it: push, schedule and dispatch plan no smoke, nor does a
+# pull request that runs everything everywhere, changes a pin test, a golden file or the
+# pin helper, or has the label test-pin-full. Any other pull request plans smoke for
+# every pin test except those whose pinned functions it changes (tests/affected.sh,
+# pin_of: the file of the function), which run in full.
 # The shard count of a leg follows its weight in tests/timings.tsv (run-tests.sh
 # reads it): one shard per TARGET table seconds, at most MAX.
 
@@ -119,7 +121,7 @@ if [[ "$files_known" == 1 && -n "${files// /}" ]] && all_match "$docs_paths"; th
 if [[ "$files_known" == 1 && -z "${files// /}" && "$EVENT" != schedule && "$EVENT" != workflow_dispatch ]]; then code=false; fi
 
 # ---- the scope
-full=false mode=none tests="" shellcheck=false shellcheck_files="" pin_full=1
+full=false mode=none tests="" shellcheck=false shellcheck_files="" pin_smoke=0
 macos=false app=false shim=false real=false
 run_linux=false run_bash32=false run_macos=false
 
@@ -181,8 +183,21 @@ case "$EVENT" in
       any_match "$shim_paths" && shim=true
     fi
     # a pull request runs the smoke scenarios of the pin tests, unless the change could move one the smoke leaves out
-    pin_full=0
-    if [[ "$mode" == full ]] || any_match "$pin_paths" || has_word "$LABELS" test-pin-full; then pin_full=1; fi
+    if [[ "$mode" == full ]] || any_match "$pin_paths" || has_word "$LABELS" test-pin-full; then
+      pin_smoke=0
+    else
+      pin_changed="$(clean_names "$(printf '%s\n' "$affected" | sed -n 's/^pin_changed=//p')")"
+      if [[ -z "$pin_changed" ]]; then
+        pin_smoke=1
+      else
+        pin_smoke=""
+        for f in tests/test-*-pin.sh; do
+          f="${f##*/}"; f="${f%.sh}"
+          has_word "$pin_changed" "$f" || pin_smoke="${pin_smoke:+$pin_smoke }$f"
+        done
+        [[ -n "$pin_smoke" ]] || pin_smoke=0
+      fi
+    fi
     ;;
 esac
 has_word "$LABELS" test-linux && [[ "$EVENT" == pull_request && "$code" == true ]] && real=true
@@ -238,7 +253,7 @@ shim_arm="$shim"
 
 out code "$code"
 out full "$full"
-out pin_full "$pin_full"
+out pin_smoke "$pin_smoke"
 out tests "$tests"
 out linux_skip "$SKIP_LINUX"
 out linux_n "$n_linux"
@@ -263,7 +278,7 @@ if [[ -n "${PLAN_SUMMARY:-}" ]]; then
   {
     printf '### CI plan\n\n'
     printf 'Event `%s`, mode `%s`, %s changed file(s). Pin tests: %s.\n\n' "$EVENT" "$mode" "$(printf '%s\n' "$files" | tr ' ' '\n' | grep -c . || true)" \
-      "$([[ "$pin_full" == 1 ]] && printf 'every scenario' || printf 'smoke scenarios')"
+      "$(case "$pin_smoke" in 0) printf 'every scenario' ;; 1) printf 'smoke scenarios' ;; *) printf 'smoke for %s, every scenario for the others' "$pin_smoke" ;; esac)"
     printf '| Leg | Runs | Shards |\n|---|---|---|\n'
     printf '| Linux (bash 5) | %s | %s |\n' "$run_linux" "$n_linux"
     printf '| bash 3.2 container | %s | %s |\n' "$run_bash32" "$n_bash32"

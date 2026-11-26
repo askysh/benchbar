@@ -6,7 +6,7 @@
 #   tests/affected.sh --base REF      the change from REF instead
 #   tests/affected.sh --all           every test (tests/run-tests.sh with no names)
 #   tests/affected.sh --list          print the chosen names, run nothing
-#   tests/affected.sh --machine       print mode=, tests=, shellcheck=, shellcheck_files= lines (CI)
+#   tests/affected.sh --machine       print mode=, tests=, shellcheck=, shellcheck_files=, pin_changed= lines (CI)
 #   tests/affected.sh --lib-coverage  list lib files with no test and no family (test-affected runs it)
 #   tests/affected.sh --files "A B"   take the changed files from the argument, not from git
 #                                     (a function level diff is not available then: every function
@@ -109,6 +109,19 @@ lib_family() {
   esac
 }
 
+# pin_of NAME: the pin test of the pinned functions that lib/frappe-local/NAME.sh holds. A change to that file runs
+# this pin test in full on a pull request (the others run their smoke scenarios); a file a pinned function only
+# calls into (ui.sh, run.sh, the git helpers) has none, on purpose.
+pin_of() {
+  case "$1" in
+    apps) echo test-app-update-pin ;;
+    app-plan) echo test-app-add-pin ;;
+    teamlock) echo test-lock-apply-pin ;;
+    profiles) echo test-profile-update-pin ;;
+    *) return 1 ;;
+  esac
+}
+
 # script_tests NAME: the tests that run scripts/NAME.sh
 script_tests() {
   case "$1" in
@@ -177,7 +190,7 @@ pick_family() {
   for t in $1; do pick_parts "$t"; done
 }
 
-full=0 shell=0 lib=0 funcs="" shfiles_all=""
+full=0 shell=0 lib=0 funcs="" shfiles_all="" pin_changed=""
 while IFS= read -r f; do
   [[ -n "$f" ]] || continue
   case "$f" in
@@ -191,7 +204,9 @@ while IFS= read -r f; do
       pick_parts "test-$t"
       fam="$(lib_family "$t" || true)"
       [[ -n "$fam" ]] || fam="$LIB_CORE"
-      pick_family "$fam" ;;
+      pick_family "$fam"
+      pin="$(pin_of "$t" || true)"
+      if [[ -n "$pin" ]]; then pick "$pin"; pin_changed="${pin_changed:+$pin_changed }$pin"; fi ;;
     lib/frappe-local/help-layout.txt) lib=1; pick_family "$(lib_family help)" ;;
     lib/frappe-local/mcp.py) lib=1; pick_family "test-mcp test-mcp-parity test-mcp-commands test-docs" ;;
     .claude/guard-*.sh | .claude/settings.json) pick test-guards; shell=1 ;;
@@ -266,7 +281,7 @@ if [[ "$machine" == 1 ]]; then
     if [[ "$t" == shellcheck ]]; then sc=true; else names="${names:+$names }$t"; fi
   done
   if [[ -z "$names" && "$sc" == false ]]; then mode=none; else mode=affected; fi
-  printf 'mode=%s\ntests=%s\nshellcheck=%s\nshellcheck_files=%s\n' "$mode" "$names" "$sc" "${shfiles_all# }"
+  printf 'mode=%s\ntests=%s\nshellcheck=%s\nshellcheck_files=%s\npin_changed=%s\n' "$mode" "$names" "$sc" "${shfiles_all# }" "$pin_changed"
   exit 0
 fi
 
