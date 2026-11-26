@@ -33,7 +33,7 @@ extension CLIError: LocalizedError {
         case .launchFailed(let detail):
             return String(localized: "Could not run benchbar: \(detail)")
         case .timedOut(let command, let seconds):
-            return String(localized: "benchbar \(command) did not finish within \(seconds) seconds.")
+            return String(localized: "benchbar \(command) did not finish within \(String(seconds)) seconds.")
         case .cancelled(let command):
             return String(localized: "benchbar \(command) was cancelled.")
         case .failed(let command, let code, let message):

@@ -9270,13 +9270,13 @@
       },
       "comment": "Main window."
     },
-    "benchbar %@ did not finish within %lld seconds.": {
+    "benchbar %@ did not finish within %@ seconds.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "benchbar %@ did not finish within %lld seconds."
+            "value": "benchbar %@ did not finish within %@ seconds."
           }
         }
       }
