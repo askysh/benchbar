@@ -27,8 +27,8 @@ struct FindUserSheet: View {
     private var openAs: OpenAsStore { store.openAs }
 
     var body: some View {
-        SheetScaffold("Find User",
-                      explanation: "Enabled users of \(row.name). Open signs the browser in as that user; pin one to keep it in the Open as… menu.",
+        SheetScaffold(String(localized: "Find User"),
+                      explanation: String(localized: "Enabled users of \(row.name). Open signs the browser in as that user; pin one to keep it in the Open as… menu."),
                       phase: phase) {
             // a fixed height while results come and go: the sheet is re-centred
             // each time its height changes, and it jumped on every keystroke
@@ -49,21 +49,21 @@ struct FindUserSheet: View {
                             }
                         }
                         if list.truncated {
-                            SheetNote("Showing the first \(Self.limit); refine the search.")
+                            SheetNote(String(localized: "Showing the first \(Self.limit); refine the search."))
                         }
                     }
                 }
             }
             .frame(maxWidth: .infinity, minHeight: Self.listHeight, alignment: .top)
         } actions: {
-            DoneButton(title: "Close", action: close)
+            DoneButton(title: String(localized: "Close"), action: close)
         }
         .task(id: query) { await load() }
     }
 
     private var phase: SheetPhase {
-        if let failure { return .failed(failure, title: "Could not list the users") }
-        return list == nil ? .loading("Reading the users of \(row.name)…") : .ready
+        if let failure { return .failed(failure, title: String(localized: "Could not list the users")) }
+        return list == nil ? .loading(String(localized: "Reading the users of \(row.name)…")) : .ready
     }
 
     private func userRow(_ user: SiteUser) -> some View {

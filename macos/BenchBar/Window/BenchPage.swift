@@ -253,7 +253,7 @@ struct BenchOverview: View {
             .primaryAction(!bench.needsService)
             .disabled(bench.state != .running && !defaultNeedsHosts)
             .fixedSize()
-            MoreMenu(help: editorInMenu ? "The editor, console, database, Finder and the bench path" : "Console, database, Finder and the bench path") {
+            MoreMenu(help: editorInMenu ? String(localized: "The editor, console, database, Finder and the bench path") : String(localized: "Console, database, Finder and the bench path")) {
                 if editorInMenu {
                     editorButton(editor)
                     Divider()
@@ -571,7 +571,7 @@ struct SiteMenu: View {
     let drop: () -> Void
 
     var body: some View {
-        MoreMenu(help: "Make \(row.name) the default, back it up, snapshot it, restore it or drop it") {
+        MoreMenu(help: String(localized: "Make \(row.name) the default, back it up, snapshot it, restore it or drop it")) {
             if !row.isDefault {
                 Button("Make Default") { Task { await workbench.setDefaultSite(row.name, on: bench) } }
                 Divider()
@@ -645,19 +645,18 @@ struct AddSiteSheet: View {
     private var phase: SheetPhase {
         switch flow.stage {
         case .form:
-            if let error = flow.readError { .failed(error, title: "\(name) cannot be added") } else { .ready }
-        case .reading: .loading("Reading the plan from benchbar…")
+            if let error = flow.readError { .failed(error, title: String(localized: "\(name) cannot be added")) } else { .ready }
+        case .reading: .loading(String(localized: "Reading the plan from benchbar…"))
         case .reviewing: .ready
-        case .applying: .running("Creating \(name)…")
-        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown")
+        case .applying: .running(String(localized: "Creating \(name)…"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench changed since this plan was shown"))
         }
     }
 
     var body: some View {
-        SheetScaffold("Add a Site to \(bench.name)",
+        SheetScaffold(String(localized: "Add a Site to \(bench.name)"),
                       explanation: flow.plan == nil
-                          ? "A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards."
-                          : "Nothing has run yet. These are the steps; Add Site runs exactly this plan.",
+                          ? String(localized: "A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards.") : String(localized: "Nothing has run yet. These are the steps; Add Site runs exactly this plan."),
                       phase: phase, width: flow.plan == nil ? .regular : .wide) {
             if let plan = flow.plan {
                 SiteAddPlanView(plan: plan)
@@ -701,7 +700,7 @@ struct AddSiteSheet: View {
             SecureField("Confirm password", text: $confirm)
         }
         .formStyle(.columns)
-        SheetNote("The password goes to the benchbar process only, never on a command line or to disk. The MariaDB password comes from your Keychain.")
+        SheetNote(String(localized: "The password goes to the benchbar process only, never on a command line or to disk. The MariaDB password comes from your Keychain."))
     }
 
     private func review() {
