@@ -1511,7 +1511,6 @@ Topics:
   json                     the JSON API
   runners                  draw your own menu bar runner
   troubleshooting          when something goes wrong
-  decisions                why things are the way they are
   roadmap                  what comes next
   contributing             work on BenchBar
 === benchbar self-update --help [labs: none] (exit 0)
