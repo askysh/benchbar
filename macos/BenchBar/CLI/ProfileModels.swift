@@ -23,7 +23,7 @@ nonisolated struct ProfileSubscription: Codable, Sendable, Equatable {
     /// "Outdated · 3 commits / 12 days"
     var outdatedText: String? {
         guard let behind, behind > 0 else { return nil }
-        var text = "Outdated · \(Wording.commits(behind))"
+        var text = String(localized: "Outdated · \(Wording.commits(behind))")
         if let days, days > 0 { text += " / \(Wording.days(days))" }
         return text
     }
@@ -35,7 +35,7 @@ nonisolated enum RepoAccess {
         switch access {
         case "public": return "public"
         case "private": return "private"
-        case "personal": return "personal account"
+        case "personal": return String(localized: "personal account")
         default: return "unknown"
         }
     }
@@ -332,13 +332,13 @@ nonisolated extension ProfileInfo {
     /// "built in", "local", "imported", "subscribed · acme/profiles"
     var originText: String {
         switch origin {
-        case .builtin: return "built in"
+        case .builtin: return String(localized: "built in")
         case .user: return "local"
         case .imported: return "imported"
         case .path: return "profile path"
         case .subscribed:
             guard let repo = subscription?.repo else { return "subscribed" }
-            return "subscribed · \(Self.shortRepo(repo))"
+            return String(localized: "subscribed · \(Self.shortRepo(repo))")
         }
     }
 
@@ -391,12 +391,12 @@ nonisolated struct ProfileExportChoices: Equatable, Sendable {
     /// Why Export is off, or nil when it can run.
     func problem(in plan: ProfileExportPlan) -> String? {
         if let first = blocked(in: plan).first {
-            return "\(first.app) is required by \(first.requiredBy.joined(separator: ", ")): keep it, or drop those too."
+            return String(localized: "\(first.app) is required by \(first.requiredBy.joined(separator: ", ")): keep it, or drop those too.")
         }
-        if !plan.apps.contains(where: { keeps($0.name) }) { return "Keep at least one app." }
+        if !plan.apps.contains(where: { keeps($0.name) }) { return String(localized: "Keep at least one app.") }
         for app in plan.apps where keeps(app.name) {
             let branch = (branches[app.name] ?? "").trimmingCharacters(in: .whitespaces)
-            if !Self.isBranch(branch) { return "\(app.name) needs a branch name." }
+            if !Self.isBranch(branch) { return String(localized: "\(app.name) needs a branch name.") }
         }
         return nil
     }

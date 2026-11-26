@@ -71,10 +71,10 @@ nonisolated struct SiteRestorePlan: ReviewablePlan, Codable {
     var touchesText: [String] {
         touches.compactMap { kind in
             switch kind {
-            case "backup": "a backup of \(site) with its files, first"
-            case "database": new ? "a new database for \(site)" : "the database of \(site)"
-            case "files": "the public and private files of \(site)"
-            case "site_config": "sites/\(site)/site_config.json (the encryption key)"
+            case "backup": String(localized: "a backup of \(site) with its files, first")
+            case "database": new ? String(localized: "a new database for \(site)") : String(localized: "the database of \(site)")
+            case "files": String(localized: "the public and private files of \(site)")
+            case "site_config": String(localized: "sites/\(site)/site_config.json (the encryption key)")
             case "cache", "hosts", "common_site_config": nil
             default: kind
             }

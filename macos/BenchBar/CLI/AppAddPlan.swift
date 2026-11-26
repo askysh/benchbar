@@ -67,10 +67,13 @@ nonisolated struct AppAddPlan: Codable, Sendable, Equatable {
         /// "main at 9b1d2c4 (pinned), install on macdev, site2", for the plan's row of this app.
         var summary: String {
             var parts: [String] = []
-            if let branch { parts.append("branch \(branch)") }
-            if let commit { parts.append("commit \(commit.prefix(7))" + (commitSource == "pin" ? " (pinned)" : "")) }
-            if present { parts.append("already in the bench") }
-            parts.append(installOn.isEmpty ? "no site" : "install on " + installOn.joined(separator: ", "))
+            if let branch { parts.append(String(localized: "branch \(branch)")) }
+            if let commit {
+                let short = String(commit.prefix(7))
+                parts.append(commitSource == "pin" ? String(localized: "commit \(short) (pinned)") : String(localized: "commit \(short)"))
+            }
+            if present { parts.append(String(localized: "already in the bench")) }
+            parts.append(installOn.isEmpty ? String(localized: "no site") : String(localized: "install on \(installOn.joined(separator: ", "))"))
             return parts.joined(separator: ", ")
         }
     }
@@ -125,10 +128,10 @@ nonisolated struct AppAddPlan: Codable, Sendable, Equatable {
     /// Where the branch came from, in words.
     var branchSourceText: String? {
         switch branchSource {
-        case "given": "the one you asked for"
-        case "policy": "the profile's branch for this app"
-        case "remote_default": "the repository's default"
-        case "present": "the branch of the app already in the bench"
+        case "given": String(localized: "the one you asked for")
+        case "policy": String(localized: "the profile's branch for this app")
+        case "remote_default": String(localized: "the repository's default")
+        case "present": String(localized: "the branch of the app already in the bench")
         default: nil
         }
     }
@@ -137,16 +140,16 @@ nonisolated struct AppAddPlan: Codable, Sendable, Equatable {
     var touches: [String] {
         var out: [String] = []
         if steps.contains(where: { $0.kind == "clone" || $0.kind == "clone_required" }) {
-            out += ["apps/ and sites/apps.txt", "the bench's Python environment"]
+            out += [String(localized: "apps/ and sites/apps.txt"), String(localized: "the bench's Python environment")]
         }
-        if steps.contains(where: { $0.kind == "build" }) { out.append("built assets") }
+        if steps.contains(where: { $0.kind == "build" }) { out.append(String(localized: "built assets")) }
         // "Install on SITE", or "Install APP on SITE" when several apps are added
         var installs: [String] = []
         for step in steps where step.kind == "install" {
             let site = step.name.components(separatedBy: " on ").last ?? step.name
             if !installs.contains(site) { installs.append(site) }
         }
-        if !installs.isEmpty { out.append("the database of " + installs.joined(separator: ", ")) }
+        if !installs.isEmpty { out.append(String(localized: "the database of \(installs.joined(separator: ", "))")) }
         return out
     }
 

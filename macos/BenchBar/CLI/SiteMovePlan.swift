@@ -144,7 +144,7 @@ nonisolated struct SiteMoveOutcome: Equatable, Sendable {
 
 /// The words of the move sheet and the gating of its entry, kept out of the views so a test can read them.
 nonisolated enum SiteMoveText {
-    static let stopPrefix = "Stop the bench first"
+    static let stopPrefix = String(localized: "Stop the bench first")
 
     /// The plan's suggestion is `benchbar down --bench-dir SRC`.
     static func isStop(_ command: String) -> Bool {
@@ -165,17 +165,17 @@ nonisolated enum SiteMoveText {
 
     static func facts(_ plan: SiteMovePlan) -> [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
-        out.append(("From", plan.bench))
-        out.append(("To", plan.toBench))
-        if !plan.apps.isEmpty { out.append(("Apps", plan.apps.joined(separator: ", "))) }
+        out.append((String(localized: "From"), plan.bench))
+        out.append((String(localized: "To"), plan.toBench))
+        if !plan.apps.isEmpty { out.append((String(localized: "Apps"), plan.apps.joined(separator: ", "))) }
         if let address = plan.address {
-            out.append(("Address", address.portChanges
-                        ? "\(address.urlBefore) becomes \(address.urlAfter). The name stays, so its hosts line is kept."
-                        : "\(address.urlAfter), as before."))
+            out.append((String(localized: "Address"), address.portChanges
+                        ? String(localized: "\(address.urlBefore) becomes \(address.urlAfter). The name stays, so its hosts line is kept.")
+                        : String(localized: "\(address.urlAfter), as before.")))
         }
-        out.append(("Migrate", plan.migrate ? "bench migrate runs after the restore." : "Not run: the site arrives on the schema it had."))
-        if !plan.stays.isEmpty { out.append(("Stays", plan.stays.joined(separator: "\n"))) }
-        out.append(("Left alone", "The default site of both benches and every other site."))
+        out.append((String(localized: "Migrate"), plan.migrate ? String(localized: "bench migrate runs after the restore.") : String(localized: "Not run: the site arrives on the schema it had.")))
+        if !plan.stays.isEmpty { out.append((String(localized: "Stays"), plan.stays.joined(separator: "\n"))) }
+        out.append((String(localized: "Left alone"), String(localized: "The default site of both benches and every other site.")))
         return out
     }
 
@@ -183,7 +183,7 @@ nonisolated enum SiteMoveText {
     static func canStop(canChange: Bool, stopping: Bool) -> Bool { canChange && !stopping }
 
     /// The progress line while Stop Bench runs.
-    static func stopping(_ bench: String) -> String { "Stopping \(bench)…" }
+    static func stopping(_ bench: String) -> String { String(localized: "Stopping \(bench)…") }
 
     /// What a stream's step line says while it runs.
     static func progress(_ step: InstallStep) -> String {
@@ -196,6 +196,6 @@ nonisolated enum SiteMoveText {
         let notes = outcome.envelope.nextActions.map { $0.why.isEmpty ? $0.command : "\($0.why)\n\($0.command)" }
         let detail = (outcome.envelope.warnings + notes).joined(separator: "\n\n")
         let more = detail.isEmpty ? nil : detail
-        return outcome.envelope.warnings.isEmpty ? .success("\(site) moved to \(name)", more) : .warning("\(site) moved to \(name)", more)
+        return outcome.envelope.warnings.isEmpty ? .success(String(localized: "\(site) moved to \(name)"), more) : .warning(String(localized: "\(site) moved to \(name)"), more)
     }
 }
