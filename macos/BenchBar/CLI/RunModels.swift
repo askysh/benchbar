@@ -79,7 +79,7 @@ nonisolated struct RunRequest: Equatable, Sendable {
             if command.switches.contains(token) { words.append(token); continue }
             guard command.valued.contains(token) else {
                 return ([], command.flags.isEmpty ? String(localized: "\(command.name) takes no flags.")
-                    : String(localized: "\(token) is not a flag of \(command.name). It takes: \(command.flags.joined(separator: ", ")).")
+                    : String(localized: "\(token) is not a flag of \(command.name). It takes: \(command.flags.joined(separator: ", "))."))
             }
             guard index < tokens.count else { return ([], String(localized: "\(token) needs a value.")) }
             let value = tokens[index]
