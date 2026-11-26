@@ -88,3 +88,87 @@ share setup	--dry-run	print the plan (size, time,
 share setup	--json	json lines: plan, steps, done
 share preflight	--json	one document: protocol, ok, lan_ip
 lan-guard install	--json	json lines: done, with state,
+run	--dry-run	print the plan and its token, run nothing
+run	--apply	run exactly that plan (with --yes)
+pull	--as	local site name (default site.local)
+pull	--from-dir	a backup set downloaded by hand (frappe cloud)
+pull	--remote-bench	the bench folder on the server (default
+pull	--new-backup	it also deletes older backups there
+pull	--confirm-site	with --new-backup: the site name
+pull	--replace	after backing it up
+pull	--skip-app	its tables stay behind as orphans
+pull	--no-files	database only
+pull	--keep-secrets	the administrator login is kept
+pull	--no-migrate	stop after the restore and the dev safety, before bench migrate
+pull	--before-migrate	no secret in its environment|a failing script stops the run
+docs	--print	print the page's address instead
+mcp	--calls	print the last n (default 50) lines of the audit log
+op status	--json	the run's done line as result once the run ended
+op status	--timeout	give up after secs seconds	op wait/--timeout
+history	--bench	only the runs on this bench
+history	--since	since 90m, 12h, 7d, 2w ago
+history	--limit	at most n runs (1 to 1000
+app list	--no-sites	the last site lists are read instead of asking bench
+app add	--branch	branch or tag
+app add	--name	the app's package name
+app add	--commit	pin the app to this commit
+app add	--site	install it on this site
+app add	--all-sites	install it on every site
+app add	--install-on	install this app on these sites only
+app add	--dry-run	print the plan and its token
+app add	--apply	run exactly that plan (with --yes)
+app add	--yes	with --yes	--apply
+app install	--dry-run	print the plan as one json document with --json; it carries a token
+app install	--apply	run exactly that plan (with --yes)
+app install	--yes	with --yes	--apply
+app update	--skip-backup	migrate without a backup first
+app update	--discard-pending	drop the record of an update or add that stopped part way
+app update	--dry-run	it carries a token (null when there is nothing to do)
+app update	--apply	the plan is made again after a fetch
+app update	--yes	with --yes	--apply
+app focus	--list	list the focus apps
+app focus	--auto	let benchbar decide again (undo a pin)
+app focus	--fetch	git fetch the branches of the focus apps first
+lock write	--lock	write this lockfile, and remember it for this bench
+lock write	--no-commits	leave the commit hashes out (branches only)
+lock write	--allow-dirty	write it although an app has local changes
+lock apply	--dry-run	it carries a token (null when the apps match)
+lock apply	--apply	refused when the lockfile, an app or the plan changed
+lock apply	--yes	with --yes	--apply
+lease take	--for	how long, from 1 to 480
+lease take	--note	why, for whoever meets the lease
+lease take	--bench	lease the whole bench (every site of it)
+lease take	--site	lease one site
+notices	--dismiss	hide one notice (also in the benchbar app)
+notices	--all	hide every notice
+history	--json	json: one document for a
+app list	--json	json: one document for a
+app add	--json	json: one document for a
+app install	--site	site name (default: remembered, or
+app install	--json	json: one document for a
+app update	--json	json: one document for a
+app focus	--json	json: one document for a
+lock check	--json	json: one document for a
+lock apply	--json	json: one document for a
+profile list	--json	json: one document for a
+profile create	--from-bench	the bench to read the
+profile create	--dir	write the profile into this
+profile export	--out	where to write (default ./name.toml)
+profile export	--branch	export app on br instead
+profile export	--drop	leave app out of the
+profile export	--plan	print the review only, write
+profile import	--as	save it under this name
+profile import	--plan	print the review only, write
+profile subscribe	--plan	print the review only, clone
+profile update	--all	every import and subscription
+profile update	--plan	print the review only, change
+profile check	--json	json: one document for a
+labs	--json	one json document
+lease take	--json	json lines, ending in a
+lease renew	--for	how long from now, from
+lease list	--bench	only the leases of this
+lease list	--json	one json document
+lease list	--lease	a lease you hold (benchbar
+lease list	--break-lease	go ahead although a lease
+pull	--keep-scheduler	leave the scheduler as production
+pull	--keep-staging	keep the downloaded backup in

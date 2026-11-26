@@ -94,11 +94,14 @@ def check(rows):
     for r in rows:
         key, flag, words = r[0], r[1], r[2]
         carrier = r[3] if len(r) > 3 and r[3] else flag
+        ckey = key
+        if "/" in carrier:
+            ckey, carrier = carrier.split("/", 1)
         have_row.add((key, flag))
         if key not in cmds:
             errs.append("dropped note: %s is not a command" % key)
             continue
-        text = flag_text(key, carrier)
+        text = flag_text(ckey, carrier)
         if text is None:
             errs.append("dropped note of %s %s: no flag record and no global flag %s" % (key, flag, carrier))
             continue

@@ -223,7 +223,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
-| `app list` | `--no-sites` |  | Leave out the sites that have each app (faster). |
+| `app list` | `--no-sites` |  | Leave out the sites that have each app (faster): the last site lists are read instead of asking bench. |
 | `app add` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `app add` | `--branch` | `B` | Branch or tag. |
 | `app add` | `--name` | `N` | The app's package name. |

@@ -1455,9 +1455,8 @@ All commands: benchbar commands --json
 === benchbar run --help [labs: none] (exit 0)
 benchbar run: Run one command of the allow list (migrate, clear-cache, clear-website-cache, build,
   run-tests, doctor, list-apps, version) with bench's own environment, in the right bench and site,
-  under a deadline. A command that changes things: --dry-run --json prints the plan and its token,
-  --apply TOKEN --yes runs exactly that plan; migrate backs the site up first. Anything else is
-  refused with exit 64 and the list.
+  under a deadline. A command that changes things goes through a plan (see --dry-run and --apply);
+  migrate backs the site up first. Anything else is refused with exit 64 and the list.
 
 Usage: benchbar run [--site S] [--timeout SECS] [--dry-run --json | --apply TOKEN --yes] -- COMMAND
        [FLAGS]
@@ -1522,7 +1521,10 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar pull --help [labs: none] (exit 0)
-benchbar pull: Copy a production site over SSH into a new local site.
+benchbar pull: Copy a production site over SSH into a new local site, from the latest backup on the
+  server (nothing is written there). The copy gets the encryption key, muted email and a paused
+  scheduler, and it is neutralised: integrations off, stored secrets cleared. HOST is a name from
+  your SSH config. The local site is created when it does not exist.
 
 Usage: benchbar pull HOST:SITE [--as NAME] [--from-dir DIR] [--replace] [--dry-run|--apply TOKEN
        --yes] [--json]
@@ -1532,12 +1534,14 @@ Options:
                          follow it). Nothing can be asked: needs --yes and the inputs in the
                          environment, as for an agent. Not with --dry-run.
   --as NAME              Local site name (default SITE.local).
-  --from-dir DIR         A backup set downloaded by hand, no SSH.
-  --remote-bench DIR     The bench folder on the server.
-  --new-backup           Run bench backup on the server first.
+  --from-dir DIR         A backup set downloaded by hand (Frappe Cloud), no SSH.
+  --remote-bench DIR     The bench folder on the server (default ~/frappe-bench).
+  --new-backup           Run bench backup on the server first. It also deletes older backups there,
+                         and it asks for the site name (or takes --confirm-site).
   --keep-secrets         Keep the copy's integrations and stored secrets (by default they are
-                         switched off and cleared). A person's decision: refused under --for-agent,
-                         benchbar mcp and BENCHBAR_NONINTERACTIVE=1.
+                         switched off and cleared, and tokens and queued mail are dropped; the
+                         Administrator login is kept). A person's decision: refused under
+                         --for-agent, benchbar mcp and BENCHBAR_NONINTERACTIVE=1.
   --replace              Restore over an existing local site, after backing it up.
   --confirm-site SITE    With --new-backup: the site name, instead of typing it.
   --skip-app APP         Restore without APP (its tables stay behind as orphans); repeat for more
@@ -1545,8 +1549,8 @@ Options:
   --no-files             Database only.
   --no-migrate           Stop after the restore and the dev safety, before bench migrate.
   --before-migrate SCRIPT An executable run after the restore, before migrate, in the bench folder,
-                         with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME; a failing script
-                         stops the run.
+                         with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME (no secret in its
+                         environment); a failing script stops the run.
   --keep-scheduler       Leave the scheduler as production has it.
   --keep-staging         Keep the downloaded backup in the bench's .benchbar/pulls/ after a
                          successful run.
@@ -1647,7 +1651,8 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar mcp --help [labs: none] (exit 0)
-benchbar mcp: Model Context Protocol server on stdio for coding agents.
+benchbar mcp: Model Context Protocol server on stdio for coding agents (claude mcp add benchbar --
+  benchbar mcp). It offers read tools, up, down, restart, and changes made from a reviewed plan.
 
 Usage: benchbar mcp [--print-agents-md] [--calls [N]] [--allow-bench PATH]
 
@@ -1679,10 +1684,14 @@ Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar op status --help [labs: none] (exit 0)
 benchbar op status: One operation (its command, bench, site, state, last step, last progress, exit,
-  log), or the ten newest. A run that died without a done line is interrupted. --json adds the run's
-  done line as result once it ended.
+  log), or the ten newest. Every command that changes things has an op_id (in its JSON lines too). A
+  run that died without a done line is interrupted.
 
 Usage: benchbar op status [OP_ID] [--json]
+
+Options:
+  --json                 One JSON document. It adds the run's done line as result once the run
+                         ended.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -1717,8 +1726,9 @@ All commands: benchbar commands --json
 === benchbar history --help [labs: none] (exit 0)
 benchbar history: What ran on this machine, newest first: every run that changed things, with its
   op_id, command line (secrets as ***), who started it, bench, site, times, exit, what it changed
-  and its log. A run an agent started through benchbar mcp also names the MCP tool and the client
-  that made the call. Kept in history.jsonl in the state folder, 1 MB and three older files.
+  and its log. Who started it is a terminal, the app, the tray, an agent through MCP or a script. A
+  run an agent started through benchbar mcp also names the MCP tool and the client that made the
+  call. Kept in history.jsonl in the state folder, 1 MB and three older files.
 
 Usage: benchbar history [--bench PATH] [--since TIME] [--limit N] [--json]
 
@@ -2320,14 +2330,18 @@ benchbar app list: Every app: branch, commit, local changes, the sites that have
 Usage: benchbar app list [--json] [--no-sites]
 
 Options:
-  --no-sites             Leave out the sites that have each app (faster).
+  --no-sites             Leave out the sites that have each app (faster): the last site lists are
+                         read instead of asking bench.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar app add --help [labs: none] (exit 0)
-benchbar app add: bench get-app from config/apps.tsv or any git URL, as a reviewed plan.
+benchbar app add: bench get-app from config/apps.tsv or any git URL (GitHub, SSH, a host alias),
+  after checking access, as a reviewed plan. It never replaces an app. Several apps go in one plan:
+  app add A --commit SHA B --install-on s1,s2 (--branch, --name, --commit and --install-on belong to
+  the app before them). The plan reads the required apps from hooks.py.
 
 Usage: benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME|URL
        ...] [--site S|--all-sites] --dry-run --json, then --apply TOKEN --yes
@@ -2367,7 +2381,9 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar app update --help [labs: none] (exit 0)
-benchbar app update: Fast forward one app with a changelog first, back up its sites, migrate, build.
+benchbar app update: Fast forward one app with a changelog first, back up the sites that have it,
+  then requirements, migrate and build. A run that stopped half way is finished by the next one
+  (only the steps left).
 
 Usage: benchbar app update NAME [--skip-backup] [--dry-run --json | --apply TOKEN --yes]
 
@@ -2388,7 +2404,9 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: yes.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar app focus --help [labs: none] (exit 0)
-benchbar app focus: Focus apps: the ones you work on.
+benchbar app focus: Focus apps: the ones you work on (local changes, another branch, a commit of
+  yours in 14 days). Doctor warns when an app they need falls behind. With no NAME it lists them;
+  with NAME it pins that app as focus.
 
 Usage: benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]
 
@@ -2420,7 +2438,8 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar lock write --help [labs: none] (exit 0)
-benchbar lock write: Write benchbar.toml from this bench.
+benchbar lock write: Write benchbar.toml from this bench: it asks, shows the diff and backs up the
+  old one.
 
 Usage: benchbar lock write [--lock PATH] [--no-commits] [--allow-dirty]
 
@@ -2434,7 +2453,8 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar lock check --help [labs: none] (exit 0)
-benchbar lock check: Compare the bench with benchbar.toml. Exit 1 on any difference.
+benchbar lock check: Compare the bench with benchbar.toml: read only, no network, no database. Exit
+  1 on any difference.
 
 Usage: benchbar lock check [--json]
 
@@ -2446,7 +2466,8 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar lock apply --help [labs: none] (exit 0)
-benchbar lock apply: Clone missing apps, switch branches, fast forward to pinned commits.
+benchbar lock apply: Clone missing apps, switch branches, fast forward to pinned commits, then
+  requirements and build. It never touches a site or local work.
 
 Usage: benchbar lock apply [--dry-run --json | --apply TOKEN --yes]
 
@@ -2553,7 +2574,7 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar profile list --help [labs: none] (exit 0)
-benchbar profile list: Built in and team profiles.
+benchbar profile list: Built in and team profiles, with where each comes from.
 
 Usage: benchbar profile list [--json]
 
@@ -2562,7 +2583,7 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar profile show --help [labs: none] (exit 0)
-benchbar profile show: What a profile installs.
+benchbar profile show: What a profile installs: base, Python, Node, MariaDB, apps.
 
 Usage: benchbar profile show NAME
 
@@ -2571,7 +2592,8 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar profile create --help [labs: none] (exit 0)
-benchbar profile create: Write a team profile from a bench.
+benchbar profile create: Write a team profile from a bench (read only: app repos and branches, the
+  base from its frappe version). install --profile NAME then builds the same bench on another Mac.
 
 Usage: benchbar profile create NAME --from-bench PATH [--dir DIR]
 
@@ -2584,7 +2606,8 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar profile export --help [labs: none] (exit 0)
-benchbar profile export: A copy to share.
+benchbar profile export: A copy to share: SSH aliases resolved, each repo's default branch, access
+  (public, private, personal) and requires per app.
 
 Usage: benchbar profile export NAME [--out FILE] [--plan] [--json]
 
@@ -2600,7 +2623,8 @@ Needs: a terminal to ask questions: no; sudo: no; the network: yes.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar profile import --help [labs: none] (exit 0)
-benchbar profile import: Add a profile someone sent.
+benchbar profile import: Add a profile someone sent (https only, 64 KB at most); checks which repos
+  you can read. A GitHub page URL is fetched raw.
 
 Usage: benchbar profile import FILE|URL [--as NAME] [--plan] [--json]
 
@@ -2614,7 +2638,7 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: yes.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar profile subscribe --help [labs: none] (exit 0)
-benchbar profile subscribe: Clone a team's config repo.
+benchbar profile subscribe: Clone a team's config repo; its profiles join the lookup path.
 
 Usage: benchbar profile subscribe GIT_URL [--plan|--yes] [--json]
 
@@ -2626,7 +2650,7 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: yes.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar profile update --help [labs: none] (exit 0)
-benchbar profile update: Fetch an import or subscription again.
+benchbar profile update: Fetch an import or subscription again, show the diff, ask.
 
 Usage: benchbar profile update NAME|--all [--plan] [--json]
 
@@ -2741,7 +2765,8 @@ All commands: benchbar commands --json
 === benchbar lease take --help [labs: none] (exit 0)
 benchbar lease take: Take a lease on a bench, or on one site of it, and return its id. Commands that
   change what it covers refuse, naming the holder and the end, unless they pass --lease ID. Reads
-  are never refused. Benchbar's own state only.
+  are never refused. It touches benchbar's own state only. Set BENCHBAR_CALLER to a name for the
+  holder: an agent run without one cannot take a lease.
 
 Usage: benchbar lease take (--bench PATH | --site NAME) [--for MINUTES] [--note TEXT] [--json]
 

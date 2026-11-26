@@ -1,7 +1,3 @@
 # The commands whose summary is still over 200 characters: the groups of #371 that have not been done. A pull request of the
 # series takes its commands out of this list when it splits their summary into a short part and a note~KEY~ record.
 # tests/test-commands-table.sh fails for a summary over 200 characters that is not here, and for a key here that is no longer over.
-run
-op status
-history
-lease take
