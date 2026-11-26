@@ -2,7 +2,7 @@ import Foundation
 
 /// The counts and the relative age of the main window (UI-18). The plural forms are in the
 /// String Catalog, next to the ones in Wording.swift.
-extension Wording {
+nonisolated extension Wording {
     /// "1 difference", "3 differences": the lockfile badge.
     static func differences(_ n: Int) -> String { String(localized: "\(n) differences") }
 
