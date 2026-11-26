@@ -73,13 +73,14 @@ assert_contains "$OUT" "a.sh still running after 1s"
 # ---- the pool width: CPUs, at most SC_JOBS_MAX, and what the memory holds (4500 MB per process)
 pool() { # SC_MEM_MB PARALLEL [SC_JOBS]: the "N at a time" the lint reports
   PATH="$TMP_DIR/bin:$PATH" SHELLCHECK_FILES="$TMP_DIR/a.sh" SC_MEM_MB="$1" PARALLEL="$2" SC_JOBS="${3:-}" \
-    bash "$ROOT/tests/run-tests.sh" shellcheck 2>&1 | sed -n 's/^shellcheck: 1 files, \([0-9]*\) at a time$/\1/p'
+    bash "$ROOT/tests/run-tests.sh" shellcheck >"$TMP_DIR/pool.raw" 2>&1 || true
+  sed -n 's/^shellcheck: 1 files, \([0-9]*\) at a time$/\1/p' "$TMP_DIR/pool.raw"
 }
 assert_eq "3" "$(pool 64000 16)" "(plenty of memory and CPUs: the cap)"
 assert_eq "2" "$(pool 64000 2)" "(two CPUs)"
 assert_eq "1" "$(pool 7500 16)" "(a 7.5 GB machine holds one 4 GB process)"
 assert_eq "2" "$(pool 10000 16)" "(10 GB holds two)"
-assert_eq "5" "$(pool 7500 16 5)" "(an explicit SC_JOBS is the caller's word)"
+assert_eq "5" "$(pool 7500 16 5)" "(an explicit SC_JOBS is the caller word)$(cat "$TMP_DIR/pool.raw")"
 
 # ---- the CI job: a per-file deadline, and a job timeout above it
 wf="$(cat "$ROOT/.github/workflows/ci.yml")"
