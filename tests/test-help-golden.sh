@@ -64,6 +64,10 @@ if [[ -n "${HELP_GOLDEN_WRITE:-}" ]]; then
   exit 0
 fi
 
+# no line of the help of a command is wider than 100 columns (the global help has its own limit, when it is generated)
+wide="$(awk '/^=== /{ g = ($0 ~ /^=== benchbar (--help |-h |help |)\[labs/) } !g && length($0) > 100 { printf "%d (%d): %s\n", NR, length($0), substr($0, 1, 60) }' "$ACTUAL")"
+[[ -z "$wide" ]] || fail "help lines over 100 columns (line of the output, width): $wide"
+
 [[ -f "$GOLDEN" ]] || fail "tests/golden/help.txt is missing"
 if ! cmp -s "$GOLDEN" "$ACTUAL"; then
   fail "the help text differs from tests/golden/help.txt: $(diff "$GOLDEN" "$ACTUAL" | sed -n 1,20p)"

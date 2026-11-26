@@ -85,6 +85,9 @@ for line in table.split("\n"):
         cur["flags"] = []
         cur["env"] = []
         commands.append(cur)
+    elif kind == "note" and not skip:
+        text = line.split("~", 2)[2]
+        cur["summary"] = text if cur["summary"] is None else cur["summary"] + " " + text
     elif kind == "flag" and not skip:
         f = row(line, 5)
         cur["flags"].append({"name": s(f[2]), "value": s(f[3]), "help": s(f[4])})

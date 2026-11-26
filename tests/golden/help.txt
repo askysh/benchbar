@@ -1043,56 +1043,89 @@ Shell helpers (written to your shell rc by install or repair):
 
 Documentation: @DOCS@/
 === benchbar install --help [labs: none] (exit 0)
-benchbar install: Phase 00 (system dependencies), 01 (bench and site) and the background service, idempotent.
+benchbar install: Install phase 00 (system dependencies), phase 01 (bench and site) and the
+  background service. Safe to run again: it changes only what changed.
 
 Usage: benchbar install [--profile NAME] [--bundle NAME] [--dry-run|--apply TOKEN] [--yes] [--json]
 
 Options:
-  --background           Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
+  --background           Start it detached and print its op_id at once (benchbar op status, op wait
+                         follow it). Nothing can be asked: needs --yes and the inputs in the
+                         environment, as for an agent. Not with --dry-run.
   --profile NAME         Release profile (default v15-lts) or a team profile.
   --bundle NAME          App bundle: minimal, common or extended.
   --port-offset N        Use port block N (web 8000+N).
   --make-default         Make this the default bench even when another one is.
-  --repair-bench         Move a bench folder that is incomplete aside and start over (never one that holds a site). With --dry-run it shows the move.
-  --allow-windows-fs     WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p). It is refused by default: slow, no file watching, broken permissions.
-  --scratch              Mark the new bench scratch: it expires after --ttl days and benchbar bench gc then removes it (never the default bench). Not with --make-default.
+  --repair-bench         Move a bench folder that is incomplete aside and start over (never one that
+                         holds a site). With --dry-run it shows the move.
+  --allow-windows-fs     WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p). It
+                         is refused by default: slow, no file watching, broken permissions.
+  --scratch              Mark the new bench scratch: it expires after --ttl days and benchbar bench
+                         gc then removes it (never the default bench). Not with --make-default.
   --ttl DAYS             With --scratch: days until the bench expires, 1 to 90 (default 7).
-  --allow-unsupported-distro Linux only: try a system other than Ubuntu 24.04, the one the install is tested on and supports. Without it the install stops before it installs any package.
+  --allow-unsupported-distro Linux only: try a system other than Ubuntu 24.04, the one the install
+                         is tested on and supports. Without it the install stops before it installs
+                         any package.
   --offline              Skip the remote branch checks.
-  --frappe-commit SHA    Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile).
-  --erpnext-commit SHA   Pin the erpnext clone to this commit.
-  --dry-run              Print the plan, change nothing. With --json the plan line carries its token.
-  --apply TOKEN          Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before.
+  --frappe-commit SHA    Pin the frappe clone to this commit (or FRAPPE_COMMIT, or frappe_commit in
+                         a team profile). A commit the clone does not reach stops the install before
+                         anything is built.
+  --erpnext-commit SHA   Pin the erpnext clone to this commit (or erpnext_commit in a team profile).
+                         A commit the clone does not reach stops the install before anything is
+                         built.
+  --dry-run              Print the plan, change nothing. With --json the plan line carries its
+                         token.
+  --apply TOKEN          Run exactly that plan (with --yes); refused when the plan changed since the
+                         token was made. Without a token the run is as before.
   --yes                  Do not ask; secrets come from the environment.
-  --secrets-stdin        Read ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD and BENCHBAR_SUDO_PASSWORD from standard input, not the environment: KEY=VALUE lines, LF only, ended by an empty line (required). For a program that has no terminal; a terminal is refused.
+  --secrets-stdin        Read ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD and BENCHBAR_SUDO_PASSWORD from
+                         standard input, not the environment: KEY=VALUE lines, LF only, ended by an
+                         empty line (required). For a program that has no terminal; a terminal is
+                         refused.
+  --json                 JSON lines for the BenchBar app. Needs --yes or --dry-run: no question can
+                         be answered on the stream.
 
 Environment:
   ADMIN_PASSWORD         The new site's Administrator password.
   MARIADB_ROOT_PASSWORD  Only when MariaDB has a password benchbar does not know.
-  BENCH_INIT_TIMEOUT_SECONDS Seconds bench init may take before it is stopped (default 2700, 0 for no limit). A half built bench left by a stopped init is moved aside by the next install, which starts it again.
-  BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
-  BENCHBAR_SUDO_PASSWORD The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
+  BENCH_INIT_TIMEOUT_SECONDS Seconds bench init may take before it is stopped (default 2700, 0 for
+                         no limit). A half built bench left by a stopped init is moved aside by the
+                         next install, which starts it again.
+  BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no
+                         terminal needed (a wrong one fails at once with error_id
+                         sudo_password_wrong, before any change).
+  BENCHBAR_SUDO_PASSWORD The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed
+                         from the environment; never in argv, the log or a child.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: yes; the network: yes.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar adopt --help [labs: none] (exit 0)
-benchbar adopt: Register an existing bench: Procfile.lean, runner, agent, helpers. Never runs migrate, build or update.
+benchbar adopt: Register an existing bench: Procfile.lean, runner, agent and helpers. It shows the
+  plan and asks first, and never runs migrate, build or update.
 
 Usage: benchbar adopt PATH [--dry-run] [--yes] [--json]
 
 Options:
   --port-offset N        Move the bench to port block N.
   --make-default         Make this the default bench.
-  --allow-windows-fs     WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p), which is refused by default.
+  --allow-windows-fs     WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p),
+                         which is refused by default.
   --dry-run              Print the plan, change nothing.
   --yes                  Do not ask.
-  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
+  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE
+                         lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF
+                         only, ended by an empty line (required). For a program that has no
+                         terminal.
+  --json                 JSON lines, as install. Needs --yes or --dry-run.
 
 Environment:
-  BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
-  BENCHBAR_SUDO_PASSWORD The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
+  BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no
+                         terminal needed (a wrong one fails at once with error_id
+                         sudo_password_wrong, before any change).
+  BENCHBAR_SUDO_PASSWORD The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed
+                         from the environment; never in argv, the log or a child.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: yes; the network: no.
@@ -1101,7 +1134,8 @@ All commands: benchbar commands --json
 === benchbar service --help [labs: none] (exit 0)
 benchbar service: Install or refresh only the background service (phase 02).
 
-Usage: benchbar service [--with-schedule|--without-schedule] [--port-offset N] [--dry-run|--apply TOKEN --yes] [--json]
+Usage: benchbar service [--with-schedule|--without-schedule] [--port-offset N] [--dry-run|--apply
+       TOKEN --yes] [--json]
 
 Options:
   --with-schedule        Add the scheduler to Procfile.lean.
@@ -1111,15 +1145,20 @@ Options:
   --apply TOKEN          Run exactly that plan (with --yes).
 
 Environment:
-  BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
-  BENCHBAR_SUDO_PASSWORD The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
+  BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no
+                         terminal needed (a wrong one fails at once with error_id
+                         sudo_password_wrong, before any change).
+  BENCHBAR_SUDO_PASSWORD The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed
+                         from the environment; never in argv, the log or a child.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar mariadb-password --help [labs: none] (exit 0)
-benchbar mariadb-password: Print the MariaDB root password to a person at a terminal (asks first). Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal, whatever --yes says.
+benchbar mariadb-password: Print the MariaDB root password to a person at a terminal (asks first).
+  Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal, whatever --yes
+  says.
 
 Usage: benchbar mariadb-password [--yes]
 
@@ -1133,7 +1172,8 @@ All commands: benchbar commands --json
 === benchbar doctor --help [labs: none] (exit 0)
 benchbar doctor: Read only health report. Exit 1 when something FAILs.
 
-Usage: benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack CHECK] [--prerequisites] [--fetch]
+Usage: benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack CHECK]
+       [--prerequisites] [--fetch]
 
 Options:
   --json                 One JSON document.
@@ -1141,8 +1181,10 @@ Options:
   --quick                Skip the slow checks and say which.
   --ack CHECK            Silence one named WARN for this bench until its message changes.
   --unack CHECK          Undo --ack.
-  --prerequisites        What this machine needs before an install, no bench needed.
-  --fetch                git fetch the branches of the apps your focus apps need first.
+  --prerequisites        What this machine needs before an install; no bench is needed. With --json
+                         it prints a document; --bench-dir names the folder a new bench would go to.
+  --fetch                git fetch the branches of the apps your focus apps need first. Without it,
+                         doctor never touches the network.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -1154,38 +1196,56 @@ benchbar repair: Apply only the fixes doctor flagged, in dependency order.
 Usage: benchbar repair [--dry-run|--apply TOKEN] [--yes] [--json]
 
 Options:
-  --background           Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
-  --dry-run              Print the plan, change nothing. With --json the plan line carries its token.
-  --apply TOKEN          Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before.
+  --background           Start it detached and print its op_id at once (benchbar op status, op wait
+                         follow it). Nothing can be asked: needs --yes and the inputs in the
+                         environment, as for an agent. Not with --dry-run.
+  --dry-run              Print the plan, change nothing. With --json the plan line carries its
+                         token.
+  --apply TOKEN          Run exactly that plan (with --yes); refused when the plan changed since the
+                         token was made. Without a token the run is as before.
   --yes                  Do not ask.
-  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
+  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE
+                         lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF
+                         only, ended by an empty line (required). For a program that has no
+                         terminal.
 
 Environment:
-  BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
-  BENCHBAR_SUDO_PASSWORD The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
+  BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no
+                         terminal needed (a wrong one fails at once with error_id
+                         sudo_password_wrong, before any change).
+  BENCHBAR_SUDO_PASSWORD The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed
+                         from the environment; never in argv, the log or a child.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: yes; the network: yes.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar status --help [labs: none] (exit 0)
-benchbar status: State, pid, stop reason, site ping, and with --json the ready object (is the bench ready to serve).
+benchbar status: State, pid, stop reason, site ping and Redis of the bench (benchstatus).
 
 Usage: benchbar status [--json] [--ping] [--deep]
 
 Options:
   --ping                 Ask every site, not only the default one.
-  --deep                 Also ask the ready parts that start programs: workers (pgrep, lsof) and stale (find: a Python file under apps/ changed after the bench started). Without it ready.workers and ready.stale are null.
+  --deep                 Also ask the ready parts that start programs: workers (pgrep, lsof) and
+                         stale (find: a Python file under apps/ changed after the bench started).
+                         Without it ready.workers and ready.stale are null.
+  --json                 One JSON document. It adds redis, sites[].served (does the running bench
+                         serve the site) and the ready object (is the bench ready to serve).
 
 Environment:
-  BENCHBAR_LOAD_ALL      Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
+  BENCHBAR_LOAD_ALL      Debugging switch: 1 loads every library, as before the lean start (the
+                         output is the same; use it to see whether a problem comes from the lean
+                         load).
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar stats --help [labs: none] (exit 0)
-benchbar stats: CPU, memory and process count of the running bench's own processes (the set down stops, with their children), and the speed figure the Mac app derives from the CPU. resources is null while the bench is stopped. Read only.
+benchbar stats: CPU, memory and process count of the running bench's own processes (the set down
+  stops, with their children). It also gives the speed figure that the Mac app derives from the CPU.
+  With --json, resources is null while the bench is stopped. It only reads.
 
 Usage: benchbar stats [--json]
 
@@ -1202,7 +1262,9 @@ benchbar list: Every bench benchbar knows about. Never pings a site.
 Usage: benchbar list [--json]
 
 Environment:
-  BENCHBAR_LOAD_ALL      Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
+  BENCHBAR_LOAD_ALL      Debugging switch: 1 loads every library, as before the lean start (the
+                         output is the same; use it to see whether a problem comes from the lean
+                         load).
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -1227,7 +1289,7 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar up --help [labs: none] (exit 0)
-benchbar up: Start the bench in the background.
+benchbar up: Start the bench in the background (benchup).
 
 Usage: benchbar up [--services-only] [--json]
 
@@ -1239,7 +1301,7 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar down --help [labs: none] (exit 0)
-benchbar down: Stop the bench and keep it stopped across reboots.
+benchbar down: Stop the bench and keep it stopped across reboots (benchdown).
 
 Usage: benchbar down [--json]
 
@@ -1257,13 +1319,17 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar wait --help [labs: none] (exit 0)
-benchbar wait: Block until the bench is ready (agent loaded, processes, site ping 2xx or 3xx, socketio, Redis, a worker, no Python file changed since the start), or until one part is. Exit 0 ready, 1 not ready in time, with what is missing and the fix. Reads only, starts nothing.
+benchbar wait: Block until the bench is ready (agent loaded, processes, site ping 2xx or 3xx,
+  socketio, Redis, a worker, no Python file changed since the start), or until one part is. Exit 0
+  when ready, 1 when not ready in time, with what is missing and the fix. It only reads and starts
+  nothing.
 
 Usage: benchbar wait [--ready] [--for PART] [--timeout SECS] [--json]
 
 Options:
   --ready                Wait for every part (the default).
-  --for PART             Wait for one part only: agent, processes, web, socketio, redis, workers or stale.
+  --for PART             Wait for one part only: agent, processes, web, socketio, redis, workers or
+                         stale.
   --timeout SECS         Give up after SECS seconds, 0 to 3600 (default 60). 0 checks once.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
@@ -1273,13 +1339,15 @@ All commands: benchbar commands --json
 === benchbar logs --help [labs: none] (exit 0)
 benchbar logs: Tail logs/bench.log.
 
-Usage: benchbar logs [-nN] [--worker|--worker-error|--previous] [--process NAME] [--since TIMESTAMP] [--since-restart] [--no-follow] [--json]
+Usage: benchbar logs [-nN] [--worker|--worker-error|--previous] [--process NAME] [--since TIMESTAMP]
+       [--since-restart] [--no-follow] [--json]
 
 Options:
   --worker               Read logs/worker.log.
   --worker-error         Read logs/worker.error.log.
-  --previous             Read logs/bench.previous.log (the starts before it are bench.previous.1.log to .3.log).
-  --process NAME         web, socketio, schedule or worker.
+  --previous             Read logs/bench.previous.log (the starts before it are bench.previous.1.log
+                         to .3.log).
+  --process NAME         web, socketio, schedule or worker. The worker one reads logs/worker.log.
   --since TIMESTAMP      Only lines at or after it (--json; ISO 8601, or HH:MM:SS today).
   --since-restart        Only lines after the bench's last start (--json).
   --no-follow            Print and exit.
@@ -1317,7 +1385,9 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar listen --help [labs: none] (exit 0)
-benchbar listen: Where the bench's web server and socketio listen: local is 127.0.0.1 only (the default), all is every interface. Stored per bench, applied to Procfile.lean; restart the bench to use it. all is a person's decision and is refused without a terminal.
+benchbar listen: Where the bench's web server and socketio listen: 127.0.0.1 only (the default) or
+  every interface. The choice is stored per bench and applied to Procfile.lean; restart the bench to
+  use it. Listening on every interface is a person's decision and is refused without a terminal.
 
 Usage: benchbar listen [local|all] [--dry-run] [--yes]
 
@@ -1331,7 +1401,8 @@ benchbar uninstall-service: Remove the agent, runner, Procfile.lean and shell he
 Usage: benchbar uninstall-service [--all] [--yes] [--dry-run]
 
 Options:
-  --all                  Every bench with a benchbar agent, after one question.
+  --all                  Every bench with a benchbar agent, after one question. Run it before brew
+                         uninstall benchbar: brew cannot stop the agents itself.
   --yes                  Do not ask; required without a terminal.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
@@ -1339,12 +1410,14 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar path --help [labs: none] (exit 0)
-benchbar path: Print the bench directory.
+benchbar path: Print the bench directory (benchcd uses it).
 
 Usage: benchbar path
 
 Environment:
-  BENCHBAR_LOAD_ALL      Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
+  BENCHBAR_LOAD_ALL      Debugging switch: 1 loads every library, as before the lean start (the
+                         output is the same; use it to see whether a problem comes from the lean
+                         load).
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -1369,12 +1442,16 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar db orphans --help [labs: none] (exit 0)
-benchbar db orphans: Databases of frappe's shape (an underscore and 16 hex digits) that no site of any bench benchbar knows (or was told to forget, while its folder is there) refers to. A listed database may belong to a bench or program benchbar does not know. Read only: benchbar never drops them. Needs the MariaDB root password.
+benchbar db orphans: Databases of frappe's shape (an underscore and 16 hex digits) that no site of
+  any bench benchbar knows (or was told to forget, while its folder is there) refers to. A listed
+  database may belong to a bench or program benchbar does not know. Read only: benchbar never drops
+  them. Needs the MariaDB root password.
 
 Usage: benchbar db orphans [--json]
 
 Options:
-  --json                 One document: checked and orphans, each with the archived site folder that names it, if any.
+  --json                 One document: checked and orphans, each with the archived site folder that
+                         names it, if any.
 
 Environment:
   MARIADB_ROOT_PASSWORD  Only when MariaDB has a password benchbar does not know.
@@ -1384,12 +1461,18 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar run --help [labs: none] (exit 0)
-benchbar run: Run one command of the allow list (migrate, clear-cache, clear-website-cache, build, run-tests, doctor, list-apps, version) with bench's own environment, in the right bench and site, under a deadline. A command that changes things: --dry-run --json prints the plan and its token, --apply TOKEN --yes runs exactly that plan; migrate backs the site up first. Anything else is refused with exit 64 and the list.
+benchbar run: Run one command of the allow list (migrate, clear-cache, clear-website-cache, build,
+  run-tests, doctor, list-apps, version) with bench's own environment, in the right bench and site,
+  under a deadline. A command that changes things: --dry-run --json prints the plan and its token,
+  --apply TOKEN --yes runs exactly that plan; migrate backs the site up first. Anything else is
+  refused with exit 64 and the list.
 
-Usage: benchbar run [--site S] [--timeout SECS] [--dry-run --json | --apply TOKEN --yes] -- COMMAND [FLAGS]
+Usage: benchbar run [--site S] [--timeout SECS] [--dry-run --json | --apply TOKEN --yes] -- COMMAND
+       [FLAGS]
 
 Options:
-  --timeout SECS         Stop the bench command after this many seconds (1 to 7200; each command has a default, 60 to 1800). The backup before migrate is not counted.
+  --timeout SECS         Stop the bench command after this many seconds (1 to 7200; each command has
+                         a default, 60 to 1800). The backup before migrate is not counted.
   --dry-run              Print the plan and its token, run nothing.
   --apply TOKEN          Run exactly that plan (with --yes).
   --yes                  Do not ask before a change; with --apply it confirms the plan was reviewed.
@@ -1408,15 +1491,24 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar open --help [labs: none] (exit 0)
-benchbar open: Open a site in the browser, or open it signed in as USER (developer_mode sites that were opted in with site open-as on).
+benchbar open: Open a site in the browser, or open it signed in as USER (developer_mode sites that
+  were opted in with site open-as on).
 
 Usage: benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]
 
 Options:
-  --as USER              Sign in as this user, no password. Refused unless site open-as is on for the site and developer_mode is on. A sign in runs the apps' on_login and on_session_creation hooks as a real login does: last_login, an Activity Log entry, a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User, and Frappe may end the user's oldest session (simultaneous_sessions).
-  --path P               Where to land, for example /app/todo. Default: /app, or / for a Website User.
+  --as USER              Sign in as this user, no password. Refused unless site open-as is on for
+                         the site and developer_mode is on. A sign in runs the apps' on_login and
+                         on_session_creation hooks as a real login does: last_login, an Activity Log
+                         entry, a mail to System Managers for Administrator, an ERPNext Customer or
+                         Supplier for a Website User, and Frappe may end the user's oldest session
+                         (simultaneous_sessions).
+  --path P               Where to land, for example /app/todo. Default: /app, or / for a Website
+                         User.
   --no-browser           Start the session, open nothing.
-  --print-url            Print the link (it holds the session id) instead of opening it; in --json as url. With --as, refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.
+  --print-url            Print the link (it holds the session id) instead of opening it; in --json
+                         as url. With --as, refused under BENCHBAR_NONINTERACTIVE, --for-agent and
+                         mcp.
   --json                 One JSON document; url only with --print-url.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
@@ -1440,26 +1532,39 @@ All commands: benchbar commands --json
 === benchbar pull --help [labs: none] (exit 0)
 benchbar pull: Copy a production site over SSH into a new local site.
 
-Usage: benchbar pull HOST:SITE [--as NAME] [--from-dir DIR] [--replace] [--dry-run|--apply TOKEN --yes] [--json]
+Usage: benchbar pull HOST:SITE [--as NAME] [--from-dir DIR] [--replace] [--dry-run|--apply TOKEN
+       --yes] [--json]
 
 Options:
-  --background           Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
+  --background           Start it detached and print its op_id at once (benchbar op status, op wait
+                         follow it). Nothing can be asked: needs --yes and the inputs in the
+                         environment, as for an agent. Not with --dry-run.
   --as NAME              Local site name (default SITE.local).
   --from-dir DIR         A backup set downloaded by hand, no SSH.
   --remote-bench DIR     The bench folder on the server.
   --new-backup           Run bench backup on the server first.
-  --keep-secrets         Keep the copy's integrations and stored secrets (by default they are switched off and cleared). A person's decision: refused under --for-agent, benchbar mcp and BENCHBAR_NONINTERACTIVE=1.
+  --keep-secrets         Keep the copy's integrations and stored secrets (by default they are
+                         switched off and cleared). A person's decision: refused under --for-agent,
+                         benchbar mcp and BENCHBAR_NONINTERACTIVE=1.
   --replace              Restore over an existing local site, after backing it up.
   --confirm-site SITE    With --new-backup: the site name, instead of typing it.
-  --skip-app APP         Restore without APP (its tables stay behind as orphans); repeat for more apps.
+  --skip-app APP         Restore without APP (its tables stay behind as orphans); repeat for more
+                         apps.
   --no-files             Database only.
   --no-migrate           Stop after the restore and the dev safety, before bench migrate.
-  --before-migrate SCRIPT An executable run after the restore, before migrate, in the bench folder, with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME; a failing script stops the run.
+  --before-migrate SCRIPT An executable run after the restore, before migrate, in the bench folder,
+                         with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME; a failing script
+                         stops the run.
   --keep-scheduler       Leave the scheduler as production has it.
-  --keep-staging         Keep the downloaded backup in the bench's .benchbar/pulls/ after a successful run.
+  --keep-staging         Keep the downloaded backup in the bench's .benchbar/pulls/ after a
+                         successful run.
   --dry-run              Print the plan and its token, change nothing.
-  --apply TOKEN          Run exactly that plan (with --yes); refused when the plan changed since the token was made.
-  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
+  --apply TOKEN          Run exactly that plan (with --yes); refused when the plan changed since the
+                         token was made.
+  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE
+                         lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF
+                         only, ended by an empty line (required). For a program that has no
+                         terminal.
 
 Environment:
   MARIADB_ROOT_PASSWORD  Only when MariaDB has a password benchbar does not know.
@@ -1476,6 +1581,7 @@ Usage: benchbar report [--print] [--json]
 Options:
   --print                Print to the terminal instead of writing the zip.
   --out DIR              Write the zip into this folder (default: the Desktop).
+  --json                 Print {"zip": path, "redactions": n}, for the app and scripts.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -1534,12 +1640,15 @@ the git pull to run. A CLI installed with Homebrew is upgraded by brew
   --dry-run   the plan and the command, nothing runs
   --yes       do not ask
 === benchbar where --help [labs: none] (exit 0)
-benchbar where: How this CLI was installed, its state folder and the app.
+benchbar where: How this CLI was installed (homebrew, managed, checkout, other), the path it records
+  for itself, its state folder and the BenchBar app.
 
 Usage: benchbar where [--json]
 
 Environment:
-  BENCHBAR_LOAD_ALL      Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
+  BENCHBAR_LOAD_ALL      Debugging switch: 1 loads every library, as before the lean start (the
+                         output is the same; use it to see whether a problem comes from the lean
+                         load).
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -1552,18 +1661,23 @@ Usage: benchbar mcp [--print-agents-md] [--calls [N]] [--allow-bench PATH]
 
 Options:
   --print-agents-md      Print a snippet for a project's AGENTS.md or CLAUDE.md and exit.
-  --calls [N]            Print the last N (default 50) lines of the audit log of MCP calls (mcp-calls.jsonl in the state folder) and exit.
-  --allow-bench PATH     Let the changing tools act on this bench folder although benchbar does not know it (repeatable; the environment variable BENCHBAR_MCP_ALLOW_BENCH holds a : separated list). A person's choice, never a tool argument.
+  --calls [N]            Print the last N (default 50) lines of the audit log of MCP calls
+                         (mcp-calls.jsonl in the state folder) and exit.
+  --allow-bench PATH     Let the changing tools act on this bench folder although benchbar does not
+                         know it (repeatable; the environment variable BENCHBAR_MCP_ALLOW_BENCH
+                         holds a : separated list). A person's choice, never a tool argument.
 
 Environment:
-  BENCHBAR_MCP_APPLY_DELAY Seconds a plan must have been returned before its apply is accepted (default 5; 0 turns the wait off).
+  BENCHBAR_MCP_APPLY_DELAY Seconds a plan must have been returned before its apply is accepted
+                         (default 5; 0 turns the wait off).
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar op --help [labs: none] (exit 0)
-benchbar op: The long runs: every run that changes things has an op_id (in its plan, step, progress and done lines) and a record that benchbar remembers (the newest 100).
+benchbar op: The long runs: every run that changes things has an op_id (in its plan, step, progress
+  and done lines) and a record that benchbar remembers (the newest 100).
 
 Usage: benchbar op status|list|wait ...
 
@@ -1572,7 +1686,9 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar op status --help [labs: none] (exit 0)
-benchbar op status: One operation (its command, bench, site, state, last step, last progress, exit, log), or the ten newest. A run that died without a done line is interrupted. --json adds the run's done line as result once it ended.
+benchbar op status: One operation (its command, bench, site, state, last step, last progress, exit,
+  log), or the ten newest. A run that died without a done line is interrupted. --json adds the run's
+  done line as result once it ended.
 
 Usage: benchbar op status [OP_ID] [--json]
 
@@ -1594,7 +1710,8 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar op wait --help [labs: none] (exit 0)
-benchbar op wait: Wait until the operation is not running, then print it. Exit 0 when it ended with exit 0, else 1 (failed, interrupted or still running at the timeout: --json says which).
+benchbar op wait: Wait until the operation is not running, then print it. Exit 0 when it ended with
+  exit 0, else 1 (failed, interrupted or still running at the timeout: --json says which).
 
 Usage: benchbar op wait OP_ID [--timeout SECS] [--json]
 
@@ -1606,17 +1723,27 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar history --help [labs: none] (exit 0)
-benchbar history: What ran on this machine, newest first: every run that changed things, with its op_id, command line (secrets as ***), who started it, bench, site, times, exit, what it changed and its log. A run an agent started through benchbar mcp also names the MCP tool and the client that made the call. Kept in history.jsonl in the state folder, 1 MB and three older files.
+benchbar history: What ran on this machine, newest first: every run that changed things, with its
+  op_id, command line (secrets as ***), who started it, bench, site, times, exit, what it changed
+  and its log. A run an agent started through benchbar mcp also names the MCP tool and the client
+  that made the call. Kept in history.jsonl in the state folder, 1 MB and three older files.
 
 Usage: benchbar history [--bench PATH] [--since TIME] [--limit N] [--json]
 
 Options:
   --bench PATH           Only the runs on this bench.
-  --since TIME           Only the runs that started since 90m, 12h, 7d, 2w ago, a date (2026-11-19, UTC) or a time (2026-11-19T10:15:00Z).
+  --since TIME           Only the runs that started since 90m, 12h, 7d, 2w ago, a date (2026-11-19,
+                         UTC) or a time (2026-11-19T10:15:00Z).
   --limit N              At most N runs (1 to 1000, default 20).
 
 Environment:
-  BENCHBAR_CALLER        Who started a run, for the history: terminal, app, tray, mcp, agent or script. The Mac app, the tray and benchbar mcp set it; --for-agent says agent; without it a terminal on stdin is terminal and anything else script. A label the caller sets, not a proof: any process of the user can set it, and a value outside the list is ignored; NAME:REST counts as NAME (the MCP server's holder mcp:CLIENT:PID is mcp). The history never changes BENCHBAR_CALLER, which a lease uses as its holder name.
+  BENCHBAR_CALLER        Who started a run, for the history: terminal, app, tray, mcp, agent or
+                         script. The Mac app, the tray and benchbar mcp set it; --for-agent says
+                         agent; without it a terminal on stdin is terminal and anything else script.
+                         A label the caller sets, not a proof: any process of the user can set it,
+                         and a value outside the list is ignored; NAME:REST counts as NAME (the MCP
+                         server's holder mcp:CLIENT:PID is mcp). The history never changes
+                         BENCHBAR_CALLER, which a lease uses as its holder name.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -1637,8 +1764,13 @@ benchbar commands: This table: every command, flag and environment variable.
 Usage: benchbar commands --json
 
 Environment:
-  BENCHBAR_LENIENT_FLAGS Applies to every command: 1 turns the error for an unknown option (exit 64) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real.
-  BENCHBAR_LOAD_ALL      Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
+  BENCHBAR_LENIENT_FLAGS Applies to every command: 1 turns the error for an unknown option (exit 64)
+                         back into a warning on stderr, as before 0.9.0, for a script that passed
+                         options a command never read. Without it a typo of --dry-run next to --yes
+                         can no longer run for real.
+  BENCHBAR_LOAD_ALL      Debugging switch: 1 loads every library, as before the lean start (the
+                         output is the same; use it to see whether a problem comes from the lean
+                         load).
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -1654,18 +1786,24 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar ports plan --help [labs: none] (exit 0)
-benchbar ports plan: Read only preview of the allocation and its approval token.
+benchbar ports plan: Read-only preview of the port allocation and its approval token.
 
 Usage: benchbar ports plan [--json] -- PATH ...
+
+Options:
+  --json                 The plan and its token as one JSON document.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar ports setup --help [labs: none] (exit 0)
-benchbar ports setup: Preview, confirm once, then apply.
+benchbar ports setup: Preview the port changes, confirm once, then apply them.
 
 Usage: benchbar ports setup [--dry-run] -- PATH ...
+
+Options:
+  --dry-run              Show the preview and change nothing.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: yes; the network: no.
@@ -1680,17 +1818,23 @@ Options:
   --yes                  Required: the plan was reviewed.
 
 Environment:
-  BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
-  BENCHBAR_SUDO_PASSWORD The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
+  BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no
+                         terminal needed (a wrong one fails at once with error_id
+                         sudo_password_wrong, before any change).
+  BENCHBAR_SUDO_PASSWORD The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed
+                         from the environment; never in argv, the log or a child.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: yes; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar ports check --help [labs: none] (exit 0)
-benchbar ports check: Port conflicts of the bench.
+benchbar ports check: Check the bench for port conflicts.
 
 Usage: benchbar ports check [--json]
+
+Options:
+  --json                 The conflicts as one JSON document.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -1708,7 +1852,8 @@ All commands: benchbar commands --json
 === benchbar site --help [labs: none] (exit 0)
 benchbar site: The sites of a bench.
 
-Usage: benchbar site list|add|default|hosts|backup|backups|restore|snapshot|snapshots|rollback|drop|open-as ...
+Usage: benchbar site
+       list|add|default|hosts|backup|backups|restore|snapshot|snapshots|rollback|drop|open-as ...
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -1726,22 +1871,31 @@ All commands: benchbar commands --json
 === benchbar site add --help [labs: none] (exit 0)
 benchbar site add: bench new-site, the hosts line and apps from apps/. The default site stays.
 
-Usage: benchbar site add NAME [--bundle NAME|--apps "a b"] [--dry-run|--apply TOKEN] [--yes] [--json]
+Usage: benchbar site add NAME [--bundle NAME|--apps "a b"] [--dry-run|--apply TOKEN] [--yes]
+       [--json]
 
 Options:
-  --background           Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
+  --background           Start it detached and print its op_id at once (benchbar op status, op wait
+                         follow it). Nothing can be asked: needs --yes and the inputs in the
+                         environment, as for an agent. Not with --dry-run.
   --bundle NAME          App bundle to install.
   --apps "a b"           Apps of apps/ to install.
   --dry-run              Print the plan and its token, change nothing.
   --apply TOKEN          Run exactly that plan (with --yes).
   --yes                  Do not ask.
-  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
+  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE
+                         lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF
+                         only, ended by an empty line (required). For a program that has no
+                         terminal.
 
 Environment:
   ADMIN_PASSWORD         The new site's Administrator password.
   MARIADB_ROOT_PASSWORD  Only when MariaDB has a password benchbar does not know.
-  BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
-  BENCHBAR_SUDO_PASSWORD The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
+  BENCHBAR_SUDO          Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no
+                         terminal needed (a wrong one fails at once with error_id
+                         sudo_password_wrong, before any change).
+  BENCHBAR_SUDO_PASSWORD The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed
+                         from the environment; never in argv, the log or a child.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: yes; the network: no.
@@ -1757,12 +1911,14 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar site open-as --help [labs: none] (exit 0)
-benchbar site open-as: Turn password-less sign in (open --as) on or off for a site, or show it. Changes benchbar's state only. on needs a person at a terminal.
+benchbar site open-as: Turn password-less sign in (open --as) on or off for a site, or show it.
+  Changes benchbar's state only. on needs a person at a terminal.
 
 Usage: benchbar site open-as on|off|status [NAME] [--json]
 
 Options:
-  --yes                  Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1).
+  --yes                  Do not ask before turning on (still refused without a terminal session,
+                         BENCHBAR_NONINTERACTIVE=1).
   --json                 JSON lines for on and off, one document for status.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
@@ -1790,7 +1946,8 @@ Aborting. Turn it on: benchbar labs on lan-rooms
 
 Aborting. Turn it on: benchbar labs on lan-rooms
 === benchbar share stop --help [labs: none] (exit 0)
-benchbar share stop: Stop sharing: the gateway and the job end, the room empties, every session of the copy ends. Never refused (no dry run).
+benchbar share stop: Stop sharing: the gateway and the job end, the room empties, every session of
+  the copy ends. Never refused (no dry run).
 
 Usage: benchbar share stop [--json]
 
@@ -1806,7 +1963,8 @@ All commands: benchbar commands --json
 
 Aborting. Turn it on: benchbar labs on lan-rooms
 === benchbar share status --help [labs: none] (exit 0)
-benchbar share status: The share: on, off, expired or error, the time left, the copy, the room's counts. Reads only.
+benchbar share status: The share: on, off, expired or error, the time left, the copy, the room's
+  counts. Reads only.
 
 Usage: benchbar share status [--preflight] [--json]
 
@@ -1863,7 +2021,9 @@ Aborting. Turn it on: benchbar labs on lan-rooms
 
 Aborting. Turn it on: benchbar labs on lan-rooms
 === benchbar share teardown --help [labs: none] (exit 0)
-benchbar share teardown: Stop sharing, drop the copy (backed up first), and delete the share folder with the host identity and the room; the Time Machine exclusions go too. Asks first (--yes); only a person runs it.
+benchbar share teardown: Stop sharing, drop the copy (backed up first), and delete the share folder
+  with the host identity and the room; the Time Machine exclusions go too. Asks first (--yes); only
+  a person runs it.
 
 Usage: benchbar share teardown [--yes] [--json]
 
@@ -1884,7 +2044,9 @@ Aborting. Turn it on: benchbar labs on lan-rooms
 
 Aborting. Turn it on: benchbar labs on lan-rooms
 === benchbar share leave --help [labs: none] (exit 0)
-benchbar share leave: Leave a room: the host is told, so the seat is free and its sessions end, and the local address closes. The room and this computer's key for its host stay. ROOM is the id from share joined; not needed with one room. Only a person runs it.
+benchbar share leave: Leave a room: the host is told, so the seat is free and its sessions end, and
+  the local address closes. The room and this computer's key for its host stay. ROOM is the id from
+  share joined; not needed with one room. Only a person runs it.
 
 Usage: benchbar share leave [ROOM] [--json]
 
@@ -1893,7 +2055,8 @@ Needs: a terminal to ask questions: no; sudo: no; the network: yes.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar share forget --help [labs: none] (exit 0)
-benchbar share forget: Leave a room and delete it from this computer with the key made for its host: to that host, a later join is a new computer. Only a person runs it.
+benchbar share forget: Leave a room and delete it from this computer with the key made for its host:
+  to that host, a later join is a new computer. Only a person runs it.
 
 Usage: benchbar share forget [ROOM] [--json]
 
@@ -1910,19 +2073,25 @@ Aborting. Turn it on: benchbar labs on lan-rooms
 
 Aborting. Turn it on: benchbar labs on lan-rooms
 === benchbar lan-guard status --help [labs: none] (exit 0)
-benchbar lan-guard status: Whether the guard is installed, missing or outdated, and whether the bench ports are refused on this machine's LAN address (a probe with its own listener). Reads only; never refused.
+benchbar lan-guard status: Whether the guard is installed, missing or outdated, and whether the
+  bench ports are refused on this machine's LAN address (a probe with its own listener). Reads only;
+  never refused.
 
 Usage: benchbar lan-guard status [--json]
 
 Options:
-  --json                 One document: state, active (null with no LAN address), ports, anchor, lan_ip.
+  --json                 One document: state, active (null with no LAN address), ports, anchor,
+                         lan_ip.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar lan-guard remove --help [labs: none] (exit 0)
-benchbar lan-guard remove: Unload and delete the pf anchor and its daemon (macOS), or the nftables table, its systemd unit and its rules file (Linux, nothing else in nftables), with sudo once. On macOS it also takes the node that lan-guard allow-node added out of the firewall's allowed apps. Sharing refuses to start without the guard. Asks first. Runs while the lan-rooms Lab is off too.
+benchbar lan-guard remove: Unload and delete the pf anchor and its daemon (macOS), or the nftables
+  table, its systemd unit and its rules file (Linux, nothing else in nftables), with sudo once. On
+  macOS it also takes the node that lan-guard allow-node added out of the firewall's allowed apps.
+  Sharing refuses to start without the guard. Asks first. Runs while the lan-rooms Lab is off too.
 
 Usage: benchbar lan-guard remove [--yes] [--json]
 
@@ -1939,12 +2108,17 @@ All commands: benchbar commands --json
 
 Aborting. Turn it on: benchbar labs on lan-rooms
 === benchbar site hosts --help [labs: none] (exit 0)
-benchbar site hosts: Add a 127.0.0.1 line for every site to /etc/hosts. On Linux it edits nothing: a *.localhost name already resolves, and any other name gets the sudo line to run yourself. --prune removes instead the lines in benchbar's block whose site no bench benchbar knows has (one backup, one sudo; without a terminal it prints the command).
+benchbar site hosts: Add a 127.0.0.1 line for every site to /etc/hosts. On Linux it edits nothing: a
+  *.localhost name already resolves, and any other name gets the sudo line to run yourself. --prune
+  removes instead the lines in benchbar's block whose site no bench benchbar knows has (one backup,
+  one sudo; without a terminal it prints the command).
 
 Usage: benchbar site hosts [--prune] [--dry-run]
 
 Options:
-  --prune                Remove the stale lines of benchbar's block instead of adding the missing ones (sites of a forgotten bench whose folder is still there count as sites). The printed fallback command keeps a .bak copy. macOS only.
+  --prune                Remove the stale lines of benchbar's block instead of adding the missing
+                         ones (sites of a forgotten bench whose folder is still there count as
+                         sites). The printed fallback command keeps a .bak copy. macOS only.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: yes; the network: no.
@@ -1956,7 +2130,9 @@ benchbar site backup: bench --site NAME backup.
 Usage: benchbar site backup NAME [--with-files] [--json]
 
 Options:
-  --background           Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
+  --background           Start it detached and print its op_id at once (benchbar op status, op wait
+                         follow it). Nothing can be asked: needs --yes and the inputs in the
+                         environment, as for an agent. Not with --dry-run.
   --with-files           Include the uploads.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
@@ -1973,16 +2149,25 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar site restore --help [labs: none] (exit 0)
-benchbar site restore: Restore a local backup set into a site (a new one with --new), after a backup of the target; a reviewed plan.
+benchbar site restore: Restore a local backup set into a site (a new one with --new), after a backup
+  of the target; a reviewed plan.
 
-Usage: benchbar site restore NAME --from STAMP|PATH [--from-site S] [--new] [--neutralise] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes
+Usage: benchbar site restore NAME --from STAMP|PATH [--from-site S] [--new] [--neutralise]
+       [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN
+       --yes
 
 Options:
-  --background           Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
-  --from STAMP|PATH      The backup set: its stamp in the target's (or --from-site's) backup folder, or the database file's path.
+  --background           Start it detached and print its op_id at once (benchbar op status, op wait
+                         follow it). Nothing can be asked: needs --yes and the inputs in the
+                         environment, as for an agent. Not with --dry-run.
+  --from STAMP|PATH      The backup set: its stamp in the target's (or --from-site's) backup folder,
+                         or the database file's path.
   --from-site S          Read the stamp from this site's backups.
   --new                  Create the site (bench new-site) first.
-  --neutralise           Switch the restored site's integrations off and clear its stored secrets, after the restore and before migrate (the list pull runs; the Administrator login is kept). Needed for a set from outside this bench when no person runs the restore.
+  --neutralise           Switch the restored site's integrations off and clear its stored secrets,
+                         after the restore and before migrate (the list pull runs; the Administrator
+                         login is kept). Needed for a set from outside this bench when no person
+                         runs the restore.
   --no-migrate           Stop after the restore, before bench migrate.
   --before-migrate SCRIPT An executable run after the restore, before migrate.
   --with-files           Restore the uploads too.
@@ -1997,12 +2182,19 @@ Needs: a terminal to ask questions: no; sudo: yes; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar site move --help [labs: none] (exit 0)
-benchbar site move: Move a site to another registered bench on this machine: a backup with files, the restore there under the same name, migrate, a check that it lists the same apps there, then the drop here (a second backup first; the backups stay in archived/sites). The source bench must be stopped (benchbar down), or writes made after the first backup would be lost. Never the default site of either bench; a failed step before the drop leaves the site here as it was. A reviewed plan.
+benchbar site move: Move a site to another registered bench on this machine: a backup with files,
+  the restore there under the same name, migrate, a check that it lists the same apps there, then
+  the drop here (a second backup first; the backups stay in archived/sites). The source bench must
+  be stopped (benchbar down), or writes made after the first backup would be lost. Never the default
+  site of either bench; a failed step before the drop leaves the site here as it was. A reviewed
+  plan.
 
-Usage: benchbar site move NAME --to-bench PATH [--no-migrate] --dry-run --json, then --apply TOKEN --yes
+Usage: benchbar site move NAME --to-bench PATH [--no-migrate] --dry-run --json, then --apply TOKEN
+       --yes
 
 Options:
-  --to-bench PATH        The bench the site goes to: a bench benchbar knows (benchbar register PATH), not this one.
+  --to-bench PATH        The bench the site goes to: a bench benchbar knows (benchbar register
+                         PATH), not this one.
   --no-migrate           Stop after the restore, before bench migrate.
   --dry-run              Print the plan and its token.
   --apply TOKEN          Run exactly that plan (with --yes).
@@ -2015,13 +2207,18 @@ Needs: a terminal to ask questions: no; sudo: yes; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar site snapshot --help [labs: none] (exit 0)
-benchbar site snapshot: Save the state of a site (database, files, site_config, the apps and their commits) in sites/NAME/snapshots, which frappe's backup pruning never touches. Changes nothing in the site. To remove snapshots: benchbar site snapshot drop.
+benchbar site snapshot: Save the state of a site (database, files, site_config, the apps and their
+  commits) in sites/NAME/snapshots, which frappe's backup pruning never touches. Changes nothing in
+  the site. To remove snapshots: benchbar site snapshot drop.
 
 Usage: benchbar site snapshot NAME [--label TEXT] [--json]
 
 Options:
-  --background           Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
-  --label TEXT           What the snapshot is for (up to 120 characters, no quotes); it is part of the folder name.
+  --background           Start it detached and print its op_id at once (benchbar op status, op wait
+                         follow it). Nothing can be asked: needs --yes and the inputs in the
+                         environment, as for an agent. Not with --dry-run.
+  --label TEXT           What the snapshot is for (up to 120 characters, no quotes); it is part of
+                         the folder name.
   --dry-run              Print what would happen, change nothing.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
@@ -2029,14 +2226,21 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar site snapshot drop --help [labs: none] (exit 0)
-benchbar site snapshot drop: Remove one snapshot of a site, or with --prune the ones beyond the newest N. A person's choice: refused for an agent (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1); its --dry-run says what would go and is open to an agent. Never the undo point of a rollback unless --force-undo-point.
+benchbar site snapshot drop: Remove one snapshot of a site, or with --prune the ones beyond the
+  newest N. A person's choice: refused for an agent (--for-agent, benchbar mcp,
+  BENCHBAR_NONINTERACTIVE=1); its --dry-run says what would go and is open to an agent. Never the
+  undo point of a rollback unless --force-undo-point.
 
-Usage: benchbar site snapshot drop NAME SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run] [--json]
+Usage: benchbar site snapshot drop NAME SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes]
+       [--dry-run] [--json]
 
 Options:
-  --prune                Remove the snapshots beyond the newest N (never an undo point of a rollback).
-  --keep N               With --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's state file).
-  --force-undo-point     With one named snapshot: also remove an undo point of a rollback (a plain drop refuses it).
+  --prune                Remove the snapshots beyond the newest N (never an undo point of a
+                         rollback).
+  --keep N               With --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's
+                         state file).
+  --force-undo-point     With one named snapshot: also remove an undo point of a rollback (a plain
+                         drop refuses it).
   --yes                  Do not ask. Refused for an agent: drop is a person's choice.
   --dry-run              Print what would be removed, change nothing.
 
@@ -2045,25 +2249,33 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar site snapshots --help [labs: none] (exit 0)
-benchbar site snapshots: The site's snapshots, newest first: label, time, size, apps with their commits, and whether the bench's apps still match.
+benchbar site snapshots: The site's snapshots, newest first: label, time, size, apps with their
+  commits, and whether the bench's apps still match.
 
 Usage: benchbar site snapshots NAME [--keep N] [--json]
 
 Options:
-  --keep N               Say which snapshots are beyond the newest N (default 10, or SNAPSHOT_KEEP in the bench's state file). Nothing is removed.
+  --keep N               Say which snapshots are beyond the newest N (default 10, or SNAPSHOT_KEEP
+                         in the bench's state file). Nothing is removed.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar site rollback --help [labs: none] (exit 0)
-benchbar site rollback: Put a snapshot back into the site: its database and files. The current state is snapshotted first (label before rollback), so a rollback can be undone. Migrates only when the bench's apps differ from the snapshot's; a reviewed plan.
+benchbar site rollback: Put a snapshot back into the site: its database and files. The current state
+  is snapshotted first (label before rollback), so a rollback can be undone. Migrates only when the
+  bench's apps differ from the snapshot's; a reviewed plan.
 
-Usage: benchbar site rollback NAME --to SNAPSHOT|latest [--no-migrate] --dry-run --json, then --apply TOKEN --yes
+Usage: benchbar site rollback NAME --to SNAPSHOT|latest [--no-migrate] --dry-run --json, then
+       --apply TOKEN --yes
 
 Options:
-  --background           Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
-  --to SNAPSHOT          The snapshot: its name, its stamp, or latest (benchbar site snapshots NAME lists them).
+  --background           Start it detached and print its op_id at once (benchbar op status, op wait
+                         follow it). Nothing can be asked: needs --yes and the inputs in the
+                         environment, as for an agent. Not with --dry-run.
+  --to SNAPSHOT          The snapshot: its name, its stamp, or latest (benchbar site snapshots NAME
+                         lists them).
   --no-migrate           Stop after the restore, before bench migrate.
   --dry-run              Print the plan and its token.
   --apply TOKEN          Run exactly that plan (with --yes).
@@ -2078,14 +2290,19 @@ All commands: benchbar commands --json
 === benchbar site drop --help [labs: none] (exit 0)
 benchbar site drop: bench drop-site: a backup with files first, the folder moved to archived/sites.
 
-Usage: benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run|--apply TOKEN --yes] [--json]
+Usage: benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run|--apply TOKEN
+       --yes] [--json]
 
 Options:
   --confirm-site NAME    Repeat the site name exactly.
   --new-default OTHER    Required when NAME is the default site.
   --dry-run              Print the plan, change nothing. With --json the plan carries a token.
-  --apply TOKEN          Run the plan of a dry run; refused when the sites, the default or the hosts line changed since (needs --yes).
-  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
+  --apply TOKEN          Run the plan of a dry run; refused when the sites, the default or the hosts
+                         line changed since (needs --yes).
+  --secrets-stdin        Read the passwords from standard input, not the environment: KEY=VALUE
+                         lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF
+                         only, ended by an empty line (required). For a program that has no
+                         terminal.
 
 Environment:
   MARIADB_ROOT_PASSWORD  Only when MariaDB has a password benchbar does not know.
@@ -2118,17 +2335,21 @@ All commands: benchbar commands --json
 === benchbar app add --help [labs: none] (exit 0)
 benchbar app add: bench get-app from config/apps.tsv or any git URL, as a reviewed plan.
 
-Usage: benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME|URL ...] [--site S|--all-sites] --dry-run --json, then --apply TOKEN --yes
+Usage: benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME|URL
+       ...] [--site S|--all-sites] --dry-run --json, then --apply TOKEN --yes
 
 Options:
-  --background           Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
+  --background           Start it detached and print its op_id at once (benchbar op status, op wait
+                         follow it). Nothing can be asked: needs --yes and the inputs in the
+                         environment, as for an agent. Not with --dry-run.
   --branch B             Branch or tag.
   --name N               The app's package name.
   --commit SHA           Pin the app to this commit (7 to 40 hex characters).
   --install-on S,S       Install this app on these sites only.
   --site S               Install it on this site.
   --all-sites            Install it on every site.
-  --skip-backup          Install on the sites without a backup first (the plan takes one by default).
+  --skip-backup          Install on the sites without a backup first (the plan takes one by
+                         default).
   --dry-run              Print the plan and its token.
   --apply TOKEN          Run exactly that plan (with --yes).
 
@@ -2144,7 +2365,8 @@ Usage: benchbar app install NAME --site S [--skip-backup] [--dry-run --json | --
 Options:
   --skip-backup          Install without a backup of the site first.
   --dry-run              Print the plan as one JSON document with --json; it carries a token.
-  --apply TOKEN          Run exactly that plan (with --yes); refused when the plan changed since the token was made.
+  --apply TOKEN          Run exactly that plan (with --yes); refused when the plan changed since the
+                         token was made.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -2156,11 +2378,16 @@ benchbar app update: Fast forward one app with a changelog first, back up its si
 Usage: benchbar app update NAME [--skip-backup] [--dry-run --json | --apply TOKEN --yes]
 
 Options:
-  --background           Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
+  --background           Start it detached and print its op_id at once (benchbar op status, op wait
+                         follow it). Nothing can be asked: needs --yes and the inputs in the
+                         environment, as for an agent. Not with --dry-run.
   --skip-backup          Migrate without a backup first.
-  --dry-run              Print the plan as one JSON document with --json; it carries a token (null when there is nothing to do).
-  --apply TOKEN          Run exactly that plan (with --yes); the plan is made again after a fetch, under the lock, and refused when it changed.
-  --discard-pending      Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs.
+  --dry-run              Print the plan as one JSON document with --json; it carries a token (null
+                         when there is nothing to do).
+  --apply TOKEN          Run exactly that plan (with --yes); the plan is made again after a fetch,
+                         under the lock, and refused when it changed.
+  --discard-pending      Drop the record of an update or add that stopped part way and stop: none of
+                         its steps and no update runs.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: no; the network: yes.
@@ -2231,15 +2458,18 @@ Usage: benchbar lock apply [--dry-run --json | --apply TOKEN --yes]
 
 Options:
   --lock PATH            Apply this lockfile, and remember it for this bench.
-  --dry-run              Print the plan as one JSON document with --json; it carries a token (null when the apps match).
-  --apply TOKEN          Run exactly that plan (with --yes); refused when the lockfile, an app or the plan changed since the token was made.
+  --dry-run              Print the plan as one JSON document with --json; it carries a token (null
+                         when the apps match).
+  --apply TOKEN          Run exactly that plan (with --yes); refused when the lockfile, an app or
+                         the plan changed since the token was made.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: no; the network: yes.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar bench --help [labs: none] (exit 0)
-benchbar bench: The end of a bench's life: forget it, remove it, mark it scratch, collect the scratch benches that expired.
+benchbar bench: The end of a bench's life: forget it, remove it, mark it scratch, collect the
+  scratch benches that expired.
 
 Usage: benchbar bench forget|remove|scratch|gc ...
 
@@ -2248,7 +2478,10 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar bench forget --help [labs: none] (exit 0)
-benchbar bench forget: Unregister a bench: its service files are backed up and moved aside, its settings are set aside, the default bench is cleared when it was this one. The folder, sites, apps, databases and hosts lines stay (only the service files benchbar made in it go, each backed up first). An agent may run it with the plan and token.
+benchbar bench forget: Unregister a bench: its service files are backed up and moved aside, its
+  settings are set aside, the default bench is cleared when it was this one. The folder, sites,
+  apps, databases and hosts lines stay (only the service files benchbar made in it go, each backed
+  up first). An agent may run it with the plan and token.
 
 Usage: benchbar bench forget PATH --dry-run --json, then --apply TOKEN --yes
 
@@ -2261,7 +2494,10 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar bench remove --help [labs: none] (exit 0)
-benchbar bench remove: Forget a bench, back up each site and drop its database (bench drop-site), then move the folder to <parent>/.benchbar-trash/ (never deleted). A person's decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal. Its plan (--dry-run) is open to agents. Never the default bench.
+benchbar bench remove: Forget a bench, back up each site and drop its database (bench drop-site),
+  then move the folder to <parent>/.benchbar-trash/ (never deleted). A person's decision: refused
+  under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal. Its plan (--dry-run)
+  is open to agents. Never the default bench.
 
 Usage: benchbar bench remove PATH --dry-run --json, then --confirm-bench NAME --apply TOKEN --yes
 
@@ -2278,13 +2514,16 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar bench scratch --help [labs: none] (exit 0)
-benchbar bench scratch: Mark an existing bench scratch (asks; --yes in a mode that cannot ask): it expires after DAYS (default 7, 1 to 90), or --clear keeps it. bench gc only collects benches benchbar knows (benchbar register PATH). install --scratch marks a new one.
+benchbar bench scratch: Mark an existing bench scratch (asks; --yes in a mode that cannot ask): it
+  expires after DAYS (default 7, 1 to 90), or --clear keeps it. bench gc only collects benches
+  benchbar knows (benchbar register PATH). install --scratch marks a new one.
 
 Usage: benchbar bench scratch PATH [--ttl DAYS] [--clear] [--json]
 
 Options:
   --ttl DAYS             Days until the bench expires.
-  --yes                  Required to mark (it asks otherwise): marking is what lets bench gc remove the bench and its databases, and gc shows who marked it and when.
+  --yes                  Required to mark (it asks otherwise): marking is what lets bench gc remove
+                         the bench and its databases, and gc shows who marked it and when.
   --clear                Not scratch any more.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
@@ -2292,7 +2531,9 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar bench gc --help [labs: none] (exit 0)
-benchbar bench gc: List the scratch benches that expired (never the default bench) and remove each as bench remove does. Applying is a person's decision (refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal); the plan is open to agents.
+benchbar bench gc: List the scratch benches that expired (never the default bench) and remove each
+  as bench remove does. Applying is a person's decision (refused under BENCHBAR_NONINTERACTIVE,
+  --for-agent and mcp, and without a terminal); the plan is open to agents.
 
 Usage: benchbar bench gc --dry-run --json, then --apply TOKEN --yes
 
@@ -2397,7 +2638,8 @@ Usage: benchbar profile update NAME|--all [--plan] [--json]
 Options:
   --all                  Every import and subscription.
   --plan                 Print the review only, change nothing.
-  --expect DIGEST        Refuse unless the fetched profile's digest is this (the one the plan showed).
+  --expect DIGEST        Refuse unless the fetched profile's digest is this (the one the plan
+                         showed).
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: no; the network: yes.
@@ -2409,8 +2651,10 @@ benchbar profile remove: Move an import or subscription aside.
 Usage: benchbar profile remove NAME [--yes] [--json] [--dry-run | --apply TOKEN --yes]
 
 Options:
-  --dry-run              Print the plan (what moves aside) as one JSON document with --json; it carries a token.
-  --apply TOKEN          Run exactly that plan (with --yes); refused when the file or the subscription changed since the token was made.
+  --dry-run              Print the plan (what moves aside) as one JSON document with --json; it
+                         carries a token.
+  --apply TOKEN          Run exactly that plan (with --yes); refused when the file or the
+                         subscription changed since the token was made.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: no; the network: no.
@@ -2450,13 +2694,16 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar labs on --help [labs: none] (exit 0)
-benchbar labs on: Turn an experiment on after its warning. Refused without a person (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an app passes BENCHBAR_NONINTERACTIVE=0.
+benchbar labs on: Turn an experiment on after its warning. Refused without a person
+  (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an app passes
+  BENCHBAR_NONINTERACTIVE=0.
 
 Usage: benchbar labs on NAME [--yes] [--json]
 
 Options:
   --json                 JSON lines, ending in a done line.
-  --yes                  Do not ask before turning on (still refused without a person, BENCHBAR_NONINTERACTIVE=1).
+  --yes                  Do not ask before turning on (still refused without a person,
+                         BENCHBAR_NONINTERACTIVE=1).
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: no; the network: no.
@@ -2487,7 +2734,8 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar lease --help [labs: none] (exit 0)
-benchbar lease: Leases: a bench or a site held for a while, so that restart, down, migrate, drop and restore by another agent or the app wait.
+benchbar lease: Leases: a bench or a site held for a while, so that restart, down, migrate, drop and
+  restore by another agent or the app wait.
 
 Usage: benchbar lease take|release|renew|list ...
 
@@ -2496,19 +2744,24 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: none.
 All commands: benchbar commands --json
 === benchbar lease take --help [labs: none] (exit 0)
-benchbar lease take: Take a lease on a bench, or on one site of it, and return its id. Commands that change what it covers refuse, naming the holder and the end, unless they pass --lease ID. Reads are never refused. Benchbar's own state only.
+benchbar lease take: Take a lease on a bench, or on one site of it, and return its id. Commands that
+  change what it covers refuse, naming the holder and the end, unless they pass --lease ID. Reads
+  are never refused. Benchbar's own state only.
 
 Usage: benchbar lease take (--bench PATH | --site NAME) [--for MINUTES] [--note TEXT] [--json]
 
 Options:
   --bench PATH           Lease the whole bench (every site of it).
-  --site NAME            Lease one site (global option; the bench is --bench-dir or the default one).
+  --site NAME            Lease one site (global option; the bench is --bench-dir or the default
+                         one).
   --for MINUTES          How long, from 1 to 480. Default: 30.
   --note TEXT            Why, for whoever meets the lease: printable ASCII, at most 120 characters.
   --json                 JSON lines, ending in a done line with the lease and its id.
 
 Environment:
-  BENCHBAR_CALLER        The holder's name (1 to 40 letters, digits or . _ @ : + -). benchbar mcp sets it per client; without it a terminal run is the login name, and an agent run (BENCHBAR_NONINTERACTIVE, --for-agent) cannot take a lease.
+  BENCHBAR_CALLER        The holder's name (1 to 40 letters, digits or . _ @ : + -). benchbar mcp
+                         sets it per client; without it a terminal run is the login name, and an
+                         agent run (BENCHBAR_NONINTERACTIVE, --for-agent) cannot take a lease.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -2527,7 +2780,8 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar lease renew --help [labs: none] (exit 0)
-benchbar lease renew: Push a lease's end to MINUTES from now (default: its first length). Refused once it has expired.
+benchbar lease renew: Push a lease's end to MINUTES from now (default: its first length). Refused
+  once it has expired.
 
 Usage: benchbar lease renew ID [--for MINUTES] [--json]
 
@@ -2540,7 +2794,8 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar lease list --help [labs: none] (exit 0)
-benchbar lease list: The active leases of every bench, or of one. The id is shown to the lease's holder only (BENCHBAR_CALLER); for anyone else it is null.
+benchbar lease list: The active leases of every bench, or of one. The id is shown to the lease's
+  holder only (BENCHBAR_CALLER); for anyone else it is null.
 
 Usage: benchbar lease list [--bench PATH] [--json]
 
@@ -2553,13 +2808,17 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar notices --help [labs: none] (exit 0)
-benchbar notices: The notices an update left: a default that changed, how to switch back and where it is explained. Each shows once in the terminal after the update and stays in status --json until dismissed.
+benchbar notices: The notices an update left: a default that changed, how to switch back and where
+  it is explained. Each shows once in the terminal after the update and stays in status --json until
+  dismissed.
 
 Usage: benchbar notices [--json] [--dismiss ID|--all]
 
 Options:
-  --json                 One JSON document: notices[] with id, title, text, switch_back, doc and since.
-  --dismiss ID           Hide one notice (also in the BenchBar app). An id that is already hidden is unchanged.
+  --json                 One JSON document: notices[] with id, title, text, switch_back, doc and
+                         since.
+  --dismiss ID           Hide one notice (also in the BenchBar app). An id that is already hidden is
+                         unchanged.
   --all                  Hide every notice.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
@@ -3683,9 +3942,11 @@ Shell helpers (written to your shell rc by install or repair):
 
 Documentation: @DOCS@/
 === benchbar share --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share: Share a hardened copy of a site with people on your network: setup makes the copy and the identity, start and stop run the share.
+benchbar share: Share a hardened copy of a site with people on your network: setup makes the copy
+  and the identity, start and stop run the share.
 
-Usage: benchbar share setup|users|preflight|start|stop|extend|status|code|invite|lock|unlock|people|remove|assign|log|open-as|teardown ...
+Usage: benchbar share setup|users|preflight|start|stop|extend|status|code|invite|lock|unlock|people|
+       remove|assign|log|open-as|teardown ...
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -3694,29 +3955,41 @@ All commands: benchbar commands --json
 === benchbar share setup --help [labs: lan-rooms,quick-switch] (exit 0)
 benchbar share setup: Prepare sharing: the host identity and a hardened share copy of a site.
 
-Usage: benchbar share setup [--site S] [--from STAMP|latest] [--backup-now] [--users A,B] [--name LABEL] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]
+Usage: benchbar share setup [--site S] [--from STAMP|latest] [--backup-now] [--users A,B] [--name
+       LABEL] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]
 
 Options:
-  --users A,B            The Frappe users who may sign in to the copy, one seat each. They must be enabled System Users; each loses the roles that can run code or change settings, in the copy only. Default: the last setup's.
-  --from STAMP|latest    The backup set of the site to copy (benchbar site backups S lists them). Default: the newest complete one.
+  --users A,B            The Frappe users who may sign in to the copy, one seat each. They must be
+                         enabled System Users; each loses the roles that can run code or change
+                         settings, in the copy only. Default: the last setup's.
+  --from STAMP|latest    The backup set of the site to copy (benchbar site backups S lists them).
+                         Default: the newest complete one.
   --backup-now           Take a backup of the site first (benchbar site backup S) and copy that.
-  --name LABEL           The room's label, at most 40 printable characters. Default: "<your name>'s room".
-  --refresh              Replace the existing copy (it is backed up first). Anything guests changed in it is lost; needed to change --users.
-  --regenerate-identity  Replace the host's key and certificate and empty the paired Macs: every pairing becomes invalid. Asks first (--yes).
-  --acknowledge-data     Agree that the copy holds the site's real data (people, customers, contacts, addresses). Without it setup stops before any change, naming what the copy holds.
+  --name LABEL           The room's label, at most 40 printable characters. Default: "<your name>'s
+                         room".
+  --refresh              Replace the existing copy (it is backed up first). Anything guests changed
+                         in it is lost; needed to change --users.
+  --regenerate-identity  Replace the host's key and certificate and empty the paired Macs: every
+                         pairing becomes invalid. Asks first (--yes).
+  --acknowledge-data     Agree that the copy holds the site's real data (people, customers,
+                         contacts, addresses). Without it setup stops before any change, naming what
+                         the copy holds.
   --dry-run              Print the plan (size, time, the data the copy holds) and change nothing.
   --yes                  Do not ask before replacing the copy or the identity.
   --json                 JSON lines: plan, steps, done.
 
 Environment:
-  MARIADB_ROOT_PASSWORD  Making the copy restores it as MariaDB's root user: the password from the Keychain, this variable, or typed at a terminal. With none of them, setup and its dry run exit 2 before any change.
+  MARIADB_ROOT_PASSWORD  Making the copy restores it as MariaDB's root user: the password from the
+                         Keychain, this variable, or typed at a terminal. With none of them, setup
+                         and its dry run exit 2 before any change.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar share users --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share users: The users of a site who can take a seat in a shared copy, and which roles each would lose there.
+benchbar share users: The users of a site who can take a seat in a shared copy, and which roles each
+  would lose there.
 
 Usage: benchbar share users [--site S] [--json]
 
@@ -3725,29 +3998,40 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar share preflight --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share preflight: The checks that prove this Mac is safe to share the hardened copy on the LAN; exits 1 when one fails.
+benchbar share preflight: The checks that prove this Mac is safe to share the hardened copy on the
+  LAN; exits 1 when one fails.
 
 Usage: benchbar share preflight [--static|--critical] [--quiet] [--json]
 
 Options:
-  --static               Only the checks that run before anything starts: the copy, its seats, node, the firewall.
-  --critical             Only the fast checks a running share repeats: the pf block (probed from this Mac's LAN address with its own listener and a control), the share web process, the bench's Redis.
+  --static               Only the checks that run before anything starts: the copy, its seats, node,
+                         the firewall.
+  --critical             Only the fast checks a running share repeats: the pf block (probed from
+                         this Mac's LAN address with its own listener and a control), the share web
+                         process, the bench's Redis.
   --quiet                List only the checks that are not ok.
-  --json                 One document: protocol, ok, lan_ip and the checks, each with a status, a message and a fix_action.
+  --json                 One document: protocol, ok, lan_ip and the checks, each with a status, a
+                         message and a fix_action.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar share start --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share start: Start sharing on the LAN until the deadline. You give out the seats (benchbar share assign) unless --open-seats is passed.
+benchbar share start: Start sharing on the LAN until the deadline. You give out the seats (benchbar
+  share assign) unless --open-seats is passed.
 
 Usage: benchbar share start [--for DUR] [--name LABEL] [--open-seats] [--dry-run] [--json]
 
 Options:
   --for DUR              How long the share runs: 30m, 4h; from 5 minutes to 12 hours. Default: 4h.
-  --name LABEL           The room's label for this share, at most 40 printable characters. Default: the one share setup recorded.
-  --open-seats           Guests take a free seat themselves, as before 0.9.0: anyone with the room code takes any free seat, the most privileged one included. Without it you give out the seats: a person who joins waits (up to 10 minutes) until you run benchbar share assign for them, and cannot take or change a seat themselves.
+  --name LABEL           The room's label for this share, at most 40 printable characters. Default:
+                         the one share setup recorded.
+  --open-seats           Guests take a free seat themselves, as before 0.9.0: anyone with the room
+                         code takes any free seat, the most privileged one included. Without it you
+                         give out the seats: a person who joins waits (up to 10 minutes) until you
+                         run benchbar share assign for them, and cannot take or change a seat
+                         themselves.
   --assign-seats         The default, said out loud: you give out the seats. Not with --open-seats.
   --dry-run              Print the plan and start nothing.
   --json                 JSON lines: plan, steps, done (with the deadline).
@@ -3770,12 +4054,14 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar share code --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share code: The room code, on the terminal only: the one way it leaves the gateway (--json is the app's read). Refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.
+benchbar share code: The room code, on the terminal only: the one way it leaves the gateway (--json
+  is the app's read). Refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.
 
 Usage: benchbar share code [--new] [--json]
 
 Options:
-  --new                  Draw a new code first: the failure budget resets, the people in the room stay, a code already handed out stops working.
+  --new                  Draw a new code first: the failure budget resets, the people in the room
+                         stay, a code already handed out stops working.
   --json                 One document with the code: never logged, never stored.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
@@ -3783,13 +4069,18 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar share invite --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share invite: A ready-to-paste invite for the team channel: a benchbar://share/join link with the room, this Mac's key fingerprint, the code's salt, the code, the LAN address and the deadline. It carries the code, so it is refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp. Needs a running share.
+benchbar share invite: A ready-to-paste invite for the team channel: a benchbar://share/join link
+  with the room, this Mac's key fingerprint, the code's salt, the code, the LAN address and the
+  deadline. It carries the code, so it is refused under BENCHBAR_NONINTERACTIVE, --for-agent and
+  mcp. Needs a running share.
 
 Usage: benchbar share invite [--install-url URL] [--json]
 
 Options:
-  --install-url URL      Where people download BenchBar, added to the invite text; one http:// or https:// address.
-  --json                 One document with the invite text and its link: the code is in it, never logged, never stored.
+  --install-url URL      Where people download BenchBar, added to the invite text; one http:// or
+                         https:// address.
+  --json                 One document with the invite text and its link: the code is in it, never
+                         logged, never stored.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -3820,12 +4111,16 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar share people --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share people: The people in the room: name, Mac, address, seat, online. Reads only (it retries a wipe the gateway still owes).
+benchbar share people: The people in the room: name, Mac, address, seat, online. Reads only (it
+  retries a wipe the gateway still owes).
 
 Usage: benchbar share people [--json]
 
 Options:
-  --json                 One document: state; people, each with id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen; seats, every seat of the room with seat_id, full_name, roles, held_by and held_by_name (null for a free seat); seat_mode (host or open).
+  --json                 One document: state; people, each with id, name, model, ip, seat_id,
+                         seat_full_name, online, joined, last_seen; seats, every seat of the room
+                         with seat_id, full_name, roles, held_by and held_by_name (null for a free
+                         seat); seat_mode (host or open).
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -3844,12 +4139,15 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar share remove --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share remove: Remove a person from the room: their seat's sessions end and their Mac cannot join again with the current code; a new code (a new invite) lets them back. Asks first (--yes).
+benchbar share remove: Remove a person from the room: their seat's sessions end and their Mac cannot
+  join again with the current code; a new code (a new invite) lets them back. Asks first (--yes).
 
 Usage: benchbar share remove ID [--new-code] [--yes] [--json]
 
 Options:
-  --new-code             Also draw a new room code, for when the person is not known: a fresh Mac could join again with the old one. The new code also lets the removed Mac back, if they get it.
+  --new-code             Also draw a new room code, for when the person is not known: a fresh Mac
+                         could join again with the old one. The new code also lets the removed Mac
+                         back, if they get it.
   --yes                  Do not ask first.
   --json                 JSON lines: done, with removed, new_code and the wipe.
 
@@ -3872,7 +4170,8 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar share assign --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share assign: Move a person in the room to another free seat; the old seat's sessions end first.
+benchbar share assign: Move a person in the room to another free seat; the old seat's sessions end
+  first.
 
 Usage: benchbar share assign ID SEAT_ID [--json]
 
@@ -3884,22 +4183,29 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar share log --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share log: What the people in the room opened in the last 14 days: time, Mac, seat, method, page (two path segments, never a document name), status.
+benchbar share log: What the people in the room opened in the last 14 days: time, Mac, seat, method,
+  page (two path segments, never a document name), status.
 
 Usage: benchbar share log [--device ID] [--since TIME] [--limit N] [--json]
 
 Options:
   --device ID            Only this Mac (an id of share people).
-  --since TIME           Only entries at or after it: ISO 8601, YYYY-MM-DD HH:MM:SS, a date, or HH:MM:SS today.
+  --since TIME           Only entries at or after it: ISO 8601, YYYY-MM-DD HH:MM:SS, a date, or
+                         HH:MM:SS today.
   --limit N              The newest N entries, 1 to 5000. Default: 200.
-  --json                 One document: entries (ts, device, user, method, path, status) and truncated. user is the seat's name (the seat's id when the room no longer has the seat), never an e-mail address but in a line written by @VERSION@.
+  --json                 One document: entries (ts, device, user, method, path, status) and
+                         truncated. user is the seat's name (the seat's id when the room no longer
+                         has the seat), never an e-mail address but in a line written by @VERSION@.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar share open-as --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share open-as: Open the shared copy in this Mac's browser signed in as a seat, the way open --as does. Needs sharing on; never a user who is not a seat or can run code. Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal (the app passes BENCHBAR_SUDO=gui).
+benchbar share open-as: Open the shared copy in this Mac's browser signed in as a seat, the way open
+  --as does. Needs sharing on; never a user who is not a seat or can run code. Refused under
+  BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal (the app passes
+  BENCHBAR_SUDO=gui).
 
 Usage: benchbar share open-as USER [--print-url] [--json]
 
@@ -3912,28 +4218,38 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar share join --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share join: Join somebody's room as a guest. With ADDRESS it asks for the room code, without one for the invite link: neither is ever an argument. It shows the room and the host key first, waits for a seat, and opens the room on a localhost address of this computer. Refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.
+benchbar share join: Join somebody's room as a guest. With ADDRESS it asks for the room code,
+  without one for the invite link: neither is ever an argument. It shows the room and the host key
+  first, waits for a seat, and opens the room on a localhost address of this computer. Refused under
+  BENCHBAR_NONINTERACTIVE, --for-agent and mcp.
 
-Usage: benchbar share join [ADDRESS[:PORT]] [--host-key HEX] [--name NAME] [--seat SEAT_ID] [--no-wait] [--no-open] [--dry-run] [--yes] [--json]
+Usage: benchbar share join [ADDRESS[:PORT]] [--host-key HEX] [--name NAME] [--seat SEAT_ID]
+       [--no-wait] [--no-open] [--dry-run] [--yes] [--json]
 
 Options:
-  --host-key HEX         Join only if the host shows this key (the 64 hex digits: host_pin of a look with --dry-run --json). Another key is refused before any request, with exit code 3. Public, so an argument is fine.
+  --host-key HEX         Join only if the host shows this key (the 64 hex digits: host_pin of a look
+                         with --dry-run --json). Another key is refused before any request, with
+                         exit code 3. Public, so an argument is fine.
   --name NAME            The name the host sees for this computer (default: the computer's name).
-  --seat SEAT_ID         Take this seat, in a room where guests pick theirs (the host started it with --open-seats).
+  --seat SEAT_ID         Take this seat, in a room where guests pick theirs (the host started it
+                         with --open-seats).
   --no-wait              Do not wait for the host to give a seat: join, say so, and end.
   --no-open              Do not open the browser; the address is printed.
-  --dry-run              Show the room, its address and the host key, and stop: nothing that depends on the code is sent, nothing is saved.
+  --dry-run              Show the room, its address and the host key, and stop: nothing that depends
+                         on the code is sent, nothing is saved.
   --yes                  Do not ask "Join this room?" after an invite link.
 
 Environment:
-  BENCHBAR_SUDO          gui: the app or the tray made the run after its own window; the code or the invite link is then the first line of stdin.
+  BENCHBAR_SUDO          gui: the app or the tray made the run after its own window; the code or the
+                         invite link is then the first line of stdin.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: no; the network: yes.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar share joined --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share joined: The rooms this computer joined: id (16 digits of the host key), room, host, address, whether it is open here, the seat and the local address. Reads only, and dials no room.
+benchbar share joined: The rooms this computer joined: id (16 digits of the host key), room, host,
+  address, whether it is open here, the seat and the local address. Reads only, and dials no room.
 
 Usage: benchbar share joined [--json]
 
@@ -3942,7 +4258,10 @@ Needs: a terminal to ask questions: no; sudo: no; the network: no.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar lan-guard --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar lan-guard: The LAN guard: on macOS a pf anchor (com.apple/250.benchbar), on Linux an nftables table (inet benchbar), that refuses the bench ports (8000:8099 9000:9099 11000:11099 13000:13099 3306) to anything but this machine, and on macOS the firewall allow for the share gateway's node.
+benchbar lan-guard: The LAN guard: on macOS a pf anchor (com.apple/250.benchbar), on Linux an
+  nftables table (inet benchbar), that refuses the bench ports (8000:8099 9000:9099 11000:11099
+  13000:13099 3306) to anything but this machine, and on macOS the firewall allow for the share
+  gateway's node.
 
 Usage: benchbar lan-guard install|status|remove|allow-node ...
 
@@ -3951,7 +4270,11 @@ Needs: a terminal to ask questions: yes; sudo: yes; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar lan-guard install --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar lan-guard install: Write the pf anchor and the launch daemon (macOS), or the nftables rules file and the systemd unit (Linux), that load it at boot, with sudo once, then probe the block from the LAN address. Unchanged, with no sudo, when the guard already matches. A person's decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal (macOS: unless BENCHBAR_SUDO=gui).
+benchbar lan-guard install: Write the pf anchor and the launch daemon (macOS), or the nftables rules
+  file and the systemd unit (Linux), that load it at boot, with sudo once, then probe the block from
+  the LAN address. Unchanged, with no sudo, when the guard already matches. A person's decision:
+  refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal (macOS: unless
+  BENCHBAR_SUDO=gui).
 
 Usage: benchbar lan-guard install [--dry-run] [--yes] [--json]
 
@@ -3965,7 +4288,11 @@ Needs: a terminal to ask questions: yes; sudo: yes; the network: no.
 Changes things: yes. JSON: stream.
 All commands: benchbar commands --json
 === benchbar lan-guard allow-node --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar lan-guard allow-node: Add the realpath of the node the share gateway runs on to the macOS firewall's allowed apps, with sudo once. Unchanged when the firewall is off or already allows it; needed again after a Homebrew upgrade of node (the older entry then goes). The entry is per program: every script that node runs can then accept incoming connections; lan-guard remove takes it out again. macOS only: refused on Linux.
+benchbar lan-guard allow-node: Add the realpath of the node the share gateway runs on to the macOS
+  firewall's allowed apps, with sudo once. Unchanged when the firewall is off or already allows it;
+  needed again after a Homebrew upgrade of node (the older entry then goes). The entry is per
+  program: every script that node runs can then accept incoming connections; lan-guard remove takes
+  it out again. macOS only: refused on Linux.
 
 Usage: benchbar lan-guard allow-node [--yes] [--json]
 

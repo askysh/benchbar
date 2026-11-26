@@ -8,6 +8,8 @@
 #   cmd~KEY~USAGE~SUMMARY~TTY~SUDO~NETWORK~MUTATING~JSON
 #   flag~KEY~--name~VALUE~HELP
 #   env~KEY~NAME~HELP
+#   note~KEY~TEXT           (directly after the cmd record of KEY, at most one: what the SUMMARY
+#                            leaves out; no flag note, a flag has its own record)
 # The global help text is `use` records, in usage.sh.
 # KEY is the command ("install") or the command and subcommand ("site add").
 # TTY (may ask a question on a terminal), SUDO (may run sudo), NETWORK (may
@@ -29,7 +31,7 @@
 # `: <<'TABLE'` and `TABLE` mark where they start and end.
 case "${BASH_SOURCE[0]}" in /*) FL_CMD_FILE="${BASH_SOURCE[0]}" ;; *) FL_CMD_FILE="${PWD}/${BASH_SOURCE[0]}" ;; esac
 : <<'TABLE'
-cmd~install~benchbar install [--profile NAME] [--bundle NAME] [--dry-run|--apply TOKEN] [--yes] [--json]~Phase 00 (system dependencies), 01 (bench and site) and the background service, idempotent.~yes~yes~yes~yes~stream
+cmd~install~benchbar install [--profile NAME] [--bundle NAME] [--dry-run|--apply TOKEN] [--yes] [--json]~Install phase 00 (system dependencies), phase 01 (bench and site) and the background service. Safe to run again: it changes only what changed.~yes~yes~yes~yes~stream
 flag~install~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~install~--profile~NAME~Release profile (default v15-lts) or a team profile.
 flag~install~--bundle~NAME~App bundle: minimal, common or extended.
@@ -41,24 +43,26 @@ flag~install~--scratch~~Mark the new bench scratch: it expires after --ttl days 
 flag~install~--ttl~DAYS~With --scratch: days until the bench expires, 1 to 90 (default 7).
 flag~install~--allow-unsupported-distro~~Linux only: try a system other than Ubuntu 24.04, the one the install is tested on and supports. Without it the install stops before it installs any package.
 flag~install~--offline~~Skip the remote branch checks.
-flag~install~--frappe-commit~SHA~Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile).
-flag~install~--erpnext-commit~SHA~Pin the erpnext clone to this commit.
+flag~install~--frappe-commit~SHA~Pin the frappe clone to this commit (or FRAPPE_COMMIT, or frappe_commit in a team profile). A commit the clone does not reach stops the install before anything is built.
+flag~install~--erpnext-commit~SHA~Pin the erpnext clone to this commit (or erpnext_commit in a team profile). A commit the clone does not reach stops the install before anything is built.
 flag~install~--dry-run~~Print the plan, change nothing. With --json the plan line carries its token.
 flag~install~--apply~TOKEN~Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before.
 flag~install~--yes~~Do not ask; secrets come from the environment.
 flag~install~--secrets-stdin~~Read ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD and BENCHBAR_SUDO_PASSWORD from standard input, not the environment: KEY=VALUE lines, LF only, ended by an empty line (required). For a program that has no terminal; a terminal is refused.
+flag~install~--json~~JSON lines for the BenchBar app. Needs --yes or --dry-run: no question can be answered on the stream.
 env~install~ADMIN_PASSWORD~The new site's Administrator password.
 env~install~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 env~install~BENCH_INIT_TIMEOUT_SECONDS~Seconds bench init may take before it is stopped (default 2700, 0 for no limit). A half built bench left by a stopped init is moved aside by the next install, which starts it again.
 env~install~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~install~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
-cmd~adopt~benchbar adopt PATH [--dry-run] [--yes] [--json]~Register an existing bench: Procfile.lean, runner, agent, helpers. Never runs migrate, build or update.~yes~yes~no~yes~stream
+cmd~adopt~benchbar adopt PATH [--dry-run] [--yes] [--json]~Register an existing bench: Procfile.lean, runner, agent and helpers. It shows the plan and asks first, and never runs migrate, build or update.~yes~yes~no~yes~stream
 flag~adopt~--port-offset~N~Move the bench to port block N.
 flag~adopt~--make-default~~Make this the default bench.
 flag~adopt~--allow-windows-fs~~WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p), which is refused by default.
 flag~adopt~--dry-run~~Print the plan, change nothing.
 flag~adopt~--yes~~Do not ask.
 flag~adopt~--secrets-stdin~~Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
+flag~adopt~--json~~JSON lines, as install. Needs --yes or --dry-run.
 env~adopt~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~adopt~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
 cmd~service~benchbar service [--with-schedule|--without-schedule] [--port-offset N] [--dry-run|--apply TOKEN --yes] [--json]~Install or refresh only the background service (phase 02).~yes~no~no~yes~stream
@@ -77,8 +81,8 @@ flag~doctor~--fix-hints~~Only the fix commands, one per line.
 flag~doctor~--quick~~Skip the slow checks and say which.
 flag~doctor~--ack~CHECK~Silence one named WARN for this bench until its message changes.
 flag~doctor~--unack~CHECK~Undo --ack.
-flag~doctor~--prerequisites~~What this machine needs before an install, no bench needed.
-flag~doctor~--fetch~~git fetch the branches of the apps your focus apps need first.
+flag~doctor~--prerequisites~~What this machine needs before an install; no bench is needed. With --json it prints a document; --bench-dir names the folder a new bench would go to.
+flag~doctor~--fetch~~git fetch the branches of the apps your focus apps need first. Without it, doctor never touches the network.
 cmd~repair~benchbar repair [--dry-run|--apply TOKEN] [--yes] [--json]~Apply only the fixes doctor flagged, in dependency order.~yes~yes~yes~yes~stream
 flag~repair~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~repair~--dry-run~~Print the plan, change nothing. With --json the plan line carries its token.
@@ -87,21 +91,24 @@ flag~repair~--yes~~Do not ask.
 flag~repair~--secrets-stdin~~Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
 env~repair~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~repair~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
-cmd~status~benchbar status [--json] [--ping] [--deep]~State, pid, stop reason, site ping, and with --json the ready object (is the bench ready to serve).~no~no~no~no~document
+cmd~status~benchbar status [--json] [--ping] [--deep]~State, pid, stop reason, site ping and Redis of the bench (benchstatus).~no~no~no~no~document
 env~status~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 flag~status~--ping~~Ask every site, not only the default one.
 flag~status~--deep~~Also ask the ready parts that start programs: workers (pgrep, lsof) and stale (find: a Python file under apps/ changed after the bench started). Without it ready.workers and ready.stale are null.
-cmd~stats~benchbar stats [--json]~CPU, memory and process count of the running bench's own processes (the set down stops, with their children), and the speed figure the Mac app derives from the CPU. resources is null while the bench is stopped. Read only.~no~no~no~no~document
+flag~status~--json~~One JSON document. It adds redis, sites[].served (does the running bench serve the site) and the ready object (is the bench ready to serve).
+cmd~stats~benchbar stats [--json]~CPU, memory and process count of the running bench's own processes (the set down stops, with their children).~no~no~no~no~document
+note~stats~It also gives the speed figure that the Mac app derives from the CPU. With --json, resources is null while the bench is stopped. It only reads.
 env~stats~FL_STATS_WINDOW~Linux only: seconds between the two CPU samples (default 0.5).
 cmd~list~benchbar list [--json]~Every bench benchbar knows about. Never pings a site.~no~no~no~no~document
 env~list~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~scan~benchbar scan PATH [--json]~Find benches recursively in a folder (read only).~no~no~no~no~document
 cmd~register~benchbar register PATH...~Remember selected benches without changing their services.~no~no~no~yes~document
-cmd~up~benchbar up [--services-only] [--json]~Start the bench in the background.~yes~no~no~yes~stream
+cmd~up~benchbar up [--services-only] [--json]~Start the bench in the background (benchup).~yes~no~no~yes~stream
 flag~up~--services-only~~Start only the bench's Redis (for a restore or a migrate); down stops it.
-cmd~down~benchbar down [--json]~Stop the bench and keep it stopped across reboots.~no~no~no~yes~stream
+cmd~down~benchbar down [--json]~Stop the bench and keep it stopped across reboots (benchdown).~no~no~no~yes~stream
 cmd~restart~benchbar restart [--json]~Restart the bench, for example after changing Python code.~yes~no~no~yes~stream
-cmd~wait~benchbar wait [--ready] [--for PART] [--timeout SECS] [--json]~Block until the bench is ready (agent loaded, processes, site ping 2xx or 3xx, socketio, Redis, a worker, no Python file changed since the start), or until one part is. Exit 0 ready, 1 not ready in time, with what is missing and the fix. Reads only, starts nothing.~no~no~no~no~document
+cmd~wait~benchbar wait [--ready] [--for PART] [--timeout SECS] [--json]~Block until the bench is ready (agent loaded, processes, site ping 2xx or 3xx, socketio, Redis, a worker, no Python file changed since the start), or until one part is.~no~no~no~no~document
+note~wait~Exit 0 when ready, 1 when not ready in time, with what is missing and the fix. It only reads and starts nothing.
 flag~wait~--ready~~Wait for every part (the default).
 flag~wait~--for~PART~Wait for one part only: agent, processes, web, socketio, redis, workers or stale.
 flag~wait~--timeout~SECS~Give up after SECS seconds, 0 to 3600 (default 60). 0 checks once.
@@ -109,7 +116,7 @@ cmd~logs~benchbar logs [-nN] [--worker|--worker-error|--previous] [--process NAM
 flag~logs~--worker~~Read logs/worker.log.
 flag~logs~--worker-error~~Read logs/worker.error.log.
 flag~logs~--previous~~Read logs/bench.previous.log (the starts before it are bench.previous.1.log to .3.log).
-flag~logs~--process~NAME~web, socketio, schedule or worker.
+flag~logs~--process~NAME~web, socketio, schedule or worker. The worker one reads logs/worker.log.
 flag~logs~--since~TIMESTAMP~Only lines at or after it (--json; ISO 8601, or HH:MM:SS today).
 flag~logs~--since-restart~~Only lines after the bench's last start (--json).
 flag~logs~--no-follow~~Print and exit.
@@ -117,11 +124,12 @@ flag~logs~-n~N~The last N lines (default 50); -nN, or a bare number, also works.
 cmd~fg~benchbar fg~Stop the service and run honcho in the foreground.~yes~no~no~yes~none
 cmd~watch~benchbar watch~Run bench watch for asset rebuilds.~no~no~no~no~none
 cmd~autostart~benchbar autostart [on|off]~Whether the bench may come back after login.~no~no~no~yes~stream
-cmd~listen~benchbar listen [local|all] [--dry-run] [--yes]~Where the bench's web server and socketio listen: local is 127.0.0.1 only (the default), all is every interface. Stored per bench, applied to Procfile.lean; restart the bench to use it. all is a person's decision and is refused without a terminal.~yes~no~no~yes~stream
+cmd~listen~benchbar listen [local|all] [--dry-run] [--yes]~Where the bench's web server and socketio listen: 127.0.0.1 only (the default) or every interface.~yes~no~no~yes~stream
+note~listen~The choice is stored per bench and applied to Procfile.lean; restart the bench to use it. Listening on every interface is a person's decision and is refused without a terminal.
 cmd~uninstall-service~benchbar uninstall-service [--all] [--yes] [--dry-run]~Remove the agent, runner, Procfile.lean and shell helpers.~yes~no~no~yes~stream
-flag~uninstall-service~--all~~Every bench with a benchbar agent, after one question.
+flag~uninstall-service~--all~~Every bench with a benchbar agent, after one question. Run it before brew uninstall benchbar: brew cannot stop the agents itself.
 flag~uninstall-service~--yes~~Do not ask; required without a terminal.
-cmd~path~benchbar path~Print the bench directory.~no~no~no~no~none
+cmd~path~benchbar path~Print the bench directory (benchcd uses it).~no~no~no~no~none
 env~path~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~console~benchbar console [--site S]~bench --site SITE console: a Python shell with frappe.~yes~no~no~no~none
 cmd~db~benchbar db [--site S] | benchbar db orphans [--json]~bench --site SITE mariadb: the site's database.~yes~no~no~no~none
@@ -166,11 +174,14 @@ env~pull~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does no
 cmd~report~benchbar report [--print] [--json]~Redacted diagnostics zip on the Desktop for bug reports.~no~no~no~no~document
 flag~report~--print~~Print to the terminal instead of writing the zip.
 flag~report~--out~DIR~Write the zip into this folder (default: the Desktop).
+flag~report~--json~~Print {"zip": path, "redactions": n}, for the app and scripts.
 cmd~docs~benchbar docs [TOPIC] [--print]~Open the documentation, or one topic's page.~no~no~no~no~none
 flag~docs~--print~~Print the page's address instead of opening it.
-cmd~self-update~benchbar self-update [--check] [--dry-run] [--json]~Update the benchbar CLI and the BenchBar app.~yes~no~yes~yes~document
+cmd~self-update~benchbar self-update [--check] [--dry-run] [--json]~Update the benchbar CLI and the BenchBar app with the one line installer, after asking.~yes~no~yes~yes~document
+note~self-update~A Homebrew install runs brew upgrade askysh/tap/benchbar instead. It never touches a bench and never runs bench update.
 flag~self-update~--check~~This version against the latest.
-cmd~where~benchbar where [--json]~How this CLI was installed, its state folder and the app.~no~no~no~no~document
+flag~self-update~--dry-run~~Print the plan, change nothing.
+cmd~where~benchbar where [--json]~How this CLI was installed (homebrew, managed, checkout, other), the path it records for itself, its state folder and the BenchBar app.~no~no~no~no~document
 env~where~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~mcp~benchbar mcp [--print-agents-md] [--calls [N]] [--allow-bench PATH]~Model Context Protocol server on stdio for coding agents.~no~no~no~no~none
 flag~mcp~--print-agents-md~~Print a snippet for a project's AGENTS.md or CLAUDE.md and exit.
@@ -194,13 +205,16 @@ cmd~commands~benchbar commands --json~This table: every command, flag and enviro
 env~commands~BENCHBAR_LENIENT_FLAGS~Applies to every command: 1 turns the error for an unknown option (exit 64) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real.
 env~commands~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~ports~benchbar ports plan|setup|apply|check|mode ...~Port allocation for several benches.~no~no~no~no~none
-cmd~ports plan~benchbar ports plan [--json] -- PATH ...~Read only preview of the allocation and its approval token.~no~no~no~no~document
-cmd~ports setup~benchbar ports setup [--dry-run] -- PATH ...~Preview, confirm once, then apply.~yes~yes~no~yes~stream
+cmd~ports plan~benchbar ports plan [--json] -- PATH ...~Read-only preview of the port allocation and its approval token.~no~no~no~no~document
+flag~ports plan~--json~~The plan and its token as one JSON document.
+cmd~ports setup~benchbar ports setup [--dry-run] -- PATH ...~Preview the port changes, confirm once, then apply them.~yes~yes~no~yes~stream
+flag~ports setup~--dry-run~~Show the preview and change nothing.
 cmd~ports apply~benchbar ports apply TOKEN --yes [--json] -- PATH ...~Apply a reviewed plan; refuses a stale token.~no~yes~no~yes~stream
 flag~ports apply~--yes~~Required: the plan was reviewed.
 env~ports apply~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~ports apply~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
-cmd~ports check~benchbar ports check [--json]~Port conflicts of the bench.~no~no~no~no~document
+cmd~ports check~benchbar ports check [--json]~Check the bench for port conflicts.~no~no~no~no~document
+flag~ports check~--json~~The conflicts as one JSON document.
 cmd~ports mode~benchbar ports mode automatic|fixed~Keep automatic or fixed ports for the bench.~no~no~no~yes~stream
 cmd~site~benchbar site list|add|default|hosts|backup|backups|restore|snapshot|snapshots|rollback|drop|open-as ...~The sites of a bench.~no~no~no~no~none
 cmd~site list~benchbar site list [--json]~The bench's sites; the default one is what benchup waits for.~no~no~no~no~document
@@ -495,6 +509,8 @@ fl_cmd_load() {
   t="$(<"$FL_CMD_FILE")"
   t="${t:off}"
   FL_CMD_TABLE="${t%$'\nTABLE\n'*}"
+  # a file that cannot be read twice (commands.sh sourced from a pipe) gives no record and, before, no error
+  [[ -n "$FL_CMD_TABLE" ]] || fl_die "The commands table could not be read from ${FL_CMD_FILE}." "commands.sh has to be sourced from a file, not from a pipe or a process substitution."
 }
 fl_cmd_load
 
@@ -566,25 +582,11 @@ fl_cmd_attr_v() {
   printf -v "$1" '%s' "$__r"
 }
 
-# fl_cmd_help KEY: the table's entry as text
+# fl_cmd_help KEY: the table's entry as text, in lines of at most 100 characters (help.sh, read now: it replaces this function)
 fl_cmd_help() {
-  local key="$1" line kind k a b c flags="" envs="" summary="" usage="" tty sudo net mut json
-  while IFS= read -r line; do
-    IFS='~' read -r kind k a b c <<<"$line"
-    [[ "$k" == "$key" ]] || continue
-    case "$kind" in
-      cmd) usage="$a"; summary="$b"; IFS='~' read -r _ _ _ _ tty sudo net mut json <<<"$line" ;;
-      flag) flags="${flags}  $(printf '%-22s' "${a}${b:+ ${b}}") ${c}"$'\n' ;;
-      env) envs="${envs}  $(printf '%-22s' "$a") ${b}"$'\n' ;;
-    esac
-  done <<<"$FL_CMD_TABLE"
-  printf 'benchbar %s: %s\n\nUsage: %s\n' "$key" "$summary" "$usage"
-  [[ -z "$flags" ]] || printf '\nOptions:\n%s' "$flags"
-  [[ -z "$envs" ]] || printf '\nEnvironment:\n%s' "$envs"
-  printf '\nGlobal options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.\n'
-  printf 'Needs: a terminal to ask questions: %s; sudo: %s; the network: %s.\n' "$tty" "$sudo" "$net"
-  printf 'Changes things: %s. JSON: %s.\n' "$mut" "$json"
-  printf 'All commands: benchbar commands --json\n'
+  # shellcheck source=lib/frappe-local/help.sh
+  . "${FL_CMD_FILE%/*}/help.sh"
+  fl_cmd_help "$@"
 }
 
 # fl_commands_json: benchbar commands --json. The commands of a lab that is
@@ -598,7 +600,7 @@ fl_commands_json() {
   local LC_ALL=C
   local kind k a b c ctty csudo cnet cmut cjson on=0 out="" body="" fsep="" esep="" envs="" open=0 gflags="" gsep=""
   local word="" lab="" skip=0 gated="" gsep2="" lab_on=0 enabled="" labmap="" labs_on="" lsep="" n
-  local jk ja jb jc jt js jn jm jj jl jw
+  local jk ja jb jc jt js jn jm jj jl jw bh="" bs="" bm="" raws=""
   fl_lab_enabled_v enabled
   fl_lab_cmd_map_v labmap
   for n in $enabled; do fl_json_str_v jl "$n"; labs_on="${labs_on}${lsep}${jl}"; lsep=","; done
@@ -610,7 +612,7 @@ fl_commands_json() {
     [[ "$kind" != TABLE ]] || break
     case "$kind" in
       cmd)
-        if [[ "$open" == "1" ]]; then out="${out}${out:+,}${body}],\"env\":[${envs}]}"; fi
+        if [[ "$open" == "1" ]]; then out="${out}${out:+,}${bh}${bs}${bm}${body}],\"env\":[${envs}]}"; fi
         open=0; skip=0
         if [[ "${k%% *}" != "$word" ]]; then
           word="${k%% *}"; lab=""; lab_on=0
@@ -641,10 +643,20 @@ fl_commands_json() {
         case "$csudo" in 1|yes|true) js=true ;; *) js=false ;; esac
         case "$cnet" in 1|yes|true) jn=true ;; *) jn=false ;; esac
         case "$cmut" in 1|yes|true) jm=true ;; *) jm=false ;; esac
-        body="{\"name\":${jk},\"usage\":${ja},\"summary\":${jb},\"tty\":${jt},\"sudo\":${js},\"network\":${jn},\"mutating\":${jm},\"json\":${jj},"
-        if [[ -n "$lab" ]]; then fl_json_str_v jl "$lab"; body="${body}\"lab\":${jl},"; fi
-        body="${body}\"flags\":["
+        # the summary is held apart (bs): a note record after this one joins it before the record is written
+        bh="{\"name\":${jk},\"usage\":${ja},\"summary\":"; bs="$jb"; raws="$b"
+        bm=",\"tty\":${jt},\"sudo\":${js},\"network\":${jn},\"mutating\":${jm},\"json\":${jj},"
+        if [[ -n "$lab" ]]; then fl_json_str_v jl "$lab"; bm="${bm}\"lab\":${jl},"; fi
+        bm="${bm}\"flags\":["
+        body=""
         envs=""; open=1; fsep=""; esep="" ;;
+      note)
+        [[ "$skip" != 1 ]] || continue
+        # the summary, one space, the note: the whole text, as before it was split in two records
+        case "${raws}${a}" in
+          *[\\\"]*|*[!\ -~]*) fl_json_str_v bs "${raws}${raws:+ }${a}" ;;
+          *) bs="\"${raws}${raws:+ }${a}\"" ;;
+        esac ;;
       flag)
         [[ "$skip" != 1 ]] || continue
         case "${a}${b}${c}" in
@@ -668,7 +680,7 @@ fl_commands_json() {
         envs="${envs}${esep}{\"name\":${ja},\"help\":${jb}}"; esep="," ;;
     esac
   done <"$FL_CMD_FILE"
-  [[ "$open" != "1" ]] || out="${out}${out:+,}${body}],\"env\":[${envs}]}"
+  [[ "$open" != "1" ]] || out="${out}${out:+,}${bh}${bs}${bm}${body}],\"env\":[${envs}]}"
   while IFS='~' read -r a b c; do
     fl_json_str_v ja "$a"; fl_json_str_v jb "$b"; fl_json_str_v jc "$c"
     gflags="${gflags}${gsep}{\"name\":${ja},\"value\":${jb},\"help\":${jc}}"; gsep=","
