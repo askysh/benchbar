@@ -244,4 +244,17 @@ printf 'nothing\n' >"$LOG"
 OUT="$(TIMINGS_FILE="$TABLE" bash scripts/ci-timings.sh "$LOG" 2>&1)" && CODE=0 || CODE=$?
 assert_eq "1" "$CODE"; assert_contains "$OUT" '"--- ok'
 
+# ---- the macOS jobs wait for the Linux legs on a pull request (#137, "CI load")
+# A run that is red on Linux, or replaced by the next push within minutes, must not queue for a
+# scarce macOS runner. A push or the nightly runs them whatever Linux says.
+job_of() { awk -v j="  $1:" '$0 == j { f = 1; next } f && /^  [a-z]/ { exit } f' .github/workflows/ci.yml; }
+for j in cli-macos app; do
+  body="$(job_of "$j")"
+  [[ -n "$body" ]] || fail "job $j not found in ci.yml"
+  assert_contains "$body" "needs: [changes, cli-linux, cli-bash32]" "($j waits for the Linux legs)"
+  assert_contains "$body" "needs.cli-linux.result != 'failure' && needs.cli-bash32.result != 'failure'" "($j is skipped when one failed)"
+  assert_contains "$body" "github.event_name != 'pull_request' ||" "($j runs on a push whatever Linux says)"
+  assert_contains "$body" "!cancelled()" "($j still runs when a Linux leg was left out)"
+done
+
 printf 'test-ci-plan: ok\n'
