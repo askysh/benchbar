@@ -49,6 +49,12 @@ A new test seam (a variable that lets a test replace a program, a path or
 the clock) is read only when `FL_TESTING=1`, which `tests/lib/harness.sh`
 sets: a production run must ignore it.
 
+A pin test (`tests/test-*-pin.sh`, `tests/lib/pin.sh`) compares the whole
+output of a command, in every way it can end, with a file in
+`tests/golden/`. After an intended change of that output, write the file
+again with `PIN_UPDATE=1 bash tests/test-NAME-pin.sh` and read its diff
+before you commit it.
+
 ### What CI will do with your pull request
 
 CI plans each run from the changed files. A pull request runs the tests
