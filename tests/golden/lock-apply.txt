@@ -55,7 +55,7 @@ exit: 1
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -122,7 +122,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -176,7 +176,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -232,7 +232,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -284,7 +284,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -338,7 +338,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -393,7 +393,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -448,7 +448,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -510,7 +510,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -564,7 +564,7 @@ exit: 1
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -624,7 +624,7 @@ exit: 1
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -680,7 +680,7 @@ exit: 1
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -736,7 +736,7 @@ exit: 1
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -855,7 +855,7 @@ exit: 1
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -976,7 +976,7 @@ exit: 1
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1089,7 +1089,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1204,7 +1204,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1318,7 +1318,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1372,7 +1372,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1435,7 +1435,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1494,7 +1494,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1555,7 +1555,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1609,7 +1609,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1668,7 +1668,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1713,7 +1713,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1768,7 +1768,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1875,7 +1875,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -1926,7 +1926,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -2017,7 +2017,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -2126,7 +2126,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -2196,7 +2196,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -2248,7 +2248,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -2369,7 +2369,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -2435,7 +2435,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -2602,7 +2602,7 @@ exit: 1
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -2780,7 +2780,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -2870,7 +2870,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -2960,7 +2960,7 @@ exit: 1
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -3138,7 +3138,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -3321,7 +3321,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
@@ -3421,7 +3421,7 @@ exit: 0
 +- benchbar lock apply ---+
 | mode lock |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. lockfile <TMP>/home/frappe-bench/benchbar.toml
