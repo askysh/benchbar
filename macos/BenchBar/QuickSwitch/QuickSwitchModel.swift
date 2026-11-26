@@ -254,7 +254,10 @@ nonisolated struct QuickSwitchModel: Equatable, Sendable {
     /// The keys that do something now: the digits only while they would switch.
     var footerHint: String {
         let digitsActive = digitsSwitch && rows.contains { $0.digit != nil }
-        return ([String(localized: "↑↓ select"), String(localized: "↩ switch")] + (digitsActive ? [String(localized: "0 to 9 quick pick")] : []) + [String(localized: "esc close")]).joined(separator: "   ")
+        var hints = [String(localized: "↑↓ select"), String(localized: "↩ switch")]
+        if digitsActive { hints.append(String(localized: "0 to 9 quick pick")) }
+        hints.append(String(localized: "esc close"))
+        return hints.joined(separator: "   ")
     }
 
     /// True when `other` would show the same sites and the same reason for none.
