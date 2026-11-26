@@ -630,7 +630,7 @@ sec~profiles~Team profiles
 text~profiles~Team profiles
 help~profiles~profile list
 help~profiles~profile show
-help~profiles~profile create~profile create NAME
+help~profiles~profile create~profile create NAME --from-bench PATH [--dir DIR]
 help~profiles~profile export~profile export NAME [--out FILE] [--branch APP=BR]... [--drop APP]... [--plan]
 help~profiles~profile import~profile import FILE|URL [--as NAME] [--plan]
 help~profiles~profile subscribe~profile subscribe GIT_URL [--plan]

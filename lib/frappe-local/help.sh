@@ -74,6 +74,7 @@ fl_help_block_v() {
 # the text 22 columns in, below the label when that is 20 characters or more. The lines of no command are text.
 fl_usage_text() {
   local block line kind sec key label ulab text tilde='~' docs="" w id u s fname indent="                      "
+  local p_tilde='{tilde}' p_version='{version}' p_docs='{docs}'
   local LC_ALL=C
   # one pass over the table: the usage form and the summary of every command, in variables named after the key
   while IFS= read -r line; do
@@ -89,9 +90,9 @@ fl_usage_text() {
     case "$kind" in
       text)
         text="$key"
-        text="${text//'{tilde}'/$tilde}"
-        text="${text//'{version}'/$FL_VERSION}"
-        if [[ "$text" == *'{docs}'* ]]; then docs="$(fl_docs_url /)"; text="${text//'{docs}'/$docs}"; fi
+        text=${text//$p_tilde/$tilde}
+        text=${text//$p_version/$FL_VERSION}
+        if [[ "$text" == *"$p_docs"* ]]; then docs="$(fl_docs_url /)"; text=${text//$p_docs/$docs}; fi
         printf '%s\n' "$text" ;;
       help)
         id="${key//[^A-Za-z0-9]/_}"
