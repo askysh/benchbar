@@ -45,7 +45,10 @@ SAMPLE = {"token": "0" * 64, "site": "a.localhost", "name": "x", "paths": ["/x"]
           "mode": "on", "check": "frappe_version", "lease": "l-0123456789ab", "url_or_name": "erpnext", "to": "snap",
           "to_bench": "/x", "from": "x", "from_bench": "/x", "label": "l", "snapshot": "s",
           "op_id": "op-20261119-101500-4242"}
-OVERRIDE = {"benchbar_app_add_plan": {"url_or_name": "erpnext"}, "benchbar_app_add": {"url_or_name": "erpnext", "token": "0" * 64}}
+OVERRIDE = {"benchbar_app_add_plan": {"url_or_name": "erpnext"}, "benchbar_app_add": {"url_or_name": "erpnext", "token": "0" * 64},
+            # source and from_dir exclude each other
+            "benchbar_pull_plan": {"source": "h:s", "as": "b.localhost"},
+            "benchbar_pull": {"source": "h:s", "as": "b.localhost", "token": "0" * 64}}
 
 def sample(key, schema):
     if key in SAMPLE:
