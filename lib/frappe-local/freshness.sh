@@ -556,6 +556,9 @@ fl_cmd_app_focus() {
   [[ "$list" == "0" ]] || fl_die "--list takes no app name." "benchbar app focus --list"
   fl_has_line "$(fl_apps_all || true)" "$app" || fl_die "${app} is not an app of this bench." "benchbar app list shows the apps."
   if [[ "$cmd" == "unfocus" ]]; then pin=ignore; elif [[ "$auto" == "1" ]]; then pin=auto; else pin=focus; fi
+  # app focus NAME writes benchbar's state: the bench guess gate of the commands that change things (app unfocus is
+  # gated at the dispatch, by its record)
+  [[ "$cmd" != "focus" ]] || fl_bench_write_gate
   fl_bench_state_migrate "$FL_BENCH_DIR"
   fl_app_focus_pin_set "$app" "$pin"
   fl_focus_apps >/dev/null

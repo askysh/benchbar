@@ -618,3 +618,13 @@ fl_bench_guess_gate() {
   printf 'benchbar: acting on %s (auto-detected: no --bench-dir, BENCH_DIR or remembered bench%s; pass --bench-dir to choose)\n' \
     "$FL_BENCH_DIR" "$([[ "$n" -gt 1 ]] && printf '; %s benches are known: %s' "$n" "$list")" >&2
 }
+
+# fl_bench_write_gate: the guess gate for a form that writes benchbar's state while its command, in the commands table,
+# reads: app focus NAME, doctor --ack ID and doctor --unack ID. A command that changes things is stopped at the dispatch
+# (benchbar) by the mutating field of its record, before it runs; these keep their record at "mutating no" (it is per
+# command, and flipping it would make doctor --json refuse for an agent with two benches), so they call this where
+# they are about to write: the same notice for a person, the same refusal for an agent, nothing written.
+fl_bench_write_gate() {
+  [[ -z "$OPT_BENCH_DIR" ]] || return 0
+  fl_bench_guess_gate
+}

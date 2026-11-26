@@ -30,6 +30,8 @@ cmd_doctor() {
   if [[ "$OPT_FIX_HINTS" == "1" ]]; then exec 3>&1 1>&2; FL_PLAIN=1; fl_ui_init; fi
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
+  # --ack and --unack write benchbar's state: the bench guess gate of the commands that change things, before anything is written
+  [[ -z "$OPT_ACK$OPT_UNACK" ]] || fl_bench_write_gate
   # doctor --unack CHECK: no report needed; under --json one small document
   if [[ -n "$OPT_UNACK" ]]; then fl_doctor_unack "$OPT_UNACK"; fl_doctor_ack_doc unack "$OPT_UNACK"; return 0; fi
   [[ "$OPT_QUICK" != "1" || -n "$OPT_ACK" ]] || FL_DOCTOR_QUICK=1
