@@ -52,7 +52,7 @@ nonisolated enum NetworkPanePresentation {
     }
 
     static func seatsTaken(_ hello: RoomHello) -> String {
-        "\(min(max(hello.people, 0), max(hello.seats, 0))) of \(max(hello.seats, 0)) seats taken"
+        Wording.seatsTaken(min(max(hello.people, 0), max(hello.seats, 0)), of: max(hello.seats, 0))
     }
 
     static func sortedNearby(_ rooms: [DiscoveredRoom], status: [String: GuestRoomStore.NearbyStatus]) -> [DiscoveredRoom] {

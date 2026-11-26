@@ -97,13 +97,12 @@ nonisolated enum SharePresentation {
         if hosted > 0 {
             let people = switch online {
             case 0: "Nobody is connected now."
-            case 1: "1 person is connected and will be signed out."
-            default: "\(online) people are connected and will be signed out."
+            default: Wording.peopleConnected(online)
             }
             ends.append("Sharing stops and the room code stops working. \(people)")
         }
         if joined > 0 {
-            ends.append(joined == 1 ? "The room you opened closes on this Mac." : "The \(joined) rooms you opened close on this Mac.")
+            ends.append(Wording.roomsClose(joined))
         }
         return ("Turn off sharing on your network?", ends.joined(separator: " "))
     }
@@ -117,8 +116,7 @@ nonisolated enum SharePresentation {
     static func stopConfirm(online: Int) -> String {
         switch online {
         case 0: "Stop sharing?"
-        case 1: "Stop sharing? 1 person is connected and will be signed out."
-        default: "Stop sharing? \(online) people are connected and will be signed out."
+        default: Wording.stopSharing(online: online)
         }
     }
 
@@ -126,8 +124,7 @@ nonisolated enum SharePresentation {
     static func restartConfirm(online: Int) -> (message: String, detail: String) {
         let message = switch online {
         case 0: "Restart sharing?"
-        case 1: "Restart sharing? 1 person is connected and will be signed out."
-        default: "Restart sharing? \(online) people are connected and will be signed out."
+        default: Wording.restartSharing(online: online)
         }
         return (message, "Everyone in the room is disconnected and needs the new room code to join again.")
     }
@@ -285,8 +282,7 @@ nonisolated enum SharePresentation {
     static func waitingNotice(people: [SharePerson], hostGivesSeats: Bool) -> String? {
         let waiting = people.filter { $0.seatID == nil }.count
         guard hostGivesSeats, waiting > 0 else { return nil }
-        return waiting == 1 ? "1 person waits for a seat. Choose Give a Seat next to their name."
-            : "\(waiting) people wait for a seat. Choose Give a Seat next to each name."
+        return Wording.peopleWaiting(waiting)
     }
 
     static func removeConfirm(_ person: SharePerson, site: String) -> String {
