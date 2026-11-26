@@ -184,7 +184,7 @@ struct ProfilesPane: View {
     }
 
     private func menu(_ profile: ProfileInfo) -> some View {
-        MoreMenu(help: "Export, update, check or remove \(profile.name)") {
+        MoreMenu(help: String(localized: "Export, update, check or remove \(profile.name)")) {
             Button("Export…") { sheet = .export(ProfileExportRun(name: profile.name, workbench: workbench)) }
                 .disabled(!profile.canExport)
             if profile.canUpdate {
@@ -211,8 +211,8 @@ struct CreateProfileSheet: View {
     @State private var benchPath = ""
 
     var body: some View {
-        SheetScaffold("Create a Team Profile",
-                      explanation: "Writes a profile from one bench's apps, branches and Frappe version.") {
+        SheetScaffold(String(localized: "Create a Team Profile"),
+                      explanation: String(localized: "Writes a profile from one bench's apps, branches and Frappe version.")) {
             Form {
                 TextField("Profile name", text: $name, prompt: Text("acme"))
                     .textFieldStyle(.roundedBorder)
@@ -225,7 +225,7 @@ struct CreateProfileSheet: View {
                 Text("Lower case letters, digits, '.', '_' or '-', starting with a letter or digit.")
                     .font(.caption).foregroundStyle(.red)
             }
-            SheetNote("BenchBar reads the bench (its apps, their repositories and branches, and its Frappe version) and writes ~/.config/benchbar/profiles/NAME.toml. The bench is not changed; no site data or password goes into the file.")
+            SheetNote(String(localized: "BenchBar reads the bench (its apps, their repositories and branches, and its Frappe version) and writes ~/.config/benchbar/profiles/NAME.toml. The bench is not changed; no site data or password goes into the file."))
         } actions: {
             CancelButton(action: cancel)
             Button("Create") {

@@ -1,6 +1,336 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "%@ Flags: %@. Each value is one plain word.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Flags: %@. Each value is one plain word."
+          }
+        }
+      }
+    },
+    "%@ It takes no flags.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ It takes no flags."
+          }
+        }
+      }
+    },
+    "%@ can now be shared on your network.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ can now be shared on your network."
+          }
+        }
+      }
+    },
+    "%@ cannot be added": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ cannot be added"
+          }
+        }
+      }
+    },
+    "%@ crashed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ crashed"
+          }
+        }
+      }
+    },
+    "%@ did not run": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ did not run"
+          }
+        }
+      }
+    },
+    "%@ for %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ for %@"
+          }
+        }
+      }
+    },
+    "%@ is already in the bench and on the chosen site.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is already in the bench and on the chosen site."
+          }
+        }
+      }
+    },
+    "%@ is already in the bench.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is already in the bench."
+          }
+        }
+      }
+    },
+    "%@ is already on the bench and in /etc/hosts.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is already on the bench and in /etc/hosts."
+          }
+        }
+      }
+    },
+    "%@ is already on the bench.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is already on the bench."
+          }
+        }
+      }
+    },
+    "%@ is back.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is back."
+          }
+        }
+      }
+    },
+    "%@ is no longer in the room.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is no longer in the room."
+          }
+        }
+      }
+    },
+    "%@ is running again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is running again"
+          }
+        }
+      }
+    },
+    "%@ is the default site: the site you pick becomes the default first.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is the default site: the site you pick becomes the default first."
+          }
+        }
+      }
+    },
+    "%@ is up to date": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is up to date"
+          }
+        }
+      }
+    },
+    "%@ is up to date on %@.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is up to date on %@."
+          }
+        }
+      }
+    },
+    "%@ is up to date on its branch.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is up to date on its branch."
+          }
+        }
+      }
+    },
+    "%@ joined": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ joined"
+          }
+        }
+      }
+    },
+    "%@ keeps crashing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ keeps crashing"
+          }
+        }
+      }
+    },
+    "%@ left": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ left"
+          }
+        }
+      }
+    },
+    "%@ was not dropped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ was not dropped"
+          }
+        }
+      }
+    },
+    "%@ was not exported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ was not exported"
+          }
+        }
+      }
+    },
+    "%@ was not moved": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ was not moved"
+          }
+        }
+      }
+    },
+    "%@ was not updated": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ was not updated"
+          }
+        }
+      }
+    },
+    "%@. Remove them from the Sharing tab if you did not expect this.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@. Remove them from the Sharing tab if you did not expect this."
+          }
+        }
+      }
+    },
+    "%@: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: %@"
+          }
+        }
+      }
+    },
+    "%@: done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: done"
+          }
+        }
+      }
+    },
+    "%@: failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: failed"
+          }
+        }
+      }
+    },
+    "%@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@…"
+          }
+        }
+      }
+    },
     "%lld apps": {
       "extractionState": "manual",
       "localizations": {
@@ -336,6 +666,30 @@
         }
       },
       "comment": "Sheets: Tidy Up. The singular verb is fixed; it used to read '1 line ... name'."
+    },
+    "%lld lines redacted. The zip is selected in Finder and the issue page is open in your browser: describe what happened and attach the zip.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld line redacted. The zip is selected in Finder and the issue page is open in your browser: describe what happened and attach the zip."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld lines redacted. The zip is selected in Finder and the issue page is open in your browser: describe what happened and attach the zip."
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment": "Bug report: lines redacted from the diagnostics zip."
     },
     "%lld min": {
       "extractionState": "manual",
@@ -725,6 +1079,17 @@
       },
       "comment": "Uptime: seconds."
     },
+    "3 crashes in 10 minutes, so automatic restarts are paused. Check the logs, then press Start.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3 crashes in 10 minutes, so automatic restarts are paused. Check the logs, then press Start."
+          }
+        }
+      }
+    },
     "482 913": {
       "extractionState": "manual",
       "localizations": {
@@ -736,6 +1101,50 @@
         }
       },
       "comment": "Share and Network."
+    },
+    "A BenchBar link did nothing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A BenchBar link did nothing"
+          }
+        }
+      }
+    },
+    "A backup is taken before every change (.benchbar/backups). Broken folders are moved aside, never deleted.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A backup is taken before every change (.benchbar/backups). Broken folders are moved aside, never deleted."
+          }
+        }
+      }
+    },
+    "A backup with files can take a few minutes on a big site.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A backup with files can take a few minutes on a big site."
+          }
+        }
+      }
+    },
+    "A bench or a site changed since this plan was shown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A bench or a site changed since this plan was shown"
+          }
+        }
+      }
     },
     "A change that stopped part way keeps its steps. Resume runs only those; dropping the record leaves the app as it is now.": {
       "extractionState": "manual",
@@ -773,6 +1182,17 @@
       },
       "comment": "Main window."
     },
+    "A name from the app registry gets the branch that matches this bench's profile.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A name from the app registry gets the branch that matches this bench's profile."
+          }
+        }
+      }
+    },
     "A new site (a copy)": {
       "extractionState": "manual",
       "localizations": {
@@ -784,6 +1204,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards."
+          }
+        }
+      }
     },
     "A redacted diagnostics zip and a new issue with your versions": {
       "extractionState": "manual",
@@ -809,6 +1240,17 @@
       },
       "comment": "Main window."
     },
+    "A scratch bench expires after the days you give. The default bench is never removed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A scratch bench expires after the days you give. The default bench is never removed."
+          }
+        }
+      }
+    },
     "A server over SSH": {
       "extractionState": "manual",
       "localizations": {
@@ -821,6 +1263,17 @@
       },
       "comment": "Sheets."
     },
+    "A snapshot is a backup with files that frappe's pruning never removes, with the apps it was taken with. Taking one changes nothing in the site.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A snapshot is a backup with files that frappe's pruning never removes, with the apps it was taken with. Taking one changes nothing in the site."
+          }
+        }
+      }
+    },
     "About BenchBar": {
       "extractionState": "manual",
       "localizations": {
@@ -832,6 +1285,17 @@
         }
       },
       "comment": "Menu item."
+    },
+    "Access was not checked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Access was not checked"
+          }
+        }
+      }
     },
     "Acknowledge": {
       "extractionState": "manual",
@@ -868,6 +1332,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "Add Apps to %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Apps to %@"
+          }
+        }
+      }
     },
     "Add App…": {
       "extractionState": "manual",
@@ -965,6 +1440,61 @@
       },
       "comment": "Main window."
     },
+    "Add a Site to %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a Site to %@"
+          }
+        }
+      }
+    },
+    "Add an App to %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add an App to %@"
+          }
+        }
+      }
+    },
+    "Added %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added %@"
+          }
+        }
+      }
+    },
+    "Adding %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adding %@…"
+          }
+        }
+      }
+    },
+    "Adding the profile…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adding the profile…"
+          }
+        }
+      }
+    },
     "Address": {
       "extractionState": "manual",
       "localizations": {
@@ -976,6 +1506,39 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Adds a profile from a .toml file or an https link, after you review it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adds a profile from a .toml file or an https link, after you review it."
+          }
+        }
+      }
+    },
+    "Adds the profiles in a team's git repository to this Mac.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adds the profiles in a team's git repository to this Mac."
+          }
+        }
+      }
+    },
+    "Adds the site names of %@ to /etc/hosts, so they open in your browser.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adds the site names of %@ to /etc/hosts, so they open in your browser."
+          }
+        }
+      }
     },
     "Administrator password": {
       "extractionState": "manual",
@@ -1073,6 +1636,17 @@
       },
       "comment": "Sheets."
     },
+    "An earlier update stopped part way. Only the steps that are left run.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An earlier update stopped part way. Only the steps that are left run."
+          }
+        }
+      }
+    },
     "App or repository": {
       "extractionState": "manual",
       "localizations": {
@@ -1096,6 +1670,28 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Applying changes…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applying changes…"
+          }
+        }
+      }
+    },
+    "Applying the lock file to the apps…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applying the lock file to the apps…"
+          }
+        }
+      }
     },
     "Apply…": {
       "extractionState": "manual",
@@ -1181,6 +1777,17 @@
       },
       "comment": "Main window."
     },
+    "Asking each repository for its default branch and access…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asking each repository for its default branch and access…"
+          }
+        }
+      }
+    },
     "Asks for your password": {
       "extractionState": "manual",
       "localizations": {
@@ -1253,6 +1860,17 @@
       },
       "comment": "Main window."
     },
+    "Back it up from the site's menu first. Encrypted and partial backups are not restored here.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back it up from the site's menu first. Encrypted and partial backups are not restored here."
+          }
+        }
+      }
+    },
     "Background jobs": {
       "extractionState": "manual",
       "localizations": {
@@ -1264,6 +1882,50 @@
         }
       },
       "comment": "Main window."
+    },
+    "Backing up and dropping %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backing up and dropping %@…"
+          }
+        }
+      }
+    },
+    "Backing up and restoring %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backing up and restoring %@…"
+          }
+        }
+      }
+    },
+    "Backs the site up with its files, drops its database and moves its folder to archived/sites. Nothing is deleted from disk.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backs the site up with its files, drops its database and moves its folder to archived/sites. Nothing is deleted from disk."
+          }
+        }
+      }
+    },
+    "Backs the site up, restores it in another bench, checks it there, then drops it here. You see the plan first; nothing runs before you confirm.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backs the site up, restores it in another bench, checks it there, then drops it here. You see the plan first; nothing runs before you confirm."
+          }
+        }
+      }
     },
     "Backup": {
       "extractionState": "manual",
@@ -1337,6 +1999,17 @@
       },
       "comment": "Main window."
     },
+    "BenchBar %@ is available": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar %@ is available"
+          }
+        }
+      }
+    },
     "BenchBar Documentation": {
       "extractionState": "manual",
       "localizations": {
@@ -1361,6 +2034,28 @@
       },
       "comment": "Settings and the other windows."
     },
+    "BenchBar clones the repository into ~/.config/benchbar/sources with your own git credentials and reads only its .toml files; no code from it runs. It never updates on its own: the list shows when it is behind, and Update shows the changes first.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar clones the repository into ~/.config/benchbar/sources with your own git credentials and reads only its .toml files; no code from it runs. It never updates on its own: the list shows when it is behind, and Update shows the changes first."
+          }
+        }
+      }
+    },
+    "BenchBar does not edit /etc/hosts. Run this in Terminal: it shows the lines, backs the file up and asks for your password.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar does not edit /etc/hosts. Run this in Terminal: it shows the lines, backs the file up and asks for your password."
+          }
+        }
+      }
+    },
     "BenchBar is free software under the MIT License.": {
       "extractionState": "manual",
       "localizations": {
@@ -1373,6 +2068,39 @@
       },
       "comment": "Main window."
     },
+    "BenchBar never runs this. Run it in Terminal, then Check Again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar never runs this. Run it in Terminal, then Check Again."
+          }
+        }
+      }
+    },
+    "BenchBar reads the bench (its apps, their repositories and branches, and its Frappe version) and writes ~/.config/benchbar/profiles/NAME.toml. The bench is not changed; no site data or password goes into the file.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar reads the bench (its apps, their repositories and branches, and its Frappe version) and writes ~/.config/benchbar/profiles/NAME.toml. The bench is not changed; no site data or password goes into the file."
+          }
+        }
+      }
+    },
+    "BenchBar reads the file, checks that it parses and whether this Mac can reach each repository, and shows it before anything is saved. Nothing is installed from here.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar reads the file, checks that it parses and whether this Mac can reach each repository, and shows it before anything is saved. Nothing is installed from here."
+          }
+        }
+      }
+    },
     "BenchBar runs benchbar report, which writes a zip to your Desktop: doctor and status, the versions of everything involved, the login agent, Procfile.lean and the last lines of the logs.": {
       "extractionState": "manual",
       "localizations": {
@@ -1384,6 +2112,28 @@
         }
       },
       "comment": "Main window."
+    },
+    "BenchBar writes a redacted diagnostics zip and opens a new GitHub issue for it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar writes a redacted diagnostics zip and opens a new GitHub issue for it."
+          }
+        }
+      }
+    },
+    "BenchBar's updater downloads and installs the new version, with its command line tool. Your benches keep running.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar's updater downloads and installs the new version, with its command line tool. Your benches keep running."
+          }
+        }
+      }
     },
     "BenchBar: %@ %@": {
       "extractionState": "manual",
@@ -1517,6 +2267,17 @@
       },
       "comment": "Share and Network."
     },
+    "Changing the mode saves your preference immediately; ports change only when you apply. A hosts line asks for your password in macOS's own dialog, after you apply; cancel it and the line is left for you to add.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changing the mode saves your preference immediately; ports change only when you apply. A hosts line asks for your password in macOS's own dialog, after you apply; cancel it and the line is left for you to add."
+          }
+        }
+      }
+    },
     "Check Access": {
       "extractionState": "manual",
       "localizations": {
@@ -1528,6 +2289,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "Check Access to %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check Access to %@"
+          }
+        }
+      }
     },
     "Check Again": {
       "extractionState": "manual",
@@ -1589,6 +2361,50 @@
       },
       "comment": "Settings and the other windows."
     },
+    "Check the code. Someone is trying to join and not finishing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the code. Someone is trying to join and not finishing."
+          }
+        }
+      }
+    },
+    "Checking ports and preparing the selection…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking ports and preparing the selection…"
+          }
+        }
+      }
+    },
+    "Checking the server and the bench…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking the server and the bench…"
+          }
+        }
+      }
+    },
+    "Checking your Mac…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking your Mac…"
+          }
+        }
+      }
+    },
     "Checks": {
       "extractionState": "manual",
       "localizations": {
@@ -1600,6 +2416,17 @@
         }
       },
       "comment": "Share and Network."
+    },
+    "Checks are running again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks are running again."
+          }
+        }
+      }
     },
     "Choose Another Folder…": {
       "extractionState": "manual",
@@ -1684,6 +2511,28 @@
         }
       },
       "comment": "Settings and the other windows."
+    },
+    "Clones apps from the app registry or git repositories and installs them. You see the plan first.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clones apps from the app registry or git repositories and installs them. You see the plan first."
+          }
+        }
+      }
+    },
+    "Cloning…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloning…"
+          }
+        }
+      }
     },
     "Close": {
       "extractionState": "manual",
@@ -1781,6 +2630,17 @@
       },
       "comment": "Sheets."
     },
+    "Console, database, Finder and the bench path": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Console, database, Finder and the bench path"
+          }
+        }
+      }
+    },
     "Continue": {
       "extractionState": "manual",
       "localizations": {
@@ -1805,6 +2665,17 @@
       },
       "comment": "Popover: the invite button after a copy."
     },
+    "Copies a production site, or a backup you downloaded, into a new site of this bench. Production is only read. You see the plan first.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copies a production site, or a backup you downloaded, into a new site of this bench. Production is only read. You see the plan first."
+          }
+        }
+      }
+    },
     "Copy": {
       "extractionState": "manual",
       "localizations": {
@@ -1816,6 +2687,17 @@
         }
       },
       "comment": "Edit menu."
+    },
+    "Copy %@ to a New Site": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy %@ to a New Site"
+          }
+        }
+      }
     },
     "Copy Command": {
       "extractionState": "manual",
@@ -1877,6 +2759,39 @@
       },
       "comment": "Main window."
     },
+    "Copy benchdown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy benchdown"
+          }
+        }
+      }
+    },
+    "Copy benchlogs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy benchlogs"
+          }
+        }
+      }
+    },
+    "Copy benchup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy benchup"
+          }
+        }
+      }
+    },
     "Copy brew Command": {
       "extractionState": "manual",
       "localizations": {
@@ -1901,6 +2816,116 @@
       },
       "comment": "Sheets."
     },
+    "Copy the Homebrew command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the Homebrew command"
+          }
+        }
+      }
+    },
+    "Copy the command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the command"
+          }
+        }
+      }
+    },
+    "Copy the command for %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the command for %@"
+          }
+        }
+      }
+    },
+    "Copy the command for the skipped step": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the command for the skipped step"
+          }
+        }
+      }
+    },
+    "Copy the command that adds benchbar mcp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the command that adds benchbar mcp"
+          }
+        }
+      }
+    },
+    "Copy the command that adds the hosts lines": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the command that adds the hosts lines"
+          }
+        }
+      }
+    },
+    "Copy the command that loads the shell helpers": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the command that loads the shell helpers"
+          }
+        }
+      }
+    },
+    "Copy the command that removes the hosts line": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the command that removes the hosts line"
+          }
+        }
+      }
+    },
+    "Copy the command that removes the stale hosts lines": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the command that removes the stale hosts lines"
+          }
+        }
+      }
+    },
+    "Copy the command that updates the command line tool": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the command that updates the command line tool"
+          }
+        }
+      }
+    },
     "Copy the failed step, its message and the fix": {
       "extractionState": "manual",
       "localizations": {
@@ -1912,6 +2937,83 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Copy the one line installer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the one line installer"
+          }
+        }
+      }
+    },
+    "Copy the update command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the update command"
+          }
+        }
+      }
+    },
+    "Copying %@ to %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copying %@ to %@…"
+          }
+        }
+      }
+    },
+    "Could not check this Mac": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not check this Mac"
+          }
+        }
+      }
+    },
+    "Could not list the users": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not list the users"
+          }
+        }
+      }
+    },
+    "Could not reach GitHub: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not reach GitHub: %@"
+          }
+        }
+      }
+    },
+    "Could not read the profiles": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read the profiles"
+          }
+        }
+      }
     },
     "Crashed": {
       "extractionState": "manual",
@@ -1973,6 +3075,17 @@
       },
       "comment": "Main window."
     },
+    "Create a Team Profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a Team Profile"
+          }
+        }
+      }
+    },
     "Create a profile from a bench, import a profile file or link, or subscribe to a team's repository": {
       "extractionState": "manual",
       "localizations": {
@@ -1996,6 +3109,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "Creating %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creating %@…"
+          }
+        }
+      }
     },
     "Current address": {
       "extractionState": "manual",
@@ -2093,6 +3217,17 @@
       },
       "comment": "Main window."
     },
+    "Dismiss this notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss this notice"
+          }
+        }
+      }
+    },
     "Do not run migrate afterwards": {
       "extractionState": "manual",
       "localizations": {
@@ -2104,6 +3239,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Do not start its scheduler or workers unless you mean to reach the same services as production.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do not start its scheduler or workers unless you mean to reach the same services as production."
+          }
+        }
+      }
     },
     "Doctor": {
       "extractionState": "manual",
@@ -2153,6 +3299,28 @@
       },
       "comment": "Status menu."
     },
+    "Done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        }
+      }
+    },
+    "Drop %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drop %@"
+          }
+        }
+      }
+    },
     "Drop Site": {
       "extractionState": "manual",
       "localizations": {
@@ -2201,6 +3369,28 @@
       },
       "comment": "Main window."
     },
+    "Dropped %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dropped %@"
+          }
+        }
+      }
+    },
+    "Each site is backed up before it is migrated: %@.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each site is backed up before it is migrated: %@."
+          }
+        }
+      }
+    },
     "Edit": {
       "extractionState": "manual",
       "localizations": {
@@ -2237,6 +3427,17 @@
       },
       "comment": "Settings and the other windows."
     },
+    "Enabled users of %@. Open signs the browser in as that user; pin one to keep it in the Open as… menu.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enabled users of %@. Open signs the browser in as that user; pin one to keep it in the Open as… menu."
+          }
+        }
+      }
+    },
     "Error": {
       "extractionState": "manual",
       "localizations": {
@@ -2248,6 +3449,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "Every app is already in the bench and on its chosen sites.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every app is already in the bench and on its chosen sites."
+          }
+        }
+      }
     },
     "Every check, with its fix": {
       "extractionState": "manual",
@@ -2285,6 +3497,28 @@
       },
       "comment": "Settings and the other windows."
     },
+    "Export %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export %@"
+          }
+        }
+      }
+    },
+    "Export, update, check or remove %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export, update, check or remove %@"
+          }
+        }
+      }
+    },
     "Exported %lld apps": {
       "extractionState": "manual",
       "localizations": {
@@ -2309,6 +3543,17 @@
       },
       "comment": "Sheets: result of a profile export."
     },
+    "Exporting…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporting…"
+          }
+        }
+      }
+    },
     "Export…": {
       "extractionState": "manual",
       "localizations": {
@@ -2332,6 +3577,39 @@
         }
       },
       "comment": "Share and Network."
+    },
+    "Extend it from the Sharing tab to keep the room open.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extend it from the Sharing tab to keep the room open."
+          }
+        }
+      }
+    },
+    "Fetching the changes…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fetching the changes…"
+          }
+        }
+      }
+    },
+    "Fetching the source…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fetching the source…"
+          }
+        }
+      }
     },
     "File or https URL": {
       "extractionState": "manual",
@@ -2369,6 +3647,17 @@
       },
       "comment": "Main window."
     },
+    "Find User": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find User"
+          }
+        }
+      }
+    },
     "Find User…": {
       "extractionState": "manual",
       "localizations": {
@@ -2393,6 +3682,28 @@
       },
       "comment": "Sheets."
     },
+    "Finish the Update of %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finish the Update of %@"
+          }
+        }
+      }
+    },
+    "Fix what is marked red, then Check Again. Continue is possible when nothing is red.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fix what is marked red, then Check Again. Continue is possible when nothing is red."
+          }
+        }
+      }
+    },
     "Fixed keeps the current ports. Automatic can propose new ports for your approval.": {
       "extractionState": "manual",
       "localizations": {
@@ -2404,6 +3715,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Fixed keeps these ports. Automatic lets BenchBar propose new ones, for your approval, when another bench or app takes them. A change of mode is saved at once.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fixed keeps these ports. Automatic lets BenchBar propose new ones, for your approval, when another bench or app takes them. A change of mode is saved at once."
+          }
+        }
+      }
     },
     "Flags": {
       "extractionState": "manual",
@@ -2621,6 +3943,50 @@
       },
       "comment": "Sheets."
     },
+    "GitHub answered HTTP %lld.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub answered HTTP %lld."
+          }
+        }
+      }
+    },
+    "GitHub has no published release yet.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub has no published release yet."
+          }
+        }
+      }
+    },
+    "GitHub is rate limiting this Mac; try again in a while.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub is rate limiting this Mac; try again in a while."
+          }
+        }
+      }
+    },
+    "GitHub's answer could not be read.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub's answer could not be read."
+          }
+        }
+      }
+    },
     "Got an invite from a colleague?": {
       "extractionState": "manual",
       "localizations": {
@@ -2681,6 +4047,17 @@
       },
       "comment": "Main menu title."
     },
+    "Hide until the next version": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide until the next version"
+          }
+        }
+      }
+    },
     "History": {
       "extractionState": "manual",
       "localizations": {
@@ -2716,6 +4093,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Homebrew installed BenchBar, so %@ works too; it skips an app that is already up to date.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew installed BenchBar, so %@ works too; it skips an app that is already up to date."
+          }
+        }
+      }
     },
     "Host and site": {
       "extractionState": "manual",
@@ -2776,6 +4164,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Import a Profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import a Profile"
+          }
+        }
+      }
     },
     "Import…": {
       "extractionState": "manual",
@@ -2849,6 +4248,17 @@
       },
       "comment": "Main window."
     },
+    "Install %@ on a site or change its focus": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install %@ on a site or change its focus"
+          }
+        }
+      }
+    },
     "Install Command Line Tools…": {
       "extractionState": "manual",
       "localizations": {
@@ -2860,6 +4270,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Install Service": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install Service"
+          }
+        }
+      }
     },
     "Install benchbar without the app's wizard: the Homebrew line and the one line installer": {
       "extractionState": "manual",
@@ -2896,6 +4317,39 @@
         }
       },
       "comment": "Main window."
+    },
+    "Install starts it, and that is your confirmation. Steps that ask for your password show macOS's own dialog: BenchBar never sees the password. Cancel a dialog and that step is skipped with the command to run yourself.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install starts it, and that is your confirmation. Steps that ask for your password show macOS's own dialog: BenchBar never sees the password. Cancel a dialog and that step is skipped with the command to run yourself."
+          }
+        }
+      }
+    },
+    "Installing the service…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installing the service…"
+          }
+        }
+      }
+    },
+    "It goes to the retried benchbar process only, never on a command line or to disk.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It goes to the retried benchbar process only, never on a command line or to disk."
+          }
+        }
+      }
     },
     "It has no secrets, no personal paths and no names: passwords, keys and tokens are masked, your home folder, username and the names of this Mac are replaced, and site configs are reduced to their key names. REDACTIONS.txt inside lists every replacement.": {
       "extractionState": "manual",
@@ -3161,6 +4615,17 @@
       },
       "comment": "Main window."
     },
+    "Make %@ the default, back it up, snapshot it, restore it or drop it": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Make %@ the default, back it up, snapshot it, restore it or drop it"
+          }
+        }
+      }
+    },
     "Make Default": {
       "extractionState": "manual",
       "localizations": {
@@ -3197,6 +4662,17 @@
       },
       "comment": "Popover."
     },
+    "Management is set up. Start the benches when you are ready.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Management is set up. Start the benches when you are ready."
+          }
+        }
+      }
+    },
     "Mark %@ scratch for %lld days": {
       "extractionState": "manual",
       "localizations": {
@@ -3232,6 +4708,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Marking %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marking %@…"
+          }
+        }
+      }
     },
     "Measuring…": {
       "extractionState": "manual",
@@ -3293,6 +4780,17 @@
       },
       "comment": "Window menu."
     },
+    "More update actions": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More update actions"
+          }
+        }
+      }
+    },
     "Motion": {
       "extractionState": "manual",
       "localizations": {
@@ -3316,6 +4814,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Move %@ to Another Bench": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move %@ to Another Bench"
+          }
+        }
+      }
     },
     "Move to": {
       "extractionState": "manual",
@@ -3341,6 +4850,17 @@
       },
       "comment": "Main window."
     },
+    "Moving %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moving %@…"
+          }
+        }
+      }
+    },
     "Needs about %@ GB free": {
       "extractionState": "manual",
       "localizations": {
@@ -3364,6 +4884,17 @@
         }
       },
       "comment": "Popover: state of a running bench."
+    },
+    "Needs the MariaDB root password": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs the MariaDB root password"
+          }
+        }
+      }
     },
     "Neither VS Code nor Cursor is installed.": {
       "extractionState": "manual",
@@ -3497,6 +5028,17 @@
       },
       "comment": "Main window."
     },
+    "No backup of %@ to restore": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No backup of %@ to restore"
+          }
+        }
+      }
+    },
     "No bench found": {
       "extractionState": "manual",
       "localizations": {
@@ -3521,6 +5063,160 @@
       },
       "comment": "Main window."
     },
+    "No changelog for %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No changelog for %@"
+          }
+        }
+      }
+    },
+    "No install plan": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No install plan"
+          }
+        }
+      }
+    },
+    "No plan for %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No plan for %@"
+          }
+        }
+      }
+    },
+    "No plan for the service": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No plan for the service"
+          }
+        }
+      }
+    },
+    "No plan to %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No plan to %@"
+          }
+        }
+      }
+    },
+    "No plan to apply the lock file": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No plan to apply the lock file"
+          }
+        }
+      }
+    },
+    "No plan to move %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No plan to move %@"
+          }
+        }
+      }
+    },
+    "No plan to pull %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No plan to pull %@"
+          }
+        }
+      }
+    },
+    "No plan to restore %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No plan to restore %@"
+          }
+        }
+      }
+    },
+    "No plan to roll %@ back": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No plan to roll %@ back"
+          }
+        }
+      }
+    },
+    "No plan to run %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No plan to run %@"
+          }
+        }
+      }
+    },
+    "No plan to write the lock file": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No plan to write the lock file"
+          }
+        }
+      }
+    },
+    "No repair plan": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No repair plan"
+          }
+        }
+      }
+    },
+    "No report": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No report"
+          }
+        }
+      }
+    },
     "No scratch bench has expired.": {
       "extractionState": "manual",
       "localizations": {
@@ -3544,6 +5240,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "No snapshots of %@ yet": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No snapshots of %@ yet"
+          }
+        }
+      }
     },
     "No users match": {
       "extractionState": "manual",
@@ -3604,6 +5311,127 @@
         }
       },
       "comment": "Settings and the other windows."
+    },
+    "Nothing has run yet. These are the steps; %@ runs exactly this plan.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing has run yet. These are the steps; %@ runs exactly this plan."
+          }
+        }
+      }
+    },
+    "Nothing has run yet. These are the steps; Add Site runs exactly this plan.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing has run yet. These are the steps; Add Site runs exactly this plan."
+          }
+        }
+      }
+    },
+    "Nothing has run yet. These are the steps; Move runs exactly this plan. The backups stay.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing has run yet. These are the steps; Move runs exactly this plan. The backups stay."
+          }
+        }
+      }
+    },
+    "Nothing has run yet. These are the steps; Pull runs this plan.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing has run yet. These are the steps; Pull runs this plan."
+          }
+        }
+      }
+    },
+    "Nothing has run yet. These are the steps; Restore runs exactly this plan.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing has run yet. These are the steps; Restore runs exactly this plan."
+          }
+        }
+      }
+    },
+    "Nothing has run yet. This is the plan; Run runs exactly this.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing has run yet. This is the plan; Run runs exactly this."
+          }
+        }
+      }
+    },
+    "Nothing to change.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to change."
+          }
+        }
+      }
+    },
+    "Nothing to do": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to do"
+          }
+        }
+      }
+    },
+    "Nothing to repair.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to repair."
+          }
+        }
+      }
+    },
+    "Nothing was added": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing was added"
+          }
+        }
+      }
+    },
+    "Nothing was changed. Review the plan again to see what it is now.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing was changed. Review the plan again to see what it is now."
+          }
+        }
+      }
     },
     "Notifications": {
       "extractionState": "manual",
@@ -3724,6 +5552,17 @@
         }
       },
       "comment": "Settings and the other windows."
+    },
+    "One step was skipped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One step was skipped"
+          }
+        }
+      }
     },
     "Only the lines after the bench's last start (benchbar logs --since-restart)": {
       "extractionState": "manual",
@@ -4085,6 +5924,17 @@
       },
       "comment": "Sheets."
     },
+    "Planning the install…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Planning the install…"
+          }
+        }
+      }
+    },
     "Port Settings & Setup…": {
       "extractionState": "manual",
       "localizations": {
@@ -4205,6 +6055,17 @@
       },
       "comment": "Settings and the other windows."
     },
+    "Private repositories work when your SSH key (or a git credential helper) can read them; BenchBar checks access first, so a missing key fails in seconds.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private repositories work when your SSH key (or a git credential helper) can read them; BenchBar checks access first, so a missing key fails in seconds."
+          }
+        }
+      }
+    },
     "Process": {
       "extractionState": "manual",
       "localizations": {
@@ -4253,6 +6114,17 @@
       },
       "comment": "Main window."
     },
+    "Profiles: %@.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profiles: %@."
+          }
+        }
+      }
+    },
     "Pull": {
       "extractionState": "manual",
       "localizations": {
@@ -4264,6 +6136,28 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Pull a Site into %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull a Site into %@"
+          }
+        }
+      }
+    },
+    "Pulling %@: download, restore and migrate can take a while…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulling %@: download, restore and migrate can take a while…"
+          }
+        }
+      }
     },
     "Pull…": {
       "extractionState": "manual",
@@ -4288,6 +6182,28 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Puts %@ back into the site. You see the plan first; nothing runs before you confirm.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puts %@ back into the site. You see the plan first; nothing runs before you confirm."
+          }
+        }
+      }
+    },
+    "Puts a backup back, into this site or into a copy of it. You see the plan first; nothing runs before you confirm.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puts a backup back, into this site or into a copy of it. You see the plan first; nothing runs before you confirm."
+          }
+        }
+      }
     },
     "Quit BenchBar": {
       "extractionState": "manual",
@@ -4324,6 +6240,138 @@
         }
       },
       "comment": "Main window."
+    },
+    "Reading the backup and the bench…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the backup and the bench…"
+          }
+        }
+      }
+    },
+    "Reading the lock file and the bench…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the lock file and the bench…"
+          }
+        }
+      }
+    },
+    "Reading the plan (benchbar repair --dry-run)…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the plan (benchbar repair --dry-run)…"
+          }
+        }
+      }
+    },
+    "Reading the plan (benchbar service --dry-run)…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the plan (benchbar service --dry-run)…"
+          }
+        }
+      }
+    },
+    "Reading the plan from benchbar…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the plan from benchbar…"
+          }
+        }
+      }
+    },
+    "Reading the plan…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the plan…"
+          }
+        }
+      }
+    },
+    "Reading the profile and checking its repositories…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the profile and checking its repositories…"
+          }
+        }
+      }
+    },
+    "Reading the repositories and the bench…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the repositories and the bench…"
+          }
+        }
+      }
+    },
+    "Reading the repository and the bench…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the repository and the bench…"
+          }
+        }
+      }
+    },
+    "Reading the snapshot and the bench…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the snapshot and the bench…"
+          }
+        }
+      }
+    },
+    "Reading the snapshots of %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the snapshots of %@…"
+          }
+        }
+      }
+    },
+    "Reading the users of %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the users of %@…"
+          }
+        }
+      }
     },
     "Ready": {
       "extractionState": "manual",
@@ -4373,6 +6421,17 @@
       },
       "comment": "Main window."
     },
+    "Refresh Service": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh Service"
+          }
+        }
+      }
+    },
     "Refresh Site Lists": {
       "extractionState": "manual",
       "localizations": {
@@ -4396,6 +6455,28 @@
         }
       },
       "comment": "Share and Network."
+    },
+    "Refresh the site lists or check the remotes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh the site lists or check the remotes"
+          }
+        }
+      }
+    },
+    "Refreshing the service…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refreshing the service…"
+          }
+        }
+      }
     },
     "Release Notes": {
       "extractionState": "manual",
@@ -4493,6 +6574,61 @@
       },
       "comment": "Main window."
     },
+    "Repair %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repair %@"
+          }
+        }
+      }
+    },
+    "Repair finished with problems left": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repair finished with problems left"
+          }
+        }
+      }
+    },
+    "Repair finished; every check passes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repair finished; every check passes."
+          }
+        }
+      }
+    },
+    "Repair stopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repair stopped"
+          }
+        }
+      }
+    },
+    "Repairing…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repairing…"
+          }
+        }
+      }
+    },
     "Repair…": {
       "extractionState": "manual",
       "localizations": {
@@ -4505,6 +6641,17 @@
       },
       "comment": "Popover."
     },
+    "Report a Bug": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report a Bug"
+          }
+        }
+      }
+    },
     "Report a Bug…": {
       "extractionState": "manual",
       "localizations": {
@@ -4516,6 +6663,17 @@
         }
       },
       "comment": "Help menu."
+    },
+    "Repository addresses are written without your SSH host aliases or any login.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository addresses are written without your SSH host aliases or any login."
+          }
+        }
+      }
     },
     "Reset": {
       "extractionState": "manual",
@@ -4588,6 +6746,17 @@
         }
       },
       "comment": "Share: confirmation to restart sharing."
+    },
+    "Restore %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore %@"
+          }
+        }
+      }
     },
     "Restore a Backup…": {
       "extractionState": "manual",
@@ -4685,6 +6854,39 @@
       },
       "comment": "Popover."
     },
+    "Review reads the repositories and shows the steps. Adding runs bench get-app, installs each app's requirements and builds the assets, which can take several minutes; the bench keeps running.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review reads the repositories and shows the steps. Adding runs bench get-app, installs each app's requirements and builds the assets, which can take several minutes; the bench keeps running."
+          }
+        }
+      }
+    },
+    "Review the addresses and service changes before applying. Existing apps and databases are preserved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review the addresses and service changes before applying. Existing apps and databases are preserved."
+          }
+        }
+      }
+    },
+    "Roll %@ back": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Roll %@ back"
+          }
+        }
+      }
+    },
     "Roll Back": {
       "extractionState": "manual",
       "localizations": {
@@ -4732,6 +6934,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Run Bench Command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run Bench Command"
+          }
+        }
+      }
     },
     "Run Bench Command…": {
       "extractionState": "manual",
@@ -4805,6 +7018,39 @@
       },
       "comment": "Popover: state."
     },
+    "Running %@: it can take a while, and it is stopped at its deadline…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running %@: it can take a while, and it is stopped at its deadline…"
+          }
+        }
+      }
+    },
+    "Running %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running %@…"
+          }
+        }
+      }
+    },
+    "Running benchbar report…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running benchbar report…"
+          }
+        }
+      }
+    },
     "Running doctor": {
       "extractionState": "manual",
       "localizations": {
@@ -4865,6 +7111,17 @@
       },
       "comment": "Popover."
     },
+    "Runs one command of benchbar's allow list in %@, under a deadline. A read runs at once; a change shows its plan first.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs one command of benchbar's allow list in %@, under a deadline. A read runs at once; a change shows its plan first."
+          }
+        }
+      }
+    },
     "Runs that change things, from a terminal, an agent or the app. BenchBar only lists them. `benchbar op status` follows one.": {
       "extractionState": "manual",
       "localizations": {
@@ -4876,6 +7133,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "Runs the fixes doctor found, in order, with a backup before each change.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs the fixes doctor found, in order, with a backup before each change."
+          }
+        }
+      }
     },
     "Save as": {
       "extractionState": "manual",
@@ -4973,6 +7241,17 @@
       },
       "comment": "Sheets."
     },
+    "Scratch benches, the ones that expired and what a removed bench leaves behind. Nothing here changes until you choose.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scratch benches, the ones that expired and what a removed bench leaves behind. Nothing here changes until you choose."
+          }
+        }
+      }
+    },
     "Scratch benches, the ones that expired, the databases no site refers to and the hosts lines no bench uses": {
       "extractionState": "manual",
       "localizations": {
@@ -5020,6 +7299,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "See the steps below and the log.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See the steps below and the log."
+          }
+        }
+      }
     },
     "Select All": {
       "extractionState": "manual",
@@ -5093,6 +7383,17 @@
       },
       "comment": "Popover."
     },
+    "Set up a bench from it with benchbar install --profile %@.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up a bench from it with benchbar install --profile %@."
+          }
+        }
+      }
+    },
     "Set up a bench from one with benchbar install --profile NAME. Team profiles are files in ~/.config/benchbar/profiles, a subscribed repository or a folder in BENCHBAR_PROFILE_PATH, never inside BenchBar. Drop a .toml file here to import it.": {
       "extractionState": "manual",
       "localizations": {
@@ -5141,6 +7442,28 @@
       },
       "comment": "Menu item; the shortcut is Command comma."
     },
+    "Setup completed and the start command succeeded.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setup completed and the start command succeeded."
+          }
+        }
+      }
+    },
+    "Setup did not finish": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setup did not finish"
+          }
+        }
+      }
+    },
     "Setup output": {
       "extractionState": "manual",
       "localizations": {
@@ -5177,6 +7500,17 @@
       },
       "comment": "Sheets."
     },
+    "Shared copy ready": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared copy ready"
+          }
+        }
+      }
+    },
     "Sharing ends in %lld minutes": {
       "extractionState": "manual",
       "localizations": {
@@ -5212,6 +7546,28 @@
         }
       },
       "comment": "VoiceOver help of the menu bar item."
+    },
+    "Sharing stays on, but guests see a short pause while the copy restarts (%@ online).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharing stays on, but guests see a short pause while the copy restarts (%@ online)."
+          }
+        }
+      }
+    },
+    "Sharing stays on, but guests see a short pause while the copy restarts.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharing stays on, but guests see a short pause while the copy restarts."
+          }
+        }
+      }
     },
     "Sharing…": {
       "extractionState": "manual",
@@ -5345,6 +7701,17 @@
       },
       "comment": "Popover."
     },
+    "Showing the first %lld; refine the search.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showing the first %lld; refine the search."
+          }
+        }
+      }
+    },
     "Shows the file lock write would write from this bench, then writes it when you confirm": {
       "extractionState": "manual",
       "localizations": {
@@ -5356,6 +7723,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "Shows the new commits and the steps before anything changes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows the new commits and the steps before anything changes."
+          }
+        }
+      }
     },
     "Shows the plan of bench gc first: it backs up each site, drops its database and moves the folder aside": {
       "extractionState": "manual",
@@ -5392,6 +7770,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "Shows what changed in the profile's source, then applies it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows what changed in the profile's source, then applies it."
+          }
+        }
+      }
     },
     "Shows what lock apply would do to the apps, then runs it when you confirm": {
       "extractionState": "manual",
@@ -5513,6 +7902,17 @@
       },
       "comment": "Main window."
     },
+    "Skip": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skip"
+          }
+        }
+      }
+    },
     "Skip migrate": {
       "extractionState": "manual",
       "localizations": {
@@ -5525,6 +7925,17 @@
       },
       "comment": "Sheets."
     },
+    "Snapshots of %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshots of %@"
+          }
+        }
+      }
+    },
     "Snapshots…": {
       "extractionState": "manual",
       "localizations": {
@@ -5536,6 +7947,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "Snapshotting and rolling back %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshotting and rolling back %@…"
+          }
+        }
+      }
     },
     "Socket.IO port": {
       "extractionState": "manual",
@@ -5560,6 +7982,28 @@
         }
       },
       "comment": "Main window."
+    },
+    "Someone is having trouble joining": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Someone is having trouble joining"
+          }
+        }
+      }
+    },
+    "Someone typed a wrong room code 10 times. The room is locked. Unlock it, or draw a New code to reopen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Someone typed a wrong room code 10 times. The room is locked. Unlock it, or draw a New code to reopen."
+          }
+        }
+      }
     },
     "Source": {
       "extractionState": "manual",
@@ -5645,6 +8089,17 @@
       },
       "comment": "Popover: state."
     },
+    "Starting…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting…"
+          }
+        }
+      }
+    },
     "Startup": {
       "extractionState": "manual",
       "localizations": {
@@ -5692,6 +8147,28 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Steps that ask for your password show macOS's own dialog; BenchBar never sees the password. Cancel it and that step is skipped, with the command to run yourself.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steps that ask for your password show macOS's own dialog; BenchBar never sees the password. Cancel it and that step is skipped, with the command to run yourself."
+          }
+        }
+      }
+    },
+    "Steps that finished stay done and the step that was running may be half done. Run the wizard again to finish it, or run benchbar repair in Terminal.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steps that finished stay done and the step that was running may be half done. Run the wizard again to finish it, or run benchbar repair in Terminal."
+          }
+        }
+      }
     },
     "Stick to the newest line; scrolling up turns it off": {
       "extractionState": "manual",
@@ -5741,6 +8218,17 @@
       },
       "comment": "Main window."
     },
+    "Stop any previous manager's automatic startup first.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop any previous manager's automatic startup first."
+          }
+        }
+      }
+    },
     "Stop sharing? %lld people are connected and will be signed out.": {
       "extractionState": "manual",
       "localizations": {
@@ -5789,6 +8277,17 @@
       },
       "comment": "Popover: state."
     },
+    "Stopping…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopping…"
+          }
+        }
+      }
+    },
     "Stops the install; steps already done stay done": {
       "extractionState": "manual",
       "localizations": {
@@ -5825,6 +8324,28 @@
       },
       "comment": "Main window."
     },
+    "Subscribe to a Team's Profiles": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subscribe to a Team's Profiles"
+          }
+        }
+      }
+    },
+    "Subscribed to %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subscribed to %@"
+          }
+        }
+      }
+    },
     "Take Snapshot": {
       "extractionState": "manual",
       "localizations": {
@@ -5836,6 +8357,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Take one before an upgrade or a risky change; a rollback puts the site back as it was.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take one before an upgrade or a risky change; a rollback puts the site back as it was."
+          }
+        }
+      }
     },
     "Take the Tour": {
       "extractionState": "manual",
@@ -5873,6 +8405,17 @@
       },
       "comment": "Popover."
     },
+    "That did not work": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That did not work"
+          }
+        }
+      }
+    },
     "The %lld rooms you opened close on this Mac.": {
       "extractionState": "manual",
       "localizations": {
@@ -5909,6 +8452,105 @@
       },
       "comment": "Popover."
     },
+    "The CLI listed no step.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The CLI listed no step."
+          }
+        }
+      }
+    },
+    "The Mac changed since this plan was shown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Mac changed since this plan was shown"
+          }
+        }
+      }
+    },
+    "The MariaDB password comes from your Keychain; BenchBar never reads it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The MariaDB password comes from your Keychain; BenchBar never reads it."
+          }
+        }
+      }
+    },
+    "The apps already match the lock file.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The apps already match the lock file."
+          }
+        }
+      }
+    },
+    "The bench changed since this plan was shown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bench changed since this plan was shown"
+          }
+        }
+      }
+    },
+    "The bench or the backup changed since this plan was shown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bench or the backup changed since this plan was shown"
+          }
+        }
+      }
+    },
+    "The bench or the lock file changed since this plan was shown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bench or the lock file changed since this plan was shown"
+          }
+        }
+      }
+    },
+    "The bench or the site changed since this plan was shown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bench or the site changed since this plan was shown"
+          }
+        }
+      }
+    },
+    "The bench or the snapshot changed since this plan was shown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bench or the snapshot changed since this plan was shown"
+          }
+        }
+      }
+    },
     "The bench this popover shows; its shortcuts act on it": {
       "extractionState": "manual",
       "localizations": {
@@ -5932,6 +8574,28 @@
         }
       },
       "comment": "Main window."
+    },
+    "The benchbar command line tool is not available.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The benchbar command line tool is not available."
+          }
+        }
+      }
+    },
+    "The benchbar command line tool was not found, so there is no report. The issue page still opens with your versions.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The benchbar command line tool was not found, so there is no report. The issue page still opens with your versions."
+          }
+        }
+      }
     },
     "The code lets anyone on this Wi-Fi join. Hide it while you share your screen.": {
       "extractionState": "manual",
@@ -5969,6 +8633,39 @@
       },
       "comment": "Share and Network."
     },
+    "The copy is a new site on this bench with the backup's data. %@ is not touched.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The copy is a new site on this bench with the backup's data. %@ is not touched."
+          }
+        }
+      }
+    },
+    "The copy keeps production's secrets": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The copy keeps production's secrets"
+          }
+        }
+      }
+    },
+    "The data of %@ is replaced by the backup. %@ is backed up with its files first, and that backup is listed on the Sites tab afterwards.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The data of %@ is replaced by the backup. %@ is backed up with its files first, and that backup is listed on the Sites tab afterwards."
+          }
+        }
+      }
+    },
     "The default site is the one benchup waits for, the runner pings and ⌘O opens.": {
       "extractionState": "manual",
       "localizations": {
@@ -5980,6 +8677,94 @@
         }
       },
       "comment": "Main window."
+    },
+    "The editor, console, database, Finder and the bench path": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The editor, console, database, Finder and the bench path"
+          }
+        }
+      }
+    },
+    "The file already says this.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file already says this."
+          }
+        }
+      }
+    },
+    "The folder holds the backup set Frappe Cloud or bench gave you. Nothing is read from a server.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The folder holds the backup set Frappe Cloud or bench gave you. Nothing is read from a server."
+          }
+        }
+      }
+    },
+    "The history could not be read": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The history could not be read"
+          }
+        }
+      }
+    },
+    "The host is a Host of your ~/.ssh/config. The latest backup on the server is used and nothing is written there.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The host is a Host of your ~/.ssh/config. The latest backup on the server is used and nothing is written there."
+          }
+        }
+      }
+    },
+    "The hosts lines are in.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hosts lines are in."
+          }
+        }
+      }
+    },
+    "The hosts lines were not added": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hosts lines were not added"
+          }
+        }
+      }
+    },
+    "The installer checks the Command Line Tools and Homebrew first, and never runs sudo itself. docs: benchbar.akashmishra.com/install": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The installer checks the Command Line Tools and Homebrew first, and never runs sudo itself. docs: benchbar.akashmishra.com/install"
+          }
+        }
+      }
     },
     "The one line installer": {
       "extractionState": "manual",
@@ -6005,6 +8790,105 @@
       },
       "comment": "Sheets."
     },
+    "The password dialog was cancelled, so this still needs doing. Run it in Terminal:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The password dialog was cancelled, so this still needs doing. Run it in Terminal:"
+          }
+        }
+      }
+    },
+    "The password goes to the benchbar process only, never on a command line or to disk. It is the login of the new site's Administrator.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The password goes to the benchbar process only, never on a command line or to disk. It is the login of the new site's Administrator."
+          }
+        }
+      }
+    },
+    "The password goes to the benchbar process only, never on a command line or to disk. The MariaDB password comes from your Keychain.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The password goes to the benchbar process only, never on a command line or to disk. The MariaDB password comes from your Keychain."
+          }
+        }
+      }
+    },
+    "The plan changed since it was shown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The plan changed since it was shown"
+          }
+        }
+      }
+    },
+    "The ports this bench uses, and whether BenchBar may move them. Nothing needs setting up.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The ports this bench uses, and whether BenchBar may move them. Nothing needs setting up."
+          }
+        }
+      }
+    },
+    "The profile was not imported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The profile was not imported"
+          }
+        }
+      }
+    },
+    "The repository has no profile yet.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The repository has no profile yet."
+          }
+        }
+      }
+    },
+    "The repository was not added": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The repository was not added"
+          }
+        }
+      }
+    },
+    "The room is locked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The room is locked"
+          }
+        }
+      }
+    },
     "The runner asleep when the bench is stopped, running when it is up, stumbling when it crashed": {
       "extractionState": "manual",
       "localizations": {
@@ -6016,6 +8900,61 @@
         }
       },
       "comment": "Main window."
+    },
+    "The service files of this bench are already as benchbar writes them.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The service files of this bench are already as benchbar writes them."
+          }
+        }
+      }
+    },
+    "The site keeps its name. %@ must be stopped first, and its site is dropped there once the copy checks out; the backups stay.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The site keeps its name. %@ must be stopped first, and its site is dropped there once the copy checks out; the backups stay."
+          }
+        }
+      }
+    },
+    "The site names resolve to this Mac now.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The site names resolve to this Mac now."
+          }
+        }
+      }
+    },
+    "The sites' app lists could not be read, so every chosen site is shown as not having the app: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The sites' app lists could not be read, so every chosen site is shown as not having the app: %@"
+          }
+        }
+      }
+    },
+    "The snapshots could not be read": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The snapshots could not be read"
+          }
+        }
+      }
     },
     "The undo point of the last rollback": {
       "extractionState": "manual",
@@ -6029,6 +8968,17 @@
       },
       "comment": "Sheets."
     },
+    "Then Finder shows the zip and GitHub opens a new issue with your macOS and BenchBar versions filled in. Nothing is sent until you attach the zip yourself.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Then Finder shows the zip and GitHub opens a new issue with your macOS and BenchBar versions filled in. Nothing is sent until you attach the zip yourself."
+          }
+        }
+      }
+    },
     "Then, in order:": {
       "extractionState": "manual",
       "localizations": {
@@ -6041,6 +8991,116 @@
       },
       "comment": "Main window."
     },
+    "This Mac can reach every repository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac can reach every repository"
+          }
+        }
+      }
+    },
+    "This also ends sharing (%@ online).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This also ends sharing (%@ online)."
+          }
+        }
+      }
+    },
+    "This also ends sharing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This also ends sharing."
+          }
+        }
+      }
+    },
+    "This benchbar gives no plan token for the lock file, so Apply runs lock apply after your OK. It reads the lock file again then.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This benchbar gives no plan token for the lock file, so Apply runs lock apply after your OK. It reads the lock file again then."
+          }
+        }
+      }
+    },
+    "This build of BenchBar has no updater: Update Now opens the release page.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This build of BenchBar has no updater: Update Now opens the release page."
+          }
+        }
+      }
+    },
+    "This plan cannot run": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This plan cannot run"
+          }
+        }
+      }
+    },
+    "This plan has no token, so BenchBar does not run it. Run it in Terminal with benchbar run, or update benchbar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This plan has no token, so BenchBar does not run it. Run it in Terminal with benchbar run, or update benchbar."
+          }
+        }
+      }
+    },
+    "This plan has no token, so BenchBar does not run it. Run it in Terminal with benchbar, or update benchbar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This plan has no token, so BenchBar does not run it. Run it in Terminal with benchbar, or update benchbar."
+          }
+        }
+      }
+    },
+    "This plan moves the bench to another block of ports (offset %lld).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This plan moves the bench to another block of ports (offset %lld)."
+          }
+        }
+      }
+    },
+    "Tidy Up": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidy Up"
+          }
+        }
+      }
+    },
     "Tidy Up…": {
       "extractionState": "manual",
       "localizations": {
@@ -6052,6 +9112,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "Tries each repository of the profile with your git credentials.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tries each repository of the profile with your git credentials."
+          }
+        }
+      }
     },
     "Try Again": {
       "extractionState": "manual",
@@ -6076,6 +9147,17 @@
         }
       },
       "comment": "Share and Network."
+    },
+    "Type the password of MariaDB's root user on this Mac, then Retry. It is not the site's Administrator password.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type the password of MariaDB's root user on this Mac, then Retry. It is not the site's Administrator password."
+          }
+        }
+      }
     },
     "Type to filter": {
       "extractionState": "manual",
@@ -6149,6 +9231,29 @@
       },
       "comment": "Sheets."
     },
+    "Update %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update %@"
+          }
+        }
+      },
+      "comment": "Sheets: the title of an app update."
+    },
+    "Update BenchBar to %@?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update BenchBar to %@?"
+          }
+        }
+      }
+    },
     "Update Now": {
       "extractionState": "manual",
       "localizations": {
@@ -6185,6 +9290,17 @@
       },
       "comment": "Status menu: the version number follows."
     },
+    "Updated %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated %@"
+          }
+        }
+      }
+    },
     "Updates": {
       "extractionState": "manual",
       "localizations": {
@@ -6208,6 +9324,17 @@
         }
       },
       "comment": "Main window."
+    },
+    "Updating…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updating…"
+          }
+        }
+      }
     },
     "Use Automatic": {
       "extractionState": "manual",
@@ -6293,6 +9420,17 @@
       },
       "comment": "Popover."
     },
+    "Waiting for macOS to ask for your password…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for macOS to ask for your password…"
+          }
+        }
+      }
+    },
     "Watch Assets in Terminal": {
       "extractionState": "manual",
       "localizations": {
@@ -6353,6 +9491,17 @@
       },
       "comment": "Settings and the other windows."
     },
+    "Where it goes, what it runs on and which apps it starts with.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Where it goes, what it runs on and which apps it starts with."
+          }
+        }
+      }
+    },
     "While a lease stands, restart, stop, app changes, site drop and restore, and the lockfile wait for the holder. Starting and reading are never stopped.": {
       "extractionState": "manual",
       "localizations": {
@@ -6401,6 +9550,50 @@
       },
       "comment": "Main window."
     },
+    "Writes a profile file your team can import, with the branch each app is shared on.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Writes a profile file your team can import, with the branch each app is shared on."
+          }
+        }
+      }
+    },
+    "Writes a profile from one bench's apps, branches and Frappe version.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Writes a profile from one bench's apps, branches and Frappe version."
+          }
+        }
+      }
+    },
+    "Writes the files that run the bench in the background. You see the plan first; nothing runs until you confirm.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Writes the files that run the bench in the background. You see the plan first; nothing runs until you confirm."
+          }
+        }
+      }
+    },
+    "Writing the lock file…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Writing the lock file…"
+          }
+        }
+      }
+    },
     "Your benches run as their own login agents, so they keep running when BenchBar is closed.": {
       "extractionState": "manual",
       "localizations": {
@@ -6436,6 +9629,17 @@
         }
       },
       "comment": "Share and Network."
+    },
+    "Your network changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your network changed"
+          }
+        }
+      }
     },
     "Your runners": {
       "extractionState": "manual",
@@ -6533,6 +9737,17 @@
       },
       "comment": "Main window."
     },
+    "benchbar needs %@, which it does not have, and BenchBar never asks for or reads it. Run this move in Terminal, where benchbar can ask.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "benchbar needs %@, which it does not have, and BenchBar never asks for or reads it. Run this move in Terminal, where benchbar can ask."
+          }
+        }
+      }
+    },
     "benchbar watch, in Terminal: rebuilds the assets while you edit JS or CSS. Close the window to stop it.": {
       "extractionState": "manual",
       "localizations": {
@@ -6617,6 +9832,28 @@
       },
       "comment": "Main window."
     },
+    "honcho exited with code %lld. launchd is restarting it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "honcho exited with code %lld. launchd is restarting it."
+          }
+        }
+      }
+    },
+    "honcho stopped unexpectedly. launchd is restarting it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "honcho stopped unexpectedly. launchd is restarting it."
+          }
+        }
+      }
+    },
     "its %lld steps": {
       "extractionState": "manual",
       "localizations": {
@@ -6663,6 +9900,17 @@
         }
       },
       "comment": "Settings and the other windows."
+    },
+    "macOS asks for your password in its own dialog; BenchBar never sees it. Cancel the dialog and nothing changes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS asks for your password in its own dialog; BenchBar never sees it. Cancel the dialog and nothing changes."
+          }
+        }
+      }
     },
     "macOS cannot register this copy. Install BenchBar in Applications (scripts/macos-install-local.sh) and try again.": {
       "extractionState": "manual",

@@ -144,12 +144,12 @@ final class UpdateOffer {
     func confirmFromMenu() {
         guard let version else { return }
         let alert = NSAlert()
-        alert.messageText = "Update BenchBar to \(version)?"
+        alert.messageText = String(localized: "Update BenchBar to \(version)?")
         alert.informativeText = UpdateBanner.explanation(plan)
-        alert.addButton(withTitle: "Update Now")
-        alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Release Notes")
-        if command != nil { alert.addButton(withTitle: "Copy Command") }
+        alert.addButton(withTitle: String(localized: "Update Now"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        alert.addButton(withTitle: String(localized: "Release Notes"))
+        if command != nil { alert.addButton(withTitle: String(localized: "Copy Command")) }
         NSApp.activate()
         switch alert.runModal() {
         case .alertFirstButtonReturn: updateNow()
@@ -172,14 +172,14 @@ struct UpdateBanner: View {
 
     var body: some View {
         if let version = offer.version, offer.showsBanner {
-            PaneBanner(symbol: "arrow.down.circle.fill", tint: .blue, title: "BenchBar \(version) is available",
-                   detail: Self.explanation(offer.plan), dismissHelp: "Hide until the next version", dismiss: { offer.dismiss() }) {
+            PaneBanner(symbol: "arrow.down.circle.fill", tint: .blue, title: String(localized: "BenchBar \(version) is available"),
+                   detail: Self.explanation(offer.plan), dismissHelp: String(localized: "Hide until the next version"), dismiss: { offer.dismiss() }) {
                 HStack {
                     // bordered: the pane under the banner keeps its own main action
                     Button("Update Now") { offer.updateNow() }
                     Button("Release Notes") { offer.openReleaseNotes() }
                     if let command = offer.command {
-                        MoreMenu(help: "Copy the update command") {
+                        MoreMenu(help: String(localized: "Copy the update command")) {
                             Button("Copy Command") { offer.copyCommand() }
                                 .help(command)
                         }
