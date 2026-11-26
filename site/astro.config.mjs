@@ -105,6 +105,7 @@ export default defineConfig({
             { label: 'Teams: profiles, lockfile and pull', slug: 'guides/teams' },
             { label: 'Coding agents and MCP', slug: 'guides/agents' },
             { label: 'Share a site on your network', slug: 'guides/share-on-your-network' },
+            { label: 'Doctor and repair', slug: 'guides/doctor-and-repair' },
             { label: 'Labs', slug: 'guides/labs' },
             { label: 'Quick Switch', slug: 'guides/quick-switch' },
             { label: 'Draw your own runner', slug: 'runners' },
@@ -143,7 +144,15 @@ export default defineConfig({
                 { label: 'report and other commands', slug: 'reference/cli/other' },
               ],
             },
-            { label: 'Doctor checks', slug: 'guides/doctor-and-repair' },
+            {
+              label: 'Doctor checks',
+              items: [
+                { label: 'All checks', slug: 'reference/doctor-checks' },
+                { label: 'System checks', slug: 'reference/doctor/system-checks' },
+                { label: 'Bench checks', slug: 'reference/doctor/bench-checks' },
+                { label: 'Service and site checks', slug: 'reference/doctor/service-checks' },
+              ],
+            },
             {
               label: 'JSON schema',
               items: [
