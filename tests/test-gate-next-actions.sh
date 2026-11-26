@@ -143,7 +143,7 @@ assert_contains "$OUT" 'benchbar app unfocus my\\ app --for-agent --bench-dir' "
 BENCHBAR_LENIENT_FLAGS=1 refused "an unknown flag with a secret" dropped site default dev2.localhost --token "$SECRET"
 BENCHBAR_LENIENT_FLAGS=1 refused "an unknown flag with a secret, =" dropped site default dev2.localhost "--token=$SECRET"
 refused "a second word" dropped app unfocus frappe "$SECRET"
-refused "a secret flag the command knows" dropped repair --apply "$SECRET" --yes
+refused "a secret flag the command knows" dropped site restore dev2.localhost --apply "$SECRET" --yes
 refused "free text" dropped lease take --site dev2.localhost --for 30 --note "for me"
 refused "a word after --" dropped app update erpnext --dry-run -- "$SECRET" --x
 

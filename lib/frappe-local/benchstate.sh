@@ -768,6 +768,34 @@ fl_bench_hint_line_v() {
   printf -v "$__var" '%s' "$out"
 }
 
+# fl_bench_gate_actions LINE N BENCH...: the refusal of the guess gate as next_actions[] of the result envelope, for the
+# reader that sees only stdout (--for-agent, --jsonl: the hint is on stderr). LINE is the line of the hint
+# (fl_bench_hint_line_v), N the number of known benches, BENCH... their paths in the order the refusal names them.
+#   - a line with every word in it: one action for each of the first five benches, the line with --bench-dir and the
+#     path of that bench, quoted as the hint quotes its words (a marked fix, "quoted": true, so a reader may run it as
+#     an argv array); then `benchbar list --json`, which says how many there are when it shows no more than five
+#   - a line with a "..." (a word was left out: a secret, free text, an unknown word): no action has the line, the
+#     three dots would be taken for a word. Only the list, whose reason says what to do: the typed words and
+#     --bench-dir with the path of one of the benches
+# Only the guess gate calls it. Another refusal that knows what the next step is can call fl_next_action itself before
+# fl_die (the lease gate, the lab gate, a missing input): fl_die needs no change, the envelope reads what was collected.
+fl_bench_gate_actions() {
+  local line="$1" n="$2" shown=0 d q why="See the known benches"
+  shift 2
+  if [[ " ${line} " == *" ... "* ]]; then
+    why="See the known benches. A word was left out of the line that was typed (it could hold a secret), so it is not repeated here: run the command again with the words that were typed and --bench-dir with the path of one of them"
+  else
+    for d in "$@"; do
+      [[ "$shown" -lt 5 ]] || break
+      shown=$((shown + 1))
+      fl_hint_quote_v q "$d"
+      fl_next_action "${FL_FIXQ}benchbar ${line} --bench-dir ${q}" "Run it on this bench"
+    done
+    [[ "$n" -le 5 ]] || why="See all ${n} known benches (the first five are listed above)"
+  fi
+  fl_next_action "${FL_FIXQ}benchbar list --json" "$why"
+}
+
 # fl_bench_guess_gate: a command that changes things and was not told which bench
 # (no --bench-dir, no BENCH_DIR, none remembered) acts on the first one
 # fl_bench_detect finds. Say which, and why; and where nobody can be asked
@@ -775,17 +803,19 @@ fl_bench_hint_line_v() {
 # refuse to guess. The note goes to stderr: a --json run keeps its stdout.
 # The refusal tells what to run instead: the line that was typed (fl_bench_hint_line_v) with --bench-dir PATH.
 fl_bench_guess_gate() {
-  local d n=0 list="" sep="" line="" gap=""
+  local d n=0 list="" sep="" line="" gap="" benches=()
   fl_bench_detect "$OPT_BENCH_DIR"
   [[ "${FL_BENCH_SOURCE:-}" == "detected" ]] || return 0
   while IFS= read -r d; do
     [[ -n "$d" ]] || continue
-    n=$((n + 1)); list="${list}${sep}${d}"; sep=", "
+    n=$((n + 1)); list="${list}${sep}${d}"; sep=", "; benches+=("$d")
   done < <(fl_known_benches)
   if [[ "$n" -gt 1 ]] && fl_noninteractive; then
     fl_bench_hint_line_v line
     # a hint with a word left out is not a line to paste: "..." would be taken for a word (an app's name for app add)
     case " ${line} " in *" ... "*) gap=" Put back what ... stands for: a word that could hold a secret is not printed here." ;; esac
+    # what stderr tells, as the next actions of the envelope (collected here, printed by the done line or the document)
+    fl_bench_gate_actions "$line" "$n" "${benches[@]}"
     fl_die "More than one bench is possible and none was chosen: ${list}." "Choose one: benchbar ${line} --bench-dir PATH (or set BENCH_DIR).${gap} benchbar list shows them."
   fi
   printf 'benchbar: acting on %s (auto-detected: no --bench-dir, BENCH_DIR or remembered bench%s; pass --bench-dir to choose)\n' \
