@@ -130,7 +130,8 @@ Team profiles
   profile check NAME  Can git read every repo with your credentials?
 
 Experiments (off until a person turns one on)
-  labs [list]         Experiments: off until a person turns one on.
+  labs [list]         The experiments and whether each is on; every one is off until a person turns
+                      it on.
   labs on NAME        Turn an experiment on after its warning. Refused without a person
                       (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an
                       app passes BENCHBAR_NONINTERACTIVE=0.
@@ -345,7 +346,8 @@ Team profiles
   profile check NAME  Can git read every repo with your credentials?
 
 Experiments (off until a person turns one on)
-  labs [list]         Experiments: off until a person turns one on.
+  labs [list]         The experiments and whether each is on; every one is off until a person turns
+                      it on.
   labs on NAME        Turn an experiment on after its warning. Refused without a person
                       (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an
                       app passes BENCHBAR_NONINTERACTIVE=0.
@@ -560,7 +562,8 @@ Team profiles
   profile check NAME  Can git read every repo with your credentials?
 
 Experiments (off until a person turns one on)
-  labs [list]         Experiments: off until a person turns one on.
+  labs [list]         The experiments and whether each is on; every one is off until a person turns
+                      it on.
   labs on NAME        Turn an experiment on after its warning. Refused without a person
                       (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an
                       app passes BENCHBAR_NONINTERACTIVE=0.
@@ -775,7 +778,8 @@ Team profiles
   profile check NAME  Can git read every repo with your credentials?
 
 Experiments (off until a person turns one on)
-  labs [list]         Experiments: off until a person turns one on.
+  labs [list]         The experiments and whether each is on; every one is off until a person turns
+                      it on.
   labs on NAME        Turn an experiment on after its warning. Refused without a person
                       (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an
                       app passes BENCHBAR_NONINTERACTIVE=0.
@@ -2505,7 +2509,7 @@ Needs: a terminal to ask questions: no; sudo: no; the network: yes.
 Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar labs --help [labs: none] (exit 0)
-benchbar labs: Experiments: off until a person turns one on.
+benchbar labs: The experiments and whether each is on; every one is off until a person turns it on.
 
 Usage: benchbar labs [list|on NAME|off NAME|status NAME] [--yes] [--json]
 
@@ -2821,7 +2825,8 @@ Team profiles
   profile check NAME  Can git read every repo with your credentials?
 
 Experiments (off until a person turns one on)
-  labs [list]         Experiments: off until a person turns one on.
+  labs [list]         The experiments and whether each is on; every one is off until a person turns
+                      it on.
   labs on NAME        Turn an experiment on after its warning. Refused without a person
                       (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an
                       app passes BENCHBAR_NONINTERACTIVE=0.
@@ -3064,7 +3069,8 @@ Team profiles
   profile check NAME  Can git read every repo with your credentials?
 
 Experiments (off until a person turns one on)
-  labs [list]         Experiments: off until a person turns one on.
+  labs [list]         The experiments and whether each is on; every one is off until a person turns
+                      it on.
   labs on NAME        Turn an experiment on after its warning. Refused without a person
                       (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an
                       app passes BENCHBAR_NONINTERACTIVE=0.
@@ -3307,7 +3313,8 @@ Team profiles
   profile check NAME  Can git read every repo with your credentials?
 
 Experiments (off until a person turns one on)
-  labs [list]         Experiments: off until a person turns one on.
+  labs [list]         The experiments and whether each is on; every one is off until a person turns
+                      it on.
   labs on NAME        Turn an experiment on after its warning. Refused without a person
                       (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an
                       app passes BENCHBAR_NONINTERACTIVE=0.
@@ -3550,7 +3557,8 @@ Team profiles
   profile check NAME  Can git read every repo with your credentials?
 
 Experiments (off until a person turns one on)
-  labs [list]         Experiments: off until a person turns one on.
+  labs [list]         The experiments and whether each is on; every one is off until a person turns
+                      it on.
   labs on NAME        Turn an experiment on after its warning. Refused without a person
                       (BENCHBAR_NONINTERACTIVE, --for-agent, mcp) and without a terminal unless an
                       app passes BENCHBAR_NONINTERACTIVE=0.
