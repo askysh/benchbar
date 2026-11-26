@@ -11,9 +11,9 @@
 #   pin_check GOLDEN         compare with tests/golden/GOLDEN, or write it when PIN_UPDATE=1
 #   pin_date, pin_commit     commits with fixed dates and content, so a sha is the same on every machine
 #
-# What changes from run to run is replaced first: the test's folder, time stamps, durations, ids,
-# the token of a plan (it holds the bench's folder, which is new on every run), process ids, the user id in a launchctl call, and the line number of an ERR trap
-# message or a bash error (the lines of a file move; the function and the command stay).
+# What changes from run to run or from machine to machine is replaced first: the test's folder, then the rules of
+# tests/lib/pin.sed (time stamps, durations, ids, plan tokens, the widths of boxes and tables, the line number of an ERR
+# trap message: the lines of a file move, the function and the command stay).
 # shellcheck shell=bash
 
 PIN_FILE="$TMP_DIR/pin.out"
@@ -67,16 +67,7 @@ pin_state() { printf '[state] %s: %s\n' "$1" "$2" >>"$PIN_FILE"; }
 
 pin_check() {
   local golden="$ROOT/tests/golden/$1" norm="$TMP_DIR/pin.norm"
-  sed -E -e 's#"token":"[0-9a-f]{64}"#"token":"<TOKEN>"#g' -e 's#"secs":[0-9]+#"secs":<N>#g' -e "s#${TMP_DIR}#<TMP>#g" -e "s#${ROOT}#<ROOT>#g" \
-    -e 's#[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z#<TS>#g' \
-    -e 's#([ (])[0-9]+s([ ),".]|$)#\1<N>s\2#g' \
-    -e 's#/benches/frappe-bench-[^/ ]*#/benches/frappe-bench-<H>#g' \
-    -e 's#op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?#op-<ID>#g' \
-    -e 's#/logs/[0-9]{8}-[0-9]{6}-[0-9]+#/logs/<LOG>#g' \
-    -e 's#/tmp/benchbar-[a-z]+\.[A-Za-z0-9]+#/tmp/benchbar-X.<R>#g' \
-    -e 's#gui/[0-9]+/#gui/<UID>/#g' \
-    -e 's#near line [0-9]+#near line N#g' -e 's#: line [0-9]+: #: line N: #g' -e 's#\.tmp\.[0-9]+#.tmp.<PID>#g' \
-    "$PIN_FILE" >"$norm"
+  sed -E -e "s#${TMP_DIR}#<TMP>#g" -e "s#${ROOT}#<ROOT>#g" -f "$ROOT/tests/lib/pin.sed" "$PIN_FILE" >"$norm"
   if [[ "${PIN_UPDATE:-0}" == "1" ]]; then
     cp "$norm" "$golden"
     printf 'pin: wrote %s\n' "$golden"
