@@ -134,6 +134,27 @@ refusal_checks() {
 refusal_checks "app focus NAME" "benchbar app focus frappe --bench-dir PATH" -- app focus frappe
 refusal_checks "doctor --ack" "benchbar doctor --ack hosts --bench-dir PATH" -- doctor --ack hosts
 refusal_checks "doctor --unack" "benchbar doctor --unack hosts --bench-dir PATH" doctor --ack hosts -- doctor --unack hosts
+# The hint quotes the app and --auto and no other word. A word the command does not know can hold anything, and
+# three forms bring one past the check of the flags to the gate: an unknown flag with BENCHBAR_LENIENT_FLAGS=1 (it
+# stays in the arguments), a word after "--", and a second word after the app. The refusal must not print it back
+# (to a log, to an agent's transcript).
+hint_checks() {
+  local name="$1" hint="$2"
+  shift 2
+  fresh
+  BENCHBAR_NONINTERACTIVE=1 run_fm "$@"
+  assert_eq "1" "$CODE" "(${name}, an agent) $OUT"
+  assert_contains "$OUT" "More than one bench is possible" "(${name}: the gate refuses) $OUT"
+  assert_contains "$OUT" "$hint" "(${name}: the hint names the app and the bench)"
+  assert_not_contains "$OUT" "abc123secret" "(${name}: a word the command does not know is not in the refusal)"
+  assert_not_contains "$OUT" "--token" "(${name}: a flag the command does not know is not in the refusal)"
+}
+BENCHBAR_LENIENT_FLAGS=1 hint_checks "app focus NAME, an unknown flag let through" "benchbar app focus frappe --bench-dir PATH" app focus frappe --token=abc123secret
+hint_checks "app focus NAME, a flag after --" "benchbar app focus frappe --bench-dir PATH" app focus frappe -- --token=abc123secret
+hint_checks "app focus NAME, a second word" "benchbar app focus frappe --bench-dir PATH" app focus frappe abc123secret
+hint_checks "app focus --auto NAME, a second word" "benchbar app focus --auto frappe --bench-dir PATH" app focus --auto frappe abc123secret
+# the notice of a person's run is one line that ends with a newline (the format had a line break typed into it)
+[[ "$(grep -c 'pass --bench-dir to choose)$' "$ROOT/lib/frappe-local/benchstate.sh")" == "0" ]] || fail "the notice's format string holds a typed line break; write \\n"
 # app unfocus: gated by the dispatch, so its refusal is the one of every command that changes things: under
 # --for-agent a stream that ends with one done line. (Its hint names `benchbar app unfocus --bench-dir PATH`, without
 # NAME, as that of every command that goes through the dispatch gate does: not asserted here.)
