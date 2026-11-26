@@ -41,7 +41,13 @@ fl_linux_user_bus_env
 
 # true inside WSL (the kernel version string says Microsoft)
 fl_is_wsl() {
-  [[ -r "$FL_PROC_VERSION" ]] && grep -qi microsoft "$FL_PROC_VERSION" 2>/dev/null
+  local __l
+  [[ -r "$FL_PROC_VERSION" ]] || return 1
+  # read in bash (no grep per call: a start asks for every lab)
+  while IFS= read -r __l || [[ -n "$__l" ]]; do
+    case "$__l" in *[Mm][Ii][Cc][Rr][Oo][Ss][Oo][Ff][Tt]*) return 0 ;; esac
+  done <"$FL_PROC_VERSION" 2>/dev/null
+  return 1
 }
 
 fl_platform_init() {
