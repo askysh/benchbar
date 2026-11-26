@@ -138,10 +138,13 @@ run_test_with_deadline() {
 }
 
 # run_shellcheck: shellcheck -x over every shell file, or over SHELLCHECK_FILES
-# when set (the files a pull request changed). The files go to SC_JOBS shellcheck
-# processes at a time, 12 files each (one process over all 200 takes minutes: it
-# parses harness.sh and the libraries again for every test file). SC_JOBS is 1
-# unless set; a run of "shellcheck" alone uses every CPU.
+# when set (the files a pull request changed). One shellcheck process per file
+# (tests/lib/shellcheck-file.sh: a deadline that names the file, a memory cap),
+# SC_JOBS at a time: -x parses harness.sh and the libraries again for every
+# file, so benchbar alone takes about 4 GB and 30 s, and four of the big ones
+# at once starved a 16 GB runner until the job timed out with no log (#137).
+# SC_JOBS is 1 unless set; a run of "shellcheck" alone uses every CPU, at most
+# SC_JOBS_MAX (default 3).
 run_shellcheck() {
   local files=() jobs="${SC_JOBS:-1}"
   if [[ -n "${SHELLCHECK_FILES:-}" ]]; then
@@ -208,7 +211,10 @@ if [[ -n "${SECS_ONLY:-}" ]]; then
   printf '%s\n' "$total"; exit 0
 fi
 # a run of the lint alone has the machine to itself
-if [[ "${#JOBS[@]}" -eq 1 && "${JOBS[0]}" == shellcheck && -z "${SC_JOBS:-}" ]]; then SC_JOBS="$PARALLEL"; fi
+if [[ "${#JOBS[@]}" -eq 1 && "${JOBS[0]}" == shellcheck && -z "${SC_JOBS:-}" ]]; then
+  SC_JOBS="$PARALLEL"
+  [[ "$SC_JOBS" -le "${SC_JOBS_MAX:-3}" ]] || SC_JOBS="${SC_JOBS_MAX:-3}"
+fi
 
 OUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-run-tests.XXXXXX")"
 PIDS=()
