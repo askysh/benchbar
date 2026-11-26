@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (a link can launch the app).
     private var pendingURLs: [URL] = []
     /// "Quit when it finishes", chosen in the quit alert while a change ran.
-    private var quitWait = QuitAfterChange()
+    private let quitCoordinator = QuitCoordinator()
     private var benchesLoaded = false
 
     /// Before launch finishes, so a link that launches the app is not lost.
@@ -226,25 +226,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func makeStatusMenu() -> NSMenu {
-        let menu = NSMenu()
-        if let version = updateOffer?.version {
-            menu.addItem(withTitle: "Update to \(version)…", action: #selector(updateNowAction), keyEquivalent: "").target = self
-            menu.addItem(.separator())
-        }
-        menu.addItem(withTitle: "Open BenchBar", action: #selector(openWindowAction), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Scan Folder…", action: #selector(scanFolderAction), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
-        menu.addItem(withTitle: "About BenchBar", action: #selector(openAboutAction), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Documentation", action: #selector(openDocsAction), keyEquivalent: "").target = self
-        // as in the app menu: Sparkle's item, else the About pane's check
-        if let item = updater?.menuItem() {
-            menu.addItem(item)
-        } else {
-            menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesAction), keyEquivalent: "").target = self
-        }
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        return menu
+        AppMenus.statusMenu(target: self, actions: menuActions, updateVersion: updateOffer?.version, updaterItem: updater?.menuItem())
+    }
+
+    /// The selectors the menus send to this object (`AppMenus`).
+    private var menuActions: AppMenus.Actions {
+        AppMenus.Actions(update: #selector(updateNowAction), openWindow: #selector(openWindowAction),
+                         scanFolder: #selector(scanFolderAction), openSettings: #selector(openSettingsAction),
+                         openAbout: #selector(openAboutAction), openDocs: #selector(openDocsAction),
+                         checkForUpdates: #selector(checkForUpdatesAction),
+                         openMenuBarSettings: #selector(openMenuBarSettingsAction),
+                         showShortcuts: #selector(showShortcutsAction), showWalkthrough: #selector(showWalkthroughAction),
+                         openWhatsNew: #selector(openWhatsNewAction), reportBug: #selector(reportBugAction))
     }
 
     // MARK: commands
@@ -336,33 +329,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Mac hosts and closes the forwarder to a room it joined: those ask
     /// too, and Quit anyway is theirs (`QuitPolicy`).
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let hosted = ShareCenter.shared.benchesWithGuests.first
-        let facts = QuitPolicy.Facts(labOn: Labs.shared.isOn(.lanRooms), setupRunning: ShareCenter.shared.setupOrTeardownRunning,
-                                     hostedBench: hosted?.bench, people: hosted?.status?.people ?? 0,
-                                     guestForwarder: guest?.hasRunningForwarder == true,
-                                     changeRunning: store.runningChangeLabel)
-        guard let question = QuitPolicy.question(facts) else {
-            quitWait.disarm()
-            return .terminateNow
+        switch quitCoordinator.reply(in: self) {
+        case .terminateNow: return .terminateNow
+        case .terminateCancel: return .terminateCancel
         }
-        let alert = NSAlert()
-        alert.messageText = question.title
-        alert.informativeText = question.detail
-        alert.addButton(withTitle: "Keep running")
-        alert.addButton(withTitle: question.canWaitForIt ? "Quit when it finishes" : "Quit anyway")
-        guard alert.runModal() == .alertSecondButtonReturn else {
-            quitWait.disarm()
-            return .terminateCancel
-        }
-        guard question.canWaitForIt else { return .terminateNow }
-        // the store says when the change slot is free (onIdle)
-        quitWait.arm()
-        return .terminateCancel
     }
 
     /// The store has nothing running: the quit the person asked to wait for.
     private func quitIfWaiting() {
-        guard quitWait.shouldQuitNow(changeRunning: store.runningChangeLabel != nil) else { return }
+        guard quitCoordinator.storeIsIdle(changeRunning: store.runningChangeLabel != nil) else { return }
         DispatchQueue.main.async { NSApp.terminate(nil) }
     }
 
@@ -454,59 +429,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: main menu
 
-    /// Only visible while a window is open (the app is .regular then), but
-    /// it is what makes ⌘W, ⌘Q and copy and paste work in that window.
+    /// The main menu (AppMenus.mainMenu).
     func makeMainMenu() -> NSMenu {
-        let main = NSMenu()
+        AppMenus.mainMenu(target: self, actions: menuActions, updaterItem: updater?.menuItem())
+    }
+}
 
-        let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About BenchBar", action: #selector(openAboutAction), keyEquivalent: "").target = self
-        if let item = updater?.menuItem() {
-            appMenu.addItem(item)
-        } else {
-            appMenu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesAction), keyEquivalent: "").target = self
-        }
-        appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
-        appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        main.addItem(submenu(appMenu, title: "BenchBar"))
-
-        let edit = NSMenu(title: "Edit")
-        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
-        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
-        edit.addItem(.separator())
-        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
-        main.addItem(submenu(edit, title: "Edit"))
-
-        let window = NSMenu(title: "Window")
-        window.addItem(withTitle: "BenchBar", action: #selector(openWindowAction), keyEquivalent: "").target = self
-        window.addItem(withTitle: "Menu Bar Settings", action: #selector(openMenuBarSettingsAction), keyEquivalent: "").target = self
-        window.addItem(.separator())
-        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
-        window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
-        main.addItem(submenu(window, title: "Window"))
-        NSApp.windowsMenu = window
-
-        // Help last: macOS adds its search field to the menu set as helpMenu
-        let help = NSMenu(title: "Help")
-        help.addItem(withTitle: "BenchBar Documentation", action: #selector(openDocsAction), keyEquivalent: "?").target = self
-        help.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showShortcutsAction), keyEquivalent: "").target = self
-        help.addItem(withTitle: "Show Walkthrough", action: #selector(showWalkthroughAction), keyEquivalent: "").target = self
-        help.addItem(.separator())
-        help.addItem(withTitle: "What's New", action: #selector(openWhatsNewAction), keyEquivalent: "").target = self
-        help.addItem(withTitle: "Report a Bug…", action: #selector(reportBugAction), keyEquivalent: "").target = self
-        main.addItem(submenu(help, title: "Help"))
-        NSApp.helpMenu = help
-        return main
+extension AppDelegate: QuitEnvironment {
+    func quitFacts() -> QuitPolicy.Facts {
+        let hosted = ShareCenter.shared.benchesWithGuests.first
+        return QuitPolicy.Facts(labOn: Labs.shared.isOn(.lanRooms), setupRunning: ShareCenter.shared.setupOrTeardownRunning,
+                                hostedBench: hosted?.bench, people: hosted?.status?.people ?? 0,
+                                guestForwarder: guest?.hasRunningForwarder == true,
+                                changeRunning: store.runningChangeLabel)
     }
 
-    private func submenu(_ menu: NSMenu, title: String) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.submenu = menu
-        return item
+    func confirmQuit(_ question: QuitPolicy.Question) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = question.title
+        alert.informativeText = question.detail
+        alert.addButton(withTitle: "Keep running")
+        alert.addButton(withTitle: question.canWaitForIt ? "Quit when it finishes" : "Quit anyway")
+        return alert.runModal() == .alertSecondButtonReturn
     }
 }
