@@ -169,7 +169,7 @@ Pass flags after `bash -s --`, for example
 | `--dry-run` | Print the plan and every command, change nothing |
 | `--no-app` | The CLI only |
 | `--app-only` | The app only |
-| `--version vX.Y.Z` | Install that release of the app, not the latest. Also the only way to get a release candidate (see below) |
+| `--version vX.Y.Z` | Install that release of the app, not the latest. A release candidate only when you name it (see below) |
 | `--uninstall` | Remove the app, the links and the PATH block; see [Uninstall](#uninstall) |
 
 On a Mac that already has the CLI in `~/.local/share/benchbar`, `--yes`
@@ -178,9 +178,12 @@ and it does not run the Homebrew installer.
 
 A release candidate (for example `v0.9.0-rc.1`) is installed only when you
 name it with `--version`: the latest release is never a release candidate,
-and Homebrew and `benchbar self-update` cannot install one. On Linux,
-`--version` with `--no-app` also checks out that release of the CLI, as a
-detached checkout. A later run without `--version` goes back to `main`.
+and Homebrew and `benchbar self-update` cannot install one.
+
+`--version` also checks out that release of the CLI, as a detached
+checkout, in three cases: on Linux, with `--no-app`, or for a release
+candidate. A later run without `--version` goes back to `main`. In other
+cases (a final release with the app, on a Mac) the CLI stays on `main`.
 
 ## The app from the DMG
 

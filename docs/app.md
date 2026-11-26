@@ -60,8 +60,8 @@ top chooses which bench the popover shows.
 | ⇧⌘O | Switch back to the user before |
 | ⌃⌥U | Quick Switch, from any app, once turned on in Settings > Labs (the key can be changed there) |
 
-In the log window, **Since last start** shows the lines from the last start of
-the bench (`benchbar logs --json --since-restart`), then only the new lines.
+In the log window, **Since last start** shows the lines since the last start
+(`benchbar logs --json --since-restart`), then only the new lines.
 The worker filter reads `logs/worker.log` through the CLI.
 
 ## Open as a user
