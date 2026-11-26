@@ -30,3 +30,27 @@ logs	--process	worker.log
 logs	--since	at or after
 logs	--since-restart	last start
 logs	-n	last n lines
+open	--path	where to land
+open	--print-url	print the link
+open	--as	no password|developer_mode|site open-as
+users	--search	users whose id or full name
+users	--limit	at most n users
+site add	--bundle	app bundle
+site add	--apps	apps of apps/
+site hosts	--prune	one backup|one sudo|prints the command
+site backup	--with-files	uploads
+site restore	--from	stamp
+site restore	--from-site	stamps from this site|read the stamp
+site restore	--new	create the site
+site restore	--neutralise	integrations off|stored secrets
+site restore	--before-migrate	after the restore|before migrate
+site restore	--dry-run	plan|token
+site restore	--apply	exactly that plan
+site drop	--confirm-site	repeat the site name
+site drop	--new-default	default site
+share setup	--users	one seat each
+share setup	--from	backup set
+share setup	--acknowledge-data	real data
+share preflight	--static	before anything starts
+share preflight	--critical	fast checks
+share preflight	--quiet	not ok
