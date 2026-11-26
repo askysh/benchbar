@@ -23,12 +23,12 @@ final class LogWindowController: NSObject, NSWindowDelegate {
         let model = LogViewModel(benchName: benchName, benchPath: benchPath)
         let client = client
         model.fetch = { request in
-            guard let cli = client() else { throw CLIError.failed(command: "logs", exitCode: 1, message: "The benchbar command line tool is not available.") }
+            guard let cli = client() else { throw CLIError.failed(command: "logs", exitCode: 1, message: String(localized: "The benchbar command line tool is not available.")) }
             return try await cli.logs(request, bench: benchPath)
         }
         let view = LogView(model: model) { [weak self] in self?.openInTerminal(benchPath) }
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-        window.title = "\(benchName): bench.log"
+        window.title = String(localized: "\(benchName): bench.log")
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.setContentSize(NSSize(width: 860, height: 520))
         window.isReleasedWhenClosed = false

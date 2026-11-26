@@ -217,17 +217,17 @@ struct BenchPanel: View {
     private var actionButtons: some View {
         let controls = store.controls(for: bench)
         return HStack(spacing: 8) {
-            ActionButton(title: "Start", systemImage: "play.fill", busy: controls.busy == .up, enabled: controls.canStart) {
+            ActionButton(title: String(localized: "Start"), systemImage: "play.fill", busy: controls.busy == .up, enabled: controls.canStart) {
                 Task { await store.perform(.up, on: bench) }
             }
             .help(BenchShortcut.start.help())
             .shortcut(.start)
-            ActionButton(title: "Stop", systemImage: "stop.fill", busy: controls.busy == .down, enabled: controls.canStop) {
+            ActionButton(title: String(localized: "Stop"), systemImage: "stop.fill", busy: controls.busy == .down, enabled: controls.canStop) {
                 Task { await store.perform(.down, on: bench) }
             }
             .help(BenchShortcut.stop.help())
             .shortcut(.stop)
-            ActionButton(title: "Restart", systemImage: "arrow.clockwise", busy: controls.busy == .restart, enabled: controls.canRestart) {
+            ActionButton(title: String(localized: "Restart"), systemImage: "arrow.clockwise", busy: controls.busy == .restart, enabled: controls.canRestart) {
                 Task { await store.perform(.restart, on: bench) }
             }
             .help(BenchShortcut.restart.help())
@@ -255,7 +255,7 @@ struct SitesSection: View {
             HStack {
                 Text("Sites").font(.subheadline.weight(.semibold))
                 Spacer()
-                Button(rows.count > Self.visibleRows ? "View All \(rows.count)…" : "Manage Sites…", action: manage)
+                Button(rows.count > Self.visibleRows ? String(localized: "View All \(rows.count)…") : String(localized: "Manage Sites…"), action: manage)
                     .controlSize(.small)
                     .help("Sites in the BenchBar window")
             }
@@ -263,7 +263,7 @@ struct SitesSection: View {
                 HStack(spacing: 8) {
                     Image(systemName: row.isDefault ? "star.fill" : "globe")
                         .foregroundStyle(row.isDefault ? .yellow : .secondary).font(.caption)
-                        .accessibilityLabel(row.isDefault ? "Default site" : "Site")
+                        .accessibilityLabel(row.isDefault ? String(localized: "Default site") : String(localized: "Site"))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(row.name).font(.callout).lineLimit(1).truncationMode(.middle).help(row.name)
                         Text(subtitle(row))
@@ -327,8 +327,8 @@ struct DoctorSection: View {
                         Image(systemName: "arrow.clockwise")
                     }
                     .buttonStyle(.borderless)
-                    .help(bench.doctor == nil ? "Check health now (read only)" : "Check again (read only)")
-                    .accessibilityLabel(bench.doctor == nil ? "Check health" : "Check health again")
+                    .help(bench.doctor == nil ? String(localized: "Check health now (read only)") : String(localized: "Check again (read only)"))
+                    .accessibilityLabel(bench.doctor == nil ? String(localized: "Check health") : String(localized: "Check health again"))
                     .accessibilityHint("Runs doctor, which only reads")
                     if bench.doctor?.checks.contains(where: { $0.level != .ok && $0.action != nil }) == true {
                         Button("Repair…", action: repair).controlSize(.small)
@@ -370,7 +370,7 @@ struct CompactCheckRow: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(systemName: check.level == .fail ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
                 .foregroundStyle(check.level == .fail ? .red : .orange).font(.caption)
-                .accessibilityLabel(check.level == .fail ? "Failure" : "Warning")
+                .accessibilityLabel(check.level == .fail ? String(localized: "Failure") : String(localized: "Warning"))
             VStack(alignment: .leading, spacing: 1) {
                 Text(check.label).font(.caption.weight(.medium))
                 Text(check.message).font(.caption).foregroundStyle(.secondary).lineLimit(2).help(check.message)
@@ -395,7 +395,7 @@ struct CheckRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(systemName: icon).foregroundStyle(color).font(.caption)
-                .accessibilityLabel(check.level == .ok ? "Passing" : (check.level == .fail ? "Failure" : "Warning"))
+                .accessibilityLabel(check.level == .ok ? String(localized: "Passing") : (check.level == .fail ? String(localized: "Failure") : String(localized: "Warning")))
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(check.label).font(.caption.weight(.medium))

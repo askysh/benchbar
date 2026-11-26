@@ -18,23 +18,23 @@ nonisolated enum ForwarderPage: Equatable, Sendable {
 
     var title: String {
         switch self {
-        case .ended: return "Room ended"
-        case .removed: return "Removed from the room"
-        case .hostOffline: return "Not sharing right now"
-        case .identityChanged: return "This room looks different"
-        case .notAvailable: return "Not available"
+        case .ended: return String(localized: "Room ended")
+        case .removed: return String(localized: "Removed from the room")
+        case .hostOffline: return String(localized: "Not sharing right now")
+        case .identityChanged: return String(localized: "This room looks different")
+        case .notAvailable: return String(localized: "Not available")
         }
     }
 
     /// R3.8 copy.
     var message: String {
         switch self {
-        case .ended(let host): return "\(host) ended the room."
+        case .ended(let host): return String(localized: "\(host) ended the room.")
         case .removed(let host, _): return NetworkPanePresentation.removedLine(host: host)
-        case .hostOffline(let host, let lastSeen): return "\(host) isn't sharing right now (last seen \(lastSeen))."
+        case .hostOffline(let host, let lastSeen): return String(localized: "\(host) isn't sharing right now (last seen \(lastSeen)).")
         case .identityChanged(let host):
-            return "\(host)'s Mac looks different from the one you joined. BenchBar did not connect. If \(host) reset BenchBar, remove the room and join again with a new code."
-        case .notAvailable: return "This page isn't available through BenchBar."
+            return String(localized: "\(host)'s Mac looks different from the one you joined. BenchBar did not connect. If \(host) reset BenchBar, remove the room and join again with a new code.")
+        case .notAvailable: return String(localized: "This page isn't available through BenchBar.")
         }
     }
 

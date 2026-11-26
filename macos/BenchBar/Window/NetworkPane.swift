@@ -137,7 +137,7 @@ private struct JoinedRoomRow: View {
                 if NetworkPanePresentation.canRejoin(health) {
                     Button("Join") { store.beginRejoin(room) }
                 }
-                Button(health == .identityChanged ? "Remove and Join Again" : "Forget") { forget(health) }
+                Button(health == .identityChanged ? String(localized: "Remove and Join Again") : String(localized: "Forget")) { forget(health) }
             }
             if let failure = store.openFailed[room.id] {
                 Label(failure, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
@@ -218,7 +218,7 @@ private struct JoinSheet: View {
         case .refused(let room, let refusal):
             Text(NetworkPanePresentation.refusal(refusal, host: room.display.label)).fixedSize(horizontal: false, vertical: true)
             if NetworkPanePresentation.canRetry(refusal) {
-                buttons(primary: "Try Again", enabled: true) { store.join = .enteringCode(room) }
+                buttons(primary: String(localized: "Try Again"), enabled: true) { store.join = .enteringCode(room) }
             } else {
                 HStack {
                     Spacer()

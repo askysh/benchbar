@@ -9,28 +9,28 @@ struct ServiceInstallPlanView: View {
     private var rows: [PlanStepList.Row] {
         plan.pending.map { step in
             PlanStepList.Row(name: step.name, command: nil,
-                             note: step.sudo ? "Needs your Mac's password. macOS asks in its own dialog; BenchBar never sees it. If you cancel it, this step is skipped." : nil)
+                             note: step.sudo ? String(localized: "Needs your Mac's password. macOS asks in its own dialog; BenchBar never sees it. If you cancel it, this step is skipped.") : nil)
         }
     }
 
     private var facts: [(label: String, text: String)] {
-        [("Writes", "Procfile.lean, the runner script and the launchd agent of this bench, and the helper block of your shell file."),
-         ("Left alone", "Your sites, apps and databases. This never runs migrate, build or update.")]
+        [(String(localized: "Writes"), String(localized: "Procfile.lean, the runner script and the launchd agent of this bench, and the helper block of your shell file.")),
+         (String(localized: "Left alone"), String(localized: "Your sites, apps and databases. This never runs migrate, build or update."))]
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
             VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
-                Text(refresh ? "Refresh the service" : "Install the service").font(.headline)
+                Text(refresh ? String(localized: "Refresh the service") : String(localized: "Install the service")).font(.headline)
                 Text("\(plan.bench)\(plan.site.map { ", site \($0)" } ?? "")").font(.caption).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
             }
             if plan.portsMove {
-                SheetNote("This plan moves the bench to another block of ports (offset \(plan.portOffset)).", tint: .orange)
+                SheetNote(String(localized: "This plan moves the bench to another block of ports (offset \(plan.portOffset))."), tint: .orange)
             }
             if plan.pending.isEmpty {
-                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: "Nothing to do",
-                             detail: "The service files of this bench are already as benchbar writes them.")
+                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: String(localized: "Nothing to do"),
+                             detail: String(localized: "The service files of this bench are already as benchbar writes them."))
             } else {
                 PlanFacts(facts: facts)
                 Text("In order:").font(.callout)
@@ -60,21 +60,21 @@ struct ServiceSheet: View {
     }
 
     private var refresh: Bool { !bench.needsService }
-    private var verb: String { refresh ? "Refresh Service" : "Install Service" }
+    private var verb: String { refresh ? String(localized: "Refresh Service") : String(localized: "Install Service") }
 
     private var phase: SheetPhase {
         switch flow.stage {
-        case .form: flow.readError.map { .failed($0, title: "No plan for the service") } ?? .loading("Reading the plan (benchbar service --dry-run)…")
-        case .reading: .loading("Reading the plan (benchbar service --dry-run)…")
+        case .form: flow.readError.map { .failed($0, title: String(localized: "No plan for the service")) } ?? .loading(String(localized: "Reading the plan (benchbar service --dry-run)…"))
+        case .reading: .loading(String(localized: "Reading the plan (benchbar service --dry-run)…"))
         case .reviewing: .ready
-        case .applying: .running(refresh ? "Refreshing the service…" : "Installing the service…")
-        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown")
+        case .applying: .running(refresh ? String(localized: "Refreshing the service…") : String(localized: "Installing the service…"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench changed since this plan was shown"))
         }
     }
 
     var body: some View {
-        SheetScaffold("\(verb) for \(bench.name)",
-                      explanation: "Writes the files that run the bench in the background. You see the plan first; nothing runs until you confirm.",
+        SheetScaffold(String(localized: "\(verb) for \(bench.name)"),
+                      explanation: String(localized: "Writes the files that run the bench in the background. You see the plan first; nothing runs until you confirm."),
                       phase: phase) {
             if let plan = flow.plan {
                 ServiceInstallPlanView(plan: plan, refresh: refresh)

@@ -60,11 +60,14 @@ struct AppAddPlanView: View {
     let plan: AppAddPlan
 
     private var headline: String {
-        var parts = ["from \(plan.repo)"]
+        var parts = [String(localized: "from \(plan.repo)")]
         if let branch = plan.branch {
-            parts.append("branch \(branch)" + (plan.branchSourceText.map { " (\($0))" } ?? ""))
+            parts.append(plan.branchSourceText.map { String(localized: "branch \(branch) (\($0))") } ?? String(localized: "branch \(branch)"))
         }
-        if let commit = plan.commit { parts.append("commit \(commit.prefix(7))" + (plan.commitSource == "pin" ? " (pinned)" : "")) }
+        if let commit = plan.commit {
+            let short = String(commit.prefix(7))
+            parts.append(plan.commitSource == "pin" ? String(localized: "commit \(short) (pinned)") : String(localized: "commit \(short)"))
+        }
         return parts.joined(separator: ", ")
     }
 
@@ -79,14 +82,14 @@ struct AppAddPlanView: View {
 
     private var facts: [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
-        if !plan.touches.isEmpty { out.append(("Touches", plan.touches.joined(separator: ", "))) }
+        if !plan.touches.isEmpty { out.append((String(localized: "Touches"), plan.touches.joined(separator: ", "))) }
         // several apps say their own sites in their rows
         if !plan.isBatch {
-            let targets = plan.sites.map { $0.installed ? "\($0.name) (already has it)" : $0.name }
-            out.append(("Sites", targets.isEmpty ? "No site: the app is only added to the bench." : targets.joined(separator: ", ")))
+            let targets = plan.sites.map { $0.installed ? String(localized: "\($0.name) (already has it)") : $0.name }
+            out.append((String(localized: "Sites"), targets.isEmpty ? String(localized: "No site: the app is only added to the bench.") : targets.joined(separator: ", ")))
         }
-        out.append(("Restart", plan.restarts ? "Restarts the bench, only if it is running." : "No restart."))
-        out.append(("Left alone", "/etc/hosts and the default site. Other apps and sites are not changed."))
+        out.append((String(localized: "Restart"), plan.restarts ? String(localized: "Restarts the bench, only if it is running.") : String(localized: "No restart.")))
+        out.append((String(localized: "Left alone"), "/etc/hosts and the default site. Other apps and sites are not changed."))
         return out
     }
 
@@ -117,19 +120,20 @@ struct AppAddPlanView: View {
                 }
             }
             if !plan.errors.isEmpty {
-                SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: "This plan cannot run",
+                SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: String(localized: "This plan cannot run"),
                              detail: plan.errors.joined(separator: "\n"))
             }
             if let reason = plan.reason {
                 SheetNote(reason, tint: .orange)
             }
             if let error = plan.sitesError, !error.isEmpty {
-                SheetNote("The sites' app lists could not be read, so every chosen site is shown as not having the app: \(error)", tint: .orange)
+                SheetNote(String(localized: "The sites' app lists could not be read, so every chosen site is shown as not having the app: \(error)"), tint: .orange)
             }
             if plan.canApply && !plan.changes {
-                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: "Nothing to do",
-                             detail: plan.isBatch ? "Every app is already in the bench and on its chosen sites."
-                                 : "\(plan.app) is already in the bench\(plan.sites.isEmpty ? "" : " and on the chosen site").")
+                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: String(localized: "Nothing to do"),
+                             detail: plan.isBatch ? String(localized: "Every app is already in the bench and on its chosen sites.")
+                                 : plan.sites.isEmpty ? String(localized: "\(plan.app) is already in the bench.")
+                                 : String(localized: "\(plan.app) is already in the bench and on the chosen site."))
             }
             // a plan that cannot run shows why, not the steps it will not take
             if plan.canApply {
@@ -151,19 +155,19 @@ struct SiteAddPlanView: View {
     private var rows: [PlanStepList.Row] {
         plan.steps.map { step in
             PlanStepList.Row(name: step.name, command: step.command,
-                             note: step.kind == "hosts" ? "Add Site does not run this step." : nil)
+                             note: step.kind == "hosts" ? String(localized: "Add Site does not run this step.") : nil)
         }
     }
 
     private var facts: [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
-        if !plan.touchesText.isEmpty { out.append(("Touches", plan.touchesText.joined(separator: ", "))) }
-        out.append(("Hosts line", plan.hostsEntry
-                    ? "127.0.0.1 \(plan.site) is already in /etc/hosts."
-                    : "Needs your Mac's password, which BenchBar never asks for, so it is not added here. The Sites tab's Add Hosts Lines shows the command for Terminal."))
-        out.append(("Password", "The Administrator password you typed goes to the benchbar process only."))
-        out.append(("Left alone", plan.keptDefaultSite.map { "The default site stays \($0). Other sites and apps are not changed." }
-                    ?? "Other sites and apps are not changed."))
+        if !plan.touchesText.isEmpty { out.append((String(localized: "Touches"), plan.touchesText.joined(separator: ", "))) }
+        out.append((String(localized: "Hosts line"), plan.hostsEntry
+                    ? String(localized: "127.0.0.1 \(plan.site) is already in /etc/hosts.")
+                    : String(localized: "Needs your Mac's password, which BenchBar never asks for, so it is not added here. The Sites tab's Add Hosts Lines shows the command for Terminal.")))
+        out.append((String(localized: "Password"), String(localized: "The Administrator password you typed goes to the benchbar process only.")))
+        out.append((String(localized: "Left alone"), plan.keptDefaultSite.map { String(localized: "The default site stays \($0). Other sites and apps are not changed.") }
+                    ?? String(localized: "Other sites and apps are not changed.")))
         return out
     }
 
@@ -171,8 +175,9 @@ struct SiteAddPlanView: View {
         VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
             Text(plan.site).font(.headline)
             if !plan.changes {
-                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: "Nothing to do",
-                             detail: "\(plan.site) is already on the bench\(plan.hostsEntry ? " and in /etc/hosts" : "").")
+                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: String(localized: "Nothing to do"),
+                             detail: plan.hostsEntry ? String(localized: "\(plan.site) is already on the bench and in /etc/hosts.")
+                                 : String(localized: "\(plan.site) is already on the bench."))
             }
             PlanFacts(facts: facts)
             if !plan.steps.isEmpty {

@@ -20,14 +20,14 @@ nonisolated enum BenchShortcut: String, CaseIterable, Sendable {
 
     var action: String {
         switch self {
-        case .start: "Start"
-        case .stop: "Stop"
-        case .restart: "Restart"
-        case .openSite: "Open the site"
-        case .logs: "Logs"
-        case .folder: "Show in Finder"
-        case .health: "View Health"
-        case .manage: "Apps, sites and settings"
+        case .start: String(localized: "Start")
+        case .stop: String(localized: "Stop")
+        case .restart: String(localized: "Restart")
+        case .openSite: String(localized: "Open the site")
+        case .logs: String(localized: "Logs")
+        case .folder: String(localized: "Show in Finder")
+        case .health: String(localized: "View Health")
+        case .manage: String(localized: "Apps, sites and settings")
         }
     }
 
@@ -68,7 +68,7 @@ nonisolated enum OpenAsShortcut: Equatable, Sendable {
     var display: String { (usesShift ? "⇧" : "") + "⌘" + String(key).uppercased() }
 
     /// What Settings lists for the family.
-    static let summary = "⌘0  ⌘1 to ⌘9  \(OpenAsShortcut.switchBack.display)"
+    static let summary = String(localized: "⌘0  ⌘1 to ⌘9  \(OpenAsShortcut.switchBack.display)")
 }
 
 extension View {

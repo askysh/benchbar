@@ -7,8 +7,8 @@ struct DiscoveryPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PaneHeader(symbol: "folder.badge.plus", tint: .teal, title: "Find Benches",
-                       subtitle: "BenchBar searches a project folder for existing Frappe benches.") {
+            PaneHeader(symbol: "folder.badge.plus", tint: .teal, title: String(localized: "Find Benches"),
+                       subtitle: String(localized: "BenchBar searches a project folder for existing Frappe benches.")) {
                 // the main action until there are results; then Set Up Selected is
                 Button("Choose Folder…", action: chooseFolder)
                     .primaryAction(discovery.results.isEmpty)
@@ -39,7 +39,7 @@ struct DiscoveryPane: View {
         VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
             HStack(spacing: WindowMetrics.rowSpacing) {
                 Image(systemName: "folder").accessibilityHidden(true)
-                Text(discovery.folder.isEmpty ? "No folder selected" : discovery.folder)
+                Text(discovery.folder.isEmpty ? String(localized: "No folder selected") : discovery.folder)
                     .font(.callout).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
                 Spacer()
                 if !discovery.folder.isEmpty {
@@ -185,7 +185,7 @@ struct DiscoveryPane: View {
                         .font(.caption).foregroundStyle(.orange)
                 }
                 if let known {
-                    Label(known.needsService ? "Added · Management needs setup" : "Managed by BenchBar",
+                    Label(known.needsService ? String(localized: "Added · Management needs setup") : String(localized: "Managed by BenchBar"),
                           systemImage: known.needsService ? "wrench" : "checkmark.circle")
                         .font(.caption)
                 }

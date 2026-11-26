@@ -23,17 +23,17 @@ nonisolated enum RunAllowList {
     /// The documented allow list, in the CLI's order. Also what the sheet offers when the CLI's own list cannot be read.
     static let known: [RunCommandInfo] = [
         RunCommandInfo(name: "migrate", changes: true, needsSite: true,
-                       help: "Patches, schema sync and fixtures of the site, after a backup of it.",
+                       help: String(localized: "Patches, schema sync and fixtures of the site, after a backup of it."),
                        switches: ["--skip-failing", "--skip-search-index"]),
-        RunCommandInfo(name: "clear-cache", changes: true, needsSite: true, help: "Clears the cache of the site."),
-        RunCommandInfo(name: "clear-website-cache", changes: true, needsSite: true, help: "Clears the website cache of the site."),
-        RunCommandInfo(name: "build", changes: true, needsSite: false, help: "Builds the bench's assets.", valued: ["--app"]),
+        RunCommandInfo(name: "clear-cache", changes: true, needsSite: true, help: String(localized: "Clears the cache of the site.")),
+        RunCommandInfo(name: "clear-website-cache", changes: true, needsSite: true, help: String(localized: "Clears the website cache of the site.")),
+        RunCommandInfo(name: "build", changes: true, needsSite: false, help: String(localized: "Builds the bench's assets."), valued: ["--app"]),
         RunCommandInfo(name: "run-tests", changes: true, needsSite: true,
-                       help: "Runs the apps' tests. It writes test records into the site's database: use a throwaway site, not one you keep.",
+                       help: String(localized: "Runs the apps' tests. It writes test records into the site's database: use a throwaway site, not one you keep."),
                        switches: ["--failfast"], valued: ["--app", "--module", "--doctype", "--test", "--case"]),
-        RunCommandInfo(name: "doctor", changes: false, needsSite: true, help: "Checks the site's setup (a read)."),
-        RunCommandInfo(name: "list-apps", changes: false, needsSite: true, help: "Lists the apps installed on the site (a read).", valued: ["--format"]),
-        RunCommandInfo(name: "version", changes: false, needsSite: false, help: "Prints the versions of the bench's apps (a read)."),
+        RunCommandInfo(name: "doctor", changes: false, needsSite: true, help: String(localized: "Checks the site's setup (a read).")),
+        RunCommandInfo(name: "list-apps", changes: false, needsSite: true, help: String(localized: "Lists the apps installed on the site (a read)."), valued: ["--format"]),
+        RunCommandInfo(name: "version", changes: false, needsSite: false, help: String(localized: "Prints the versions of the bench's apps (a read).")),
     ]
 
     /// A command name no run can start: the CLI answers it with its allow list and exit 64, and runs nothing.
@@ -46,7 +46,7 @@ nonisolated enum RunAllowList {
         return allowed.map { name in
             known.first { $0.name == name }
                 ?? RunCommandInfo(name: name, changes: true, needsSite: false,
-                                  help: "A command of this benchbar that the app does not know. Its plan says what it does.")
+                                  help: String(localized: "A command of this benchbar that the app does not know. Its plan says what it does."))
         }
     }
 
@@ -78,14 +78,14 @@ nonisolated struct RunRequest: Equatable, Sendable {
             index += 1
             if command.switches.contains(token) { words.append(token); continue }
             guard command.valued.contains(token) else {
-                return ([], command.flags.isEmpty ? "\(command.name) takes no flags."
-                    : "\(token) is not a flag of \(command.name). It takes: \(command.flags.joined(separator: ", ")).")
+                return ([], command.flags.isEmpty ? String(localized: "\(command.name) takes no flags.")
+                    : String(localized: "\(token) is not a flag of \(command.name). It takes: \(command.flags.joined(separator: ", "))."))
             }
-            guard index < tokens.count else { return ([], "\(token) needs a value.") }
+            guard index < tokens.count else { return ([], String(localized: "\(token) needs a value.")) }
             let value = tokens[index]
             index += 1
             guard !value.hasPrefix("-"), value.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || ".:_-".contains($0)) }) else {
-                return ([], "The value of \(token) is one plain word: letters, digits, '.', '_', ':' and '-'.")
+                return ([], String(localized: "The value of \(token) is one plain word: letters, digits, '.', '_', ':' and '-'."))
             }
             words += [token, value]
         }
@@ -94,7 +94,7 @@ nonisolated struct RunRequest: Equatable, Sendable {
 
     /// Why this cannot run, or nil. `sites` are the bench's own.
     func problem(sites: [String]) -> String? {
-        if command.needsSite, site.map({ !sites.contains($0) }) ?? true { return "\(command.name) needs one of the sites of this bench." }
+        if command.needsSite, site.map({ !sites.contains($0) }) ?? true { return String(localized: "\(command.name) needs one of the sites of this bench.") }
         return flagWords().problem
     }
 
@@ -251,10 +251,10 @@ nonisolated struct RunOutcome: Decodable, Equatable, Sendable {
 
     /// "The deadline stopped it." / "It ended with exit 1." / nil when it worked.
     var problem: String? {
-        if timedOut { return "The deadline stopped it." }
-        if !ran { return "The backup before it failed, so it did not start." }
+        if timedOut { return String(localized: "The deadline stopped it.") }
+        if !ran { return String(localized: "The backup before it failed, so it did not start.") }
         if ok { return nil }
-        return "It ended with exit \(commandExit ?? exit)."
+        return String(localized: "It ended with exit \(commandExit ?? exit).")
     }
 }
 
@@ -262,8 +262,8 @@ nonisolated enum RunText {
     /// The output as shown: the CLI's last lines, or a word when there are none.
     static func output(_ outcome: RunOutcome) -> String {
         let text = outcome.outputTail.trimmingCharacters(in: .whitespacesAndNewlines)
-        let body = text.isEmpty ? "(no output)" : text
-        return outcome.outputTruncated ? "(the start is in the run's log)\n" + body : body
+        let body = text.isEmpty ? String(localized: "(no output)") : text
+        return outcome.outputTruncated ? String(localized: "(the start is in the run's log)") + "\n" + body : body
     }
 
     /// The last few lines of the output, for the banner of a change that failed.
@@ -274,12 +274,12 @@ nonisolated enum RunText {
     /// The facts of the plan, in the order the sheet shows them.
     static func facts(_ plan: RunPlan) -> [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
-        if let summary = plan.summary, !summary.isEmpty { out.append(("What it does", summary)) }
-        if !plan.argv.isEmpty { out.append(("Command", plan.argv.joined(separator: " "))) }
-        if let site = plan.site, !site.isEmpty { out.append(("Site", site)) }
-        if plan.backupFirst { out.append(("Backup", "A database backup of the site is taken first.")) }
-        if let deadline = plan.deadlineText { out.append(("Deadline", "It is stopped after \(deadline).")) }
-        out.append(("Output", "The output goes to the run's log. The code of the bench's apps runs, so use a bench whose apps you trust."))
+        if let summary = plan.summary, !summary.isEmpty { out.append((String(localized: "What it does"), summary)) }
+        if !plan.argv.isEmpty { out.append((String(localized: "Command"), plan.argv.joined(separator: " "))) }
+        if let site = plan.site, !site.isEmpty { out.append((String(localized: "Site"), site)) }
+        if plan.backupFirst { out.append((String(localized: "Backup"), String(localized: "A database backup of the site is taken first."))) }
+        if let deadline = plan.deadlineText { out.append((String(localized: "Deadline"), String(localized: "It is stopped after \(deadline)."))) }
+        out.append((String(localized: "Output"), String(localized: "The output goes to the run's log. The code of the bench's apps runs, so use a bench whose apps you trust.")))
         return out
     }
 }
@@ -365,24 +365,24 @@ nonisolated struct OpList: Decodable, Equatable, Sendable {
 nonisolated enum OpText {
     /// "site backup acme.localhost, running: Back up acme.localhost (dumping the database), started 2 minutes ago".
     static func line(_ op: OpRecord, now: Date) -> String {
-        var text = op.command ?? "a command"
+        var text = op.command ?? String(localized: "a command")
         if let site = op.site, !site.isEmpty, !text.contains(site) { text += " " + site }
-        text += op.state == "starting" ? ", starting" : ", running"
-        if let step = op.stepName, !step.isEmpty { text += ": " + step }
-        if let progress = op.progressLabel, !progress.isEmpty { text += " (\(progress))" }
-        if let start = op.startedAt { text += ", started " + SnapshotText.relativeAge(of: start, now: now) }
+        text = op.state == "starting" ? String(localized: "\(text), starting") : String(localized: "\(text), running")
+        if let step = op.stepName, !step.isEmpty { text = String(localized: "\(text): \(step)") }
+        if let progress = op.progressLabel, !progress.isEmpty { text = String(localized: "\(text) (\(progress))") }
+        if let start = op.startedAt { text = String(localized: "\(text), started \(SnapshotText.relativeAge(of: start, now: now))") }
         return text
     }
 
     /// How a run that was seen running ended, from `op status`: "site backup acme.localhost finished", "... failed with exit 1".
     static func ended(_ op: OpRecord) -> String {
-        var text = op.command ?? "a command"
+        var text = op.command ?? String(localized: "a command")
         if let site = op.site, !site.isEmpty, !text.contains(site) { text += " " + site }
         switch op.state {
-        case "done": return text + " finished."
-        case "failed": return text + " failed" + (op.exit.map { " with exit \($0)." } ?? ".")
-        case "interrupted": return text + " was interrupted: its process is gone."
-        default: return text + " is \(op.state)."
+        case "done": return String(localized: "\(text) finished.")
+        case "failed": return op.exit.map { String(localized: "\(text) failed with exit \($0).") } ?? String(localized: "\(text) failed.")
+        case "interrupted": return String(localized: "\(text) was interrupted: its process is gone.")
+        default: return String(localized: "\(text) is \(op.state).")
         }
     }
 }

@@ -27,8 +27,8 @@ struct FindUserSheet: View {
     private var openAs: OpenAsStore { store.openAs }
 
     var body: some View {
-        SheetScaffold("Find User",
-                      explanation: "Enabled users of \(row.name). Open signs the browser in as that user; pin one to keep it in the Open as… menu.",
+        SheetScaffold(String(localized: "Find User"),
+                      explanation: String(localized: "Enabled users of \(row.name). Open signs the browser in as that user; pin one to keep it in the Open as… menu."),
                       phase: phase) {
             // a fixed height while results come and go: the sheet is re-centred
             // each time its height changes, and it jumped on every keystroke
@@ -49,21 +49,21 @@ struct FindUserSheet: View {
                             }
                         }
                         if list.truncated {
-                            SheetNote("Showing the first \(Self.limit); refine the search.")
+                            SheetNote(String(localized: "Showing the first \(Self.limit); refine the search."))
                         }
                     }
                 }
             }
             .frame(maxWidth: .infinity, minHeight: Self.listHeight, alignment: .top)
         } actions: {
-            DoneButton(title: "Close", action: close)
+            DoneButton(title: String(localized: "Close"), action: close)
         }
         .task(id: query) { await load() }
     }
 
     private var phase: SheetPhase {
-        if let failure { return .failed(failure, title: "Could not list the users") }
-        return list == nil ? .loading("Reading the users of \(row.name)…") : .ready
+        if let failure { return .failed(failure, title: String(localized: "Could not list the users")) }
+        return list == nil ? .loading(String(localized: "Reading the users of \(row.name)…")) : .ready
     }
 
     private func userRow(_ user: SiteUser) -> some View {
@@ -96,8 +96,8 @@ struct FindUserSheet: View {
             if canPin {
                 Button { togglePin(user, pinned: pinned) } label: { Image(systemName: pinned ? "pin.fill" : "pin") }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel(pinned ? "Unpin \(user.name)" : "Pin \(user.name)")
-                    .help(pinned ? "Remove from the Open as… menu" : "Keep in the Open as… menu (\(OpenAsStore.maxPins) at most)")
+                    .accessibilityLabel(pinned ? String(localized: "Unpin \(user.name)") : String(localized: "Pin \(user.name)"))
+                    .help(pinned ? String(localized: "Remove from the Open as… menu") : String(localized: "Keep in the Open as… menu (\(OpenAsStore.maxPins) at most)"))
             }
             Button("Open") { open(user) }
         }
@@ -109,7 +109,7 @@ struct FindUserSheet: View {
         if pinned {
             openAs.unpin(user.name, bench: bench.path, site: row.name)
         } else if !openAs.pin(user.name, fullName: user.fullName, bench: bench.path, site: row.name) {
-            pinNote = "A site keeps \(OpenAsStore.maxPins) pinned users at most. Unpin one first."
+            pinNote = String(localized: "A site keeps \(OpenAsStore.maxPins) pinned users at most. Unpin one first.")
         }
     }
 

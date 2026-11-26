@@ -130,7 +130,7 @@ nonisolated enum InstallText {
         if let bytes = line.bytes {
             let have = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
             if let total = line.total, total > 0 {
-                parts.append("\(have) of \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))")
+                parts.append(String(localized: "\(have) of \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))"))
             } else {
                 parts.append(have)
             }

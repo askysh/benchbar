@@ -332,7 +332,7 @@ final class ShareStore {
     func setup(_ request: ShareSetupRequest, onStep: @escaping @Sendable (String) -> Void) async -> Bool {
         setupOrTeardownCalls += 1
         defer { setupOrTeardownCalls -= 1 }
-        return await perform("Making the copy…") { client, bench throws(CLIError) in
+        return await perform(String(localized: "Making the copy…")) { client, bench throws(CLIError) in
             try await client.shareSetup(bench: bench, request: request, onStep: onStep)
         }
     }
@@ -360,7 +360,7 @@ final class ShareStore {
 
     @discardableResult
     func setLocked(_ locked: Bool) async -> Bool {
-        await perform(locked ? "Locking…" : "Unlocking…") { client, bench throws(CLIError) in try await client.shareLock(bench: bench, locked: locked) }
+        await perform(locked ? String(localized: "Locking…") : String(localized: "Unlocking…")) { client, bench throws(CLIError) in try await client.shareLock(bench: bench, locked: locked) }
     }
 
     @discardableResult
@@ -388,12 +388,12 @@ final class ShareStore {
     func teardown() async -> Bool {
         setupOrTeardownCalls += 1
         defer { setupOrTeardownCalls -= 1 }
-        return await perform("Removing the copy…") { client, bench throws(CLIError) in try await client.shareTeardown(bench: bench) }
+        return await perform(String(localized: "Removing the copy…")) { client, bench throws(CLIError) in try await client.shareTeardown(bench: bench) }
     }
 
     @discardableResult
     func installNetworkProtection() async -> Bool {
-        await perform("Turning on network protection…") { client, _ throws(CLIError) in try await client.lanGuardInstall() }
+        await perform(String(localized: "Turning on network protection…")) { client, _ throws(CLIError) in try await client.lanGuardInstall() }
     }
 
     @discardableResult

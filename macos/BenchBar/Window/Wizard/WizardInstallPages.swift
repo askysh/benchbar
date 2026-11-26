@@ -9,7 +9,7 @@ struct InstallPage: View {
 
     var body: some View {
         let state = run.state
-        WizardScaffold("Installing \(state.form.site)", explanation: explanation(state), phase: phase(state)) {
+        WizardScaffold(String(localized: "Installing \(state.form.site)"), explanation: explanation(state), phase: phase(state)) {
             outcome(state)
             if !state.planChanges.isEmpty {
                 Label("The plan changed after you reviewed it. These steps run now and were not in it: \(state.planChanges.joined(separator: ", ")).",
@@ -41,46 +41,46 @@ struct InstallPage: View {
 
     private func explanation(_ state: WizardState) -> String {
         switch state.installPhase {
-        case .running: "This takes a while: Homebrew packages, the bench, the apps and the site. You can use other apps meanwhile."
-        case .failed: "The install stopped. Retry picks up where it stopped: every step checks what is already done."
-        case .needsRootPassword: "MariaDB already has a root password that BenchBar does not know."
-        case .stopped: "You stopped the install."
+        case .running: String(localized: "This takes a while: Homebrew packages, the bench, the apps and the site. You can use other apps meanwhile.")
+        case .failed: String(localized: "The install stopped. Retry picks up where it stopped: every step checks what is already done.")
+        case .needsRootPassword: String(localized: "MariaDB already has a root password that BenchBar does not know.")
+        case .stopped: String(localized: "You stopped the install.")
         case .idle, .succeeded: ""
         }
     }
 
     private func phase(_ state: WizardState) -> SheetPhase {
         guard state.installPhase == .running else { return .ready }
-        if state.stopRequested { return .running("Stopping…") }
-        return .running(state.progress.running.map { "\($0.name)…" } ?? "Starting…")
+        if state.stopRequested { return .running(String(localized: "Stopping…")) }
+        return .running(state.progress.running.map { String(localized: "\($0.name)…") } ?? String(localized: "Starting…"))
     }
 
     @ViewBuilder private func outcome(_ state: WizardState) -> some View {
         switch state.installPhase {
         case .failed(let failure):
             SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .red,
-                         title: failure.step.map { "\($0) failed" } ?? "The install failed",
+                         title: failure.step.map { String(localized: "\($0) failed") } ?? String(localized: "The install failed"),
                          detail: CLIText.plain([failure.message, failure.fix].compactMap { $0 }.joined(separator: "\n\n")),
                          monospaced: false)
         case .needsRootPassword:
             // the CLI's fix names the environment variable for Terminal; here the field below is the fix
-            SheetOutcome(symbol: "lock.trianglebadge.exclamationmark.fill", tint: .orange, title: "Needs the MariaDB root password",
-                         detail: "Type the password of MariaDB's root user on this Mac, then Retry. It is not the site's Administrator password.")
+            SheetOutcome(symbol: "lock.trianglebadge.exclamationmark.fill", tint: .orange, title: String(localized: "Needs the MariaDB root password"),
+                         detail: String(localized: "Type the password of MariaDB's root user on this Mac, then Retry. It is not the site's Administrator password."))
             VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
                 HStack(spacing: WindowMetrics.rowSpacing) {
-                    PasswordField(label: "MariaDB root password",
+                    PasswordField(label: String(localized: "MariaDB root password"),
                                   text: Binding(get: { rootPassword }, set: { rootPassword = $0; run.send(.setRootPassword($0)) }),
                                   reveal: revealRootPassword)
                         .frame(maxWidth: 280)
                     Toggle(isOn: $revealRootPassword) { Image(systemName: revealRootPassword ? "eye.slash" : "eye") }
                         .toggleStyle(.button)
-                        .accessibilityLabel(revealRootPassword ? "Hide the password" : "Show the password")
+                        .accessibilityLabel(revealRootPassword ? String(localized: "Hide the password") : String(localized: "Show the password"))
                 }
-                SheetNote("It goes to the retried benchbar process only, never on a command line or to disk.")
+                SheetNote(String(localized: "It goes to the retried benchbar process only, never on a command line or to disk."))
             }
         case .stopped:
-            SheetOutcome(symbol: "stop.circle.fill", tint: .orange, title: "Stopped",
-                         detail: "Steps that finished stay done and the step that was running may be half done. Run the wizard again to finish it, or run benchbar repair in Terminal.")
+            SheetOutcome(symbol: "stop.circle.fill", tint: .orange, title: String(localized: "Stopped"),
+                         detail: String(localized: "Steps that finished stay done and the step that was running may be half done. Run the wizard again to finish it, or run benchbar repair in Terminal."))
         case .idle, .running, .succeeded:
             EmptyView()
         }
@@ -101,7 +101,7 @@ struct InstallPage: View {
     private var output: some View {
         DisclosureGroup("Command output") {
             ScrollView {
-                Text(run.logLines.isEmpty ? "Nothing yet." : run.logLines.joined(separator: "\n"))
+                Text(run.logLines.isEmpty ? String(localized: "Nothing yet.") : run.logLines.joined(separator: "\n"))
                     .font(.caption.monospaced()).foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -112,7 +112,7 @@ struct InstallPage: View {
     }
 
     static func copyText(_ failure: WizardState.Failure) -> String {
-        [failure.step.map { "\($0) failed" }, failure.message, failure.fix].compactMap { $0 }.joined(separator: "\n")
+        [failure.step.map { String(localized: "\($0) failed") }, failure.message, failure.fix].compactMap { $0 }.joined(separator: "\n")
     }
 }
 
@@ -129,9 +129,9 @@ struct InstallStepRow: View {
                     Text(depth == 0 ? row.name : InstallText.sentenceCase(row.name)).font(depth == 0 ? .body : .callout)
                         .foregroundStyle(row.status == nil ? .secondary : .primary)
                     if row.sudo, row.status == nil || row.status == .running {
-                        Tag(text: "Asks for your password", color: .orange)
+                        Tag(text: String(localized: "Asks for your password"), color: .orange)
                     }
-                    if row.alreadyDone { Tag(text: "Already done", color: .secondary) }
+                    if row.alreadyDone { Tag(text: String(localized: "Already done"), color: .secondary) }
                     Spacer(minLength: 0)
                     if let secs = row.secs {
                         Text(InstallText.duration(secs)).font(.caption).monospacedDigit().foregroundStyle(.secondary)
@@ -145,7 +145,7 @@ struct InstallStepRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let command = row.command, row.status == .skipped {
-                    CopyableCommand(command: command, copyLabel: "Copy the command for \(row.name)")
+                    CopyableCommand(command: command, copyLabel: String(localized: "Copy the command for \(row.name)"))
                 }
             }
         }
@@ -154,7 +154,7 @@ struct InstallStepRow: View {
 
     private var glyphLabel: String {
         switch row.status {
-        case nil: row.alreadyDone ? "already done" : "waiting"
+        case nil: row.alreadyDone ? String(localized: "already done") : String(localized: "waiting")
         case .running: "running"
         case .done: "done"
         case .unchanged: "unchanged"
@@ -197,16 +197,16 @@ struct DonePage: View {
 
     var body: some View {
         let state = run.state
-        WizardScaffold("Your bench is ready",
-                       explanation: state.siteURL.map { "\(state.form.site) is at \($0)" } ?? "The bench is set up.") {
+        WizardScaffold(String(localized: "Your bench is ready"),
+                       explanation: state.siteURL.map { String(localized: "\(state.form.site) is at \($0)") } ?? String(localized: "The bench is set up.")) {
             VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
                 ForEach(state.skippedCommands) { skipped in
                     if let command = skipped.command {
                         VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
                             SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .orange,
-                                         title: "One step was skipped",
-                                         detail: "The password dialog was cancelled, so this still needs doing. Run it in Terminal:")
-                            CopyableCommand(command: command, copyLabel: "Copy the command for the skipped step")
+                                         title: String(localized: "One step was skipped"),
+                                         detail: String(localized: "The password dialog was cancelled, so this still needs doing. Run it in Terminal:"))
+                            CopyableCommand(command: command, copyLabel: String(localized: "Copy the command for the skipped step"))
                         }
                     }
                 }
@@ -238,7 +238,7 @@ struct DonePage: View {
                     Text("In Terminal").font(.headline)
                     Text("Open a new Terminal window, or run this once, and benchup starts the bench:")
                         .font(.callout).foregroundStyle(.secondary)
-                    CopyableCommand(command: Self.helperCommand, copyLabel: "Copy the command that loads the shell helpers")
+                    CopyableCommand(command: Self.helperCommand, copyLabel: String(localized: "Copy the command that loads the shell helpers"))
                 }
             }
         } leading: {

@@ -5,25 +5,25 @@ nonisolated enum RollbackText {
     /// The facts under the title of a rollback plan, in the plan's own words.
     static func facts(_ plan: SiteRestorePlan) -> [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
-        out.append(("Replaced", "The database and the public and private files of \(plan.site)."))
+        out.append((String(localized: "Replaced"), String(localized: "The database and the public and private files of \(plan.site).")))
         let first = plan.rollback?.snapshotFirst ?? "before rollback"
-        out.append(("Taken first", "A snapshot of \(plan.site) as it is now (label: \(first)). The rollback can be undone from it."))
+        out.append((String(localized: "Taken first"), String(localized: "A snapshot of \(plan.site) as it is now (label: \(first)). The rollback can be undone from it.")))
         if let rollback = plan.rollback {
             switch rollback.appsMatch {
             case false?:
                 let apps = rollback.changedApps.isEmpty ? "" : " (\(rollback.changedApps.joined(separator: ", ")))"
-                out.append(("Apps", "The bench's apps changed since this snapshot\(apps). Its data goes into the bench's current code."))
-            case true?: out.append(("Apps", "The same apps as when the snapshot was taken."))
+                out.append((String(localized: "Apps"), String(localized: "The bench's apps changed since this snapshot\(apps). Its data goes into the bench's current code.")))
+            case true?: out.append((String(localized: "Apps"), String(localized: "The same apps as when the snapshot was taken.")))
             case nil: break
             }
         }
-        out.append(("Migrate", plan.migrate ? "bench migrate runs after the restore." : "Not run: the site stays on the schema of the snapshot."))
-        out.append(("Left alone", "Every other site and /etc/hosts."))
+        out.append((String(localized: "Migrate"), plan.migrate ? String(localized: "bench migrate runs after the restore.") : String(localized: "Not run: the site stays on the schema of the snapshot.")))
+        out.append((String(localized: "Left alone"), String(localized: "Every other site and /etc/hosts.")))
         return out
     }
 
     static func needsText(_ needs: [String]) -> String {
-        "benchbar needs \(needs.joined(separator: ", ")), which it does not have, and BenchBar never asks for or reads it. Run this rollback in Terminal, where benchbar can ask."
+        String(localized: "benchbar needs \(needs.joined(separator: ", ")), which it does not have, and BenchBar never asks for or reads it. Run this rollback in Terminal, where benchbar can ask.")
     }
 }
 
@@ -46,19 +46,19 @@ struct SnapshotsSheet: View {
     private var labelProblem: String? { SnapshotText.labelProblem(label) }
 
     private var phase: SheetPhase {
-        if let loadError { return .failed(loadError, title: "The snapshots could not be read") }
-        if !loaded { return .loading("Reading the snapshots of \(site)…") }
+        if let loadError { return .failed(loadError, title: String(localized: "The snapshots could not be read")) }
+        if !loaded { return .loading(String(localized: "Reading the snapshots of \(site)…")) }
         if let activity = bench.activity { return .running(activity) }
         return .ready
     }
 
     var body: some View {
-        SheetScaffold("Snapshots of \(site)",
-                      explanation: "A snapshot is a backup with files that frappe's pruning never removes, with the apps it was taken with. Taking one changes nothing in the site.",
+        SheetScaffold(String(localized: "Snapshots of \(site)"),
+                      explanation: String(localized: "A snapshot is a backup with files that frappe's pruning never removes, with the apps it was taken with. Taking one changes nothing in the site."),
                       phase: phase, width: .wide) {
             if loaded { content }
         } actions: {
-            DoneButton(title: "Close", action: close)
+            DoneButton(title: String(localized: "Close"), action: close)
         }
         .task { await load() }
         .sheet(item: $rollingBack) { snapshot in
@@ -88,8 +88,8 @@ struct SnapshotsSheet: View {
             ForEach(list.snapshots) { snapshot in row(snapshot) }
             SheetNote(summary(list))
         } else {
-            SheetOutcome(symbol: "camera", tint: .secondary, title: "No snapshots of \(site) yet",
-                         detail: "Take one before an upgrade or a risky change; a rollback puts the site back as it was.")
+            SheetOutcome(symbol: "camera", tint: .secondary, title: String(localized: "No snapshots of \(site) yet"),
+                         detail: String(localized: "Take one before an upgrade or a risky change; a rollback puts the site back as it was."))
         }
     }
 
@@ -114,15 +114,15 @@ struct SnapshotsSheet: View {
             Button("Remove…", role: .destructive) { removing = snapshot }
                 // the CLI needs --force-undo-point for the undo point, which BenchBar never passes
                 .disabled(busy || snapshot.beforeRollback)
-                .help(snapshot.beforeRollback ? "This is the undo point of the last rollback. Remove it in Terminal if you are sure." : "Delete this snapshot")
+                .help(snapshot.beforeRollback ? String(localized: "This is the undo point of the last rollback. Remove it in Terminal if you are sure.") : String(localized: "Delete this snapshot"))
         }
     }
 
     private func summary(_ list: SiteSnapshotList) -> String {
         let size = ByteCountFormatter.string(fromByteCount: list.totalBytes, countStyle: .file)
-        var parts = ["The snapshots hold \(size)."]
-        if let free = list.freeBytes { parts.append("\(ByteCountFormatter.string(fromByteCount: free, countStyle: .file)) are free on this volume.") }
-        if !list.overLimit.isEmpty { parts.append("\(list.overLimit.count) are beyond the newest \(list.keep); nothing is removed on its own.") }
+        var parts = [String(localized: "The snapshots hold \(size).")]
+        if let free = list.freeBytes { parts.append(String(localized: "\(ByteCountFormatter.string(fromByteCount: free, countStyle: .file)) are free on this volume.")) }
+        if !list.overLimit.isEmpty { parts.append(String(localized: "\(list.overLimit.count) are beyond the newest \(list.keep); nothing is removed on its own.")) }
         return parts.joined(separator: " ")
     }
 
@@ -158,17 +158,17 @@ struct SiteRollbackSheet: View {
     private var phase: SheetPhase {
         switch flow.stage {
         case .form:
-            if let error = flow.readError { .failed(error, title: "No plan to roll \(site) back") } else { .loading("Reading the snapshot and the bench…") }
-        case .reading: .loading("Reading the snapshot and the bench…")
+            if let error = flow.readError { .failed(error, title: String(localized: "No plan to roll \(site) back")) } else { .loading(String(localized: "Reading the snapshot and the bench…")) }
+        case .reading: .loading(String(localized: "Reading the snapshot and the bench…"))
         case .reviewing: .ready
-        case .applying: .running("Snapshotting and rolling back \(site)…")
-        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench or the snapshot changed since this plan was shown")
+        case .applying: .running(String(localized: "Snapshotting and rolling back \(site)…"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench or the snapshot changed since this plan was shown"))
         }
     }
 
     var body: some View {
-        SheetScaffold("Roll \(site) back",
-                      explanation: "Puts \(snapshot.title) back into the site. You see the plan first; nothing runs before you confirm.",
+        SheetScaffold(String(localized: "Roll \(site) back"),
+                      explanation: String(localized: "Puts \(snapshot.title) back into the site. You see the plan first; nothing runs before you confirm."),
                       phase: phase, width: .wide) {
             if let plan = flow.plan { review(plan) }
         } actions: {
@@ -201,7 +201,7 @@ struct SiteRollbackSheet: View {
             Text("taken \(SnapshotText.line(snapshot, now: pinnedNow ?? .now)) (\(snapshot.stamp))").font(.caption).foregroundStyle(.secondary)
         }
         if !plan.errors.isEmpty {
-            SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: "This plan cannot run", detail: plan.errors.joined(separator: "\n"))
+            SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: String(localized: "This plan cannot run"), detail: plan.errors.joined(separator: "\n"))
         }
         if !plan.needs.isEmpty { SheetNote(RollbackText.needsText(plan.needs), tint: .orange) }
         if SnapshotText.isDefaultSite(plan, benchDefault: bench.status?.site ?? bench.summary.site) { SheetNote(SnapshotText.defaultSiteNote, tint: .orange) }
@@ -214,7 +214,7 @@ struct SiteRollbackSheet: View {
             }
             Toggle("Do not run migrate afterwards", isOn: $noMigrate)
             TextField("Type \(site) to confirm", text: $typed).textFieldStyle(.roundedBorder).autocorrectionDisabled()
-            SheetNote("The MariaDB password comes from your Keychain; BenchBar never reads it.")
+            SheetNote(String(localized: "The MariaDB password comes from your Keychain; BenchBar never reads it."))
         }
     }
 

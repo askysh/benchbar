@@ -65,8 +65,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ShareCenter.shared.attach(store)
         store.confirmWhileSharing = { action, bench in
             guard Labs.shared.isOn(.lanRooms), let line = HostAmbient.benchConfirm(ShareCenter.shared.stores[bench.path]?.status, restart: action == .restart) else { return true }
-            return ShareConfirm.ask(action == .restart ? "Restart \(bench.name)?" : "Stop \(bench.name)?", detail: line,
-                                    button: action == .restart ? "Restart" : "Stop")
+            return ShareConfirm.ask(action == .restart ? String(localized: "Restart \(bench.name)?") : String(localized: "Stop \(bench.name)?"), detail: line,
+                                    button: action == .restart ? String(localized: "Restart") : String(localized: "Stop"))
         }
         ShareCenter.shared.onIconChange = { [weak self] icon in
             self?.statusItemController.setShareIcon(Labs.shared.isOn(.lanRooms) ? icon : .off)
@@ -415,7 +415,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try Workspace.openLogs(bench, cli: cli)
         } catch {
-            bench.lastError = "Could not open the logs: \(error.localizedDescription)"
+            bench.lastError = String(localized: "Could not open the logs: \(error.localizedDescription)")
         }
     }
 
@@ -448,8 +448,8 @@ extension AppDelegate: QuitEnvironment {
         let alert = NSAlert()
         alert.messageText = question.title
         alert.informativeText = question.detail
-        alert.addButton(withTitle: "Keep running")
-        alert.addButton(withTitle: question.canWaitForIt ? "Quit when it finishes" : "Quit anyway")
+        alert.addButton(withTitle: String(localized: "Keep running"))
+        alert.addButton(withTitle: question.canWaitForIt ? String(localized: "Quit when it finishes") : String(localized: "Quit anyway"))
         return alert.runModal() == .alertSecondButtonReturn
     }
 }

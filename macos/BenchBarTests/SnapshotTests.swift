@@ -542,6 +542,7 @@ struct SnapshotTests {
     }
 
     func render(_ view: some View, _ name: String) throws {
+        var rendered: [(look: String, size: CGSize)] = []
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let look = try #require(NSAppearance(named: appearance))
             // an offscreen window is never key: say so to SwiftUI, and
@@ -555,12 +556,17 @@ struct SnapshotTests {
             window.appearance = look
             window.contentView = hosting
             // a sheet sizes its scrolling content after the first layout
-            // (SheetScaffold measures it), so lay out, let the update land,
-            // then measure
-            hosting.layoutSubtreeIfNeeded()
-            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-            hosting.layoutSubtreeIfNeeded()
-            let size = hosting.fittingSize
+            // (SheetScaffold measures it), so lay out and let the update land
+            // until two passes agree on the size, then render
+            let settled = SnapshotCompare.settle(measure: {
+                hosting.layoutSubtreeIfNeeded()
+                return hosting.fittingSize
+            }, wait: { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) })
+            guard case .size(let size) = settled else {
+                if case .unsettled(let why) = settled { Issue.record("\(name)-\(suffix): \(why)") }
+                continue
+            }
+            rendered.append((look: suffix, size: size))
             if name.hasPrefix("popover-") {
                 #expect(size.height <= 690, "Popover height must remain bounded with diagnostics and many sites")
                 #expect(size.width <= 400)
@@ -592,6 +598,7 @@ struct SnapshotTests {
             try png.write(to: out.appendingPathComponent("\(name)-\(suffix).png"))
             try SnapshotCompare.verify(png, points: size, name: "\(name)-\(suffix)")
         }
+        if let why = SnapshotCompare.sizeMismatch(of: name, rendered) { Issue.record("\(why)") }
     }
 
     /// A selected sidebar row draws as a solid black bar in a window that is

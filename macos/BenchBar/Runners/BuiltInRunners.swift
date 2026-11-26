@@ -301,7 +301,7 @@ nonisolated enum CupRunnerArt {
     static func make() -> Runner {
         Runner(
             id: "cup",
-            name: "Coffee cup",
+            name: String(localized: "Coffee cup"),
             author: "BenchBar",
             isTemplate: true,
             pointWidth: width,
