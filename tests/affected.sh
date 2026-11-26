@@ -78,7 +78,7 @@ lib_family() {
     doctor-linux|preflight-linux) echo "test-doctor-linux test-doctor test-repair test-wsl-preflight test-install-linux test-install-failures test-prerequisites-linux" ;;
     repair|cmd-repair) echo "test-repair test-repair-json test-doctor test-doctor-hardening test-install-json" ;;
     docs) echo "test-docs test-docs-command" ;;
-    commands) echo "test-docs test-docs-command test-labs test-json" ;;
+    commands) echo "test-docs test-docs-command test-labs test-json test-unknown-flags test-envelope test-install-json test-agent-contracts" ;;
     apps|app-plan) echo "test-apps test-app-cli test-app-batch test-app-recovery test-pull test-apps-git test-lock" ;;
     bench|benchinfo|benchstate|discovery|freshness) echo "test-bench-flow test-status-cost test-discovery test-multi-bench test-adopt test-json test-freshness test-ports test-port-management test-install-json" ;;
     bench-run) echo "test-bench-run test-bench-run-mcp test-site-backups test-docs test-agent-contracts" ;;
