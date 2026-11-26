@@ -145,6 +145,7 @@ def links_in(rel, text):
     for n, path, frag in found:
         if re.search(r"\.[a-z0-9]+$", path):
             continue  # a file of the site (og.png), not a page
+        path = path.rstrip(".")  # the full stop that ends a sentence
         out.append((n, path if path.endswith("/") else path + "/", frag))
     return out
 
