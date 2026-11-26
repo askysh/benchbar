@@ -33,7 +33,13 @@ trap 'stop_child; exit 130' INT
 trap 'stop_child; exit 143' TERM
 trap 'stop_child; exit 129' HUP
 
-"$cmd" -x "$file" &
+# benchbar, the entry point, sources every library: with dataflow analysis its check took 15 GB
+# on a 16 GB runner and stopped the runner (#396), without it 0.7 GB and 26 s. Its libraries are
+# checked one by one with the analysis, so only benchbar's own lines go without it.
+opts=()
+case "$file" in benchbar | */benchbar) opts=(--extended-analysis=false) ;; esac
+
+"$cmd" -x ${opts[@]+"${opts[@]}"} "$file" &
 pid=$!
 
 # SECONDS, not a count of sleeps: the time each check takes counts too. It counts whole
