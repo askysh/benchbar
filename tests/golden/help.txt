@@ -1158,7 +1158,7 @@ All commands: benchbar commands --json
 === benchbar mariadb-password --help [labs: none] (exit 0)
 benchbar mariadb-password: Print the MariaDB root password (Keychain; a 0600 file on Linux) to a
   person at a terminal, after asking. Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and
-  without a terminal, whatever --yes says.
+  without a terminal.
 
 Usage: benchbar mariadb-password [--yes]
 
@@ -1177,7 +1177,7 @@ Usage: benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack C
 
 Options:
   --json                 One JSON document.
-  --fix-hints            Only the fix commands, one per line.
+  --fix-hints            Only the fix commands of the FAIL and WARN checks, one per line.
   --quick                Skip the slow checks and say which.
   --ack CHECK            Silence one named WARN for this bench until its message changes.
   --unack CHECK          Undo --ack.
@@ -1352,6 +1352,7 @@ Options:
   --since-restart        Only lines after the bench's last start (--json).
   --no-follow            Print and exit.
   -n N                   The last N lines (default 50); -nN, or a bare number, also works.
+  --json                 The lines as JSON.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -2239,8 +2240,7 @@ All commands: benchbar commands --json
 === benchbar site snapshot drop --help [labs: none] (exit 0)
 benchbar site snapshot drop: Remove one snapshot of a site, or with --prune the ones beyond the
   newest N. A person's choice: refused for an agent (--for-agent, benchbar mcp,
-  BENCHBAR_NONINTERACTIVE=1); its --dry-run says what would go and is open to an agent. Never the
-  undo point of a rollback unless --force-undo-point.
+  BENCHBAR_NONINTERACTIVE=1). Never the undo point of a rollback unless --force-undo-point.
 
 Usage: benchbar site snapshot drop NAME SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes]
        [--dry-run] [--json]
@@ -2253,7 +2253,7 @@ Options:
   --force-undo-point     With one named snapshot: also remove an undo point of a rollback (a plain
                          drop refuses it).
   --yes                  Do not ask. Refused for an agent: drop is a person's choice.
-  --dry-run              Print what would be removed, change nothing.
+  --dry-run              Print what would be removed, change nothing. It is open to an agent.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.
@@ -2276,7 +2276,7 @@ All commands: benchbar commands --json
 === benchbar site rollback --help [labs: none] (exit 0)
 benchbar site rollback: Put a snapshot back into the site: its database and files. The current state
   is snapshotted first (label before rollback), so a rollback can be undone. It migrates only when
-  the bench's apps differ from the snapshot's. A reviewed plan.
+  the bench's apps differ from the snapshot's.
 
 Usage: benchbar site rollback NAME --to SNAPSHOT|latest [--no-migrate] --dry-run --json, then
        --apply TOKEN --yes
@@ -2537,17 +2537,18 @@ Needs: a terminal to ask questions: yes; sudo: no; the network: no.
 Changes things: yes. JSON: document.
 All commands: benchbar commands --json
 === benchbar bench scratch --help [labs: none] (exit 0)
-benchbar bench scratch: Mark an existing bench scratch (it asks; --yes in a mode that cannot ask):
-  it expires after DAYS (default 7, 1 to 90), or --clear keeps it. bench gc only collects benches
-  benchbar knows (benchbar register PATH). install --scratch marks a new one.
+benchbar bench scratch: Mark an existing bench scratch: it expires after DAYS (default 7, 1 to 90).
+  bench gc only collects benches benchbar knows (benchbar register PATH). install --scratch marks a
+  new one.
 
 Usage: benchbar bench scratch PATH [--ttl DAYS] [--clear] [--json]
 
 Options:
   --ttl DAYS             Days until the bench expires.
-  --yes                  Required to mark (it asks otherwise): marking is what lets bench gc remove
-                         the bench and its databases, and gc shows who marked it and when.
-  --clear                Not scratch any more.
+  --yes                  Required to mark where nothing can ask (it asks otherwise): marking is what
+                         lets bench gc remove the bench and its databases, and gc shows who marked
+                         it and when.
+  --clear                Not scratch any more: the bench does not expire.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.

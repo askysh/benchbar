@@ -74,11 +74,11 @@ flag~service~--apply~TOKEN~Run exactly that plan (with --yes).
 env~service~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~service~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
 cmd~mariadb-password~benchbar mariadb-password [--yes]~Print the MariaDB root password (Keychain; a 0600 file on Linux) to a person at a terminal, after asking.~yes~no~no~no~none
-note~mariadb-password~Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal, whatever --yes says.
+note~mariadb-password~Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal.
 flag~mariadb-password~--yes~~Do not ask (still refused without a person at a terminal).
 cmd~doctor~benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack CHECK] [--prerequisites] [--fetch]~Read only health report. Exit 1 when something FAILs.~no~no~no~no~document
 flag~doctor~--json~~One JSON document.
-flag~doctor~--fix-hints~~Only the fix commands, one per line.
+flag~doctor~--fix-hints~~Only the fix commands of the FAIL and WARN checks, one per line.
 flag~doctor~--quick~~Skip the slow checks and say which.
 flag~doctor~--ack~CHECK~Silence one named WARN for this bench until its message changes.
 flag~doctor~--unack~CHECK~Undo --ack.
@@ -122,6 +122,7 @@ flag~logs~--since~TIMESTAMP~Only lines at or after it (--json; ISO 8601, or HH:M
 flag~logs~--since-restart~~Only lines after the bench's last start (--json).
 flag~logs~--no-follow~~Print and exit.
 flag~logs~-n~N~The last N lines (default 50); -nN, or a bare number, also works.
+flag~logs~--json~~The lines as JSON.
 cmd~fg~benchbar fg~Stop the service and run honcho in the foreground.~yes~no~no~yes~none
 cmd~watch~benchbar watch~Run bench watch for asset rebuilds.~no~no~no~no~none
 cmd~autostart~benchbar autostart [on|off]~Whether the bench may come back after login.~no~no~no~yes~stream
@@ -378,16 +379,16 @@ flag~site snapshot~--background~~Start it detached and print its op_id at once (
 flag~site snapshot~--label~TEXT~What the snapshot is for (up to 120 characters, no quotes); it is part of the folder name.
 flag~site snapshot~--dry-run~~Print what would happen, change nothing.
 cmd~site snapshot drop~benchbar site snapshot drop NAME SNAPSHOT|--prune [--keep N] [--force-undo-point] [--yes] [--dry-run] [--json]~Remove one snapshot of a site, or with --prune the ones beyond the newest N.~no~no~no~yes~document
-note~site snapshot drop~A person's choice: refused for an agent (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1); its --dry-run says what would go and is open to an agent. Never the undo point of a rollback unless --force-undo-point.
+note~site snapshot drop~A person's choice: refused for an agent (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1). Never the undo point of a rollback unless --force-undo-point.
 flag~site snapshot drop~--prune~~Remove the snapshots beyond the newest N (never an undo point of a rollback).
 flag~site snapshot drop~--keep~N~With --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's state file).
 flag~site snapshot drop~--force-undo-point~~With one named snapshot: also remove an undo point of a rollback (a plain drop refuses it).
 flag~site snapshot drop~--yes~~Do not ask. Refused for an agent: drop is a person's choice.
-flag~site snapshot drop~--dry-run~~Print what would be removed, change nothing.
+flag~site snapshot drop~--dry-run~~Print what would be removed, change nothing. It is open to an agent.
 cmd~site snapshots~benchbar site snapshots NAME [--keep N] [--json]~The site's snapshots, newest first: label, time, size, apps with their commits, and whether the bench's apps still match.~no~no~no~no~document
 flag~site snapshots~--keep~N~Say which snapshots are beyond the newest N (default 10, or SNAPSHOT_KEEP in the bench's state file). Nothing is removed.
 cmd~site rollback~benchbar site rollback NAME --to SNAPSHOT|latest [--no-migrate] --dry-run --json, then --apply TOKEN --yes~Put a snapshot back into the site: its database and files. The current state is snapshotted first (label before rollback), so a rollback can be undone.~no~yes~no~yes~document
-note~site rollback~It migrates only when the bench's apps differ from the snapshot's. A reviewed plan.
+note~site rollback~It migrates only when the bench's apps differ from the snapshot's.
 flag~site rollback~--background~~Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run.
 flag~site rollback~--to~SNAPSHOT~The snapshot: its name, its stamp, or latest (benchbar site snapshots NAME lists them).
 flag~site rollback~--no-migrate~~Stop after the restore, before bench migrate.
@@ -455,11 +456,11 @@ flag~bench remove~--dry-run~~Print the plan and its token, change nothing.
 flag~bench remove~--apply~TOKEN~Run exactly that plan (with --yes).
 flag~bench remove~--confirm-bench~NAME~Repeat the bench folder's name exactly.
 env~bench remove~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
-cmd~bench scratch~benchbar bench scratch PATH [--ttl DAYS] [--clear] [--json]~Mark an existing bench scratch (it asks; --yes in a mode that cannot ask): it expires after DAYS (default 7, 1 to 90), or --clear keeps it.~no~no~no~yes~document
+cmd~bench scratch~benchbar bench scratch PATH [--ttl DAYS] [--clear] [--json]~Mark an existing bench scratch: it expires after DAYS (default 7, 1 to 90).~no~no~no~yes~document
 note~bench scratch~bench gc only collects benches benchbar knows (benchbar register PATH). install --scratch marks a new one.
 flag~bench scratch~--ttl~DAYS~Days until the bench expires.
-flag~bench scratch~--yes~~Required to mark (it asks otherwise): marking is what lets bench gc remove the bench and its databases, and gc shows who marked it and when.
-flag~bench scratch~--clear~~Not scratch any more.
+flag~bench scratch~--yes~~Required to mark where nothing can ask (it asks otherwise): marking is what lets bench gc remove the bench and its databases, and gc shows who marked it and when.
+flag~bench scratch~--clear~~Not scratch any more: the bench does not expire.
 cmd~bench gc~benchbar bench gc --dry-run --json, then --apply TOKEN --yes~List the scratch benches that expired (never the default bench) and remove each as bench remove does.~yes~no~no~yes~document
 note~bench gc~Applying is a person's decision (refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal); the plan is open to agents.
 flag~bench gc~--dry-run~~Print the plan (expired, pending, skipped) and its token, change nothing.

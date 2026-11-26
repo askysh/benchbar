@@ -496,7 +496,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site snapshot drop` | `--keep` | `N` | With --prune: how many to keep (default 10, or SNAPSHOT_KEEP in the bench's state file). |
 | `site snapshot drop` | `--force-undo-point` |  | With one named snapshot: also remove an undo point of a rollback (a plain drop refuses it). |
 | `site snapshot drop` | `--yes` |  | Do not ask. Refused for an agent: drop is a person's choice. |
-| `site snapshot drop` | `--dry-run` |  | Print what would be removed, change nothing. |
+| `site snapshot drop` | `--dry-run` |  | Print what would be removed, change nothing. It is open to an agent. |
 | `site snapshots` | `--keep` | `N` | Say which snapshots are beyond the newest N (default 10, or SNAPSHOT_KEEP in the bench's state file). Nothing is removed. |
 | `site rollback` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `site rollback` | `--to` | `SNAPSHOT` | The snapshot: its name, its stamp, or latest (benchbar site snapshots NAME lists them). |
