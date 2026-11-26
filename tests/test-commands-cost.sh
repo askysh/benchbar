@@ -104,7 +104,7 @@ PY
 # fl_cmd_load cuts the records at the last line that is just TABLE: there must be one
 [[ "$(grep -c -x TABLE "$ROOT/lib/frappe-local/commands.sh")" == 1 ]] || fail "lib/frappe-local/commands.sh has no or more than one line that is just TABLE (fl_cmd_load)"
 
-SCHEMA="$(sed -n 's/^FL_SCHEMA_VERSION=\([0-9]*\).*$/\1/p' "$ROOT"/lib/frappe-local/*.sh "$FM" | head -n 1)"
+SCHEMA="$(sed -n 's/^FL_SCHEMA_VERSION=\([0-9]*\).*$/\1/p' "$ROOT/lib/frappe-local/benchstate.sh")"
 [[ -n "$SCHEMA" ]] || fail "FL_SCHEMA_VERSION not found"
 
 # document LABS: the document of `commands --json` with BENCHBAR_LABS=LABS
@@ -117,7 +117,7 @@ document() {
   want="$(python3 -I "$TMP_DIR/commands-ref.py" "$ROOT" "$labs" "$SCHEMA" "$VER"; printf x)"
   if [[ "$got" != "$want" ]]; then
     printf '%s' "${got%x}" >"$TMP_DIR/got.json"; printf '%s' "${want%x}" >"$TMP_DIR/want.json"
-    fail "commands --json differs from the table (labs: ${labs:-none}); first difference: $(cmp "$TMP_DIR/got.json" "$TMP_DIR/want.json" 2>&1 | head -n 1)"
+    fail "commands --json differs from the table (labs: ${labs:-none}); first difference: $(cmp "$TMP_DIR/got.json" "$TMP_DIR/want.json" 2>&1 || true)"
   fi
   # one line, valid JSON
   [[ "$(printf '%s' "${got%x}" | wc -l | tr -d ' ')" == "1" ]] || fail "commands --json is not one line"
