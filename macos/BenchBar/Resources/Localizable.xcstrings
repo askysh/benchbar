@@ -417,6 +417,18 @@
       },
       "comment": "Popover."
     },
+    "All processes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All processes"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Apps, sites and settings in the BenchBar window": {
       "extractionState": "manual",
       "localizations": {
@@ -428,6 +440,42 @@
         }
       },
       "comment": "Popover."
+    },
+    "Ask before a link acts": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask before a link acts"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Automatic": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Automatic uses the command line tool inside BenchBar, then Homebrew's (/opt/homebrew/bin, then /usr/local/bin), then ~/.local/bin (the one line installer's link). Every change the app makes runs this command, the same one you use in Terminal.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic uses the command line tool inside BenchBar, then Homebrew's (/opt/homebrew/bin, then /usr/local/bin), then ~/.local/bin (the one line installer's link). Every change the app makes runs this command, the same one you use in Terminal."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "Bench": {
       "extractionState": "manual",
@@ -464,6 +512,18 @@
         }
       },
       "comment": "Help menu."
+    },
+    "BenchBar cannot find the benchbar command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BenchBar cannot find the benchbar command"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "BenchBar: %@ %@": {
       "extractionState": "manual",
@@ -525,6 +585,18 @@
       },
       "comment": "Menu item."
     },
+    "Check for updates automatically": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for updates automatically"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Choose benchbar…": {
       "extractionState": "manual",
       "localizations": {
@@ -536,6 +608,18 @@
         }
       },
       "comment": "Popover."
+    },
+    "Clear": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "Close": {
       "extractionState": "manual",
@@ -609,6 +693,18 @@
       },
       "comment": "Popover."
     },
+    "Crashed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crashed"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Crashed (exit %lld), restarting": {
       "extractionState": "manual",
       "localizations": {
@@ -669,6 +765,30 @@
       },
       "comment": "Main menu title."
     },
+    "Editor": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Empty the view; the file is not touched": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty the view; the file is not touched"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Every check, with its fix": {
       "extractionState": "manual",
       "localizations": {
@@ -681,6 +801,30 @@
       },
       "comment": "Popover."
     },
+    "Experiments can change or disappear. Turning one off stops what it started.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experiments can change or disappear. Turning one off stops what it started."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Find User…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find User…"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Folder": {
       "extractionState": "manual",
       "localizations": {
@@ -692,6 +836,18 @@
         }
       },
       "comment": "Popover."
+    },
+    "Follow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "Follow bench.log": {
       "extractionState": "manual",
@@ -741,6 +897,18 @@
       },
       "comment": "Main menu title."
     },
+    "Hold ⌃ or ⌥ and press a key. Escape cancels.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hold ⌃ or ⌥ and press a key. Escape cancels."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "In Terminal: benchbar install, or benchbar adopt PATH for a bench you have.": {
       "extractionState": "manual",
       "localizations": {
@@ -765,6 +933,18 @@
       },
       "comment": "Popover."
     },
+    "Its folder moves from the Runners folder to the Trash, so you can take it back from there. The menu bar goes back to the default runner.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Its folder moves from the Runners folder to the Trash, so you can take it back from there. The menu bar goes back to the default runner."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Keyboard Shortcuts": {
       "extractionState": "manual",
       "localizations": {
@@ -777,6 +957,42 @@
       },
       "comment": "Help menu."
     },
+    "Keyboard shortcuts": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard shortcuts"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Labs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Labs"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Links": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Links"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Loading benches": {
       "extractionState": "manual",
       "localizations": {
@@ -788,6 +1004,18 @@
         }
       },
       "comment": "Popover."
+    },
+    "Location": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Location"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "Logs": {
       "extractionState": "manual",
@@ -861,6 +1089,18 @@
       },
       "comment": "Window menu."
     },
+    "Motion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Motion"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Needs about %@ GB free": {
       "extractionState": "manual",
       "localizations": {
@@ -884,6 +1124,42 @@
         }
       },
       "comment": "Popover: state of a running bench."
+    },
+    "Neither VS Code nor Cursor is installed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neither VS Code nor Cursor is installed."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Next match": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next match"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Next match (⌘G)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next match (⌘G)"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "No bench found": {
       "extractionState": "manual",
@@ -909,6 +1185,90 @@
       },
       "comment": "Popover."
     },
+    "Not on this platform": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not on this platform"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Notifications for BenchBar are off in System Settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications for BenchBar are off in System Settings."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Notify me when a bench crashes or recovers": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notify me when a bench crashes or recovers"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Off by default so Raycast and Shortcuts keep working. Any web page or app can open a benchbar:// link, and a browser's \"always allow\" removes its own question.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off by default so Raycast and Shortcuts keep working. Any web page or app can open a benchbar:// link, and a browser's \"always allow\" removes its own question."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Once a day, BenchBar asks GitHub for the latest release. Nothing is downloaded until you click Update Now.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once a day, BenchBar asks GitHub for the latest release. Nothing is downloaded until you click Update Now."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "One notification when it goes down, one when it is back.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One notification when it goes down, one when it is back."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Only the lines after the bench's last start (benchbar logs --since-restart)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the lines after the bench's last start (benchbar logs --since-restart)"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Open": {
       "extractionState": "manual",
       "localizations": {
@@ -932,6 +1292,78 @@
         }
       },
       "comment": "Status menu."
+    },
+    "Open BenchBar at login": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open BenchBar at login"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Open Login Items…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Login Items…"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Open as…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open as…"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Open benches in": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open benches in"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Open in Editor on a bench's page opens the bench folder in this app.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Editor on a bench's page opens the bench folder in this app."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Open in Terminal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Terminal"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "Opens this bench's Sharing tab": {
       "extractionState": "manual",
@@ -993,6 +1425,78 @@
       },
       "comment": "Popover: state."
     },
+    "Pick a state to see how the runner shows it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick a state to see how the runner shows it."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Preview": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Previous log": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous log"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Previous match": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous match"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Previous match (⇧⌘G)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous match (⇧⌘G)"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Process": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Process"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Quit BenchBar": {
       "extractionState": "manual",
       "localizations": {
@@ -1053,6 +1557,18 @@
       },
       "comment": "Help menu."
     },
+    "Reset": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Review Port Conflict…": {
       "extractionState": "manual",
       "localizations": {
@@ -1064,6 +1580,18 @@
         }
       },
       "comment": "Popover."
+    },
+    "Run faster when the bench is busy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run faster when the bench is busy"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "Running": {
       "extractionState": "manual",
@@ -1112,6 +1640,18 @@
         }
       },
       "comment": "Status menu."
+    },
+    "Search": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "Select All": {
       "extractionState": "manual",
@@ -1197,6 +1737,30 @@
       },
       "comment": "VoiceOver help of the menu bar item."
     },
+    "Shortcut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcut"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Show Folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Folder"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Show Walkthrough": {
       "extractionState": "manual",
       "localizations": {
@@ -1257,6 +1821,18 @@
       },
       "comment": "Popover."
     },
+    "Since last start": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Since last start"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Sites": {
       "extractionState": "manual",
       "localizations": {
@@ -1281,6 +1857,18 @@
       },
       "comment": "Popover."
     },
+    "Speed follows the CPU use of the bench's processes, sampled every 2 seconds.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speed follows the CPU use of the bench's processes, sampled every 2 seconds."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Starting": {
       "extractionState": "manual",
       "localizations": {
@@ -1293,6 +1881,18 @@
       },
       "comment": "Popover: state."
     },
+    "Startup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Startup"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "State unknown": {
       "extractionState": "manual",
       "localizations": {
@@ -1304,6 +1904,30 @@
         }
       },
       "comment": "Popover: state."
+    },
+    "Status": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Stick to the newest line; scrolling up turns it off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stick to the newest line; scrolling up turns it off"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "Stop": {
       "extractionState": "manual",
@@ -1389,6 +2013,18 @@
       },
       "comment": "Popover."
     },
+    "Type to filter": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type to filter"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Undo": {
       "extractionState": "manual",
       "localizations": {
@@ -1401,6 +2037,30 @@
       },
       "comment": "Edit menu."
     },
+    "Unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Update the CLI to use Labs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update the CLI to use Labs"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Update to %@…": {
       "extractionState": "manual",
       "localizations": {
@@ -1412,6 +2072,30 @@
         }
       },
       "comment": "Status menu: the version number follows."
+    },
+    "Use Automatic": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Automatic"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "User to open as, type to filter": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "User to open as, type to filter"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "View All %lld…": {
       "extractionState": "manual",
@@ -1449,6 +2133,18 @@
       },
       "comment": "Help menu."
     },
+    "When a benchbar:// link starts, stops or restarts a bench or opens a console, BenchBar asks first.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When a benchbar:// link starts, stops or restarts a bench or opens a console, BenchBar asks first."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
     "Window": {
       "extractionState": "manual",
       "localizations": {
@@ -1460,6 +2156,42 @@
         }
       },
       "comment": "Main menu title."
+    },
+    "With Reduce Motion on in System Settings, the runner shows a still pose.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With Reduce Motion on in System Settings, the runner shows a still pose."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Your benches run as their own login agents, so they keep running when BenchBar is closed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your benches run as their own login agents, so they keep running when BenchBar is closed."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "Your runners": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your runners"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "as %@": {
       "extractionState": "manual",
@@ -1495,6 +2227,42 @@
           }
         }
       }
+    },
+    "logs/bench.previous.log: the end of the log before the last start": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "logs/bench.previous.log: the end of the log before the last start"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "macOS cannot register this copy. Install BenchBar in Applications (scripts/macos-install-local.sh) and try again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS cannot register this copy. Install BenchBar in Applications (scripts/macos-install-local.sh) and try again."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
+    },
+    "macOS needs your approval in Login Items.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS needs your approval in Login Items."
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     },
     "paused after crashes": {
       "extractionState": "manual",
@@ -1555,6 +2323,18 @@
         }
       },
       "comment": "Lower case state word in the tooltip."
+    },
+    "⇥ next site": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⇥ next site"
+          }
+        }
+      },
+      "comment": "Settings and the other windows."
     }
   },
   "version": "1.0"
