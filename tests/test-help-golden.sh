@@ -2,8 +2,8 @@
 # The help text is held byte for byte: benchbar --help (also with no command, and as `help`) and
 # benchbar COMMAND --help for every command and subcommand of the table, with the experiments off
 # and, for the commands of a lab, on (a command of a lab that is off prints its refusal, not its help). The expected text is in
-# tests/golden/help.txt, written from the hand written help of 0.8.3 (CORE-18): generating the
-# global help from the table must not change one character of it.
+# tests/golden/help.txt. The global help is printed from the commands table and the HELP block of
+# commands.sh (#371); that every help record names a command of the table is held by tests/test-help-source.sh.
 #
 # After an intended change of a help text: HELP_GOLDEN_WRITE=tests/golden/help.txt bash tests/test-help-golden.sh
 # writes the new file; read its diff before committing it.
@@ -25,12 +25,6 @@ note() {
 
 keys="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/commands.sh"; fl_cmd_table' "$ROOT" | awk -F'~' '$1 == "cmd" { print $2 }')"
 [[ -n "$keys" ]] || fail "no cmd record in the table"
-
-# every `use` record of the global help names a command of the table, or - (a heading, a blank line, an option)
-ukeys="$(bash -c '. "$0/lib/frappe-local/usage.sh"; fl_usage_table' "$ROOT" | awk -F'~' '$1 == "use" && $2 != "-" { print $2 }' | sort -u)"
-while IFS= read -r k; do
-  [[ -z "$k" ]] || grep -qxF -- "$k" <<<"$keys" || fail "a use record names $k, which is not a command of the table"
-done <<<"$ukeys"
 
 # The second pass (the experiments on) runs the global help and the commands whose help was a
 # refusal (a nonzero exit) in the first one: every other command prints the same in both.

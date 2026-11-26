@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# help.sh: `benchbar COMMAND --help`, from the commands table (lib/frappe-local/commands.sh): fl_cmd_help and the
-# wrap it uses. A file of its own, read when a help prints (fl_cmd_help in commands.sh sources it and runs it), so
-# that no start parses it (#371).
+# help.sh: `benchbar COMMAND --help` and the global help (`benchbar --help`), both from the commands table
+# (lib/frappe-local/commands.sh): fl_cmd_help, fl_usage_text, and the wrap they use. A file of its own, read when a
+# help prints (fl_cmd_help and usage() in commands.sh source it), so that no start parses it, and no start reads
+# the HELP block that fl_usage_text reads (#371).
 
 # fl_wrap_v VAR WIDTH FIRST REST TEXT: TEXT in lines of at most WIDTH characters (a word longer than that stands
 # alone, unless it lists alternatives with |: it breaks after one). The first line starts with FIRST, the others with REST;
@@ -58,4 +59,55 @@ fl_cmd_help() {
   printf 'Needs: a terminal to ask questions: %s; sudo: %s; the network: %s.\n' "$tty" "$sudo" "$net"
   printf 'Changes things: %s. JSON: %s.\n' "$mut" "$json"
   printf 'All commands: benchbar commands --json\n'
+}
+
+# fl_help_block_v VAR: the records of the HELP block of commands.sh (the lines between `: <<'HELP'` and `HELP`)
+fl_help_block_v() {
+  local LC_ALL=C t head=$'\n: <<\'HELP\'\n' tail=$'\nHELP\n'
+  t="$(<"$FL_CMD_FILE")"
+  t="${t#*"$head"}"
+  printf -v "$1" '%s' "${t%%"$tail"*}"
+}
+
+# fl_usage_text: the global help. The HELP block says what is in it and in which order; a command is a label (the
+# usage form up to its first " [", or the label of the record) and its short summary, wrapped at 100 columns with
+# the text 22 columns in, below the label when that is 20 characters or more. The lines of no command are text.
+fl_usage_text() {
+  local block line kind sec key label ulab text tilde='~' docs="" w id u s fname indent="                      "
+  local LC_ALL=C
+  # one pass over the table: the usage form and the summary of every command, in variables named after the key
+  while IFS= read -r line; do
+    [[ "$line" == cmd~* ]] || continue
+    IFS='~' read -r kind key u s _ <<<"$line"
+    id="${key//[^A-Za-z0-9]/_}"
+    printf -v "__fl_u_${id}" '%s' "$u"
+    printf -v "__fl_s_${id}" '%s' "$s"
+  done <<<"$FL_CMD_TABLE"
+  fl_help_block_v block
+  while IFS= read -r line; do
+    IFS='~' read -r kind sec key label <<<"$line"
+    case "$kind" in
+      text)
+        text="$key"
+        text="${text//'{tilde}'/$tilde}"
+        text="${text//'{version}'/$FL_VERSION}"
+        if [[ "$text" == *'{docs}'* ]]; then docs="$(fl_docs_url /)"; text="${text//'{docs}'/$docs}"; fi
+        printf '%s\n' "$text" ;;
+      help)
+        id="${key//[^A-Za-z0-9]/_}"
+        fname="__fl_u_${id}"; u="${!fname}"
+        fname="__fl_s_${id}"; s="${!fname}"
+        u="${u#benchbar }"
+        ulab="${u%% \[*}"
+        label="${label:-$ulab}"
+        if [[ "${#label}" -ge 20 ]]; then
+          printf '  %s\n' "$label"
+          fl_wrap_v w 100 "$indent" "$indent" "$s"
+        else
+          printf -v fname '%-20s' "$label"
+          fl_wrap_v w 100 "  ${fname}" "$indent" "$s"
+        fi
+        printf '%s\n' "$w" ;;
+    esac
+  done <<<"$block"
 }

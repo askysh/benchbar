@@ -4,8 +4,6 @@
 db orphans
 run
 op
-op list
-op wait
 help
 commands
 ports
@@ -28,13 +26,7 @@ share assign
 share log
 share open-as
 share teardown
-share joined
-share leave
-share forget
 lan-guard
-lan-guard status
-lan-guard remove
-lan-guard allow-node
 site snapshot drop
 app
 lock
@@ -45,6 +37,4 @@ bench scratch
 bench gc
 profile
 labs list
-labs status
 lease
-lease release
