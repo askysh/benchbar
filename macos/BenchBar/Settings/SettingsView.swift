@@ -42,11 +42,11 @@ struct SettingsView: View {
             if showsHeader {
                 switch part {
                 case .general:
-                    PaneHeader(symbol: "gearshape.fill", tint: .gray, title: "General",
-                               subtitle: "Startup, notifications and the benchbar command BenchBar runs.")
+                    PaneHeader(symbol: "gearshape.fill", tint: .gray, title: String(localized: "General"),
+                               subtitle: String(localized: "Startup, notifications and the benchbar command BenchBar runs."))
                 case .menuBar:
-                    PaneHeader(symbol: "menubar.rectangle", tint: .blue, title: "Menu Bar",
-                               subtitle: "The runner in the menu bar shows your bench's state at a glance.")
+                    PaneHeader(symbol: "menubar.rectangle", tint: .blue, title: String(localized: "Menu Bar"),
+                               subtitle: String(localized: "The runner in the menu bar shows your bench's state at a glance."))
                 }
             }
             ScrollViewReader { proxy in
@@ -140,7 +140,7 @@ struct SettingsView: View {
         let online = sharing.reduce(0) { $0 + ($1.status?.devicesOnline ?? 0) }
         let joined = GuestSlot.shared.store?.runningForwarderCount ?? 0
         guard let ask = SharePresentation.labOffConfirm(hosted: sharing.count, online: online, joined: joined) else { return true }
-        return ShareConfirm.ask(ask.message, detail: ask.detail, button: "Turn off")
+        return ShareConfirm.ask(ask.message, detail: ask.detail, button: String(localized: "Turn off"))
     }
 
     // MARK: menu bar
@@ -176,14 +176,14 @@ struct SettingsView: View {
         Section {
             Picker("Runner", selection: $settings.runnerID) {
                 ForEach(library.all) { runner in
-                    Text(library.isCustom(runner.id) && !runner.author.isEmpty ? "\(runner.name) (by \(runner.author))" : runner.name)
+                    Text(library.isCustom(runner.id) && !runner.author.isEmpty ? String(localized: "\(runner.name) (by \(runner.author))") : runner.name)
                         .tag(runner.id)
                 }
             }
             LabeledContent("Your runners") {
                 HStack(spacing: WindowMetrics.rowSpacing) {
                     Button("Import…", action: importRunner)
-                    MoreMenu(help: "More runner actions") {
+                    MoreMenu(help: String(localized: "More runner actions")) {
                         Button("Show Folder") { library.revealFolder() }
                         if library.isCustom(settings.runnerID) {
                             Divider()
@@ -259,14 +259,14 @@ struct SettingsView: View {
             Text("Keyboard shortcuts")
         } footer: {
             Text(Labs.shared.isOn(.quickSwitch)
-                 ? "In the menu bar popover, for the bench it shows. Quick Switch works from any app."
-                 : "In the menu bar popover, for the bench it shows.")
+                 ? String(localized: "In the menu bar popover, for the bench it shows. Quick Switch works from any app.")
+                 : String(localized: "In the menu bar popover, for the bench it shows."))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
 
     static let shortcuts: [(action: String, keys: String)] = [
-        ("Start, stop, restart", [BenchShortcut.start, .stop, .restart].map(\.display).joined(separator: "  ")),
+        (String(localized: "Start, stop, restart"), [BenchShortcut.start, .stop, .restart].map(\.display).joined(separator: "  ")),
         (BenchShortcut.openSite.action, BenchShortcut.openSite.display),
         (BenchShortcut.logs.action, BenchShortcut.logs.display),
         (BenchShortcut.folder.action, BenchShortcut.folder.display),
@@ -284,8 +284,8 @@ struct SettingsView: View {
     static func shortcuts(quickSwitch: Bool, keyHeld: Bool = false, key: HotKeyChoice = .standard) -> [(action: String, keys: String)] {
         guard quickSwitch else { return shortcuts }
         return shortcuts + [
-            ("Open as Administrator, a pinned user, or back", OpenAsShortcut.summary),
-            ("Quick Switch, from any app", keyHeld ? "\(key.name) is used by another app" : key.name),
+            (String(localized: "Open as Administrator, a pinned user, or back"), OpenAsShortcut.summary),
+            (String(localized: "Quick Switch, from any app"), keyHeld ? String(localized: "\(key.name) is used by another app") : key.name),
         ]
     }
 
@@ -410,7 +410,7 @@ struct SettingsView: View {
                 HStack(spacing: WindowMetrics.rowSpacing) {
                     cliStatus
                     if case .ready(let url) = store.cli {
-                        MoreMenu(help: "More actions for the command line tool") {
+                        MoreMenu(help: String(localized: "More actions for the command line tool")) {
                             Button("Copy Path") { Workspace.copy(url.path) }
                             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
                         }
@@ -436,7 +436,7 @@ struct SettingsView: View {
             }
             if case .missing(.notFound) = store.cli {
                 LabeledContent("Install") {
-                    CopyableCommand(command: Homebrew.installCLI, copyLabel: "Copy the Homebrew command that installs benchbar")
+                    CopyableCommand(command: Homebrew.installCLI, copyLabel: String(localized: "Copy the Homebrew command that installs benchbar"))
                 }
             }
         } header: {
@@ -464,8 +464,8 @@ struct SettingsView: View {
     /// A runner folder or a .zip of one, from the file picker.
     private func importRunner() {
         let panel = NSOpenPanel()
-        panel.title = "Import a runner"
-        panel.message = "Choose a runner folder (with manifest.json) or a .zip of one. See docs/runners.md."
+        panel.title = String(localized: "Import a runner")
+        panel.message = String(localized: "Choose a runner folder (with manifest.json) or a .zip of one. See docs/runners.md.")
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
         panel.allowedContentTypes = [.folder, .zip]
@@ -475,9 +475,9 @@ struct SettingsView: View {
             switch await library.importRunnerInBackground(from: url) {
             case .success(let id):
                 settings.runnerID = id
-                importMessage = "Imported \(library.runner(id).name)."
+                importMessage = String(localized: "Imported \(library.runner(id).name).")
             case .failure(let error):
-                importMessage = "Not imported: \(error.localizedDescription)"
+                importMessage = String(localized: "Not imported: \(error.localizedDescription)")
             }
         }
     }

@@ -7,8 +7,8 @@ struct HistoryPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PaneHeader(symbol: "clock.arrow.circlepath", tint: .teal, title: "History",
-                       subtitle: "Every run that changed something on this Mac, newest first: who started it and how it ended.") {
+            PaneHeader(symbol: "clock.arrow.circlepath", tint: .teal, title: String(localized: "History"),
+                       subtitle: String(localized: "Every run that changed something on this Mac, newest first: who started it and how it ended.")) {
                 Button("Refresh") { Task { await workbench.loadHistory() } }
                     .disabled(workbench.loadingHistory)
             }
@@ -20,8 +20,8 @@ struct HistoryPane: View {
                 if workbench.loadingHistory {
                     ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    EmptyStateBlock(symbol: "clock", title: "Nothing has run yet",
-                                    line: "A start, a backup, an app change or a restore shows here once it has run.", actions: [], disabled: false)
+                    EmptyStateBlock(symbol: "clock", title: String(localized: "Nothing has run yet"),
+                                    line: String(localized: "A start, a backup, an app change or a restore shows here once it has run."), actions: [], disabled: false)
                         .padding(WindowMetrics.paneInset)
                     Spacer()
                 }

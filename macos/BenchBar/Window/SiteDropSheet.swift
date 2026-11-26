@@ -85,7 +85,7 @@ struct SiteDropSheet: View {
                             Text("\(index + 1).").monospacedDigit().foregroundStyle(.secondary)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(step.title).fixedSize(horizontal: false, vertical: true)
-                                Text(step.needsPassword ? "needs your password: BenchBar shows the command to run in Terminal" : step.command)
+                                Text(step.needsPassword ? String(localized: "needs your password: BenchBar shows the command to run in Terminal") : step.command)
                                     .font(.caption).foregroundStyle(step.needsPassword ? .orange : .secondary)
                             }
                         }

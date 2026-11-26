@@ -14,10 +14,10 @@ nonisolated struct BenchGuidance: Equatable, Sendable {
         var title: String {
             switch self {
             case .start: "Start"
-            case .viewHealth: "View Health…"
-            case .reviewPortConflict: "Review Port Conflict…"
+            case .viewHealth: String(localized: "View Health…")
+            case .reviewPortConflict: String(localized: "Review Port Conflict…")
             case .repair: "Repair…"
-            case .setUpManagement: "Set Up Management…"
+            case .setUpManagement: String(localized: "Set Up Management…")
             }
         }
     }
@@ -35,29 +35,29 @@ nonisolated struct BenchGuidance: Equatable, Sendable {
     static func make(state: BenchState, reason: StopReason?, needsService: Bool, portConflict: Bool, pending: Bool = false) -> BenchGuidance? {
         if pending { return nil }
         if needsService {
-            return BenchGuidance(reason: "BenchBar does not manage this bench yet, so it cannot start it.", action: .setUpManagement)
+            return BenchGuidance(reason: String(localized: "BenchBar does not manage this bench yet, so it cannot start it."), action: .setUpManagement)
         }
         if portConflict {
-            return BenchGuidance(reason: "Another program holds one of its ports.", action: .reviewPortConflict)
+            return BenchGuidance(reason: String(localized: "Another program holds one of its ports."), action: .reviewPortConflict)
         }
         switch state {
         case .running, .starting:
             return nil
         case .crashed:
-            return BenchGuidance(reason: "It crashed and launchd is restarting it.", action: .viewHealth)
+            return BenchGuidance(reason: String(localized: "It crashed and launchd is restarting it."), action: .viewHealth)
         case .paused:
             switch reason {
-            case .broken: return BenchGuidance(reason: "Its environment is broken, so automatic restarts are paused.", action: .repair)
-            case .portConflict: return BenchGuidance(reason: "Another program holds one of its ports.", action: .reviewPortConflict)
-            case .manual: return BenchGuidance(reason: "You stopped it.", action: .start)
-            default: return BenchGuidance(reason: "It crashed three times in ten minutes, so restarts are paused.", action: .viewHealth)
+            case .broken: return BenchGuidance(reason: String(localized: "Its environment is broken, so automatic restarts are paused."), action: .repair)
+            case .portConflict: return BenchGuidance(reason: String(localized: "Another program holds one of its ports."), action: .reviewPortConflict)
+            case .manual: return BenchGuidance(reason: String(localized: "You stopped it."), action: .start)
+            default: return BenchGuidance(reason: String(localized: "It crashed three times in ten minutes, so restarts are paused."), action: .viewHealth)
             }
         case .stopped:
             switch reason {
-            case .broken: return BenchGuidance(reason: "Its environment is broken, so it cannot start.", action: .repair)
-            case .portConflict: return BenchGuidance(reason: "Another program held one of its ports when it started.", action: .reviewPortConflict)
-            case .manual: return BenchGuidance(reason: "You stopped it.", action: .start)
-            default: return BenchGuidance(reason: "It has not been started yet.", action: .start)
+            case .broken: return BenchGuidance(reason: String(localized: "Its environment is broken, so it cannot start."), action: .repair)
+            case .portConflict: return BenchGuidance(reason: String(localized: "Another program held one of its ports when it started."), action: .reviewPortConflict)
+            case .manual: return BenchGuidance(reason: String(localized: "You stopped it."), action: .start)
+            default: return BenchGuidance(reason: String(localized: "It has not been started yet."), action: .start)
             }
         case .unknown:
             return nil

@@ -26,10 +26,10 @@ final class PortSetupRun: Identifiable {
     }
 
     var title: String {
-        if startAfterSetup { return "Resolve Port Conflict" }
-        if opensSettings { return "Port Settings" }
+        if startAfterSetup { return String(localized: "Resolve Port Conflict") }
+        if opensSettings { return String(localized: "Port Settings") }
         // one bench (Adopt Existing Bench…, Set Up Management…) by its name
-        return summaries.count == 1 ? "Set Up \(summaries[0].name)" : "Set Up Selected Benches"
+        return summaries.count == 1 ? String(localized: "Set Up \(summaries[0].name)") : String(localized: "Set Up Selected Benches")
     }
 
     /// The plan has nothing to set up (`PortPlan.Entry.needsSetup`): Port
@@ -40,13 +40,13 @@ final class PortSetupRun: Identifiable {
     var isBusy: Bool { phase == .planning || phase == .running }
 
     func loadPlan() async {
-        guard let client = store.cliClient else { phase = .failed("The benchbar command is unavailable."); return }
+        guard let client = store.cliClient else { phase = .failed(String(localized: "The benchbar command is unavailable.")); return }
         phase = .planning
         plan = nil
         do {
             plan = try await client.portPlan(benches: summaries.map(\.path))
             if plan?.canApply == true && plan?.entries.contains(where: { $0.setupPlan?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false }) == true {
-                phase = .failed("The CLI did not provide a service-change preview. Upgrade benchbar and refresh the preview before applying.")
+                phase = .failed(String(localized: "The CLI did not provide a service-change preview. Upgrade benchbar and refresh the preview before applying."))
                 return
             }
             phase = .review
@@ -84,7 +84,7 @@ final class PortSetupRun: Identifiable {
             return
         }
         guard summaries.allSatisfy({ summary in store.benches.contains { $0.path == summary.path && !$0.needsService } }) else {
-            phase = .failed("Setup returned, but some services were not found. Review the output and run Doctor.")
+            phase = .failed(String(localized: "Setup returned, but some services were not found. Review the output and run Doctor."))
             return
         }
         for bench in store.benches where summaries.contains(where: { $0.path == bench.path }) {

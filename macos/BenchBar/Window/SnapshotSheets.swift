@@ -5,25 +5,25 @@ nonisolated enum RollbackText {
     /// The facts under the title of a rollback plan, in the plan's own words.
     static func facts(_ plan: SiteRestorePlan) -> [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
-        out.append(("Replaced", "The database and the public and private files of \(plan.site)."))
+        out.append((String(localized: "Replaced"), String(localized: "The database and the public and private files of \(plan.site).")))
         let first = plan.rollback?.snapshotFirst ?? "before rollback"
-        out.append(("Taken first", "A snapshot of \(plan.site) as it is now (label: \(first)). The rollback can be undone from it."))
+        out.append((String(localized: "Taken first"), String(localized: "A snapshot of \(plan.site) as it is now (label: \(first)). The rollback can be undone from it.")))
         if let rollback = plan.rollback {
             switch rollback.appsMatch {
             case false?:
                 let apps = rollback.changedApps.isEmpty ? "" : " (\(rollback.changedApps.joined(separator: ", ")))"
-                out.append(("Apps", "The bench's apps changed since this snapshot\(apps). Its data goes into the bench's current code."))
-            case true?: out.append(("Apps", "The same apps as when the snapshot was taken."))
+                out.append((String(localized: "Apps"), String(localized: "The bench's apps changed since this snapshot\(apps). Its data goes into the bench's current code.")))
+            case true?: out.append((String(localized: "Apps"), String(localized: "The same apps as when the snapshot was taken.")))
             case nil: break
             }
         }
-        out.append(("Migrate", plan.migrate ? "bench migrate runs after the restore." : "Not run: the site stays on the schema of the snapshot."))
-        out.append(("Left alone", "Every other site and /etc/hosts."))
+        out.append((String(localized: "Migrate"), plan.migrate ? String(localized: "bench migrate runs after the restore.") : String(localized: "Not run: the site stays on the schema of the snapshot.")))
+        out.append((String(localized: "Left alone"), String(localized: "Every other site and /etc/hosts.")))
         return out
     }
 
     static func needsText(_ needs: [String]) -> String {
-        "benchbar needs \(needs.joined(separator: ", ")), which it does not have, and BenchBar never asks for or reads it. Run this rollback in Terminal, where benchbar can ask."
+        String(localized: "benchbar needs \(needs.joined(separator: ", ")), which it does not have, and BenchBar never asks for or reads it. Run this rollback in Terminal, where benchbar can ask.")
     }
 }
 
@@ -114,15 +114,15 @@ struct SnapshotsSheet: View {
             Button("Remove…", role: .destructive) { removing = snapshot }
                 // the CLI needs --force-undo-point for the undo point, which BenchBar never passes
                 .disabled(busy || snapshot.beforeRollback)
-                .help(snapshot.beforeRollback ? "This is the undo point of the last rollback. Remove it in Terminal if you are sure." : "Delete this snapshot")
+                .help(snapshot.beforeRollback ? String(localized: "This is the undo point of the last rollback. Remove it in Terminal if you are sure.") : String(localized: "Delete this snapshot"))
         }
     }
 
     private func summary(_ list: SiteSnapshotList) -> String {
         let size = ByteCountFormatter.string(fromByteCount: list.totalBytes, countStyle: .file)
-        var parts = ["The snapshots hold \(size)."]
-        if let free = list.freeBytes { parts.append("\(ByteCountFormatter.string(fromByteCount: free, countStyle: .file)) are free on this volume.") }
-        if !list.overLimit.isEmpty { parts.append("\(list.overLimit.count) are beyond the newest \(list.keep); nothing is removed on its own.") }
+        var parts = [String(localized: "The snapshots hold \(size).")]
+        if let free = list.freeBytes { parts.append(String(localized: "\(ByteCountFormatter.string(fromByteCount: free, countStyle: .file)) are free on this volume.")) }
+        if !list.overLimit.isEmpty { parts.append(String(localized: "\(list.overLimit.count) are beyond the newest \(list.keep); nothing is removed on its own.")) }
         return parts.joined(separator: " ")
     }
 

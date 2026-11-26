@@ -129,7 +129,7 @@ struct BenchOverview: View {
                 LabeledContent("Default site", value: bench.summary.site)
                 LabeledContent("Web", value: bench.status?.webURL ?? bench.summary.webURL)
                 LabeledContent("Socket.IO port", value: String(ports.socketio))
-                LabeledContent("Redis ports", value: "\(ports.redisQueue) (queue), \(ports.redisCache) (cache)")
+                LabeledContent("Redis ports", value: String(localized: "\(ports.redisQueue) (queue), \(ports.redisCache) (cache)"))
                 LabeledContent("Agent", value: bench.summary.label)
             } header: {
                 HStack {
@@ -146,26 +146,26 @@ struct BenchOverview: View {
             Section("Background jobs") {
                 Toggle(isOn: Binding(get: { bench.schedulerOn ?? false }, set: { schedulerChange = $0 })) {
                     Text("Scheduler")
-                    Text(bench.schedulerOn == nil ? "Needs benchbar 0.4 or later"
-                         : "Runs scheduled jobs (bench schedule) in the background. Changing it restarts a running bench.")
+                    Text(bench.schedulerOn == nil ? String(localized: "Needs benchbar 0.4 or later")
+                         : String(localized: "Runs scheduled jobs (bench schedule) in the background. Changing it restarts a running bench."))
                 }
                 .disabled(bench.schedulerOn == nil || !store.canChange(bench))
                 if catalog?.has("autostart") == true || bench.status?.autostart != nil, !bench.needsService {
                     Toggle(isOn: Binding(get: { workbench.autostartSetting(for: bench) ?? false },
                                          set: { on in Task { await workbench.setAutostart(on, on: bench) } })) {
                         Text("Start after login")
-                        Text(workbench.autostartSetting(for: bench) == nil ? "Reading the setting…"
-                             : "The bench comes back after you log in, if it was running when you logged out.")
+                        Text(workbench.autostartSetting(for: bench) == nil ? String(localized: "Reading the setting…")
+                             : String(localized: "The bench comes back after you log in, if it was running when you logged out."))
                     }
                     .disabled(workbench.autostartSetting(for: bench) == nil || !store.canChange(bench))
                 }
                 if catalog?.has("service") == true {
                     LabeledContent {
-                        Button(bench.needsService ? "Install Service…" : "Refresh Service…") { servicing = true }
+                        Button(bench.needsService ? String(localized: "Install Service…") : String(localized: "Refresh Service…")) { servicing = true }
                             .disabled(!store.canChange(bench))
                     } label: {
                         Text("Service")
-                        Text(bench.needsService ? "Not installed. Shows its plan first." : "Writes the agent and runner files again. Shows its plan first.")
+                        Text(bench.needsService ? String(localized: "Not installed. Shows its plan first.") : String(localized: "Writes the agent and runner files again. Shows its plan first."))
                     }
                 }
             }
@@ -188,9 +188,9 @@ struct BenchOverview: View {
         .task { await workbench.pollLeases(bench) }
         .task { await workbench.pollOps(bench) }
         .onChange(of: router.setupRequest) { _, _ in openRequestedSetup() }
-        .alert(schedulerChange == true ? "Run the scheduler for \(bench.name)?" : "Stop the scheduler for \(bench.name)?",
+        .alert(schedulerChange == true ? String(localized: "Run the scheduler for \(bench.name)?") : String(localized: "Stop the scheduler for \(bench.name)?"),
                isPresented: Binding(get: { schedulerChange != nil }, set: { if !$0 { schedulerChange = nil } })) {
-            Button(schedulerChange == true ? "Turn On and Restart" : "Turn Off and Restart") {
+            Button(schedulerChange == true ? String(localized: "Turn On and Restart") : String(localized: "Turn Off and Restart")) {
                 guard let on = schedulerChange else { return }
                 schedulerChange = nil
                 Task { await store.setScheduler(on, on: bench) }
@@ -246,7 +246,7 @@ struct BenchOverview: View {
                 }
                 .fixedSize()
             }
-            Button(defaultNeedsHosts ? "Set Up Site…" : "Open Site") {
+            Button(defaultNeedsHosts ? String(localized: "Set Up Site…") : String(localized: "Open Site")) {
                 if defaultNeedsHosts { router.benchTab = .sites }
                 else { Workspace.openSite(bench) }
             }
@@ -338,10 +338,10 @@ struct BenchOverview: View {
 
     private func editorButton(_ editor: Editor?) -> some View {
         Button { if let editor { Workspace.openInEditor(bench, editor: editor) } } label: {
-            Label(editor.map { "Open in \($0.name)" } ?? "Open in Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+            Label(editor.map { String(localized: "Open in \($0.name)") } ?? String(localized: "Open in Editor"), systemImage: "chevron.left.forwardslash.chevron.right")
         }
         .disabled(editor == nil)
-        .help(editor == nil ? "Install VS Code or Cursor to open the bench folder in it." : bench.path)
+        .help(editor == nil ? String(localized: "Install VS Code or Cursor to open the bench folder in it.") : bench.path)
     }
 
     private func openRequestedSetup() {
@@ -383,10 +383,10 @@ struct BenchSites: View {
                     HStack(spacing: 8) {
                         Image(systemName: row.isDefault ? "star.fill" : "globe")
                             .foregroundStyle(row.isDefault ? .yellow : .secondary)
-                            .accessibilityLabel(row.isDefault ? "Default site" : "Site")
+                            .accessibilityLabel(row.isDefault ? String(localized: "Default site") : String(localized: "Site"))
                         VStack(alignment: .leading, spacing: 1) {
                             Text(row.name)
-                            Text(row.needsHosts ? "no /etc/hosts line yet" : row.url)
+                            Text(row.needsHosts ? String(localized: "no /etc/hosts line yet") : row.url)
                                 .font(.caption).foregroundStyle(row.needsHosts ? .orange : .secondary)
                             if let last = workbench.backups(of: row.name, on: bench)?.backups.first {
                                 LastBackupLine(backup: last)
@@ -401,7 +401,7 @@ struct BenchSites: View {
                             ProgressView().controlSize(.small)
                         }
                         OpenAsMenu(store: store, bench: bench, row: row) { findingUser = row.name }
-                        Button(row.needsHosts ? "Set Up…" : "Open") {
+                        Button(row.needsHosts ? String(localized: "Set Up…") : String(localized: "Open")) {
                             if row.needsHosts { openHosts() }
                             else { Workspace.open(row.url) }
                         }
@@ -430,9 +430,9 @@ struct BenchSites: View {
             }
             if rows.count == 1 {
                 Section {
-                    EmptyStateBlock(symbol: "globe", title: "One site so far",
-                                    line: "A second site shares this bench and its MariaDB, with only Frappe installed.",
-                                    actions: [("Add Site…", { addingSite = true })], disabled: busy)
+                    EmptyStateBlock(symbol: "globe", title: String(localized: "One site so far"),
+                                    line: String(localized: "A second site shares this bench and its MariaDB, with only Frappe installed."),
+                                    actions: [(String(localized: "Add Site…"), { addingSite = true })], disabled: busy)
                 }
             }
             if SiteRow.hostsFix(rows, bench: bench.path) != nil {
@@ -546,7 +546,7 @@ struct LastBackupLine: View {
     private var text: String {
         let size = ByteCountFormatter.string(fromByteCount: backup.sizeBytes, countStyle: .file)
         // a clock that is a little behind must not say "in 2 minutes"
-        let when = backup.time.map { "Backed up " + Self.age(of: $0, now: pinnedNow ?? .now) } ?? "Backed up \(backup.stamp)"
+        let when = backup.time.map { String(localized: "Backed up \(Self.age(of: $0, now: pinnedNow ?? .now))") } ?? String(localized: "Backed up \(backup.stamp)")
         return "\(when), \(size)\(backup.withFiles ? ", with files" : "")"
     }
 
@@ -592,14 +592,14 @@ struct SiteMenu: View {
             if workbench.offersMove(from: bench) {
                 Button("Move to Another Bench…", action: move)
                     .disabled(!SiteMoveText.canMove(row))
-                    .help(SiteMoveText.canMove(row) ? "Moves \(row.name) to another bench, under the same name" : "The default site never moves; make another site the default first")
+                    .help(SiteMoveText.canMove(row) ? String(localized: "Moves \(row.name) to another bench, under the same name") : String(localized: "The default site never moves; make another site the default first"))
             }
             Divider()
             Button("Open Console") { Workspace.openShell(.console, site: row.name, bench: bench, store: workbench.store) }
             Button("Open Database") { Workspace.openShell(.db, site: row.name, bench: bench, store: workbench.store) }
             if let enabled = row.openAsEnabled {
                 Divider()
-                Button(enabled ? "Turn Off Open as" : "Allow Open as…", action: openAs)
+                Button(enabled ? String(localized: "Turn Off Open as") : String(localized: "Allow Open as…"), action: openAs)
             }
             Divider()
             Button("Drop Site…", role: .destructive, action: drop)
@@ -746,7 +746,7 @@ struct LockSection: View {
                 } else if let check {
                     Image(systemName: check.inSync ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(check.inSync ? .green : .orange)
-                        .accessibilityLabel(check.inSync ? "In sync" : "Differences")
+                        .accessibilityLabel(check.inSync ? String(localized: "In sync") : String(localized: "Differences"))
                     Text(LockText.badge(check))
                 } else if let error = workbench.lockErrors[bench.path] {
                     Image(systemName: "xmark.octagon.fill").foregroundStyle(.red).accessibilityLabel("Error")
@@ -794,15 +794,15 @@ struct LockSection: View {
 
 nonisolated enum LockText {
     static func badge(_ check: LockCheck) -> String {
-        if check.inSync { return "In sync" }
+        if check.inSync { return String(localized: "In sync") }
         let n = check.drift.count
         return Wording.differences(n)
     }
 
-    static let noFile = "No lockfile for this bench yet."
+    static let noFile = String(localized: "No lockfile for this bench yet.")
 
     static func footer(_ path: String?) -> String {
-        guard let path else { return "benchbar.toml pins the apps and sites of this bench for the team. Write Lock File makes one from this bench." }
-        return "Compared with \(path). Apply brings the apps in line; no site is touched."
+        guard let path else { return String(localized: "benchbar.toml pins the apps and sites of this bench for the team. Write Lock File makes one from this bench.") }
+        return String(localized: "Compared with \(path). Apply brings the apps in line; no site is touched.")
     }
 }

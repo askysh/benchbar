@@ -69,7 +69,7 @@ final class QuickSwitchController {
     /// The Labs row's note while another app holds the key. The lab stays on:
     /// the choice is the person's, and it works again once the other app lets go.
     static func conflictNote(for key: HotKeyChoice) -> String {
-        "\(key.name) is used by another app, so Quick Switch has no key for now. It stays on: pick another key in Settings, or turn it off and on to try again."
+        String(localized: "\(key.name) is used by another app, so Quick Switch has no key for now. It stays on: pick another key in Settings, or turn it off and on to try again.")
     }
 
     private let store: BenchStore
@@ -205,7 +205,7 @@ final class QuickSwitchController {
     private func switchUser(_ request: QuickSwitchRequest, panelNumber: Int) async -> String? {
         guard let bench = store.benches.first(where: { $0.path == request.target.bench }),
               let row = bench.siteRows.first(where: { $0.name == request.target.site }) else {
-            return "That site is no longer available."
+            return String(localized: "That site is no longer available.")
         }
         if store.openAs.isSwitching(bench: bench.path, site: row.name) { return QuickSwitchModel.alreadySwitchingCopy }
         let error = await store.switchUser(request.user, fullName: request.fullName, on: bench, row: row)

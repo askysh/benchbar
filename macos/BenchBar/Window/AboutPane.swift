@@ -90,7 +90,7 @@ final class BugReport {
     /// and prints text, which does not decode.
     static func message(for error: CLIError) -> String {
         if case .invalidJSON = error {
-            return "This benchbar is older than the app and cannot report to it. Run benchbar report in Terminal: it writes the zip to your Desktop."
+            return String(localized: "This benchbar is older than the app and cannot report to it. Run benchbar report in Terminal: it writes the zip to your Desktop.")
         }
         return error.localizedDescription
     }
@@ -159,7 +159,7 @@ struct AboutPane: View {
                 // the path under the row, not inside it: a long path pushed the
                 // value far below its label
                 LabeledContent("Command line tool") {
-                    Text(model.cliVersion ?? (cliPath == nil ? "not found" : "…")).textSelection(.enabled)
+                    Text(model.cliVersion ?? (cliPath == nil ? String(localized: "not found") : "…")).textSelection(.enabled)
                 }
                 if let cliPath {
                     Text(cliPath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
@@ -173,9 +173,9 @@ struct AboutPane: View {
                 Text("Versions")
             }
             Section {
-                LinkRow(title: "Documentation", address: "benchbar.akashmishra.com", url: BenchBarLinks.docs)
-                LinkRow(title: "What's new", detail: "What changed in each version", address: "benchbar.akashmishra.com/whats-new", url: BenchBarLinks.whatsNew)
-                LinkRow(title: "Source code", address: "github.com/askysh/benchbar", url: BenchBarLinks.repository)
+                LinkRow(title: String(localized: "Documentation"), address: "benchbar.akashmishra.com", url: BenchBarLinks.docs)
+                LinkRow(title: String(localized: "What's new"), detail: String(localized: "What changed in each version"), address: "benchbar.akashmishra.com/whats-new", url: BenchBarLinks.whatsNew)
+                LinkRow(title: String(localized: "Source code"), address: "github.com/askysh/benchbar", url: BenchBarLinks.repository)
                 LabeledContent {
                     Button("Report a Bug…") { showBugReport = true }
                 } label: {
@@ -247,8 +247,8 @@ struct AboutPane: View {
         } label: {
             Text("Updates")
             Text(model.offer == nil || Updater.isAvailable
-                 ? "Asks GitHub for the latest release."
-                 : "Asks GitHub for the latest release, and once a day when Check for updates automatically is on in General.")
+                 ? String(localized: "Asks GitHub for the latest release.")
+                 : String(localized: "Asks GitHub for the latest release, and once a day when Check for updates automatically is on in General."))
         }
     }
 }

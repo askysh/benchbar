@@ -51,21 +51,21 @@ nonisolated enum RunnerError: Error, Equatable, Sendable, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .missingManifest: "There is no manifest.json in the runner folder."
-        case .badManifest(let detail): "manifest.json could not be read: \(detail)."
-        case .unknownState(let state): "\"\(state)\" is not a state. Use sleeping, starting, running, crashed, alert or unknown."
-        case .noRunningFrames: "The running state is required: every other state falls back to it."
-        case .emptyState(let state): "The \(state) state lists no frames. Leave it out instead."
-        case .tooManyFrames(let state, let count): "The \(state) state has \(count) frames; the limit is \(RunnerLoader.maxFrames)."
-        case .badFileName(let name): "\"\(name)\" is not an allowed frame name: use a plain .png file name, no folders."
-        case .missingFile(let name): "\(name) is listed in manifest.json but is not in the folder."
-        case .notPNG(let name): "\(name) is not a PNG image."
+        case .missingManifest: String(localized: "There is no manifest.json in the runner folder.")
+        case .badManifest(let detail): String(localized: "manifest.json could not be read: \(detail).")
+        case .unknownState(let state): String(localized: "\"\(state)\" is not a state. Use sleeping, starting, running, crashed, alert or unknown.")
+        case .noRunningFrames: String(localized: "The running state is required: every other state falls back to it.")
+        case .emptyState(let state): String(localized: "The \(state) state lists no frames. Leave it out instead.")
+        case .tooManyFrames(let state, let count): String(localized: "The \(state) state has \(count) frames; the limit is \(RunnerLoader.maxFrames).")
+        case .badFileName(let name): String(localized: "\"\(name)\" is not an allowed frame name: use a plain .png file name, no folders.")
+        case .missingFile(let name): String(localized: "\(name) is listed in manifest.json but is not in the folder.")
+        case .notPNG(let name): String(localized: "\(name) is not a PNG image.")
         case .badSize(let file, let width, let height):
-            "\(file) is \(width) x \(height) px; frames must be \(RunnerLoader.pixelHeight) px tall and \(RunnerLoader.widthRange.lowerBound) to \(RunnerLoader.widthRange.upperBound) px wide."
-        case .mixedSizes(let file): "\(file) is not the same size as the other frames."
-        case .tooLarge(let bytes): "The runner is \(bytes / 1024) KB; the limit is \(RunnerLoader.maxBytes / 1024 / 1024) MB."
-        case .badArchive(let detail): "The zip file could not be used: \(detail)."
-        case .reservedID(let id): "\"\(id)\" is the name of a built in runner. Rename the folder."
+            String(localized: "\(file) is \(width) x \(height) px; frames must be \(RunnerLoader.pixelHeight) px tall and \(RunnerLoader.widthRange.lowerBound) to \(RunnerLoader.widthRange.upperBound) px wide.")
+        case .mixedSizes(let file): String(localized: "\(file) is not the same size as the other frames.")
+        case .tooLarge(let bytes): String(localized: "The runner is \(bytes / 1024) KB; the limit is \(RunnerLoader.maxBytes / 1024 / 1024) MB.")
+        case .badArchive(let detail): String(localized: "The zip file could not be used: \(detail).")
+        case .reservedID(let id): String(localized: "\"\(id)\" is the name of a built in runner. Rename the folder.")
         }
     }
 }
@@ -136,24 +136,24 @@ nonisolated enum RunnerLoader {
         let data: Data
         switch readPlainFile(url, limit: maxManifestBytes) {
         case .missing: throw .missingManifest
-        case .notPlain: throw .badManifest("it is not a plain file")
-        case .tooLarge: throw .badManifest("it is larger than 64 KB")
+        case .notPlain: throw .badManifest(String(localized: "it is not a plain file"))
+        case .tooLarge: throw .badManifest(String(localized: "it is larger than 64 KB"))
         case .data(let read): data = read
         }
         let manifest: RunnerManifest
         do {
             manifest = try JSONDecoder().decode(RunnerManifest.self, from: data)
         } catch let DecodingError.keyNotFound(key, _) {
-            throw .badManifest("\"\(key.stringValue)\" is missing")
+            throw .badManifest(String(localized: "\"\(key.stringValue)\" is missing"))
         } catch let DecodingError.typeMismatch(_, context) {
-            throw .badManifest("\"\(context.codingPath.map(\.stringValue).joined(separator: "."))\" has the wrong type")
+            throw .badManifest(String(localized: "\"\(context.codingPath.map(\.stringValue).joined(separator: "."))\" has the wrong type"))
         } catch let DecodingError.dataCorrupted(context) {
-            throw .badManifest(context.codingPath.isEmpty ? "it is not valid JSON" : context.debugDescription)
+            throw .badManifest(context.codingPath.isEmpty ? String(localized: "it is not valid JSON") : context.debugDescription)
         } catch {
-            throw .badManifest("it is not valid JSON")
+            throw .badManifest(String(localized: "it is not valid JSON"))
         }
         let name = manifest.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name.count <= 40 else { throw .badManifest("\"name\" must be 1 to 40 characters") }
+        guard !name.isEmpty, name.count <= 40 else { throw .badManifest(String(localized: "\"name\" must be 1 to 40 characters")) }
         return manifest
     }
 

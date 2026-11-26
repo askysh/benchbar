@@ -218,7 +218,7 @@ nonisolated struct WizardState: Equatable, Sendable {
     /// out of the other.
     var siteClash: String? {
         bench(usingSite: form.site).map {
-            "\($0) already has a site named \(form.site). Cookies ignore the port, so logging in to one bench logs you out of the other. Choose another name."
+            String(localized: "\($0) already has a site named \(form.site). Cookies ignore the port, so logging in to one bench logs you out of the other. Choose another name.")
         }
     }
 
@@ -230,12 +230,12 @@ nonisolated struct WizardState: Equatable, Sendable {
     var formProblem: String? {
         if resolvedFolder.isEmpty || !resolvedFolder.hasPrefix("/") { return "Choose a folder for the bench." }
         if prerequisites?.check("bench_folder")?.level == .fail { return prerequisites?.check("bench_folder")?.message }
-        if !profilesLoaded { return profilesError == nil ? "Reading the profiles…" : "The profiles could not be read. Choose Try Again." }
-        if !profileChoices.contains(where: { $0.name == form.profile }) { return "Choose a profile." }
-        if !bundles.contains(where: { $0.name == form.bundle }) { return "Choose a bundle." }
+        if !profilesLoaded { return profilesError == nil ? String(localized: "Reading the profiles…") : String(localized: "The profiles could not be read. Choose Try Again.") }
+        if !profileChoices.contains(where: { $0.name == form.profile }) { return String(localized: "Choose a profile.") }
+        if !bundles.contains(where: { $0.name == form.bundle }) { return String(localized: "Choose a bundle.") }
         if form.site.isEmpty || !SiteName.isValid(form.site) { return SiteName.rule }
-        if form.adminPassword.isEmpty { return "Choose the Administrator password." }
-        if showsPortField, portOffsetValue == nil { return "The port offset is a whole number." }
+        if form.adminPassword.isEmpty { return String(localized: "Choose the Administrator password.") }
+        if showsPortField, portOffsetValue == nil { return String(localized: "The port offset is a whole number.") }
         return nil
     }
 
@@ -262,21 +262,21 @@ nonisolated struct WizardState: Equatable, Sendable {
 
     var primary: Primary? {
         switch page {
-        case .welcome: return Primary(title: "Set Up a New Bench", enabled: true)
-        case .cliOnly: return Primary(title: "Done", enabled: true)
-        case .check: return Primary(title: "Continue", enabled: canContinueFromCheck)
-        case .newBench: return Primary(title: "Review", enabled: formProblem == nil)
+        case .welcome: return Primary(title: String(localized: "Set Up a New Bench"), enabled: true)
+        case .cliOnly: return Primary(title: String(localized: "Done"), enabled: true)
+        case .check: return Primary(title: String(localized: "Continue"), enabled: canContinueFromCheck)
+        case .newBench: return Primary(title: String(localized: "Review"), enabled: formProblem == nil)
         case .review:
-            if planStale != nil { return Primary(title: "Review Again", enabled: !planning) }
-            return Primary(title: "Install", enabled: plan != nil && !planning)
+            if planStale != nil { return Primary(title: String(localized: "Review Again"), enabled: !planning) }
+            return Primary(title: String(localized: "Install"), enabled: plan != nil && !planning)
         case .install:
             switch installPhase {
-            case .failed: return Primary(title: "Retry", enabled: true)
-            case .needsRootPassword: return Primary(title: "Retry", enabled: !rootPassword.isEmpty)
-            case .stopped: return Primary(title: "Run Again", enabled: true)
+            case .failed: return Primary(title: String(localized: "Retry"), enabled: true)
+            case .needsRootPassword: return Primary(title: String(localized: "Retry"), enabled: !rootPassword.isEmpty)
+            case .stopped: return Primary(title: String(localized: "Run Again"), enabled: true)
             case .idle, .running, .succeeded: return nil
             }
-        case .done: return siteURL.map { _ in Primary(title: "Open Site", enabled: true) }
+        case .done: return siteURL.map { _ in Primary(title: String(localized: "Open Site"), enabled: true) }
         }
     }
 
@@ -285,7 +285,7 @@ nonisolated struct WizardState: Equatable, Sendable {
         switch page {
         case .welcome: return "Cancel"
         case .cliOnly, .check, .newBench, .review: return "Back"
-        case .install: return isInstalling ? nil : "Back"
+        case .install: return isInstalling ? nil : String(localized: "Back")
         case .done: return "Done"
         }
     }
@@ -498,7 +498,7 @@ nonisolated struct WizardState: Equatable, Sendable {
             return []
         }
         guard let done = progress.done else {
-            let message = error ?? "benchbar install ended without a result (exit code \(code))."
+            let message = error ?? String(localized: "benchbar install ended without a result (exit code \(code)).")
             installPhase = .failed(Failure(step: progress.failedStep?.name, message: message, fix: nil, log: progress.log))
             return []
         }
@@ -520,7 +520,7 @@ nonisolated struct WizardState: Equatable, Sendable {
             installPhase = .needsRootPassword(fix: done.fix)
         default:
             let step = progress.failedStep
-            let message = step?.message ?? done.error ?? done.fix ?? "benchbar install failed (exit \(done.exit))."
+            let message = step?.message ?? done.error ?? done.fix ?? String(localized: "benchbar install failed (exit \(done.exit)).")
             installPhase = .failed(Failure(step: step?.name, message: message, fix: done.fix, log: done.log ?? progress.log))
         }
         return []

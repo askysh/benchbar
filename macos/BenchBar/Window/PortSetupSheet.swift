@@ -44,7 +44,7 @@ struct PortSetupSheet: View {
                                 LabeledContent("Address", value: entry.currentURL)
                             } else {
                                 LabeledContent("Current address", value: entry.currentURL)
-                                LabeledContent(entry.changesPorts ? "New address" : "Address stays", value: entry.proposedURL)
+                                LabeledContent(entry.changesPorts ? String(localized: "New address") : String(localized: "Address stays"), value: entry.proposedURL)
                             }
                             Text("Web \(String(entry.proposed.web)) · Socket.IO \(String(entry.proposed.socketio)) · Redis \(String(entry.proposed.redisQueue))/\(String(entry.proposed.redisCache))")
                                 .font(.caption).monospacedDigit()
@@ -52,7 +52,7 @@ struct PortSetupSheet: View {
                                 HStack(spacing: 6) {
                                     Text("Service changes").font(.subheadline.bold())
                                     if PortSetupHints.asksForPassword(setupPlan: setupPlan) {
-                                        Tag(text: "Asks for your password", color: .orange)
+                                        Tag(text: String(localized: "Asks for your password"), color: .orange)
                                     }
                                 }
                                 .padding(.top, 6)
@@ -108,14 +108,14 @@ struct PortSetupSheet: View {
             }
         } leading: {
             if !run.isBusy && run.phase != .finished {
-                Button(calm ? "Check Again" : "Refresh Preview") { Task { await run.loadPlan() } }
+                Button(calm ? String(localized: "Check Again") : String(localized: "Refresh Preview")) { Task { await run.loadPlan() } }
             }
         } actions: {
             if run.phase == .review && calm {
                 DoneButton(action: close)
             } else if run.phase == .review {
                 CancelButton(action: close)
-                Button(run.startAfterSetup ? "Resolve & Start" : (run.opensSettings || run.summaries.count == 1 ? "Set Up Bench" : "Set Up Selected Benches")) { Task { await run.apply() } }
+                Button(run.startAfterSetup ? String(localized: "Resolve & Start") : (run.opensSettings || run.summaries.count == 1 ? String(localized: "Set Up Bench") : String(localized: "Set Up Selected Benches"))) { Task { await run.apply() } }
                     .keyboardShortcut(.defaultAction)
                     .disabled(run.plan?.canApply != true || run.store.busyBench != nil)
             } else if run.phase == .planning {

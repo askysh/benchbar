@@ -45,6 +45,6 @@ nonisolated enum PendingText {
     static func discardMessage(_ operation: PendingOperation) -> String {
         let left = operation.steps.count
         let steps = Wording.itsSteps(left)
-        return "BenchBar forgets \(steps) and nothing runs now. \(operation.app) stays where it is, so the bench may be half updated: run the update again later to finish it."
+        return String(localized: "BenchBar forgets \(steps) and nothing runs now. \(operation.app) stays where it is, so the bench may be half updated: run the update again later to finish it.")
     }
 }

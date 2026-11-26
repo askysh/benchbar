@@ -272,7 +272,7 @@ struct MainSidebar: View {
                                 .foregroundStyle(site.isDefault ? Color.yellow : Color.secondary)
                                 .environment(\.backgroundProminence, .standard)
                                 .offscreenSafe()
-                                .accessibilityLabel(site.isDefault ? "Default site" : "Site")
+                                .accessibilityLabel(site.isDefault ? String(localized: "Default site") : String(localized: "Site"))
                             Text(site.name)
                         }
                         .font(.callout)
@@ -332,8 +332,8 @@ struct SidebarFooter: View {
             .fixedSize()
             .accessibilityLabel("Settings")
             .help("Settings (⌘,): General and Menu Bar")
-            footerButton("info.circle", label: "About BenchBar",
-                         help: "About BenchBar: versions, Check for Updates, Report a Bug") { router.pane = .about }
+            footerButton("info.circle", label: String(localized: "About BenchBar"),
+                         help: String(localized: "About BenchBar: versions, Check for Updates, Report a Bug")) { router.pane = .about }
         }
         .font(.callout)
         .foregroundStyle(.secondary)
@@ -370,7 +370,7 @@ struct DefaultsNoticeBanner: View {
     let more: Int
     let dismiss: () -> Void
 
-    var title: String { more > 0 ? "\(notice.title) (\(more) more after this)" : notice.title }
+    var title: String { more > 0 ? String(localized: "\(notice.title) (\(more) more after this)") : notice.title }
 
     var body: some View {
         PaneBanner(symbol: "info.circle.fill", tint: .orange, title: title, detail: notice.banner,

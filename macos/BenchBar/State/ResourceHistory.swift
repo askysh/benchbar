@@ -101,8 +101,8 @@ nonisolated enum ResourceScale {
 nonisolated enum ResourceText {
     /// "0%", "12%", "250%": percent of one core, like Activity Monitor.
     static func cpu(_ percent: Double) -> String {
-        guard percent.isFinite else { return "0%" }
-        return "\(Int(max(0, percent).rounded()))%"
+        guard percent.isFinite else { return String(localized: "0%") }
+        return String(localized: "\(Int(max(0, percent).rounded()))%")
     }
 
     /// "640 KB", "812 MB", "1.4 GB", in binary units like Activity Monitor.
@@ -110,8 +110,8 @@ nonisolated enum ResourceText {
         let kb = 1024.0, mb = kb * 1024, gb = mb * 1024
         let value = Double(bytes)
         // 1000 MB and up reads as GB, so "1020 MB" is never shown
-        if value >= 1000 * mb { return "\(Wording.oneDecimal(value / gb)) GB" }
-        if value >= mb { return "\(Int((value / mb).rounded())) MB" }
-        return "\(Int((value / kb).rounded())) KB"
+        if value >= 1000 * mb { return String(localized: "\(Wording.oneDecimal(value / gb)) GB") }
+        if value >= mb { return String(localized: "\(Int((value / mb).rounded())) MB") }
+        return String(localized: "\(Int((value / kb).rounded())) KB")
     }
 }

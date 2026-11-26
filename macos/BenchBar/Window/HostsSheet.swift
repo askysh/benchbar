@@ -38,7 +38,7 @@ final class HostsRun: Identifiable {
         guard phase == .ready || phase.isRetryable else { return }
         phase = .running
         var outcome: HostsOutcome = .added
-        let error = await store.runChange("Adding hosts lines", on: bench) { client throws(CLIError) in
+        let error = await store.runChange(String(localized: "Adding hosts lines"), on: bench) { client throws(CLIError) in
             outcome = HostsOutcome.classify(try await client.siteHosts(bench: bench.path))
         }
         if let error {

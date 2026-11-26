@@ -9,19 +9,19 @@ nonisolated struct WalkthroughModel: Equatable, Sendable {
 
         var title: String {
             switch self {
-            case .runner: "The runner is your bench"
-            case .popover: "The popover starts, stops and opens it"
-            case .window: "The window holds everything else"
-            case .terminal: "Terminal and coding agents"
+            case .runner: String(localized: "The runner is your bench")
+            case .popover: String(localized: "The popover starts, stops and opens it")
+            case .window: String(localized: "The window holds everything else")
+            case .terminal: String(localized: "Terminal and coding agents")
             }
         }
 
         var line: String {
             switch self {
-            case .runner: "The character in the menu bar shows the state of your benches: asleep when stopped, running when up, stumbling when one crashes."
-            case .popover: "Click the runner for Start, Stop, Restart and Open Site. They have shortcuts while the popover is open."
-            case .window: "Every bench's sites, apps and health are in the BenchBar window. Repair shows its plan before it changes anything."
-            case .terminal: "The same commands work in Terminal, and coding agents can use benchbar too."
+            case .runner: String(localized: "The character in the menu bar shows the state of your benches: asleep when stopped, running when up, stumbling when one crashes.")
+            case .popover: String(localized: "Click the runner for Start, Stop, Restart and Open Site. They have shortcuts while the popover is open.")
+            case .window: String(localized: "Every bench's sites, apps and health are in the BenchBar window. Repair shows its plan before it changes anything.")
+            case .terminal: String(localized: "The same commands work in Terminal, and coding agents can use benchbar too.")
             }
         }
     }
@@ -32,8 +32,8 @@ nonisolated struct WalkthroughModel: Equatable, Sendable {
     var step: Step { Self.steps[index] }
     var isFirst: Bool { index == 0 }
     var isLast: Bool { index == Self.steps.count - 1 }
-    var progress: String { "\(index + 1) of \(Self.steps.count)" }
-    var primaryTitle: String { isLast ? "Done" : "Next" }
+    var progress: String { String(localized: "\(index + 1) of \(Self.steps.count)") }
+    var primaryTitle: String { isLast ? String(localized: "Done") : String(localized: "Next") }
 
     /// Return: the next step, and true when the last one was already shown.
     mutating func next() -> Bool {

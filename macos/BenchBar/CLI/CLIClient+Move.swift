@@ -26,7 +26,7 @@ nonisolated extension CLIClient {
         }
         let outcome = SiteMoveOutcome(envelope: ResultEnvelope.parse(lines.text), steps: lines.steps)
         guard code == 0, outcome.envelope.exit == 0 else {
-            let said = outcome.envelope.error ?? "The move did not finish. Nothing after the failed step ran."
+            let said = outcome.envelope.error ?? String(localized: "The move did not finish. Nothing after the failed step ran.")
             throw .failed(command: "site move", exitCode: code == 0 ? Int32(outcome.envelope.exit ?? 1) : code, message: said)
         }
         return outcome

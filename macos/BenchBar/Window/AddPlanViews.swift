@@ -60,11 +60,14 @@ struct AppAddPlanView: View {
     let plan: AppAddPlan
 
     private var headline: String {
-        var parts = ["from \(plan.repo)"]
+        var parts = [String(localized: "from \(plan.repo)")]
         if let branch = plan.branch {
-            parts.append("branch \(branch)" + (plan.branchSourceText.map { " (\($0))" } ?? ""))
+            parts.append(plan.branchSourceText.map { String(localized: "branch \(branch) (\($0))") } ?? String(localized: "branch \(branch)"))
         }
-        if let commit = plan.commit { parts.append("commit \(commit.prefix(7))" + (plan.commitSource == "pin" ? " (pinned)" : "")) }
+        if let commit = plan.commit {
+            let short = String(commit.prefix(7))
+            parts.append(plan.commitSource == "pin" ? String(localized: "commit \(short) (pinned)") : String(localized: "commit \(short)"))
+        }
         return parts.joined(separator: ", ")
     }
 
@@ -79,14 +82,14 @@ struct AppAddPlanView: View {
 
     private var facts: [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
-        if !plan.touches.isEmpty { out.append(("Touches", plan.touches.joined(separator: ", "))) }
+        if !plan.touches.isEmpty { out.append((String(localized: "Touches"), plan.touches.joined(separator: ", "))) }
         // several apps say their own sites in their rows
         if !plan.isBatch {
-            let targets = plan.sites.map { $0.installed ? "\($0.name) (already has it)" : $0.name }
-            out.append(("Sites", targets.isEmpty ? "No site: the app is only added to the bench." : targets.joined(separator: ", ")))
+            let targets = plan.sites.map { $0.installed ? String(localized: "\($0.name) (already has it)") : $0.name }
+            out.append((String(localized: "Sites"), targets.isEmpty ? String(localized: "No site: the app is only added to the bench.") : targets.joined(separator: ", ")))
         }
-        out.append(("Restart", plan.restarts ? "Restarts the bench, only if it is running." : "No restart."))
-        out.append(("Left alone", "/etc/hosts and the default site. Other apps and sites are not changed."))
+        out.append((String(localized: "Restart"), plan.restarts ? String(localized: "Restarts the bench, only if it is running.") : String(localized: "No restart.")))
+        out.append((String(localized: "Left alone"), "/etc/hosts and the default site. Other apps and sites are not changed."))
         return out
     }
 
@@ -151,19 +154,19 @@ struct SiteAddPlanView: View {
     private var rows: [PlanStepList.Row] {
         plan.steps.map { step in
             PlanStepList.Row(name: step.name, command: step.command,
-                             note: step.kind == "hosts" ? "Add Site does not run this step." : nil)
+                             note: step.kind == "hosts" ? String(localized: "Add Site does not run this step.") : nil)
         }
     }
 
     private var facts: [(label: String, text: String)] {
         var out: [(label: String, text: String)] = []
-        if !plan.touchesText.isEmpty { out.append(("Touches", plan.touchesText.joined(separator: ", "))) }
-        out.append(("Hosts line", plan.hostsEntry
-                    ? "127.0.0.1 \(plan.site) is already in /etc/hosts."
-                    : "Needs your Mac's password, which BenchBar never asks for, so it is not added here. The Sites tab's Add Hosts Lines shows the command for Terminal."))
-        out.append(("Password", "The Administrator password you typed goes to the benchbar process only."))
-        out.append(("Left alone", plan.keptDefaultSite.map { "The default site stays \($0). Other sites and apps are not changed." }
-                    ?? "Other sites and apps are not changed."))
+        if !plan.touchesText.isEmpty { out.append((String(localized: "Touches"), plan.touchesText.joined(separator: ", "))) }
+        out.append((String(localized: "Hosts line"), plan.hostsEntry
+                    ? String(localized: "127.0.0.1 \(plan.site) is already in /etc/hosts.")
+                    : String(localized: "Needs your Mac's password, which BenchBar never asks for, so it is not added here. The Sites tab's Add Hosts Lines shows the command for Terminal.")))
+        out.append((String(localized: "Password"), String(localized: "The Administrator password you typed goes to the benchbar process only.")))
+        out.append((String(localized: "Left alone"), plan.keptDefaultSite.map { String(localized: "The default site stays \($0). Other sites and apps are not changed.") }
+                    ?? String(localized: "Other sites and apps are not changed.")))
         return out
     }
 

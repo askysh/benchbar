@@ -140,23 +140,23 @@ struct SharingTab: View {
         case .setUp, .finishSetup: setupOpen = true
         case .turnOnProtection: await turnOnProtection()
         case .start:
-            guard ShareConfirm.ask("Start sharing \(site) on this network?",
+            guard ShareConfirm.ask(String(localized: "Start sharing \(site) on this network?"),
                                    detail: SharePresentation.startDetail(site: site, assignSeats: assignSeats && status.knowsSeatMode),
-                                   button: "Start sharing") else { return }
+                                   button: String(localized: "Start sharing")) else { return }
             await share.start(hours: hours, label: nil, assignSeats: assignSeats)
             await share.loadCode()
             codeRevealed = true
         case .stop:
-            guard ShareConfirm.ask(SharePresentation.stopConfirm(online: status.devicesOnline), button: "Stop") else { return }
+            guard ShareConfirm.ask(SharePresentation.stopConfirm(online: status.devicesOnline), button: String(localized: "Stop")) else { return }
             await share.stop()
         case .updateCLI: NSWorkspace.shared.open(BenchBarLinks.docs)
         }
     }
 
     private func turnOnProtection() async {
-        guard ShareConfirm.ask("Turn on network protection?",
-                               detail: "macOS asks for your password in its own dialog. The rules keep the bench's ports closed to other Macs while sharing.",
-                               button: "Continue") else { return }
+        guard ShareConfirm.ask(String(localized: "Turn on network protection?"),
+                               detail: String(localized: "macOS asks for your password in its own dialog. The rules keep the bench's ports closed to other Macs while sharing."),
+                               button: String(localized: "Continue")) else { return }
         await share.installNetworkProtection()
     }
 
@@ -171,10 +171,10 @@ struct SharingTab: View {
                 Text(SharePresentation.codeText(share.code, revealed: codeRevealed))
                     .font(.system(size: 40, weight: .semibold, design: .monospaced))
                     .textSelection(.disabled)
-                    .accessibilityLabel(codeRevealed ? "Room code" : "Room code, hidden")
+                    .accessibilityLabel(codeRevealed ? String(localized: "Room code") : String(localized: "Room code, hidden"))
                 Spacer()
-                Button(codeRevealed ? "Hide" : "Show") { codeRevealed.toggle() }
-                    .accessibilityLabel(codeRevealed ? "Hide room code" : "Show room code")
+                Button(codeRevealed ? String(localized: "Hide") : String(localized: "Show")) { codeRevealed.toggle() }
+                    .accessibilityLabel(codeRevealed ? String(localized: "Hide room code") : String(localized: "Show room code"))
                     .disabled(share.code == nil)
                     .help("The code lets anyone on this Wi-Fi join. Hide it while you share your screen.")
                 Button("Copy") { if let code = share.code { ShareClipboard.copy(code.code) } }
@@ -188,7 +188,7 @@ struct SharingTab: View {
                         codeRevealed = true
                     }
                 }
-                Button(status.locked == true ? "Unlock" : "Lock room") {
+                Button(status.locked == true ? String(localized: "Unlock") : String(localized: "Lock room")) {
                     Task { await share.setLocked(!(status.locked ?? false)) }
                 }
             }
@@ -263,8 +263,8 @@ struct SharingTab: View {
         case .none: break
         case .installNetworkProtection: await turnOnProtection()
         case .allowNodeFirewall:
-            guard ShareConfirm.ask("Allow sharing through the firewall?",
-                                   detail: "macOS asks for your password in its own dialog.", button: "Allow") else { return }
+            guard ShareConfirm.ask(String(localized: "Allow sharing through the firewall?"),
+                                   detail: String(localized: "macOS asks for your password in its own dialog."), button: String(localized: "Allow")) else { return }
             await share.allowNodeThroughFirewall()
         case .openLocalNetworkSettings:
             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork") { NSWorkspace.shared.open(url) }
@@ -272,7 +272,7 @@ struct SharingTab: View {
         case .rerunSetup, .refreshCopy: setupOpen = true
         case .restartSharing:
             let confirm = SharePresentation.restartConfirm(online: status.devicesOnline)
-            guard ShareConfirm.ask(confirm.message, detail: confirm.detail, button: "Restart") else { return }
+            guard ShareConfirm.ask(confirm.message, detail: confirm.detail, button: String(localized: "Restart")) else { return }
             // the room that starts again gives out its seats the way the one that ran did; a room that
             // did not say falls back to the switch, never to open seats
             let assign = SharePresentation.restartAssignsSeats(mode: share.seatMode ?? status.seatMode, stored: assignSeats)
@@ -288,14 +288,14 @@ struct SharingTab: View {
             if copy.drifted { Label(SharePresentation.driftWarning, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
             HStack {
                 Button("Refresh copy…") {
-                    if ShareConfirm.ask("Refresh the copy?", detail: SharePresentation.refreshConfirm, button: "Refresh") { setupOpen = true }
+                    if ShareConfirm.ask(String(localized: "Refresh the copy?"), detail: SharePresentation.refreshConfirm, button: String(localized: "Refresh")) { setupOpen = true }
                 }
                 .disabled(status.isOn)
                 if status.isOn {
                     Menu("Open copy as…") {
                         ForEach(status.allowedUsers, id: \.self) { user in
                             Button(user) {
-                                guard ShareConfirm.ask("Open the copy as \(user)?", detail: "BenchBar signs in to the copy in your browser.", button: "Open") else { return }
+                                guard ShareConfirm.ask(String(localized: "Open the copy as \(user)?"), detail: String(localized: "BenchBar signs in to the copy in your browser."), button: String(localized: "Open")) else { return }
                                 Task { await share.openAs(user) }
                             }
                         }
@@ -330,8 +330,8 @@ struct SharingTab: View {
                     }
                     .fixedSize()
                     .disabled(targets.isEmpty || share.busy != nil)
-                    .help(targets.isEmpty ? "No seat of this room is free." : person.seatID == nil ? "Gives them the seat you pick."
-                        : "Signs them out of their seat and into the one you pick.")
+                    .help(targets.isEmpty ? String(localized: "No seat of this room is free.") : person.seatID == nil ? String(localized: "Gives them the seat you pick.")
+                        : String(localized: "Signs them out of their seat and into the one you pick."))
                     Button("Remove") { Task { await remove(person) } }
                 }
             }
@@ -339,7 +339,7 @@ struct SharingTab: View {
     }
 
     private func remove(_ person: SharePerson) async {
-        guard ShareConfirm.ask(SharePresentation.removeConfirm(person, site: site), detail: SharePresentation.removeDetail, button: "Remove") else { return }
+        guard ShareConfirm.ask(SharePresentation.removeConfirm(person, site: site), detail: SharePresentation.removeDetail, button: String(localized: "Remove")) else { return }
         await share.remove(person, newCode: false)
     }
 
@@ -367,7 +367,7 @@ enum ShareConfirm {
         alert.messageText = message
         alert.informativeText = detail
         let action = alert.addButton(withTitle: button)
-        let cancel = alert.addButton(withTitle: "Cancel")
+        let cancel = alert.addButton(withTitle: String(localized: "Cancel"))
         if cancelIsDefault {
             action.keyEquivalent = ""
             cancel.keyEquivalent = "\r"
@@ -411,7 +411,7 @@ struct ShareSetupSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(refresh ? "Refresh the shared copy" : "Set up sharing").font(.title2.bold())
+            Text(refresh ? String(localized: "Refresh the shared copy") : String(localized: "Set up sharing")).font(.title2.bold())
             Text("Site: \(site)").foregroundStyle(.secondary)
             Picker("Source", selection: $form.backupNow) {
                 Text(ShareSetupForm.sourceLabel(backupNow: true, estMinutes: plan?.estMinutes, backupAgeS: nil)).tag(true)
@@ -444,7 +444,7 @@ struct ShareSetupSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel", action: close).disabled(running)
-                Button(refresh ? "Refresh copy" : "Set up sharing") { Task { await run() } }
+                Button(refresh ? String(localized: "Refresh copy") : String(localized: "Set up sharing")) { Task { await run() } }
                     .buttonStyle(.borderedProminent)
                     .disabled(!form.canRun || running)
             }

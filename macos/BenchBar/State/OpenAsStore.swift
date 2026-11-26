@@ -206,7 +206,7 @@ final class OpenAsStore {
                 return OpenAsLink.scrub(error.localizedDescription)
             }
             guard let text = result.url, let url = URL(string: text), let sid = OpenAsLink.sessionID(in: text) else {
-                return "benchbar did not return a sign-in link for \(user)."
+                return String(localized: "benchbar did not return a sign-in link for \(user).")
             }
             sessions[sessionKey] = Session(base: siteURL, sid: sid, homePath: result.userType == "Website User" ? "/" : "/app")
             name = result.fullName ?? fullName
