@@ -90,7 +90,8 @@ weighted_tests() {
 }
 
 ncpu() { sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2; }
-# mem_mb: the memory the machine can give out now, in MB (empty when unknown)
+# mem_mb: the memory the machine can give out now, in MB (empty when unknown). On macOS
+# there is no such figure, so it is the total memory there: only an upper bound
 mem_mb() {
   local kb bytes
   kb="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null)" || kb=""
