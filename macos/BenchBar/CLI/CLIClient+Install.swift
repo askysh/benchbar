@@ -17,8 +17,9 @@ nonisolated struct InstallRequest: Equatable, Sendable {
 }
 
 /// Install, adopt and the checks before them (CLI 0.8). The passwords of an
-/// install go in the environment of that one process, as `addSite`'s do,
-/// never on a command line, to disk or to a log.
+/// install go to that one process, never on a command line, to disk or to a
+/// log: on its standard input when the CLI lists `--secrets-stdin`, else in its
+/// environment, as `addSite`'s do.
 extension CLIClient {
     /// `doctor --prerequisites --json`: what the Mac needs before an install,
     /// with no bench. Exit 1 means a check fails; the report is still printed.
@@ -34,9 +35,10 @@ extension CLIClient {
     /// inputs before the dry run would refuse the plan without it. The privileged
     /// steps do not run here, so no BENCHBAR_SUDO.
     func installPlan(_ request: InstallRequest, adminPassword: String) async throws(CLIError) -> InstallPlan {
-        let args = ["install", "--dry-run", "--json"] + request.flags
+        let stdinBytes = await takesSecretsStdin("install") ? Self.secretList([("ADMIN_PASSWORD", adminPassword)]) : nil
+        let args = ["install", "--dry-run", "--json"] + request.flags + (stdinBytes == nil ? [] : ["--secrets-stdin"])
         let output = try await run(args, timeout: Timeout.doctor, acceptExitCodes: [0, 1],
-                                   extraEnvironment: ["ADMIN_PASSWORD": adminPassword])
+                                   extraEnvironment: stdinBytes == nil ? ["ADMIN_PASSWORD": adminPassword] : [:], input: stdinBytes)
         let events = try InstallEvent.decodeAll(output.stdout)
         // a dry run that ends unsuccessfully (no free port block, a profile
         // ref that is gone) has no plan to review, even when it sent one
@@ -62,11 +64,15 @@ extension CLIClient {
     func install(_ request: InstallRequest, adminPassword: String, rootPassword: String? = nil, token: String? = nil,
                  onEvent: @escaping @Sendable (InstallEvent) -> Void) async throws(CLIError) -> Int32 {
         var env = environment().merging(Self.guiSudo) { _, new in new }
-        env["ADMIN_PASSWORD"] = adminPassword
-        if let rootPassword, !rootPassword.isEmpty { env["MARIADB_ROOT_PASSWORD"] = rootPassword }
+        // a CLI that lists --secrets-stdin gets the passwords on its standard input, in no environment; an older one keeps the variables
+        let stdinBytes = await takesSecretsStdin("install") ? Self.secretList([("ADMIN_PASSWORD", adminPassword), ("MARIADB_ROOT_PASSWORD", rootPassword)]) : nil
+        if stdinBytes == nil {
+            env["ADMIN_PASSWORD"] = adminPassword
+            if let rootPassword, !rootPassword.isEmpty { env["MARIADB_ROOT_PASSWORD"] = rootPassword }
+        }
         let apply = token.map { ["--apply", $0] } ?? []
-        return try await stream(["install", "--yes", "--json"] + apply + request.flags, environment: env,
-                                timeout: Timeout.install, onEvent: onEvent)
+        return try await stream(["install", "--yes", "--json"] + apply + request.flags + (stdinBytes == nil ? [] : ["--secrets-stdin"]), environment: env,
+                                timeout: Timeout.install, input: stdinBytes, onEvent: onEvent)
     }
 
     /// `adopt PATH --yes --json`: the same stream as an install, the service
@@ -85,11 +91,30 @@ extension CLIClient {
                       extraEnvironment: Self.guiSudo)
     }
 
-    private func stream(_ arguments: [String], environment: [String: String], timeout: Duration,
+    /// The CLI lists `--secrets-stdin` for `command`. An older CLI, or no answer, means no: the environment path then runs as before.
+    func takesSecretsStdin(_ command: String) async -> Bool {
+        guard let catalog = try? await self.commands() else { return false }
+        return catalog.hasFlag(command, "--secrets-stdin")
+    }
+
+    /// The bytes of the list `--secrets-stdin` reads: one `KEY=VALUE` line per password, each ended by LF, then the empty line that ends
+    /// the list (UTF-8, no byte order mark). `nil` when there is no password, or one holds a line break (a list is one line each, and
+    /// the environment path has the CLI's own refusal for such a password).
+    static func secretList(_ entries: [(key: String, value: String?)]) -> [UInt8]? {
+        var text = ""
+        for entry in entries {
+            guard let secret = entry.value, !secret.isEmpty else { continue }
+            if secret.contains("\n") || secret.contains("\r") { return nil }
+            text += "\(entry.key)=\(secret)\n"
+        }
+        return text.isEmpty ? nil : Array((text + "\n").utf8)
+    }
+
+    private func stream(_ arguments: [String], environment: [String: String], timeout: Duration, input: [UInt8]? = nil,
                         onEvent: @escaping @Sendable (InstallEvent) -> Void) async throws(CLIError) -> Int32 {
         let issue = StreamIssue()
         let code = try await runner.stream(executable: executable, arguments: arguments, environment: environment,
-                                           timeout: timeout) { line in
+                                           timeout: timeout, input: input) { line in
             do throws(CLIError) {
                 if let event = try InstallEvent.decode(line) { onEvent(event) }
             } catch {
