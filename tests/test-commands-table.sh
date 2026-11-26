@@ -13,12 +13,14 @@
 
 # ---- 1. a table that cannot be read
 set +e
-OUT="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . <(cat "$0/lib/frappe-local/commands.sh"); printf "table:%s\n" "${#FL_CMD_TABLE}"' "$ROOT" 2>&1)"
+# (a pipe and /dev/stdin, not a process substitution: bash 3.2 does not source those at all)
+# shellcheck disable=SC2016  # the single quotes are for the inner shell
+OUT="$(bash -c '. "$0/lib/frappe-local/ui.sh"; cat "$0/lib/frappe-local/commands.sh" | { . /dev/stdin; printf "table:%s\n" "${#FL_CMD_TABLE}"; }' "$ROOT" 2>&1)"
 CODE=$?
 set -e
 [[ "$CODE" != "0" ]] || fail "commands.sh sourced from a pipe went on with no table: $OUT"
 assert_contains "$OUT" "commands table could not be read" "(the sentence)"
-assert_contains "$OUT" "/dev/fd/" "(says from where it tried)"
+assert_contains "$OUT" "/dev/stdin" "(says from where it tried)"
 assert_not_contains "$OUT" "table:0" "(did not go on)"
 
 # ---- 2 and 3
