@@ -45,8 +45,8 @@ nonisolated final class InputRecordingRunner: CommandRunning, @unchecked Sendabl
 /// `commands --json` lists the flag for the command, and in the environment of an older CLI as before.
 @Suite("Secrets on standard input")
 struct SecretsStdinTests {
-    static let withFlag = #"{"cli_version":"0.9.0","commands":[{"name":"install","flags":[{"name":"--secrets-stdin"}]},{"name":"site add","flags":[{"name":"--secrets-stdin"}]}]}"#
-    static let withoutFlag = #"{"cli_version":"0.8.3","commands":[{"name":"install","flags":[{"name":"--yes"}]},{"name":"site add","flags":[]}]}"#
+    static let withFlag = #"{"schema_version":1,"cli_version":"0.9.0","commands":[{"name":"install","flags":[{"name":"--secrets-stdin"}]},{"name":"site add","flags":[{"name":"--secrets-stdin"}]}]}"#
+    static let withoutFlag = #"{"schema_version":1,"cli_version":"0.8.3","commands":[{"name":"install","flags":[{"name":"--yes"}]},{"name":"site add","flags":[]}]}"#
 
     let request = InstallRequest(benchDir: "/b", profile: "v15-lts", bundle: "minimal", site: "s")
 
