@@ -20,3 +20,5 @@ s#\.tmp\.[0-9]+#.tmp.<PID>#g
 s#([^ ]) {2,}#\1 #g
 s# +$##
 s#-{4,}#---#g
+# a long folder is cut with ... inside the header box (macOS temp folders are long): the line is one
+s#^\| bench .* \|$#| bench <PATH> |#
