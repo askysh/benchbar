@@ -301,6 +301,67 @@ assert_eq "0" "$CODE" "(one bench, repair --dry-run, plain) $OUT $ERR"
 assert_not_contains "$OUT" '"event"' "(one bench, plain: text, no JSON)"
 mv "$TMP_DIR/off-bench/frappe-bench" "$OTHER"
 
+# --- the stream opens in the dispatch, before the gates (#405, review): a refusal of the gates that come before the
+# guess gate (the lab gate, the lease gate) is a done line for repair and pull too, and a run that goes on prints what it did
+# the lease gate: a lease of another caller on the bench. The lease is the only thing the refusals leave in the state
+# folder (state_tree is compared after it was taken), so no log, run lock, operation record or history was made before it.
+export FL_NOW=1800000000
+fresh
+BENCHBAR_NONINTERACTIVE=1 BENCHBAR_CALLER=agent-a run_fm_split lease take --bench "$BENCH" --for 20 --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "(lease take) $OUT $ERR"
+before="$(state_tree)"
+for mode in --for-agent --jsonl --json; do
+  for cmd in "repair --yes" "pull build.example.com:mysite --yes"; do
+    # shellcheck disable=SC2086
+    BENCHBAR_NONINTERACTIVE=1 BENCHBAR_CALLER=agent-b run_fm_split $cmd $mode --bench-dir "$BENCH"
+    assert_eq "1" "$CODE" "($cmd $mode, lease) $OUT $ERR"
+    assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c .)" "($cmd $mode, lease: one JSON line on stdout) $OUT"
+    kind="$(printf '%s' "$OUT" | python3 -I -c '
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d["event"] == "done" and d["exit"] == 1 and d["error_id"] == "lease_held", d
+assert d["error"] == sys.argv[1] + " is leased by agent-a until 2027-01-15T08:20:00Z. Nothing was changed.", d
+assert d["next_actions"] == [] and d["changed"] == [] and d["state_after"] is None, d
+print("repair" if "exit_code" in d else "pull")
+' "The bench ${BENCH}")"
+    assert_eq "${cmd%% *}" "$kind" "($cmd $mode, lease: the command's own done line)"
+    want="  [FAIL] The bench ${BENCH} is leased by agent-a until 2027-01-15T08:20:00Z. Nothing was changed."$'\n\n'"Aborting. Wait until it ends or ask the holder to release it; the holder passes --lease ID. A person at a terminal can pass --break-lease."
+    assert_eq "$want" "$ERR" "($cmd $mode, lease: stderr is byte for byte what it was)"
+    assert_eq "$before" "$(state_tree)" "($cmd $mode, lease: nothing written but the lease)"
+  done
+done
+rm -f "$FL_STATE_DIR/leases.tsv"
+unset FL_NOW
+# the lab gate: repair and pull are behind no Lab (a Lab gates share and lan-guard), so the early open has nothing to
+# do for one; a Lab that is off still refuses another command as it did, with its own done line and its own text
+assert_eq "" "$(grep '^lab~' "$ROOT/lib/frappe-local/labs.sh" | awk -F'~' '{print $7}' | tr ',' '\n' | grep -x -e repair -e pull || true)" "(no Lab gates repair or pull)"
+for mode in --for-agent --jsonl --json; do
+  BENCHBAR_NONINTERACTIVE=1 run_fm_split share start --dry-run "$mode" --bench-dir "$BENCH"
+  assert_eq "2" "$CODE" "(share start $mode, lab off) $OUT $ERR"
+  assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c .)" "(share start $mode, lab off: one line) $OUT"
+  assert_not_contains "$OUT" "exit_code" "(share start $mode, lab off: not a repair line)"
+  assert_eq "  [FAIL] benchbar share is an experiment and it is off."$'\n\n'"Aborting. Turn it on: benchbar labs on lan-rooms" "$ERR" "(share start $mode, lab off: stderr as it was)"
+done
+# a run that goes on: one plan, one done, in this order, and a command with no stream of its own is not touched
+events() { printf '%s\n' "$OUT" | python3 -I -c 'import json,sys; print(" ".join(json.loads(l)["event"] for l in sys.stdin if l.strip()))'; }
+BENCHBAR_NONINTERACTIVE=1 run_fm_split repair --yes --json --bench-dir "$BENCH"
+assert_eq "plan" "$(events | cut -d' ' -f1)" "(repair --yes --json: the plan comes first) $OUT"
+assert_eq "1" "$(events | tr ' ' '\n' | grep -c -x plan)" "(repair --yes --json: one plan line)"
+assert_eq "1" "$(events | tr ' ' '\n' | grep -c -x done)" "(repair --yes --json: one done line)"
+assert_eq "done" "$(events | awk '{print $NF}')" "(repair --yes --json: the done line is last)"
+assert_eq "" "$ERR" "(repair --yes --json: nothing on stderr)"
+BENCHBAR_NONINTERACTIVE=1 run_fm_split repair --for-agent --bench-dir "$BENCH"
+assert_eq "1" "$(events | tr ' ' '\n' | grep -c -x plan)" "(repair --for-agent: one plan line) $OUT"
+assert_eq "done" "$(events | awk '{print $NF}')" "(repair --for-agent: the done line is last)"
+BENCHBAR_NONINTERACTIVE=1 run_fm_split pull build.example.com:mysite --dry-run --json --bench-dir "$BENCH"
+assert_eq "done" "$(events)" "(pull --dry-run --json: its own early stop, one done line) $OUT"
+BENCHBAR_NONINTERACTIVE=1 run_fm_split site add dev2.localhost --dry-run --for-agent --bench-dir "$BENCH"
+assert_eq "plan done" "$(events)" "(site add --dry-run --for-agent: as before) $OUT"
+assert_not_contains "$OUT" "exit_code" "(site add: no repair field)"
+BENCHBAR_NONINTERACTIVE=1 run_fm_split status --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "(status --json) $OUT $ERR"
+assert_not_contains "$OUT" '"event"' "(status --json: one document, no stream)"
+
 # --- a refusal that is not this gate has no such actions
 fresh
 BENCHBAR_NONINTERACTIVE=1 run_fm_split app unfocus frappe --nosuchflag --for-agent
