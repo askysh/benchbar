@@ -5,7 +5,7 @@ repair	-	repair --dry-run --yes	benchbar repair --dry-run --yes --bench-dir PATH
 repair	-	repair --apply s3cr3t --yes	benchbar repair ... --yes --bench-dir PATH
 run	-	run --site mysite --timeout 30 -- bench console s3cr3t	benchbar run --site mysite --timeout 30 ... --bench-dir PATH
 pull	-	pull build.example.com:mysite --as mine --from-dir '/tmp/my dir' --dry-run	benchbar pull build.example.com:mysite --as mine --from-dir /tmp/my\ dir --dry-run --bench-dir PATH
-pull	-	pull build.example.com:mysite --keep-secrets --skip-app erpnext --dry-run	benchbar pull build.example.com:mysite ... --skip-app erpnext --dry-run --bench-dir PATH
+pull	-	pull build.example.com:mysite --keep-secrets --skip-app erpnext --dry-run	benchbar pull build.example.com:mysite --keep-secrets --skip-app erpnext --dry-run --bench-dir PATH
 listen	-	listen all --dry-run	benchbar listen all --dry-run --bench-dir PATH
 autostart	-	autostart off	benchbar autostart off --bench-dir PATH
 site add	-	site add dev2.localhost --bundle minimal --dry-run	benchbar site add dev2.localhost --bundle minimal --dry-run --bench-dir PATH
