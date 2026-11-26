@@ -26,6 +26,9 @@ make_fake_bench "$OTHER" other
 DATA="$ROOT/tests/golden/gate-hints.tsv"
 TABLE="$ROOT/lib/frappe-local/commands.sh"
 SECRET=s3cr3t
+# what the preflight of a run nobody can ask asks for (it comes before the gate): fake values
+export MARIADB_ROOT_PASSWORD=test-root-pw ADMIN_PASSWORD=test-admin-pw
+LABEL=""
 
 fresh() { rm -f "$FL_STATE_FILE"; rm -rf "$FL_STATE_DIR/benches"; }
 # the whole state folder as one number: a refused run must leave it byte for byte as it was (no log, no history)
@@ -47,15 +50,12 @@ profile remove|as install
 labs on|as install (labs is global, not a bench's)
 labs off|as install
 lan-guard|as install (the firewall rule is the computer's, not a bench's)
-lan-guard install|as install
-lan-guard remove|as install
-lan-guard allow-node|as install
 share join|a guest's share commands act on a room of another computer, on no bench (fl_share_guest_sub)
 share leave|as share join
 share forget|as share join"
 
-# the hint of one refusal. Plain: the line of the notice; --for-agent: the fix of the one JSON line (that line is
-# stdout; the error is its own text, which holds no word of the command line)
+# the hint of one refusal: the "Choose one" text of the notice. Plain: in the output; --for-agent: on stderr (stdout is
+# the one JSON line, whose error is the refusal without the hint)
 FOUND_HINT=""
 refused_hint() {
   local words=("$@") w agent=0
@@ -63,20 +63,23 @@ refused_hint() {
   FOUND_HINT=""; ERR=""
   if [[ "$agent" == 1 ]]; then
     BENCHBAR_NONINTERACTIVE=1 run_fm_split "${words[@]}"
-    assert_eq "1" "$CODE" "(--for-agent: refused) $OUT $ERR"
-    assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c .)" "(--for-agent: one line on stdout) $OUT"
-    FOUND_HINT="$(printf '%s' "$OUT" | python3 -c '
-import json, re, sys
+    assert_eq "1" "$CODE" "(${LABEL}: --for-agent, refused) $OUT $ERR"
+    assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c .)" "(${LABEL}: --for-agent, one line on stdout) $OUT"
+    # the JSON line has the refusal as its error and no hint (the fix is not a field of a stream's done line); the
+    # hint is the line of stderr, and where the document has a fix, the same text
+    printf '%s' "$OUT" | python3 -I -c '
+import json, sys
 d = json.loads(sys.stdin.read())
 assert "More than one bench is possible" in d["error"], d
-m = re.search(r"Choose one: (benchbar .* --bench-dir PATH) \(or set BENCH_DIR\)", d["fix"])
-print(m.group(1) if m else "")')"
+assert "Choose one" not in d["error"] and "--bench-dir" not in d["error"], d
+' || fail "(${LABEL}: --for-agent) the JSON line is not the refusal: $OUT"
+    FOUND_HINT="$(printf '%s\n' "$ERR" | sed -n 's/.*Choose one: \(benchbar .* --bench-dir PATH\) (or set BENCH_DIR).*/\1/p')"
     return 0
   fi
   BENCHBAR_NONINTERACTIVE=1 run_fm "${words[@]}"
-  assert_eq "1" "$CODE" "(refused) $OUT"
-  assert_contains "$OUT" "More than one bench is possible" "(the gate refuses) $OUT"
-  FOUND_HINT="$(printf '%s\n' "$OUT" | sed -n 's/.*Choose one: \(benchbar .* --bench-dir PATH\) (or set BENCH_DIR).*/\1/p' | head -n 1)"
+  assert_eq "1" "$CODE" "(${LABEL}: refused) $OUT"
+  assert_contains "$OUT" "More than one bench is possible" "(${LABEL}: the gate refuses) $OUT"
+  FOUND_HINT="$(printf '%s\n' "$OUT" | sed -n 's/.*Choose one: \(benchbar .* --bench-dir PATH\) (or set BENCH_DIR).*/\1/p')"
 }
 
 # words_match TYPED-WORDS HINT: the hint, read as a shell reads it, is the typed words plus --bench-dir PATH,
@@ -102,7 +105,7 @@ if not ok(typed, hint):
 }
 
 # the samples: one refusal each
-KEYS_SEEN=" "
+KEYS_SEEN=""
 samples=()
 while IFS= read -r line; do
   [[ -n "$line" && "$line" != '#'* ]] || continue
@@ -114,12 +117,13 @@ before="$(state_sum)"
 for line in "${samples[@]}"; do
   IFS=$'\t' read -r key envs argv want <<<"$line"
   [[ -n "$want" ]] || fail "a sample line without its four fields: $line"
-  KEYS_SEEN="${KEYS_SEEN}${key} "
+  KEYS_SEEN="${KEYS_SEEN}${key}"$'\n'
   eval "words=($argv)"
   envnames=""
   if [[ "$envs" != - ]]; then
     for e in $envs; do export "${e?}"; envnames="$envnames ${e%%=*}"; done
   fi
+  LABEL="sample: $argv"
   refused_hint "${words[@]}"
   for n in $envnames; do unset "$n"; done
   assert_eq "$want" "$FOUND_HINT" "(sample: $argv) the hint"
@@ -147,7 +151,7 @@ for l in open(table, encoding="utf8"):
         cmds[p[1]] = (p[2], p[7])
     elif p[0] == "flag" and len(p) > 3 and p[3]:
         valued.add(p[1])
-seen = set(open(seen_file).read().split(" "))
+seen = set(open(seen_file).read().split("\n"))
 exempt = {}
 for l in open(exempt_file):
     if l.strip():

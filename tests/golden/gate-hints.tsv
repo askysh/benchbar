@@ -27,14 +27,14 @@ site restore	-	site restore dev2.localhost --from '/tmp/my backups/x.sql.gz' --b
 site restore	-	site restore dev2.localhost --apply s3cr3t --yes	benchbar site restore dev2.localhost ... --yes --bench-dir PATH
 site move	-	site move dev2.localhost --to-bench /home/u/b2 --dry-run	benchbar site move dev2.localhost --to-bench /home/u/b2 --dry-run --bench-dir PATH
 site snapshot	-	site snapshot dev2.localhost --label 'before upgrade' --dry-run	benchbar site snapshot dev2.localhost ... --dry-run --bench-dir PATH
-site snapshot drop	-	site snapshot drop dev2.localhost snap-1 --yes	benchbar site snapshot drop dev2.localhost snap-1 --yes --bench-dir PATH
+site snapshot drop	-	site snapshot drop dev2.localhost snap-1 --dry-run --yes	benchbar site snapshot drop dev2.localhost snap-1 --dry-run --yes --bench-dir PATH
 site snapshot drop	-	site snapshot drop dev2.localhost --prune --keep 3 --dry-run	benchbar site snapshot drop dev2.localhost --prune --keep 3 --dry-run --bench-dir PATH
 site rollback	-	site rollback dev2.localhost --to latest --dry-run	benchbar site rollback dev2.localhost --to latest --dry-run --bench-dir PATH
 site drop	-	site drop dev2.localhost --confirm-site dev2.localhost --new-default main.localhost --dry-run	benchbar site drop dev2.localhost --confirm-site dev2.localhost --new-default main.localhost --dry-run --bench-dir PATH
 app add	-	app add erpnext --branch version-15 --install-on a.localhost,b.localhost --dry-run	benchbar app add erpnext --branch version-15 --install-on a.localhost,b.localhost --dry-run --bench-dir PATH
 app add	-	app add https://github.com/frappe/hrms --commit abc123 --dry-run	benchbar app add https://github.com/frappe/hrms --commit abc123 --dry-run --bench-dir PATH
 app add	-	app add 'my app' --dry-run	benchbar app add my\ app --dry-run --bench-dir PATH
-app add	-	app add "it's" --dry-run	benchbar app add it's --dry-run --bench-dir PATH
+app add	-	app add "it's" --dry-run	benchbar app add it\'s --dry-run --bench-dir PATH
 app add	-	app add https://user:s3cr3t@github.com/org/private.git --dry-run	benchbar app add ... --dry-run --bench-dir PATH
 app add	-	app add https://github.com/org/x.git --branch=v15 --dry-run	benchbar app add https://github.com/org/x.git --branch=v15 --dry-run --bench-dir PATH
 app add	-	app add erpnext --branch 'x?token=s3cr3t' --dry-run	benchbar app add erpnext ... --dry-run --bench-dir PATH
@@ -47,9 +47,9 @@ app unfocus	-	app unfocus frappe -y	benchbar app unfocus frappe -y --bench-dir P
 lock write	-	lock write --lock '/tmp/my lock.json' --no-commits	benchbar lock write --lock /tmp/my\ lock.json --no-commits --bench-dir PATH
 lock apply	-	lock apply --lock=/tmp/x.lock --dry-run	benchbar lock apply --lock=/tmp/x.lock --dry-run --bench-dir PATH
 bench forget	-	bench forget /home/u/b2 --dry-run	benchbar bench forget /home/u/b2 --dry-run --bench-dir PATH
-bench remove	-	bench remove /home/u/b2 --confirm-bench b2 --apply s3cr3t --yes	benchbar bench remove /home/u/b2 --confirm-bench b2 ... --yes --bench-dir PATH
+bench remove	-	bench remove /home/u/b2 --confirm-bench b2 --apply s3cr3t --dry-run	benchbar bench remove /home/u/b2 --confirm-bench b2 ... --dry-run --bench-dir PATH
 bench scratch	-	bench scratch /home/u/b2 --ttl 3	benchbar bench scratch /home/u/b2 --ttl 3 --bench-dir PATH
-bench gc	-	bench gc --apply s3cr3t --yes	benchbar bench gc ... --yes --bench-dir PATH
+bench gc	-	bench gc --apply s3cr3t --dry-run --yes	benchbar bench gc ... --dry-run --yes --bench-dir PATH
 lease take	-	lease take --site dev2.localhost --for 30 --note 'for me'	benchbar lease take --site dev2.localhost --for 30 ... --bench-dir PATH
 lease take	-	lease take --bench /home/u/b2 --for 30	benchbar lease take --bench /home/u/b2 --for 30 --bench-dir PATH
 lease release	-	lease release lease-abc123	benchbar lease release lease-abc123 --bench-dir PATH
