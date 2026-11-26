@@ -148,7 +148,7 @@ run_test_with_deadline() {
 
 # run_shellcheck: shellcheck -x over every shell file, or over SHELLCHECK_FILES
 # when set (the files a pull request changed). One shellcheck process per file
-# (tests/lib/shellcheck-file.sh: a deadline that names the file, a memory cap),
+# (tests/lib/shellcheck-file.sh: a deadline that names the file),
 # SC_JOBS at a time: -x parses harness.sh and the libraries again for every
 # file, so benchbar alone takes about 4 GB and 30 s, and four of the big ones
 # at once starved a 16 GB runner until the job timed out with no log (#137).
