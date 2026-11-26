@@ -4929,13 +4929,13 @@
       },
       "comment": "Main window."
     },
-    "No orphan database among %lld of frappe's shape.": {
+    "No orphan database among %@ of frappe's shape.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No orphan database among %lld of frappe's shape."
+            "value": "No orphan database among %@ of frappe's shape."
           }
         }
       }

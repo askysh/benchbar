@@ -289,7 +289,7 @@ nonisolated enum TidyText {
 
     static func orphanSummary(_ list: OrphanList) -> String {
         let n = list.orphans.count
-        return n == 0 ? String(localized: "No orphan database among \(list.checked) of frappe's shape.")
+        return n == 0 ? String(localized: "No orphan database among \(String(list.checked)) of frappe's shape.")
             : Wording.orphanDatabases(n, checked: list.checked)
     }
 
