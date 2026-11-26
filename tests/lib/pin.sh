@@ -12,7 +12,7 @@
 #   pin_date, pin_commit     commits with fixed dates and content, so a sha is the same on every machine
 #
 # What changes from run to run is replaced first: the test's folder, time stamps, durations, ids,
-# the token of a plan (it holds the bench's folder, which is new on every run), process ids, and the line number of an ERR trap
+# the token of a plan (it holds the bench's folder, which is new on every run), process ids, the user id in a launchctl call, and the line number of an ERR trap
 # message or a bash error (the lines of a file move; the function and the command stay).
 # shellcheck shell=bash
 
@@ -74,6 +74,7 @@ pin_check() {
     -e 's#op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?#op-<ID>#g' \
     -e 's#/logs/[0-9]{8}-[0-9]{6}-[0-9]+#/logs/<LOG>#g' \
     -e 's#/tmp/benchbar-[a-z]+\.[A-Za-z0-9]+#/tmp/benchbar-X.<R>#g' \
+    -e 's#gui/[0-9]+/#gui/<UID>/#g' \
     -e 's#near line [0-9]+#near line N#g' -e 's#: line [0-9]+: #: line N: #g' -e 's#\.tmp\.[0-9]+#.tmp.<PID>#g' \
     "$PIN_FILE" >"$norm"
   if [[ "${PIN_UPDATE:-0}" == "1" ]]; then
