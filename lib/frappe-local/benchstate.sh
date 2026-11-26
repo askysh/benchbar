@@ -816,8 +816,6 @@ fl_bench_guess_gate() {
     case " ${line} " in *" ... "*) gap=" Put back what ... stands for: a word that could hold a secret is not printed here." ;; esac
     # what stderr tells, as the next actions of the envelope (collected here, printed by the done line or the document)
     fl_bench_gate_actions "$line" "$n" "${benches[@]}"
-    # repair and pull open their stream in the command, after this gate: open it, so the refusal is a done line (#405)
-    fl_own_stream_open
     fl_die "More than one bench is possible and none was chosen: ${list}." "Choose one: benchbar ${line} --bench-dir PATH (or set BENCH_DIR).${gap} benchbar list shows them."
   fi
   printf 'benchbar: acting on %s (auto-detected: no --bench-dir, BENCH_DIR or remembered bench%s; pass --bench-dir to choose)\n' \

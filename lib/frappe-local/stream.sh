@@ -123,13 +123,15 @@ fl_jsonl_on_exit() {
 }
 
 # fl_own_stream_open: the streams of repair and pull are their own, and their command opens them (cmd_repair,
-# fl_cmd_pull), after the bench guess gate. A refusal of the gate comes before that, and before the log and the lock, so
-# it opens the stream here, as far as the done line needs it: fd 3 is the real stdout and the command's own done writer
-# (fl_repair_done, fl_pull_on_exit) is armed; the exit trap sends the line, with the next actions the gate collected.
-# The text of the refusal stays on stderr (fl_die moves stdout there under --json). Any other command, and a run
-# without JSON, is left as it is (#405).
+# fl_cmd_pull), after the lab gate, the lease gate, the preflight and the bench guess gate, and after the log and the
+# lock. A refusal of any of those would have no stream to end, so the dispatch opens it here, before the first of them, as
+# far as the done line needs it: fd 3 is the real stdout and the command's own done writer (fl_repair_done,
+# fl_pull_on_exit) is armed; the exit trap sends the line, with the next actions the gate collected. Nothing is printed
+# here, and the command's own open, later, sets the same state again. The text of a refusal stays on stderr (fl_die moves
+# stdout there under --json). Any other command, and a run without JSON, is left as it is (#405).
 fl_own_stream_open() {
-  [[ "${OPT_JSON:-0}" == "1" && "${FL_JSON_MODE:-}" == "own" ]] || return 0
+  [[ "${OPT_JSON:-0}" == "1" ]] || return 0
+  # shellcheck disable=SC2034  # FL_PULL_ACTIVE is read by fl_pull_on_exit (pull.sh), which the exit trap calls
   case "$COMMAND" in
     repair) FL_JSON_EVENTS=1 ;;
     pull) FL_PULL_ACTIVE=1 ;;
