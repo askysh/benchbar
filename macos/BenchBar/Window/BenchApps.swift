@@ -46,7 +46,7 @@ struct BenchApps: View {
                 HStack(spacing: WindowMetrics.rowSpacing) {
                     Text("Apps")
                     Spacer()
-                    MoreMenu(help: "Refresh the site lists or check the remotes") {
+                    MoreMenu(help: String(localized: "Refresh the site lists or check the remotes")) {
                         Button { Task { await workbench.loadApps(bench, liveSites: true) } } label: {
                             Label("Refresh Site Lists", systemImage: "arrow.clockwise")
                         }
@@ -180,19 +180,18 @@ struct AddAppSheet: View {
     private var phase: SheetPhase {
         switch flow.stage {
         case .form:
-            if let error = flow.readError { .failed(error, title: "No plan for \(title)") } else { .ready }
-        case .reading: .loading(several ? "Reading the repositories and the bench…" : "Reading the repository and the bench…")
+            if let error = flow.readError { .failed(error, title: String(localized: "No plan for \(title)")) } else { .ready }
+        case .reading: .loading(several ? String(localized: "Reading the repositories and the bench…") : String(localized: "Reading the repository and the bench…"))
         case .reviewing: .ready
-        case .applying: .running("Adding \(title)…")
-        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown")
+        case .applying: .running(String(localized: "Adding \(title)…"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench changed since this plan was shown"))
         }
     }
 
     var body: some View {
-        SheetScaffold(several || flow.plan?.isBatch == true ? "Add Apps to \(bench.name)" : "Add an App to \(bench.name)",
+        SheetScaffold(several || flow.plan?.isBatch == true ? String(localized: "Add Apps to \(bench.name)") : String(localized: "Add an App to \(bench.name)"),
                       explanation: flow.plan == nil
-                          ? "Clones apps from the app registry or git repositories and installs them. You see the plan first."
-                          : "Nothing has run yet. These are the steps; \(runTitle) runs exactly this plan.",
+                          ? String(localized: "Clones apps from the app registry or git repositories and installs them. You see the plan first.") : String(localized: "Nothing has run yet. These are the steps; \(runTitle) runs exactly this plan."),
                       phase: phase, width: flow.plan == nil ? .regular : .wide) {
             if let plan = flow.plan {
                 AppAddPlanView(plan: plan)
@@ -255,9 +254,8 @@ struct AddAppSheet: View {
             .help("Several apps are one plan with one token; an app another one needs is cloned once")
         if let problem, entries.contains(where: { !$0.isEmpty }) { SheetNote(problem, tint: .orange) }
         SheetNote(entries.contains { AppSource.isURL($0.source) }
-                  ? "Private repositories work when your SSH key (or a git credential helper) can read them; BenchBar checks access first, so a missing key fails in seconds."
-                  : "A name from the app registry gets the branch that matches this bench's profile.")
-        SheetNote("Review reads the repositories and shows the steps. Adding runs bench get-app, installs each app's requirements and builds the assets, which can take several minutes; the bench keeps running.")
+                  ? String(localized: "Private repositories work when your SSH key (or a git credential helper) can read them; BenchBar checks access first, so a missing key fails in seconds.") : String(localized: "A name from the app registry gets the branch that matches this bench's profile."))
+        SheetNote(String(localized: "Review reads the repositories and shows the steps. Adding runs bench get-app, installs each app's requirements and builds the assets, which can take several minutes; the bench keeps running."))
     }
 
     private func review() {
@@ -287,16 +285,16 @@ struct UpdateAppSheet: View {
     @State private var error: String?
 
     private var phase: SheetPhase {
-        if let error { return .failed(error, title: "No changelog for \(app)") }
-        guard let plan else { return .loading("Fetching the changes…") }
-        return plan.isUpToDate ? .done(.success("\(app) is up to date on \(plan.branch ?? "its branch").")) : .ready
+        if let error { return .failed(error, title: String(localized: "No changelog for \(app)")) }
+        guard let plan else { return .loading(String(localized: "Fetching the changes…")) }
+        return plan.isUpToDate ? .done(.success(plan.branch.map { String(localized: "\(app) is up to date on \($0).") }
+                                              ?? String(localized: "\(app) is up to date on its branch."))) : .ready
     }
 
     var body: some View {
-        SheetScaffold("\(plan?.pending == nil ? "Update" : "Finish the Update of") \(app)",
+        SheetScaffold(plan?.pending == nil ? String(localized: "Update \(app)") : String(localized: "Finish the Update of \(app)"),
                       explanation: plan?.pending == nil
-                          ? "Shows the new commits and the steps before anything changes."
-                          : "An earlier update stopped part way. Only the steps that are left run.",
+                          ? String(localized: "Shows the new commits and the steps before anything changes.") : String(localized: "An earlier update stopped part way. Only the steps that are left run."),
                       phase: phase) {
             if let pending = plan?.pending {
                 SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .orange, title: pending.title, detail: pending.detail)
@@ -322,7 +320,7 @@ struct UpdateAppSheet: View {
                     }
                 }
                 if !plan.sites.isEmpty && plan.pending == nil {
-                    SheetNote("Each site is backed up before it is migrated: \(plan.sites.joined(separator: ", ")).")
+                    SheetNote(String(localized: "Each site is backed up before it is migrated: \(plan.sites.joined(separator: ", "))."))
                 }
             }
         } actions: {

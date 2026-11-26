@@ -13,7 +13,7 @@ struct HistoryPane: View {
                     .disabled(workbench.loadingHistory)
             }
             if let error = workbench.historyError {
-                PaneBanner(symbol: "exclamationmark.triangle.fill", tint: .orange, title: "The history could not be read", detail: error)
+                PaneBanner(symbol: "exclamationmark.triangle.fill", tint: .orange, title: String(localized: "The history could not be read"), detail: error)
                     .padding(.horizontal, WindowMetrics.paneInset).padding(.top, 6)
             }
             if workbench.history.isEmpty && workbench.historyError == nil {

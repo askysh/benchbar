@@ -51,8 +51,8 @@ struct InstallPage: View {
 
     private func phase(_ state: WizardState) -> SheetPhase {
         guard state.installPhase == .running else { return .ready }
-        if state.stopRequested { return .running("Stopping…") }
-        return .running(state.progress.running.map { "\($0.name)…" } ?? "Starting…")
+        if state.stopRequested { return .running(String(localized: "Stopping…")) }
+        return .running(state.progress.running.map { String(localized: "\($0.name)…") } ?? String(localized: "Starting…"))
     }
 
     @ViewBuilder private func outcome(_ state: WizardState) -> some View {
@@ -64,8 +64,8 @@ struct InstallPage: View {
                          monospaced: false)
         case .needsRootPassword:
             // the CLI's fix names the environment variable for Terminal; here the field below is the fix
-            SheetOutcome(symbol: "lock.trianglebadge.exclamationmark.fill", tint: .orange, title: "Needs the MariaDB root password",
-                         detail: "Type the password of MariaDB's root user on this Mac, then Retry. It is not the site's Administrator password.")
+            SheetOutcome(symbol: "lock.trianglebadge.exclamationmark.fill", tint: .orange, title: String(localized: "Needs the MariaDB root password"),
+                         detail: String(localized: "Type the password of MariaDB's root user on this Mac, then Retry. It is not the site's Administrator password."))
             VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
                 HStack(spacing: WindowMetrics.rowSpacing) {
                     PasswordField(label: "MariaDB root password",
@@ -76,11 +76,11 @@ struct InstallPage: View {
                         .toggleStyle(.button)
                         .accessibilityLabel(revealRootPassword ? "Hide the password" : "Show the password")
                 }
-                SheetNote("It goes to the retried benchbar process only, never on a command line or to disk.")
+                SheetNote(String(localized: "It goes to the retried benchbar process only, never on a command line or to disk."))
             }
         case .stopped:
-            SheetOutcome(symbol: "stop.circle.fill", tint: .orange, title: "Stopped",
-                         detail: "Steps that finished stay done and the step that was running may be half done. Run the wizard again to finish it, or run benchbar repair in Terminal.")
+            SheetOutcome(symbol: "stop.circle.fill", tint: .orange, title: String(localized: "Stopped"),
+                         detail: String(localized: "Steps that finished stay done and the step that was running may be half done. Run the wizard again to finish it, or run benchbar repair in Terminal."))
         case .idle, .running, .succeeded:
             EmptyView()
         }
@@ -145,7 +145,7 @@ struct InstallStepRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let command = row.command, row.status == .skipped {
-                    CopyableCommand(command: command, copyLabel: "Copy the command for \(row.name)")
+                    CopyableCommand(command: command, copyLabel: String(localized: "Copy the command for \(row.name)"))
                 }
             }
         }
@@ -204,9 +204,9 @@ struct DonePage: View {
                     if let command = skipped.command {
                         VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
                             SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .orange,
-                                         title: "One step was skipped",
-                                         detail: "The password dialog was cancelled, so this still needs doing. Run it in Terminal:")
-                            CopyableCommand(command: command, copyLabel: "Copy the command for the skipped step")
+                                         title: String(localized: "One step was skipped"),
+                                         detail: String(localized: "The password dialog was cancelled, so this still needs doing. Run it in Terminal:"))
+                            CopyableCommand(command: command, copyLabel: String(localized: "Copy the command for the skipped step"))
                         }
                     }
                 }
@@ -238,7 +238,7 @@ struct DonePage: View {
                     Text("In Terminal").font(.headline)
                     Text("Open a new Terminal window, or run this once, and benchup starts the bench:")
                         .font(.callout).foregroundStyle(.secondary)
-                    CopyableCommand(command: Self.helperCommand, copyLabel: "Copy the command that loads the shell helpers")
+                    CopyableCommand(command: Self.helperCommand, copyLabel: String(localized: "Copy the command that loads the shell helpers"))
                 }
             }
         } leading: {

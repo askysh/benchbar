@@ -25,22 +25,24 @@ nonisolated enum HostAmbient {
         switch event {
         case .joined(let name, let model, let ip):
             let line = [name, model, ip].compactMap { $0 }.joined(separator: " · ")
-            return Notice(title: "\(name) joined", body: line + ". Remove them from the Sharing tab if you did not expect this.",
+            return Notice(title: String(localized: "\(name) joined"),
+                          body: String(localized: "\(line). Remove them from the Sharing tab if you did not expect this."),
                           identifier: "benchbar.share.joined.\(bench).\(line)")
         case .left(let name):
-            return Notice(title: "\(name) left", body: "\(name) is no longer in the room.", identifier: "benchbar.share.left.\(bench).\(name)")
+            return Notice(title: String(localized: "\(name) left"), body: String(localized: "\(name) is no longer in the room."), identifier: "benchbar.share.left.\(bench).\(name)")
         case .lockedByWrongCodes:
-            return Notice(title: "The room is locked",
-                          body: "Someone typed a wrong room code 10 times. The room is locked. Unlock it, or draw a New code to reopen.",
+            return Notice(title: String(localized: "The room is locked"),
+                          body: String(localized: "Someone typed a wrong room code 10 times. The room is locked. Unlock it, or draw a New code to reopen."),
                           identifier: "benchbar.share.budget.\(bench)")
         case .joinTrouble:
-            return Notice(title: "Someone is having trouble joining", body: "Check the code. Someone is trying to join and not finishing.",
+            return Notice(title: String(localized: "Someone is having trouble joining"),
+                          body: String(localized: "Check the code. Someone is trying to join and not finishing."),
                           identifier: "benchbar.share.trouble.\(bench)")
         case .reminder(let minutes):
             return Notice(title: Wording.sharingEndsIn(minutes: minutes),
-                          body: "Extend it from the Sharing tab to keep the room open.", identifier: "benchbar.share.reminder.\(bench)")
+                          body: String(localized: "Extend it from the Sharing tab to keep the room open."), identifier: "benchbar.share.reminder.\(bench)")
         case .networkChanged:
-            return Notice(title: "Your network changed", body: "Checks are running again.", identifier: "benchbar.share.network.\(bench)")
+            return Notice(title: String(localized: "Your network changed"), body: String(localized: "Checks are running again."), identifier: "benchbar.share.network.\(bench)")
         case .stateChanged:
             return nil
         }
@@ -49,9 +51,14 @@ nonisolated enum HostAmbient {
     /// The extra line of the bench Stop or Restart confirmation; nil when not sharing.
     static func benchConfirm(_ status: ShareStatus?, restart: Bool) -> String? {
         guard let status, status.isOn else { return nil }
-        let guests = status.devicesOnline > 0 ? " (\(Wording.guests(status.devicesOnline)) online)" : ""
+        if status.devicesOnline > 0 {
+            let online = Wording.guests(status.devicesOnline)
+            return restart
+                ? String(localized: "Sharing stays on, but guests see a short pause while the copy restarts (\(online) online).")
+                : String(localized: "This also ends sharing (\(online) online).")
+        }
         return restart
-            ? "Sharing stays on, but guests see a short pause while the copy restarts\(guests)."
-            : "This also ends sharing\(guests)."
+            ? String(localized: "Sharing stays on, but guests see a short pause while the copy restarts.")
+            : String(localized: "This also ends sharing.")
     }
 }
