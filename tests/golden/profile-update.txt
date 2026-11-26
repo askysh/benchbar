@@ -1,0 +1,802 @@
+=== no target
+exit: 1
+--- stdout
+  [FAIL] Usage: benchbar profile update NAME|--all [--plan]
+
+Aborting. Fix the above and re-run.
+--- stderr
+--- calls
+[state] no target shared.toml: none
+[state] no target clone: none
+=== unknown option
+exit: 64
+--- stdout
+  [FAIL] Unknown option for profile update: --bogus
+
+Aborting. Usage: benchbar profile update NAME|--all [--plan] [--json]. Every flag: benchbar profile update --help. A script that relied on unknown options being ignored: BENCHBAR_LENIENT_FLAGS=1 turns this error into a warning.
+--- stderr
+--- calls
+[state] unknown option shared.toml: none
+[state] unknown option clone: none
+=== invalid name
+exit: 1
+--- stdout
+  [FAIL] Invalid profile name: 'Bad Name'.
+
+Aborting. Fix the above and re-run.
+--- stderr
+--- calls
+[state] invalid name shared.toml: none
+[state] invalid name clone: none
+=== no such profile
+exit: 1
+--- stdout
+  [FAIL] No team profile 'nosuch'.
+
+Aborting. benchbar profile list shows the team profiles.
+--- stderr
+--- calls
+[state] no such profile shared.toml: none
+[state] no such profile clone: none
+=== a file of your own, not imported
+exit: 1
+--- stdout
+  [FAIL] own (<TMP>/home/.config/benchbar/profiles/own.toml) was not imported or subscribed: there is nothing to update it from.
+
+Aborting. Edit the file itself, or import it: benchbar profile import URL --as own
+--- stderr
+--- calls
+[state] a file of your own, not imported shared.toml: none
+[state] a file of your own, not imported clone: none
+=== imported, up to date, plan
+exit: 0
+--- stdout
+  [OK] shared (imported): up to date
+--- stderr
+--- calls
+[state] imported, up to date, plan shared.toml: description = "Shared"
+[state] imported, up to date, plan clone: none
+=== imported, up to date, plan json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"<V>","updates":[{"name":"shared","kind":"imported","behind":null,"diff":null}],"digest":"<DIGEST>"}
+--- stderr
+  [OK] shared (imported): up to date
+--- calls
+[state] imported, up to date, plan json shared.toml: description = "Shared"
+[state] imported, up to date, plan json clone: none
+=== imported, up to date
+exit: 0
+--- stdout
+  [OK] unchanged: <TMP>/home/.config/benchbar/profiles/shared.toml already says this
+--- stderr
+--- calls
+[state] imported, up to date shared.toml: description = "Shared"
+[state] imported, up to date clone: none
+=== imported, changed, plan
+exit: 0
+--- stdout
+  .. shared (imported): changes:
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared"
+    +description = "Shared 2"
+     site = "shared.localhost"
+--- stderr
+--- calls
+[state] imported, changed, plan shared.toml: description = "Shared"
+[state] imported, changed, plan clone: none
+=== imported, changed, plan json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"<V>","updates":[{"name":"shared","kind":"imported","behind":null,"diff":"@@ -1,5 +1,5 @@\n schema = 2\n source = \"<TMP>/src/shared.toml\"\n base = \"v15-lts\"\n-description = \"Shared\"\n+description = \"Shared 2\"\n site = \"shared.localhost\""}],"digest":"<DIGEST>"}
+--- stderr
+  .. shared (imported): changes:
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared"
+    +description = "Shared 2"
+     site = "shared.localhost"
+--- calls
+[state] imported, changed, plan json shared.toml: description = "Shared"
+[state] imported, changed, plan json clone: none
+=== imported, changed, dry run
+exit: 0
+--- stdout
+
+Changes to <TMP>/home/.config/benchbar/profiles/shared.toml
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared"
+    +description = "Shared 2"
+     site = "shared.localhost"
+
+  .. dry-run: nothing was written
+--- stderr
+--- calls
+[state] imported, changed, dry run shared.toml: description = "Shared"
+[state] imported, changed, dry run clone: none
+=== imported, changed, cancelled at the prompt
+exit: 1
+--- stdout
+
+Changes to <TMP>/home/.config/benchbar/profiles/shared.toml
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared"
+    +description = "Shared 2"
+     site = "shared.localhost"
+
+  [WARN] Not a terminal and --yes not given; treating 'Write team profile shared to <TMP>/home/.config/benchbar/profiles/shared.toml?' as no.
+  [WARN] Cancelled. Nothing was written.
+--- stderr
+--- calls
+[state] imported, changed, cancelled at the prompt shared.toml: description = "Shared"
+[state] imported, changed, cancelled at the prompt clone: none
+=== imported, changed, nothing can ask
+exit: 1
+--- stdout
+
+Changes to <TMP>/home/.config/benchbar/profiles/shared.toml
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared"
+    +description = "Shared 2"
+     site = "shared.localhost"
+
+  [FAIL] 'Write team profile shared to <TMP>/home/.config/benchbar/profiles/shared.toml?' needs an answer, and BENCHBAR_NONINTERACTIVE=1 says nothing can ask; pass --yes to confirm it.
+
+Aborting. Pass --yes to confirm it, or run without the mode in a terminal.
+--- stderr
+--- calls
+[state] imported, changed, nothing can ask shared.toml: description = "Shared"
+[state] imported, changed, nothing can ask clone: none
+=== imported, changed, a digest of another review
+exit: 1
+--- stdout
+  [FAIL] The update changed since it was reviewed (newer content at the source, or a local change). Nothing was changed.
+
+Aborting. Review it again: benchbar profile update shared --plan
+--- stderr
+--- calls
+[state] imported, changed, a digest of another review shared.toml: description = "Shared"
+[state] imported, changed, a digest of another review clone: none
+=== imported, changed, the digest as --expect=
+exit: 1
+--- stdout
+  [FAIL] The update changed since it was reviewed (newer content at the source, or a local change). Nothing was changed.
+
+Aborting. Review it again: benchbar profile update shared --plan
+--- stderr
+--- calls
+[state] imported, changed, the digest as --expect= shared.toml: description = "Shared"
+[state] imported, changed, the digest as --expect= clone: none
+=== imported, changed, apply with its digest, json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"<V>","updates":[{"name":"shared","kind":"imported","behind":null,"diff":"@@ -1,5 +1,5 @@\n schema = 2\n source = \"<TMP>/src/shared.toml\"\n base = \"v15-lts\"\n-description = \"Shared\"\n+description = \"Shared 2\"\n site = \"shared.localhost\""}],"digest":"<DIGEST>","applied":true}
+--- stderr
+
+Changes to <TMP>/home/.config/benchbar/profiles/shared.toml
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared"
+    +description = "Shared 2"
+     site = "shared.localhost"
+
+  .. auto-confirmed: Write team profile shared to <TMP>/home/.config/benchbar/profiles/shared.toml?
+  [OK] wrote <TMP>/home/.config/benchbar/profiles/shared.toml (backup: <TMP>/state/backups/<BK>/HOME__.config__benchbar__profiles__shared.toml)
+shasum: /tmp/benchbar-X.<R>: No such file or directory
+--- calls
+[state] imported, changed, apply with its digest, json shared.toml: description = "Shared 2"
+[state] imported, changed, apply with its digest, json clone: none
+=== imported, after the apply
+exit: 0
+--- stdout
+  [OK] shared (imported): up to date
+--- stderr
+--- calls
+[state] imported, after the apply shared.toml: description = "Shared 2"
+[state] imported, after the apply clone: none
+=== imported, apply without a digest
+exit: 0
+--- stdout
+
+Changes to <TMP>/home/.config/benchbar/profiles/shared.toml
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared 2"
+    +description = "Shared 3"
+     site = "shared.localhost"
+
+  .. auto-confirmed: Write team profile shared to <TMP>/home/.config/benchbar/profiles/shared.toml?
+  [OK] wrote <TMP>/home/.config/benchbar/profiles/shared.toml (backup: <TMP>/state/backups/<BK>/HOME__.config__benchbar__profiles__shared.toml)
+--- stderr
+--- calls
+[state] imported, apply without a digest shared.toml: description = "Shared 3"
+[state] imported, apply without a digest clone: none
+=== imported, the file cannot be written
+exit: 1
+--- stdout
+
+Changes to <TMP>/home/.config/benchbar/profiles/shared.toml
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared 3"
+    +description = "Shared 4"
+     site = "shared.localhost"
+
+  .. auto-confirmed: Write team profile shared to <TMP>/home/.config/benchbar/profiles/shared.toml?
+  [FAIL] could not write <TMP>/home/.config/benchbar/profiles/shared.toml; it is as it was
+--- stderr
+--- calls
+[state] imported, the file cannot be written shared.toml: description = "Shared 3"
+[state] imported, the file cannot be written clone: none
+=== imported, the source cannot be read
+exit: 0
+--- stdout
+  [WARN] shared: cannot fetch <TMP>/src/shared.toml: no such file: <TMP>/src/shared.toml
+--- stderr
+--- calls
+[state] imported, the source cannot be read shared.toml: description = "Shared 3"
+[state] imported, the source cannot be read clone: none
+=== imported, the source cannot be read, plan json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"<V>","updates":[{"name":"shared","kind":"imported","behind":null,"diff":null}],"digest":"<DIGEST>"}
+--- stderr
+  [WARN] shared: cannot fetch <TMP>/src/shared.toml: no such file: <TMP>/src/shared.toml
+  [OK] shared (imported): up to date
+--- calls
+[state] imported, the source cannot be read, plan json shared.toml: description = "Shared 3"
+[state] imported, the source cannot be read, plan json clone: none
+=== imported, the source no longer parses
+exit: 0
+--- stdout
+  [WARN] shared: <TMP>/src/shared.toml no longer parses (benchbar-profile.Rf9ef9:3: not supported: unknown key plugin); keeping <TMP>/home/.config/benchbar/profiles/shared.toml
+--- stderr
+--- calls
+[state] imported, the source no longer parses shared.toml: description = "Shared 3"
+[state] imported, the source no longer parses clone: none
+=== subscribed, up to date, plan
+exit: 0
+--- stdout
+  [OK] team-a (subscribed): up to date
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+[state] subscribed, up to date, plan shared.toml: description = "Shared"
+[state] subscribed, up to date, plan clone: 49c73d8 description = "Team A"
+=== subscribed, up to date
+exit: 0
+--- stdout
+  [OK] team-a (subscribed): up to date
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+[state] subscribed, up to date shared.toml: description = "Shared"
+[state] subscribed, up to date clone: 49c73d8 description = "Team A"
+=== subscribed, behind, plan
+exit: 0
+--- stdout
+  .. team-a (subscribed): 1 commit(s) behind, changes:
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index ebfe8f7..2505c7c 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A"
+    +description = "Team A v2"
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..d20c656e472c32ab3a0ac7a22eb64a2c26e3663b -- *.toml
+[state] subscribed, behind, plan shared.toml: description = "Shared"
+[state] subscribed, behind, plan clone: 49c73d8 description = "Team A"
+=== subscribed, behind, plan json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"<V>","updates":[{"name":"team-a","kind":"subscribed","behind":1,"diff":"diff --git a/profiles/team-a.toml b/profiles/team-a.toml\nindex ebfe8f7..2505c7c 100644\n--- a/profiles/team-a.toml\n+++ b/profiles/team-a.toml\n@@ -1,2 +1,2 @@\n base = \"v15-lts\"\n-description = \"Team A\"\n+description = \"Team A v2\""}],"digest":"<DIGEST>"}
+--- stderr
+  .. team-a (subscribed): 1 commit(s) behind, changes:
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index ebfe8f7..2505c7c 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A"
+    +description = "Team A v2"
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..d20c656e472c32ab3a0ac7a22eb64a2c26e3663b -- *.toml
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify HEAD
+[state] subscribed, behind, plan json shared.toml: description = "Shared"
+[state] subscribed, behind, plan json clone: 49c73d8 description = "Team A"
+=== subscribed, behind, dry run
+exit: 0
+--- stdout
+
+team-a: 1 new commit(s)
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index ebfe8f7..2505c7c 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A"
+    +description = "Team A v2"
+  .. dry-run: nothing was changed
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..d20c656e472c32ab3a0ac7a22eb64a2c26e3663b -- *.toml
+[state] subscribed, behind, dry run shared.toml: description = "Shared"
+[state] subscribed, behind, dry run clone: 49c73d8 description = "Team A"
+=== subscribed, behind, cancelled at the prompt
+exit: 1
+--- stdout
+
+team-a: 1 new commit(s)
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index ebfe8f7..2505c7c 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A"
+    +description = "Team A v2"
+  [WARN] Not a terminal and --yes not given; treating 'Fast forward <TMP>/home/.config/benchbar/sources/remotes-team-config to these commits?' as no.
+  [WARN] Cancelled. team-a was not updated.
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..d20c656e472c32ab3a0ac7a22eb64a2c26e3663b -- *.toml
+[state] subscribed, behind, cancelled at the prompt shared.toml: description = "Shared"
+[state] subscribed, behind, cancelled at the prompt clone: 49c73d8 description = "Team A"
+=== subscribed, behind, nothing can ask
+exit: 1
+--- stdout
+
+team-a: 1 new commit(s)
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index ebfe8f7..2505c7c 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A"
+    +description = "Team A v2"
+  [FAIL] 'Fast forward <TMP>/home/.config/benchbar/sources/remotes-team-config to these commits?' needs an answer, and BENCHBAR_NONINTERACTIVE=1 says nothing can ask; pass --yes to confirm it.
+
+Aborting. Pass --yes to confirm it, or run without the mode in a terminal.
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..d20c656e472c32ab3a0ac7a22eb64a2c26e3663b -- *.toml
+[state] subscribed, behind, nothing can ask shared.toml: description = "Shared"
+[state] subscribed, behind, nothing can ask clone: 49c73d8 description = "Team A"
+=== subscribed, behind, a digest of another review
+exit: 1
+--- stdout
+  [FAIL] The update changed since it was reviewed (newer content at the source, or a local change). Nothing was changed.
+
+Aborting. Review it again: benchbar profile update team-a --plan
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..d20c656e472c32ab3a0ac7a22eb64a2c26e3663b -- *.toml
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify HEAD
+[state] subscribed, behind, a digest of another review shared.toml: description = "Shared"
+[state] subscribed, behind, a digest of another review clone: 49c73d8 description = "Team A"
+=== subscribed, behind, by the name of the subscription
+exit: 0
+--- stdout
+  .. remotes-team-config (subscribed): 1 commit(s) behind, changes:
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index ebfe8f7..2505c7c 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A"
+    +description = "Team A v2"
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..d20c656e472c32ab3a0ac7a22eb64a2c26e3663b -- *.toml
+[state] subscribed, behind, by the name of the subscription shared.toml: description = "Shared"
+[state] subscribed, behind, by the name of the subscription clone: 49c73d8 description = "Team A"
+=== subscribed, behind, apply with its digest, json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"<V>","updates":[{"name":"team-a","kind":"subscribed","behind":1,"diff":"diff --git a/profiles/team-a.toml b/profiles/team-a.toml\nindex ebfe8f7..2505c7c 100644\n--- a/profiles/team-a.toml\n+++ b/profiles/team-a.toml\n@@ -1,2 +1,2 @@\n base = \"v15-lts\"\n-description = \"Team A\"\n+description = \"Team A v2\""}],"digest":"<DIGEST>","applied":true}
+--- stderr
+
+team-a: 1 new commit(s)
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index ebfe8f7..2505c7c 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A"
+    +description = "Team A v2"
+  .. auto-confirmed: Fast forward <TMP>/home/.config/benchbar/sources/remotes-team-config to these commits?
+  [OK] team-a: updated (<TMP>/home/.config/benchbar/sources/remotes-team-config)
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..d20c656e472c32ab3a0ac7a22eb64a2c26e3663b -- *.toml
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify HEAD
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null merge --ff-only --quiet d20c656e472c32ab3a0ac7a22eb64a2c26e3663b
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify HEAD
+[state] subscribed, behind, apply with its digest, json shared.toml: description = "Shared"
+[state] subscribed, behind, apply with its digest, json clone: d20c656 description = "Team A v2"
+=== subscribed, after the apply
+exit: 0
+--- stdout
+  [OK] team-a (subscribed): up to date
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+[state] subscribed, after the apply shared.toml: description = "Shared"
+[state] subscribed, after the apply clone: d20c656 description = "Team A v2"
+=== subscribed, not a fast forward
+exit: 1
+--- stdout
+
+team-a: 1 new commit(s)
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index 2505c7c..710c752 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A v2"
+    +description = "Team A v3"
+  .. auto-confirmed: Fast forward <TMP>/home/.config/benchbar/sources/remotes-team-config to these commits?
+  [FAIL] team-a: not a fast forward; <TMP>/home/.config/benchbar/sources/remotes-team-config has changes of its own
+     fix: benchbar profile remove team-a, then subscribe again
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..20c84c1f28b8cafa885e1a0b287c011ae7d18a9e -- *.toml
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null merge --ff-only --quiet 20c84c1f28b8cafa885e1a0b287c011ae7d18a9e
+[state] subscribed, not a fast forward shared.toml: description = "Shared"
+[state] subscribed, not a fast forward clone: 00c0a62 description = "Team A v2"
+=== subscribed, not a fast forward, json
+exit: 1
+--- stdout
+{"schema_version":1,"cli_version":"<V>","updates":[{"name":"team-a","kind":"subscribed","behind":1,"diff":"diff --git a/profiles/team-a.toml b/profiles/team-a.toml\nindex 2505c7c..710c752 100644\n--- a/profiles/team-a.toml\n+++ b/profiles/team-a.toml\n@@ -1,2 +1,2 @@\n base = \"v15-lts\"\n-description = \"Team A v2\"\n+description = \"Team A v3\""}],"digest":"<DIGEST>","applied":false}
+--- stderr
+
+team-a: 1 new commit(s)
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index 2505c7c..710c752 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A v2"
+    +description = "Team A v3"
+  .. auto-confirmed: Fast forward <TMP>/home/.config/benchbar/sources/remotes-team-config to these commits?
+  [FAIL] team-a: not a fast forward; <TMP>/home/.config/benchbar/sources/remotes-team-config has changes of its own
+     fix: benchbar profile remove team-a, then subscribe again
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..20c84c1f28b8cafa885e1a0b287c011ae7d18a9e -- *.toml
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null merge --ff-only --quiet 20c84c1f28b8cafa885e1a0b287c011ae7d18a9e
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify HEAD
+[state] subscribed, not a fast forward, json shared.toml: description = "Shared"
+[state] subscribed, not a fast forward, json clone: 00c0a62 description = "Team A v2"
+=== subscribed, the remote cannot be fetched
+exit: 0
+--- stdout
+  [WARN] team-a: cannot fetch: '<TMP>/remotes/team-config.git' does not appear to be a git repository; showing the last fetch
+  [OK] team-a (subscribed): up to date
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+[state] subscribed, the remote cannot be fetched shared.toml: description = "Shared"
+[state] subscribed, the remote cannot be fetched clone: 20c84c1 description = "Team A v3"
+=== all, plan
+exit: 0
+--- stdout
+  .. shared (imported): changes:
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared"
+    +description = "Shared 5"
+     site = "shared.localhost"
+  .. remotes-team-config (subscribed): 1 commit(s) behind, changes:
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index 710c752..ca47b57 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A v3"
+    +description = "Team A v4"
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..b317223746897b550903d79909077ea790b053b2 -- *.toml
+[state] all, plan shared.toml: description = "Shared"
+[state] all, plan clone: 20c84c1 description = "Team A v3"
+=== all, plan json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"<V>","updates":[{"name":"shared","kind":"imported","behind":null,"diff":"@@ -1,5 +1,5 @@\n schema = 2\n source = \"<TMP>/src/shared.toml\"\n base = \"v15-lts\"\n-description = \"Shared\"\n+description = \"Shared 5\"\n site = \"shared.localhost\""},{"name":"remotes-team-config","kind":"subscribed","behind":1,"diff":"diff --git a/profiles/team-a.toml b/profiles/team-a.toml\nindex 710c752..ca47b57 100644\n--- a/profiles/team-a.toml\n+++ b/profiles/team-a.toml\n@@ -1,2 +1,2 @@\n base = \"v15-lts\"\n-description = \"Team A v3\"\n+description = \"Team A v4\""}],"digest":"<DIGEST>"}
+--- stderr
+  .. shared (imported): changes:
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared"
+    +description = "Shared 5"
+     site = "shared.localhost"
+  .. remotes-team-config (subscribed): 1 commit(s) behind, changes:
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index 710c752..ca47b57 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A v3"
+    +description = "Team A v4"
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..b317223746897b550903d79909077ea790b053b2 -- *.toml
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify HEAD
+[state] all, plan json shared.toml: description = "Shared"
+[state] all, plan json clone: 20c84c1 description = "Team A v3"
+=== all, dry run
+exit: 0
+--- stdout
+
+Changes to <TMP>/home/.config/benchbar/profiles/shared.toml
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared"
+    +description = "Shared 5"
+     site = "shared.localhost"
+
+  .. dry-run: nothing was written
+
+remotes-team-config: 1 new commit(s)
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index 710c752..ca47b57 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A v3"
+    +description = "Team A v4"
+  .. dry-run: nothing was changed
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..b317223746897b550903d79909077ea790b053b2 -- *.toml
+[state] all, dry run shared.toml: description = "Shared"
+[state] all, dry run clone: 20c84c1 description = "Team A v3"
+=== all, nothing can ask
+exit: 1
+--- stdout
+
+Changes to <TMP>/home/.config/benchbar/profiles/shared.toml
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared"
+    +description = "Shared 5"
+     site = "shared.localhost"
+
+  [FAIL] 'Write team profile shared to <TMP>/home/.config/benchbar/profiles/shared.toml?' needs an answer, and BENCHBAR_NONINTERACTIVE=1 says nothing can ask; pass --yes to confirm it.
+
+Aborting. Pass --yes to confirm it, or run without the mode in a terminal.
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..b317223746897b550903d79909077ea790b053b2 -- *.toml
+[state] all, nothing can ask shared.toml: description = "Shared"
+[state] all, nothing can ask clone: 20c84c1 description = "Team A v3"
+=== all, cancelled at the prompt
+exit: 1
+--- stdout
+
+Changes to <TMP>/home/.config/benchbar/profiles/shared.toml
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared"
+    +description = "Shared 5"
+     site = "shared.localhost"
+
+  [WARN] Not a terminal and --yes not given; treating 'Write team profile shared to <TMP>/home/.config/benchbar/profiles/shared.toml?' as no.
+  [WARN] Cancelled. Nothing was written.
+
+remotes-team-config: 1 new commit(s)
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index 710c752..ca47b57 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A v3"
+    +description = "Team A v4"
+  [WARN] Not a terminal and --yes not given; treating 'Fast forward <TMP>/home/.config/benchbar/sources/remotes-team-config to these commits?' as no.
+  [WARN] Cancelled. remotes-team-config was not updated.
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..b317223746897b550903d79909077ea790b053b2 -- *.toml
+[state] all, cancelled at the prompt shared.toml: description = "Shared"
+[state] all, cancelled at the prompt clone: 20c84c1 description = "Team A v3"
+=== all, apply
+exit: 0
+--- stdout
+
+Changes to <TMP>/home/.config/benchbar/profiles/shared.toml
+    @@ -1,5 +1,5 @@
+     schema = 2
+     source = "<TMP>/src/shared.toml"
+     base = "v15-lts"
+    -description = "Shared"
+    +description = "Shared 5"
+     site = "shared.localhost"
+
+  .. auto-confirmed: Write team profile shared to <TMP>/home/.config/benchbar/profiles/shared.toml?
+  [OK] wrote <TMP>/home/.config/benchbar/profiles/shared.toml (backup: <TMP>/state/backups/<BK>/HOME__.config__benchbar__profiles__shared.toml)
+
+remotes-team-config: 1 new commit(s)
+    diff --git a/profiles/team-a.toml b/profiles/team-a.toml
+    index 710c752..ca47b57 100644
+    --- a/profiles/team-a.toml
+    +++ b/profiles/team-a.toml
+    @@ -1,2 +1,2 @@
+     base = "v15-lts"
+    -description = "Team A v3"
+    +description = "Team A v4"
+  .. auto-confirmed: Fast forward <TMP>/home/.config/benchbar/sources/remotes-team-config to these commits?
+  [OK] remotes-team-config: updated (<TMP>/home/.config/benchbar/sources/remotes-team-config)
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null log --format=%ct HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null diff HEAD..b317223746897b550903d79909077ea790b053b2 -- *.toml
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null merge --ff-only --quiet b317223746897b550903d79909077ea790b053b2
+[state] all, apply shared.toml: description = "Shared 5"
+[state] all, apply clone: b317223 description = "Team A v4"
+=== all, after the apply
+exit: 0
+--- stdout
+  [OK] shared (imported): up to date
+  [OK] remotes-team-config (subscribed): up to date
+--- stderr
+--- calls
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config config --get core.sshCommand
+git -c core.hooksPath=/dev/null -C <TMP>/home/.config/benchbar/sources/remotes-team-config fetch --quiet --no-tags
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-list --count HEAD..@{upstream}
+git -C <TMP>/home/.config/benchbar/sources/remotes-team-config -c core.hooksPath=/dev/null rev-parse -q --verify @{upstream}
+[state] all, after the apply shared.toml: description = "Shared 5"
+[state] all, after the apply clone: b317223 description = "Team A v4"

@@ -273,6 +273,7 @@ assert_eq "1" "$(val pin_full)" "(dispatch of one pin test)"
 plan EVENT=pull_request FILES="lib/frappe-local/apps.sh lib/frappe-local/app-plan.sh lib/frappe-local/teamlock.sh lib/frappe-local/profiles.sh"
 assert_eq "0" "$(val pin_full)" "(the pinned functions' files only)"
 assert_contains "$(val tests)" "test-app-update-pin"
+assert_contains "$(val tests)" "test-profile-update-pin"
 plan EVENT=pull_request FILES="docs/a.md"
 assert_eq "0" "$(val pin_full)" "(docs)"
 for f in tests/test-lock-apply-pin.sh tests/test-profile-update-pin.sh tests/golden/app-add.txt tests/lib/pin.sh tests/lib/pin.sed tests/lib/harness.sh; do
