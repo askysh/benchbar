@@ -1,0 +1,56 @@
+# command<TAB>flag<TAB>words (separated by |) that the flag record has to say: a note about the flag that left the summary (tests/test-commands-table.sh)
+install	--json	json lines|--yes|--dry-run
+install	--frappe-commit	frappe_commit|stops the install
+install	--erpnext-commit	erpnext_commit|stops the install
+adopt	--json	as install|--yes|--dry-run
+doctor	--fix-hints	fix commands|one per line
+doctor	--prerequisites	before an install|--bench-dir|new bench
+doctor	--fetch	focus apps|never touches the network
+doctor	--ack	until its message changes
+doctor	--unack	undo --ack
+doctor	--quick	skip the slow checks
+ports setup	--dry-run	preview|nothing
+ports plan	--json	token|json
+ports check	--json	conflicts|json
+report	--print	terminal
+report	--json	zip|redactions
+uninstall-service	--all	brew uninstall benchbar|cannot stop
+self-update	--check	latest
+self-update	--dry-run	change nothing
+where	--json	one document
+up	--services-only	redis|down stops it
+status	--json	redis|sites[].served|ready object
+wait	--for	one part
+wait	--timeout	give up after
+logs	--worker	worker.log
+logs	--worker-error	worker.error.log
+logs	--previous	bench.previous.log
+logs	--no-follow	print and exit
+logs	--process	worker.log
+logs	--since	at or after
+logs	--since-restart	last start
+logs	-n	last n lines
+open	--path	where to land
+open	--print-url	print the link
+open	--as	no password|developer_mode|site open-as
+users	--search	users whose id or full name
+users	--limit	at most n users
+site add	--bundle	app bundle
+site add	--apps	apps of apps/
+site hosts	--prune	one backup|one sudo|prints the command
+site backup	--with-files	uploads
+site restore	--from	stamp
+site restore	--from-site	read the stamp
+site restore	--new	create the site
+site restore	--neutralise	integrations off|stored secrets
+site restore	--before-migrate	after the restore|before migrate
+site restore	--dry-run	plan|token
+site restore	--apply	exactly that plan
+site drop	--confirm-site	repeat the site name
+site drop	--new-default	default site
+share setup	--users	one seat each
+share setup	--from	backup set
+share setup	--acknowledge-data	real data
+share preflight	--static	before anything starts
+share preflight	--critical	fast checks
+share preflight	--quiet	not ok
