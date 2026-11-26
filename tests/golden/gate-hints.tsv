@@ -71,3 +71,8 @@ site default	-	site default dev2.localhost --json	benchbar site default dev2.loc
 -	-	app focus frappe -- --token=s3cr3t	benchbar app focus frappe ... --bench-dir PATH
 -	BENCHBAR_LENIENT_FLAGS=1	app focus frappe --token=s3cr3t	benchbar app focus frappe ... --bench-dir PATH
 -	-	app focus 'my app' --for-agent	benchbar app focus my\ app --for-agent --bench-dir PATH
+pull	-	pull build.example.com:mysite --keep-secrets=x --dry-run	benchbar pull build.example.com:mysite ... --dry-run --bench-dir PATH
+site add	BENCHBAR_LENIENT_FLAGS=1	site add dev2.localhost -p s3cr3t --dry-run	benchbar site add dev2.localhost ... --dry-run --bench-dir PATH
+app add	-	app add API_TOKEN=s3cr3t --dry-run	benchbar app add ... --dry-run --bench-dir PATH
+app add	-	app add erpnext --dry-run -- KEY=s3cr3t	benchbar app add erpnext --dry-run ... --bench-dir PATH
+app add	-	app add ssh://git@github.com/org/x.git --dry-run	benchbar app add ... --dry-run --bench-dir PATH
