@@ -319,7 +319,9 @@ for mode in --for-agent --jsonl --json; do
     kind="$(printf '%s' "$OUT" | python3 -I -c '
 import json, sys
 d = json.loads(sys.stdin.read())
-assert d["event"] == "done" and d["exit"] == 1 and d["error_id"] == "lease_held", d
+assert d["event"] == "done" and d["exit"] == 1, d
+# the done line of repair carries the stable id of the refusal; the one of pull has none
+assert d.get("error_id") == ("lease_held" if "exit_code" in d else None), d
 assert d["error"] == sys.argv[1] + " is leased by agent-a until 2027-01-15T08:20:00Z. Nothing was changed.", d
 assert d["next_actions"] == [] and d["changed"] == [] and d["state_after"] is None, d
 print("repair" if "exit_code" in d else "pull")
