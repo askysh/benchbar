@@ -1,0 +1,73 @@
+# the form's key in the commands table (or - for a form outside the table's gate), the environment (- for none), the words typed, the hint the refusal gives (the words after benchbar, without the trailing --bench-dir PATH). s3cr3t marks a word that must never come back.
+service	-	service --port-offset 2 --with-schedule --dry-run	benchbar service --port-offset 2 --with-schedule --dry-run --bench-dir PATH
+service	-	service --apply s3cr3t --yes	benchbar service ... --yes --bench-dir PATH
+repair	-	repair --dry-run --yes	benchbar repair --dry-run --yes --bench-dir PATH
+repair	-	repair --apply s3cr3t --yes	benchbar repair ... --yes --bench-dir PATH
+run	-	run --site mysite --timeout 30 -- bench console s3cr3t	benchbar run --site mysite --timeout 30 ... --bench-dir PATH
+pull	-	pull build.example.com:mysite --as mine --from-dir '/tmp/my dir' --dry-run	benchbar pull build.example.com:mysite --as mine --from-dir /tmp/my\ dir --dry-run --bench-dir PATH
+pull	-	pull build.example.com:mysite --keep-secrets --skip-app erpnext --dry-run	benchbar pull build.example.com:mysite --keep-secrets --skip-app erpnext --dry-run --bench-dir PATH
+listen	-	listen all --dry-run	benchbar listen all --dry-run --bench-dir PATH
+autostart	-	autostart off	benchbar autostart off --bench-dir PATH
+site add	-	site add dev2.localhost --bundle minimal --dry-run	benchbar site add dev2.localhost --bundle minimal --dry-run --bench-dir PATH
+site add	-	site add dev2.localhost --apps 'frappe erpnext' --dry-run	benchbar site add dev2.localhost --apps frappe\ erpnext --dry-run --bench-dir PATH
+site default	-	site default dev2.localhost	benchbar site default dev2.localhost --bench-dir PATH
+site default	-	site default 'a$b'	benchbar site default a\$b --bench-dir PATH
+site open-as	-	site open-as off dev2.localhost	benchbar site open-as off dev2.localhost --bench-dir PATH
+share setup	BENCHBAR_LABS=lan-rooms	share setup --from latest --users a,b --name 'My room' --dry-run --yes	benchbar share setup --from latest --users a,b --name My\ room --dry-run --yes --bench-dir PATH
+share start	BENCHBAR_LABS=lan-rooms	share start --for 30m --name office --dry-run	benchbar share start --for 30m --name office --dry-run --bench-dir PATH
+share extend	BENCHBAR_LABS=lan-rooms	share extend --by 15m	benchbar share extend --by 15m --bench-dir PATH
+share remove	BENCHBAR_LABS=lan-rooms	share remove dev-abc --new-code --yes	benchbar share remove dev-abc --new-code --yes --bench-dir PATH
+share revoke	BENCHBAR_LABS=lan-rooms	share revoke dev-abc --yes	benchbar share revoke dev-abc --yes --bench-dir PATH
+share assign	BENCHBAR_LABS=lan-rooms	share assign dev-abc seat-1	benchbar share assign dev-abc seat-1 --bench-dir PATH
+share open-as	BENCHBAR_LABS=lan-rooms	share open-as alice --print-url	benchbar share open-as alice --print-url --bench-dir PATH
+share open-as	BENCHBAR_LABS=lan-rooms	share open-as alice@example.com	benchbar share open-as ... --bench-dir PATH
+site backup	-	site backup dev2.localhost --with-files	benchbar site backup dev2.localhost --with-files --bench-dir PATH
+site restore	-	site restore dev2.localhost --from 20260101-120000 --new --dry-run	benchbar site restore dev2.localhost --from 20260101-120000 --new --dry-run --bench-dir PATH
+site restore	-	site restore dev2.localhost --from '/tmp/my backups/x.sql.gz' --before-migrate ./fix.sh --dry-run	benchbar site restore dev2.localhost --from /tmp/my\ backups/x.sql.gz --before-migrate ./fix.sh --dry-run --bench-dir PATH
+site restore	-	site restore dev2.localhost --apply s3cr3t --yes	benchbar site restore dev2.localhost ... --yes --bench-dir PATH
+site move	-	site move dev2.localhost --to-bench /home/u/b2 --dry-run	benchbar site move dev2.localhost --to-bench /home/u/b2 --dry-run --bench-dir PATH
+site snapshot	-	site snapshot dev2.localhost --label 'before upgrade' --dry-run	benchbar site snapshot dev2.localhost ... --dry-run --bench-dir PATH
+site snapshot drop	-	site snapshot drop dev2.localhost snap-1 --dry-run --yes	benchbar site snapshot drop dev2.localhost snap-1 --dry-run --yes --bench-dir PATH
+site snapshot drop	-	site snapshot drop dev2.localhost --prune --keep 3 --dry-run	benchbar site snapshot drop dev2.localhost --prune --keep 3 --dry-run --bench-dir PATH
+site rollback	-	site rollback dev2.localhost --to latest --dry-run	benchbar site rollback dev2.localhost --to latest --dry-run --bench-dir PATH
+site drop	-	site drop dev2.localhost --confirm-site dev2.localhost --new-default main.localhost --dry-run	benchbar site drop dev2.localhost --confirm-site dev2.localhost --new-default main.localhost --dry-run --bench-dir PATH
+app add	-	app add erpnext --branch version-15 --install-on a.localhost,b.localhost --dry-run	benchbar app add erpnext --branch version-15 --install-on a.localhost,b.localhost --dry-run --bench-dir PATH
+app add	-	app add https://github.com/frappe/hrms --commit abc123 --dry-run	benchbar app add https://github.com/frappe/hrms --commit abc123 --dry-run --bench-dir PATH
+app add	-	app add 'my app' --dry-run	benchbar app add my\ app --dry-run --bench-dir PATH
+app add	-	app add "it's" --dry-run	benchbar app add it\'s --dry-run --bench-dir PATH
+app add	-	app add https://user:s3cr3t@github.com/org/private.git --dry-run	benchbar app add ... --dry-run --bench-dir PATH
+app add	-	app add https://github.com/org/x.git --branch=v15 --dry-run	benchbar app add https://github.com/org/x.git --branch=v15 --dry-run --bench-dir PATH
+app add	-	app add erpnext --branch 'x?token=s3cr3t' --dry-run	benchbar app add erpnext ... --dry-run --bench-dir PATH
+app install	-	app install erpnext --site dev2.localhost --dry-run	benchbar app install erpnext --site dev2.localhost --dry-run --bench-dir PATH
+app update	-	app update erpnext --skip-backup --dry-run	benchbar app update erpnext --skip-backup --dry-run --bench-dir PATH
+app unfocus	-	app unfocus frappe	benchbar app unfocus frappe --bench-dir PATH
+app unfocus	-	app unfocus frappe s3cr3t	benchbar app unfocus frappe ... --bench-dir PATH
+app unfocus	-	app unfocus frappe --for-agent	benchbar app unfocus frappe --for-agent --bench-dir PATH
+app unfocus	-	app unfocus frappe -y	benchbar app unfocus frappe -y --bench-dir PATH
+lock write	-	lock write --lock '/tmp/my lock.json' --no-commits	benchbar lock write --lock /tmp/my\ lock.json --no-commits --bench-dir PATH
+lock apply	-	lock apply --lock=/tmp/x.lock --dry-run	benchbar lock apply --lock=/tmp/x.lock --dry-run --bench-dir PATH
+bench forget	-	bench forget /home/u/b2 --dry-run	benchbar bench forget /home/u/b2 --dry-run --bench-dir PATH
+bench remove	-	bench remove /home/u/b2 --confirm-bench b2 --apply s3cr3t --dry-run	benchbar bench remove /home/u/b2 --confirm-bench b2 ... --dry-run --bench-dir PATH
+bench scratch	-	bench scratch /home/u/b2 --ttl 3	benchbar bench scratch /home/u/b2 --ttl 3 --bench-dir PATH
+bench gc	-	bench gc --apply s3cr3t --dry-run --yes	benchbar bench gc ... --dry-run --yes --bench-dir PATH
+lease take	-	lease take --site dev2.localhost --for 30 --note 'for me'	benchbar lease take --site dev2.localhost --for 30 ... --bench-dir PATH
+lease take	-	lease take --bench /home/u/b2 --for 30	benchbar lease take --bench /home/u/b2 --for 30 --bench-dir PATH
+lease release	-	lease release lease-abc123	benchbar lease release lease-abc123 --bench-dir PATH
+lease renew	-	lease renew lease-abc123 --for 10	benchbar lease renew lease-abc123 --for 10 --bench-dir PATH
+site default	BENCHBAR_LENIENT_FLAGS=1	site default dev2.localhost --token=s3cr3t	benchbar site default dev2.localhost ... --bench-dir PATH
+site default	BENCHBAR_LENIENT_FLAGS=1	site default dev2.localhost --password s3cr3t	benchbar site default dev2.localhost ... --bench-dir PATH
+site default	BENCHBAR_LENIENT_FLAGS=1	site default dev2.localhost --api-key s3cr3t --yes	benchbar site default dev2.localhost ... --yes --bench-dir PATH
+site default	BENCHBAR_LENIENT_FLAGS=1	site default dev2.localhost --client-secret=s3cr3t	benchbar site default dev2.localhost ... --bench-dir PATH
+site default	BENCHBAR_LENIENT_FLAGS=1	site default dev2.localhost --color s3cr3t --json	benchbar site default dev2.localhost ... --json --bench-dir PATH
+site default	-	site default dev2.localhost --offline	benchbar site default dev2.localhost ... --bench-dir PATH
+app update	-	app update erpnext --dry-run -- s3cr3t --x	benchbar app update erpnext --dry-run ... --bench-dir PATH
+site default	-	site default dev2.localhost --json	benchbar site default dev2.localhost --json --bench-dir PATH
+-	-	doctor --ack hosts	benchbar doctor --ack hosts --bench-dir PATH
+-	-	doctor --unack hosts	benchbar doctor --unack hosts --bench-dir PATH
+-	-	doctor --ack hosts --for-agent	benchbar doctor --ack hosts --for-agent --bench-dir PATH
+-	-	app focus frappe	benchbar app focus frappe --bench-dir PATH
+-	-	app focus --auto frappe	benchbar app focus --auto frappe --bench-dir PATH
+-	-	app focus frappe s3cr3t	benchbar app focus frappe ... --bench-dir PATH
+-	-	app focus frappe -- --token=s3cr3t	benchbar app focus frappe ... --bench-dir PATH
+-	BENCHBAR_LENIENT_FLAGS=1	app focus frappe --token=s3cr3t	benchbar app focus frappe ... --bench-dir PATH
+-	-	app focus 'my app' --for-agent	benchbar app focus my\ app --for-agent --bench-dir PATH

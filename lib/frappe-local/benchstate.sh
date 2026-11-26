@@ -599,16 +599,183 @@ fl_site_ping_code() {
   esac
 }
 
-# fl_bench_guess_gate [LINE]: a command that changes things and was not told which
-# bench (no --bench-dir, no BENCH_DIR, none remembered) acts on the first one
+# The line a refusal tells the agent to run instead (#401). It is the line that was typed (FL_ORIG_ARGS), in the
+# words the table knows, with --bench-dir PATH added by the caller. One rule for every command behind a gate:
+#   quoted (printf %q): the words of the command's key; the positional words, as many as its usage line names
+#     (fl_hint_slots_v); the flags of the command's records in commands.sh, the global flags and the flags the
+#     dispatch reads for every command (FL_HINT_LOOP_FLAGS), with the value of those that take one
+#   left out, one "..." for a run of them: a flag that could carry a secret (fl_hist_secret_name_p, the words of the
+#     history) and its value; the value of a flag of free text (the table's value is TEXT); a flag the command does
+#     not know (it reaches the gate with BENCHBAR_LENIENT_FLAGS=1) and the word after it; a positional word beyond
+#     the usage line; "--" and everything after it; a word the history or the redactor would change (a URL with
+#     a user or a password in it). A flag whose value is left out goes with it. --bench-dir is dropped: the caller adds it.
+# It runs on the refusal path only, so the table is read there and nowhere else.
+FL_HINT_LOOP_FLAGS=" --json --jsonl --for-agent --yes -y --dry-run --plain --no-color "
+FL_HINT_KNOWN=" "
+FL_HINT_VALUED=" "
+FL_HINT_FREE=" "
+
+# fl_hint_flags_load KEY: FL_HINT_KNOWN, FL_HINT_VALUED and FL_HINT_FREE, each " --a --b " (a flag of the key's
+# records or a global one; one that takes a value; one whose value is free text)
+fl_hint_flags_load() {
+  local IFS=$' \t\n' kind k name val n line
+  FL_HINT_KNOWN="$FL_HINT_LOOP_FLAGS"; FL_HINT_VALUED=" "; FL_HINT_FREE=" "
+  while IFS='~' read -r kind k name val _; do
+    [[ "$kind" == flag && "$k" == "$1" ]] || continue
+    for n in ${name//,/ }; do
+      FL_HINT_KNOWN="${FL_HINT_KNOWN}${n} "
+      [[ -z "$val" ]] || FL_HINT_VALUED="${FL_HINT_VALUED}${n} "
+      [[ "$val" != TEXT ]] || FL_HINT_FREE="${FL_HINT_FREE}${n} "
+    done
+  done <<<"$FL_CMD_TABLE"
+  while IFS= read -r line; do
+    name="${line%%~*}"; val="${line#*~}"; val="${val%%~*}"
+    for n in ${name//,/ }; do
+      FL_HINT_KNOWN="${FL_HINT_KNOWN}${n} "
+      [[ -z "$val" ]] || FL_HINT_VALUED="${FL_HINT_VALUED}${n} "
+    done
+  done <<<"$FL_CMD_GLOBAL_FLAGS"
+}
+
+# fl_hint_slots_v VAR KEY: how many positional words the usage line of KEY names (999: any number). The usage is
+# read as groups: [..] and (..) whose first word is a flag are flags, any other group is one word; a bare word
+# is one word unless it starts with - (a flag; the bare word after one that takes a value is its value). The part
+# after ", then" (the apply step of a plan) and after " -- " is flags or the command's own words and is not read.
+fl_hint_slots_v() {
+  local __usage="" __rest __n=0 __item="" __depth=0 __skip=0 __i __c __first __name
+  fl_cmd_usage_v __usage "$2"
+  if [[ "$__usage" != "benchbar $2"* ]]; then printf -v "$1" '%s' 0; return 0; fi
+  __rest="${__usage#"benchbar $2"}"
+  __rest="${__rest%%, then *}"; __rest="${__rest%% -- *}"
+  __rest="${__rest} "
+  for ((__i = 0; __i < ${#__rest}; __i++)); do
+    __c="${__rest:$__i:1}"
+    case "$__c" in
+      '['|'(') __depth=$((__depth + 1)); __item="${__item}${__c}" ;;
+      ']'|')') __depth=$((__depth - 1)); __item="${__item}${__c}" ;;
+      ' ')
+        if [[ "$__depth" -gt 0 ]]; then __item="${__item}${__c}"; continue; fi
+        [[ -n "$__item" ]] || continue
+        case "$__item" in
+          '['*|'('*)
+            __first="${__item:1}"; __first="${__first%%[[:space:]]*}"
+            case "$__first" in
+              -*|'('*|'[') ;;
+              *) if [[ "$__item" == *...* ]]; then __n=999; else __n=$((__n + 1)); fi ;;
+            esac
+            __skip=0 ;;
+          -*) __name="${__item%%[=,]*}"
+              case "$FL_HINT_VALUED" in *" ${__name} "*) __skip=1 ;; *) __skip=0 ;; esac ;;
+          '|') ;;
+          *...*) __n=999; __skip=0 ;;
+          *) if [[ "$__skip" == 1 ]]; then __skip=0; else __n=$((__n + 1)); fi ;;
+        esac
+        __item="" ;;
+      *) __item="${__item}${__c}" ;;
+    esac
+  done
+  printf -v "$1" '%s' "$__n"
+}
+
+# fl_hint_word_ok WORD: the word may be quoted: the history keeps it as it is (no credentials in a URL, no secret
+# looking KEY=VALUE or query parameter, not cut) and the redactor of the report leaves it alone
+fl_hint_word_ok() {
+  local w="$1" h r
+  [[ "$w" != "..." ]] || return 1
+  fl_hist_word_v h "$w" 0
+  [[ "$h" == "$w" ]] || return 1
+  r="$(printf '%s\n' "$w" | fl_redact_stream)"
+  [[ "$r" == "$w" ]]
+}
+
+# fl_hint_quote_v VAR WORD: WORD as the shell reads it back. printf %q does it for a word with anything but the
+# characters below; the others stay as they are, so the line is the same on bash 3.2 and on bash 5 (5.2 escapes ",")
+fl_hint_quote_v() {
+  case "$2" in
+    ''|*[!A-Za-z0-9_@%+=:,./-]*) printf -v "$1" '%q' "$2" ;;
+    *) printf -v "$1" '%s' "$2" ;;
+  esac
+}
+
+# fl_hint_gap_v VAR LINE: LINE with "..." at its end, unless it ends with one
+fl_hint_gap_v() {
+  if [[ "${2: -4}" == " ..." ]]; then printf -v "$1" '%s' "$2"; else printf -v "$1" '%s' "$2 ..."; fi
+}
+
+# fl_bench_hint_line_v VAR: the line of the hint, without --bench-dir PATH (see above)
+fl_bench_hint_line_v() {
+  local __var="$1" key="" kw=() slots=0 out="" pos=0 i=0 total w name val hasval nextval keep p q words=()
+  words=(${FL_ORIG_ARGS[@]+"${FL_ORIG_ARGS[@]}"})
+  total="${#words[@]}"
+  key="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")" || key=""
+  if [[ -z "$key" ]]; then key="$COMMAND"; FL_HINT_KNOWN="$FL_HINT_LOOP_FLAGS"; FL_HINT_VALUED=" "; FL_HINT_FREE=" "
+  else fl_hint_flags_load "$key"; fi
+  fl_hint_slots_v slots "$key"
+  # shellcheck disable=SC2206
+  kw=($key)
+  out="$key"
+  while [[ "$i" -lt "$total" ]]; do
+    w="${words[$i]}"; i=$((i + 1))
+    case "$w" in
+      --) fl_hint_gap_v out "$out"; break ;;
+      --bench-dir) if [[ "$i" -lt "$total" && "${words[$i]}" != -* ]]; then i=$((i + 1)); fi; continue ;;
+      --bench-dir=*) continue ;;
+      -?*)
+        name="${w%%=*}"; hasval=0; val=""; nextval=0; keep=0
+        [[ "$w" != --*=* ]] || { hasval=1; val="${w#*=}"; }
+        if fl_hist_secret_name_p "$name"; then
+          # a secret flag goes with its value: the word after it, unless the table says the flag takes none
+          case "$FL_HINT_KNOWN" in
+            *" ${name} "*)
+              case "$FL_HINT_VALUED" in
+                *" ${name} "*) nextval=1 ;;
+                # a flag the command knows and that takes no value carries no secret, whatever its name
+                # (pull --keep-secrets): it is quoted, so the hint runs the form that was typed
+                *) if [[ "$hasval" == 0 ]]; then out="${out} ${name}"; keep=1; fi ;;
+              esac ;;
+            *) nextval=1 ;;
+          esac
+        else
+          case "$FL_HINT_KNOWN" in
+            *" ${name} "*)
+              case "$FL_HINT_VALUED" in
+                *" ${name} "*)
+                  if [[ "$hasval" == 0 && "$i" -lt "$total" && "${words[$i]}" != -* ]]; then val="${words[$i]}"; i=$((i + 1)); hasval=2; fi
+                  if [[ "$hasval" == 0 ]]; then out="${out} ${name}"
+                  elif [[ "$FL_HINT_FREE" == *" ${name} "* ]] || ! fl_hint_word_ok "$val"; then fl_hint_gap_v out "$out"
+                  else fl_hint_quote_v q "$val"
+                    if [[ "$hasval" == 1 ]]; then out="${out} ${name}=${q}"; else out="${out} ${name} ${q}"; fi; fi ;;
+                *) if [[ "$hasval" == 0 ]]; then out="${out} ${name}"; else fl_hint_gap_v out "$out"; fi ;;
+              esac
+              keep=1 ;;
+            *) nextval=1 ;;
+          esac
+        fi
+        if [[ "$keep" == 0 ]]; then
+          # a secret flag, or one the command does not know: left out with the word after it (it may be its value)
+          [[ "$hasval" == 1 || "$nextval" == 0 || "$i" -ge "$total" || "${words[$i]}" == -* ]] || i=$((i + 1))
+          fl_hint_gap_v out "$out"
+        fi
+        continue ;;
+    esac
+    pos=$((pos + 1))
+    # the words of the key are in the line already
+    [[ "$pos" -gt "${#kw[@]}" ]] || continue
+    p=$((pos - ${#kw[@]}))
+    if [[ "$p" -le "$slots" ]] && fl_hint_word_ok "$w"; then fl_hint_quote_v q "$w"; out="${out} ${q}"
+    else fl_hint_gap_v out "$out"; fi
+  done
+  printf -v "$__var" '%s' "$out"
+}
+
+# fl_bench_guess_gate: a command that changes things and was not told which bench
+# (no --bench-dir, no BENCH_DIR, none remembered) acts on the first one
 # fl_bench_detect finds. Say which, and why; and where nobody can be asked
 # (--for-agent, BENCHBAR_NONINTERACTIVE=1) with more than one bench known,
 # refuse to guess. The note goes to stderr: a --json run keeps its stdout.
-# The refusal tells what to run instead: the command and its first argument with --bench-dir PATH,
-# or, with LINE (the whole command line that was typed), LINE with --bench-dir PATH.
+# The refusal tells what to run instead: the line that was typed (fl_bench_hint_line_v) with --bench-dir PATH.
 fl_bench_guess_gate() {
-  local d n=0 list="" sep="" line="${COMMAND}${ARGS[0]:+ ${ARGS[0]}}"
-  [[ -z "${1:-}" ]] || line="$1"
+  local d n=0 list="" sep="" line=""
   fl_bench_detect "$OPT_BENCH_DIR"
   [[ "${FL_BENCH_SOURCE:-}" == "detected" ]] || return 0
   while IFS= read -r d; do
@@ -616,6 +783,7 @@ fl_bench_guess_gate() {
     n=$((n + 1)); list="${list}${sep}${d}"; sep=", "
   done < <(fl_known_benches)
   if [[ "$n" -gt 1 ]] && fl_noninteractive; then
+    fl_bench_hint_line_v line
     fl_die "More than one bench is possible and none was chosen: ${list}." "Choose one: benchbar ${line} --bench-dir PATH (or set BENCH_DIR). benchbar list shows them."
   fi
   printf 'benchbar: acting on %s (auto-detected: no --bench-dir, BENCH_DIR or remembered bench%s; pass --bench-dir to choose)\n' \
@@ -626,26 +794,21 @@ fl_bench_guess_gate() {
 # table, reads: app focus NAME, doctor --ack ID and doctor --unack ID. The table says "mutating no" for both keys (it is
 # per command, and "yes" would make doctor --json refuse for an agent with two benches), so the dispatch (benchbar)
 # calls this next to the gate of the table: before the run opens its log, takes the lock or writes anything, with the
-# same notice for a person and the same refusal for an agent. The refusal names the whole form that was typed.
+# same notice for a person and the same refusal, with the same hint, for an agent.
 fl_bench_write_gate() {
-  local line="$COMMAND" i=1 a named=0
+  local i=1 a named=0
   case "$COMMAND" in
-    doctor) [[ -n "$OPT_ACK$OPT_UNACK" ]] || return 0
-      [[ -z "$OPT_ACK" ]] || line="${line} --ack $(printf '%q' "$OPT_ACK")"
-      [[ -z "$OPT_UNACK" ]] || line="${line} --unack $(printf '%q' "$OPT_UNACK")" ;;
+    doctor) [[ -n "$OPT_ACK$OPT_UNACK" ]] || return 0 ;;
     app) [[ "${ARGS[0]:-}" == focus ]] || return 0
-      line="${line} focus"
       while [[ "$i" -lt "${#ARGS[@]}" ]]; do
         a="${ARGS[$i]}"
-        # the first word that is not a flag is the app: the form that pins. The hint quotes the app and --auto and
-        # no other word: an unknown flag (BENCHBAR_LENIENT_FLAGS=1), a word after "--" or a second word stays in
-        # ARGS and can hold anything
-        if [[ "$a" != -* && "$named" == 0 ]]; then named=1; line="${line} $(printf '%q' "$a")"
-        elif [[ "$a" == --auto ]]; then line="${line} --auto"; fi
+        # the first word that is not a flag is the app: the form that pins (a word after "--" or a flag the command
+        # does not know stays in ARGS, as before)
+        [[ "$a" == -* ]] || named=1
         i=$((i + 1))
       done
       [[ "$named" == 1 ]] || return 0 ;;
     *) return 0 ;;
   esac
-  fl_bench_guess_gate "$line"
+  fl_bench_guess_gate
 }

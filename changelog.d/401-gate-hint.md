@@ -1,0 +1,3 @@
+### Command line
+
+- When an agent (or any run with no terminal, `--for-agent`, `BENCHBAR_NONINTERACTIVE=1`) is refused because more than one bench is possible and none was chosen, the line it is told to run now keeps the whole command that was typed, for every command that changes things: `benchbar app unfocus frappe` is told `benchbar app unfocus frappe --bench-dir PATH`, not `benchbar app unfocus --bench-dir PATH`. Names, paths and the flags the command knows are quoted for the shell; a flag that could carry a secret and its value, a word after `--`, a flag the command does not know and a URL with a password in it are left out and shown as `...` (#401).
