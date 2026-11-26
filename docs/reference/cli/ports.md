@@ -158,7 +158,10 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
+| `ports plan` | `--json` |  | The plan and its token as one JSON document. |
+| `ports setup` | `--dry-run` |  | Show the preview and change nothing. |
 | `ports apply` | `--yes` |  | Required: the plan was reviewed. |
+| `ports check` | `--json` |  | The conflicts as one JSON document. |
 
 | Command | Environment variable | What it does |
 |---|---|---|

@@ -240,6 +240,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 |---|---|---|---|
 | `status` | `--ping` |  | Ask every site, not only the default one. |
 | `status` | `--deep` |  | Also ask the ready parts that start programs: workers (pgrep, lsof) and stale (find: a Python file under apps/ changed after the bench started). Without it ready.workers and ready.stale are null. |
+| `status` | `--json` |  | One JSON document. It adds redis, sites[].served (does the running bench serve the site) and the ready object (is the bench ready to serve). |
 | `up` | `--services-only` |  | Start only the bench's Redis (for a restore or a migrate); down stops it. |
 | `wait` | `--ready` |  | Wait for every part (the default). |
 | `wait` | `--for` | `PART` | Wait for one part only: agent, processes, web, socketio, redis, workers or stale. |
@@ -247,7 +248,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `logs` | `--worker` |  | Read logs/worker.log. |
 | `logs` | `--worker-error` |  | Read logs/worker.error.log. |
 | `logs` | `--previous` |  | Read logs/bench.previous.log (the starts before it are bench.previous.1.log to .3.log). |
-| `logs` | `--process` | `NAME` | web, socketio, schedule or worker. |
+| `logs` | `--process` | `NAME` | web, socketio, schedule or worker. The worker one reads logs/worker.log. |
 | `logs` | `--since` | `TIMESTAMP` | Only lines at or after it (--json; ISO 8601, or HH:MM:SS today). |
 | `logs` | `--since-restart` |  | Only lines after the bench's last start (--json). |
 | `logs` | `--no-follow` |  | Print and exit. |

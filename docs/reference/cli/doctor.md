@@ -96,8 +96,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `doctor` | `--quick` |  | Skip the slow checks and say which. |
 | `doctor` | `--ack` | `CHECK` | Silence one named WARN for this bench until its message changes. |
 | `doctor` | `--unack` | `CHECK` | Undo --ack. |
-| `doctor` | `--prerequisites` |  | What this machine needs before an install, no bench needed. |
-| `doctor` | `--fetch` |  | git fetch the branches of the apps your focus apps need first. |
+| `doctor` | `--prerequisites` |  | What this machine needs before an install; no bench is needed. With --json it prints a document; --bench-dir names the folder a new bench would go to. |
+| `doctor` | `--fetch` |  | git fetch the branches of the apps your focus apps need first. Without it, doctor never touches the network. |
 | `repair` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `repair` | `--dry-run` |  | Print the plan, change nothing. With --json the plan line carries its token. |
 | `repair` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before. |

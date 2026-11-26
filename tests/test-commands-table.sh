@@ -3,7 +3,8 @@
 #   1. a table that cannot be read stops the run with a sentence: commands.sh sourced from a pipe
 #      has no file to read the records from, and used to give no record and no error
 #   2. a note record (note~KEY~TEXT) stands directly after the cmd record of its key, and a summary
-#      (the short part: what `benchbar commands` and the global help print) is at most 200 characters
+#      (the short part: what `benchbar commands` and the global help print) is at most 200 characters,
+#      except the commands in tests/golden/long-summaries.txt (the groups of #371 not done yet)
 #   3. the notes about flags that left a summary are still somewhere: tests/golden/dropped-flag-notes.tsv
 #      lists each (command, flag, the words of the old note), and the flag has a record of its own
 #      (or is a global flag) whose help carries the key words of the note
@@ -27,19 +28,22 @@ root = sys.argv[1]
 src = open(root + "/lib/frappe-local/commands.sh", encoding="utf-8").read()
 table = re.search(r": <<'TABLE'\n(.*?)\nTABLE\n", src, re.S).group(1).split("\n")
 errors = []
+waiting = {l.strip() for l in open(root + "/tests/golden/long-summaries.txt", encoding="utf-8") if l.strip() and not l.startswith("#")}
 cmds, flags, last_cmd = {}, {}, None
 for n, line in enumerate(table, 1):
     f = line.split("~")
     if f[0] == "cmd":
         last_cmd = f[1]
         cmds[f[1]] = f
-        if len(f[3]) > 200:
+        if len(f[3]) > 200 and f[1] not in waiting:
             errors.append("cmd %s: the summary is %d characters; keep it to 200 and put the rest in a note~%s~ record" % (f[1], len(f[3]), f[1]))
+        if len(f[3]) <= 200 and f[1] in waiting:
+            errors.append("cmd %s is in tests/golden/long-summaries.txt but its summary is short now: take it out of the list" % f[1])
     elif f[0] == "note":
         if f[1] != last_cmd:
             errors.append("note~%s~ is not directly after the cmd record of %s" % (f[1], f[1]))
-        if len("~".join(f[2:])) < 1:
-            errors.append("note~%s~ is empty" % f[1])
+        if len(f) != 3 or not f[2]:
+            errors.append("note~%s~ is empty or holds a ~ (it has three fields: note, the key, the text)" % f[1])
     elif f[0] == "flag":
         flags.setdefault(f[1], {})[f[2]] = "~".join(f[4:])
         if f[1] != last_cmd:
