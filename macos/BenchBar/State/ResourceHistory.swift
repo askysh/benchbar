@@ -110,7 +110,7 @@ nonisolated enum ResourceText {
         let kb = 1024.0, mb = kb * 1024, gb = mb * 1024
         let value = Double(bytes)
         // 1000 MB and up reads as GB, so "1020 MB" is never shown
-        if value >= 1000 * mb { return String(format: "%.1f GB", value / gb) }
+        if value >= 1000 * mb { return "\(Wording.oneDecimal(value / gb)) GB" }
         if value >= mb { return "\(Int((value / mb).rounded())) MB" }
         return "\(Int((value / kb).rounded())) KB"
     }

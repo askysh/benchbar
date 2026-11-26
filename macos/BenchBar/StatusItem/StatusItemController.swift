@@ -100,7 +100,7 @@ final class StatusItemController {
         shareDot.backgroundColor = (icon == .attention ? NSColor.systemOrange : NSColor.controlAccentColor).cgColor
         shareDot.position = CGPoint(x: button.bounds.maxX - 3.5, y: button.bounds.maxY - 3.5)
         CATransaction.commit()
-        button.setAccessibilityHelp(icon == .off ? nil : "Sharing on your network")
+        button.setAccessibilityHelp(icon == .off ? nil : String(localized: "Sharing on your network"))
     }
 
     // MARK: state
@@ -179,13 +179,13 @@ final class StatusItemController {
     private func describe(_ state: BenchState) {
         let text: String
         if case .missing = store.cli {
-            text = "BenchBar: benchbar CLI not found"
+            text = String(localized: "BenchBar: benchbar CLI not found")
         } else if store.benches.count > 1 {
-            text = "BenchBar: \(store.benches.count) benches, \(BenchAggregate.upText(store.benches.map(\.state)))"
+            text = String(localized: "BenchBar: \(store.benches.count) benches, \(BenchAggregate.upText(store.benches.map(\.state)))")
         } else if let bench = store.selected {
-            text = "BenchBar: \(bench.name) \(Self.word(for: state))"
+            text = String(localized: "BenchBar: \(bench.name) \(Self.word(for: state))")
         } else {
-            text = "BenchBar: no bench"
+            text = String(localized: "BenchBar: no bench")
         }
         guard let button = statusItem.button else { return }
         if button.toolTip != text { button.toolTip = text }
@@ -195,12 +195,12 @@ final class StatusItemController {
 
     static func word(for state: BenchState) -> String {
         switch state {
-        case .stopped: "stopped"
-        case .starting: "starting"
-        case .running: "running"
-        case .crashed: "crashed"
-        case .paused: "paused after crashes"
-        case .unknown: "state unknown"
+        case .stopped: String(localized: "stopped")
+        case .starting: String(localized: "starting")
+        case .running: String(localized: "running")
+        case .crashed: String(localized: "crashed")
+        case .paused: String(localized: "paused after crashes")
+        case .unknown: String(localized: "state unknown")
         }
     }
 
