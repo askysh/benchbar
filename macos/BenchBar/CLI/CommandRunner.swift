@@ -30,6 +30,17 @@ nonisolated protocol CommandRunning: Sendable {
         qos: QualityOfService
     ) async throws(CLIError) -> CommandOutput
 
+    /// The same with bytes for the child's standard input (`--secrets-stdin`: the passwords of an install,
+    /// not in any environment). `nil` leaves standard input closed, as the calls above do.
+    func run(
+        executable: URL,
+        arguments: [String],
+        environment: [String: String],
+        timeout: Duration,
+        qos: QualityOfService,
+        input: [UInt8]?
+    ) async throws(CLIError) -> CommandOutput
+
     /// Runs a program and hands each line of stdout to `onLine` as it is
     /// written (repair --json streams its events). Returns the exit code.
     func stream(
@@ -37,6 +48,16 @@ nonisolated protocol CommandRunning: Sendable {
         arguments: [String],
         environment: [String: String],
         timeout: Duration,
+        onLine: @escaping @Sendable (String) -> Void
+    ) async throws(CLIError) -> Int32
+
+    /// The same with bytes for the child's standard input.
+    func stream(
+        executable: URL,
+        arguments: [String],
+        environment: [String: String],
+        timeout: Duration,
+        input: [UInt8]?,
         onLine: @escaping @Sendable (String) -> Void
     ) async throws(CLIError) -> Int32
 }
@@ -51,6 +72,30 @@ extension CommandRunning {
         qos: QualityOfService
     ) async throws(CLIError) -> CommandOutput {
         try await run(executable: executable, arguments: arguments, environment: environment, timeout: timeout)
+    }
+
+    /// Runners that cannot send standard input (the test fakes) run the call without it; a test that checks the
+    /// bytes uses a runner that records them (`InputRecordingRunner`).
+    func run(
+        executable: URL,
+        arguments: [String],
+        environment: [String: String],
+        timeout: Duration,
+        qos: QualityOfService,
+        input: [UInt8]?
+    ) async throws(CLIError) -> CommandOutput {
+        try await run(executable: executable, arguments: arguments, environment: environment, timeout: timeout, qos: qos)
+    }
+
+    func stream(
+        executable: URL,
+        arguments: [String],
+        environment: [String: String],
+        timeout: Duration,
+        input: [UInt8]?,
+        onLine: @escaping @Sendable (String) -> Void
+    ) async throws(CLIError) -> Int32 {
+        try await stream(executable: executable, arguments: arguments, environment: environment, timeout: timeout, onLine: onLine)
     }
 
     /// For runners that cannot stream (the test fakes): run, then replay the lines.
@@ -70,7 +115,7 @@ extension CommandRunning {
 /// The real runner, built on Apple's swift-subprocess package.
 ///
 /// - The program is always called by absolute path, never looked up on PATH.
-/// - stdin is closed (no prompts can hang it), stdout and stderr are
+/// - stdin is closed (no prompts can hang it) after the bytes of `input`, when a call sends any; stdout and stderr are
 ///   collected up to 4 MB each.
 /// - The child leads a process group of its own, and a timeout or a cancel
 ///   signals the whole group: SIGTERM, then SIGKILL after 2 seconds. The CLI
@@ -121,8 +166,20 @@ nonisolated struct SubprocessRunner: CommandRunning {
         timeout: Duration,
         qos: QualityOfService
     ) async throws(CLIError) -> CommandOutput {
+        try await run(executable: executable, arguments: arguments, environment: environment, timeout: timeout, qos: qos, input: nil)
+    }
+
+    func run(
+        executable: URL,
+        arguments: [String],
+        environment: [String: String],
+        timeout: Duration,
+        qos: QualityOfService,
+        input: [UInt8]?
+    ) async throws(CLIError) -> CommandOutput {
         let label = arguments.first ?? executable.lastPathComponent
         Self.log(label, qos)
+        let bytes = input ?? []
         return try await Self.race(label: label, timeout: timeout) {
             // PlatformOptions is not Sendable, so it is built inside the task
             let result = try await Subprocess.run(
@@ -130,6 +187,7 @@ nonisolated struct SubprocessRunner: CommandRunning {
                 arguments: Arguments(arguments),
                 environment: Self.environment(environment),
                 platformOptions: Self.platformOptions(qos: qos),
+                input: .array(bytes),
                 output: .string(limit: Self.outputLimit),
                 error: .string(limit: Self.outputLimit)
             )
@@ -148,15 +206,27 @@ nonisolated struct SubprocessRunner: CommandRunning {
         timeout: Duration,
         onLine: @escaping @Sendable (String) -> Void
     ) async throws(CLIError) -> Int32 {
+        try await stream(executable: executable, arguments: arguments, environment: environment, timeout: timeout, input: nil, onLine: onLine)
+    }
+
+    func stream(
+        executable: URL,
+        arguments: [String],
+        environment: [String: String],
+        timeout: Duration,
+        input: [UInt8]?,
+        onLine: @escaping @Sendable (String) -> Void
+    ) async throws(CLIError) -> Int32 {
         let label = arguments.first ?? executable.lastPathComponent
         Self.log(label, .default)
+        let bytes = input ?? []
         return try await Self.race(label: label, timeout: timeout) {
             let result = try await Subprocess.run(
                 .path(FilePath(executable.path)),
                 arguments: Arguments(arguments),
                 environment: Self.environment(environment),
                 platformOptions: Self.platformOptions(qos: .default),
-                input: .none,
+                input: .array(bytes),
                 output: .sequence,
                 error: .discarded
             ) { execution in

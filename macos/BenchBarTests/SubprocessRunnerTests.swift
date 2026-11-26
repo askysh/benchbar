@@ -30,6 +30,37 @@ struct SubprocessRunnerTests {
         #expect(output.stdout == "got:\n")
     }
 
+    @Test func theBytesOfAnInputReachTheChildOnStdinAndInNoVariable() async throws {
+        let input = Array("ADMIN_PASSWORD=pw one
+
+".utf8)
+        let output = try await SubprocessRunner().run(
+            executable: sh, arguments: ["-c", "cat; echo ---; env; echo ---; echo \"$*\""],
+            environment: ["PATH": "/usr/bin:/bin", "KEEP": "1"], timeout: .seconds(10), qos: .default, input: input)
+        #expect(output.exitCode == 0)
+        #expect(output.stdout.hasPrefix("ADMIN_PASSWORD=pw one
+
+---
+"))
+        let rest = output.stdout.dropFirst("ADMIN_PASSWORD=pw one
+
+".count)
+        #expect(!rest.contains("pw one"), "the child's environment and arguments have no password")
+        #expect(rest.contains("KEEP=1"))
+    }
+
+    @Test func aStreamCanSendInputToo() async throws {
+        let box = LinesBox()
+        let code = try await SubprocessRunner().stream(
+            executable: sh, arguments: ["-c", "read a; read b; read c; echo \"$a|$b|$c\""], environment: [:], timeout: .seconds(10),
+            input: Array("one
+two
+
+".utf8)) { box.add($0) }
+        #expect(code == 0)
+        #expect(box.lines == ["one|two|"])
+    }
+
     @Test func timeoutStopsTheProcess() async throws {
         let clock = ContinuousClock()
         let start = clock.now
@@ -132,4 +163,12 @@ struct SubprocessRunnerTests {
             return false
         }
     }
+}
+
+/// The lines a stream handed over, collected from its callback.
+nonisolated private final class LinesBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var all: [String] = []
+    func add(_ line: String) { lock.withLock { all.append(line) } }
+    var lines: [String] { lock.withLock { all } }
 }
