@@ -1,4 +1,4 @@
-### Windows
+### Windows tray
 
 - The tray sends the Administrator, MariaDB root and `sudo` passwords of an
   install or an adopt to `benchbar.exe` on standard input (`--secrets-stdin`)
