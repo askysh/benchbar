@@ -479,13 +479,13 @@ fl__ap_main_order() {
   done
 }
 
-# fl_app_add_plan ALL: plans every target of AP_T_* in one graph. Sets M_*
-# (one entry per target), AP_* (the first target's own fields, the graph, the
-# steps), AP_JSON and AP_TOKEN. Refusals that the plain app add also refuses
-# exit 1 with the reason.
-fl_app_add_plan() {
-  local all="$1" i j s n cnt by pr rs src rp br sha kind label cmd note st entry body state sep a e on inst kn rn dup=0
-  local g_sites=() pd_build="" pd_py="" pd_restart=0 pd_sites="" apps_json="" all_nodes names_json parent found
+# The steps of fl_app_add_plan, called once each and in this order. They run in the shell of the plan
+# and share its locals (bash scopes are dynamic) and the M_* and AP_* globals: a step reads and sets the
+# variables its comment names and declares none of its own. A step that ends the command (fl_die) exits
+# as before; none of them returns early.
+
+# fl__ap_plan_init: empty M_* and AP_*, and count the targets. Reads all; sets cnt.
+fl__ap_plan_init() {
   M_NAME=(); M_REPO=(); M_BRANCH=(); M_BSRC=(); M_PRESENT=(); M_REACH=(); M_PKG=(); M_COMMIT=(); M_CSRC=(); M_REQS=()
   M_SITES=(); M_INSTALL=(); M_INVOLVED=(); M_PD=(); AP_MORDER=()
   AP_NAME=""; AP_REPO=""; AP_BRANCH=""; AP_BRANCH_SOURCE=""; AP_PRESENT=0; AP_REACHABLE=""; AP_PKG=""; AP_COMMIT=""; AP_COMMIT_SOURCE="branch"
@@ -493,7 +493,12 @@ fl_app_add_plan() {
   AP_EDGES=(); AP_ORDER=(); AP_PENDING=0; AP_REASON=""; AP_SEEN=" "
   [[ "$all" == "1" && -n "${OPT_SITE:-}" ]] && fl_die "Pass --site or --all-sites, not both."
   cnt="${#AP_T_TARGET[@]}"
+  return 0
+}
 
+# fl__ap_plan_targets: what each target is (first pass), and the first target's own AP_* fields. Reads cnt;
+# sets i, j, dup.
+fl__ap_plan_targets() {
   # first pass: what each target is
   for ((i = 0; i < cnt; i++)); do fl__ap_target "$i"; done
   for ((i = 0; i < cnt; i++)); do
@@ -503,7 +508,12 @@ fl_app_add_plan() {
   done
   AP_NAME="${M_NAME[0]}"; AP_REPO="${M_REPO[0]}"; AP_BRANCH="${M_BRANCH[0]}"; AP_BRANCH_SOURCE="${M_BSRC[0]}"; AP_PRESENT="${M_PRESENT[0]}"
   AP_REACHABLE="${M_REACH[0]}"; AP_PKG="${M_PKG[0]}"; AP_COMMIT="${M_COMMIT[0]}"; AP_COMMIT_SOURCE="${M_CSRC[0]}"
+  return 0
+}
 
+# fl__ap_plan_sites: the sites of each target: its own --install-on, else --site or --all-sites. Reads all, cnt;
+# sets g_sites, i, s, on.
+fl__ap_plan_sites() {
   # the sites of each target: its own --install-on, else --site or --all-sites
   while IFS= read -r s; do [[ -n "$s" ]] && g_sites+=("$s"); done < <(fl_app_target_sites "$all")
   for ((i = 0; i < cnt; i++)); do
@@ -515,14 +525,23 @@ fl_app_add_plan() {
       for s in ${g_sites[@]+"${g_sites[@]}"}; do M_SITES[i]="${M_SITES[$i]:+${M_SITES[$i]} }$s"; done
     fi
   done
+  return 0
+}
 
+# fl__ap_plan_graph: the required apps of all of them, one graph, one order. Reads cnt, dup; sets i.
+fl__ap_plan_graph() {
   # second pass: the required apps of all of them, one graph, one order
   for ((i = 0; i < cnt; i++)); do
     [[ -z "${M_REQS[$i]}" ]] || fl__ap_required "${M_NAME[$i]}" "${M_REQS[$i]}"
   done
   [[ "$dup" == "1" ]] || fl__ap_toposort || true
   fl__ap_main_order
+  return 0
+}
 
+# fl__ap_plan_pending: an earlier app add of a target that stopped half way. Reads cnt; sets i, s, st, kind, kn, a,
+# pd_build, pd_py, pd_restart.
+fl__ap_plan_pending() {
   # an earlier app add of a target that stopped half way: what it did not
   # finish (build, install, restart) is part of this plan
   for ((i = 0; i < cnt; i++)); do
@@ -545,7 +564,11 @@ fl_app_add_plan() {
       done
     fi
   done
+  return 0
+}
 
+# fl__ap_plan_installs: which sites still need each target. Reads cnt; sets i, s.
+fl__ap_plan_installs() {
   # which sites still need each target (a fresh read of their app lists)
   for ((i = 0; i < cnt; i++)); do
     for s in ${M_SITES[$i]}; do case " ${AP_SITES[*]:-} " in *" $s "*) ;; *) AP_SITES+=("$s") ;; esac; done
@@ -560,7 +583,12 @@ fl_app_add_plan() {
       done
     done
   fi
+  return 0
+}
 
+# fl__ap_plan_clone_steps: the clones, in dependency order. Sets s (the clones, comma separated), e, br, rp, parent,
+# entry.
+fl__ap_plan_clone_steps() {
   # the steps, in the order --apply runs them: every clone in dependency
   # order, one build for all of them, the installs, one restart
   s=""
@@ -580,6 +608,12 @@ fl_app_add_plan() {
       AP_STEPS+=("clone_required|${e}|Clone ${e}|bench get-app --skip-assets --branch ${br} ${rp}|required app of ${parent} (hooks.py required_apps); get-app also pip installs it into the bench env")
     fi
   done
+  return 0
+}
+
+# fl__ap_plan_build_steps: the Python requirements of a stopped run, and the one build. Reads pd_py, pd_build;
+# sets s, a, cmd.
+fl__ap_plan_build_steps() {
   # an app whose get-app cloned it and then failed (its pip install, typically)
   # has no Python requirements in the env yet: they come before the build
   if [[ -n "$pd_py" ]]; then
@@ -593,6 +627,12 @@ fl_app_add_plan() {
     if [[ "$s" == *,* ]]; then cmd="bench build --apps ${s}"; else cmd="bench build --app ${s}"; fi
     AP_STEPS+=("build|${s}|Build|${cmd}|the new apps' JS and CSS")
   fi
+  return 0
+}
+
+# fl__ap_plan_install_steps: the backups and the installs, site by site, and the restart. Reads cnt, pd_restart;
+# sets s, j, e, label.
+fl__ap_plan_install_steps() {
   # installs: site by site, each site in dependency order
   AP_BK_NOTE=""
   [[ "${AP_SKIP_BACKUP:-0}" != "1" ]] || AP_BK_NOTE="; --skip-backup: no backup is taken first"
@@ -611,7 +651,11 @@ fl_app_add_plan() {
   if [[ "${#AP_ORDER[@]}" -gt 0 || "$pd_restart" == "1" ]]; then
     AP_STEPS+=("restart||Restart|benchbar restart|only when the bench is running, so the new code is served")
   fi
+  return 0
+}
 
+# fl__ap_plan_uv: without uv the clone would land and its install fail. Reads AP_STEPS; sets st.
+fl__ap_plan_uv() {
   # get-app and "bench setup requirements" install into the env with uv
   # (frappe-bench 5.31 and later): without it the clone would land and its
   # install fail, so the plan says so before anything is cloned (issue 188)
@@ -622,7 +666,11 @@ fl_app_add_plan() {
         break ;;
     esac
   done
+  return 0
+}
 
+# fl__ap_plan_involved: the targets that have work, for the records. Reads cnt; sets all_nodes, i.
+fl__ap_plan_involved() {
   # the targets that have work: a record is kept for these when a step fails
   all_nodes=" ${AP_ORDER[*]:-} "
   for ((i = 0; i < cnt; i++)); do
@@ -630,8 +678,11 @@ fl_app_add_plan() {
     fl__ap_blockers "${M_NAME[$i]}" "$all_nodes"
     [[ -z "$AP_BLK" ]] || M_INVOLVED[i]=1
   done
+  return 0
+}
 
-  # JSON
+# fl__ap_plan_apps_json: the "apps" member of a batch. Reads cnt; sets apps_json, sep, i, s, j, inst, names_json, e.
+fl__ap_plan_apps_json() {
   if [[ "$cnt" -gt 1 ]]; then
     apps_json="\"apps\":["; sep=""
     for ((i = 0; i < cnt; i++)); do
@@ -652,6 +703,12 @@ fl_app_add_plan() {
     done
     apps_json="${apps_json}],"
   fi
+  return 0
+}
+
+# fl__ap_plan_body: the JSON members of the plan, without the token. Reads apps_json; sets body, sep, i, s, entry,
+# rn, by, pr, rs, src, rp, br, sha, kind, label, cmd, note.
+fl__ap_plan_body() {
   body="$(printf '"bench":%s,"profile":%s,"target":%s,"app":%s,"package":%s,"repo":%s,"branch":%s,"commit":%s,"commit_source":%s,"branch_source":%s,"present":%s,"reachable":%s,' \
     "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_PROFILE")" "$(fl_json_str "$(fl_url_strip_userinfo "${AP_T_TARGET[0]}")")" \
     "$(fl_json_str "$AP_NAME")" "$(fl_json_str "$AP_PKG")" "$(fl_json_str "$AP_REPO")" "$(fl_json_str "$AP_BRANCH")" "$(fl_json_str "$AP_COMMIT")" \
@@ -679,6 +736,12 @@ fl_app_add_plan() {
     body="${body}${sep}{\"kind\":$(fl_json_str "$kind"),\"name\":$(fl_json_str "$label"),\"command\":$(fl_json_str "$cmd"),\"note\":$(fl_json_str "$note")}"; sep=","
   done
   body="${body}],\"errors\":$(fl_json_str_array ${AP_ERRORS[@]+"${AP_ERRORS[@]}"}),\"changes\":$(fl_json_bool "$([[ "${#AP_STEPS[@]}" -gt 0 ]] && printf 1 || printf 0)"),\"can_apply\":$(fl_json_bool "$AP_CAN_APPLY"),\"reason\":$(fl_json_str "$AP_REASON")"
+  return 0
+}
+
+# fl__ap_plan_token: the bench state the plan was made against, the token and the document. Reads body; sets state,
+# AP_TOKEN_DATA, AP_TOKEN, AP_JSON.
+fl__ap_plan_token() {
   # the bench state the plan was made against: a changed apps.txt, apps/
   # folder or site list makes the token stale, and so does a moved HEAD of an
   # app that is already there (APP-13)
@@ -686,6 +749,52 @@ fl_app_add_plan() {
   AP_TOKEN_DATA="$(printf '%s\n%s\n' "$body" "$state")"
   fl_plan_token_v AP_TOKEN "$AP_TOKEN_DATA"
   AP_JSON="$(printf '{"schema_version":%d,"cli_version":"%s",%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$body" "$AP_TOKEN")"
+  return 0
+}
+
+# fl_app_add_plan ALL: plans every target of AP_T_* in one graph. Sets M_*
+# (one entry per target), AP_* (the first target's own fields, the graph, the
+# steps), AP_JSON and AP_TOKEN. Refusals that the plain app add also refuses
+# exit 1 with the reason.
+fl_app_add_plan() {
+  local all="$1" i j s n cnt by pr rs src rp br sha kind label cmd note st entry body state sep a e on inst kn rn dup=0
+  local g_sites=() pd_build="" pd_py="" pd_restart=0 pd_sites="" apps_json="" all_nodes names_json parent found
+  fl__ap_plan_init
+
+  # first pass: what each target is
+  fl__ap_plan_targets
+
+  # the sites of each target: its own --install-on, else --site or --all-sites
+  fl__ap_plan_sites
+
+  # second pass: the required apps of all of them, one graph, one order
+  fl__ap_plan_graph
+
+  # an earlier app add of a target that stopped half way: what it did not
+  # finish (build, install, restart) is part of this plan
+  fl__ap_plan_pending
+
+  # which sites still need each target (a fresh read of their app lists)
+  fl__ap_plan_installs
+
+  # the steps, in the order --apply runs them: every clone in dependency
+  # order, one build for all of them, the installs, one restart
+  fl__ap_plan_clone_steps
+  fl__ap_plan_build_steps
+  fl__ap_plan_install_steps
+
+  # get-app and "bench setup requirements" install into the env with uv
+  # (frappe-bench 5.31 and later): without it the clone would land and its
+  # install fail, so the plan says so before anything is cloned (issue 188)
+  fl__ap_plan_uv
+
+  # the targets that have work: a record is kept for these when a step fails
+  fl__ap_plan_involved
+
+  # JSON
+  fl__ap_plan_apps_json
+  fl__ap_plan_body
+  fl__ap_plan_token
 }
 
 fl__ap_print_plan() {
@@ -956,17 +1065,15 @@ fl__ap_pin_requirements() {
   fl_run_long "bench setup requirements --node ${1} (at the pinned commit)" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --node "$1"
 }
 
-# fl__ap_apply TARGET: runs AP_STEPS in order, with the dependencies
-# clone_required -> clone -> build -> install and restart. A step whose
-# requirement failed is skipped ("after failed <step>"); installs on
-# different sites do not depend on each other, and a failed install does not
-# keep the restart from running. The steps that did not finish stay in the
-# pending records, which go away only when all are done and verify is green.
-# Returns 1 when a step or the verify pass failed.
-fl__ap_apply() {
-  local target="$1" labels=() ids=() entry kind arg label i=0 code=0 e s a m nm res fail_from reason ia is
-  local clone_failed="" build_failed="" py_failed="" first_kind="" first_reason="" done_set=" " cloned=() inst_failed=" " mains=" " vfail="" bk_failed=" "
-  AP_STEP_NOTE=()
+# The steps of fl__ap_apply, called once each and in this order. They run in the shell of the apply and share
+# its locals (bash scopes are dynamic): a step reads and sets the variables its comment names and declares none
+# of its own. A step never ends the apply with a return: it sets ap_end and fl__ap_apply returns with a literal
+# return, as the steps of fl_cmd_app_update do (see there).
+
+# fl__ap_apply_begin: the step list of the display, and the records first (whatever stops this run leaves what is
+# still to do). Sets ap_end=1 when the records cannot be written. Reads done_set; sets mains, labels, ids, entry,
+# kind, arg, label, m.
+fl__ap_apply_begin() {
   for ((m = 0; m < ${#M_NAME[@]}; m++)); do mains="${mains}${M_NAME[$m]} "; done
   for entry in "${AP_STEPS[@]}"; do
     IFS='|' read -r kind arg label _ <<<"$entry"
@@ -979,124 +1086,141 @@ fl__ap_apply() {
   fl_steps_define "${labels[@]}"
   fl_steps_ids "${ids[@]}"
   # the records first: whatever stops this run leaves what is still to do
-  fl__ap_record "" "" "$done_set" || { fl_fail "nothing was run: without its record a stop could not be finished later"; return 1; }
-  for entry in "${AP_STEPS[@]}"; do
-    IFS='|' read -r kind arg label _ <<<"$entry"
-    res=""
-    if [[ -n "$clone_failed" ]]; then res="after failed ${clone_failed}"
-    elif [[ -n "$py_failed" && ( "$kind" == "build" || "$kind" == "backup" || "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed requirements_python"
-    elif [[ -n "$build_failed" && ( "$kind" == "backup" || "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed build"
-    elif [[ "$kind" == "install" ]]; then
-      # an app that this one requires failed to install on this site
-      ia="${arg%%@*}"; is="${arg#*@}"
-      case "$bk_failed" in *" ${is} "*) res="after failed backup of ${is}" ;; esac
-      fl__ap_blockers "$ia" "$mains"
-      for a in $AP_BLK; do
-        case "$inst_failed" in *" ${a}@${is} "*) res="after failed install of ${a}" ;; esac
-      done
-    fi
-    if [[ -n "$res" ]]; then
-      FL_STEP_CURRENT="$i"; FL_STEP_START="$SECONDS"
-      fl_step_end skipped "$res"
-      AP_STEP_NOTE[i]="$res"
-      i=$((i + 1)); continue
-    fi
-    fl_step_begin "$i"
-    fl_log_lines_v fail_from
-    res="done"
-    case "$kind" in
-      clone_required|clone)
-        fl__ap_clone_info "$arg"
-        if ! fl__ap_tip_unmoved "$arg"; then res="failed"
-        elif ! fl_app_clone "$arg" "$AP_CI_REPO" "$AP_CI_BRANCH"; then res="failed"
-        elif [[ -n "$AP_CI_PIN" ]] && ! fl__ap_pin_checkout "$FL_CLONED_DIR" "$AP_CI_PIN"; then
-          # the clone does not reach the commit that was reviewed
-          res="failed"
-          fl_fail "${arg}: the clone does not reach the pinned commit (planned ${AP_CI_PIN:0:12}, cloned ${AP__GOT:0:12}); get-app cloned it and installed its Python requirements, but nothing was built or installed on a site."
-          fl_fix "Check the commit is on a branch or tag of ${AP_CI_REPO}, then: cd $(printf '%q' "$FL_BENCH_DIR") && bench remove-app $(printf '%q' "$FL_CLONED_DIR"), and plan again"
-        elif ! fl__ap_at_commit "$FL_CLONED_DIR" "$AP_CI_SHA"; then
-          # the branch moved between the plan and get-app: build and install
-          # would run code nobody reviewed
-          res="failed"
-          fl_fail "${arg}: ${AP_CI_BRANCH} moved after the plan was made (planned ${AP_CI_SHA:0:12}, cloned ${AP__GOT:0:12}); get-app cloned it and installed its Python requirements, but nothing was built or installed on a site."
-          fl_fix "Remove the clone, then review a fresh plan: cd $(printf '%q' "$FL_BENCH_DIR") && bench remove-app $(printf '%q' "$FL_CLONED_DIR"); benchbar app add ${target} ... --dry-run --json"
-        elif [[ -n "$AP_CI_PIN" && "$AP__PRE" != "$AP_CI_PIN" ]] && ! fl__ap_pin_requirements "$FL_CLONED_DIR"; then
-          # get-app installed the requirements of the tip it cloned; the pin has its own
-          res="failed"
-        else cloned+=("$FL_CLONED_DIR"); fi ;;
-      build)
-        # the folders of the apps to build, as bench named them
-        s=""
-        for a in ${arg//,/ }; do
-          e="$(fl_app_existing_dir "$a")"
-          [[ -z "$e" ]] || s="${s}${s:+,}${e}"
-        done
-        s="${s:-$arg}"
-        fl_app_build "$s" || { res="failed"; fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench build --apps "$s")"; } ;;
-      requirements_python)
-        for a in ${arg//,/ }; do
-          fl_run_long "bench setup requirements --python ${a}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --python "$a" || { res="failed"; break; }
-        done ;;
-      backup)
-        fl_site_backup_run "$arg" || { res="failed"; bk_failed="${bk_failed}${arg} "; } ;;
-      install)
-        fl_app_install_on_sites "${arg%%@*}" "${arg#*@}" || { res="failed"; inst_failed="${inst_failed}${arg} "; } ;;
-      restart)
-        fl_bench_redis_down
-        if ! fl_bench_is_running; then res="skipped"
-        else fl_app_restart_if_running || res="failed"; fi ;;
-    esac
-    case "$res" in
-      done)
-        fl_step_end "done"; done_set="${done_set}${i} "
-        # what the run changed, for the done line
-        case "$kind" in
-          clone_required|clone) fl_changed app "$arg" "cloned" ;;
-          backup) fl_changed backup "$arg" "bench --site backup" ;;
-          install) fl_changed app "${arg%%@*}" "installed on ${arg#*@}" ;;
-          restart) fl_changed process "$FL_BENCH_NAME" "restarted" ;;
-        esac ;;
-      skipped) fl_step_end skipped "not running"; done_set="${done_set}${i} " ;;
-      *)
-        fl_step_end failed
-        code=1
-        # a step that mutates and then fails is still a change: changed[] says "partial", so
-        # an agent that reads it first does not believe nothing moved
-        case "$kind" in
-          clone_required|clone)
-            e="$(fl_app_existing_dir "$arg")"
-            [[ -z "$e" ]] || fl_changed app "$arg" "partial: apps/${e} was cloned, then the step failed" ;;
-          install) fl_changed app "${arg%%@*}" "partial: install on ${arg#*@} failed, the site database may have changed" ;;
-        esac
-        fl_pending_reason_v reason "$fail_from"
-        if [[ -z "$first_kind" ]]; then first_kind="$kind"; first_reason="${reason:-${label} failed}"; fi
-        case "$kind" in clone_required|clone) clone_failed="$kind" ;; build) build_failed=1 ;; requirements_python) py_failed=1 ;; esac ;;
-    esac
-    if [[ -n "$clone_failed" && "$res" == "failed" && ( "$kind" == "clone_required" || "$kind" == "clone" ) ]]; then
-      # a clone that failed was rolled back: the records keep only the build
-      # of the apps this run did clone, or go away when there are none
+  fl__ap_record "" "" "$done_set" || { fl_fail "nothing was run: without its record a stop could not be finished later"; ap_end=1; return 0; }
+  return 0
+}
+
+# fl__ap_apply_blocked: a step whose requirement failed is skipped, and says why. Reads kind, arg, clone_failed,
+# py_failed, build_failed, bk_failed, inst_failed, mains; sets res, ia, is, a.
+fl__ap_apply_blocked() {
+  res=""
+  if [[ -n "$clone_failed" ]]; then res="after failed ${clone_failed}"
+  elif [[ -n "$py_failed" && ( "$kind" == "build" || "$kind" == "backup" || "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed requirements_python"
+  elif [[ -n "$build_failed" && ( "$kind" == "backup" || "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed build"
+  elif [[ "$kind" == "install" ]]; then
+    # an app that this one requires failed to install on this site
+    ia="${arg%%@*}"; is="${arg#*@}"
+    case "$bk_failed" in *" ${is} "*) res="after failed backup of ${is}" ;; esac
+    fl__ap_blockers "$ia" "$mains"
+    for a in $AP_BLK; do
+      case "$inst_failed" in *" ${a}@${is} "*) res="after failed install of ${a}" ;; esac
+    done
+  fi
+  return 0
+}
+
+# fl__ap_apply_run: run one step. Reads kind, arg, target; sets res, s, e, a, cloned, bk_failed, inst_failed.
+fl__ap_apply_run() {
+  res="done"
+  case "$kind" in
+    clone_required|clone)
+      fl__ap_clone_info "$arg"
+      if ! fl__ap_tip_unmoved "$arg"; then res="failed"
+      elif ! fl_app_clone "$arg" "$AP_CI_REPO" "$AP_CI_BRANCH"; then res="failed"
+      elif [[ -n "$AP_CI_PIN" ]] && ! fl__ap_pin_checkout "$FL_CLONED_DIR" "$AP_CI_PIN"; then
+        # the clone does not reach the commit that was reviewed
+        res="failed"
+        fl_fail "${arg}: the clone does not reach the pinned commit (planned ${AP_CI_PIN:0:12}, cloned ${AP__GOT:0:12}); get-app cloned it and installed its Python requirements, but nothing was built or installed on a site."
+        fl_fix "Check the commit is on a branch or tag of ${AP_CI_REPO}, then: cd $(printf '%q' "$FL_BENCH_DIR") && bench remove-app $(printf '%q' "$FL_CLONED_DIR"), and plan again"
+      elif ! fl__ap_at_commit "$FL_CLONED_DIR" "$AP_CI_SHA"; then
+        # the branch moved between the plan and get-app: build and install
+        # would run code nobody reviewed
+        res="failed"
+        fl_fail "${arg}: ${AP_CI_BRANCH} moved after the plan was made (planned ${AP_CI_SHA:0:12}, cloned ${AP__GOT:0:12}); get-app cloned it and installed its Python requirements, but nothing was built or installed on a site."
+        fl_fix "Remove the clone, then review a fresh plan: cd $(printf '%q' "$FL_BENCH_DIR") && bench remove-app $(printf '%q' "$FL_CLONED_DIR"); benchbar app add ${target} ... --dry-run --json"
+      elif [[ -n "$AP_CI_PIN" && "$AP__PRE" != "$AP_CI_PIN" ]] && ! fl__ap_pin_requirements "$FL_CLONED_DIR"; then
+        # get-app installed the requirements of the tip it cloned; the pin has its own
+        res="failed"
+      else cloned+=("$FL_CLONED_DIR"); fi ;;
+    build)
+      # the folders of the apps to build, as bench named them
       s=""
-      for a in ${cloned[@]+"${cloned[@]}"}; do s="${s}${s:+,}${a}"; done
-      # a folder get-app left behind (listed in apps.txt) was not pip installed
-      e="$(fl_app_existing_dir "$arg")"
-      [[ -z "$e" ]] || { case ",${s}," in *",${e},"*) ;; *) s="${s}${s:+,}${e}" ;; esac; }
-      for ((m = 0; m < ${#M_NAME[@]}; m++)); do
-        [[ "${M_INVOLVED[$m]}" == "1" ]] || continue
-        nm="${M_NAME[$m]}"
-        if [[ -n "$s" && -n "$e" ]]; then
-          FL_PENDING_URL="${M_REPO[$m]}" fl_pending_write app_add "$nm" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$first_kind" "$first_reason" "requirements_python|${e}|Python requirements" "build|${s}|Build" "restart||Restart" || code=1
-        elif [[ -n "$s" ]]; then
-          FL_PENDING_URL="${M_REPO[$m]}" fl_pending_write app_add "$nm" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$first_kind" "$first_reason" "build|${s}|Build" "restart||Restart" || code=1
-        else
-          fl_pending_remove "$nm"
-        fi
+      for a in ${arg//,/ }; do
+        e="$(fl_app_existing_dir "$a")"
+        [[ -z "$e" ]] || s="${s}${s:+,}${e}"
       done
-    elif ! fl__ap_record "$first_kind" "$first_reason" "$done_set"; then
-      # the record is what a retry runs from: a step that cannot be recorded is a failed step
-      code=1; clone_failed="pending record"
-    fi
-    i=$((i + 1))
-  done
+      s="${s:-$arg}"
+      fl_app_build "$s" || { res="failed"; fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench build --apps "$s")"; } ;;
+    requirements_python)
+      for a in ${arg//,/ }; do
+        fl_run_long "bench setup requirements --python ${a}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --python "$a" || { res="failed"; break; }
+      done ;;
+    backup)
+      fl_site_backup_run "$arg" || { res="failed"; bk_failed="${bk_failed}${arg} "; } ;;
+    install)
+      fl_app_install_on_sites "${arg%%@*}" "${arg#*@}" || { res="failed"; inst_failed="${inst_failed}${arg} "; } ;;
+    restart)
+      fl_bench_redis_down
+      if ! fl_bench_is_running; then res="skipped"
+      else fl_app_restart_if_running || res="failed"; fi ;;
+  esac
+  return 0
+}
+
+# fl__ap_apply_result: what the step did: its end line, what changed, what failed first. Reads kind, arg, label, res,
+# i, fail_from; sets done_set, code, reason, e, first_kind, first_reason, clone_failed, build_failed, py_failed.
+fl__ap_apply_result() {
+  case "$res" in
+    done)
+      fl_step_end "done"; done_set="${done_set}${i} "
+      # what the run changed, for the done line
+      case "$kind" in
+        clone_required|clone) fl_changed app "$arg" "cloned" ;;
+        backup) fl_changed backup "$arg" "bench --site backup" ;;
+        install) fl_changed app "${arg%%@*}" "installed on ${arg#*@}" ;;
+        restart) fl_changed process "$FL_BENCH_NAME" "restarted" ;;
+      esac ;;
+    skipped) fl_step_end skipped "not running"; done_set="${done_set}${i} " ;;
+    *)
+      fl_step_end failed
+      code=1
+      # a step that mutates and then fails is still a change: changed[] says "partial", so
+      # an agent that reads it first does not believe nothing moved
+      case "$kind" in
+        clone_required|clone)
+          e="$(fl_app_existing_dir "$arg")"
+          [[ -z "$e" ]] || fl_changed app "$arg" "partial: apps/${e} was cloned, then the step failed" ;;
+        install) fl_changed app "${arg%%@*}" "partial: install on ${arg#*@} failed, the site database may have changed" ;;
+      esac
+      fl_pending_reason_v reason "$fail_from"
+      if [[ -z "$first_kind" ]]; then first_kind="$kind"; first_reason="${reason:-${label} failed}"; fi
+      case "$kind" in clone_required|clone) clone_failed="$kind" ;; build) build_failed=1 ;; requirements_python) py_failed=1 ;; esac ;;
+  esac
+  return 0
+}
+
+# fl__ap_apply_records: the records after the step: what is left to do. Reads res, kind, arg, cloned, first_kind,
+# first_reason, done_set; sets s, a, e, m, nm, code, clone_failed.
+fl__ap_apply_records() {
+  if [[ -n "$clone_failed" && "$res" == "failed" && ( "$kind" == "clone_required" || "$kind" == "clone" ) ]]; then
+    # a clone that failed was rolled back: the records keep only the build
+    # of the apps this run did clone, or go away when there are none
+    s=""
+    for a in ${cloned[@]+"${cloned[@]}"}; do s="${s}${s:+,}${a}"; done
+    # a folder get-app left behind (listed in apps.txt) was not pip installed
+    e="$(fl_app_existing_dir "$arg")"
+    [[ -z "$e" ]] || { case ",${s}," in *",${e},"*) ;; *) s="${s}${s:+,}${e}" ;; esac; }
+    for ((m = 0; m < ${#M_NAME[@]}; m++)); do
+      [[ "${M_INVOLVED[$m]}" == "1" ]] || continue
+      nm="${M_NAME[$m]}"
+      if [[ -n "$s" && -n "$e" ]]; then
+        FL_PENDING_URL="${M_REPO[$m]}" fl_pending_write app_add "$nm" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$first_kind" "$first_reason" "requirements_python|${e}|Python requirements" "build|${s}|Build" "restart||Restart" || code=1
+      elif [[ -n "$s" ]]; then
+        FL_PENDING_URL="${M_REPO[$m]}" fl_pending_write app_add "$nm" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$first_kind" "$first_reason" "build|${s}|Build" "restart||Restart" || code=1
+      else
+        fl_pending_remove "$nm"
+      fi
+    done
+  elif ! fl__ap_record "$first_kind" "$first_reason" "$done_set"; then
+    # the record is what a retry runs from: a step that cannot be recorded is a failed step
+    code=1; clone_failed="pending record"
+  fi
+  return 0
+}
+
+# fl__ap_apply_verify: the verify pass of every app, and the records when all is done. Reads first_kind, done_set;
+# sets code, vfail, m, nm.
+fl__ap_apply_verify() {
   fl_bench_redis_down
   for ((m = 0; m < ${#M_NAME[@]}; m++)); do
     nm="${M_NAME[$m]}"
@@ -1111,6 +1235,39 @@ fl__ap_apply() {
   if [[ "$code" == "0" ]]; then
     for ((m = 0; m < ${#M_NAME[@]}; m++)); do fl_pending_remove "${M_NAME[$m]}"; done
   fi
+  return 0
+}
+
+# fl__ap_apply TARGET: runs AP_STEPS in order, with the dependencies
+# clone_required -> clone -> build -> install and restart. A step whose
+# requirement failed is skipped ("after failed <step>"); installs on
+# different sites do not depend on each other, and a failed install does not
+# keep the restart from running. The steps that did not finish stay in the
+# pending records, which go away only when all are done and verify is green.
+# Returns 1 when a step or the verify pass failed.
+fl__ap_apply() {
+  local target="$1" labels=() ids=() entry kind arg label i=0 code=0 e s a m nm res fail_from reason ia is
+  local clone_failed="" build_failed="" py_failed="" first_kind="" first_reason="" done_set=" " cloned=() inst_failed=" " mains=" " vfail="" bk_failed=" " ap_end=""
+  AP_STEP_NOTE=()
+  fl__ap_apply_begin
+  [[ -z "$ap_end" ]] || return 1
+  for entry in "${AP_STEPS[@]}"; do
+    IFS='|' read -r kind arg label _ <<<"$entry"
+    fl__ap_apply_blocked
+    if [[ -n "$res" ]]; then
+      FL_STEP_CURRENT="$i"; FL_STEP_START="$SECONDS"
+      fl_step_end skipped "$res"
+      AP_STEP_NOTE[i]="$res"
+      i=$((i + 1)); continue
+    fi
+    fl_step_begin "$i"
+    fl_log_lines_v fail_from
+    fl__ap_apply_run
+    fl__ap_apply_result
+    fl__ap_apply_records
+    i=$((i + 1))
+  done
+  fl__ap_apply_verify
   fl_steps_summary
   return "$code"
 }
