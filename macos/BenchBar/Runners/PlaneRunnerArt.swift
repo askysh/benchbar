@@ -13,7 +13,7 @@ nonisolated enum PlaneRunnerArt {
     static func make() -> Runner {
         Runner(
             id: "plane",
-            name: "Paper plane",
+            name: String(localized: "Paper plane"),
             author: "BenchBar",
             isTemplate: true,
             pointWidth: width,

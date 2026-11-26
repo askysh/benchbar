@@ -57,7 +57,7 @@ final class PortSetupRun: Identifiable {
         guard phase == .review, let summary = summaries.first(where: { $0.path == path }) else { return }
         phase = .running; modeError = nil
         let anchor = store.benches.first(where: { $0.path == path }) ?? BenchModel(summary: summary)
-        modeError = await store.runChange("Saving port mode", on: anchor) { client throws(CLIError) in
+        modeError = await store.runChange(String(localized: "Saving port mode"), on: anchor) { client throws(CLIError) in
             try await client.setPortMode(mode, bench: path)
         }
         await loadPlan()
@@ -67,7 +67,7 @@ final class PortSetupRun: Identifiable {
         guard phase == .review, let plan, plan.canApply, let summary = summaries.first else { return }
         phase = .running
         let anchor = store.benches.first(where: { $0.path == summary.path }) ?? BenchModel(summary: summary)
-        let error = await store.runChange("Setting up benches", on: anchor) { client throws(CLIError) in
+        let error = await store.runChange(String(localized: "Setting up benches"), on: anchor) { client throws(CLIError) in
             let result = try await client.applyPortPlan(plan)
             self.output = result.stdout + result.stderr
             self.hostsFallbacks = PortSetupHints.dialogCancelled(output: self.output) ? PortSetupHints.fallbacks(entries: plan.entries) : []

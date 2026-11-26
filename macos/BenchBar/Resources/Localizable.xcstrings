@@ -485,6 +485,17 @@
         }
       }
     },
+    "%@ of %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ of %@"
+          }
+        }
+      }
+    },
     "%@ on production": {
       "extractionState": "manual",
       "localizations": {
@@ -591,6 +602,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@: bench.log"
+          }
+        }
+      }
+    },
+    "%@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@…"
           }
         }
       }
@@ -3527,6 +3549,17 @@
       },
       "comment": "Window menu."
     },
+    "Coffee cup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coffee cup"
+          }
+        }
+      }
+    },
     "Command": {
       "extractionState": "manual",
       "localizations": {
@@ -4527,6 +4560,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Finish Update"
+          }
+        }
+      }
+    },
+    "Fixed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fixed"
           }
         }
       }
@@ -6106,6 +6150,17 @@
         }
       }
     },
+    "Moving %@…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moving %@…"
+          }
+        }
+      }
+    },
     "Needs about %@ GB free": {
       "extractionState": "manual",
       "localizations": {
@@ -7359,6 +7414,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Paper plane": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paper plane"
+          }
+        }
+      }
     },
     "Passing": {
       "extractionState": "manual",
@@ -8996,6 +9062,17 @@
         }
       }
     },
+    "Saving port mode": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saving port mode"
+          }
+        }
+      }
+    },
     "Scan %@ for benches, or choose another folder. Review the results, then add the benches you want to manage.": {
       "extractionState": "manual",
       "localizations": {
@@ -9184,6 +9261,17 @@
       },
       "comment": "Edit menu."
     },
+    "Server rack": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server rack"
+          }
+        }
+      }
+    },
     "Service": {
       "extractionState": "manual",
       "localizations": {
@@ -9340,6 +9428,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sets up a Frappe bench on this Mac, keeps it running and tells you when it crashes."
+          }
+        }
+      }
+    },
+    "Setting up benches": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setting up benches"
           }
         }
       }
@@ -10100,6 +10199,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Starting %@"
+          }
+        }
+      }
+    },
+    "Starting…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting…"
           }
         }
       }
@@ -12093,6 +12203,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "a copy of %@"
+          }
+        }
+      }
+    },
+    "a moment ago": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a moment ago"
           }
         }
       }
