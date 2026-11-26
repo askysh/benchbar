@@ -122,6 +122,22 @@ fl_jsonl_on_exit() {
   fl_jsonl "done" ",\"exit\":${code},\"bench\":$(fl_json_str "${FL_JSONL_BENCH:-${FL_BENCH_DIR:-}}"),\"site\":$(fl_json_str "${FL_JSONL_SITE:-${FL_SITE:-}}"),\"url\":${url},\"skipped\":[${FL_JSONL_SKIPPED}],\"fix\":${fix},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")${extra},${f}"
 }
 
+# fl_own_stream_open: the streams of repair and pull are their own, and their command opens them (cmd_repair,
+# fl_cmd_pull), after the bench guess gate. A refusal of the gate comes before that, and before the log and the lock, so
+# it opens the stream here, as far as the done line needs it: fd 3 is the real stdout and the command's own done writer
+# (fl_repair_done, fl_pull_on_exit) is armed; the exit trap sends the line, with the next actions the gate collected.
+# The text of the refusal stays on stderr (fl_die moves stdout there under --json). Any other command, and a run
+# without JSON, is left as it is (#405).
+fl_own_stream_open() {
+  [[ "${OPT_JSON:-0}" == "1" && "${FL_JSON_MODE:-}" == "own" ]] || return 0
+  case "$COMMAND" in
+    repair) FL_JSON_EVENTS=1 ;;
+    pull) FL_PULL_ACTIVE=1 ;;
+    *) return 0 ;;
+  esac
+  exec 3>&1
+}
+
 # fl_repair_done CODE: repair --json ends with one done line, however the run
 # ends (the engine's end, or an fl_die on the way). exit_code is the field of
 # 0.8, exit the shared one: both carry the process exit code.
