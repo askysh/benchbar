@@ -52,6 +52,17 @@ assert_eq "a b c d " "$(names)" "(PIN_UPDATE=1 with PIN_FULL=0)"
 # a full run passes, and says nothing about smoke
 mini PIN_FULL=1
 assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "mini: ok"; assert_not_contains "$OUT" "smoke"
+# PIN_FULL can name the tests that run in full: this one by name, among others; another name leaves it in smoke
+mini PIN_FULL=mini
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "mini: ok"; assert_not_contains "$OUT" "smoke"
+mini "PIN_FULL=test-other mini"
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "mini: ok"; assert_not_contains "$OUT" "smoke"
+mini PIN_FULL=test-other
+assert_contains "$OUT" "pin: smoke, 2 of 4 scenarios"
+mini PIN_FULL=min
+assert_contains "$OUT" "pin: smoke, 2 of 4 scenarios" "(a name is a whole word)"
+mini PIN_FULL=0
+assert_contains "$OUT" "pin: smoke, 2 of 4 scenarios"
 # a smoke run passes: a and c ran, b is skipped, d is never reached
 mini
 assert_eq "0" "$CODE" "$OUT"
