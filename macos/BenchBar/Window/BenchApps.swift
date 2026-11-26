@@ -302,7 +302,7 @@ struct UpdateAppSheet: View {
                 SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .orange, title: pending.title, detail: pending.detail)
             }
             if let plan, !plan.isUpToDate {
-                Text("\(plan.commitsTotal) new commit\(plan.commitsTotal == 1 ? "" : "s") on \(plan.branch ?? "the branch"):")
+                Text(Wording.newCommits(plan.commitsTotal, on: plan.branch ?? "the branch"))
                     .font(.callout)
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(plan.commits) { commit in

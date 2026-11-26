@@ -403,7 +403,7 @@ after crashes, not managed by benchbar) returns at once. `benchbar_status`
 carries the same `ready` object without waiting: `ready.stale: true` means
 the running code is old, so `benchbar_restart` first. In a terminal the same
 is `benchbar wait --json`, exit 0 when ready and 1 when not; the fields are in
-[the JSON reference](../json-schema.md#readiness).
+[the JSON reference](../reference/json/list-and-status.md#readiness).
 
 ## What was run
 
