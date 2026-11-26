@@ -147,7 +147,9 @@ hint_checks() {
   assert_contains "$OUT" "More than one bench is possible" "(${name}: the gate refuses) $OUT"
   assert_contains "$OUT" "$hint" "(${name}: the hint names the app and the bench)"
   assert_not_contains "$OUT" "abc123secret" "(${name}: a word the command does not know is not in the refusal)"
-  assert_not_contains "$OUT" "--token" "(${name}: a flag the command does not know is not in the refusal)"
+  # the line that says what to run (with BENCHBAR_LENIENT_FLAGS=1 another, older line names the flag it ignores,
+  # without its value)
+  assert_not_contains "$(printf '%s\n' "$OUT" | grep 'Choose one:')" "--token" "(${name}: a flag the command does not know is not in the hint)"
 }
 BENCHBAR_LENIENT_FLAGS=1 hint_checks "app focus NAME, an unknown flag let through" "benchbar app focus frappe --bench-dir PATH" app focus frappe --token=abc123secret
 hint_checks "app focus NAME, a flag after --" "benchbar app focus frappe --bench-dir PATH" app focus frappe -- --token=abc123secret

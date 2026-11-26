@@ -618,8 +618,8 @@ fl_bench_guess_gate() {
   if [[ "$n" -gt 1 ]] && fl_noninteractive; then
     fl_die "More than one bench is possible and none was chosen: ${list}." "Choose one: benchbar ${line} --bench-dir PATH (or set BENCH_DIR). benchbar list shows them."
   fi
-  printf 'benchbar: acting on %s (auto-detected: no --bench-dir, BENCH_DIR or remembered bench%s; pass --bench-dir to choose)
-'     "$FL_BENCH_DIR" "$([[ "$n" -gt 1 ]] && printf '; %s benches are known: %s' "$n" "$list")" >&2
+  printf 'benchbar: acting on %s (auto-detected: no --bench-dir, BENCH_DIR or remembered bench%s; pass --bench-dir to choose)\n' \
+    "$FL_BENCH_DIR" "$([[ "$n" -gt 1 ]] && printf '; %s benches are known: %s' "$n" "$list")" >&2
 }
 
 # fl_bench_write_gate: the guess gate for the forms that write benchbar's state while their command, in the commands
@@ -637,9 +637,11 @@ fl_bench_write_gate() {
       line="${line} focus"
       while [[ "$i" -lt "${#ARGS[@]}" ]]; do
         a="${ARGS[$i]}"
-        # a word that is not a flag is the app: the form that pins
-        if [[ "$a" != -* && "$named" == 0 ]]; then named=1; fi
-        line="${line} $(printf '%q' "$a")"
+        # the first word that is not a flag is the app: the form that pins. The hint quotes the app and --auto and
+        # no other word: an unknown flag (BENCHBAR_LENIENT_FLAGS=1), a word after "--" or a second word stays in
+        # ARGS and can hold anything
+        if [[ "$a" != -* && "$named" == 0 ]]; then named=1; line="${line} $(printf '%q' "$a")"
+        elif [[ "$a" == --auto ]]; then line="${line} --auto"; fi
         i=$((i + 1))
       done
       [[ "$named" == 1 ]] || return 0 ;;
