@@ -10,7 +10,7 @@
 # policy of accept: only the bench ports are touched, nothing else about the machine's firewall. A
 # systemd unit (benchbar-lan-guard.service) loads the table again at boot and deletes it on stop.
 # remove deletes that table, the unit and the rules file, nothing else. ufw and a firewalld are not
-# changed (docs/DECISIONS.md).
+# changed (maintainers/DECISIONS.md).
 #
 # Root runs a script of this CLI's own text, as the macOS half does: the system tools and the two root
 # files are named by absolute path, the rules and the unit are single-quoted literals, and nothing from

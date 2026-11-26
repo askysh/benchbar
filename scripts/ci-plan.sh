@@ -22,7 +22,7 @@
 # shim_arm, wsl, real,
 # full (every leg runs everything) and code (anything beyond docs changed).
 #
-# The rules (docs/DECISIONS.md, "CI tiering"):
+# The rules (maintainers/DECISIONS.md, "CI tiering"):
 #   pull request   the tests tests/affected.sh picks, on Linux and in the
 #                  bash 3.2 container. macOS only when a path that needs macOS
 #                  changed (macos_paths below), or the label test-macos is on.

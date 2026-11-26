@@ -6,7 +6,7 @@ import Sparkle
 /// Sparkle 2 automatic updates. Only built with BENCHBAR_SPARKLE=YES
 /// (scripts/macos-build.sh --sparkle): the default build has no Sparkle
 /// code and makes no update checks. The feed URL and the public EdDSA key
-/// come from Info.plist (SUFeedURL, SUPublicEDKey); see docs/releasing.md.
+/// come from Info.plist (SUFeedURL, SUPublicEDKey); see maintainers/releasing.md.
 final class Updater {
     private let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 

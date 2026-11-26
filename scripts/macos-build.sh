@@ -12,9 +12,9 @@
 # Options:
 #   --test      run the Swift tests before building
 #   --debug     build the Debug configuration instead of Release
-#   --sparkle   include Sparkle (BENCHBAR_SPARKLE=YES, see docs/releasing.md)
+#   --sparkle   include Sparkle (BENCHBAR_SPARKLE=YES, see maintainers/releasing.md)
 #
-# Release signing (docs/releasing.md): set BENCHBAR_SIGN_IDENTITY to a
+# Release signing (maintainers/releasing.md): set BENCHBAR_SIGN_IDENTITY to a
 # "Developer ID Application: ..." identity and BENCHBAR_TEAM_ID to your team
 # id. xcodebuild then signs with it and a secure timestamp, and the ad hoc
 # step is skipped. Unset (the default), the app is signed ad hoc.

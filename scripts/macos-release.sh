@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # macos-release.sh: build, sign, notarize and package a BenchBar release.
-# Written for the day there is an Apple Developer account; docs/releasing.md
+# Written for the day there is an Apple Developer account; maintainers/releasing.md
 # explains every step and how to get each secret.
 #
 #   scripts/macos-release.sh 0.3.0            full release into dist/
@@ -107,18 +107,18 @@ for tool in xcodegen xcodebuild xcrun hdiutil ditto codesign shasum; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool not found" "install Xcode and: brew install xcodegen"
 done
 ok "tools present"
-"${ROOT}/scripts/check-profile-formulae.sh" || die "a release profile names a formula Homebrew is about to disable" "move the profile in config/release-profiles.tsv (see docs/DECISIONS.md, 0.7.3)"
+"${ROOT}/scripts/check-profile-formulae.sh" || die "a release profile names a formula Homebrew is about to disable" "move the profile in config/release-profiles.tsv (see maintainers/DECISIONS.md, 0.7.3)"
 missing=()
 for var in BENCHBAR_SIGN_IDENTITY BENCHBAR_TEAM_ID NOTARY_KEY_ID NOTARY_ISSUER_ID BENCHBAR_SPARKLE_PUBLIC_KEY; do
   [[ -n "${!var:-}" ]] || missing+=("$var")
 done
 [[ -n "${NOTARY_KEY_PATH:-}" || -n "$NOTARY_KEY_B64" ]] || missing+=("NOTARY_KEY_PATH or NOTARY_KEY_BASE64")
 [[ -n "${SPARKLE_ED_KEY_PATH:-}" || -n "$SPARKLE_KEY_CONTENT" ]] || missing+=("SPARKLE_ED_KEY_PATH or SPARKLE_ED_KEY")
-[[ "${#missing[@]}" == "0" ]] || die "missing settings: ${missing[*]}" "see docs/releasing.md, Secrets"
+[[ "${#missing[@]}" == "0" ]] || die "missing settings: ${missing[*]}" "see maintainers/releasing.md, Secrets"
 [[ -z "${NOTARY_KEY_PATH:-}" || -f "$NOTARY_KEY_PATH" ]] || die "no API key at $NOTARY_KEY_PATH"
 [[ -z "${SPARKLE_ED_KEY_PATH:-}" || -f "$SPARKLE_ED_KEY_PATH" ]] || die "no Sparkle key at $SPARKLE_ED_KEY_PATH"
 security find-identity -v -p codesigning | grep -qF "$BENCHBAR_SIGN_IDENTITY" \
-  || die "signing identity not in the keychain: $BENCHBAR_SIGN_IDENTITY" "import the Developer ID .p12 (docs/releasing.md)"
+  || die "signing identity not in the keychain: $BENCHBAR_SIGN_IDENTITY" "import the Developer ID .p12 (maintainers/releasing.md)"
 ok "settings and signing identity present"
 
 want="$(project_version)"

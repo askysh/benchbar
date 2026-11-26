@@ -1,6 +1,6 @@
 # Builds BenchBar and drafts a GitHub release when a v* tag is pushed.
 #
-# Two paths, one workflow (docs/releasing.md):
+# Two paths, one workflow (maintainers/releasing.md):
 #   Developer ID  the release: signed, notarized, stapled, with a Sparkle
 #               appcast. It runs only for a v* tag, in the `release`
 #               environment, which holds the signing, notarization, Sparkle
@@ -152,7 +152,7 @@ jobs:
             [ -n "${!var}" ] || missing="$missing ${var#S_}"
           done
           if [ -n "$missing" ]; then
-            echo "::error title=Signing secrets missing::Not set in the release environment:${missing}. A tag build is never released unsigned. Set them (docs/releasing.md, Secrets) and re-run."
+            echo "::error title=Signing secrets missing::Not set in the release environment:${missing}. A tag build is never released unsigned. Set them (maintainers/releasing.md, Secrets) and re-run."
             exit 1
           fi
           echo "All nine signing secrets are set."

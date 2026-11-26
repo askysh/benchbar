@@ -19,7 +19,7 @@
 # cooldown): a release that is pulled or found malicious usually is within
 # days. Security updates are not held back by it.
 #
-# Not here, so a person bumps them (docs/DECISIONS.md, "Supply chain"): the
+# Not here, so a person bumps them (maintainers/DECISIONS.md, "Supply chain"): the
 # tools of scripts/ci-install-tool.sh (shellcheck, XcodeGen, actionlint,
 # zizmor), the Xcode version of the macOS jobs, the bash:3.2.57 image's
 # digest in ci.yml, govulncheck's version in ci.yml, and the third party

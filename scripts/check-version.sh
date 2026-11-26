@@ -11,7 +11,7 @@
 #                                              the same, and no changelog fragment is left
 #
 # The form is X.Y.Z for a release and X.Y.Z-rc.N for a release candidate (a
-# pre-release that updaters do not offer: docs/releasing.md). Numbers have no
+# pre-release that updaters do not offer: maintainers/releasing.md). Numbers have no
 # leading zero. The same pattern is written in release.yml, homebrew-tap.yml
 # and release-windows.yml; tests/test-version-sources.sh keeps the copies equal.
 #
