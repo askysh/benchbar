@@ -150,8 +150,9 @@ run_test_with_deadline() {
 # when set (the files a pull request changed). One shellcheck process per file
 # (tests/lib/shellcheck-file.sh: a deadline that names the file),
 # SC_JOBS at a time: -x parses harness.sh and the libraries again for every
-# file, so benchbar alone takes about 4 GB and 30 s, and four of the big ones
-# at once starved a 16 GB runner until the job timed out with no log (#137).
+# file. benchbar, with dataflow analysis, took 15 GB on a 16 GB runner, so the
+# wrapper checks it without that analysis (0.7 GB); the biggest of the rest
+# take 2 to 2.5 GB there (#137, #396).
 # SC_JOBS is 1 unless set; a run of "shellcheck" alone uses every CPU, at most
 # SC_JOBS_MAX (default 3).
 run_shellcheck() {

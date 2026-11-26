@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Usage: shellcheck-file.sh FILE. Runs shellcheck -x over one file, with a deadline.
 #
-# The -x option of shellcheck follows every sourced file, so one process over benchbar needs about 4 GB and
-# 30 s, and the pool run-tests.sh runs several at a time. Five CI runs on 2026-11-25 and 26 sat
+# The -x option of shellcheck follows every sourced file: the phase scripts take 2 to 2.5 GB on a
+# hosted runner, and benchbar with dataflow analysis 15 GB (so it goes without, below), and the
+# pool run-tests.sh runs several at a time. Five CI runs on 2026-11-25 and 26 sat
 # in that step until the job's timeout and left no log at all. One file per process, so a stuck
 # or runaway one names itself:
 #   SC_FILE_TIMEOUT  seconds per file (default 180; the slowest file takes about 30)
