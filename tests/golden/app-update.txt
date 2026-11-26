@@ -1,0 +1,2925 @@
+=== unknown option
+exit: 64
+--- stdout
+  [FAIL] Unknown option for app update: --bogus
+
+Aborting. Usage: benchbar app update NAME [--skip-backup] [--dry-run --json | --apply TOKEN --yes]. Every flag: benchbar app update --help. A script that relied on unknown options being ignored: BENCHBAR_LENIENT_FLAGS=1 turns this error into a warning.
+--- stderr
+--- calls
+[state] unknown option head: 4dbe61d
+[state] unknown option record: none
+=== no app
+exit: 1
+--- stdout
+  [FAIL] Usage: benchbar app update NAME [--skip-backup]
+
+Aborting. Fix the above and re-run.
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] no app head: 4dbe61d
+[state] no app record: none
+=== apply, bad token
+exit: 1
+--- stdout
+  [FAIL] --apply needs the token of a plan.
+
+Aborting. benchbar app update acme_crm --dry-run --json prints it
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] apply, bad token head: 4dbe61d
+[state] apply, bad token record: none
+=== apply, no --yes
+exit: 1
+--- stdout
+  [FAIL] Review the plan (app update acme_crm --dry-run --json), then pass its token with --apply TOKEN --yes.
+
+Aborting. Fix the above and re-run.
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] apply, no --yes head: 4dbe61d
+[state] apply, no --yes record: none
+=== apply with dry run
+exit: 1
+--- stdout
+  [FAIL] --apply runs the plan; --dry-run shows it. Pass one of them.
+
+Aborting. Fix the above and re-run.
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] apply with dry run head: 4dbe61d
+[state] apply with dry run record: none
+=== apply with discard
+exit: 1
+--- stdout
+  [FAIL] --apply runs an update; --discard-pending does not.
+
+Aborting. Fix the above and re-run.
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] apply with discard head: 4dbe61d
+[state] apply with discard record: none
+=== apply=TOKEN form, no --yes
+exit: 1
+--- stdout
+  [FAIL] Review the plan (app update acme_crm --dry-run --json), then pass its token with --apply TOKEN --yes.
+
+Aborting. Fix the above and re-run.
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] apply=TOKEN form, no --yes head: 4dbe61d
+[state] apply=TOKEN form, no --yes record: none
+=== not a git app
+exit: 1
+--- stdout
+  [FAIL] nosuch is not a git app of this bench.
+
+Aborting. benchbar app list shows the apps.
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] not a git app head: 4dbe61d
+[state] not a git app record: none
+=== discard with json
+exit: 1
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","event":"done","op_id":"op-<ID>","bench":"<TMP>/home/frappe-bench","exit":1,"changed":[],"warnings":[],"next_actions":[],"state_after":{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","name":"frappe-bench","site":null,"label":"com.benchbar.frappe-bench","state":"not_adopted","stop_reason":null,"pid":null,"started_at":null,"last_exit_code":null,"web_url":null,"web_ping_code":null,"ports":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_socketio":13000,"redis_cache":13000},"sites":[{"name":"macdev","default":false,"hosts_entry":false,"ping_code":null,"developer_mode":false,"open_as_enabled":false,"open_as":false,"served":null}],"scheduler":false,"autostart":true,"listen":"local","redis":{"queue":{"port":11000,"running":false},"cache":{"port":13000,"running":false}},"bench_bin":null,"state_file":"<TMP>/home/frappe-bench/logs/.benchbar/state.json","log":"<TMP>/home/frappe-bench/logs/bench.log","agent_loaded":false,"agent_state":null,"processes_running":false,"url":null,"agent":"com.benchbar.frappe-bench","loaded":"no","stop_flag":"none","ping":"000","pending_operations":[],"ready":{"ready":false,"deep":false,"agent":false,"processes":false,"web":false,"socketio":false,"redis":false,"workers":null,"stale":null,"stale_file":null,"waiting_on":["agent","processes","web","socketio","redis"],"fix":"<ROOT>/benchbar adopt <TMP>/home/frappe-bench"},"labs":[],"notices":[],"leases":[]},"log":"<TMP>/state/logs/<LOG>.log","error":"--discard-pending prints text only; leave out --json."}
+--- stderr
+  [FAIL] --discard-pending prints text only; leave out --json.
+
+Aborting. benchbar app update acme_crm --discard-pending [--dry-run]
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+launchctl print gui/<UID>/com.benchbar.frappe-bench
+pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
+[state] discard with json head: 4dbe61d
+[state] discard with json record: none
+=== discard, nothing to drop
+exit: 0
+--- stdout
+  .. no unfinished update or add of acme_crm to discard
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] discard, nothing to drop head: 4dbe61d
+[state] discard, nothing to drop record: none
+=== discard, dry run
+exit: 0
+--- stdout
+  .. dry-run: would drop the unfinished app_update of acme_crm (2 step(s) not run) and stop; nothing is changed
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] discard, dry run head: 4dbe61d
+[state] discard, dry run record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"","to":"","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"boom","url":"","started_at":"<TS>","updated_at":"<TS>"}
+=== discard, real
+exit: 0
+--- stdout
+  [WARN] dropping the unfinished app_update of acme_crm (started <TS>, stopped at migrate); its 2 step(s) will not run, and nothing else runs now
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] discard, real head: 4dbe61d
+[state] discard, real record: none
+=== discard unreadable, dry run
+exit: 0
+--- stdout
+  .. dry-run: would drop the unreadable record <TMP>/state/benches/frappe-bench-<H>/acme_crm.json and stop; nothing is changed
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] discard unreadable, dry run head: 4dbe61d
+[state] discard unreadable, dry run record: not json
+=== update with unreadable record
+exit: 1
+--- stdout
+  [FAIL] the pending record of acme_crm cannot be read (cut short or from another version); it is kept, and no step runs from it.
+
+Aborting. Look at <TMP>/state/benches/frappe-bench-<H>/acme_crm.json, then: benchbar app update acme_crm --discard-pending (drops the record and stops; run the update again after)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] update with unreadable record head: 4dbe61d
+[state] update with unreadable record record: not json
+=== discard unreadable, real
+exit: 0
+--- stdout
+  [WARN] dropping the unreadable record <TMP>/state/benches/frappe-bench-<H>/acme_crm.json; nothing else runs now
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] discard unreadable, real head: 4dbe61d
+[state] discard unreadable, real record: none
+=== dirty tree
+exit: 1
+--- stdout
+  [FAIL] apps/acme_crm has local changes; update refuses to touch them.
+
+Aborting. cd <TMP>/home/frappe-bench/apps/acme_crm && git status (commit or stash them first)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+[state] dirty tree head: 4dbe61d
+[state] dirty tree record: none
+=== detached head
+exit: 1
+--- stdout
+  [FAIL] apps/acme_crm is on a detached HEAD; update follows a branch.
+
+Aborting. cd <TMP>/home/frappe-bench/apps/acme_crm && git checkout BRANCH
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+[state] detached head head: 4dbe61d
+[state] detached head record: none
+=== no remote
+exit: 1
+--- stdout
+  [FAIL] apps/acme_crm has no git remote.
+
+Aborting. cd <TMP>/home/frappe-bench/apps/acme_crm && git remote add upstream URL
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm remote
+[state] no remote head: 4dbe61d
+[state] no remote record: none
+=== up to date
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+  [OK] unchanged: acme_crm is up to date with upstream/main (4dbe61d)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+[state] up to date head: 4dbe61d
+[state] up to date record: none
+=== up to date, dry run
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+  [OK] unchanged: acme_crm is up to date with upstream/main (4dbe61d)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+[state] up to date, dry run head: 4dbe61d
+[state] up to date, dry run record: none
+=== up to date, dry run json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"4dbe61d9fde2c19f5f6c536beb3b80723ea03567","to":"4dbe61d9fde2c19f5f6c536beb3b80723ea03567","commits":[],"commits_total":0,"newer_commits":0,"pending":null,"sites":["macdev"],"skip_backup":false,"steps":[],"can_apply":false,"token":null}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+[state] up to date, dry run json head: 4dbe61d
+[state] up to date, dry run json record: none
+=== ahead, text
+exit: 0
+--- stdout
+  .. apps/acme_crm is ahead of upstream/main
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+  [OK] unchanged: acme_crm is up to date with upstream/main (75ade15)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 75ade152046398c0815166dd106e8708a03a4efe 4dbe61d9fde2c19f5f6c536beb3b80723ea03567
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 75ade152046398c0815166dd106e8708a03a4efe
+[state] ahead, text head: 75ade15
+[state] ahead, text record: none
+=== ahead, dry run json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"75ade152046398c0815166dd106e8708a03a4efe","to":"75ade152046398c0815166dd106e8708a03a4efe","commits":[],"commits_total":0,"newer_commits":0,"pending":null,"sites":["macdev"],"skip_backup":false,"steps":[],"can_apply":false,"token":null}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 75ade152046398c0815166dd106e8708a03a4efe 4dbe61d9fde2c19f5f6c536beb3b80723ea03567
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 75ade152046398c0815166dd106e8708a03a4efe
+[state] ahead, dry run json head: 75ade15
+[state] ahead, dry run json record: none
+=== plan, text
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 4dbe61d..8fcd166 on upstream/main, 2 commit(s)
+    8fcd166 acme_crm: change 4
+    9f59f70 acme_crm: change 3
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 8fcd16634d2b
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+
+  .. dry-run: nothing was changed (git fetch updated only apps/acme_crm/.git)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 8fcd16634d2b5031f19642525024a16e01f00481
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+[state] plan, text head: 4dbe61d
+[state] plan, text record: none
+=== plan, json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"4dbe61d9fde2c19f5f6c536beb3b80723ea03567","to":"8fcd16634d2b5031f19642525024a16e01f00481","commits":[{"sha":"8fcd166","subject":"acme_crm: change 4"},{"sha":"9f59f70","subject":"acme_crm: change 3"}],"commits_total":2,"newer_commits":0,"pending":null,"sites":["macdev"],"skip_backup":false,"steps":[{"name":"Back up macdev","command":"bench --site macdev backup","kind":"backup","target":"macdev"},{"name":"Fast forward","command":"git -C apps/acme_crm merge --ff-only 8fcd16634d2b","kind":"fast_forward","target":""},{"name":"Python requirements","command":"bench setup requirements --python acme_crm","kind":"requirements_python","target":"acme_crm"},{"name":"Node requirements","command":"bench setup requirements --node acme_crm","kind":"requirements_node","target":"acme_crm"},{"name":"Migrate macdev","command":"bench --site macdev migrate","kind":"migrate","target":"macdev"},{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 8fcd16634d2b5031f19642525024a16e01f00481
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+[state] plan, json head: 4dbe61d
+[state] plan, json record: none
+=== plan, skip backup, text
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 4dbe61d..8fcd166 on upstream/main, 2 commit(s)
+    8fcd166 acme_crm: change 4
+    9f59f70 acme_crm: change 3
+
+Plan
+  # Step Command
+  1 Fast forward git -C apps/acme_crm merge --ff-only 8fcd16634d2b
+  2 Python requirements bench setup requirements --python acme_crm
+  3 Node requirements bench setup requirements --node acme_crm
+  4 Migrate macdev bench --site macdev migrate
+  5 Build bench build --app acme_crm
+  [WARN] --skip-backup: the sites are migrated without a backup first
+
+  .. dry-run: nothing was changed (git fetch updated only apps/acme_crm/.git)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 8fcd16634d2b5031f19642525024a16e01f00481
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+[state] plan, skip backup, text head: 4dbe61d
+[state] plan, skip backup, text record: none
+=== plan, skip backup, json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"4dbe61d9fde2c19f5f6c536beb3b80723ea03567","to":"8fcd16634d2b5031f19642525024a16e01f00481","commits":[{"sha":"8fcd166","subject":"acme_crm: change 4"},{"sha":"9f59f70","subject":"acme_crm: change 3"}],"commits_total":2,"newer_commits":0,"pending":null,"sites":["macdev"],"skip_backup":true,"steps":[{"name":"Fast forward","command":"git -C apps/acme_crm merge --ff-only 8fcd16634d2b","kind":"fast_forward","target":""},{"name":"Python requirements","command":"bench setup requirements --python acme_crm","kind":"requirements_python","target":"acme_crm"},{"name":"Node requirements","command":"bench setup requirements --node acme_crm","kind":"requirements_node","target":"acme_crm"},{"name":"Migrate macdev","command":"bench --site macdev migrate","kind":"migrate","target":"macdev"},{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 8fcd16634d2b5031f19642525024a16e01f00481
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+[state] plan, skip backup, json head: 4dbe61d
+[state] plan, skip backup, json record: none
+=== cancelled at the prompt
+exit: 1
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 4dbe61d..8fcd166 on upstream/main, 2 commit(s)
+    8fcd166 acme_crm: change 4
+    9f59f70 acme_crm: change 3
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 8fcd16634d2b
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  [WARN] Not a terminal and --yes not given; treating 'Update acme_crm (2 commit(s)) and apply 6 step(s)?' as no.
+  [WARN] Cancelled. Nothing was changed.
+  [FAIL] Command failed (exit 1): return 1 (lib/frappe-local/apps.sh in fl_cmd_app near line N)
+     full log: <TMP>/state/logs/<LOG>.log
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 8fcd16634d2b5031f19642525024a16e01f00481
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+[state] cancelled at the prompt head: 4dbe61d
+[state] cancelled at the prompt record: none
+=== no uv, dry run
+exit: 0
+--- stdout
+  [WARN] uv is not installed: the update stops before its first step until it is (bench installs the Python requirements of acme_crm with it)
+     fix: brew install uv
+
++- benchbar app update ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 4dbe61d..8fcd166 on upstream/main, 2 commit(s)
+    8fcd166 acme_crm: change 4
+    9f59f70 acme_crm: change 3
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 8fcd16634d2b
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+
+  .. dry-run: nothing was changed (git fetch updated only apps/acme_crm/.git)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 8fcd16634d2b5031f19642525024a16e01f00481
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+[state] no uv, dry run head: 4dbe61d
+[state] no uv, dry run record: none
+=== no uv, real run
+exit: 1
+--- stdout
+  [FAIL] uv is not installed, and bench installs the Python requirements of acme_crm with it; nothing was changed.
+
+Aborting. brew install uv
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 8fcd16634d2b5031f19642525024a16e01f00481
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+[state] no uv, real run head: 4dbe61d
+[state] no uv, real run record: none
+=== apply, token of another plan
+exit: 1
+--- stdout
+  [FAIL] The app update plan changed since it was shown (the remote has new commits, a site or the app changed, or nothing is left to do). Nothing was changed.
+
+Aborting. Review a fresh plan: benchbar app update acme_crm --dry-run --json, then pass its token.
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 8fcd16634d2b5031f19642525024a16e01f00481
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+[state] apply, token of another plan head: 4dbe61d
+[state] apply, token of another plan record: none
+=== apply, expired token
+exit: 1
+--- stdout
+  [FAIL] The plan token expired: a token is good for about an hour after its plan was made, and this one is older. Nothing was changed.
+
+Aborting. Review a fresh plan: benchbar app update acme_crm --dry-run --json, then pass its token.
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 8fcd16634d2b5031f19642525024a16e01f00481
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+[state] apply, expired token head: 4dbe61d
+[state] apply, expired token record: none
+=== diverged
+exit: 1
+--- stdout
+  [FAIL] apps/acme_crm and upstream/main have diverged, not a fast forward.
+
+Aborting. Merge or rebase it yourself: cd <TMP>/home/frappe-bench/apps/acme_crm && git log --oneline --graph HEAD FETCH_HEAD
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor d98f4e2da5faba1c82a460f68a25e272e67dcc05 8fcd16634d2b5031f19642525024a16e01f00481
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 8fcd16634d2b5031f19642525024a16e01f00481 d98f4e2da5faba1c82a460f68a25e272e67dcc05
+[state] diverged head: d98f4e2
+[state] diverged record: none
+=== plan again
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"4dbe61d9fde2c19f5f6c536beb3b80723ea03567","to":"8fcd16634d2b5031f19642525024a16e01f00481","commits":[{"sha":"8fcd166","subject":"acme_crm: change 4"},{"sha":"9f59f70","subject":"acme_crm: change 3"}],"commits_total":2,"newer_commits":0,"pending":null,"sites":["macdev"],"skip_backup":false,"steps":[{"name":"Back up macdev","command":"bench --site macdev backup","kind":"backup","target":"macdev"},{"name":"Fast forward","command":"git -C apps/acme_crm merge --ff-only 8fcd16634d2b","kind":"fast_forward","target":""},{"name":"Python requirements","command":"bench setup requirements --python acme_crm","kind":"requirements_python","target":"acme_crm"},{"name":"Node requirements","command":"bench setup requirements --node acme_crm","kind":"requirements_node","target":"acme_crm"},{"name":"Migrate macdev","command":"bench --site macdev migrate","kind":"migrate","target":"macdev"},{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 8fcd16634d2b5031f19642525024a16e01f00481
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..8fcd16634d2b5031f19642525024a16e01f00481
+[state] plan again head: 4dbe61d
+[state] plan again record: none
+=== apply, stale token
+exit: 1
+--- stdout
+  [FAIL] The app update plan changed since it was shown (the remote has new commits, a site or the app changed, or nothing is left to do). Nothing was changed.
+
+Aborting. Review a fresh plan: benchbar app update acme_crm --dry-run --json, then pass its token.
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 874373866663d48054884e2d2da6adb67b5bfb20
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..874373866663d48054884e2d2da6adb67b5bfb20
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+[state] apply, stale token head: 4dbe61d
+[state] apply, stale token record: none
+=== plan with the third commit
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"4dbe61d9fde2c19f5f6c536beb3b80723ea03567","to":"874373866663d48054884e2d2da6adb67b5bfb20","commits":[{"sha":"8743738","subject":"acme_crm: change 6"},{"sha":"8fcd166","subject":"acme_crm: change 4"},{"sha":"9f59f70","subject":"acme_crm: change 3"}],"commits_total":3,"newer_commits":0,"pending":null,"sites":["macdev"],"skip_backup":false,"steps":[{"name":"Back up macdev","command":"bench --site macdev backup","kind":"backup","target":"macdev"},{"name":"Fast forward","command":"git -C apps/acme_crm merge --ff-only 874373866663","kind":"fast_forward","target":""},{"name":"Python requirements","command":"bench setup requirements --python acme_crm","kind":"requirements_python","target":"acme_crm"},{"name":"Node requirements","command":"bench setup requirements --node acme_crm","kind":"requirements_node","target":"acme_crm"},{"name":"Migrate macdev","command":"bench --site macdev migrate","kind":"migrate","target":"macdev"},{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 874373866663d48054884e2d2da6adb67b5bfb20
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..874373866663d48054884e2d2da6adb67b5bfb20
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..874373866663d48054884e2d2da6adb67b5bfb20
+[state] plan with the third commit head: 4dbe61d
+[state] plan with the third commit record: none
+=== apply, good token, json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","event":"plan","op_id":"op-<ID>","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"4dbe61d9fde2c19f5f6c536beb3b80723ea03567","to":"874373866663d48054884e2d2da6adb67b5bfb20","commits":[{"sha":"8743738","subject":"acme_crm: change 6"},{"sha":"8fcd166","subject":"acme_crm: change 4"},{"sha":"9f59f70","subject":"acme_crm: change 3"}],"commits_total":3,"newer_commits":0,"pending":null,"sites":["macdev"],"skip_backup":false,"steps":[{"name":"Back up macdev","command":"bench --site macdev backup","kind":"backup","target":"macdev"},{"name":"Fast forward","command":"git -C apps/acme_crm merge --ff-only 874373866663","kind":"fast_forward","target":""},{"name":"Python requirements","command":"bench setup requirements --python acme_crm","kind":"requirements_python","target":"acme_crm"},{"name":"Node requirements","command":"bench setup requirements --node acme_crm","kind":"requirements_node","target":"acme_crm"},{"name":"Migrate macdev","command":"bench --site macdev migrate","kind":"migrate","target":"macdev"},{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":1,"id":"backup_macdev","parent":null,"name":"Back up macdev","status":"running"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":1,"id":"backup_macdev","parent":null,"name":"Back up macdev","status":"done","secs":<N>}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":2,"id":"fast_forward","parent":null,"name":"Fast forward","status":"running"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":2,"id":"fast_forward","parent":null,"name":"Fast forward","status":"done","secs":<N>}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":3,"id":"requirements_python_acme_crm","parent":null,"name":"Python requirements","status":"running"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":3,"id":"requirements_python_acme_crm","parent":null,"name":"Python requirements","status":"done","secs":<N>}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":4,"id":"requirements_node_acme_crm","parent":null,"name":"Node requirements","status":"running"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":4,"id":"requirements_node_acme_crm","parent":null,"name":"Node requirements","status":"done","secs":<N>}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":5,"id":"migrate_macdev","parent":null,"name":"Migrate macdev","status":"running"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":5,"id":"migrate_macdev","parent":null,"name":"Migrate macdev","status":"done","secs":<N>}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":6,"id":"build_acme_crm","parent":null,"name":"Build","status":"running"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":6,"id":"build_acme_crm","parent":null,"name":"Build","status":"done","secs":<N>}
+{"schema_version":1,"cli_version":"0.8.3","event":"done","op_id":"op-<ID>","bench":"<TMP>/home/frappe-bench","app":"acme_crm","from":"4dbe61d9fde2c19f5f6c536beb3b80723ea03567","to":"874373866663d48054884e2d2da6adb67b5bfb20","updated":true,"exit":0,"changed":[{"kind":"backup","name":"macdev","detail":"bench --site backup"},{"kind":"app","name":"acme_crm","detail":"4dbe61d to 8743738"},{"kind":"site","name":"macdev","detail":"migrated"}],"warnings":[],"next_actions":[],"state_after":{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","name":"frappe-bench","site":null,"label":"com.benchbar.frappe-bench","state":"not_adopted","stop_reason":null,"pid":null,"started_at":null,"last_exit_code":null,"web_url":null,"web_ping_code":null,"ports":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_socketio":13000,"redis_cache":13000},"sites":[{"name":"macdev","default":false,"hosts_entry":false,"ping_code":null,"developer_mode":false,"open_as_enabled":false,"open_as":false,"served":null}],"scheduler":false,"autostart":true,"listen":"local","redis":{"queue":{"port":11000,"running":false},"cache":{"port":13000,"running":false}},"bench_bin":null,"state_file":"<TMP>/home/frappe-bench/logs/.benchbar/state.json","log":"<TMP>/home/frappe-bench/logs/bench.log","agent_loaded":false,"agent_state":null,"processes_running":false,"url":null,"agent":"com.benchbar.frappe-bench","loaded":"no","stop_flag":"none","ping":"000","pending_operations":[],"ready":{"ready":false,"deep":false,"agent":false,"processes":false,"web":false,"socketio":false,"redis":false,"workers":null,"stale":null,"stale_file":null,"waiting_on":["agent","processes","web","socketio","redis"],"fix":"<ROOT>/benchbar adopt <TMP>/home/frappe-bench"},"labs":[],"notices":[],"leases":[]},"log":"<TMP>/state/logs/<LOG>.log"}
+--- stderr
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 4dbe61d..8743738 on upstream/main, 3 commit(s)
+    8743738 acme_crm: change 6
+    8fcd166 acme_crm: change 4
+    9f59f70 acme_crm: change 3
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 874373866663
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Update acme_crm (3 commit(s)) and apply 6 step(s)?
+
+> 1. Back up macdev
+  > bench --site macdev backup
+  [OK] bench --site macdev backup (<N>s)
+  + 1. Back up macdev: done (<N>s)
+
+> 2. Fast forward
+  > git merge --ff-only
+  [OK] git merge --ff-only (<N>s)
+  + 2. Fast forward: done (<N>s)
+
+> 3. Python requirements
+  > bench setup requirements --python acme_crm
+  [OK] bench setup requirements --python acme_crm (<N>s)
+  + 3. Python requirements: done (<N>s)
+
+> 4. Node requirements
+  > bench setup requirements --node acme_crm
+  [OK] bench setup requirements --node acme_crm (<N>s)
+  + 4. Node requirements: done (<N>s)
+
+> 5. Migrate macdev
+  > bench --site macdev migrate
+  [OK] bench --site macdev migrate (<N>s)
+  + 5. Migrate macdev: done (<N>s)
+
+> 6. Build
+  > bench build --app acme_crm
+  [OK] bench build --app acme_crm (<N>s)
+  + 6. Build: done (<N>s)
+
+Verify
+  [OK] apps/acme_crm is at 8743738 (upstream/main)
+
+Summary
+  # Step Status Time
+  1 Back up macdev done <N>s
+  2 Fast forward done <N>s
+  3 Python requirements done <N>s
+  4 Node requirements done <N>s
+  5 Migrate macdev done <N>s
+  6 Build done <N>s
+  total <N>s
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4dbe61d9fde2c19f5f6c536beb3b80723ea03567 874373866663d48054884e2d2da6adb67b5bfb20
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..874373866663d48054884e2d2da6adb67b5bfb20
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..874373866663d48054884e2d2da6adb67b5bfb20
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4dbe61d9fde2c19f5f6c536beb3b80723ea03567..874373866663d48054884e2d2da6adb67b5bfb20
+bench --site macdev backup
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet 874373866663d48054884e2d2da6adb67b5bfb20
+bench setup requirements --python acme_crm
+bench setup requirements --node acme_crm
+bench --site macdev migrate
+bench build --app acme_crm
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+launchctl print gui/<UID>/com.benchbar.frappe-bench
+pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
+[state] apply, good token, json head: 8743738
+[state] apply, good token, json record: none
+=== after apply, up to date
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+  [OK] unchanged: acme_crm is up to date with upstream/main (8743738)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+[state] after apply, up to date head: 8743738
+[state] after apply, up to date record: none
+=== fails at backup
+exit: 1
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 8743738..442ed2f on upstream/main, 1 commit(s)
+    442ed2f acme_crm: change 7
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 442ed2f85dfe
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Update acme_crm (1 commit(s)) and apply 6 step(s)?
+
+> 1. Back up macdev
+  > bench --site macdev backup
+  [FAIL] bench --site macdev backup failed with exit code 1 after <N>s
+     last 40 lines:
+     full log: <TMP>/state/logs/<LOG>.log
+     command: fl__in_dir <TMP>/home/frappe-bench bench --site macdev backup
+  x 1. Back up macdev: failed (<N>s)
+
+Summary
+  # Step Status Time
+  1 Back up macdev failed <N>s
+  2 Fast forward pending <N>s
+  3 Python requirements pending <N>s
+  4 Node requirements pending <N>s
+  5 Migrate macdev pending <N>s
+  6 Build pending <N>s
+  total <N>s
+  [FAIL] update of acme_crm stopped at: Back up macdev
+     site backups are in <TMP>/home/frappe-bench/sites/<site>/private/backups
+     fix: benchbar app update acme_crm --bench-dir <TMP>/home/frappe-bench (runs the steps that did not finish, nothing else)
+  [FAIL] Command failed (exit 1): return 1 (lib/frappe-local/apps.sh in fl_cmd_app near line N)
+     full log: <TMP>/state/logs/<LOG>.log
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 874373866663d48054884e2d2da6adb67b5bfb20 442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 874373866663d48054884e2d2da6adb67b5bfb20..442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 874373866663d48054884e2d2da6adb67b5bfb20..442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4
+bench --site macdev backup
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] fails at backup head: 8743738
+[state] fails at backup record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"874373866663d48054884e2d2da6adb67b5bfb20","to":"442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4","steps":[{"kind":"backup","target":"macdev","name":"Back up macdev"},{"kind":"fast_forward","target":"","name":"Fast forward"},{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"backup","reason":"bench --site macdev backup failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending after backup, text
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at backup
+     bench --site macdev backup failed with exit code 1 after <N>s
+
+Changes 8743738..442ed2f on upstream/main, 1 commit(s)
+    442ed2f acme_crm: change 7
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 442ed2f85dfe
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+
+  .. dry-run: nothing was changed (git fetch updated only apps/acme_crm/.git)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 874373866663d48054884e2d2da6adb67b5bfb20..442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 874373866663d48054884e2d2da6adb67b5bfb20..442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4
+[state] pending after backup, text head: 8743738
+[state] pending after backup, text record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"874373866663d48054884e2d2da6adb67b5bfb20","to":"442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4","steps":[{"kind":"backup","target":"macdev","name":"Back up macdev"},{"kind":"fast_forward","target":"","name":"Fast forward"},{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"backup","reason":"bench --site macdev backup failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending after backup, json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"874373866663d48054884e2d2da6adb67b5bfb20","to":"442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4","commits":[{"sha":"442ed2f","subject":"acme_crm: change 7"}],"commits_total":1,"newer_commits":0,"pending":{"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"874373866663d48054884e2d2da6adb67b5bfb20","to":"442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4","steps":[{"kind":"backup","target":"macdev","name":"Back up macdev"},{"kind":"fast_forward","target":"","name":"Fast forward"},{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"backup","reason":"bench --site macdev backup failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"},"sites":["macdev"],"skip_backup":false,"steps":[{"name":"Back up macdev","command":"bench --site macdev backup","kind":"backup","target":"macdev"},{"name":"Fast forward","command":"git -C apps/acme_crm merge --ff-only 442ed2f85dfe","kind":"fast_forward","target":""},{"name":"Python requirements","command":"bench setup requirements --python acme_crm","kind":"requirements_python","target":"acme_crm"},{"name":"Node requirements","command":"bench setup requirements --node acme_crm","kind":"requirements_node","target":"acme_crm"},{"name":"Migrate macdev","command":"bench --site macdev migrate","kind":"migrate","target":"macdev"},{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 874373866663d48054884e2d2da6adb67b5bfb20..442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 874373866663d48054884e2d2da6adb67b5bfb20..442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4
+[state] pending after backup, json head: 8743738
+[state] pending after backup, json record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"874373866663d48054884e2d2da6adb67b5bfb20","to":"442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4","steps":[{"kind":"backup","target":"macdev","name":"Back up macdev"},{"kind":"fast_forward","target":"","name":"Fast forward"},{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"backup","reason":"bench --site macdev backup failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== retry after backup
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at backup
+     bench --site macdev backup failed with exit code 1 after <N>s
+
+Changes 8743738..442ed2f on upstream/main, 1 commit(s)
+    442ed2f acme_crm: change 7
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 442ed2f85dfe
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Finish the unfinished update of acme_crm and apply 6 step(s)?
+
+> 1. Back up macdev
+  > bench --site macdev backup
+  [OK] bench --site macdev backup (<N>s)
+  + 1. Back up macdev: done (<N>s)
+
+> 2. Fast forward
+  > git merge --ff-only
+  [OK] git merge --ff-only (<N>s)
+  + 2. Fast forward: done (<N>s)
+
+> 3. Python requirements
+  > bench setup requirements --python acme_crm
+  [OK] bench setup requirements --python acme_crm (<N>s)
+  + 3. Python requirements: done (<N>s)
+
+> 4. Node requirements
+  > bench setup requirements --node acme_crm
+  [OK] bench setup requirements --node acme_crm (<N>s)
+  + 4. Node requirements: done (<N>s)
+
+> 5. Migrate macdev
+  > bench --site macdev migrate
+  [OK] bench --site macdev migrate (<N>s)
+  + 5. Migrate macdev: done (<N>s)
+
+> 6. Build
+  > bench build --app acme_crm
+  [OK] bench build --app acme_crm (<N>s)
+  + 6. Build: done (<N>s)
+
+Verify
+  [OK] apps/acme_crm is at 442ed2f (upstream/main)
+
+Summary
+  # Step Status Time
+  1 Back up macdev done <N>s
+  2 Fast forward done <N>s
+  3 Python requirements done <N>s
+  4 Node requirements done <N>s
+  5 Migrate macdev done <N>s
+  6 Build done <N>s
+  total <N>s
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 874373866663d48054884e2d2da6adb67b5bfb20..442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 874373866663d48054884e2d2da6adb67b5bfb20..442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4
+bench --site macdev backup
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet 442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4
+bench setup requirements --python acme_crm
+bench setup requirements --node acme_crm
+bench --site macdev migrate
+bench build --app acme_crm
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] retry after backup head: 442ed2f
+[state] retry after backup record: none
+=== fails at fast_forward
+exit: 1
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 442ed2f..fc9aeaf on upstream/main, 1 commit(s)
+    fc9aeaf acme_crm: change 8
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only fc9aeafe06a5
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Update acme_crm (1 commit(s)) and apply 6 step(s)?
+
+> 1. Back up macdev
+  > bench --site macdev backup
+  [OK] bench --site macdev backup (<N>s)
+  + 1. Back up macdev: done (<N>s)
+
+> 2. Fast forward
+  > git merge --ff-only
+  [FAIL] git merge --ff-only failed with exit code 1 after <N>s
+     last 40 lines:
+     error: unable to write the working tree
+     full log: <TMP>/state/logs/<LOG>.log
+     command: git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet fc9aeafe06a5e6584f9905639ea873473195a88d
+  x 2. Fast forward: failed (<N>s)
+
+Summary
+  # Step Status Time
+  1 Back up macdev done <N>s
+  2 Fast forward failed <N>s
+  3 Python requirements pending <N>s
+  4 Node requirements pending <N>s
+  5 Migrate macdev pending <N>s
+  6 Build pending <N>s
+  total <N>s
+  [FAIL] update of acme_crm stopped at: Fast forward
+     site backups are in <TMP>/home/frappe-bench/sites/<site>/private/backups
+     fix: benchbar app update acme_crm --bench-dir <TMP>/home/frappe-bench (runs the steps that did not finish, nothing else)
+  [FAIL] Command failed (exit 1): return 1 (lib/frappe-local/apps.sh in fl_cmd_app near line N)
+     full log: <TMP>/state/logs/<LOG>.log
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4 fc9aeafe06a5e6584f9905639ea873473195a88d
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4..fc9aeafe06a5e6584f9905639ea873473195a88d
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4..fc9aeafe06a5e6584f9905639ea873473195a88d
+bench --site macdev backup
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet fc9aeafe06a5e6584f9905639ea873473195a88d
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] fails at fast_forward head: 442ed2f
+[state] fails at fast_forward record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4","to":"fc9aeafe06a5e6584f9905639ea873473195a88d","steps":[{"kind":"fast_forward","target":"","name":"Fast forward"},{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"fast_forward","reason":"git merge --ff-only failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending after fast_forward, text
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at fast_forward
+     git merge --ff-only failed with exit code 1 after <N>s
+
+Changes 442ed2f..fc9aeaf on upstream/main, 1 commit(s)
+    fc9aeaf acme_crm: change 8
+
+Plan
+  # Step Command
+  1 Fast forward git -C apps/acme_crm merge --ff-only fc9aeafe06a5
+  2 Python requirements bench setup requirements --python acme_crm
+  3 Node requirements bench setup requirements --node acme_crm
+  4 Migrate macdev bench --site macdev migrate
+  5 Build bench build --app acme_crm
+
+  .. dry-run: nothing was changed (git fetch updated only apps/acme_crm/.git)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4..fc9aeafe06a5e6584f9905639ea873473195a88d
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4..fc9aeafe06a5e6584f9905639ea873473195a88d
+[state] pending after fast_forward, text head: 442ed2f
+[state] pending after fast_forward, text record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4","to":"fc9aeafe06a5e6584f9905639ea873473195a88d","steps":[{"kind":"fast_forward","target":"","name":"Fast forward"},{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"fast_forward","reason":"git merge --ff-only failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending after fast_forward, json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4","to":"fc9aeafe06a5e6584f9905639ea873473195a88d","commits":[{"sha":"fc9aeaf","subject":"acme_crm: change 8"}],"commits_total":1,"newer_commits":0,"pending":{"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4","to":"fc9aeafe06a5e6584f9905639ea873473195a88d","steps":[{"kind":"fast_forward","target":"","name":"Fast forward"},{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"fast_forward","reason":"git merge --ff-only failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"},"sites":["macdev"],"skip_backup":false,"steps":[{"name":"Fast forward","command":"git -C apps/acme_crm merge --ff-only fc9aeafe06a5","kind":"fast_forward","target":""},{"name":"Python requirements","command":"bench setup requirements --python acme_crm","kind":"requirements_python","target":"acme_crm"},{"name":"Node requirements","command":"bench setup requirements --node acme_crm","kind":"requirements_node","target":"acme_crm"},{"name":"Migrate macdev","command":"bench --site macdev migrate","kind":"migrate","target":"macdev"},{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4..fc9aeafe06a5e6584f9905639ea873473195a88d
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4..fc9aeafe06a5e6584f9905639ea873473195a88d
+[state] pending after fast_forward, json head: 442ed2f
+[state] pending after fast_forward, json record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4","to":"fc9aeafe06a5e6584f9905639ea873473195a88d","steps":[{"kind":"fast_forward","target":"","name":"Fast forward"},{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"fast_forward","reason":"git merge --ff-only failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== retry after fast_forward
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at fast_forward
+     git merge --ff-only failed with exit code 1 after <N>s
+
+Changes 442ed2f..fc9aeaf on upstream/main, 1 commit(s)
+    fc9aeaf acme_crm: change 8
+
+Plan
+  # Step Command
+  1 Fast forward git -C apps/acme_crm merge --ff-only fc9aeafe06a5
+  2 Python requirements bench setup requirements --python acme_crm
+  3 Node requirements bench setup requirements --node acme_crm
+  4 Migrate macdev bench --site macdev migrate
+  5 Build bench build --app acme_crm
+  .. auto-confirmed: Finish the unfinished update of acme_crm and apply 5 step(s)?
+
+> 1. Fast forward
+  > git merge --ff-only
+  [OK] git merge --ff-only (<N>s)
+  + 1. Fast forward: done (<N>s)
+
+> 2. Python requirements
+  > bench setup requirements --python acme_crm
+  [OK] bench setup requirements --python acme_crm (<N>s)
+  + 2. Python requirements: done (<N>s)
+
+> 3. Node requirements
+  > bench setup requirements --node acme_crm
+  [OK] bench setup requirements --node acme_crm (<N>s)
+  + 3. Node requirements: done (<N>s)
+
+> 4. Migrate macdev
+  > bench --site macdev migrate
+  [OK] bench --site macdev migrate (<N>s)
+  + 4. Migrate macdev: done (<N>s)
+
+> 5. Build
+  > bench build --app acme_crm
+  [OK] bench build --app acme_crm (<N>s)
+  + 5. Build: done (<N>s)
+
+Verify
+  [OK] apps/acme_crm is at fc9aeaf (upstream/main)
+
+Summary
+  # Step Status Time
+  1 Fast forward done <N>s
+  2 Python requirements done <N>s
+  3 Node requirements done <N>s
+  4 Migrate macdev done <N>s
+  5 Build done <N>s
+  total <N>s
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4..fc9aeafe06a5e6584f9905639ea873473195a88d
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 442ed2f85dfe5e094a4248e9ab65f7ac0de7bfa4..fc9aeafe06a5e6584f9905639ea873473195a88d
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet fc9aeafe06a5e6584f9905639ea873473195a88d
+bench setup requirements --python acme_crm
+bench setup requirements --node acme_crm
+bench --site macdev migrate
+bench build --app acme_crm
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] retry after fast_forward head: fc9aeaf
+[state] retry after fast_forward record: none
+=== fails at python
+exit: 1
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes fc9aeaf..211b37c on upstream/main, 1 commit(s)
+    211b37c acme_crm: change 9
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 211b37c72231
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Update acme_crm (1 commit(s)) and apply 6 step(s)?
+
+> 1. Back up macdev
+  > bench --site macdev backup
+  [OK] bench --site macdev backup (<N>s)
+  + 1. Back up macdev: done (<N>s)
+
+> 2. Fast forward
+  > git merge --ff-only
+  [OK] git merge --ff-only (<N>s)
+  + 2. Fast forward: done (<N>s)
+
+> 3. Python requirements
+  > bench setup requirements --python acme_crm
+  [FAIL] bench setup requirements --python acme_crm failed with exit code 1 after <N>s
+     last 40 lines:
+     full log: <TMP>/state/logs/<LOG>.log
+     command: fl__in_dir <TMP>/home/frappe-bench bench setup requirements --python acme_crm
+  x 3. Python requirements: failed (<N>s)
+
+Summary
+  # Step Status Time
+  1 Back up macdev done <N>s
+  2 Fast forward done <N>s
+  3 Python requirements failed <N>s
+  4 Node requirements pending <N>s
+  5 Migrate macdev pending <N>s
+  6 Build pending <N>s
+  total <N>s
+  [FAIL] update of acme_crm stopped at: Python requirements
+     the code is at 211b37c72231; to go back (not run for you): git -C <TMP>/home/frappe-bench/apps/acme_crm reset --hard fc9aeafe06a5e6584f9905639ea873473195a88d
+     site backups are in <TMP>/home/frappe-bench/sites/<site>/private/backups
+     fix: benchbar app update acme_crm --bench-dir <TMP>/home/frappe-bench (runs the steps that did not finish, nothing else)
+  [FAIL] Command failed (exit 1): return 1 (lib/frappe-local/apps.sh in fl_cmd_app near line N)
+     full log: <TMP>/state/logs/<LOG>.log
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor fc9aeafe06a5e6584f9905639ea873473195a88d 211b37c722316e1929c18837b9bdcf8f1085f417
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count fc9aeafe06a5e6584f9905639ea873473195a88d..211b37c722316e1929c18837b9bdcf8f1085f417
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 fc9aeafe06a5e6584f9905639ea873473195a88d..211b37c722316e1929c18837b9bdcf8f1085f417
+bench --site macdev backup
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet 211b37c722316e1929c18837b9bdcf8f1085f417
+bench setup requirements --python acme_crm
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] fails at python head: 211b37c
+[state] fails at python record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"fc9aeafe06a5e6584f9905639ea873473195a88d","to":"211b37c722316e1929c18837b9bdcf8f1085f417","steps":[{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"requirements_python","reason":"bench setup requirements --python acme_crm failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending after python, text
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at requirements_python
+     bench setup requirements --python acme_crm failed with exit code 1 after <N>s
+
+Changes fc9aeaf..211b37c on upstream/main, 1 commit(s)
+    211b37c acme_crm: change 9
+
+Plan
+  # Step Command
+  1 Python requirements bench setup requirements --python acme_crm
+  2 Node requirements bench setup requirements --node acme_crm
+  3 Migrate macdev bench --site macdev migrate
+  4 Build bench build --app acme_crm
+
+  .. dry-run: nothing was changed (git fetch updated only apps/acme_crm/.git)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count fc9aeafe06a5e6584f9905639ea873473195a88d..211b37c722316e1929c18837b9bdcf8f1085f417
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 fc9aeafe06a5e6584f9905639ea873473195a88d..211b37c722316e1929c18837b9bdcf8f1085f417
+[state] pending after python, text head: 211b37c
+[state] pending after python, text record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"fc9aeafe06a5e6584f9905639ea873473195a88d","to":"211b37c722316e1929c18837b9bdcf8f1085f417","steps":[{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"requirements_python","reason":"bench setup requirements --python acme_crm failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending after python, json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"fc9aeafe06a5e6584f9905639ea873473195a88d","to":"211b37c722316e1929c18837b9bdcf8f1085f417","commits":[{"sha":"211b37c","subject":"acme_crm: change 9"}],"commits_total":1,"newer_commits":0,"pending":{"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"fc9aeafe06a5e6584f9905639ea873473195a88d","to":"211b37c722316e1929c18837b9bdcf8f1085f417","steps":[{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"requirements_python","reason":"bench setup requirements --python acme_crm failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"},"sites":["macdev"],"skip_backup":false,"steps":[{"name":"Python requirements","command":"bench setup requirements --python acme_crm","kind":"requirements_python","target":"acme_crm"},{"name":"Node requirements","command":"bench setup requirements --node acme_crm","kind":"requirements_node","target":"acme_crm"},{"name":"Migrate macdev","command":"bench --site macdev migrate","kind":"migrate","target":"macdev"},{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count fc9aeafe06a5e6584f9905639ea873473195a88d..211b37c722316e1929c18837b9bdcf8f1085f417
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 fc9aeafe06a5e6584f9905639ea873473195a88d..211b37c722316e1929c18837b9bdcf8f1085f417
+[state] pending after python, json head: 211b37c
+[state] pending after python, json record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"fc9aeafe06a5e6584f9905639ea873473195a88d","to":"211b37c722316e1929c18837b9bdcf8f1085f417","steps":[{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"requirements_python","reason":"bench setup requirements --python acme_crm failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== retry after python
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at requirements_python
+     bench setup requirements --python acme_crm failed with exit code 1 after <N>s
+
+Changes fc9aeaf..211b37c on upstream/main, 1 commit(s)
+    211b37c acme_crm: change 9
+
+Plan
+  # Step Command
+  1 Python requirements bench setup requirements --python acme_crm
+  2 Node requirements bench setup requirements --node acme_crm
+  3 Migrate macdev bench --site macdev migrate
+  4 Build bench build --app acme_crm
+  .. auto-confirmed: Finish the unfinished update of acme_crm and apply 4 step(s)?
+
+> 1. Python requirements
+  > bench setup requirements --python acme_crm
+  [OK] bench setup requirements --python acme_crm (<N>s)
+  + 1. Python requirements: done (<N>s)
+
+> 2. Node requirements
+  > bench setup requirements --node acme_crm
+  [OK] bench setup requirements --node acme_crm (<N>s)
+  + 2. Node requirements: done (<N>s)
+
+> 3. Migrate macdev
+  > bench --site macdev migrate
+  [OK] bench --site macdev migrate (<N>s)
+  + 3. Migrate macdev: done (<N>s)
+
+> 4. Build
+  > bench build --app acme_crm
+  [OK] bench build --app acme_crm (<N>s)
+  + 4. Build: done (<N>s)
+
+Verify
+  [OK] apps/acme_crm is at 211b37c (upstream/main)
+
+Summary
+  # Step Status Time
+  1 Python requirements done <N>s
+  2 Node requirements done <N>s
+  3 Migrate macdev done <N>s
+  4 Build done <N>s
+  total <N>s
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count fc9aeafe06a5e6584f9905639ea873473195a88d..211b37c722316e1929c18837b9bdcf8f1085f417
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 fc9aeafe06a5e6584f9905639ea873473195a88d..211b37c722316e1929c18837b9bdcf8f1085f417
+bench setup requirements --python acme_crm
+bench setup requirements --node acme_crm
+bench --site macdev migrate
+bench build --app acme_crm
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] retry after python head: 211b37c
+[state] retry after python record: none
+=== fails at node
+exit: 1
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 211b37c..c36db73 on upstream/main, 1 commit(s)
+    c36db73 acme_crm: change 10
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only c36db731be09
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Update acme_crm (1 commit(s)) and apply 6 step(s)?
+
+> 1. Back up macdev
+  > bench --site macdev backup
+  [OK] bench --site macdev backup (<N>s)
+  + 1. Back up macdev: done (<N>s)
+
+> 2. Fast forward
+  > git merge --ff-only
+  [OK] git merge --ff-only (<N>s)
+  + 2. Fast forward: done (<N>s)
+
+> 3. Python requirements
+  > bench setup requirements --python acme_crm
+  [OK] bench setup requirements --python acme_crm (<N>s)
+  + 3. Python requirements: done (<N>s)
+
+> 4. Node requirements
+  > bench setup requirements --node acme_crm
+  [FAIL] bench setup requirements --node acme_crm failed with exit code 1 after <N>s
+     last 40 lines:
+     full log: <TMP>/state/logs/<LOG>.log
+     command: fl__in_dir <TMP>/home/frappe-bench bench setup requirements --node acme_crm
+  x 4. Node requirements: failed (<N>s)
+
+Summary
+  # Step Status Time
+  1 Back up macdev done <N>s
+  2 Fast forward done <N>s
+  3 Python requirements done <N>s
+  4 Node requirements failed <N>s
+  5 Migrate macdev pending <N>s
+  6 Build pending <N>s
+  total <N>s
+  [FAIL] update of acme_crm stopped at: Node requirements
+     the code is at c36db731be09; to go back (not run for you): git -C <TMP>/home/frappe-bench/apps/acme_crm reset --hard 211b37c722316e1929c18837b9bdcf8f1085f417
+     site backups are in <TMP>/home/frappe-bench/sites/<site>/private/backups
+     fix: benchbar app update acme_crm --bench-dir <TMP>/home/frappe-bench (runs the steps that did not finish, nothing else)
+  [FAIL] Command failed (exit 1): return 1 (lib/frappe-local/apps.sh in fl_cmd_app near line N)
+     full log: <TMP>/state/logs/<LOG>.log
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 211b37c722316e1929c18837b9bdcf8f1085f417 c36db731be09d3fb21cf7ecff9bda7cef2adbdc0
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 211b37c722316e1929c18837b9bdcf8f1085f417..c36db731be09d3fb21cf7ecff9bda7cef2adbdc0
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 211b37c722316e1929c18837b9bdcf8f1085f417..c36db731be09d3fb21cf7ecff9bda7cef2adbdc0
+bench --site macdev backup
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet c36db731be09d3fb21cf7ecff9bda7cef2adbdc0
+bench setup requirements --python acme_crm
+bench setup requirements --node acme_crm
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] fails at node head: c36db73
+[state] fails at node record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"211b37c722316e1929c18837b9bdcf8f1085f417","to":"c36db731be09d3fb21cf7ecff9bda7cef2adbdc0","steps":[{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"requirements_node","reason":"bench setup requirements --node acme_crm failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending after node, text
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at requirements_node
+     bench setup requirements --node acme_crm failed with exit code 1 after <N>s
+
+Changes 211b37c..c36db73 on upstream/main, 1 commit(s)
+    c36db73 acme_crm: change 10
+
+Plan
+  # Step Command
+  1 Node requirements bench setup requirements --node acme_crm
+  2 Migrate macdev bench --site macdev migrate
+  3 Build bench build --app acme_crm
+
+  .. dry-run: nothing was changed (git fetch updated only apps/acme_crm/.git)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 211b37c722316e1929c18837b9bdcf8f1085f417..c36db731be09d3fb21cf7ecff9bda7cef2adbdc0
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 211b37c722316e1929c18837b9bdcf8f1085f417..c36db731be09d3fb21cf7ecff9bda7cef2adbdc0
+[state] pending after node, text head: c36db73
+[state] pending after node, text record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"211b37c722316e1929c18837b9bdcf8f1085f417","to":"c36db731be09d3fb21cf7ecff9bda7cef2adbdc0","steps":[{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"requirements_node","reason":"bench setup requirements --node acme_crm failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending after node, json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"211b37c722316e1929c18837b9bdcf8f1085f417","to":"c36db731be09d3fb21cf7ecff9bda7cef2adbdc0","commits":[{"sha":"c36db73","subject":"acme_crm: change 10"}],"commits_total":1,"newer_commits":0,"pending":{"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"211b37c722316e1929c18837b9bdcf8f1085f417","to":"c36db731be09d3fb21cf7ecff9bda7cef2adbdc0","steps":[{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"requirements_node","reason":"bench setup requirements --node acme_crm failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"},"sites":["macdev"],"skip_backup":false,"steps":[{"name":"Node requirements","command":"bench setup requirements --node acme_crm","kind":"requirements_node","target":"acme_crm"},{"name":"Migrate macdev","command":"bench --site macdev migrate","kind":"migrate","target":"macdev"},{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 211b37c722316e1929c18837b9bdcf8f1085f417..c36db731be09d3fb21cf7ecff9bda7cef2adbdc0
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 211b37c722316e1929c18837b9bdcf8f1085f417..c36db731be09d3fb21cf7ecff9bda7cef2adbdc0
+[state] pending after node, json head: c36db73
+[state] pending after node, json record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"211b37c722316e1929c18837b9bdcf8f1085f417","to":"c36db731be09d3fb21cf7ecff9bda7cef2adbdc0","steps":[{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"requirements_node","reason":"bench setup requirements --node acme_crm failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== retry after node
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at requirements_node
+     bench setup requirements --node acme_crm failed with exit code 1 after <N>s
+
+Changes 211b37c..c36db73 on upstream/main, 1 commit(s)
+    c36db73 acme_crm: change 10
+
+Plan
+  # Step Command
+  1 Node requirements bench setup requirements --node acme_crm
+  2 Migrate macdev bench --site macdev migrate
+  3 Build bench build --app acme_crm
+  .. auto-confirmed: Finish the unfinished update of acme_crm and apply 3 step(s)?
+
+> 1. Node requirements
+  > bench setup requirements --node acme_crm
+  [OK] bench setup requirements --node acme_crm (<N>s)
+  + 1. Node requirements: done (<N>s)
+
+> 2. Migrate macdev
+  > bench --site macdev migrate
+  [OK] bench --site macdev migrate (<N>s)
+  + 2. Migrate macdev: done (<N>s)
+
+> 3. Build
+  > bench build --app acme_crm
+  [OK] bench build --app acme_crm (<N>s)
+  + 3. Build: done (<N>s)
+
+Verify
+  [OK] apps/acme_crm is at c36db73 (upstream/main)
+
+Summary
+  # Step Status Time
+  1 Node requirements done <N>s
+  2 Migrate macdev done <N>s
+  3 Build done <N>s
+  total <N>s
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 211b37c722316e1929c18837b9bdcf8f1085f417..c36db731be09d3fb21cf7ecff9bda7cef2adbdc0
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 211b37c722316e1929c18837b9bdcf8f1085f417..c36db731be09d3fb21cf7ecff9bda7cef2adbdc0
+bench setup requirements --node acme_crm
+bench --site macdev migrate
+bench build --app acme_crm
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] retry after node head: c36db73
+[state] retry after node record: none
+=== fails at migrate
+exit: 1
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes c36db73..3c5d366 on upstream/main, 1 commit(s)
+    3c5d366 acme_crm: change 11
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 3c5d3662e926
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Update acme_crm (1 commit(s)) and apply 6 step(s)?
+
+> 1. Back up macdev
+  > bench --site macdev backup
+  [OK] bench --site macdev backup (<N>s)
+  + 1. Back up macdev: done (<N>s)
+
+> 2. Fast forward
+  > git merge --ff-only
+  [OK] git merge --ff-only (<N>s)
+  + 2. Fast forward: done (<N>s)
+
+> 3. Python requirements
+  > bench setup requirements --python acme_crm
+  [OK] bench setup requirements --python acme_crm (<N>s)
+  + 3. Python requirements: done (<N>s)
+
+> 4. Node requirements
+  > bench setup requirements --node acme_crm
+  [OK] bench setup requirements --node acme_crm (<N>s)
+  + 4. Node requirements: done (<N>s)
+
+> 5. Migrate macdev
+  > bench --site macdev migrate
+  [FAIL] bench --site macdev migrate failed with exit code 1 after <N>s
+     last 40 lines:
+     full log: <TMP>/state/logs/<LOG>.log
+     command: fl__in_dir <TMP>/home/frappe-bench bench --site macdev migrate
+  x 5. Migrate macdev: failed (<N>s)
+
+Summary
+  # Step Status Time
+  1 Back up macdev done <N>s
+  2 Fast forward done <N>s
+  3 Python requirements done <N>s
+  4 Node requirements done <N>s
+  5 Migrate macdev failed <N>s
+  6 Build pending <N>s
+  total <N>s
+  [FAIL] update of acme_crm stopped at: Migrate macdev
+     the code is at 3c5d3662e926; to go back (not run for you): git -C <TMP>/home/frappe-bench/apps/acme_crm reset --hard c36db731be09d3fb21cf7ecff9bda7cef2adbdc0
+     site backups are in <TMP>/home/frappe-bench/sites/<site>/private/backups
+     fix: benchbar app update acme_crm --bench-dir <TMP>/home/frappe-bench (runs the steps that did not finish, nothing else)
+  [FAIL] Command failed (exit 1): return 1 (lib/frappe-local/apps.sh in fl_cmd_app near line N)
+     full log: <TMP>/state/logs/<LOG>.log
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor c36db731be09d3fb21cf7ecff9bda7cef2adbdc0 3c5d3662e9263fd12608ff874358b57767cdc5d9
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count c36db731be09d3fb21cf7ecff9bda7cef2adbdc0..3c5d3662e9263fd12608ff874358b57767cdc5d9
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 c36db731be09d3fb21cf7ecff9bda7cef2adbdc0..3c5d3662e9263fd12608ff874358b57767cdc5d9
+bench --site macdev backup
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet 3c5d3662e9263fd12608ff874358b57767cdc5d9
+bench setup requirements --python acme_crm
+bench setup requirements --node acme_crm
+bench --site macdev migrate
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] fails at migrate head: 3c5d366
+[state] fails at migrate record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"c36db731be09d3fb21cf7ecff9bda7cef2adbdc0","to":"3c5d3662e9263fd12608ff874358b57767cdc5d9","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"bench --site macdev migrate failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending after migrate, text
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at migrate
+     bench --site macdev migrate failed with exit code 1 after <N>s
+
+Changes c36db73..3c5d366 on upstream/main, 1 commit(s)
+    3c5d366 acme_crm: change 11
+
+Plan
+  # Step Command
+  1 Migrate macdev bench --site macdev migrate
+  2 Build bench build --app acme_crm
+
+  .. dry-run: nothing was changed (git fetch updated only apps/acme_crm/.git)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count c36db731be09d3fb21cf7ecff9bda7cef2adbdc0..3c5d3662e9263fd12608ff874358b57767cdc5d9
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 c36db731be09d3fb21cf7ecff9bda7cef2adbdc0..3c5d3662e9263fd12608ff874358b57767cdc5d9
+[state] pending after migrate, text head: 3c5d366
+[state] pending after migrate, text record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"c36db731be09d3fb21cf7ecff9bda7cef2adbdc0","to":"3c5d3662e9263fd12608ff874358b57767cdc5d9","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"bench --site macdev migrate failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending after migrate, json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"c36db731be09d3fb21cf7ecff9bda7cef2adbdc0","to":"3c5d3662e9263fd12608ff874358b57767cdc5d9","commits":[{"sha":"3c5d366","subject":"acme_crm: change 11"}],"commits_total":1,"newer_commits":0,"pending":{"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"c36db731be09d3fb21cf7ecff9bda7cef2adbdc0","to":"3c5d3662e9263fd12608ff874358b57767cdc5d9","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"bench --site macdev migrate failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"},"sites":["macdev"],"skip_backup":false,"steps":[{"name":"Migrate macdev","command":"bench --site macdev migrate","kind":"migrate","target":"macdev"},{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count c36db731be09d3fb21cf7ecff9bda7cef2adbdc0..3c5d3662e9263fd12608ff874358b57767cdc5d9
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 c36db731be09d3fb21cf7ecff9bda7cef2adbdc0..3c5d3662e9263fd12608ff874358b57767cdc5d9
+[state] pending after migrate, json head: 3c5d366
+[state] pending after migrate, json record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"c36db731be09d3fb21cf7ecff9bda7cef2adbdc0","to":"3c5d3662e9263fd12608ff874358b57767cdc5d9","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"bench --site macdev migrate failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== retry after migrate
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at migrate
+     bench --site macdev migrate failed with exit code 1 after <N>s
+
+Changes c36db73..3c5d366 on upstream/main, 1 commit(s)
+    3c5d366 acme_crm: change 11
+
+Plan
+  # Step Command
+  1 Migrate macdev bench --site macdev migrate
+  2 Build bench build --app acme_crm
+  .. auto-confirmed: Finish the unfinished update of acme_crm and apply 2 step(s)?
+
+> 1. Migrate macdev
+  > bench --site macdev migrate
+  [OK] bench --site macdev migrate (<N>s)
+  + 1. Migrate macdev: done (<N>s)
+
+> 2. Build
+  > bench build --app acme_crm
+  [OK] bench build --app acme_crm (<N>s)
+  + 2. Build: done (<N>s)
+
+Verify
+  [OK] apps/acme_crm is at 3c5d366 (upstream/main)
+
+Summary
+  # Step Status Time
+  1 Migrate macdev done <N>s
+  2 Build done <N>s
+  total <N>s
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count c36db731be09d3fb21cf7ecff9bda7cef2adbdc0..3c5d3662e9263fd12608ff874358b57767cdc5d9
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 c36db731be09d3fb21cf7ecff9bda7cef2adbdc0..3c5d3662e9263fd12608ff874358b57767cdc5d9
+bench --site macdev migrate
+bench build --app acme_crm
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] retry after migrate head: 3c5d366
+[state] retry after migrate record: none
+=== fails at build
+exit: 1
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 3c5d366..0162a95 on upstream/main, 1 commit(s)
+    0162a95 acme_crm: change 12
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 0162a95992e9
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Update acme_crm (1 commit(s)) and apply 6 step(s)?
+
+> 1. Back up macdev
+  > bench --site macdev backup
+  [OK] bench --site macdev backup (<N>s)
+  + 1. Back up macdev: done (<N>s)
+
+> 2. Fast forward
+  > git merge --ff-only
+  [OK] git merge --ff-only (<N>s)
+  + 2. Fast forward: done (<N>s)
+
+> 3. Python requirements
+  > bench setup requirements --python acme_crm
+  [OK] bench setup requirements --python acme_crm (<N>s)
+  + 3. Python requirements: done (<N>s)
+
+> 4. Node requirements
+  > bench setup requirements --node acme_crm
+  [OK] bench setup requirements --node acme_crm (<N>s)
+  + 4. Node requirements: done (<N>s)
+
+> 5. Migrate macdev
+  > bench --site macdev migrate
+  [OK] bench --site macdev migrate (<N>s)
+  + 5. Migrate macdev: done (<N>s)
+
+> 6. Build
+  > bench build --app acme_crm
+  [FAIL] bench build --app acme_crm failed with exit code 1 after <N>s
+     last 40 lines:
+     full log: <TMP>/state/logs/<LOG>.log
+     command: fl__in_dir <TMP>/home/frappe-bench bench build --app acme_crm
+  x 6. Build: failed (<N>s)
+
+Summary
+  # Step Status Time
+  1 Back up macdev done <N>s
+  2 Fast forward done <N>s
+  3 Python requirements done <N>s
+  4 Node requirements done <N>s
+  5 Migrate macdev done <N>s
+  6 Build failed <N>s
+  total <N>s
+  [FAIL] update of acme_crm stopped at: Build
+     the code is at 0162a95992e9; to go back (not run for you): git -C <TMP>/home/frappe-bench/apps/acme_crm reset --hard 3c5d3662e9263fd12608ff874358b57767cdc5d9
+     site backups are in <TMP>/home/frappe-bench/sites/<site>/private/backups
+     fix: benchbar app update acme_crm --bench-dir <TMP>/home/frappe-bench (runs the steps that did not finish, nothing else)
+  [FAIL] Command failed (exit 1): return 1 (lib/frappe-local/apps.sh in fl_cmd_app near line N)
+     full log: <TMP>/state/logs/<LOG>.log
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 3c5d3662e9263fd12608ff874358b57767cdc5d9 0162a95992e9c1ead41e8d18dc9b144e7885a076
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 3c5d3662e9263fd12608ff874358b57767cdc5d9..0162a95992e9c1ead41e8d18dc9b144e7885a076
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 3c5d3662e9263fd12608ff874358b57767cdc5d9..0162a95992e9c1ead41e8d18dc9b144e7885a076
+bench --site macdev backup
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet 0162a95992e9c1ead41e8d18dc9b144e7885a076
+bench setup requirements --python acme_crm
+bench setup requirements --node acme_crm
+bench --site macdev migrate
+bench build --app acme_crm
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] fails at build head: 0162a95
+[state] fails at build record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"3c5d3662e9263fd12608ff874358b57767cdc5d9","to":"0162a95992e9c1ead41e8d18dc9b144e7885a076","steps":[{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"build","reason":"bench build --app acme_crm failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending after build, text
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <PATH> |
+| site no site |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at build
+     bench build --app acme_crm failed with exit code 1 after <N>s
+
+Changes 3c5d366..0162a95 on upstream/main, 1 commit(s)
+    0162a95 acme_crm: change 12
+
+Plan
+  # Step Command
+  1 Build bench build --app acme_crm
+  .. no site has acme_crm installed (from the last list-apps read): nothing to back up or migrate
+
+  .. dry-run: nothing was changed (git fetch updated only apps/acme_crm/.git)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 3c5d3662e9263fd12608ff874358b57767cdc5d9..0162a95992e9c1ead41e8d18dc9b144e7885a076
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 3c5d3662e9263fd12608ff874358b57767cdc5d9..0162a95992e9c1ead41e8d18dc9b144e7885a076
+[state] pending after build, text head: 0162a95
+[state] pending after build, text record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"3c5d3662e9263fd12608ff874358b57767cdc5d9","to":"0162a95992e9c1ead41e8d18dc9b144e7885a076","steps":[{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"build","reason":"bench build --app acme_crm failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending after build, json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"3c5d3662e9263fd12608ff874358b57767cdc5d9","to":"0162a95992e9c1ead41e8d18dc9b144e7885a076","commits":[{"sha":"0162a95","subject":"acme_crm: change 12"}],"commits_total":1,"newer_commits":0,"pending":{"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"3c5d3662e9263fd12608ff874358b57767cdc5d9","to":"0162a95992e9c1ead41e8d18dc9b144e7885a076","steps":[{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"build","reason":"bench build --app acme_crm failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"},"sites":[],"skip_backup":false,"steps":[{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 3c5d3662e9263fd12608ff874358b57767cdc5d9..0162a95992e9c1ead41e8d18dc9b144e7885a076
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 3c5d3662e9263fd12608ff874358b57767cdc5d9..0162a95992e9c1ead41e8d18dc9b144e7885a076
+[state] pending after build, json head: 0162a95
+[state] pending after build, json record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"3c5d3662e9263fd12608ff874358b57767cdc5d9","to":"0162a95992e9c1ead41e8d18dc9b144e7885a076","steps":[{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"build","reason":"bench build --app acme_crm failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== retry after build
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site no site |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at build
+     bench build --app acme_crm failed with exit code 1 after <N>s
+
+Changes 3c5d366..0162a95 on upstream/main, 1 commit(s)
+    0162a95 acme_crm: change 12
+
+Plan
+  # Step Command
+  1 Build bench build --app acme_crm
+  .. no site has acme_crm installed (from the last list-apps read): nothing to back up or migrate
+  .. auto-confirmed: Finish the unfinished update of acme_crm and apply 1 step(s)?
+
+> 1. Build
+  > bench build --app acme_crm
+  [OK] bench build --app acme_crm (<N>s)
+  + 1. Build: done (<N>s)
+
+Verify
+  [OK] apps/acme_crm is at 0162a95 (upstream/main)
+
+Summary
+  # Step Status Time
+  1 Build done <N>s
+  total <N>s
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 3c5d3662e9263fd12608ff874358b57767cdc5d9..0162a95992e9c1ead41e8d18dc9b144e7885a076
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 3c5d3662e9263fd12608ff874358b57767cdc5d9..0162a95992e9c1ead41e8d18dc9b144e7885a076
+bench build --app acme_crm
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] retry after build head: 0162a95
+[state] retry after build record: none
+=== fails at migrate, json
+exit: 1
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","event":"plan","op_id":"op-<ID>","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"0162a95992e9c1ead41e8d18dc9b144e7885a076","to":"4d64dedd10869cdb89dd5fcf988a133124fe0ae6","commits":[{"sha":"4d64ded","subject":"acme_crm: change 13"}],"commits_total":1,"newer_commits":0,"pending":null,"sites":["macdev"],"skip_backup":false,"steps":[{"name":"Back up macdev","command":"bench --site macdev backup","kind":"backup","target":"macdev"},{"name":"Fast forward","command":"git -C apps/acme_crm merge --ff-only 4d64dedd1086","kind":"fast_forward","target":""},{"name":"Python requirements","command":"bench setup requirements --python acme_crm","kind":"requirements_python","target":"acme_crm"},{"name":"Node requirements","command":"bench setup requirements --node acme_crm","kind":"requirements_node","target":"acme_crm"},{"name":"Migrate macdev","command":"bench --site macdev migrate","kind":"migrate","target":"macdev"},{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":1,"id":"backup_macdev","parent":null,"name":"Back up macdev","status":"running"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":1,"id":"backup_macdev","parent":null,"name":"Back up macdev","status":"done","secs":<N>}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":2,"id":"fast_forward","parent":null,"name":"Fast forward","status":"running"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":2,"id":"fast_forward","parent":null,"name":"Fast forward","status":"done","secs":<N>}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":3,"id":"requirements_python_acme_crm","parent":null,"name":"Python requirements","status":"running"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":3,"id":"requirements_python_acme_crm","parent":null,"name":"Python requirements","status":"done","secs":<N>}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":4,"id":"requirements_node_acme_crm","parent":null,"name":"Node requirements","status":"running"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":4,"id":"requirements_node_acme_crm","parent":null,"name":"Node requirements","status":"done","secs":<N>}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":5,"id":"migrate_macdev","parent":null,"name":"Migrate macdev","status":"running"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","op_id":"op-<ID>","n":5,"id":"migrate_macdev","parent":null,"name":"Migrate macdev","status":"failed","secs":<N>,"message":"[FAIL] bench --site macdev migrate failed with exit code 1 after <N>s"}
+{"schema_version":1,"cli_version":"0.8.3","event":"done","op_id":"op-<ID>","bench":"<TMP>/home/frappe-bench","exit":1,"changed":[{"kind":"backup","name":"macdev","detail":"bench --site backup"},{"kind":"app","name":"acme_crm","detail":"0162a95 to 4d64ded"},{"kind":"site","name":"macdev","detail":"partial: migrate failed, the database may have changed"}],"warnings":[],"next_actions":[{"command":"benchbar app update acme_crm --bench-dir <TMP>/home/frappe-bench (runs the steps that did not finish, nothing else)","why":"update of acme_crm stopped at: Migrate macdev","quoted":true}],"state_after":{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","name":"frappe-bench","site":null,"label":"com.benchbar.frappe-bench","state":"not_adopted","stop_reason":null,"pid":null,"started_at":null,"last_exit_code":null,"web_url":null,"web_ping_code":null,"ports":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_socketio":13000,"redis_cache":13000},"sites":[{"name":"macdev","default":false,"hosts_entry":false,"ping_code":null,"developer_mode":false,"open_as_enabled":false,"open_as":false,"served":null}],"scheduler":false,"autostart":true,"listen":"local","redis":{"queue":{"port":11000,"running":false},"cache":{"port":13000,"running":false}},"bench_bin":null,"state_file":"<TMP>/home/frappe-bench/logs/.benchbar/state.json","log":"<TMP>/home/frappe-bench/logs/bench.log","agent_loaded":false,"agent_state":null,"processes_running":false,"url":null,"agent":"com.benchbar.frappe-bench","loaded":"no","stop_flag":"none","ping":"000","pending_operations":[{"op":"app_update","app":"acme_crm","branch":"main","from":"0162a95992e9c1ead41e8d18dc9b144e7885a076","to":"4d64dedd10869cdb89dd5fcf988a133124fe0ae6","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"bench --site macdev migrate failed with exit code 1 after <N>s","url":null,"updated_at":"<TS>"}],"ready":{"ready":false,"deep":false,"agent":false,"processes":false,"web":false,"socketio":false,"redis":false,"workers":null,"stale":null,"stale_file":null,"waiting_on":["agent","processes","web","socketio","redis"],"fix":"<ROOT>/benchbar adopt <TMP>/home/frappe-bench"},"labs":[],"notices":[],"leases":[]},"log":"<TMP>/state/logs/<LOG>.log","error":"Command failed (exit 1): return 1 (lib/frappe-local/apps.sh in fl_cmd_app near line N)"}
+--- stderr
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 0162a95..4d64ded on upstream/main, 1 commit(s)
+    4d64ded acme_crm: change 13
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 4d64dedd1086
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Update acme_crm (1 commit(s)) and apply 6 step(s)?
+
+> 1. Back up macdev
+  > bench --site macdev backup
+  [OK] bench --site macdev backup (<N>s)
+  + 1. Back up macdev: done (<N>s)
+
+> 2. Fast forward
+  > git merge --ff-only
+  [OK] git merge --ff-only (<N>s)
+  + 2. Fast forward: done (<N>s)
+
+> 3. Python requirements
+  > bench setup requirements --python acme_crm
+  [OK] bench setup requirements --python acme_crm (<N>s)
+  + 3. Python requirements: done (<N>s)
+
+> 4. Node requirements
+  > bench setup requirements --node acme_crm
+  [OK] bench setup requirements --node acme_crm (<N>s)
+  + 4. Node requirements: done (<N>s)
+
+> 5. Migrate macdev
+  > bench --site macdev migrate
+  [FAIL] bench --site macdev migrate failed with exit code 1 after <N>s
+     last 40 lines:
+     full log: <TMP>/state/logs/<LOG>.log
+     command: fl__in_dir <TMP>/home/frappe-bench bench --site macdev migrate
+  x 5. Migrate macdev: failed (<N>s)
+
+Summary
+  # Step Status Time
+  1 Back up macdev done <N>s
+  2 Fast forward done <N>s
+  3 Python requirements done <N>s
+  4 Node requirements done <N>s
+  5 Migrate macdev failed <N>s
+  6 Build pending <N>s
+  total <N>s
+  [FAIL] update of acme_crm stopped at: Migrate macdev
+     the code is at 4d64dedd1086; to go back (not run for you): git -C <TMP>/home/frappe-bench/apps/acme_crm reset --hard 0162a95992e9c1ead41e8d18dc9b144e7885a076
+     site backups are in <TMP>/home/frappe-bench/sites/<site>/private/backups
+     fix: benchbar app update acme_crm --bench-dir <TMP>/home/frappe-bench (runs the steps that did not finish, nothing else)
+  [FAIL] Command failed (exit 1): return 1 (lib/frappe-local/apps.sh in fl_cmd_app near line N)
+     full log: <TMP>/state/logs/<LOG>.log
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 0162a95992e9c1ead41e8d18dc9b144e7885a076 4d64dedd10869cdb89dd5fcf988a133124fe0ae6
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 0162a95992e9c1ead41e8d18dc9b144e7885a076..4d64dedd10869cdb89dd5fcf988a133124fe0ae6
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 0162a95992e9c1ead41e8d18dc9b144e7885a076..4d64dedd10869cdb89dd5fcf988a133124fe0ae6
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 0162a95992e9c1ead41e8d18dc9b144e7885a076..4d64dedd10869cdb89dd5fcf988a133124fe0ae6
+bench --site macdev backup
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet 4d64dedd10869cdb89dd5fcf988a133124fe0ae6
+bench setup requirements --python acme_crm
+bench setup requirements --node acme_crm
+bench --site macdev migrate
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+launchctl print gui/<UID>/com.benchbar.frappe-bench
+pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
+[state] fails at migrate, json head: 4d64ded
+[state] fails at migrate, json record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"0162a95992e9c1ead41e8d18dc9b144e7885a076","to":"4d64dedd10869cdb89dd5fcf988a133124fe0ae6","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"bench --site macdev migrate failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== retry, skip backup
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at migrate
+     bench --site macdev migrate failed with exit code 1 after <N>s
+
+Changes 0162a95..4d64ded on upstream/main, 1 commit(s)
+    4d64ded acme_crm: change 13
+
+Plan
+  # Step Command
+  1 Migrate macdev bench --site macdev migrate
+  2 Build bench build --app acme_crm
+  [WARN] --skip-backup: the sites are migrated without a backup first
+  .. auto-confirmed: Finish the unfinished update of acme_crm and apply 2 step(s)?
+
+> 1. Migrate macdev
+  > bench --site macdev migrate
+  [OK] bench --site macdev migrate (<N>s)
+  + 1. Migrate macdev: done (<N>s)
+
+> 2. Build
+  > bench build --app acme_crm
+  [OK] bench build --app acme_crm (<N>s)
+  + 2. Build: done (<N>s)
+
+Verify
+  [OK] apps/acme_crm is at 4d64ded (upstream/main)
+
+Summary
+  # Step Status Time
+  1 Migrate macdev done <N>s
+  2 Build done <N>s
+  total <N>s
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 0162a95992e9c1ead41e8d18dc9b144e7885a076..4d64dedd10869cdb89dd5fcf988a133124fe0ae6
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 0162a95992e9c1ead41e8d18dc9b144e7885a076..4d64dedd10869cdb89dd5fcf988a133124fe0ae6
+bench --site macdev migrate
+bench build --app acme_crm
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] retry, skip backup head: 4d64ded
+[state] retry, skip backup record: none
+=== fails at migrate again
+exit: 1
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 4d64ded..74055bd on upstream/main, 1 commit(s)
+    74055bd acme_crm: change 14
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 74055bdd7572
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Update acme_crm (1 commit(s)) and apply 6 step(s)?
+
+> 1. Back up macdev
+  > bench --site macdev backup
+  [OK] bench --site macdev backup (<N>s)
+  + 1. Back up macdev: done (<N>s)
+
+> 2. Fast forward
+  > git merge --ff-only
+  [OK] git merge --ff-only (<N>s)
+  + 2. Fast forward: done (<N>s)
+
+> 3. Python requirements
+  > bench setup requirements --python acme_crm
+  [OK] bench setup requirements --python acme_crm (<N>s)
+  + 3. Python requirements: done (<N>s)
+
+> 4. Node requirements
+  > bench setup requirements --node acme_crm
+  [OK] bench setup requirements --node acme_crm (<N>s)
+  + 4. Node requirements: done (<N>s)
+
+> 5. Migrate macdev
+  > bench --site macdev migrate
+  [FAIL] bench --site macdev migrate failed with exit code 1 after <N>s
+     last 40 lines:
+     full log: <TMP>/state/logs/<LOG>.log
+     command: fl__in_dir <TMP>/home/frappe-bench bench --site macdev migrate
+  x 5. Migrate macdev: failed (<N>s)
+
+Summary
+  # Step Status Time
+  1 Back up macdev done <N>s
+  2 Fast forward done <N>s
+  3 Python requirements done <N>s
+  4 Node requirements done <N>s
+  5 Migrate macdev failed <N>s
+  6 Build pending <N>s
+  total <N>s
+  [FAIL] update of acme_crm stopped at: Migrate macdev
+     the code is at 74055bdd7572; to go back (not run for you): git -C <TMP>/home/frappe-bench/apps/acme_crm reset --hard 4d64dedd10869cdb89dd5fcf988a133124fe0ae6
+     site backups are in <TMP>/home/frappe-bench/sites/<site>/private/backups
+     fix: benchbar app update acme_crm --bench-dir <TMP>/home/frappe-bench (runs the steps that did not finish, nothing else)
+  [FAIL] Command failed (exit 1): return 1 (lib/frappe-local/apps.sh in fl_cmd_app near line N)
+     full log: <TMP>/state/logs/<LOG>.log
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4d64dedd10869cdb89dd5fcf988a133124fe0ae6 74055bdd75724b85f2e89048b4b6de9177f31e59
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4d64dedd10869cdb89dd5fcf988a133124fe0ae6..74055bdd75724b85f2e89048b4b6de9177f31e59
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4d64dedd10869cdb89dd5fcf988a133124fe0ae6..74055bdd75724b85f2e89048b4b6de9177f31e59
+bench --site macdev backup
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet 74055bdd75724b85f2e89048b4b6de9177f31e59
+bench setup requirements --python acme_crm
+bench setup requirements --node acme_crm
+bench --site macdev migrate
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] fails at migrate again head: 74055bd
+[state] fails at migrate again record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"4d64dedd10869cdb89dd5fcf988a133124fe0ae6","to":"74055bdd75724b85f2e89048b4b6de9177f31e59","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"bench --site macdev migrate failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending, newer commits upstream
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode dry-run |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at migrate
+     bench --site macdev migrate failed with exit code 1 after <N>s
+
+Changes 4d64ded..74055bd on upstream/main, 1 commit(s)
+    74055bd acme_crm: change 14
+  .. 2 newer commit(s) on upstream/main wait for the next app update
+
+Plan
+  # Step Command
+  1 Migrate macdev bench --site macdev migrate
+  2 Build bench build --app acme_crm
+
+  .. dry-run: nothing was changed (git fetch updated only apps/acme_crm/.git)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 74055bdd75724b85f2e89048b4b6de9177f31e59 4aad5acf14a17d4e9ffbbba541f2145b0710a49b
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 74055bdd75724b85f2e89048b4b6de9177f31e59..4aad5acf14a17d4e9ffbbba541f2145b0710a49b
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4d64dedd10869cdb89dd5fcf988a133124fe0ae6..74055bdd75724b85f2e89048b4b6de9177f31e59
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4d64dedd10869cdb89dd5fcf988a133124fe0ae6..74055bdd75724b85f2e89048b4b6de9177f31e59
+[state] pending, newer commits upstream head: 74055bd
+[state] pending, newer commits upstream record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"4d64dedd10869cdb89dd5fcf988a133124fe0ae6","to":"74055bdd75724b85f2e89048b4b6de9177f31e59","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"bench --site macdev migrate failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending, skip backup, json plan
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"4d64dedd10869cdb89dd5fcf988a133124fe0ae6","to":"74055bdd75724b85f2e89048b4b6de9177f31e59","commits":[{"sha":"74055bd","subject":"acme_crm: change 14"}],"commits_total":1,"newer_commits":2,"pending":{"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"4d64dedd10869cdb89dd5fcf988a133124fe0ae6","to":"74055bdd75724b85f2e89048b4b6de9177f31e59","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"bench --site macdev migrate failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"},"sites":["macdev"],"skip_backup":true,"steps":[{"name":"Migrate macdev","command":"bench --site macdev migrate","kind":"migrate","target":"macdev"},{"name":"Build","command":"bench build --app acme_crm","kind":"build","target":"acme_crm"}],"can_apply":true,"token":"<TOKEN>"}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 74055bdd75724b85f2e89048b4b6de9177f31e59 4aad5acf14a17d4e9ffbbba541f2145b0710a49b
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 74055bdd75724b85f2e89048b4b6de9177f31e59..4aad5acf14a17d4e9ffbbba541f2145b0710a49b
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4d64dedd10869cdb89dd5fcf988a133124fe0ae6..74055bdd75724b85f2e89048b4b6de9177f31e59
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4d64dedd10869cdb89dd5fcf988a133124fe0ae6..74055bdd75724b85f2e89048b4b6de9177f31e59
+[state] pending, skip backup, json plan head: 74055bd
+[state] pending, skip backup, json plan record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"4d64dedd10869cdb89dd5fcf988a133124fe0ae6","to":"74055bdd75724b85f2e89048b4b6de9177f31e59","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"bench --site macdev migrate failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending, app moved
+exit: 1
+--- stdout
+  [FAIL] apps/acme_crm is at 4d64dedd1086, not where the unfinished update was going (74055bdd7572); it was moved after that update stopped.
+
+Aborting. Look at the app yourself, then: benchbar app update acme_crm --discard-pending (drops the record and stops; the steps it lists are not run, and the update itself waits for the next run)
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] pending, app moved head: 4d64ded
+[state] pending, app moved record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"4d64dedd10869cdb89dd5fcf988a133124fe0ae6","to":"74055bdd75724b85f2e89048b4b6de9177f31e59","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"bench --site macdev migrate failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== pending, discard
+exit: 0
+--- stdout
+  [WARN] dropping the unfinished app_update of acme_crm (started <TS>, stopped at migrate); its 2 step(s) will not run, and nothing else runs now
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+[state] pending, discard head: 4d64ded
+[state] pending, discard record: none
+=== pending app add
+exit: 1
+--- stdout
+  [FAIL] apps/acme_crm has an unfinished app add (stopped at build); update would not finish it.
+
+Aborting. benchbar app add acme_crm ... (the plan lists the steps left), or drop the record without running anything: benchbar app update acme_crm --discard-pending
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] pending app add head: 4aad5ac
+[state] pending app add record: {"schema_version":1,"op":"app_add","app":"acme_crm","branch":"main","from":"","to":"","steps":[],"failed_step":"build","reason":"left over","url":"","started_at":"<TS>","updated_at":"<TS>"}
+=== pending, nothing left but verify
+exit: 0
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site no site |
++---+
+
+Unfinished from the last run update of acme_crm, started <TS>, stopped at verify
+     not there
+  .. every step is done; the verify pass below decides
+  .. no site has acme_crm installed (from the last list-apps read): nothing to back up or migrate
+  .. auto-confirmed: Finish the unfinished update of acme_crm and apply 0 step(s)?
+
+Verify
+  [OK] apps/acme_crm is at 4aad5ac (upstream/main)
+
+Summary
+  # Step Status Time
+  total <N>s
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] pending, nothing left but verify head: 4aad5ac
+[state] pending, nothing left but verify record: none
+=== pending, nothing left, json
+exit: 0
+--- stdout
+{"schema_version":1,"cli_version":"0.8.3","bench":"<TMP>/home/frappe-bench","app":"acme_crm","remote":"upstream","branch":"main","from":"4aad5acf14a17d4e9ffbbba541f2145b0710a49b","to":"4aad5acf14a17d4e9ffbbba541f2145b0710a49b","commits":[],"commits_total":0,"newer_commits":0,"pending":{"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"4aad5acf14a17d4e9ffbbba541f2145b0710a49b","to":"4aad5acf14a17d4e9ffbbba541f2145b0710a49b","steps":[],"failed_step":"verify","reason":"not there","url":"","started_at":"<TS>","updated_at":"<TS>"},"sites":[],"skip_backup":false,"steps":[],"can_apply":false,"token":null}
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+[state] pending, nothing left, json head: 4aad5ac
+[state] pending, nothing left, json record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"4aad5acf14a17d4e9ffbbba541f2145b0710a49b","to":"4aad5acf14a17d4e9ffbbba541f2145b0710a49b","steps":[],"failed_step":"verify","reason":"not there","url":"","started_at":"<TS>","updated_at":"<TS>"}
+=== record cannot be written first
+exit: 1
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 4aad5ac..8f42ea1 on upstream/main, 1 commit(s)
+    8f42ea1 acme_crm: change 17
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 8f42ea1e6af3
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Update acme_crm (1 commit(s)) and apply 6 step(s)?
+  [FAIL] could not write the pending record <TMP>/state/benches/frappe-bench-<H>/acme_crm.json
+  [FAIL] nothing was run: without its record a stop could not be finished later
+  [FAIL] Command failed (exit 1): return 1 (lib/frappe-local/apps.sh in fl_cmd_app near line N)
+     full log: <TMP>/state/logs/<LOG>.log
+--- stderr
+<ROOT>/lib/frappe-local/apps.sh: line N: <TMP>/state/benches/frappe-bench-<H>/acme_crm.json.tmp.<PID>: Permission denied
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4aad5acf14a17d4e9ffbbba541f2145b0710a49b 8f42ea1e6af315244fa267a058024b8e6028896d
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4aad5acf14a17d4e9ffbbba541f2145b0710a49b..8f42ea1e6af315244fa267a058024b8e6028896d
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4aad5acf14a17d4e9ffbbba541f2145b0710a49b..8f42ea1e6af315244fa267a058024b8e6028896d
+[state] record cannot be written first head: 4aad5ac
+[state] record cannot be written first record: none
+=== record cannot be updated
+exit: 1
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 4aad5ac..8f42ea1 on upstream/main, 1 commit(s)
+    8f42ea1 acme_crm: change 17
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 8f42ea1e6af3
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Update acme_crm (1 commit(s)) and apply 6 step(s)?
+
+> 1. Back up macdev
+  > bench --site macdev backup
+  [OK] bench --site macdev backup (<N>s)
+  + 1. Back up macdev: done (<N>s)
+
+> 2. Fast forward
+  > git merge --ff-only
+  [OK] git merge --ff-only (<N>s)
+  + 2. Fast forward: done (<N>s)
+
+> 3. Python requirements
+  > bench setup requirements --python acme_crm
+  [OK] bench setup requirements --python acme_crm (<N>s)
+  + 3. Python requirements: done (<N>s)
+  [FAIL] could not write the pending record <TMP>/state/benches/frappe-bench-<H>/acme_crm.json
+
+Summary
+  # Step Status Time
+  1 Back up macdev done <N>s
+  2 Fast forward done <N>s
+  3 Python requirements done <N>s
+  4 Node requirements pending <N>s
+  5 Migrate macdev pending <N>s
+  6 Build pending <N>s
+  total <N>s
+  [FAIL] update of acme_crm stopped after: Python requirements (its record could not be updated)
+  [FAIL] Command failed (exit 1): return 1 (lib/frappe-local/apps.sh in fl_cmd_app near line N)
+     full log: <TMP>/state/logs/<LOG>.log
+--- stderr
+<ROOT>/lib/frappe-local/apps.sh: line N: <TMP>/state/benches/frappe-bench-<H>/acme_crm.json.tmp.<PID>: Permission denied
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4aad5acf14a17d4e9ffbbba541f2145b0710a49b 8f42ea1e6af315244fa267a058024b8e6028896d
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4aad5acf14a17d4e9ffbbba541f2145b0710a49b..8f42ea1e6af315244fa267a058024b8e6028896d
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4aad5acf14a17d4e9ffbbba541f2145b0710a49b..8f42ea1e6af315244fa267a058024b8e6028896d
+bench --site macdev backup
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet 8f42ea1e6af315244fa267a058024b8e6028896d
+bench setup requirements --python acme_crm
+[state] record cannot be updated head: 8f42ea1
+[state] record cannot be updated record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"4aad5acf14a17d4e9ffbbba541f2145b0710a49b","to":"8f42ea1e6af315244fa267a058024b8e6028896d","steps":[{"kind":"requirements_python","target":"acme_crm","name":"Python requirements"},{"kind":"requirements_node","target":"acme_crm","name":"Node requirements"},{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":null,"reason":null,"url":null,"started_at":"<TS>","updated_at":"<TS>"}
+=== verify fails
+exit: 1
+--- stdout
+
++- benchbar app update ---+
+| mode app |
+| profile v15-lts |
+| bench <PATH> |
+| site macdev |
++---+
+
+Changes 4aad5ac..8f42ea1 on upstream/main, 1 commit(s)
+    8f42ea1 acme_crm: change 17
+
+Plan
+  # Step Command
+  1 Back up macdev bench --site macdev backup
+  2 Fast forward git -C apps/acme_crm merge --ff-only 8f42ea1e6af3
+  3 Python requirements bench setup requirements --python acme_crm
+  4 Node requirements bench setup requirements --node acme_crm
+  5 Migrate macdev bench --site macdev migrate
+  6 Build bench build --app acme_crm
+  .. auto-confirmed: Update acme_crm (1 commit(s)) and apply 6 step(s)?
+
+> 1. Back up macdev
+  > bench --site macdev backup
+  [OK] bench --site macdev backup (<N>s)
+  + 1. Back up macdev: done (<N>s)
+
+> 2. Fast forward
+  > git merge --ff-only
+  [OK] git merge --ff-only (<N>s)
+  + 2. Fast forward: done (<N>s)
+
+> 3. Python requirements
+  > bench setup requirements --python acme_crm
+  [OK] bench setup requirements --python acme_crm (<N>s)
+  + 3. Python requirements: done (<N>s)
+
+> 4. Node requirements
+  > bench setup requirements --node acme_crm
+  [OK] bench setup requirements --node acme_crm (<N>s)
+  + 4. Node requirements: done (<N>s)
+
+> 5. Migrate macdev
+  > bench --site macdev migrate
+  [OK] bench --site macdev migrate (<N>s)
+  + 5. Migrate macdev: done (<N>s)
+
+> 6. Build
+  > bench build --app acme_crm
+  [OK] bench build --app acme_crm (<N>s)
+  + 6. Build: done (<N>s)
+
+Verify
+  [FAIL] apps/acme_crm is not at 8f42ea1
+     fix: look at apps/acme_crm yourself; benchbar app update acme_crm --discard-pending drops this record and stops (the update itself is a separate run)
+
+Summary
+  # Step Status Time
+  1 Back up macdev done <N>s
+  2 Fast forward done <N>s
+  3 Python requirements done <N>s
+  4 Node requirements done <N>s
+  5 Migrate macdev done <N>s
+  6 Build done <N>s
+  total <N>s
+  [FAIL] Command failed (exit 1): return "$code" (lib/frappe-local/apps.sh in fl_cmd_app near line N)
+     full log: <TMP>/state/logs/<LOG>.log
+--- stderr
+--- calls
+brew --prefix
+pipx environment --value PIPX_HOME
+git -C <TMP>/home/frappe-bench/apps/acme_crm status --porcelain -uno
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get branch.main.remote
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse --is-shallow-repository
+git -C <TMP>/home/frappe-bench/apps/acme_crm config --get core.sshCommand
+git -C <TMP>/home/frappe-bench/apps/acme_crm fetch --quiet upstream main
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify FETCH_HEAD^{commit}
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge-base --is-ancestor 4aad5acf14a17d4e9ffbbba541f2145b0710a49b 8f42ea1e6af315244fa267a058024b8e6028896d
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-list --count 4aad5acf14a17d4e9ffbbba541f2145b0710a49b..8f42ea1e6af315244fa267a058024b8e6028896d
+bench --site macdev list-apps --format json
+pgrep -f honcho start -f Procfile\.lean
+pgrep -f -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)
+pgrep -f apps/frappe/socketio\.js
+lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
+git -C <TMP>/home/frappe-bench/apps/acme_crm log --format=%h %s -n 30 4aad5acf14a17d4e9ffbbba541f2145b0710a49b..8f42ea1e6af315244fa267a058024b8e6028896d
+bench --site macdev backup
+git -C <TMP>/home/frappe-bench/apps/acme_crm merge --ff-only --quiet 8f42ea1e6af315244fa267a058024b8e6028896d
+bench setup requirements --python acme_crm
+bench setup requirements --node acme_crm
+bench --site macdev migrate
+git -C <TMP>/home/frappe-bench/apps/acme_crm reset -q --hard HEAD~1
+bench build --app acme_crm
+git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
+[state] verify fails head: 4aad5ac
+[state] verify fails record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"4aad5acf14a17d4e9ffbbba541f2145b0710a49b","to":"8f42ea1e6af315244fa267a058024b8e6028896d","steps":[],"failed_step":"verify","reason":"apps/acme_crm is not at 8f42ea1","url":null,"started_at":"<TS>","updated_at":"<TS>"}

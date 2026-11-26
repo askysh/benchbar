@@ -1428,10 +1428,15 @@ fl__au_run() {
   esac
 }
 
-fl_cmd_app_update() {
-  local app="" a skip_backup=0 discard=0 branch remote old new head total=0 newer=0 from to sites=() s rows=() labels=() steps=() i code=0 running=0 sep log
-  local ff_left f s pending=0 fetched=1 kind target name cmd reason fail_from
-  local pd_failed="" pd_reason="" pd_started="" pd_line="" pd_steps=() doc ids=() apply=0 token="" au_data="" au_token="" tcode
+# The steps of fl_cmd_app_update, called once each and in this order. They run in the shell of the
+# command and share its locals (bash scopes are dynamic): a step reads and sets the variables its
+# comment names and declares none of its own. A step never ends the command with a return: it sets
+# au_end (0 or 1) and the command returns with a literal return, because the ERR trap line names the
+# last command that ran and the function it fired in. A step is called as a plain statement, so set -e
+# and the traps act inside it as they did in the command.
+
+# fl__au_parse_args ARGS...: the flags and the app name. Sets app, skip_backup, discard, apply, token, OPT_JSON.
+fl__au_parse_args() {
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --skip-backup) skip_backup=1; shift ;;
@@ -1443,39 +1448,46 @@ fl_cmd_app_update() {
       *) [[ -z "$app" ]] && app="$1"; shift ;;
     esac
   done
+  return 0
+}
+
+# fl__au_check_apply: --apply needs a token, --yes, and neither --dry-run nor --discard-pending. Reads apply,
+# token, app, discard.
+fl__au_check_apply() {
   if [[ "$apply" == "1" ]]; then
     [[ "$token" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar app update ${app:-NAME} --dry-run --json prints it"
     [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
     [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (app update ${app:-NAME} --dry-run --json), then pass its token with --apply TOKEN --yes."
     [[ "$discard" == "0" ]] || fl_die "--apply runs an update; --discard-pending does not."
   fi
-  # the document (or the stream) is on fd 3; every line of text goes to stderr
-  [[ "$OPT_JSON" != "1" ]] || fl_json_doc_begin
-  fl_require_bench
-  [[ -n "$app" ]] || fl_die "Usage: benchbar app update NAME [--skip-backup]"
-  # --discard-pending only removes benchbar's own record and then stops: no
-  # update runs, and a dirty tree or a detached HEAD (an app added from a tag)
-  # does not matter. Run benchbar app update again for the update itself.
-  if [[ "$discard" == "1" ]]; then
-    [[ "$OPT_JSON" != "1" ]] || fl_die "--discard-pending prints text only; leave out --json." "benchbar app update ${app} --discard-pending [--dry-run]"
-    f="$(fl_pending_file "$app")"
-    if [[ -z "$f" || ! -e "$f" ]]; then
-      fl_info "no unfinished update or add of ${app} to discard"
-    elif fl_pending_read "$f"; then
-      if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would drop the unfinished ${PD_OP} of ${app} (${#PD_STEPS[@]} step(s) not run) and stop; nothing is changed"
-      else
-        fl_warn "dropping the unfinished ${PD_OP} of ${app} (started ${PD_STARTED}, stopped at ${PD_FAILED:-no step}); its ${#PD_STEPS[@]} step(s) will not run, and nothing else runs now"
-        fl_log "pending record dropped: ${PD_LINE}"
-        fl_pending_remove "$app"
-      fi
-    elif [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would drop the unreadable record ${f} and stop; nothing is changed"
+  return 0
+}
+
+# fl__au_discard_pending: --discard-pending drops benchbar's own record and nothing else. Reads app, discard;
+# sets f (and PD_*).
+fl__au_discard_pending() {
+  [[ "$OPT_JSON" != "1" ]] || fl_die "--discard-pending prints text only; leave out --json." "benchbar app update ${app} --discard-pending [--dry-run]"
+  f="$(fl_pending_file "$app")"
+  if [[ -z "$f" || ! -e "$f" ]]; then
+    fl_info "no unfinished update or add of ${app} to discard"
+  elif fl_pending_read "$f"; then
+    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would drop the unfinished ${PD_OP} of ${app} (${#PD_STEPS[@]} step(s) not run) and stop; nothing is changed"
     else
-      fl_warn "dropping the unreadable record ${f}; nothing else runs now"
-      fl_log "pending record dropped (unreadable): ${f}"
+      fl_warn "dropping the unfinished ${PD_OP} of ${app} (started ${PD_STARTED}, stopped at ${PD_FAILED:-no step}); its ${#PD_STEPS[@]} step(s) will not run, and nothing else runs now"
+      fl_log "pending record dropped: ${PD_LINE}"
       fl_pending_remove "$app"
     fi
-    return 0
+  elif [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would drop the unreadable record ${f} and stop; nothing is changed"
+  else
+    fl_warn "dropping the unreadable record ${f}; nothing else runs now"
+    fl_log "pending record dropped (unreadable): ${f}"
+    fl_pending_remove "$app"
   fi
+  return 0
+}
+
+# fl__au_check_app: a git app of the bench, clean, on a branch, with a remote. Reads app; sets branch, remote, head.
+fl__au_check_app() {
   if ! fl_app_has_git "$app" || ! fl_app_in_apps_txt "$app"; then fl_die "${app} is not a git app of this bench." "benchbar app list shows the apps."; fi
   fl_app_dirty "$app" && fl_die "apps/${app} has local changes; update refuses to touch them." "cd ${FL_BENCH_DIR}/apps/${app} && git status   (commit or stash them first)"
   branch="$(fl_app_branch "$app")"
@@ -1483,8 +1495,12 @@ fl_cmd_app_update() {
   remote="$(fl_app_remote "$app")"
   [[ -n "$remote" ]] || fl_die "apps/${app} has no git remote." "cd ${FL_BENCH_DIR}/apps/${app} && git remote add upstream URL"
   head="$(fl_app_commit "$app")"
+  return 0
+}
 
-  # an earlier run that stopped half way: its record is the truth, not Git's position
+# fl__au_load_pending: an earlier run that stopped half way. Reads app, head; sets pending, from, to, pd_failed,
+# pd_reason, pd_started, pd_line, pd_steps, ff_left, s.
+fl__au_load_pending() {
   if fl_pending_corrupt "$app"; then
     fl_die "the pending record of ${app} cannot be read (cut short or from another version); it is kept, and no step runs from it." \
       "Look at $(fl_pending_file "$app"), then: benchbar app update ${app} --discard-pending   (drops the record and stops; run the update again after)"
@@ -1505,14 +1521,24 @@ fl_cmd_app_update() {
       pending=1; from="$PD_FROM"; to="$PD_TO"
     fi
   fi
+  return 0
+}
 
-  # the remote: needed to plan a new update; an unfinished one only counts what came after it
+# fl__au_fetch: the remote, needed to plan a new update (an unfinished one only counts what came after it).
+# Reads app, remote, branch, head, pending, OPT_JSON; sets fetched, old, new.
+fl__au_fetch() {
   if [[ "$pending" == "1" ]]; then
     fl_app_fetch "$app" "$remote" "$branch" >/dev/null 2>&1 || fetched=0
   elif [[ "$OPT_JSON" == "1" ]]; then fl_app_fetch "$app" "$remote" "$branch" >&2 || exit 1
   else fl_app_fetch "$app" "$remote" "$branch" || exit 1; fi
   old="$head"
   new="$(fl_app_git "$app" rev-parse -q --verify 'FETCH_HEAD^{commit}' 2>/dev/null || true)"
+  return 0
+}
+
+# fl__au_range: the commits the update takes. Reads app, remote, branch, pending, fetched, old, new, from, to,
+# OPT_JSON; sets old, new, from, to, total, newer.
+fl__au_range() {
   if [[ "$pending" == "1" ]]; then
     if [[ "$fetched" == "1" && -n "$new" && "$new" != "$to" ]] && fl_app_git "$app" merge-base --is-ancestor "$to" "$new" 2>/dev/null; then
       newer="$(fl_app_git "$app" rev-list --count "${to}..${new}")"
@@ -1532,7 +1558,12 @@ fl_cmd_app_update() {
     [[ "$old" == "$new" ]] || total="$(fl_app_git "$app" rev-list --count "${old}..${new}")"
     from="$old"; to="$new"
   fi
+  return 0
+}
 
+# fl__au_plan_steps: the sites and the steps of the plan. Reads app, pending, pd_steps, skip_backup, to, total;
+# sets sites, steps, running, kind, target, name, s.
+fl__au_plan_steps() {
   if [[ "$pending" == "1" ]]; then
     # the steps the record lists (a --skip-backup now leaves the backups out)
     for s in ${pd_steps[@]+"${pd_steps[@]}"}; do
@@ -1560,7 +1591,11 @@ fl_cmd_app_update() {
       [[ "$running" == "1" ]] && steps+=("restart||Restart|benchbar restart")
     fi
   fi
+  return 0
+}
 
+# fl__au_check_uv: without uv the update would stop after the backups and the fast forward. Reads steps, app.
+fl__au_check_uv() {
   # "bench setup requirements --python" installs with uv (frappe-bench 5.31 and
   # later): without it the update would stop after the backups and the fast
   # forward, so it stops here, before either (issue 188)
@@ -1572,13 +1607,23 @@ fl_cmd_app_update() {
         fl_fix "$(fl_uv_install_hint)"
       fi ;;
   esac
+  return 0
+}
 
-  # the approval token: the plan (the remote and the pending record included) and the state it was made against,
-  # nothing when there is nothing to do; --apply recomputes it here, after its own fetch and under the lock
+# fl__au_token: the approval token of the plan (the remote and the pending record included), nothing when there
+# is nothing to do. Reads steps, app, remote, branch, from, to, pending, pd_line, sites, skip_backup; sets au_data,
+# au_token.
+fl__au_token() {
   if [[ "${#steps[@]}" -gt 0 ]]; then
     au_data="$(printf 'app update\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' "$FL_BENCH_DIR" "$app" "$remote" "$branch" "$from" "$to" "${pending}:${pd_line}" "${sites[*]:-}" "$skip_backup"; printf '%s\n' "${steps[@]}")"
     fl_plan_token_v au_token "$au_data"
   fi
+  return 0
+}
+
+# fl__au_token_check: --apply recomputes the token here, after its own fetch, and refuses a plan that changed.
+# Reads apply, au_data, token, app; sets tcode.
+fl__au_token_check() {
   if [[ "$apply" == "1" ]]; then
     tcode=0
     if [[ -n "$au_data" ]]; then fl_plan_token_check "$au_data" "$token" || tcode=$?; else tcode=1; fi
@@ -1589,38 +1634,48 @@ fl_cmd_app_update() {
         "Review a fresh plan: benchbar app update ${app} --dry-run --json, then pass its token." ;;
     esac
   fi
+  return 0
+}
 
-  if [[ "$OPT_JSON" == "1" ]]; then
-    if [[ "$pending" == "1" && "$pd_line" != *"}" ]]; then fl_warn "the record of ${app} looks cut short; pending is null here"; fi
-    doc="$(
-      printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"remote":%s,"branch":%s,"from":%s,"to":%s,"commits":[' \
-        "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$remote")" \
-        "$(fl_json_str "$branch")" "$(fl_json_str "$from")" "$(fl_json_str "$to")"
-      sep=""
-      if [[ "$total" != "0" ]]; then
-        while IFS=' ' read -r a log; do
-          printf '%s{"sha":%s,"subject":%s}' "$sep" "$(fl_json_str "$a")" "$(fl_json_str "$log")"; sep=","
-        done < <(fl_app_git "$app" log --format='%h %s' -n 30 "${old}..${new}")
-      fi
-      printf '],"commits_total":%d,"newer_commits":%d,"pending":%s,"sites":%s,"skip_backup":%s,"steps":[' "$total" "$newer" \
-        "$(if [[ "$pending" == "1" && "$pd_line" == *"}" ]]; then printf '%s' "$pd_line"; else printf null; fi)" \
-        "$(fl_json_str_array ${sites[@]+"${sites[@]}"})" "$(fl_json_bool "$skip_backup")"
-      sep=""
-      for a in ${steps[@]+"${steps[@]}"}; do
-        IFS='|' read -r kind target name cmd <<<"$a"
-        printf '%s{"name":%s,"command":%s,"kind":%s,"target":%s}' "$sep" "$(fl_json_str "$name")" "$(fl_json_str "$cmd")" "$(fl_json_str "$kind")" "\"$(fl_json_escape "$target")\""; sep=","
-      done
-      printf '],"can_apply":%s,"token":%s}' "$([[ -n "$au_token" ]] && printf true || printf false)" "$(if [[ -n "$au_token" ]]; then printf '"%s"' "$au_token"; else printf null; fi)"
-    )"
-    # the plan: the one document of a dry run, the plan line of a real run's stream
-    fl_doc_emit 0 "$doc" plan
-    [[ "${FL_DRY_RUN:-0}" == "1" ]] || FL_JSONL_PLAN_SENT=1
-    [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
-  fi
+# fl__au_plan_doc: the plan as JSON: the one document of a dry run, the plan line of a real run's stream. Reads
+# app, remote, branch, from, to, old, new, total, newer, pending, pd_line, sites, skip_backup, steps, au_token;
+# sets doc, sep, a, log, kind, target, name, cmd.
+fl__au_plan_doc() {
+  if [[ "$pending" == "1" && "$pd_line" != *"}" ]]; then fl_warn "the record of ${app} looks cut short; pending is null here"; fi
+  doc="$(
+    printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"remote":%s,"branch":%s,"from":%s,"to":%s,"commits":[' \
+      "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$remote")" \
+      "$(fl_json_str "$branch")" "$(fl_json_str "$from")" "$(fl_json_str "$to")"
+    sep=""
+    if [[ "$total" != "0" ]]; then
+      while IFS=' ' read -r a log; do
+        printf '%s{"sha":%s,"subject":%s}' "$sep" "$(fl_json_str "$a")" "$(fl_json_str "$log")"; sep=","
+      done < <(fl_app_git "$app" log --format='%h %s' -n 30 "${old}..${new}")
+    fi
+    printf '],"commits_total":%d,"newer_commits":%d,"pending":%s,"sites":%s,"skip_backup":%s,"steps":[' "$total" "$newer" \
+      "$(if [[ "$pending" == "1" && "$pd_line" == *"}" ]]; then printf '%s' "$pd_line"; else printf null; fi)" \
+      "$(fl_json_str_array ${sites[@]+"${sites[@]}"})" "$(fl_json_bool "$skip_backup")"
+    sep=""
+    for a in ${steps[@]+"${steps[@]}"}; do
+      IFS='|' read -r kind target name cmd <<<"$a"
+      printf '%s{"name":%s,"command":%s,"kind":%s,"target":%s}' "$sep" "$(fl_json_str "$name")" "$(fl_json_str "$cmd")" "$(fl_json_str "$kind")" "\"$(fl_json_escape "$target")\""; sep=","
+    done
+    printf '],"can_apply":%s,"token":%s}' "$([[ -n "$au_token" ]] && printf true || printf false)" "$(if [[ -n "$au_token" ]]; then printf '"%s"' "$au_token"; else printf null; fi)"
+  )"
+  # the plan: the one document of a dry run, the plan line of a real run's stream
+  fl_doc_emit 0 "$doc" plan
+  [[ "${FL_DRY_RUN:-0}" == "1" ]] || FL_JSONL_PLAN_SENT=1
+  return 0
+}
 
+# fl__au_show_plan: the header, the changes and the plan table. Sets au_end=0 when there is nothing to do and after
+# a dry run. Reads app, remote, branch, old, new, total, newer, pending, pd_started, pd_failed, pd_reason, steps,
+# sites, skip_backup; sets rows, labels, i, a, kind, target, name, cmd.
+fl__au_show_plan() {
   fl_header "benchbar app update" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "${sites[*]:-no site}"
   if [[ "$pending" != "1" && "$total" == "0" ]]; then
     fl_ok "unchanged: ${app} is up to date with ${remote}/${branch} (${old:0:7})"
+    au_end=0
     return 0
   fi
   if [[ "$pending" == "1" ]]; then
@@ -1645,20 +1700,59 @@ fl_cmd_app_update() {
   [[ "$skip_backup" == "1" && "${#sites[@]}" -gt 0 ]] && fl_warn "--skip-backup: the sites are migrated without a backup first"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     printf '\n'; fl_info "dry-run: nothing was changed (git fetch updated only apps/${app}/.git)"
+    au_end=0
     return 0
   fi
-  if [[ "$pending" == "1" ]]; then
-    fl_confirm "Finish the unfinished update of ${app} and apply ${#labels[@]} step(s)?" || { fl_warn "Cancelled. Nothing was changed."; return 1; }
-  else
-    fl_confirm "Update ${app} (${total} commit(s)) and apply ${#labels[@]} step(s)?" || { fl_warn "Cancelled. Nothing was changed."; return 1; }
-  fi
+  return 0
+}
 
+# fl__au_confirm: ask once. Sets au_end=1 when the answer is no. Reads app, pending, total, labels.
+fl__au_confirm() {
+  if [[ "$pending" == "1" ]]; then
+    fl_confirm "Finish the unfinished update of ${app} and apply ${#labels[@]} step(s)?" || { fl_warn "Cancelled. Nothing was changed."; au_end=1; return 0; }
+  else
+    fl_confirm "Update ${app} (${total} commit(s)) and apply ${#labels[@]} step(s)?" || { fl_warn "Cancelled. Nothing was changed."; au_end=1; return 0; }
+  fi
+  return 0
+}
+
+# fl__au_record_start: the record first (a stop anywhere below leaves the steps that did not finish), then the steps
+# of the display. Sets au_end=1 when the record cannot be written. Reads app, branch, from, to, pd_failed, pd_reason,
+# steps, labels; sets ids, a, kind, target, name, cmd.
+fl__au_record_start() {
   fl_bench_env_exports
   # the record first: a stop anywhere below leaves the steps that did not finish
-  fl_pending_write app_update "$app" "$branch" "$from" "$to" "$pd_failed" "$pd_reason" ${steps[@]+"${steps[@]}"} || { fl_fail "nothing was run: without its record a stop could not be finished later"; return 1; }
+  fl_pending_write app_update "$app" "$branch" "$from" "$to" "$pd_failed" "$pd_reason" ${steps[@]+"${steps[@]}"} || { fl_fail "nothing was run: without its record a stop could not be finished later"; au_end=1; return 0; }
   fl_steps_define ${labels[@]+"${labels[@]}"}
   for a in ${steps[@]+"${steps[@]}"}; do IFS='|' read -r kind target name cmd <<<"$a"; ids+=("${kind}${target:+_${target}}"); done
   fl_steps_ids ${ids[@]+"${ids[@]}"}
+  return 0
+}
+
+# fl__au_step_failed: a step failed: its record, what changed, the way back. Reads app, branch, from, to, old, new, i,
+# kind, target, name, steps, sites, skip_backup, fail_from; sets reason.
+fl__au_step_failed() {
+  fl_step_end failed
+  fl_pending_reason_v reason "$fail_from"
+  fl_pending_write app_update "$app" "$branch" "$from" "$to" "$kind" "${reason:-${name} failed}" "${steps[@]:$i}"
+  # a step that mutates and then fails is still a change (changed[] says "partial")
+  case "$kind" in
+    fast_forward) [[ "$(fl_app_commit "$app")" == "$old" ]] || fl_changed app "$app" "partial: apps/${app} moved from ${old:0:7} to $(fl_app_commit "$app" | cut -c1-7), then the step failed" ;;
+    migrate) fl_changed site "$target" "partial: migrate failed, the database may have changed" ;;
+  esac
+  fl_bench_redis_down
+  fl_steps_summary
+  fl_fail "update of ${app} stopped at: ${name}"
+  [[ "$(fl_app_commit "$app")" != "$old" ]] && fl_note "the code is at ${new:0:12}; to go back (not run for you): git -C ${FL_BENCH_DIR}/apps/${app} reset --hard ${old}"
+  [[ "$skip_backup" != "1" && "${#sites[@]}" -gt 0 ]] && fl_note "site backups are in ${FL_BENCH_DIR}/sites/<site>/private/backups"
+  fl_fix "$(fl_fix_cmd benchbar app update "$app" --bench-dir "$FL_BENCH_DIR")   (runs the steps that did not finish, nothing else)"
+  return 0
+}
+
+# fl__au_run_steps: run the steps one by one, recording each. Sets au_end=1 when a step fails or its record cannot be
+# written. Reads app, branch, from, to, old, new, pending, steps, sites, skip_backup; sets i, a, kind, target, name,
+# cmd, code, fail_from.
+fl__au_run_steps() {
   i=0
   for a in ${steps[@]+"${steps[@]}"}; do
     IFS='|' read -r kind target name cmd <<<"$a"
@@ -1671,21 +1765,9 @@ fl_cmd_app_update() {
     else
       fl__au_run "$kind" "$target" "$app" "$to" || code=1
       if [[ "$code" != "0" ]]; then
-        fl_step_end failed
-        fl_pending_reason_v reason "$fail_from"
-        fl_pending_write app_update "$app" "$branch" "$from" "$to" "$kind" "${reason:-${name} failed}" "${steps[@]:$i}"
-        # a step that mutates and then fails is still a change (changed[] says "partial")
-        case "$kind" in
-          fast_forward) [[ "$(fl_app_commit "$app")" == "$old" ]] || fl_changed app "$app" "partial: apps/${app} moved from ${old:0:7} to $(fl_app_commit "$app" | cut -c1-7), then the step failed" ;;
-          migrate) fl_changed site "$target" "partial: migrate failed, the database may have changed" ;;
-        esac
-        fl_bench_redis_down
-        fl_steps_summary
-        fl_fail "update of ${app} stopped at: ${name}"
-        [[ "$(fl_app_commit "$app")" != "$old" ]] && fl_note "the code is at ${new:0:12}; to go back (not run for you): git -C ${FL_BENCH_DIR}/apps/${app} reset --hard ${old}"
-        [[ "$skip_backup" != "1" && "${#sites[@]}" -gt 0 ]] && fl_note "site backups are in ${FL_BENCH_DIR}/sites/<site>/private/backups"
-        fl_fix "$(fl_fix_cmd benchbar app update "$app" --bench-dir "$FL_BENCH_DIR")   (runs the steps that did not finish, nothing else)"
-        return 1
+        fl__au_step_failed
+        au_end=1
+        return 0
       fi
       fl_step_end "done"
       case "$kind" in
@@ -1700,9 +1782,15 @@ fl_cmd_app_update() {
       # the record is what a retry runs from: a step that cannot be recorded is a failed step
       fl_bench_redis_down; fl_steps_summary
       fl_fail "update of ${app} stopped after: ${name} (its record could not be updated)"
-      return 1
+      au_end=1
+      return 0
     fi
   done
+  return 0
+}
+
+# fl__au_verify: the app is at the commit the plan named. Reads app, new, remote, branch, from, to; sets code.
+fl__au_verify() {
   fl_bench_redis_down
   printf '\n%sVerify%s\n' "$FL_BOLD" "$FL_RESET"
   if [[ "$(fl_app_commit "$app")" == "$new" ]]; then fl_ok "apps/${app} is at ${new:0:7} (${remote}/${branch})"; else fl_fail "apps/${app} is not at ${new:0:7}"; code=1; fi
@@ -1712,11 +1800,72 @@ fl_cmd_app_update() {
     fl_pending_write app_update "$app" "$branch" "$from" "$to" "verify" "apps/${app} is not at ${new:0:7}"
     fl_fix "look at apps/${app} yourself; benchbar app update ${app} --discard-pending drops this record and stops (the update itself is a separate run)"
   fi
+  return 0
+}
+
+# fl__au_result: the summary, and the JSON result. Reads code, old, new, app, OPT_JSON.
+fl__au_result() {
   fl_steps_summary
   if [[ "$OPT_JSON" == "1" ]]; then
     fl_doc_emit "$code" "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"from":%s,"to":%s,"updated":%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$old")" "$(fl_json_str "$new")" "$(fl_json_bool "$([[ "$code" == 0 ]] && printf 1 || printf 0)")")"
   fi
+  return 0
+}
+
+fl_cmd_app_update() {
+  local app="" a skip_backup=0 discard=0 branch remote old new head total=0 newer=0 from to sites=() s rows=() labels=() steps=() i code=0 running=0 sep log
+  local ff_left f s pending=0 fetched=1 kind target name cmd reason fail_from
+  local pd_failed="" pd_reason="" pd_started="" pd_line="" pd_steps=() doc ids=() apply=0 token="" au_data="" au_token="" tcode au_end=""
+  fl__au_parse_args "$@"
+  fl__au_check_apply
+  # the document (or the stream) is on fd 3; every line of text goes to stderr
+  [[ "$OPT_JSON" != "1" ]] || fl_json_doc_begin
+  fl_require_bench
+  [[ -n "$app" ]] || fl_die "Usage: benchbar app update NAME [--skip-backup]"
+  # --discard-pending only removes benchbar's own record and then stops: no
+  # update runs, and a dirty tree or a detached HEAD (an app added from a tag)
+  # does not matter. Run benchbar app update again for the update itself.
+  if [[ "$discard" == "1" ]]; then
+    fl__au_discard_pending
+    return 0
+  fi
+  fl__au_check_app
+
+  # an earlier run that stopped half way: its record is the truth, not Git's position
+  fl__au_load_pending
+
+  # the remote: needed to plan a new update; an unfinished one only counts what came after it
+  fl__au_fetch
+  fl__au_range
+
+  fl__au_plan_steps
+
+  # "bench setup requirements --python" installs with uv (frappe-bench 5.31 and
+  # later): without it the update would stop after the backups and the fast
+  # forward, so it stops here, before either (issue 188)
+  fl__au_check_uv
+
+  # the approval token: the plan and the state it was made against; --apply recomputes it here
+  fl__au_token
+  fl__au_token_check
+
+  if [[ "$OPT_JSON" == "1" ]]; then
+    fl__au_plan_doc
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
+  fi
+
+  fl__au_show_plan
+  case "$au_end" in "") ;; 0) return 0 ;; *) return 1 ;; esac
+  fl__au_confirm
+  case "$au_end" in "") ;; 0) return 0 ;; *) return 1 ;; esac
+
+  fl__au_record_start
+  case "$au_end" in "") ;; 0) return 0 ;; *) return 1 ;; esac
+  fl__au_run_steps
+  case "$au_end" in "") ;; 0) return 0 ;; *) return 1 ;; esac
+  fl__au_verify
+  fl__au_result
   return "$code"
 }
 
