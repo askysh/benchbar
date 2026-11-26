@@ -95,6 +95,12 @@ nonisolated enum LocalizedKeys {
                     i = after
                     continue
                 }
+                if next == "u" {
+                    guard let parsed = unicodeEscape(line, from: i + 2) else { return nil }
+                    out.append(parsed.scalar)
+                    i = parsed.end
+                    continue
+                }
                 switch next {
                 case "n": out.append("\n")
                 case "t": out.append("\t")
@@ -109,6 +115,19 @@ nonisolated enum LocalizedKeys {
             }
         }
         return nil
+    }
+
+    /// A `\u{...}` escape: the scalar, and the index after the closing brace. `start` is the index of the opening brace.
+    private static func unicodeEscape(_ line: [Unicode.Scalar], from start: Int) -> (scalar: Unicode.Scalar, end: Int)? {
+        guard start < line.count, line[start] == "{" else { return nil }
+        var digits = ""
+        var i = start + 1
+        while i < line.count && line[i] != "}" {
+            digits.unicodeScalars.append(line[i])
+            i += 1
+        }
+        guard i < line.count, let value = UInt32(digits, radix: 16), let scalar = Unicode.Scalar(value) else { return nil }
+        return (scalar, i + 1)
     }
 
     /// The index after the `)` that closes an interpolation whose text starts at `start`.
@@ -165,6 +184,7 @@ struct CatalogueKeysTests {
         let c = String(localized: "100% sure, \\"quoted\\"") + String(localized: "second")
         // String(localized: "in a comment")
         let d = String(localized: "tab\\there")
+        let e = String(localized: "\\u{201C}quoted\\u{201D}")
         """
         let found = LocalizedKeys.keys(in: text)
         let readKeys: [String?] = found.map { $0.key }
@@ -175,8 +195,9 @@ struct CatalogueKeysTests {
             "100%% sure, \"quoted\"",
             "second",
             "tab\there",
+            "\u{201C}quoted\u{201D}",
         ])
-        #expect(readLines == [1, 2, 3, 3, 5])
+        #expect(readLines == [1, 2, 3, 3, 5, 6])
     }
 
     @Test func catalogueKeysAreNormalisedLikeTheScanner() throws {
