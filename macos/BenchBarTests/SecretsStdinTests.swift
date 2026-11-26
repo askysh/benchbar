@@ -99,6 +99,34 @@ struct SecretsStdinTests {
         #expect(!add.arguments.contains("--secrets-stdin") && add.input == nil && add.environment["ADMIN_PASSWORD"] == "s3cret pw")
     }
 
+    /// The commands fixture of the CLI, with `--secrets-stdin` added to `install`: the shape a CLI that has the flag prints.
+    static func commandsListing(_ command: String, flag: String) throws -> String {
+        var root = try #require(try JSONSerialization.jsonObject(with: Data(try Fixture.string("commands").utf8)) as? [String: Any])
+        var entries = try #require(root["commands"] as? [[String: Any]])
+        let index = try #require(entries.firstIndex { $0["name"] as? String == command })
+        var flags = entries[index]["flags"] as? [[String: Any]] ?? []
+        flags.append(["name": flag, "value": NSNull(), "help": ""])
+        entries[index]["flags"] = flags
+        root["commands"] = entries
+        return String(decoding: try JSONSerialization.data(withJSONObject: root), as: UTF8.self)
+    }
+
+    @Test func anInstallOnTheFakeRunnerRecordsTheInputWhenTheCommandsFixtureListsTheFlag() async throws {
+        let listed = try Self.commandsListing("install", flag: "--secrets-stdin")
+        let runner = FakeRunner { arguments throws(CLIError) in
+            if arguments == ["commands", "--json"] { return CommandOutput.ok(listed) }
+            return CommandOutput.ok(#"{"schema_version":1,"cli_version":"0.9.0","event":"done","exit":0}"#)
+        }
+        let client = CLIClient(executable: URL(fileURLWithPath: "/fake/benchbar"), runner: runner)
+        _ = try await client.install(request, adminPassword: "s3cret pw", rootPassword: nil, token: nil) { _ in }
+        let call = try #require(runner.calls.last { $0.arguments.starts(with: ["install", "--yes"]) })
+        #expect(call.arguments.last == "--secrets-stdin")
+        #expect(call.input == Array("ADMIN_PASSWORD=s3cret pw\n\n".utf8))
+        #expect(call.environment["ADMIN_PASSWORD"] == nil)
+        // the calls that send nothing record nothing
+        #expect(runner.calls.filter { $0.arguments == ["commands", "--json"] }.allSatisfy { $0.input == nil })
+    }
+
     @Test func aCLIThatCannotAnswerCommandsKeepsTheEnvironment() async throws {
         let runner = InputRecordingRunner(commandsJSON: "not json")
         _ = try await client(runner).install(request, adminPassword: "s3cret pw", rootPassword: nil, token: nil) { _ in }
