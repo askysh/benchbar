@@ -175,3 +175,4 @@ pull	--keep-staging	--keep-scheduler, --keep-staging --keep-secrets Leave the co
 pull	--keep-secrets	--keep-scheduler, --keep-staging --keep-secrets Leave the copy as production had it
 pull	--no-migrate	A person's decision: refused for agents and benchbar mcp --no-migrate Stop after the restore, before bench migrate --before-migrate S Run the executable SCRIPT after the restore, before migrate (with BENCHBAR_SITE, BENCHBAR_BENCH, BENCHBAR_DB_NAME
 pull	--before-migrate	A person's decision: refused for agents and benchbar mcp --no-migrate Stop after the restore, before bench migrate --before-migrate S Run the executable SCRIPT after the restore, before migrate (with BENCHBAR_SITE, BENCHBAR_BENCH, BENCHBAR_DB_NAME
+logs	-n	Flags: --worker, --worker-error, --previous, -n50, --no-follow, --process web|socketio|schedule|worker (worker reads logs/worker.log
