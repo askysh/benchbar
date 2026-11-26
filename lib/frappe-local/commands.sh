@@ -134,7 +134,6 @@ flag~uninstall-service~--yes~~Do not ask; required without a terminal.
 cmd~path~benchbar path~Print the bench directory (benchcd uses it).~no~no~no~no~none
 env~path~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~console~benchbar console [--site S]~bench --site SITE console: a Python shell with frappe.~yes~no~no~no~none
-cmd~db~benchbar db [--site S] | benchbar db orphans [--json]~bench --site SITE mariadb: the site's database, with its own user.~yes~no~no~no~none
 cmd~db orphans~benchbar db orphans [--json]~Databases of frappe's shape (an underscore and 16 hex digits) that no site of any bench benchbar knows refers to. Read only: benchbar never drops them.~no~no~no~no~document
 note~db orphans~A site that benchbar was told to forget still counts while its folder is there. A listed database may belong to a bench or program benchbar does not know. Needs the MariaDB root password.
 flag~db orphans~--json~~One document: checked and orphans, each with the archived site folder that names it, if any.
@@ -144,7 +143,7 @@ flag~run~--timeout~SECS~Stop the bench command after this many seconds (1 to 720
 flag~run~--dry-run~~Print the plan and its token, run nothing.
 flag~run~--apply~TOKEN~Run exactly that plan (with --yes).
 flag~run~--yes~~Do not ask before a change; with --apply it confirms the plan was reviewed.
-cmd~db~benchbar db [--site S]~bench --site SITE mariadb: the site's database.~yes~no~no~no~none
+cmd~db~benchbar db [--site S]~bench --site SITE mariadb: the site's database, with its own user.~yes~no~no~no~none
 cmd~open~benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]~Open a site in the browser, or open it signed in as USER (developer_mode sites that were opted in with site open-as on).~no~no~no~no~document
 flag~open~--as~USER~Sign in as this user, no password. Refused unless site open-as is on for the site and developer_mode is on. A sign in runs the apps' on_login and on_session_creation hooks as a real login does: last_login, an Activity Log entry, a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User, and Frappe may end the user's oldest session (simultaneous_sessions).
 flag~open~--path~P~Where to land, for example /app/todo. Default: /app, or / for a Website User.
