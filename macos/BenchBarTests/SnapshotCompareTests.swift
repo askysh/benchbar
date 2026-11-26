@@ -1,7 +1,20 @@
 import AppKit
 import Foundation
+import SwiftUI
 import Testing
 @testable import BenchBar
+
+/// A view whose height is set from outside, for the settle test: it changes
+/// between two layout passes, the way a sheet's content does on a later turn
+/// of the run loop.
+private final class GrowingHeight: ObservableObject {
+    @Published var points: CGFloat = 40
+}
+
+private struct GrowingView: View {
+    @ObservedObject var height: GrowingHeight
+    var body: some View { Color.clear.frame(width: 100, height: height.points) }
+}
 
 /// The comparison behind the snapshot references: it must pass the noise two
 /// Macs produce and fail a real layout or colour change.
@@ -108,6 +121,64 @@ struct SnapshotCompareTests {
         let back = try #require(SnapshotCompare.pixels(ofPNG: data))
         #expect(back.width == original.width && back.height == original.height)
         #expect(SnapshotCompare.compare(back, to: original) == .same)
+    }
+
+    @Test func settleTakesTheSizeTwoPassesAgreeOn() {
+        // the sheet of profile-import-light (run 45798391475): 3 points short on the first pass
+        var passes = [CGSize(width: 640, height: 623), CGSize(width: 640, height: 626), CGSize(width: 640, height: 626)]
+        var waits = 0
+        let settled = SnapshotCompare.settle(measure: { passes.removeFirst() }, wait: { waits += 1 })
+        #expect(settled == .size(CGSize(width: 640, height: 626)))
+        #expect(waits == 2)
+    }
+
+    @Test func settleStopsWhenTheFirstTwoPassesAgree() {
+        var waits = 0
+        let settled = SnapshotCompare.settle(measure: { CGSize(width: 320, height: 200) }, wait: { waits += 1 })
+        #expect(settled == .size(CGSize(width: 320, height: 200)))
+        #expect(waits == 1)
+    }
+
+    @Test func aLayoutThatNeverSettlesIsNamed() {
+        var tall: CGFloat = 100
+        var waits = 0
+        let settled = SnapshotCompare.settle(passes: 3, measure: {
+            tall += 1.5
+            return CGSize(width: 320, height: tall)
+        }, wait: { waits += 1 })
+        #expect(settled == .unsettled("the layout did not settle: 320 x 101.5 then 320 x 103 then 320 x 104.5"))
+        #expect(waits == 2)
+    }
+
+    @Test func settleFollowsAViewThatGrowsBetweenPasses() {
+        let height = GrowingHeight()
+        let hosting = NSHostingView(rootView: GrowingView(height: height))
+        let window = NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = hosting
+        var waits = 0
+        let settled = SnapshotCompare.settle(measure: {
+            hosting.layoutSubtreeIfNeeded()
+            return hosting.fittingSize
+        }, wait: {
+            waits += 1
+            // the change lands after the first pass, as a sheet's measured content does
+            if waits == 1 { height.points = 80 }
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        })
+        guard case .size(let fitted) = settled else {
+            Issue.record("the view did not settle: \(settled)")
+            return
+        }
+        #expect(abs(fitted.height - 80) < 0.5 && abs(fitted.width - 100) < 0.5)
+        #expect(waits == 2)
+    }
+
+    @Test func lightAndDarkOfOneViewHaveOneSize() {
+        let short = CGSize(width: 640, height: 623), full = CGSize(width: 640, height: 626)
+        #expect(SnapshotCompare.sizeMismatch(of: "profile-import", [("light", full), ("dark", full)]) == nil)
+        #expect(SnapshotCompare.sizeMismatch(of: "profile-import", [("light", full)]) == nil)
+        let why = SnapshotCompare.sizeMismatch(of: "profile-import", [("light", short), ("dark", full)])
+        #expect(why == "profile-import: the light render is 640 x 623 and the dark render is 640 x 626. One of them was taken before its layout settled.")
     }
 
     @Test func normalizingUsesTwoPointsPerPixel() throws {
