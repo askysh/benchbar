@@ -228,6 +228,25 @@ Which line carries it:
   and `site restore --apply` (always `exit == 0`), so no reader breaks;
   `share preflight` has its own `ok` (the critical checks passed) beside
   `exit`. Do not add it to a new command.
+- A command that changes things, run by an agent with more than one bench
+  known and none chosen (no `--bench-dir`, `BENCH_DIR` or remembered bench),
+  is refused before it does anything. The text on stderr says
+  `Choose one: benchbar LINE --bench-dir PATH`; the envelope carries the same
+  in `next_actions[]`, for a program that reads only stdout: one action for
+  each of the first five benches the `error` names (LINE is the line that was
+  typed, `--bench-dir` is that bench's real path, `"quoted": true`), then
+  `benchbar list --json`, with its `why` saying how many benches there are
+  when more than five. A `...` in LINE means a word was left out (it could be a
+  secret); then no action holds the line, and only the list action is given:
+  its `why` says to run the command again with the words that were typed and
+  `--bench-dir`. The forms of `app focus NAME` and `doctor --ack|--unack`
+  that write while their command reads are refused the same way; the read
+  document of `--for-agent` and `--jsonl` has the actions. Plain `--json` of
+  a read still prints nothing for a refusal.
+
+  ```json
+  {"schema_version":1,"cli_version":"0.9.0","event":"done","bench":"/home/u/frappe-bench","exit":1,"changed":[],"warnings":[],"next_actions":[{"command":"benchbar app unfocus frappe --for-agent --bench-dir /home/u/frappe-bench","why":"Run it on this bench","quoted":true},{"command":"benchbar app unfocus frappe --for-agent --bench-dir /home/u/dev/frappe-bench","why":"Run it on this bench","quoted":true},{"command":"benchbar list --json","why":"See the known benches","quoted":true}],"state_after":null,"log":null,"error":"More than one bench is possible and none was chosen: /home/u/frappe-bench, /home/u/dev/frappe-bench."}
+  ```
 - A refusal of the non interactive mode, a usage error and a failure
   before the command could start (`No bench at ...`) all end with this
   envelope. A distinct exit code for usage errors is not used yet: a usage

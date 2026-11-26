@@ -51,7 +51,7 @@ top chooses which bench the popover shows.
 | ⌘D | Stop |
 | ⌘R | Restart |
 | ⌘O | Open the site |
-| ⌘L | Logs: a log window with search, a filter per process and **Since last start** (`benchbar logs --json --since-restart`, then only the new lines). The worker filter reads `logs/worker.log` through the CLI |
+| ⌘L | Logs: a log window with search, a filter per process and **Since last start** (see below) |
 | ⌘F | Open the bench folder |
 | ⌘K | Health in the BenchBar window |
 | ⌘M | The BenchBar window |
@@ -59,6 +59,10 @@ top chooses which bench the popover shows.
 | ⌘1 to ⌘9 | Open as a pinned user, in menu order |
 | ⇧⌘O | Switch back to the user before |
 | ⌃⌥U | Quick Switch, from any app, once turned on in Settings > Labs (the key can be changed there) |
+
+In the log window, **Since last start** shows the lines since the last start
+(`benchbar logs --json --since-restart`), then only the new lines.
+The worker filter reads `logs/worker.log` through the CLI.
 
 ## Open as a user
 

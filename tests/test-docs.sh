@@ -241,4 +241,16 @@ while IFS= read -r link; do
   [[ -f "$ROOT/docs/$target" ]] || fail "docs/features.md links to ${target}, which is not a page in docs/"
 done < <(grep -o '\]([^)]*)' "$ROOT/docs/features.md" | sed 's/^](//; s/)$//' | grep -v '^http' | grep -v '^\.\./' )
 
+# ---- DOC-21: the two pages a first time reader opens first keep each line short enough to read
+# (a table row too: the detail goes in a note under the table), and they link the glossary where
+# they first say bench and site
+for f in docs/install.md docs/app.md; do
+  long="$(awk 'length > 200 { printf "%s:%d (%d characters)\n", FILENAME, FNR, length }' "$ROOT/$f")"
+  [[ -z "$long" ]] || fail "lines over 200 characters (DOC-21):"$'\n'"${long//$ROOT\//}"
+done
+for f in docs/install.md README.md; do
+  grep -q 'glossary\.md#bench' "$ROOT/$f" || fail "$f does not link the glossary's bench where it first says bench (DOC-21)"
+done
+grep -q 'glossary\.md#site' "$ROOT/docs/install.md" || fail "docs/install.md does not link the glossary's site (DOC-21)"
+
 printf 'test-docs: ok\n'

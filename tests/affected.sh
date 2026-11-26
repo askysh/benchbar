@@ -81,7 +81,7 @@ lib_family() {
     docs) echo "test-docs test-docs-command" ;;
     commands) echo "test-commands-table test-commands-cost test-help-golden test-help-source test-docs test-docs-command test-labs test-json test-unknown-flags test-envelope test-install-json test-agent-contracts" ;;
     apps|app-plan) echo "test-apps test-app-cli test-app-batch test-app-recovery test-app-update-pin test-app-add-pin test-pull test-apps-git test-lock" ;;
-    bench|benchinfo|benchstate|discovery|freshness) echo "test-write-forms-gate test-bench-flow test-status-cost test-discovery test-multi-bench test-adopt test-json test-freshness test-ports test-port-management test-install-json" ;;
+    bench|benchinfo|benchstate|discovery|freshness) echo "test-write-forms-gate test-gate-hints test-gate-next-actions test-bench-flow test-status-cost test-discovery test-multi-bench test-adopt test-json test-freshness test-ports test-port-management test-install-json" ;;
     bench-run) echo "test-bench-run test-bench-run-mcp test-site-backups test-docs test-agent-contracts" ;;
     sites|site-backups|site-restore|snapshots|pull) echo "test-sites test-bench-run test-site-backups test-site-restore test-snapshots test-snapshots-2 test-pull test-install-json" ;;
     ports|port-management) echo "test-ports test-port-management test-multi-bench test-adopt" ;;
