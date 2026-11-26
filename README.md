@@ -26,7 +26,7 @@
 
 ## Why
 
-BenchBar runs a bench natively, with Python, Node, MariaDB and Redis from
+BenchBar runs a [bench](docs/glossary.md#bench) natively, with Python, Node, MariaDB and Redis from
 Homebrew and no Docker or VM in between, so file watching, `bench build`
 and a debugger run at the Mac's full speed and the setup matches what
 most Frappe developers run on Linux. Each bench (the folder that holds
