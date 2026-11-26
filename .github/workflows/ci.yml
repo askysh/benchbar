@@ -294,7 +294,8 @@ jobs:
 
   # shellcheck once, on its own runner, for every platform's scripts: the files
   # a pull request changed (the plan lists them), every file on a full run. It
-  # runs one shellcheck process per 12 files, one per CPU at a time.
+  # runs one shellcheck process per file, at most 3 at a time (each can take
+  # several GB), each with a deadline that names the file it stops.
   shellcheck:
     name: shellcheck
     needs: changes
@@ -317,8 +318,11 @@ jobs:
       - name: shellcheck
         env:
           SHELLCHECK_FILES: ${{ needs.changes.outputs.shellcheck_files }}
+          # seconds per file; a file that overruns is named and stopped (#137)
+          SC_FILE_TIMEOUT: 180
         run: |
           shellcheck --version | sed -n 2p
+          free -m | sed -n 2p
           bash tests/run-tests.sh shellcheck
 
   # The workflows themselves: actionlint (syntax, expressions, and shellcheck

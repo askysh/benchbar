@@ -15,7 +15,7 @@
 #   NO_SKIP="test-a test-b" ...         those tests fail when they skip themselves ("NAME: ok (SKIPPED ...)")
 #   RERUN_FAILED=1 ...                  a failed test runs once more, and FLAKY says it passed then (on by default when CI is set)
 #   STRICT_FLAKY=1 ...                  a test that was FLAKY (failed, then passed on the rerun) fails the run at its end
-#   SHELLCHECK_FILES="a.sh b.sh" ...    the lint checks only those files; SC_JOBS=4 runs 4 shellcheck at once
+#   SHELLCHECK_FILES="a.sh b.sh" ...    the lint checks only those files; SC_JOBS=2 runs 2 shellcheck at once (default: CPUs, at most 3, at most what the memory holds at 4.5 GB each)
 #
 # PARALLEL defaults to the number of CPUs. Every test builds its own HOME
 # and mock state under mktemp, so they run side by side; each test's output
@@ -90,6 +90,15 @@ weighted_tests() {
 }
 
 ncpu() { sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2; }
+# mem_mb: the memory the machine can give out now, in MB (empty when unknown). On macOS
+# there is no such figure, so it is the total memory there: only an upper bound
+mem_mb() {
+  local kb bytes
+  kb="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null)" || kb=""
+  if [[ "$kb" =~ ^[0-9]+$ ]]; then printf '%s' $((kb / 1024)); return 0; fi
+  bytes="$(sysctl -n hw.memsize 2>/dev/null)" || bytes=""
+  if [[ "$bytes" =~ ^[0-9]+$ ]]; then printf '%s' $((bytes / 1048576)); fi
+}
 PARALLEL="${PARALLEL:-$(ncpu)}"
 [[ "$PARALLEL" =~ ^[1-9][0-9]*$ ]] || { printf 'PARALLEL must be a positive number, got %s\n' "$PARALLEL" >&2; exit 1; }
 
@@ -138,10 +147,14 @@ run_test_with_deadline() {
 }
 
 # run_shellcheck: shellcheck -x over every shell file, or over SHELLCHECK_FILES
-# when set (the files a pull request changed). The files go to SC_JOBS shellcheck
-# processes at a time, 12 files each (one process over all 200 takes minutes: it
-# parses harness.sh and the libraries again for every test file). SC_JOBS is 1
-# unless set; a run of "shellcheck" alone uses every CPU.
+# when set (the files a pull request changed). One shellcheck process per file
+# (tests/lib/shellcheck-file.sh: a deadline that names the file),
+# SC_JOBS at a time: -x parses harness.sh and the libraries again for every
+# file. benchbar, with dataflow analysis, took 15 GB on a 16 GB runner, so the
+# wrapper checks it without that analysis (0.7 GB); the biggest of the rest
+# take 2 to 2.5 GB there (#137, #396).
+# SC_JOBS is 1 unless set; a run of "shellcheck" alone uses every CPU, at most
+# SC_JOBS_MAX (default 3).
 run_shellcheck() {
   local files=() jobs="${SC_JOBS:-1}"
   if [[ -n "${SHELLCHECK_FILES:-}" ]]; then
@@ -153,7 +166,8 @@ run_shellcheck() {
     files+=("$ROOT"/tests/*.sh "$ROOT"/tests/lib/*.sh "$ROOT"/tests/mocks/bin/* "$ROOT"/scripts/*.sh)
   fi
   [[ "${#files[@]}" -gt 0 ]] || { printf 'shellcheck: no files\n'; return 0; }
-  printf '%s\0' "${files[@]}" | xargs -0 -n 12 -P "$jobs" shellcheck -x || return 1
+  printf 'shellcheck: %s files, %s at a time\n' "${#files[@]}" "$jobs"
+  printf '%s\0' "${files[@]}" | xargs -0 -n 1 -P "$jobs" bash "$ROOT/tests/lib/shellcheck-file.sh" || return 1
   printf 'shellcheck: ok (%s files)\n' "${#files[@]}"
 }
 
@@ -207,8 +221,18 @@ if [[ -n "${SECS_ONLY:-}" ]]; then
   for t in ${JOBS[@]+"${JOBS[@]}"}; do [[ "$t" == shellcheck ]] || { test_secs "$t"; total=$((total + SECS)); }; done
   printf '%s\n' "$total"; exit 0
 fi
-# a run of the lint alone has the machine to itself
-if [[ "${#JOBS[@]}" -eq 1 && "${JOBS[0]}" == shellcheck && -z "${SC_JOBS:-}" ]]; then SC_JOBS="$PARALLEL"; fi
+# a run of the lint alone has the machine to itself, but not more than SC_JOBS_MAX processes
+# (default 3) and not more than the memory holds: the biggest takes SC_MB_PER_JOB (default 4500)
+if [[ "${#JOBS[@]}" -eq 1 && "${JOBS[0]}" == shellcheck && -z "${SC_JOBS:-}" ]]; then
+  SC_JOBS="$PARALLEL"
+  [[ "$SC_JOBS" -le "${SC_JOBS_MAX:-3}" ]] || SC_JOBS="${SC_JOBS_MAX:-3}"
+  mb="${SC_MEM_MB:-$(mem_mb)}"
+  if [[ "$mb" =~ ^[1-9][0-9]*$ ]]; then
+    fit=$((mb / ${SC_MB_PER_JOB:-4500}))
+    [[ "$fit" -ge 1 ]] || fit=1
+    [[ "$SC_JOBS" -le "$fit" ]] || SC_JOBS="$fit"
+  fi
+fi
 
 OUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-run-tests.XXXXXX")"
 PIDS=()

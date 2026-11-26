@@ -129,3 +129,4 @@ test-version-policy	1	0
 test-version-sources	2	1
 test-windows-commands	197	203
 test-wsl-preflight	176	140
+test-shellcheck-guard	3	3
