@@ -1192,7 +1192,7 @@ git -C <TMP>/home/frappe-bench/apps/acme_base status --porcelain -uno
 git -C <TMP>/home/frappe-bench/apps/acme_base symbolic-ref --short -q HEAD
 git -C <TMP>/home/frappe-bench/apps/acme_base rev-parse -q --verify HEAD^{commit}
 git -C <TMP>/home/frappe-bench/apps/acme_base rev-parse -q --verify HEAD^{commit}
-launchctl print gui/1000/com.benchbar.frappe-bench
+launchctl print gui/<UID>/com.benchbar.frappe-bench
 pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
 [state] behind, apply with its token acme_crm: 85b2330 main
 [state] behind, apply with its token acme_base: b6399ac version-15
