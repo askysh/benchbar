@@ -306,8 +306,10 @@ line tool takes them from `ADMIN_PASSWORD`, `BENCHBAR_SUDO_PASSWORD` and
 `MARIADB_ROOT_PASSWORD` and nowhere else. They are never on a command
 line, in a file or in the tray's logs, and the output of the run is
 cleaned of them. An install can last up to 90 minutes, so for that time the
-values can be read by another program of your own user. This stays so until
-the command line tool can take a secret from standard input or a file.
+values can be read by another program of your own user. The command line
+tool can now take them on standard input (`--secrets-stdin`, which
+`benchbar commands --json` lists); the tray moves to it in a later change.
+Until then it uses the environment.
 
 Settings: Open BenchBar at logon, notifications, check for updates when the window
 opens, **Ask before a link acts** (see [benchbar:// links](#benchbar-links)), the distro (switching runs `benchbar.exe adopt-distro`), the editor

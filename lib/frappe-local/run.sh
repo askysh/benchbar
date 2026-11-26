@@ -192,15 +192,25 @@ fl_run_phase_script() {
   fl_redact_url_v FL_LAST_COMMAND "${script} $*"
   fl_log "phase: ${script} $*"
   # BENCHBAR_SUDO=env: the one script that runs sudo reads the password once
-  # from fd 8 (sudo-env.sh); it is never in its environment or its arguments
+  # from fd 8 (sudo-env.sh); it is never in its environment or its arguments.
+  # The site's passwords go the same way on fd 7 (secrets.sh), not in its environment.
   case "$script" in
     */00-linux-system-deps.sh)
-      if fl_sudo_env_has_password; then
+      if fl_sudo_env_has_password && fl__secrets_present; then
+        FL_SUDO_PW_FD=8 FL_SECRETS_FD=7 "$script" "$@" <&0 8< <(fl__sudo_env_emit) 7< <(fl__secrets_emit) &
+      elif fl_sudo_env_has_password; then
         FL_SUDO_PW_FD=8 "$script" "$@" <&0 8< <(fl__sudo_env_emit) &
+      elif fl__secrets_present; then
+        FL_SECRETS_FD=7 "$script" "$@" <&0 7< <(fl__secrets_emit) &
       else
         "$script" "$@" <&0 &
       fi ;;
-    *) "$script" "$@" <&0 & ;;
+    *)
+      if fl__secrets_present; then
+        FL_SECRETS_FD=7 "$script" "$@" <&0 7< <(fl__secrets_emit) &
+      else
+        "$script" "$@" <&0 &
+      fi ;;
   esac
   FL_RUN_CHILD_PID="$!"
   wait "$FL_RUN_CHILD_PID" || code=$?

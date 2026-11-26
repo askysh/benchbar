@@ -140,6 +140,8 @@ FL_OP_ID=""; FL_OP_OWNER=""; FL_OP_JSON=""; FL_OP_COMMAND=""; FL_OP_STARTED=""; 
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/sudo.sh"
 # shellcheck source=lib/frappe-local/mariadb.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/mariadb.sh"
+# shellcheck source=lib/frappe-local/secrets.sh
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/secrets.sh"
 # shellcheck source=lib/frappe-local/wkhtmltopdf.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/wkhtmltopdf.sh"
 # shellcheck source=lib/frappe-local/bench.sh
@@ -355,6 +357,8 @@ if [[ "$OPT_BACKGROUND" == "1" ]]; then BENCHBAR_NONINTERACTIVE=1; export BENCHB
 # the options after the command are the command's own: each is in its entry of commands.sh,
 # else the run stops (exit 64) before anything is taken, started or written
 [[ "$FL_WANT_HELP" == "1" || -z "$COMMAND" ]] || fl_args_validate
+# --secrets-stdin: the passwords come on standard input (secrets.sh), before anything else reads it
+[[ "$FL_LEAN" == "1" ]] || fl_secrets_stdin_take
 # the passwords stay shell variables of this process: the phase scripts get
 # them on their own command line below, no other child (brew, pip, npm,
 # yarn, bench get-app) sees them

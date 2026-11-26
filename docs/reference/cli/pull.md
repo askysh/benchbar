@@ -154,6 +154,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `pull` | `--keep-staging` |  | Keep the downloaded backup in the bench's .benchbar/pulls/ after a successful run. |
 | `pull` | `--dry-run` |  | Print the plan and its token, change nothing. |
 | `pull` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); refused when the plan changed since the token was made. |
+| `pull` | `--secrets-stdin` |  | Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal. |
 
 | Command | Environment variable | What it does |
 |---|---|---|
