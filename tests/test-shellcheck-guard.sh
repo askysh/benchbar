@@ -26,6 +26,7 @@ case "${FAKE_MODE:-ok}" in
   findings) printf '%s: SC2086 fake finding\n' "$2"; exit 1 ;;
   crash) exit 251 ;;
   hang) printf '%s\n' "$$" >"$FAKE_PIDFILE"; exec /bin/sleep 60 ;;
+  limit) printf 'vmem=%s\n' "$(ulimit -v)"; exit 0 ;;
 esac
 FAKE_EOF
 chmod +x "$FAKE"
@@ -64,11 +65,16 @@ pid="$(cat "$TMP_DIR/pid3")"
 for _ in 1 2 3 4 5 6 7 8; do kill -0 "$pid" 2>/dev/null || break; sleep 0.25; done
 if kill -0 "$pid" 2>/dev/null; then kill -9 "$pid" 2>/dev/null || true; fail "the shellcheck of a stopped wrapper (pid $pid) was left running"; fi
 
-# ---- a memory cap that is no number is refused, not dropped without a word
+# ---- a deadline that is no number is refused, not dropped without a word
 RC=0
-OUT="$(SC_MEM_KB=6GB SHELLCHECK_CMD="$FAKE" bash "$ONE" x.sh 2>&1)" || RC=$?
-assert_eq "2" "$RC" "(SC_MEM_KB=6GB)"
-assert_contains "$OUT" "SC_MEM_KB must be a number of KB, got 6GB"
+OUT="$(SC_FILE_TIMEOUT=2m SHELLCHECK_CMD="$FAKE" bash "$ONE" x.sh 2>&1)" || RC=$?
+assert_eq "2" "$RC" "(SC_FILE_TIMEOUT=2m)"
+assert_contains "$OUT" "SC_FILE_TIMEOUT must be a number of seconds, got 2m"
+
+# ---- no virtual memory cap: the runtime of shellcheck maps far more than it keeps resident, and
+# an 8 GB cap stopped benchbar on a hosted runner (#396); the pool in run-tests.sh bounds memory
+run_one limit; assert_eq "0" "$RC" "(limit)"
+assert_eq "vmem=$(ulimit -v)" "$OUT" "(the wrapper sets no ulimit -v of its own)"
 
 # ---- run-tests.sh: one file per process, through the wrapper, with a bounded pool
 runner="$(cat "$ROOT/tests/run-tests.sh")"
