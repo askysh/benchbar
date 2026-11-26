@@ -290,7 +290,7 @@ nonisolated enum TidyText {
     static func orphanSummary(_ list: OrphanList) -> String {
         let n = list.orphans.count
         return n == 0 ? "No orphan database among \(list.checked) of frappe's shape."
-            : "\(n) \(n == 1 ? "database" : "databases") of \(list.checked) \(n == 1 ? "has" : "have") no site in any bench benchbar knows."
+            : Wording.orphanDatabases(n, checked: list.checked)
     }
 
     /// "expired 5 days ago", or "expires 2026-11-30" for a bench that waits.
