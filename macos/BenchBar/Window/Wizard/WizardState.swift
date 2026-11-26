@@ -283,10 +283,10 @@ nonisolated struct WizardState: Equatable, Sendable {
     /// The label of the Back button, nil when the page has none.
     var backTitle: String? {
         switch page {
-        case .welcome: return "Cancel"
-        case .cliOnly, .check, .newBench, .review: return "Back"
+        case .welcome: return String(localized: "Cancel")
+        case .cliOnly, .check, .newBench, .review: return String(localized: "Back")
         case .install: return isInstalling ? nil : String(localized: "Back")
-        case .done: return "Done"
+        case .done: return String(localized: "Done")
         }
     }
 

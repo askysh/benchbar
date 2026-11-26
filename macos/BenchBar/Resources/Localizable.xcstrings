@@ -2594,6 +2594,17 @@
       },
       "comment": "Main window."
     },
+    "Auto": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto"
+          }
+        }
+      }
+    },
     "Automatic": {
       "extractionState": "manual",
       "localizations": {
@@ -5035,6 +5046,17 @@
         }
       },
       "comment": "Sheets."
+    },
+    "Ignore": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignore"
+          }
+        }
+      }
     },
     "Import a runner": {
       "extractionState": "manual",
@@ -11981,6 +12003,17 @@
         }
       },
       "comment": "Settings and the other windows."
+    },
+    "Working…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working…"
+          }
+        }
+      }
     },
     "Write Lock File": {
       "extractionState": "manual",

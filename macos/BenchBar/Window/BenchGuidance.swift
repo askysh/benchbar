@@ -13,10 +13,10 @@ nonisolated struct BenchGuidance: Equatable, Sendable {
 
         var title: String {
             switch self {
-            case .start: "Start"
+            case .start: String(localized: "Start")
             case .viewHealth: String(localized: "View Health…")
             case .reviewPortConflict: String(localized: "Review Port Conflict…")
-            case .repair: "Repair…"
+            case .repair: String(localized: "Repair…")
             case .setUpManagement: String(localized: "Set Up Management…")
             }
         }

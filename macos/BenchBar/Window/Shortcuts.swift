@@ -20,11 +20,11 @@ nonisolated enum BenchShortcut: String, CaseIterable, Sendable {
 
     var action: String {
         switch self {
-        case .start: "Start"
-        case .stop: "Stop"
-        case .restart: "Restart"
+        case .start: String(localized: "Start")
+        case .stop: String(localized: "Stop")
+        case .restart: String(localized: "Restart")
         case .openSite: String(localized: "Open the site")
-        case .logs: "Logs"
+        case .logs: String(localized: "Logs")
         case .folder: String(localized: "Show in Finder")
         case .health: String(localized: "View Health")
         case .manage: String(localized: "Apps, sites and settings")

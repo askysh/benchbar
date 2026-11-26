@@ -11,9 +11,9 @@ nonisolated enum FocusPin: String, CaseIterable, Sendable, Identifiable {
 
     var title: String {
         switch self {
-        case .auto: "Auto"
-        case .focus: "Focus"
-        case .ignore: "Ignore"
+        case .auto: String(localized: "Auto")
+        case .focus: String(localized: "Focus")
+        case .ignore: String(localized: "Ignore")
         }
     }
 

@@ -465,7 +465,7 @@ struct ShareSetupSheet: View {
         case "backup": "Backing up…"
         case "share_site": "Making the copy…"
         case "harden", "baseline": "Locking it down…"
-        default: "Working…"
+        default: String(localized: "Working…")
         }
     }
 
