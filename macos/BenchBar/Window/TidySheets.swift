@@ -115,7 +115,7 @@ struct TidySheet: View {
                 if names.isEmpty {
                     Text("Every line in benchbar's block of /etc/hosts belongs to a site.").font(.callout)
                 } else {
-                    Text("\(names.count) line\(names.count == 1 ? "" : "s") in /etc/hosts name no site of any bench:").font(.callout)
+                    Text(Wording.staleHostsLines(names.count)).font(.callout)
                     ForEach(names, id: \.self) { Text($0).font(.callout.monospaced()) }
                     SheetNote("BenchBar does not edit /etc/hosts. Run this in Terminal: it shows the lines, backs the file up and asks for your password.")
                     CopyableCommand(command: TidyCommands.hostsCommand, copyLabel: "Copy the command that removes the stale hosts lines")

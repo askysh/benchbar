@@ -272,7 +272,7 @@ struct ExportProfileSheet: View {
         run.phase.sheetPhase(idle: .loading("Asking each repository for its default branch and access…"),
                              loading: "Asking each repository for its default branch and access…",
                              running: "Exporting…",
-                             done: run.result.map { SheetResult.success("Exported \($0.apps) app\($0.apps == 1 ? "" : "s")", $0.path) },
+                             done: run.result.map { SheetResult.success(Wording.exportedApps($0.apps), $0.path) },
                              failedTitle: "\(run.name) was not exported")
     }
 
@@ -411,7 +411,7 @@ struct UpdateProfileSheet: View {
                     Text(update.name).font(.body.weight(.medium))
                     Tag(text: update.kind, color: .secondary)
                     if let behind = update.behind, behind > 0 {
-                        Tag(text: "\(behind) commit\(behind == 1 ? "" : "s") behind", color: .orange)
+                        Tag(text: Wording.commitsBehind(behind), color: .orange)
                     }
                 }
                 if let diff = update.diff, !diff.isEmpty, run.phase != .done { ProfileDiffView(diff: diff) }
@@ -457,7 +457,7 @@ struct CheckAccessSheet: View {
             return .success("This Mac can reach every repository")
         }
         let title = missing == 0 ? "Some apps would be left out"
-            : missing == 1 ? "1 repository is not reachable" : "\(missing) repositories are not reachable"
+            : Wording.repositoriesNotReachable(missing)
         let detail = check.skippedApps.isEmpty ? "Ask the repository owner for access, then check again."
             : "A bench set up from this profile now would skip: \(check.skippedApps.joined(separator: ", ")). Ask the repository owner for access, then check again."
         return .warning(title, detail)
