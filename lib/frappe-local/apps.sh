@@ -1221,23 +1221,6 @@ fl_pending_file() {
   printf '%s/%s.json' "$(fl_pending_dir)" "$1"
 }
 
-# the text of a step: its label for the steps table
-fl_pending_label() {
-  case "$1" in
-    backup) printf 'Back up %s' "$2" ;;
-    fast_forward) printf 'Fast forward' ;;
-    requirements_python) printf 'Python requirements' ;;
-    requirements_node) printf 'Node requirements' ;;
-    migrate) printf 'Migrate %s' "$2" ;;
-    build) printf 'Build' ;;
-    install) printf 'Install on %s' "$2" ;;
-    clone_required) printf 'Clone %s' "$2" ;;
-    clone) printf 'Clone %s' "$2" ;;
-    restart) printf 'Restart' ;;
-    *) printf '%s' "$1" ;;
-  esac
-}
-
 # fl_pending_clean TEXT: one line without quotes or backslashes, 300 characters at most
 fl_pending_clean() {
   local t="$1"
