@@ -18,20 +18,20 @@ nonisolated struct AlertContent: Equatable, Sendable {
         switch alert {
         case .crashed(let exitCode):
             kind = "crashed"
-            title = "\(name) crashed"
+            title = String(localized: "\(name) crashed")
             if let exitCode {
-                body = "honcho exited with code \(exitCode). launchd is restarting it."
+                body = String(localized: "honcho exited with code \(exitCode). launchd is restarting it.")
             } else {
-                body = "honcho stopped unexpectedly. launchd is restarting it."
+                body = String(localized: "honcho stopped unexpectedly. launchd is restarting it.")
             }
         case .crashGuardTripped:
             kind = "paused"
-            title = "\(name) keeps crashing"
-            body = "3 crashes in 10 minutes, so automatic restarts are paused. Check the logs, then press Start."
+            title = String(localized: "\(name) keeps crashing")
+            body = String(localized: "3 crashes in 10 minutes, so automatic restarts are paused. Check the logs, then press Start.")
         case .recovered:
             kind = "recovered"
-            title = "\(name) is running again"
-            body = "\(url) is back."
+            title = String(localized: "\(name) is running again")
+            body = String(localized: "\(url) is back.")
         }
         // one identifier per bench and kind: a new crash replaces the old banner
         return AlertContent(identifier: "benchbar.\(kind).\(benchPath)", title: title, body: body, thread: benchPath)

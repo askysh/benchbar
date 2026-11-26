@@ -69,7 +69,7 @@ struct WalkthroughSheet: View {
         } leading: {
             Button("Back") { model.back() }.disabled(model.isFirst)
         } actions: {
-            CancelButton(title: "Skip", action: close)
+            CancelButton(title: String(localized: "Skip"), action: close)
             Button(model.primaryTitle) { if model.next() { close() } }
                 .keyboardShortcut(.defaultAction)
         }
@@ -100,11 +100,11 @@ struct WalkthroughSheet: View {
         case .terminal:
             VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
                 Text("benchup, benchdown and benchlogs start, stop and follow a bench.").font(.callout)
-                CopyableCommand(command: "benchup", copyLabel: "Copy benchup")
-                CopyableCommand(command: "benchdown", copyLabel: "Copy benchdown")
-                CopyableCommand(command: "benchlogs", copyLabel: "Copy benchlogs")
+                CopyableCommand(command: "benchup", copyLabel: String(localized: "Copy benchup"))
+                CopyableCommand(command: "benchdown", copyLabel: String(localized: "Copy benchdown"))
+                CopyableCommand(command: "benchlogs", copyLabel: String(localized: "Copy benchlogs"))
                 Text("For Claude Code and other agents:").font(.callout).foregroundStyle(.secondary)
-                CopyableCommand(command: MCPSnippet.claude, copyLabel: "Copy the command that adds benchbar mcp")
+                CopyableCommand(command: MCPSnippet.claude, copyLabel: String(localized: "Copy the command that adds benchbar mcp"))
             }
         }
     }

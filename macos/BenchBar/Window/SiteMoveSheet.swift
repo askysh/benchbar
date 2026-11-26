@@ -13,10 +13,10 @@ struct SiteMovePlanView: View {
                              detail: plan.nextActions.first { SiteMoveText.isStop($0.command) }?.why)
             }
             if !plan.otherErrors.isEmpty {
-                SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: "This plan cannot run", detail: plan.otherErrors.joined(separator: "\n"))
+                SheetOutcome(symbol: "xmark.octagon.fill", tint: .red, title: String(localized: "This plan cannot run"), detail: plan.otherErrors.joined(separator: "\n"))
             }
             if !plan.needs.isEmpty {
-                SheetNote("benchbar needs \(plan.needs.joined(separator: ", ")), which it does not have, and BenchBar never asks for or reads it. Run this move in Terminal, where benchbar can ask.", tint: .orange)
+                SheetNote(String(localized: "benchbar needs \(plan.needs.joined(separator: ", ")), which it does not have, and BenchBar never asks for or reads it. Run this move in Terminal, where benchbar can ask."), tint: .orange)
             }
             ForEach(plan.warnings, id: \.self) { SheetNote($0, tint: .orange) }
             if plan.errors.isEmpty {
@@ -53,22 +53,21 @@ struct SiteMoveSheet: View {
 
     private var phase: SheetPhase {
         if let finished { return .done(finished) }
-        if let failure { return .failed(failure, title: "\(site) was not moved") }
+        if let failure { return .failed(failure, title: String(localized: "\(site) was not moved")) }
         if stopping { return .loading(SiteMoveText.stopping(bench.name)) }
         switch flow.stage {
-        case .form: return flow.readError.map { .failed($0, title: "No plan to move \(site)") } ?? .ready
-        case .reading: return .loading("Reading the plan…")
+        case .form: return flow.readError.map { .failed($0, title: String(localized: "No plan to move \(site)")) } ?? .ready
+        case .reading: return .loading(String(localized: "Reading the plan…"))
         case .reviewing: return .ready
         case .applying: return .running(step.isEmpty ? "Moving \(site)…" : step)
-        case .stale: return .failed("Nothing was changed. Review the plan again to see what it is now.", title: "A bench or a site changed since this plan was shown")
+        case .stale: return .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "A bench or a site changed since this plan was shown"))
         }
     }
 
     var body: some View {
-        SheetScaffold("Move \(site) to Another Bench",
+        SheetScaffold(String(localized: "Move \(site) to Another Bench"),
                       explanation: flow.plan == nil
-                          ? "Backs the site up, restores it in another bench, checks it there, then drops it here. You see the plan first; nothing runs before you confirm."
-                          : "Nothing has run yet. These are the steps; Move runs exactly this plan. The backups stay.",
+                          ? String(localized: "Backs the site up, restores it in another bench, checks it there, then drops it here. You see the plan first; nothing runs before you confirm.") : String(localized: "Nothing has run yet. These are the steps; Move runs exactly this plan. The backups stay."),
                       phase: phase, width: .wide) {
             if finished == nil, failure == nil {
                 if let plan = flow.plan {
@@ -86,7 +85,7 @@ struct SiteMoveSheet: View {
             if case .reviewing = flow.stage, finished == nil { Button("Back") { flow.edit() } }
         } actions: {
             if finished != nil || failure != nil {
-                DoneButton(title: "Close", action: close)
+                DoneButton(title: String(localized: "Close"), action: close)
             } else {
                 stageActions
             }
@@ -125,8 +124,8 @@ struct SiteMoveSheet: View {
             Toggle("Skip migrate", isOn: $noMigrate)
         }
         .formStyle(.columns)
-        SheetNote("The site keeps its name. \(bench.name) must be stopped first, and its site is dropped there once the copy checks out; the backups stay.")
-        SheetNote("The MariaDB password comes from your Keychain; BenchBar never reads it.")
+        SheetNote(String(localized: "The site keeps its name. \(bench.name) must be stopped first, and its site is dropped there once the copy checks out; the backups stay."))
+        SheetNote(String(localized: "The MariaDB password comes from your Keychain; BenchBar never reads it."))
     }
 
     private func review() {

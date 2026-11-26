@@ -33,11 +33,11 @@ struct LockSheet: View {
     private var phase: SheetPhase {
         switch flow.stage {
         case .form:
-            if let error = flow.readError { .failed(error, title: "No plan to \(kind == .write ? "write" : "apply") the lock file") } else { .loading("Reading the lock file and the bench…") }
-        case .reading: .loading("Reading the lock file and the bench…")
+            if let error = flow.readError { .failed(error, title: kind == .write ? String(localized: "No plan to write the lock file") : String(localized: "No plan to apply the lock file")) } else { .loading(String(localized: "Reading the lock file and the bench…")) }
+        case .reading: .loading(String(localized: "Reading the lock file and the bench…"))
         case .reviewing: .ready
-        case .applying: .running(kind == .write ? "Writing the lock file…" : "Applying the lock file to the apps…")
-        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench or the lock file changed since this plan was shown")
+        case .applying: .running(kind == .write ? String(localized: "Writing the lock file…") : String(localized: "Applying the lock file to the apps…"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench or the lock file changed since this plan was shown"))
         }
     }
 
@@ -66,8 +66,8 @@ struct LockSheet: View {
 
     @ViewBuilder private func planView(_ plan: LockPlan) -> some View {
         if plan.unchanged {
-            SheetOutcome(symbol: "checkmark.seal.fill", tint: .green, title: "Nothing to do",
-                         detail: kind == .write ? "The file already says this." : "The apps already match the lock file.")
+            SheetOutcome(symbol: "checkmark.seal.fill", tint: .green, title: String(localized: "Nothing to do"),
+                         detail: kind == .write ? String(localized: "The file already says this.") : String(localized: "The apps already match the lock file."))
         }
         Text(plan.text)
             .font(.caption.monospaced())
@@ -76,7 +76,7 @@ struct LockSheet: View {
             .padding(WindowMetrics.bannerPadding)
             .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: WindowMetrics.cornerRadius))
         if kind == .apply, plan.canRun, plan.token == nil {
-            SheetNote("This benchbar gives no plan token for the lock file, so Apply runs lock apply after your OK. It reads the lock file again then.")
+            SheetNote(String(localized: "This benchbar gives no plan token for the lock file, so Apply runs lock apply after your OK. It reads the lock file again then."))
         }
     }
 

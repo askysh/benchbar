@@ -225,13 +225,13 @@ struct CLIOnlyPage: View {
             VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
                 VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
                     Text("Homebrew").font(.headline)
-                    CopyableCommand(command: Homebrew.installCLI, copyLabel: "Copy the Homebrew command")
+                    CopyableCommand(command: Homebrew.installCLI, copyLabel: String(localized: "Copy the Homebrew command"))
                 }
                 VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
                     Text("The one line installer").font(.headline)
-                    CopyableCommand(command: Self.installerLine, copyLabel: "Copy the one line installer")
+                    CopyableCommand(command: Self.installerLine, copyLabel: String(localized: "Copy the one line installer"))
                 }
-                SheetNote("The installer checks the Command Line Tools and Homebrew first, and never runs sudo itself. docs: benchbar.akashmishra.com/install")
+                SheetNote(String(localized: "The installer checks the Command Line Tools and Homebrew first, and never runs sudo itself. docs: benchbar.akashmishra.com/install"))
             }
         } actions: {
             WizardBackButton(run: run)
@@ -264,7 +264,7 @@ struct CheckPage: View {
                     Divider()
                 }
                 if let report = state.prerequisites, !report.canContinue {
-                    SheetNote("Fix what is marked red, then Check Again. Continue is possible when nothing is red.", tint: .orange)
+                    SheetNote(String(localized: "Fix what is marked red, then Check Again. Continue is possible when nothing is red."), tint: .orange)
                 }
             }
         } leading: {
@@ -281,8 +281,8 @@ struct CheckPage: View {
 
     private var phase: SheetPhase {
         let state = run.state
-        if let error = state.checkError { return .failed(error, title: "Could not check this Mac") }
-        if state.prerequisites == nil { return .loading("Checking your Mac…") }
+        if let error = state.checkError { return .failed(error, title: String(localized: "Could not check this Mac")) }
+        if state.prerequisites == nil { return .loading(String(localized: "Checking your Mac…")) }
         return .ready
     }
 }
@@ -334,8 +334,8 @@ struct PrerequisiteRowView: View {
                         Text(note).font(.callout).textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    CopyableCommand(command: command, copyLabel: "Copy the command for \(row.label)")
-                    SheetNote("BenchBar never runs this. Run it in Terminal, then Check Again.")
+                    CopyableCommand(command: command, copyLabel: String(localized: "Copy the command for \(row.label)"))
+                    SheetNote(String(localized: "BenchBar never runs this. Run it in Terminal, then Check Again."))
                 case .advice(let text):
                     Text(text).font(.callout).textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)

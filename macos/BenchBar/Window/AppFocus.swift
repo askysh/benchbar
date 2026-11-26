@@ -82,7 +82,7 @@ struct AppMenu: View {
     let setFocus: (FocusPin) -> Void
 
     var body: some View {
-        MoreMenu(help: "Install \(app.name) on a site or change its focus") {
+        MoreMenu(help: String(localized: "Install \(app.name) on a site or change its focus")) {
             if !missingSites.isEmpty {
                 Section("Install") {
                     ForEach(missingSites, id: \.self) { site in

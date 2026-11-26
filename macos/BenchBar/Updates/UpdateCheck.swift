@@ -68,11 +68,11 @@ nonisolated enum UpdateCheckError: Error, Equatable, Sendable, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .network(let message): "Could not reach GitHub: \(message)"
-        case .http(403), .http(429): "GitHub is rate limiting this Mac; try again in a while."
-        case .http(404): "GitHub has no published release yet."
-        case .http(let code): "GitHub answered HTTP \(code)."
-        case .unreadable: "GitHub's answer could not be read."
+        case .network(let message): String(localized: "Could not reach GitHub: \(message)")
+        case .http(403), .http(429): String(localized: "GitHub is rate limiting this Mac; try again in a while.")
+        case .http(404): String(localized: "GitHub has no published release yet.")
+        case .http(let code): String(localized: "GitHub answered HTTP \(code).")
+        case .unreadable: String(localized: "GitHub's answer could not be read.")
         }
     }
 }
