@@ -190,9 +190,7 @@ nonisolated enum SnapshotText {
 
     /// "2 hours ago"; a clock that is a little behind must not say "in 2 minutes".
     static func relativeAge(of time: Date, now: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.dateTimeStyle = .named
-        return formatter.localizedString(for: min(time, now), relativeTo: now)
+        Wording.relativeAge(of: time, now: now)
     }
 
     /// Whether the bench's apps are the ones the snapshot was taken with.

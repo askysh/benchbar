@@ -11,7 +11,7 @@ users you chose) and use a hardened **copy** of one of your dev sites in
 their own browser. It runs on macOS and, since 0.9.0, on Linux (see [Sharing on Linux](#sharing-on-linux));
 the Mac app is macOS only. Every command takes the
 [options for every command](install.md#options-for-every-command).
-The documents are in the [JSON schema](../../json-schema.md#sharing).
+The documents are in the [JSON schema](../json/share.md#sharing).
 
 ## Sharing on Linux
 

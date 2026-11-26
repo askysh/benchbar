@@ -72,6 +72,7 @@ jobs:
               - 'lib/frappe-local/labs.sh'
               - 'lib/frappe-local/mcp.py'
               - 'scripts/docs-reference.py'
+              - 'scripts/docs-links.py'
               - 'tests/test-docs.sh'
 
   build:
