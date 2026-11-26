@@ -3,11 +3,17 @@
 // config cannot carry an anchor. The page loads a data file from /moved/
 // first, which sets window.MOVED_ANCHORS (page path, then anchor, then the
 // new page). scripts/docs-links.py checks every entry against the headings.
+// Only own entries count: a hash or a path that names a built-in property
+// (#constructor, #__proto__) is no anchor that moved.
 (function () {
+  var own = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
   var moved = window.MOVED_ANCHORS || {};
-  var page = moved[location.pathname.replace(/\/?$/, '/')];
-  var id = decodeURIComponent(location.hash.slice(1));
-  if (page && id && page[id] && !document.getElementById(id)) {
+  var path = location.pathname.replace(/\/?$/, '/');
+  if (!own(moved, path)) return;
+  var page = moved[path];
+  var id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+  if (id && own(page, id) && typeof page[id] === 'string' && !document.getElementById(id)) {
     location.replace(page[id] + '#' + encodeURIComponent(id));
   }
 })();
