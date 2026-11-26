@@ -1,0 +1,3 @@
+### Command line
+
+- An agent (or any run with no terminal, `--for-agent`, `BENCHBAR_NONINTERACTIVE=1`) on a machine with more than one bench can now be refused by `benchbar app focus NAME`, `benchbar doctor --ack ID` and `benchbar doctor --unack ID` when it names no bench: they write benchbar's state for a bench, and now stop with "More than one bench is possible and none was chosen" like the other commands that change things. Pass `--bench-dir PATH` (or set `BENCH_DIR`). A person gets one line that says which bench was picked, and the write goes on. Plain `doctor`, `doctor --json`, `app focus` with no name and `--list` are not affected (#371).

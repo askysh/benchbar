@@ -95,8 +95,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `doctor` | `--json` |  | One JSON document. |
 | `doctor` | `--fix-hints` |  | Only the fix commands of the FAIL and WARN checks, one per line. |
 | `doctor` | `--quick` |  | Skip the slow checks and say which. |
-| `doctor` | `--ack` | `CHECK` | Silence one named WARN for this bench until its message changes. |
-| `doctor` | `--unack` | `CHECK` | Undo --ack. |
+| `doctor` | `--ack` | `CHECK` | Silence one named WARN for this bench until its message changes. Writes benchbar's state for the bench. |
+| `doctor` | `--unack` | `CHECK` | Undo --ack. Writes benchbar's state for the bench. |
 | `doctor` | `--prerequisites` |  | What this machine needs before an install; no bench is needed. With --json it prints a document; --bench-dir names the folder a new bench would go to. |
 | `doctor` | `--fetch` |  | git fetch the branches of the apps your focus apps need first. Without it, doctor never touches the network. |
 | `repair` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
