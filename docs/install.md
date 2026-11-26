@@ -26,7 +26,8 @@ The first line installs the CLI, the `benchbar` formula, and the menu bar
 app, the `benchbar-app` cask, from the `askysh/tap` tap. Type both names:
 Homebrew trusts a third party tap only for the names you type, so the
 cask alone cannot pull in its formula. `benchbar install` sets up the
-bench, the site and the background service as in the
+[bench](glossary.md#bench), the [site](glossary.md#site) and the
+background service as in the
 [Quick start](quick-start.md); with a bench you already have, run
 `benchbar adopt` instead. To check a Mac before installing, without a
 bench, run `benchbar doctor --prerequisites`. It checks Apple Silicon,
@@ -164,12 +165,22 @@ Pass flags after `bash -s --`, for example
 
 | Flag | What it does |
 |---|---|
-| `--yes` | Accept every default, no questions (no terminal needed). On a Mac that already has the CLI in `~/.local/share/benchbar` this is an update: the CLI and the app only, no bench is adopted or installed and the Homebrew installer is never run |
+| `--yes` | Accept every default, no questions (no terminal needed). On a Mac that has the CLI already, an update (see below) |
 | `--dry-run` | Print the plan and every command, change nothing |
 | `--no-app` | The CLI only |
 | `--app-only` | The app only |
-| `--version vX.Y.Z` | Install that release of the app instead of the latest. On Linux, with `--no-app` and for a release candidate: also check out that release of the CLI (a detached checkout; a run without `--version` goes back to `main`). A release candidate (`v0.9.0-rc.1`) is installed only when you name it: the latest never is one, and Homebrew and `benchbar self-update` cannot install one |
+| `--version vX.Y.Z` | Install that release of the app, not the latest. Also the only way to get a release candidate (see below) |
 | `--uninstall` | Remove the app, the links and the PATH block; see [Uninstall](#uninstall) |
+
+On a Mac that already has the CLI in `~/.local/share/benchbar`, `--yes`
+updates the CLI and the app only. It does not adopt or install a bench,
+and it does not run the Homebrew installer.
+
+A release candidate (for example `v0.9.0-rc.1`) is installed only when you
+name it with `--version`: the latest release is never a release candidate,
+and Homebrew and `benchbar self-update` cannot install one. On Linux,
+`--version` with `--no-app` also checks out that release of the CLI, as a
+detached checkout. A later run without `--version` goes back to `main`.
 
 ## The app from the DMG
 
