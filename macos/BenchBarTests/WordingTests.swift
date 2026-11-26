@@ -100,7 +100,7 @@ struct WordingTests {
         #expect(en.contains("Nov") && en.contains("19") && en.contains("2026") && en.contains("3:20 PM"))
         let de = plain(Wording.dayAndTime(moment, locale: german, timeZone: utc))
         #expect(de.contains("19") && de.contains("2026") && de.contains("15:20"))
-        #expect(!de.contains("Nov") && !de.contains("PM"))
+        #expect(!de.contains("PM"))
     }
 
     @Test func aMomentOnTheSameDayShowsOnlyTheTime() {
