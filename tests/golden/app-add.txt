@@ -28,7 +28,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -67,7 +67,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site no site |
 +---+
 
@@ -127,7 +127,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -196,7 +196,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. acme_pay requires apps that are not in the bench yet (hooks.py required_apps): acme_crm
@@ -278,7 +278,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -429,7 +429,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -622,7 +622,7 @@ exit: 1
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -781,7 +781,7 @@ exit: 1
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -860,7 +860,7 @@ exit: 1
 +- benchbar app add --apply ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [FAIL] The app add plan changed since it was shown (apps.txt, apps/, the sites or the remote). Nothing was changed.
@@ -915,7 +915,7 @@ exit: 1
 +- benchbar app add --apply ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [FAIL] The plan token expired: a token is good for about an hour after its plan was made, and this one is older. Nothing was changed.
@@ -946,7 +946,7 @@ exit: 1
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -989,7 +989,7 @@ exit: 0
 +- benchbar app add --apply ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -1096,7 +1096,7 @@ exit: 0
 +- benchbar app add --apply ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site no site |
 +---+
 
@@ -1122,7 +1122,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -1147,7 +1147,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -1172,7 +1172,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -1223,7 +1223,7 @@ exit: 1
 +- benchbar app add --apply ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [FAIL] The app add plan changed since it was shown (apps.txt, apps/, the sites or the remote). Nothing was changed.
@@ -1255,7 +1255,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -1345,7 +1345,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. acme_pay requires apps that are not in the bench yet (hooks.py required_apps): acme_crm
@@ -1456,7 +1456,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -1584,7 +1584,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site no site |
 +---+
 
@@ -1656,7 +1656,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -1738,7 +1738,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -1906,7 +1906,7 @@ exit: 0
 +- benchbar app add --apply ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -2054,7 +2054,7 @@ exit: 1
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -2131,7 +2131,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -2182,7 +2182,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -2263,7 +2263,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -2288,7 +2288,7 @@ exit: 1
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -2353,7 +2353,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -2415,7 +2415,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -2505,7 +2505,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -2530,7 +2530,7 @@ exit: 1
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -2611,7 +2611,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -2661,7 +2661,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -2734,7 +2734,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -2759,7 +2759,7 @@ exit: 1
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -2850,7 +2850,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -2898,7 +2898,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -2954,7 +2954,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -2979,7 +2979,7 @@ exit: 1
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -3076,7 +3076,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -3124,7 +3124,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -3180,7 +3180,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -3205,7 +3205,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -3295,7 +3295,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -3335,7 +3335,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -3360,7 +3360,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -3420,7 +3420,7 @@ exit: 1
 +- benchbar app add --apply ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -3579,7 +3579,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -3655,7 +3655,7 @@ exit: 1
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -3755,7 +3755,7 @@ exit: 0
 +- benchbar app add ---+
 | mode dry-run |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -3802,7 +3802,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   [OK] apps/acme_crm is already on main
@@ -3913,7 +3913,7 @@ exit: 1
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
   .. acme_pay requires apps that are not in the bench yet (hooks.py required_apps): acme_crm
@@ -4021,7 +4021,7 @@ exit: 1
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -4157,7 +4157,7 @@ exit: 1
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -4281,7 +4281,7 @@ exit: 1
 +- benchbar app add --apply ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -4326,7 +4326,7 @@ exit: 1
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -4402,7 +4402,7 @@ exit: 0
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
@@ -4484,7 +4484,7 @@ exit: 1
 +- benchbar app add ---+
 | mode app |
 | profile v15-lts |
-| bench <TMP>/home/frappe-bench |
+| bench <PATH> |
 | site macdev |
 +---+
 
