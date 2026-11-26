@@ -152,7 +152,7 @@ nonisolated enum BenchAggregate {
     /// "2 of 3 up", "none up".
     static func upText(_ states: [BenchState]) -> String {
         let up = upCount(states)
-        return up == 0 ? "none up" : "\(up) of \(states.count) up"
+        return up == 0 ? String(localized: "none up") : String(localized: "\(up) of \(states.count) up")
     }
 }
 
