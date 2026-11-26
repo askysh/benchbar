@@ -1,0 +1,3 @@
+### Agents and MCP
+
+- When an agent is refused because more than one bench is possible and none was chosen, the JSON on stdout (`--for-agent`, `--jsonl`, and `--json` of a command that prints a `done` line) now says what to run, in `next_actions[]`: one action for each of the first five benches the refusal names, the line that was typed with `--bench-dir` and that bench's path, then `benchbar list --json`. An agent that reads only stdout no longer has `error` and no fix. When a word was left out of the line (a secret, free text), no action holds the line with `...` in it: the list action says to run the command again with the words that were typed and `--bench-dir`. The text on stderr is unchanged (#401).
