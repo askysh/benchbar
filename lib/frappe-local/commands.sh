@@ -10,7 +10,7 @@
 #   env~KEY~NAME~HELP
 #   note~KEY~TEXT           (directly after the cmd record of KEY, at most one: what the SUMMARY
 #                            leaves out; no flag note, a flag has its own record)
-# The global help is printed from this table and the HELP block that follows it (see there).
+# The global help is printed from this table and from help-layout.txt (see help.sh).
 # KEY is the command ("install") or the command and subcommand ("site add").
 # TTY (may ask a question on a terminal), SUDO (may run sudo), NETWORK (may
 # reach the network) and MUTATING (changes the machine, a bench or its
@@ -491,7 +491,7 @@ cmd~profile remove~benchbar profile remove NAME [--yes] [--json] [--dry-run | --
 flag~profile remove~--dry-run~~Print the plan (what moves aside) as one JSON document with --json; it carries a token.
 flag~profile remove~--apply~TOKEN~Run exactly that plan (with --yes); refused when the file or the subscription changed since the token was made.
 cmd~profile check~benchbar profile check NAME [--json]~Can git read every repo with your credentials?~no~no~yes~no~document
-cmd~labs~benchbar labs [list|on NAME|off NAME|status NAME] [--yes] [--json]~Experiments: off until a person turns one on.~no~no~no~no~document
+cmd~labs~benchbar labs [list|on NAME|off NAME|status NAME] [--yes] [--json]~The experiments and whether each is on; every one is off until a person turns it on.~no~no~no~no~document
 flag~labs~--json~~One JSON document.
 cmd~labs list~benchbar labs list [--json]~The experiments, whether each is on, and the commands each gates.~no~no~no~no~document
 flag~labs list~--json~~One JSON document.
@@ -525,203 +525,6 @@ flag~notices~--dismiss~ID~Hide one notice (also in the BenchBar app). An id that
 flag~notices~--all~~Hide every notice.
 TABLE
 
-# The global help (`benchbar --help`, `help`, no command) is printed from the table above and from this second
-# here document, which bash parses and `:` ignores, like TABLE. The table gives each command its usage form
-# and its short summary; what it cannot give is here, and only usage() (via help.sh) reads it, when a help
-# prints. No start parses it: fl_cmd_load stops at the last line that is just TABLE.
-#   sec~ID~TITLE             a section, in print order (the text records carry its heading)
-#   help~SECTION~KEY[~LABEL] a command of the section, in print order: its label (the usage form cut before
-#                            its first " [", or LABEL where that is a worse label), then its summary wrapped
-#                            at 100 columns, 22 columns in
-#   text~SECTION~LINE        a line that belongs to no command (a heading, a blank line, an option, the footer),
-#                            as printed; {tilde} is a ~, {version} the version, {docs} the documentation address
-# tests/golden/not-in-global-help.txt lists the commands that have no help record.
-: <<'HELP'
-sec~top~Header
-text~top~benchbar {version}: local Frappe/ERPNext bench on macOS and Linux, in the background.
-text~top~
-text~top~Usage: benchbar <command> [options]
-text~top~
-sec~setup~Setup
-text~setup~Setup
-help~setup~install
-help~setup~adopt
-help~setup~service
-help~setup~doctor
-help~setup~ports setup~ports setup -- PATH ...
-help~setup~ports plan~ports plan -- PATH ...
-help~setup~ports check
-help~setup~ports mode
-help~setup~ports apply~ports apply TOKEN --yes -- PATH ...
-help~setup~report
-help~setup~repair
-help~setup~uninstall-service
-help~setup~self-update
-help~setup~where
-text~setup~
-sec~daily~Daily
-text~daily~Daily
-help~daily~up
-help~daily~down
-help~daily~restart
-help~daily~status
-help~daily~stats
-help~daily~wait
-help~daily~list
-help~daily~scan
-help~daily~register~register PATH ...
-help~daily~logs
-help~daily~fg
-help~daily~watch
-help~daily~autostart~autostart on|off
-help~daily~listen~listen local|all
-help~daily~path
-help~daily~site list
-help~daily~site add
-help~daily~site default
-help~daily~site hosts
-help~daily~site backup
-help~daily~site backups
-help~daily~site snapshot~site snapshot NAME [--label TEXT]
-help~daily~site snapshots
-help~daily~site rollback~site rollback NAME --to SNAPSHOT
-help~daily~site move
-help~daily~site restore~site restore NAME
-help~daily~site drop~site drop NAME
-help~daily~console
-help~daily~db
-help~daily~open
-help~daily~users
-help~daily~share setup
-help~daily~share users
-help~daily~share preflight
-help~daily~share join~share join [ADDR]
-help~daily~share joined
-help~daily~share leave
-help~daily~share forget
-help~daily~lan-guard install
-help~daily~lan-guard status
-help~daily~lan-guard remove
-help~daily~lan-guard allow-node
-help~daily~mariadb-password
-help~daily~mcp
-help~daily~op status~op status [OP_ID]
-help~daily~op list
-help~daily~op wait
-help~daily~history
-help~daily~docs~docs [TOPIC]
-text~daily~
-sec~apps~Apps
-text~apps~Apps
-help~apps~app list
-help~apps~app add
-help~apps~app install~app install NAME
-help~apps~app update
-help~apps~app focus~app focus [NAME]
-help~apps~app unfocus
-text~apps~
-sec~lockfile~Team lockfile
-text~lockfile~Team lockfile (benchbar.toml: each app's repo, branch and commit, and the sites)
-help~lockfile~lock write
-help~lockfile~lock check
-help~lockfile~lock apply
-text~lockfile~
-sec~profiles~Team profiles
-text~profiles~Team profiles
-help~profiles~profile list
-help~profiles~profile show
-help~profiles~profile create~profile create NAME --from-bench PATH [--dir DIR]
-help~profiles~profile export~profile export NAME [--out FILE] [--branch APP=BR]... [--drop APP]... [--plan]
-help~profiles~profile import~profile import FILE|URL [--as NAME] [--plan]
-help~profiles~profile subscribe~profile subscribe GIT_URL [--plan]
-help~profiles~profile update~profile update NAME|--all [--plan]
-help~profiles~profile remove
-help~profiles~profile check
-text~profiles~
-sec~labs~Experiments
-text~labs~Experiments (off until a person turns one on)
-help~labs~labs~labs [list]
-help~labs~labs on
-help~labs~labs off
-help~labs~labs status
-text~labs~
-sec~leases~Leases
-text~leases~Leases (a bench or a site held for a while, so nothing restarts, migrates, drops or restores it
-text~leases~  meanwhile)
-help~leases~lease take~lease take
-help~leases~lease renew
-help~leases~lease release
-help~leases~lease list
-text~leases~
-sec~notices~Defaults that changed
-text~notices~Defaults that changed
-help~notices~notices
-text~notices~
-sec~pull~Production copy
-text~pull~Production copy
-help~pull~pull
-text~pull~
-sec~options~Options
-text~options~Options
-text~options~  --bench-dir DIR     Bench to act on (default: remembered, or auto-detected)
-text~options~  --site NAME         Site name (default: remembered, or from the bench)
-text~options~  --profile NAME      Release profile for install/repair (default: v15-lts), or a team
-text~options~                      profile ({tilde}/.config/benchbar/profiles/NAME.toml, BENCHBAR_PROFILE_PATH)
-text~options~  --bundle NAME       App bundle for install (minimal, common, extended)
-text~options~  --scratch, --ttl DAYS
-text~options~                      install: the bench expires after DAYS (default 7); benchbar bench gc
-text~options~                      removes it
-text~options~  --make-default      install, adopt, service: make this the default bench even when
-text~options~                      another one is already the default
-text~options~  --repair-bench      install: move a bench folder that is incomplete aside and start over (never
-text~options~                      one that holds a site; --dry-run shows the move)
-text~options~  --allow-windows-fs  install, adopt (WSL): accept a bench on the Windows file system
-text~options~                      (/mnt/c, drvfs, 9p), which is slow and breaks file watching
-text~options~  --allow-unsupported-distro
-text~options~                      install (Linux): try a system other than Ubuntu 24.04, which is the one
-text~options~                      the install is tested on and supports (at your own risk)
-text~options~  --with-schedule     service: add the scheduler to Procfile.lean (per bench, kept by repair)
-text~options~  --without-schedule  service: remove it again (the default)
-text~options~  --port-offset N     install, adopt, service: use port block N (web 8000+N, socketio 9000+N,
-text~options~                      redis 11000+N and 13000+N). Default: keep the ports, or the next
-text~options~                      free block when another bench already uses them
-text~options~  --dry-run           Print the full plan, change nothing
-text~options~  --offline           install: skip the remote branch checks (also OFFLINE=1 or BENCHBAR_OFFLINE=1)
-text~options~  -y, --yes           Do not ask; secrets must come from the environment
-text~options~  --json              Versioned JSON for list, status and doctor; JSON lines for pull,
-text~options~                      install, adopt, repair, up, down, restart, service, site add,
-text~options~                      app update and ports apply (docs/json-schema.md)
-text~options~  --lease ID          A lease you hold (benchbar lease take): the command may change what it covers
-text~options~  --break-lease       A person at a terminal goes ahead although a lease covers the command
-text~options~  --jsonl             JSON lines (plan, step, done) from any command that changes things
-text~options~  --for-agent         --jsonl or --json, no questions (BENCHBAR_NONINTERACTIVE=1), no colors
-text~options~  --background        install, repair, pull, app add, app update, site add, site backup,
-text~options~                      site restore, site snapshot, site rollback:
-text~options~                      start the run detached and print its op_id at once (needs --yes; no questions)
-text~options~  benchbar COMMAND --help prints that command's flags and needs;
-text~options~                      benchbar commands --json lists them all
-text~options~  --plain             No colors or spinners (also: NO_COLOR=1, or a non-TTY)
-text~options~  -h, --help          This help
-text~options~  --version           Print the version (and the BenchBar app's, when it is installed)
-text~options~
-sec~environment~Environment
-text~environment~Environment:
-text~environment~  BENCHBAR_SUDO=gui   root steps (wkhtmltopdf, /etc/hosts) ask in a macOS password dialog, not sudo
-text~environment~  BENCHBAR_SUDO=env   Linux: sudo steps use the password in BENCHBAR_SUDO_PASSWORD,
-text~environment~                      no terminal needed
-text~environment~  BENCHBAR_CALLER     Who started the run, for benchbar history: terminal, app, tray, mcp, agent or
-text~environment~                      script (set by the app, the tray and benchbar mcp; --for-agent says agent)
-text~environment~  BENCH_INIT_TIMEOUT_SECONDS   install: how long bench init may run (default 2700, 0 for no limit)
-text~environment~  BENCHBAR_LENIENT_FLAGS=1     an unknown option is a warning, not an error (exit 64),
-text~environment~                               as before 0.9.0
-text~environment~
-sec~helpers~Shell helpers
-text~helpers~Shell helpers (written to your shell rc by install or repair):
-text~helpers~  benchup benchdown benchrestart benchstatus benchlogs benchfg benchwatch benchdoctor benchcd
-text~helpers~
-sec~docs~Documentation
-text~docs~Documentation: {docs}
-HELP
 
 # fl_cmd_load: FL_CMD_TABLE, the records between the two marker lines above. The lines
 # before them are counted, the file is read whole (no program: `read -d ''` gets a file
@@ -1241,8 +1044,8 @@ fl_noninteractive_preflight() {
 }
 
 # ---------------------------------------------------------------- the global help
-# `benchbar --help`, `benchbar help` and `benchbar` alone print the commands table's summaries and the HELP block
-# (fl_usage_text in help.sh, read here, when the help prints, and not at every start: CORE-18, issue 151).
+# `benchbar --help`, `benchbar help` and `benchbar` alone print the commands table's summaries and the layout of help-layout.txt
+# (fl_usage_text in help.sh, which reads help-layout.txt: only when the help prints, never at a start; CORE-18, issue 151).
 usage() {
   # shellcheck source=lib/frappe-local/help.sh
   . "${FL_CMD_FILE%/*}/help.sh"

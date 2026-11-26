@@ -1,35 +1,39 @@
 #!/usr/bin/env bash
-# The global help is printed from the commands table (#371). What the table cannot give is data in the HELP
-# block of lib/frappe-local/commands.sh, a second here document after TABLE:
+# The global help is printed from the commands table (#371). What the table cannot give is data in
+# lib/frappe-local/help-layout.txt, a file that only a help reads (it was a second here document in commands.sh, which
+# every start sources: 2 to 4 ms per start):
 #   sec~ID~TITLE            a section of the help, in print order
 #   help~SECTION~KEY[~LABEL] a command of the section, in print order; LABEL only where the usage form cut before its first " [" is not the label
 #   text~SECTION~LINE        a line that belongs to no command (a heading, a blank line, an option, the footer), as printed
 # This test holds:
-#   1. the block is there once, its sections are in order and every record names a section that exists
+#   1. the layout file is there, its sections are in order and every record names a section that exists
 #   2. every help key is a command of the table, once; every command of the table is in the help or on the
 #      list tests/golden/not-in-global-help.txt, so that a new command cannot be forgotten
 #   3. the Options lines of the text records name every global flag, and no flag that does not exist
 #   4. no line of the global help is over 100 columns, with the experiments off and on
-#   5. nothing reads the block at a start that is not a help: the table the readers loop over has no record of it,
-#      and the functions that read it are not loaded (benchbar --version, status and path stay as fast as before)
+#   5. nothing reads the layout at a start that is not a help: commands.sh has no record of it, the table the readers
+#      loop over has none, and the function that reads it is not loaded (--version, status and path stay as fast as before)
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
 COMMANDS_SH="$ROOT/lib/frappe-local/commands.sh"
 
 # ---- 1 to 3
-python3 -I - "$ROOT" <<'PY' || fail "the HELP block of lib/frappe-local/commands.sh is not in order (see above)"
+python3 -I - "$ROOT" <<'PY' || fail "lib/frappe-local/help-layout.txt is not in order (see above)"
 import re, sys
 root = sys.argv[1]
 src = open(root + "/lib/frappe-local/commands.sh", encoding="utf-8").read()
 errors = []
 tm = re.search(r": <<'TABLE'\n(.*?)\nTABLE\n", src, re.S)
-hm = re.findall(r"\n: <<'HELP'\n(.*?)\nHELP\n", src, re.S)
-if len(hm) != 1:
-    print("lib/frappe-local/commands.sh has %d HELP blocks (a here document `: <<'HELP'` ... `HELP`); it needs one" % len(hm))
+try:
+    layout = open(root + "/lib/frappe-local/help-layout.txt", encoding="utf-8").read()
+except OSError:
+    print("lib/frappe-local/help-layout.txt is missing (the layout of the global help)")
     sys.exit(1)
-if src.index(": <<'HELP'") < tm.end():
-    errors.append("the HELP block has to come after the TABLE block")
+hm = ["\n".join(l for l in layout.split("\n") if not l.startswith("#")).strip("\n")]
+for word in ("HELP\x27", "\nsec~", "\nhelp~", "\ntext~"):
+    if word in src:
+        errors.append("lib/frappe-local/commands.sh holds a record or a block of the global help layout (%r): it belongs in help-layout.txt, which no start reads" % word)
 keys = []
 gflag_text = re.search(r"<<'FLAGS'[^\n]*\n(.*?)\nFLAGS\n", src, re.S).group(1).split("\n")
 gflags = []
@@ -63,7 +67,7 @@ for line in hm[0].split("\n"):
             errors.append("%s record of section %s is not under its sec record (the section before it is %s): %s" % (kind, sec, cur, line))
         (helps if kind == "help" else texts).append(f[1:] if kind == "help" else (f[1], f[2] if len(f) > 2 else ""))
     else:
-        errors.append("unknown record in the HELP block: %s" % line)
+        errors.append("unknown record in help-layout.txt: %s" % line)
 seen = set()
 for h in helps:
     key = h[1]
@@ -82,7 +86,7 @@ for key in exempt:
         errors.append("%s is in the global help and on tests/golden/not-in-global-help.txt: take it off the list" % key)
 for key in keys:
     if key not in seen and key not in exempt:
-        errors.append("command %s is neither in the global help (help~SECTION~%s in the HELP block) nor on tests/golden/not-in-global-help.txt" % (key, key))
+        errors.append("command %s is neither in the global help (help~SECTION~%s in help-layout.txt) nor on tests/golden/not-in-global-help.txt" % (key, key))
 # the Options lines
 opt = [t[1] for t in texts if t[0] == "options"]
 named = set()
@@ -112,7 +116,7 @@ for labs in "" "lan-rooms,quick-switch"; do
 done
 
 # ---- 5. a start that is not a help reads nothing of the block
-[[ "$(grep -c -x HELP "$COMMANDS_SH")" == 1 ]] || fail "lib/frappe-local/commands.sh has no or more than one line that is just HELP"
+[[ "$(grep -c -x TABLE "$COMMANDS_SH")" == 1 ]] || fail "lib/frappe-local/commands.sh has no or more than one line that is just TABLE (fl_cmd_load)"
 # shellcheck disable=SC2016  # the single quotes are for the inner shell
-loaded="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/commands.sh"; printf "%s\n" "$FL_CMD_TABLE" | grep -c -E "^(sec|help|text)~"; declare -F fl_usage_text fl_help_block_v | wc -l' "$ROOT" 2>&1 | tr '\n' ' ')"
-assert_eq "0 0 " "$loaded" "(after a start, the table has no HELP record and no function that reads the block is loaded)"
+loaded="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/commands.sh"; printf "%s\n" "$FL_CMD_TABLE" | grep -c -E "^(sec|help|text)~"; declare -F fl_usage_text | wc -l' "$ROOT" 2>&1 | tr '\n' ' ')"
+assert_eq "0 0 " "$loaded" "(after a start, the table has no layout record and the function that reads the layout is not loaded)"
