@@ -691,7 +691,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | Command | Flag | Value | What it does |
 |---|---|---|---|
 | `mariadb-password` | `--yes` |  | Do not ask (still refused without a person at a terminal). |
-| `uninstall-service` | `--all` |  | Every bench with a benchbar agent, after one question. |
+| `uninstall-service` | `--all` |  | Every bench with a benchbar agent, after one question. Run it before brew uninstall benchbar: brew cannot stop the agents itself. |
 | `uninstall-service` | `--yes` |  | Do not ask; required without a terminal. |
 | `db orphans` | `--json` |  | One document: checked and orphans, each with the archived site folder that names it, if any. |
 | `open` | `--as` | `USER` | Sign in as this user, no password. Refused unless site open-as is on for the site and developer_mode is on. A sign in runs the apps' on_login and on_session_creation hooks as a real login does: last_login, an Activity Log entry, a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User, and Frappe may end the user's oldest session (simultaneous_sessions). |
@@ -704,8 +704,10 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `users` | `--json` |  | One JSON document. |
 | `report` | `--print` |  | Print to the terminal instead of writing the zip. |
 | `report` | `--out` | `DIR` | Write the zip into this folder (default: the Desktop). |
+| `report` | `--json` |  | Print {"zip": path, "redactions": n}, for the app and scripts. |
 | `docs` | `--print` |  | Print the page's address instead of opening it. |
 | `self-update` | `--check` |  | This version against the latest. |
+| `self-update` | `--dry-run` |  | Print the plan, change nothing. |
 | `op list` | `--running` |  | Only the ones that run now. |
 | `op list` | `--limit` | `N` | At most N (1 to 100, default 20). |
 | `op wait` | `--timeout` | `SECS` | Give up after SECS seconds (the operation goes on); default: wait for it. |

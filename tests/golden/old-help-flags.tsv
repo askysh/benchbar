@@ -1,0 +1,45 @@
+# command<TAB>flag<TAB>the clause of the old global help (usage.sh at 604de57a) that named it: the flags of the commands of the groups done (#371)
+install	--json	--json (with --yes or --dry-run
+install	--yes	with --yes or --dry-run
+install	--dry-run	with --yes or --dry-run
+install	--frappe-commit	--frappe-commit SHA, --erpnext-commit SHA: pin the clones (or frappe_commit and erpnext_commit in a team profile
+install	--erpnext-commit	--frappe-commit SHA, --erpnext-commit SHA: pin the clones (or frappe_commit and erpnext_commit in a team profile
+adopt	--json	--json (with --yes or --dry-run
+adopt	--yes	with --yes or --dry-run
+adopt	--dry-run	with --yes or --dry-run
+doctor	--fix-hints	--fix-hints: only the fix commands of FAIL and WARN checks, one per line
+doctor	--prerequisites	--prerequisites: what this Mac needs before an install, no bench needed (--json
+doctor	--json	--json
+doctor	--bench-dir	--bench-dir names the folder a new bench would go to
+doctor	--fetch	--fetch: git fetch the branches of the apps your focus apps need first (without it doctor never touches the network
+doctor	--ack	--ack CHECK / --unack CHECK: silence one warning until its message changes, or undo that
+doctor	--unack	--ack CHECK / --unack CHECK: silence one warning until its message changes, or undo that
+doctor	--quick	--quick: skip the slow checks and say which.
+ports setup	--dry-run	--dry-run: preview only
+ports plan	--json	--json: machine-readable plan and token
+ports check	--bench-dir	ports check Check conflicts for --bench-dir PATH (--json
+ports check	--json	--json
+ports mode	--bench-dir	ports mode automatic|fixed Keep automatic or fixed ports for --bench-dir PATH
+ports apply	--yes	ports apply TOKEN --yes -- PATH ..
+report	--print	--print: to the terminal, --json: {"zip": path, "redactions": n} for the app and scripts
+report	--json	--print: to the terminal, --json: {"zip": path, "redactions": n} for the app and scripts
+uninstall-service	--all	--all: every bench with a benchbar agent, after one question (before brew uninstall benchbar: brew cannot stop the agents itself
+self-update	--check	--check: this version against the latest, --json, --dry-run
+self-update	--json	--check: this version against the latest, --json, --dry-run
+self-update	--dry-run	--check: this version against the latest, --json, --dry-run
+where	--json	--json
+up	--services-only	--services-only: only its Redis, for a restore or a migrate (down stops it
+status	--json	--json adds redis and sites[].served (does the running bench serve the site
+stats	--json	--json
+wait	--for	--for PART for one part, --timeout SECS, --json.
+wait	--timeout	--for PART for one part, --timeout SECS, --json.
+wait	--json	--for PART for one part, --timeout SECS, --json.
+scan	--json	--json
+logs	--worker	Flags: --worker, --worker-error, --previous, -n50, --no-follow, --process web|socketio|schedule|worker (worker reads logs/worker.log
+logs	--worker-error	Flags: --worker, --worker-error, --previous, -n50, --no-follow, --process web|socketio|schedule|worker (worker reads logs/worker.log
+logs	--previous	Flags: --worker, --worker-error, --previous, -n50, --no-follow, --process web|socketio|schedule|worker (worker reads logs/worker.log
+logs	--no-follow	Flags: --worker, --worker-error, --previous, -n50, --no-follow, --process web|socketio|schedule|worker (worker reads logs/worker.log
+logs	--process	Flags: --worker, --worker-error, --previous, -n50, --no-follow, --process web|socketio|schedule|worker (worker reads logs/worker.log
+logs	--json	with --json: the lines as JSON, --since TIME or --since-restart for the newer ones only
+logs	--since	with --json: the lines as JSON, --since TIME or --since-restart for the newer ones only
+logs	--since-restart	with --json: the lines as JSON, --since TIME or --since-restart for the newer ones only
