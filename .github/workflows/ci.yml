@@ -142,11 +142,17 @@ jobs:
   # PARALLEL at a time, the tests named in ONLY_TESTS or all of them, minus
   # the tests the platform leaves out (SKIP_TESTS, from the plan).
   # Four of the macOS jobs plus the app job are the five concurrent macOS jobs
-  # of the free plan, so macOS stays the exception on a pull request.
+  # of the free plan, so macOS stays the exception on a pull request. On a
+  # pull request it also waits for the Linux and bash 3.2 legs and is skipped
+  # when one failed or was cancelled: a run that is red there, or replaced
+  # by the next push within minutes, never queues for a macOS runner (#137,
+  # "CI load").
   cli-macos:
     name: CLI tests (macOS, shard ${{ matrix.shard }}/${{ needs.changes.outputs.macos_n }})
-    needs: changes
-    if: needs.changes.outputs.macos_n != '0'
+    needs: [changes, cli-linux, cli-bash32]
+    if: >-
+      ${{ !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.macos_n != '0'
+      && (github.event_name != 'pull_request' || ((needs.cli-linux.result == 'success' || needs.cli-linux.result == 'skipped') && (needs.cli-bash32.result == 'success' || needs.cli-bash32.result == 'skipped'))) }}
     runs-on: macos-latest
     timeout-minutes: 20
     strategy:
@@ -702,8 +708,11 @@ jobs:
 
   app:
     name: App build, Swift tests and unsigned release bundle (macOS)
-    needs: changes
-    if: needs.changes.outputs.app == 'true'
+    # on a pull request after the Linux legs, as cli-macos does
+    needs: [changes, cli-linux, cli-bash32]
+    if: >-
+      ${{ !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.app == 'true'
+      && (github.event_name != 'pull_request' || ((needs.cli-linux.result == 'success' || needs.cli-linux.result == 'skipped') && (needs.cli-bash32.result == 'success' || needs.cli-bash32.result == 'skipped'))) }}
     runs-on: macos-26
     timeout-minutes: 45
     steps:
