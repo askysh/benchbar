@@ -220,6 +220,87 @@ assert_eq "6 7 See all 7 known benches (the first five are listed above)" "$n" "
 check_actions "seven benches" runnable
 rm -f "$FL_STATE_DIR/registered-benches.txt"
 
+# --- repair and pull: the stream is their own, and it opens in the command, after the gate (#405)
+# Their refusal had no stream to end: stdout was empty in every mode, with the hint on stderr only. It is a done line now,
+# the one their own early stops end with (repair: exit_code and exit, pull: exit and site), and the rest is as it was:
+# the text on stderr byte for byte, and nothing written (no log, no lock, no operation, no history: the whole state folder,
+# its empty folders too, is compared).
+state_tree() {
+  (cd "$FL_STATE_DIR" && find . -print | LC_ALL=C sort | while IFS= read -r f; do
+    printf '%s\n' "$f"
+    if [[ -f "$f" ]]; then cat "$f"; fi
+  done) | cksum
+}
+# own_refused NAME MODE ARGS...: ARGS and MODE as an agent types them, two benches, no --bench-dir
+own_refused() {
+  local name="$1" mode="$2" before want kind
+  shift 2
+  fresh
+  before="$(state_tree)"
+  BENCHBAR_NONINTERACTIVE=1 run_fm_split "$@" "$mode"
+  assert_eq "1" "$CODE" "($name $mode) $OUT $ERR"
+  assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c .)" "($name $mode: one JSON line on stdout) $OUT"
+  check_actions "$name $mode" runnable
+  # the done line of the command's own stream
+  kind="$(printf '%s' "$OUT" | python3 -I -c '
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d["event"] == "done" and d["exit"] == 1 and d["schema_version"] == 1 and d["error"], d
+assert d["changed"] == [] and d["warnings"] == [] and d["state_after"] is None, d
+print("repair" if "exit_code" in d else "pull" if "site" in d else "other", d.get("exit_code", "-"))
+')"
+  case "$1" in repair) assert_eq "repair 1" "$kind" "($name $mode: repair keeps exit_code beside exit)" ;; pull) assert_eq "pull -" "$kind" "($name $mode: pull's done has exit and site)" ;; esac
+  # stderr is what it was: the refusal, then the hint with the line that was typed
+  want="  [FAIL] More than one bench is possible and none was chosen: ${BENCH}, ${OTHER}."$'\n\n'"Aborting. Choose one: benchbar $* ${mode} --bench-dir PATH (or set BENCH_DIR). benchbar list shows them."
+  assert_eq "$want" "$ERR" "($name $mode: stderr is byte for byte what it was)"
+  assert_eq "$before" "$(state_tree)" "($name $mode: nothing was written, not even a folder)"
+}
+for mode in --for-agent --jsonl --json; do
+  own_refused "repair" "$mode" repair
+  own_refused "repair --dry-run" "$mode" repair --dry-run
+  own_refused "repair --yes" "$mode" repair --yes
+  own_refused "pull" "$mode" pull build.example.com:mysite --dry-run
+done
+# the actions of the line that was typed, run as they are, are not refused for the bench (a dry run, as typed)
+fresh
+BENCHBAR_NONINTERACTIVE=1 run_fm_split repair --dry-run --for-agent
+accepted "repair --dry-run"
+# a hint with a word left out has the list action only, for these commands too
+fresh
+BENCHBAR_NONINTERACTIVE=1 run_fm_split pull build.example.com:mysite --dry-run --apply "$SECRET" --yes --for-agent
+assert_eq "1" "$CODE" "(pull --apply) $OUT $ERR"
+check_actions "pull --apply" dropped
+assert_not_contains "$OUT$ERR" "$SECRET" "(pull --apply: the secret is in no output)"
+# a bench that was named: the run goes on as it did, the stream is the command's own
+BENCHBAR_NONINTERACTIVE=1 run_fm_split repair --dry-run --for-agent --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "(repair --bench-dir) $OUT $ERR"
+assert_eq "plan done" "$(printf '%s\n' "$OUT" | python3 -I -c 'import json,sys; print(" ".join(json.loads(l)["event"] for l in sys.stdin if l.strip()))')" "(repair --dry-run --for-agent --bench-dir: plan, done)"
+assert_not_contains "$OUT$ERR" "More than one bench" "(repair --bench-dir: no refusal)"
+BENCHBAR_NONINTERACTIVE=1 run_fm_split repair --dry-run --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "(repair --dry-run --json --bench-dir) $OUT $ERR"
+assert_eq "plan" "$(printf '%s\n' "$OUT" | python3 -I -c 'import json,sys; print(" ".join(json.loads(l)["event"] for l in sys.stdin if l.strip()))')" "(repair --dry-run --json: the plan alone, as before)"
+BENCHBAR_NONINTERACTIVE=1 run_fm_split pull build.example.com:mysite --dry-run --for-agent --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "(pull --bench-dir) $OUT $ERR"
+assert_contains "$OUT" '"error":"No SSH connection to build.example.com."' "(pull --bench-dir: its own early stop, as before)"
+assert_not_contains "$OUT$ERR" "More than one bench" "(pull --bench-dir: no refusal)"
+# one bench known: the starts print what they printed (a person's text, the plan alone, the plan and the done line)
+mkdir -p "$TMP_DIR/off-bench"
+mv "$OTHER" "$TMP_DIR/off-bench/frappe-bench"
+fresh
+BENCHBAR_NONINTERACTIVE=1 run_fm_split repair --dry-run --json
+assert_eq "0" "$CODE" "(one bench, repair --dry-run --json) $OUT $ERR"
+assert_eq "plan" "$(printf '%s\n' "$OUT" | python3 -I -c 'import json,sys; print(" ".join(json.loads(l)["event"] for l in sys.stdin if l.strip()))')" "(one bench, repair --dry-run --json: the plan alone)"
+BENCHBAR_NONINTERACTIVE=1 run_fm_split repair --dry-run --for-agent
+assert_eq "plan done 0" "$(printf '%s\n' "$OUT" | python3 -I -c 'import json,sys; e = [json.loads(l) for l in sys.stdin if l.strip()]; print(" ".join(x["event"] for x in e), e[-1]["exit_code"])')" "(one bench, repair --dry-run --for-agent: plan, done, exit 0)"
+assert_not_contains "$OUT" "Run it on this bench" "(one bench: no gate action)"
+BENCHBAR_NONINTERACTIVE=1 run_fm_split repair --yes --json
+assert_eq "done $CODE" "$(printf '%s\n' "$OUT" | python3 -I -c 'import json,sys; e = [json.loads(l) for l in sys.stdin if l.strip()]; print(e[-1]["event"], e[-1]["exit_code"])')" "(one bench, repair --yes --json: ends with its done line, as before) $OUT $ERR"
+assert_not_contains "$OUT$ERR" "More than one bench" "(one bench, repair --yes --json: no refusal)"
+BENCHBAR_NONINTERACTIVE=1 run_fm_split repair --dry-run
+assert_eq "0" "$CODE" "(one bench, repair --dry-run, plain) $OUT $ERR"
+assert_not_contains "$OUT" '"event"' "(one bench, plain: text, no JSON)"
+mv "$TMP_DIR/off-bench/frappe-bench" "$OTHER"
+
 # --- a refusal that is not this gate has no such actions
 fresh
 BENCHBAR_NONINTERACTIVE=1 run_fm_split app unfocus frappe --nosuchflag --for-agent
