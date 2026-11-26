@@ -80,8 +80,8 @@ cmd~doctor~benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--una
 flag~doctor~--json~~One JSON document.
 flag~doctor~--fix-hints~~Only the fix commands of the FAIL and WARN checks, one per line.
 flag~doctor~--quick~~Skip the slow checks and say which.
-flag~doctor~--ack~CHECK~Silence one named WARN for this bench until its message changes.
-flag~doctor~--unack~CHECK~Undo --ack.
+flag~doctor~--ack~CHECK~Silence one named WARN for this bench until its message changes. Writes benchbar's state for the bench.
+flag~doctor~--unack~CHECK~Undo --ack. Writes benchbar's state for the bench.
 flag~doctor~--prerequisites~~What this machine needs before an install; no bench is needed. With --json it prints a document; --bench-dir names the folder a new bench would go to.
 flag~doctor~--fetch~~git fetch the branches of the apps your focus apps need first. Without it, doctor never touches the network.
 cmd~repair~benchbar repair [--dry-run|--apply TOKEN] [--yes] [--json]~Apply only the fixes doctor flagged, in dependency order.~yes~yes~yes~yes~stream
@@ -428,7 +428,7 @@ flag~app update~--dry-run~~Print the plan as one JSON document with --json; it c
 flag~app update~--apply~TOKEN~Run exactly that plan (with --yes); the plan is made again after a fetch, under the lock, and refused when it changed.
 flag~app update~--discard-pending~~Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs.
 cmd~app focus~benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]~Focus apps: the ones you work on (local changes, another branch, a commit of yours in 14 days). Doctor warns when an app they need falls behind.~no~no~no~no~document
-note~app focus~With no NAME it lists them; with NAME it pins that app as focus.
+note~app focus~With no NAME it lists them; with NAME it pins that app as focus and writes benchbar's state for the bench.
 flag~app focus~--list~~List the focus apps (the default without a name).
 flag~app focus~--auto~~With NAME: let benchbar decide again (undo a pin).
 flag~app focus~--fetch~~git fetch the branches of the focus apps first.
