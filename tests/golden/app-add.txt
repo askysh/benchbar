@@ -1067,7 +1067,7 @@ lsof -ti tcp:8000,9000,11000,13000 -sTCP:LISTEN
 git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
 git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
 bench --site macdev list-apps --format json
-launchctl print gui/1000/com.benchbar.frappe-bench
+launchctl print gui/<UID>/com.benchbar.frappe-bench
 pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
 [state] apply, one app, json apps.txt: frappe acme_crm 
 [state] apply, one app, json site apps: frappe 15.0.0 acme_crm 1.0.0 
@@ -1110,7 +1110,7 @@ git -C <TMP>/home/frappe-bench/apps/acme_crm symbolic-ref --short -q HEAD
 bench --site macdev list-apps --format json
 git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
-launchctl print gui/1000/com.benchbar.frappe-bench
+launchctl print gui/<UID>/com.benchbar.frappe-bench
 pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
 [state] apply, nothing to do, json apps.txt: frappe acme_crm 
 [state] apply, nothing to do, json site apps: frappe 15.0.0 acme_crm 1.0.0 
@@ -2042,7 +2042,7 @@ bench --site macdev list-apps --format json
 git -C <TMP>/home/frappe-bench/apps/acme_hr symbolic-ref --short -q HEAD
 git -C <TMP>/home/frappe-bench/apps/acme_hr symbolic-ref --short -q HEAD
 bench --site macdev list-apps --format json
-launchctl print gui/1000/com.benchbar.frappe-bench
+launchctl print gui/<UID>/com.benchbar.frappe-bench
 pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
 [state] apply, batch with a required app, json apps.txt: frappe acme_crm acme_pay acme_hr 
 [state] apply, batch with a required app, json site apps: frappe 15.0.0 acme_pay 1.0.0 acme_hr 1.0.0 
@@ -3546,7 +3546,7 @@ bench --site macdev list-apps --format json
 git -C <TMP>/home/frappe-bench/apps/acme_hr symbolic-ref --short -q HEAD
 git -C <TMP>/home/frappe-bench/apps/acme_hr symbolic-ref --short -q HEAD
 bench --site macdev list-apps --format json
-launchctl print gui/1000/com.benchbar.frappe-bench
+launchctl print gui/<UID>/com.benchbar.frappe-bench
 pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
 [state] apply fails at install, json apps.txt: frappe acme_crm acme_hr 
 [state] apply fails at install, json site apps: frappe 15.0.0 
@@ -4313,7 +4313,7 @@ git -C /tmp/benchbar-X.<R>/repo show HEAD:pyproject.toml
 bench --site macdev list-apps --format json
 git -C <TMP>/home/frappe-bench/apps/acme_hr rev-parse HEAD
 git -C <TMP>/home/frappe-bench/apps/frappe rev-parse HEAD
-launchctl print gui/1000/com.benchbar.frappe-bench
+launchctl print gui/<UID>/com.benchbar.frappe-bench
 pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
 [state] record cannot be written first apps.txt: frappe acme_hr 
 [state] record cannot be written first site apps: frappe 15.0.0 

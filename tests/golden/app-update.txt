@@ -103,7 +103,7 @@ Aborting. benchbar app update acme_crm --discard-pending [--dry-run]
 --- calls
 brew --prefix
 pipx environment --value PIPX_HOME
-launchctl print gui/1000/com.benchbar.frappe-bench
+launchctl print gui/<UID>/com.benchbar.frappe-bench
 pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
 [state] discard with json head: 4dbe61d
 [state] discard with json record: none
@@ -889,7 +889,7 @@ bench setup requirements --node acme_crm
 bench --site macdev migrate
 bench build --app acme_crm
 git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
-launchctl print gui/1000/com.benchbar.frappe-bench
+launchctl print gui/<UID>/com.benchbar.frappe-bench
 pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
 [state] apply, good token, json head: 8743738
 [state] apply, good token, json record: none
@@ -2363,7 +2363,7 @@ bench setup requirements --python acme_crm
 bench setup requirements --node acme_crm
 bench --site macdev migrate
 git -C <TMP>/home/frappe-bench/apps/acme_crm rev-parse -q --verify HEAD^{commit}
-launchctl print gui/1000/com.benchbar.frappe-bench
+launchctl print gui/<UID>/com.benchbar.frappe-bench
 pgrep -lf honcho start -f Procfile\.lean| -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)|apps/frappe/socketio\.js
 [state] fails at migrate, json head: 4d64ded
 [state] fails at migrate, json record: {"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"0162a95992e9c1ead41e8d18dc9b144e7885a076","to":"4d64dedd10869cdb89dd5fcf988a133124fe0ae6","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"bench --site macdev migrate failed with exit code 1 after <N>s","url":null,"started_at":"<TS>","updated_at":"<TS>"}
