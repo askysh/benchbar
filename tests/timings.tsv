@@ -63,6 +63,7 @@ test-lifecycle-2	38	28
 test-linux-parity	17	12
 test-listen	39	46
 test-lock	171	180
+test-lock-apply-pin	100	60
 test-macos-appcast	2	1
 test-mcp	205	215
 test-mcp-2	55	33

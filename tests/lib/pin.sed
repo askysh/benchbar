@@ -10,8 +10,8 @@ s#op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?#op-<ID>#g
 s#/logs/[0-9]{8}-[0-9]{6}-[0-9]+#/logs/<LOG>#g
 s#[^ ]*/benchbar-[a-z]+\.[A-Za-z0-9]+#/tmp/benchbar-X.<R>#g
 s#gui/[0-9]+/#gui/<UID>/#g
-s#mkdir: cannot create directory .*: File exists#mkdir: <EEXIST>#
-s#mkdir: Already exists#mkdir: <EEXIST>#
+# the message of a failing mkdir (the mock build makes the same folder twice) differs between GNU, uutils and BSD
+s#mkdir: .*#mkdir: <ERR>#
 s#near line [0-9]+#near line N#g
 s#: line [0-9]+: #: line N: #g
 s#\.tmp\.[0-9]+#.tmp.<PID>#g

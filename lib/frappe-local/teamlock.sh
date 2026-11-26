@@ -417,24 +417,24 @@ fl_lock_switch_branch() {
   fi
 }
 
-fl_cmd_lock_apply() {
-  local i n name dir cur state rows=() plan=() skipped=() changed=() cloned=() a s code=0 r kind sha step new_repos=() la_data la_token="" tcode sep="" steps_json="" skipped_json="" repos_json=""
-  fl__lock_args "$@"
+# The steps of fl_cmd_lock_apply, called once each and in this order. They run in the shell of the command and
+# share its locals (bash scopes are dynamic): a step reads and sets the variables its comment names and declares
+# none of its own. The returns that end the command stay in fl_cmd_lock_apply, as literal returns (see the
+# decision about steps in maintainers/DECISIONS.md).
+
+# fl__la_check_apply: --apply needs a token, --yes, and no --dry-run. Reads LOCK_APPLY, LOCK_TOKEN.
+fl__la_check_apply() {
   if [[ "$LOCK_APPLY" == "1" ]]; then
     [[ "$LOCK_TOKEN" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar lock apply --dry-run --json prints it"
     [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
     [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (lock apply --dry-run --json), then pass its token with --apply TOKEN --yes."
   fi
-  # a dry run with --json: the plan is the one document on fd 3, the text goes to stderr
-  [[ "$LOCK_APPLY" == "1" || "${FL_DRY_RUN:-0}" != "1" || "$OPT_JSON" != "1" ]] || fl_json_doc_begin
-  fl_require_bench
-  fl_lock_file_resolve "$LOCK_FLAG"
-  fl__lock_require apply
-  fl_header "benchbar lock apply" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
-  fl_info "lockfile ${FL_LOCK_FILE}"
-  fl_lock_drift
-  [[ -n "$LK_PROFILE" && "$LK_PROFILE" != "$FL_PROFILE" ]] && fl_warn "the lock was written on profile ${LK_PROFILE}, this bench is ${FL_PROFILE}; apply changes apps only"
-  # the plan: one entry per app that needs something, "kind|app|dir|detail"
+  return 0
+}
+
+# fl__la_plan: one entry per app that needs something, "kind|index|app|detail", and what is skipped. Reads
+# LK_APP_*; sets n, i, name, dir, sha, cur, state, plan, skipped.
+fl__la_plan() {
   n="${#LK_APP_NAME[@]}"; i=0
   while [[ "$i" -lt "$n" ]]; do
     name="${LK_APP_NAME[$i]}"
@@ -464,10 +464,21 @@ fl_cmd_lock_apply() {
     fi
     i=$((i + 1))
   done
-  # the approval token: the lockfile (its bytes), the plan and what is skipped; --apply recomputes it here, under the lock
+  return 0
+}
+
+# fl__la_token: the approval token: the lockfile (its bytes), the plan and what is skipped. Reads plan, skipped;
+# sets la_data, la_token.
+fl__la_token() {
   la_data="$(printf 'lock apply\n%s\n%s\n%s\n' "$FL_BENCH_DIR" "$FL_LOCK_FILE" "$(shasum -a 256 <"$FL_LOCK_FILE" | awk '{print $1}')"
     printf 'plan\n'; printf '%s\n' ${plan[@]+"${plan[@]}"}; printf 'skipped\n'; printf '%s\n' ${skipped[@]+"${skipped[@]}"}; printf 'heads\n%s\n' "$(fl__apps_heads)")"
   [[ "${#plan[@]}" == "0" ]] || fl_plan_token_v la_token "$la_data"
+  return 0
+}
+
+# fl__la_token_check: --apply recomputes the token here, under the lock, and refuses a plan that changed. Reads
+# LOCK_APPLY, LOCK_TOKEN, la_data, la_token; sets tcode.
+fl__la_token_check() {
   if [[ "$LOCK_APPLY" == "1" ]]; then
     tcode=0
     if [[ -n "$la_token" ]]; then fl_plan_token_check "$la_data" "$LOCK_TOKEN" || tcode=$?; else tcode=1; fi
@@ -478,32 +489,40 @@ fl_cmd_lock_apply() {
         "Review a fresh plan: benchbar lock apply --dry-run --json, then pass its token." ;;
     esac
   fi
+  return 0
+}
+
+# fl__la_notes: the Plan heading, what is skipped, and the apps the lock does not have. Reads skipped; sets s, i.
+fl__la_notes() {
   printf '\n%sPlan%s\n' "$FL_BOLD" "$FL_RESET"
   for s in ${skipped[@]+"${skipped[@]}"}; do fl_warn "skipped: ${s}"; done
   for i in "${!DR_KIND[@]}"; do
     [[ "${DR_KIND[$i]}" == "app_extra" ]] && fl_info "${DR_APP[$i]} is in the bench but not in the lock; it stays"
   done
-  if [[ "${FL_DRY_RUN:-0}" == "1" && "$OPT_JSON" == "1" ]]; then
-    for step in ${plan[@]+"${plan[@]}"}; do
-      IFS='|' read -r kind r name a <<<"$step"
-      steps_json="${steps_json}${sep}$(printf '{"kind":%s,"app":%s,"detail":%s}' "$(fl_json_str "$kind")" "$(fl_json_str "$name")" "$(fl_json_str "$a")")"; sep=","
-      [[ "$kind" != "clone" ]] || new_repos+=("${LK_APP_REPO[$r]}")
-    done
-    sep=""
-    for s in ${skipped[@]+"${skipped[@]}"}; do skipped_json="${skipped_json}${sep}$(fl_json_str "$s")"; sep=","; done
-    sep=""
-    for s in ${new_repos[@]+"${new_repos[@]}"}; do repos_json="${repos_json}${sep}$(fl_json_str "$s")"; sep=","; done
-    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"lock_file":%s,"dry_run":true,"can_apply":%s,"steps":[%s],"skipped":[%s],"runs_code_from":[%s],"token":%s}' \
-      "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_LOCK_FILE")" "$([[ -n "$la_token" ]] && printf true || printf false)" "$steps_json" "$skipped_json" "$repos_json" \
-      "$(if [[ -n "$la_token" ]]; then printf '"%s"' "$la_token"; else printf null; fi)")" plan
-    return 0
-  fi
-  if [[ "${#plan[@]}" == "0" ]]; then
-    fl_ok "unchanged: the apps match ${FL_LOCK_FILE}"
-    fl_lock_site_steps
-    fl__lock_remember
-    return 0
-  fi
+  return 0
+}
+
+# fl__la_plan_doc: the plan as JSON, the one document of a dry run. Reads plan, skipped, la_token, LK_APP_REPO;
+# sets steps_json, skipped_json, repos_json, sep, step, kind, r, name, a, s, new_repos.
+fl__la_plan_doc() {
+  for step in ${plan[@]+"${plan[@]}"}; do
+    IFS='|' read -r kind r name a <<<"$step"
+    steps_json="${steps_json}${sep}$(printf '{"kind":%s,"app":%s,"detail":%s}' "$(fl_json_str "$kind")" "$(fl_json_str "$name")" "$(fl_json_str "$a")")"; sep=","
+    [[ "$kind" != "clone" ]] || new_repos+=("${LK_APP_REPO[$r]}")
+  done
+  sep=""
+  for s in ${skipped[@]+"${skipped[@]}"}; do skipped_json="${skipped_json}${sep}$(fl_json_str "$s")"; sep=","; done
+  sep=""
+  for s in ${new_repos[@]+"${new_repos[@]}"}; do repos_json="${repos_json}${sep}$(fl_json_str "$s")"; sep=","; done
+  fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"lock_file":%s,"dry_run":true,"can_apply":%s,"steps":[%s],"skipped":[%s],"runs_code_from":[%s],"token":%s}' \
+    "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_LOCK_FILE")" "$([[ -n "$la_token" ]] && printf true || printf false)" "$steps_json" "$skipped_json" "$repos_json" \
+    "$(if [[ -n "$la_token" ]]; then printf '"%s"' "$la_token"; else printf null; fi)")" plan
+  return 0
+}
+
+# fl__la_show_plan: the table of changes, the repos that will run code, and what comes after. Reads plan,
+# LK_APP_REPO; sets rows, i, step, kind, r, name, a, new_repos.
+fl__la_show_plan() {
   rows+=("#|App|Change")
   i=1
   for step in "${plan[@]}"; do IFS='|' read -r kind r name a <<<"$step"; rows+=("${i}|${name}|${a}"); i=$((i + 1)); done
@@ -512,12 +531,69 @@ fl_cmd_lock_apply() {
   for step in "${plan[@]}"; do IFS='|' read -r kind r _ _ <<<"$step"; [[ "$kind" != "clone" ]] || new_repos+=("${LK_APP_REPO[$r]}"); done
   [[ "${#new_repos[@]}" -eq 0 ]] || fl_repo_trust_print "apply" "${new_repos[@]}"
   fl_info "then bench setup requirements and bench build --app for each changed app; no site is touched"
-  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then printf '\n'; fl_info "dry-run: nothing was changed"; return 0; fi
-  fl_confirm "Apply ${#plan[@]} change(s) to the apps?" || { fl_warn "Cancelled. Nothing was changed."; return 1; }
+  return 0
+}
+
+# fl__la_steps_define: the steps of the display. Reads plan; sets rows, step, kind, r, name, a.
+fl__la_steps_define() {
   fl_bench_env_exports
   rows=(); for step in "${plan[@]}"; do IFS='|' read -r kind r name a <<<"$step"; rows+=("${name}"); done
   rows+=("Requirements and build")
   fl_steps_define "${rows[@]}"
+  return 0
+}
+
+# fl__la_clone: clone an app of the lock and bring it to its pin. Reads r, sha, LK_APP_*; sets state, name,
+# cloned, changed.
+fl__la_clone() {
+  if fl_repo_preflight "${LK_APP_REPO[$r]}" "${LK_APP_BRANCH[$r]}" && fl_app_clone "$name" "${LK_APP_REPO[$r]}" "${LK_APP_BRANCH[$r]}"; then
+    name="$FL_CLONED_DIR"; cloned+=("$name")
+    # a clone made just now holds no local work: its branch may start at the pin
+    if [[ -n "$sha" && "$(fl_lock_commit_state "$name" "$sha")" != "equal" ]]; then
+      fl_lock_reach_commit "$name" "$sha" || state=$?
+      if [[ "$(fl_lock_commit_state "$name" "$sha")" == "ahead" ]]; then
+        fl_run_long "git checkout -B ${LK_APP_BRANCH[$r]} ${sha:0:7} (${name}, fresh clone)" git -C "$(fl_app_path "$name")" checkout --quiet -B "${LK_APP_BRANCH[$r]}" "$sha" && state=0 || state=1
+      fi
+      # the pin is the point of the clone: anything but "equal" is a failure
+      if [[ "$(fl_lock_commit_state "$name" "$sha")" != "equal" ]]; then
+        [[ "$state" == "0" ]] && fl_fail "${name}: cloned, but not at the pinned ${sha:0:7}"
+        state=1
+      fi
+      # get-app installed the requirements of the branch tip: the pin's own are set up with the changed apps
+      [[ "$state" != "0" ]] || changed+=("$name")
+    fi
+    # a clone that did not reach its pin is not built with the others
+    if [[ "$state" != "0" ]]; then unset 'cloned[${#cloned[@]}-1]'; fi
+  else
+    state=1
+  fi
+  return 0
+}
+
+# fl__la_branch: put a clean app on the lock's branch, and on its pin. Reads name, r, sha, LK_APP_BRANCH;
+# sets state, changed.
+fl__la_branch() {
+  if fl_lock_detached_with_work "$name"; then
+    fl_warn "${name}: HEAD is detached with commits no branch holds; create a branch first (cd $(fl_app_path "$name") && git switch -c NAME), then apply again"
+    state=2
+  elif fl_lock_switch_branch "$name" "$(fl_app_remote "$name")" "${LK_APP_BRANCH[$r]}"; then
+    changed+=("$name")
+    if [[ -n "$sha" ]]; then fl_lock_reach_commit "$name" "$sha" || state=$?; fi
+  else
+    state=1
+  fi
+  return 0
+}
+
+# fl__la_commit: fast forward an app to its pin. Reads name, sha; sets state, changed.
+fl__la_commit() {
+  fl_lock_reach_commit "$name" "$sha" || state=$?
+  [[ "$state" == "1" ]] || changed+=("$name")
+  return 0
+}
+
+# fl__la_apply_changes: one step per entry of the plan. Reads plan; sets i, step, kind, r, name, a, sha, state, code.
+fl__la_apply_changes() {
   i=0
   for step in "${plan[@]}"; do
     IFS='|' read -r kind r name a <<<"$step"
@@ -525,41 +601,9 @@ fl_cmd_lock_apply() {
     fl_step_begin "$i"
     state=0
     case "$kind" in
-      clone)
-        if fl_repo_preflight "${LK_APP_REPO[$r]}" "${LK_APP_BRANCH[$r]}" && fl_app_clone "$name" "${LK_APP_REPO[$r]}" "${LK_APP_BRANCH[$r]}"; then
-          name="$FL_CLONED_DIR"; cloned+=("$name")
-          # a clone made just now holds no local work: its branch may start at the pin
-          if [[ -n "$sha" && "$(fl_lock_commit_state "$name" "$sha")" != "equal" ]]; then
-            fl_lock_reach_commit "$name" "$sha" || state=$?
-            if [[ "$(fl_lock_commit_state "$name" "$sha")" == "ahead" ]]; then
-              fl_run_long "git checkout -B ${LK_APP_BRANCH[$r]} ${sha:0:7} (${name}, fresh clone)" git -C "$(fl_app_path "$name")" checkout --quiet -B "${LK_APP_BRANCH[$r]}" "$sha" && state=0 || state=1
-            fi
-            # the pin is the point of the clone: anything but "equal" is a failure
-            if [[ "$(fl_lock_commit_state "$name" "$sha")" != "equal" ]]; then
-              [[ "$state" == "0" ]] && fl_fail "${name}: cloned, but not at the pinned ${sha:0:7}"
-              state=1
-            fi
-            # get-app installed the requirements of the branch tip: the pin's own are set up with the changed apps
-            [[ "$state" != "0" ]] || changed+=("$name")
-          fi
-          # a clone that did not reach its pin is not built with the others
-          if [[ "$state" != "0" ]]; then unset 'cloned[${#cloned[@]}-1]'; fi
-        else
-          state=1
-        fi ;;
-      branch)
-        if fl_lock_detached_with_work "$name"; then
-          fl_warn "${name}: HEAD is detached with commits no branch holds; create a branch first (cd $(fl_app_path "$name") && git switch -c NAME), then apply again"
-          state=2
-        elif fl_lock_switch_branch "$name" "$(fl_app_remote "$name")" "${LK_APP_BRANCH[$r]}"; then
-          changed+=("$name")
-          if [[ -n "$sha" ]]; then fl_lock_reach_commit "$name" "$sha" || state=$?; fi
-        else
-          state=1
-        fi ;;
-      commit)
-        fl_lock_reach_commit "$name" "$sha" || state=$?
-        [[ "$state" == "1" ]] || changed+=("$name") ;;
+      clone) fl__la_clone ;;
+      branch) fl__la_branch ;;
+      commit) fl__la_commit ;;
     esac
     case "$state" in
       0) fl_step_end "done" ;;
@@ -568,6 +612,12 @@ fl_cmd_lock_apply() {
     esac
     i=$((i + 1))
   done
+  return 0
+}
+
+# fl__la_requirements: the Python and node requirements of the changed apps, one build for all. Reads changed,
+# cloned, i; sets state, a, code.
+fl__la_requirements() {
   fl_step_begin "$i"
   state=0
   for a in ${changed[@]+"${changed[@]}"}; do
@@ -577,6 +627,11 @@ fl_cmd_lock_apply() {
   a="$(printf '%s\n' ${changed[@]+"${changed[@]}"} ${cloned[@]+"${cloned[@]}"} | awk 'NF && !seen[$0]++' | paste -sd, -)"
   if [[ -n "$a" ]]; then fl_app_build "$a" || state=1; fi
   if [[ "$state" == "0" ]]; then fl_step_end "done"; else fl_step_end failed; code=1; fi
+  return 0
+}
+
+# fl__la_verify: the drift again, what is left for the sites, the summary. Reads changed, cloned, code; sets i.
+fl__la_verify() {
   printf '\n%sVerify%s\n' "$FL_BOLD" "$FL_RESET"
   fl_lock_drift
   i=0
@@ -590,6 +645,45 @@ fl_cmd_lock_apply() {
   if [[ -n "${changed[*]:-}${cloned[*]:-}" ]]; then
     fl_info "the code changed: migrate the sites that have these apps (bench --site SITE migrate), then benchbar restart"
   fi
+  return 0
+}
+
+fl_cmd_lock_apply() {
+  local i n name dir cur state rows=() plan=() skipped=() changed=() cloned=() a s code=0 r kind sha step new_repos=() la_data la_token="" tcode sep="" steps_json="" skipped_json="" repos_json=""
+  fl__lock_args "$@"
+  fl__la_check_apply
+  # a dry run with --json: the plan is the one document on fd 3, the text goes to stderr
+  [[ "$LOCK_APPLY" == "1" || "${FL_DRY_RUN:-0}" != "1" || "$OPT_JSON" != "1" ]] || fl_json_doc_begin
+  fl_require_bench
+  fl_lock_file_resolve "$LOCK_FLAG"
+  fl__lock_require apply
+  fl_header "benchbar lock apply" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
+  fl_info "lockfile ${FL_LOCK_FILE}"
+  fl_lock_drift
+  [[ -n "$LK_PROFILE" && "$LK_PROFILE" != "$FL_PROFILE" ]] && fl_warn "the lock was written on profile ${LK_PROFILE}, this bench is ${FL_PROFILE}; apply changes apps only"
+  # the plan: one entry per app that needs something, "kind|index|app|detail"
+  fl__la_plan
+  # the approval token: the lockfile (its bytes), the plan and what is skipped; --apply recomputes it here, under the lock
+  fl__la_token
+  fl__la_token_check
+  fl__la_notes
+  if [[ "${FL_DRY_RUN:-0}" == "1" && "$OPT_JSON" == "1" ]]; then
+    fl__la_plan_doc
+    return 0
+  fi
+  if [[ "${#plan[@]}" == "0" ]]; then
+    fl_ok "unchanged: the apps match ${FL_LOCK_FILE}"
+    fl_lock_site_steps
+    fl__lock_remember
+    return 0
+  fi
+  fl__la_show_plan
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then printf '\n'; fl_info "dry-run: nothing was changed"; return 0; fi
+  fl_confirm "Apply ${#plan[@]} change(s) to the apps?" || { fl_warn "Cancelled. Nothing was changed."; return 1; }
+  fl__la_steps_define
+  fl__la_apply_changes
+  fl__la_requirements
+  fl__la_verify
   return "$code"
 }
 
