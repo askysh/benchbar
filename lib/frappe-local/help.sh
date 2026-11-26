@@ -99,6 +99,10 @@ fl_usage_text() {
     printf -v "__fl_u_${id}" '%s' "$u"
     printf -v "__fl_s_${id}" '%s' "$s"
   done
+  # a file that is gone (a broken or half copied install) is named: the shell's own error from this line says neither
+  # what the file is nor what to do
+  [[ -r "${FL_CMD_FILE%/*}/help-layout.txt" ]] || { [[ "$noglob" == *f* ]] || set +f
+    fl_die "The layout of the help could not be read from ${FL_CMD_FILE%/*}/help-layout.txt." "The file belongs next to help.sh: install benchbar again, or run it from a complete checkout. benchbar COMMAND --help and benchbar commands need no layout."; }
   layout="$(<"${FL_CMD_FILE%/*}/help-layout.txt")"
   # shellcheck disable=SC2086
   set -- $layout

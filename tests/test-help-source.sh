@@ -118,7 +118,7 @@ done
 # ---- 5. a start that is not a help reads nothing of the block
 [[ "$(grep -c -x TABLE "$COMMANDS_SH")" == 1 ]] || fail "lib/frappe-local/commands.sh has no or more than one line that is just TABLE (fl_cmd_load)"
 # shellcheck disable=SC2016  # the single quotes are for the inner shell
-loaded="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/commands.sh"; printf "%s\n" "$FL_CMD_TABLE" | grep -c -E "^(sec|help|text)~"; declare -F fl_usage_text | wc -l' "$ROOT" 2>&1 | tr '\n' ' ')"
+loaded="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/commands.sh"; printf "%s\n" "$FL_CMD_TABLE" | grep -c -E "^(sec|help|text)~"; declare -F fl_usage_text | grep -c . || true' "$ROOT" 2>&1 | tr '\n' ' ')"
 assert_eq "0 0 " "$loaded" "(after a start, the table has no layout record and the function that reads the layout is not loaded)"
 
 # ---- 6. a layout file that is gone (a broken or half copied install) is named in a sentence, with the way out;
