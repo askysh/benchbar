@@ -579,7 +579,7 @@ fl_cmd_db_orphans() {
     "Ask the person for it (do not look for it), then re-run with: MARIADB_ROOT_PASSWORD='...' benchbar db orphans" 2
   bin="$(fl_mariadb_client)"
   [[ -n "$bin" ]] || fl_die "No mariadb client found." "Run: benchbar doctor"
-  dbs="$(MYSQL_PWD="$FL_MARIADB_ROOT_PW" "$bin" -u root --connect-timeout=2 -sNe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME LIKE '\\_%'" 2>/dev/null)" \
+  dbs="$("$bin" --defaults-extra-file=<(fl_mariadb_cnf "$FL_MARIADB_ROOT_PW") -u root --connect-timeout=2 -sNe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME LIKE '\\_%'" 2>/dev/null)" \
     || fl_die "MariaDB did not answer the list of databases." "Is it running? Run: benchbar doctor"
   ref="$(fl_lc_db_referenced)"
   while IFS= read -r db; do

@@ -441,7 +441,7 @@ fl_snap_db_bytes() {
   [[ -n "$pw" ]] || return 0
   bin="$(fl_mariadb_client)"
   [[ -n "$bin" ]] || return 0
-  n="$(MYSQL_PWD="$pw" "$bin" -u root --connect-timeout=2 -sNe "SELECT COALESCE(SUM(data_length + index_length), 0) FROM information_schema.TABLES WHERE TABLE_SCHEMA='${db}'" 2>/dev/null | awk 'NR==1')" || n=""
+  n="$("$bin" --defaults-extra-file=<(fl_mariadb_cnf "$pw") -u root --connect-timeout=2 -sNe "SELECT COALESCE(SUM(data_length + index_length), 0) FROM information_schema.TABLES WHERE TABLE_SCHEMA='${db}'" 2>/dev/null | awk 'NR==1')" || n=""
   [[ "$n" =~ ^[0-9]+$ ]] && printf '%s' "$n"
   return 0
 }

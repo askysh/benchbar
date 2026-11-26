@@ -773,7 +773,7 @@ fl_site_recover() {
     # db is _ and 16 hex digits (fl_site_marker_db): safe in SQL; the backticks are SQL's
     # shellcheck disable=SC2016
     if ! printf 'DROP DATABASE IF EXISTS `%s`;\nDROP USER IF EXISTS '"'%s'@'%%'"';\nDROP USER IF EXISTS '"'%s'@'localhost'"';\nFLUSH PRIVILEGES;\n' "$db" "$db" "$db" \
-        | MYSQL_PWD="$pw" "$bin" -u root --connect-timeout=5 >>"${FL_LOG_FILE:-/dev/null}" 2>&1; then
+        | "$bin" --defaults-extra-file=<(fl_mariadb_cnf "$pw") -u root --connect-timeout=5 >>"${FL_LOG_FILE:-/dev/null}" 2>&1; then
       FL_SITE_RECOVER_WHY="dropping the database ${db} failed (log: ${FL_LOG_FILE:-none})"
       return 1
     fi

@@ -18,8 +18,18 @@ BENCH="$HOME/frappe-bench"
 ADMIN='Adm1n-sTdIn-0451'
 ROOT_PW='rootpw'
 
-# run_in INPUT ARGS...: benchbar with INPUT on standard input (a pipe, never a terminal)
+# run_in INPUT ARGS...: benchbar with INPUT and then an empty line on standard input (a pipe, never a terminal);
+# run_raw sends INPUT as it is
 run_in() {
+  local input="$1"
+  shift
+  set +e
+  OUT="$(printf '%s
+' "$input" | "$FM" "$@" 2>&1)"
+  CODE=$?
+  set -e
+}
+run_raw() {
   local input="$1"
   shift
   set +e
@@ -61,6 +71,9 @@ assert_eq "" "$(leaked bench)" "(bench saw a password variable)"
 assert_eq "" "$(leaked brew)" "(brew saw a password variable)"
 assert_eq "" "$(leaked yarn)" "(yarn saw a password variable)"
 assert_eq "" "$(ancestors)" "(a process above a mock had a password in /proc/PID/environ)"
+assert_no_file "$MOCK_STATE/mysql_pwd_seen" "(a mariadb client got MYSQL_PWD in its environment)"
+assert_calls_contain "^mariadb --defaults-extra-file=/dev/fd/[0-9]+ -u root" "(the root password went in an option file that is a pipe, the first option)"
+assert_calls_not_contain "^mariadb .*( --password| -p)" "(no client call carries it on its command line)"
 no_secret "stdin install"
 
 # the same run as a stream: the done line and the plan carry no password either
@@ -103,6 +116,56 @@ assert_contains "$OUT" "secrets_stdin_invalid"
 assert_eq "$snap" "$(find "$HOME" -type f 2>/dev/null | wc -l | tr -d ' ')" "(a refusal writes nothing)"
 assert_calls_not_contain "^(brew|bench|sudo) "
 
+# the same refusals on every bash: a half value, an empty list, a long line, a joined key
+for bad in "ADMIN_PASSWORD=half" "" "ADMIN_PASSWORD=$(printf 'a%.0s' $(seq 1 5000))
+" "ADMIN_PASSWORD MARIADB_ROOT_PASSWORD=x
+" "BENCHBAR_SUDO_PASSWORD=x
+" "admin_password=x
+"; do
+  run_raw "$bad" install --offline --yes --secrets-stdin --bench-dir "$BENCH" --site macdev
+  assert_eq "64" "$CODE" "${OUT:0:300}"
+  assert_contains "$OUT" "Nothing was changed"
+  assert_not_contains "$OUT" "half" "(a refusal must not print the value)"
+  assert_no_file "$BENCH"
+done
+assert_contains "$OUT" "not accepted" "(lower case is not a key)"
+run_raw "ADMIN_PASSWORD=half" install --offline --yes --secrets-stdin --bench-dir "$BENCH" --site macdev
+assert_contains "$OUT" "no LF"
+run_in "" install --offline --yes --secrets-stdin --bench-dir "$BENCH" --site macdev
+assert_contains "$OUT" "empty"
+run_raw "" install --offline --yes --secrets-stdin --bench-dir "$BENCH" --site macdev
+assert_contains "$OUT" "not ended by an empty line"
+run_raw "ADMIN_PASSWORD=${ADMIN}
+" install --offline --yes --secrets-stdin --bench-dir "$BENCH" --site macdev
+assert_contains "$OUT" "not ended by an empty line" "(a closed input without the empty line)"
+run_in "BENCHBAR_SUDO_PASSWORD=x
+" install --offline --yes --secrets-stdin --bench-dir "$BENCH" --site macdev
+assert_contains "$OUT" "BENCHBAR_SUDO=env"
+# a caller that keeps stdin open and never ends the list: a timeout is a refusal, not the end of the list
+set +e
+OUT="$( (printf 'ADMIN_PASSWORD=x
+'; sleep 4) | FL_SECRETS_WAIT=1 "$FM" install --offline --yes --secrets-stdin --bench-dir "$BENCH" --site macdev 2>&1)"
+CODE=$?
+set -e
+assert_eq "64" "$CODE" "$OUT"
+assert_contains "$OUT" "not ended by an empty line"
+assert_no_file "$BENCH"
+# a missing password under --secrets-stdin says how to send it
+run_in "MARIADB_ROOT_PASSWORD=${ROOT_PW}
+" install --offline --yes --json --secrets-stdin --bench-dir "$BENCH" --site macdev
+assert_contains "$OUT" "ADMIN_PASSWORD was not sent"
+
+# bash -x: the trace of the channel's own code (read, take, hand over) shows no value. A dry run goes
+# through all of it: the parent reads stdin, the phase scripts read fd 7
+fresh
+trace="$(printf 'ADMIN_PASSWORD=%s
+MARIADB_ROOT_PASSWORD=%s
+
+' "$ADMIN" "R00t-xTrace-77" | bash -x "$FM" install --offline --dry-run --yes --secrets-stdin --bench-dir "$BENCH" --site macdev 2>&1 >/dev/null || true)"
+assert_contains "$trace" "fl__secrets_read" "(the trace is the run's)"
+assert_not_contains "$trace" "$ADMIN" "(xtrace)"
+assert_not_contains "$trace" "R00t-xTrace-77" "(xtrace)"
+
 # a terminal on stdin is refused at once, not waited on
 run_fm_tty install --offline --yes --secrets-stdin --bench-dir "$BENCH" --site macdev
 assert_eq "64" "$CODE" "$OUT"
@@ -126,11 +189,12 @@ assert_eq "0" "$CODE" "$OUT"
 assert_eq "${ROOT_PW} ${ADMIN}" "$(tr '\n' ' ' <"$MOCK_STATE/stdin-new-site" | sed 's/ $//')"
 assert_eq "" "$(leaked bench)" "(bench saw a password variable)"
 assert_eq "" "$(leaked brew)" "(brew saw a password variable)"
+assert_no_file "$MOCK_STATE/mysql_pwd_seen" "(a mariadb client got MYSQL_PWD in its environment)"
 
 # ---- --background: the detached run reads them from a pipe, and has them in no environment
 fresh
 set +e
-OUT="$(printf 'ADMIN_PASSWORD=%s\nMARIADB_ROOT_PASSWORD=%s\n' "$ADMIN" "$ROOT_PW" | MOCK_ENV_DUMP=1 "$FM" install --offline --background --yes --json --secrets-stdin --bench-dir "$BENCH" --site macdev 2>&1)"
+OUT="$(printf 'ADMIN_PASSWORD=%s\nMARIADB_ROOT_PASSWORD=%s\n\n' "$ADMIN" "$ROOT_PW" | MOCK_ENV_DUMP=1 "$FM" install --offline --background --yes --json --secrets-stdin --bench-dir "$BENCH" --site macdev 2>&1)"
 CODE=$?
 set -e
 assert_eq "0" "$CODE" "$OUT"

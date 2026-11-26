@@ -8,8 +8,12 @@
 #   MARIADB_ROOT_PASSWORD in the environment, then the Keychain, then a
 #   prompt. Whatever verifies against the server is saved to the Keychain.
 #
-# The client gets the password through MYSQL_PWD, not on the command line,
-# so it never shows in the process list.
+# The client gets the password in an option file that is a pipe
+# (--defaults-extra-file=<(fl_mariadb_cnf PASSWORD), always the first option),
+# not on the command line and not in its environment: the process list has no
+# password and /proc/PID/environ has none either. The file never exists on
+# disk. (A client that is only asked over the socket with no password still
+# gets MYSQL_PWD="", which is no secret.)
 
 FL_KEYCHAIN_SERVICE="${FL_KEYCHAIN_SERVICE:-benchbar-mariadb}"
 FL_KEYCHAIN_ACCOUNT="root"
@@ -90,6 +94,21 @@ fl_mariadb_client() {
   printf '%s' "$bin"
 }
 
+# fl_mariadb_cnf PASSWORD: prints the option file that holds PASSWORD, for
+# --defaults-extra-file=<(fl_mariadb_cnf "$pw"). The value is in double
+# quotes, where a backslash and a double quote are escaped with a backslash
+# (a "#" or a space inside would otherwise end it). xtrace is off while the
+# value is held, so "bash -x" prints no value from here.
+fl_mariadb_cnf() {
+  local xt=0 v bs=$'\\' q='"'
+  case "$-" in *x*) xt=1; { set +x; } 2>/dev/null ;; esac
+  v="${1//"$bs"/"$bs$bs"}"
+  v="${v//"$q"/"$bs$q"}"
+  printf '[client]\npassword="%s"\n' "$v"
+  if [[ "$xt" == "1" ]]; then set -x; fi
+  return 0
+}
+
 # true when root@localhost accepts a login with no password (an older
 # fresh install, or a server someone opened up)
 fl_mariadb_root_open() {
@@ -139,7 +158,7 @@ fl_mariadb_root_verify() {
   local bin
   bin="$(fl_mariadb_client)"
   [[ -n "$bin" ]] || return 1
-  MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -e "SELECT 1" >/dev/null 2>&1
+  "$bin" --defaults-extra-file=<(fl_mariadb_cnf "$1") -u root --connect-timeout=2 -e "SELECT 1" >/dev/null 2>&1
 }
 
 # fl_mariadb_db_exists PASSWORD NAME: 0 the database exists, 1 it does not,
@@ -150,7 +169,7 @@ fl_mariadb_db_exists() {
   [[ "$2" =~ ^[A-Za-z0-9_]+$ ]] || return 2
   bin="$(fl_mariadb_client)"
   [[ -n "$bin" ]] || return 2
-  out="$(MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -sNe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$2'" 2>/dev/null)" || return 2
+  out="$("$bin" --defaults-extra-file=<(fl_mariadb_cnf "$1") -u root --connect-timeout=2 -sNe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$2'" 2>/dev/null)" || return 2
   [[ "$out" == "$2" ]]
 }
 
@@ -163,14 +182,14 @@ fl_mariadb_db_fresh() {
   [[ "$2" =~ ^[A-Za-z0-9_]+$ ]] || return 2
   bin="$(fl_mariadb_client)"
   [[ -n "$bin" ]] || return 2
-  n="$(MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -sNe "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$2'" 2>/dev/null)" || return 2
+  n="$("$bin" --defaults-extra-file=<(fl_mariadb_cnf "$1") -u root --connect-timeout=2 -sNe "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$2'" 2>/dev/null)" || return 2
   [[ "$n" =~ ^[0-9]+$ ]] || return 2
   [[ "$n" == "0" ]] && return 0
-  n="$(MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -sNe "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$2' AND TABLE_NAME='tabUser'" 2>/dev/null)" || return 2
+  n="$("$bin" --defaults-extra-file=<(fl_mariadb_cnf "$1") -u root --connect-timeout=2 -sNe "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$2' AND TABLE_NAME='tabUser'" 2>/dev/null)" || return 2
   [[ "$n" =~ ^[0-9]+$ ]] || return 2
   # tables but no tabUser yet: nothing a person made
   [[ "$n" == "0" ]] && return 0
-  n="$(MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -sNe "SELECT COUNT(*) FROM \`$2\`.tabUser WHERE name NOT IN ('Administrator','Guest')" 2>/dev/null)" || return 2
+  n="$("$bin" --defaults-extra-file=<(fl_mariadb_cnf "$1") -u root --connect-timeout=2 -sNe "SELECT COUNT(*) FROM \`$2\`.tabUser WHERE name NOT IN ('Administrator','Guest')" 2>/dev/null)" || return 2
   [[ "$n" =~ ^[0-9]+$ ]] || return 2
   [[ "$n" == "0" ]]
 }
@@ -178,7 +197,7 @@ fl_mariadb_db_fresh() {
 fl_mariadb_server_charset() {
   local bin
   bin="$(fl_mariadb_client)"
-  MYSQL_PWD="$1" "$bin" -u root -sNe "SHOW VARIABLES LIKE 'character_set_server'" 2>/dev/null | awk '{print $2}'
+  "$bin" --defaults-extra-file=<(fl_mariadb_cnf "$1") -u root -sNe "SHOW VARIABLES LIKE 'character_set_server'" 2>/dev/null | awk '{print $2}'
 }
 
 fl_password_generate() {

@@ -102,7 +102,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `repair` | `--dry-run` |  | Print the plan, change nothing. With --json the plan line carries its token. |
 | `repair` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before. |
 | `repair` | `--yes` |  | Do not ask. |
-| `repair` | `--secrets-stdin` |  | Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line. For a program that has no terminal. |
+| `repair` | `--secrets-stdin` |  | Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal. |
 
 | Command | Environment variable | What it does |
 |---|---|---|

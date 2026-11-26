@@ -467,7 +467,11 @@ benchbar doctor --for-agent  # one JSON document
   --json --secrets-stdin` (`KEY=VALUE` lines; `install`, `adopt`, `repair`,
   `pull`, `site add` and `site drop`). An environment variable stays
   readable in `/proc/PID/environ` for the whole run; a password read from
-  standard input is in no process's environment. See
+  standard input is in no process's environment (the MariaDB client gets the
+  root password in an option file that is a pipe, not in `MYSQL_PWD`).
+  `site restore`, `site move`, `bench remove`, `db orphans` and
+  `share setup` do not take the flag yet: they still need
+  `MARIADB_ROOT_PASSWORD` in the environment. See
   [install](../reference/cli/install.md#passwords-without-the-environment).
 - Two commands are a person's and refuse in this mode and under MCP:
   `benchbar mariadb-password` (the root password) and `benchbar open --as

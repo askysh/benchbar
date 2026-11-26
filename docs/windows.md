@@ -597,7 +597,9 @@ every distro, so stop your benches first).
   A caller that has no terminal can send the passwords on standard input
   instead (`benchbar.exe install --secrets-stdin`, `KEY=VALUE` lines): stdin
   goes through the shim and `wsl.exe` unchanged, and a password sent that way
-  is in no process's environment. See
+  is in no process's environment of the run. `site restore`, `site move`,
+  `bench remove`, `db orphans` and `share setup` do not take the flag: they
+  still need `MARIADB_ROOT_PASSWORD` in the environment. See
   [install](reference/cli/install.md#passwords-without-the-environment).
 - **The tray does not open at logon.** The tray's **Open BenchBar at
   logon** makes a shortcut in your Startup folder. Windows can switch a Startup

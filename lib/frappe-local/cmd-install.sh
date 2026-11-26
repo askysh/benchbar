@@ -281,9 +281,13 @@ cmd_install() {
   export FL_CHANGED_FILE FL_CHANGED_OWNER
   FL_JSONL_BENCH="$FL_BENCH_DIR"; FL_JSONL_SITE="$FL_SITE"
   # the passwords of a stream cannot be asked for: refused before anything runs
-  if [[ "$FL_JSONL" == "1" && "$FL_DRY_RUN" != "1" && ! -d "${FL_BENCH_DIR}/sites/${FL_SITE}" && -z "${ADMIN_PASSWORD:-}" ]]; then
+  if [[ "$FL_JSONL" == "1" && "$FL_DRY_RUN" != "1" && ! -d "${FL_BENCH_DIR}/sites/${FL_SITE}" && -z "${ADMIN_PASSWORD:+x}" ]]; then
+    if [[ "$OPT_SECRETS_STDIN" == "1" ]]; then
+      fl_die "ADMIN_PASSWORD was not sent: the new site ${FL_SITE} needs the Administrator password." \
+        "Send it on standard input: printf 'ADMIN_PASSWORD=%s\n' \"\$pw\" | benchbar install --json --yes --secrets-stdin"
+    fi
     fl_die "ADMIN_PASSWORD is not set: the new site ${FL_SITE} needs the Administrator password." \
-      "Pass it in the environment: ADMIN_PASSWORD='...' benchbar install --json --yes"
+      "Pass it in the environment: ADMIN_PASSWORD='...' benchbar install --json --yes (or on standard input with --secrets-stdin)"
   fi
   bundle="${OPT_BUNDLE:-$(fl_bstate_get APP_BUNDLE 2>/dev/null || true)}"
   bundle="${bundle:-$FL_TEAM_BUNDLE}"

@@ -39,7 +39,7 @@ flag~install~--erpnext-commit~SHA~Pin the erpnext clone to this commit.
 flag~install~--dry-run~~Print the plan, change nothing. With --json the plan line carries its token.
 flag~install~--apply~TOKEN~Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before.
 flag~install~--yes~~Do not ask; secrets come from the environment.
-flag~install~--secrets-stdin~~Read ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD and BENCHBAR_SUDO_PASSWORD from standard input, not the environment: KEY=VALUE lines, LF only, ended by an empty line or the end of the input. For a program that has no terminal; a terminal is refused.
+flag~install~--secrets-stdin~~Read ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD and BENCHBAR_SUDO_PASSWORD from standard input, not the environment: KEY=VALUE lines, LF only, ended by an empty line (required). For a program that has no terminal; a terminal is refused.
 env~install~ADMIN_PASSWORD~The new site's Administrator password.
 env~install~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 env~install~BENCH_INIT_TIMEOUT_SECONDS~Seconds bench init may take before it is stopped (default 2700, 0 for no limit). A half built bench left by a stopped init is moved aside by the next install, which starts it again.
@@ -51,7 +51,7 @@ flag~adopt~--make-default~~Make this the default bench.
 flag~adopt~--allow-windows-fs~~WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p), which is refused by default.
 flag~adopt~--dry-run~~Print the plan, change nothing.
 flag~adopt~--yes~~Do not ask.
-flag~adopt~--secrets-stdin~~Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line. For a program that has no terminal.
+flag~adopt~--secrets-stdin~~Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
 env~adopt~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~adopt~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
 cmd~service~benchbar service [--with-schedule|--without-schedule] [--port-offset N] [--dry-run|--apply TOKEN --yes] [--json]~Install or refresh only the background service (phase 02).~yes~no~no~yes~stream
@@ -77,7 +77,7 @@ flag~repair~--background~~Start it detached and print its op_id at once (benchba
 flag~repair~--dry-run~~Print the plan, change nothing. With --json the plan line carries its token.
 flag~repair~--apply~TOKEN~Run exactly that plan (with --yes); refused when the plan changed since the token was made. Without a token the run is as before.
 flag~repair~--yes~~Do not ask.
-flag~repair~--secrets-stdin~~Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line. For a program that has no terminal.
+flag~repair~--secrets-stdin~~Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
 env~repair~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~repair~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
 cmd~status~benchbar status [--json] [--ping] [--deep]~State, pid, stop reason, site ping, and with --json the ready object (is the bench ready to serve).~no~no~no~no~document
@@ -154,7 +154,7 @@ flag~pull~--keep-scheduler~~Leave the scheduler as production has it.
 flag~pull~--keep-staging~~Keep the downloaded backup in the bench's .benchbar/pulls/ after a successful run.
 flag~pull~--dry-run~~Print the plan and its token, change nothing.
 flag~pull~--apply~TOKEN~Run exactly that plan (with --yes); refused when the plan changed since the token was made.
-flag~pull~--secrets-stdin~~Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line. For a program that has no terminal.
+flag~pull~--secrets-stdin~~Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
 env~pull~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~report~benchbar report [--print] [--json]~Redacted diagnostics zip on the Desktop for bug reports.~no~no~no~no~document
 flag~report~--print~~Print to the terminal instead of writing the zip.
@@ -204,7 +204,7 @@ flag~site add~--apps~"a b"~Apps of apps/ to install.
 flag~site add~--dry-run~~Print the plan and its token, change nothing.
 flag~site add~--apply~TOKEN~Run exactly that plan (with --yes).
 flag~site add~--yes~~Do not ask.
-flag~site add~--secrets-stdin~~Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line. For a program that has no terminal.
+flag~site add~--secrets-stdin~~Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
 env~site add~ADMIN_PASSWORD~The new site's Administrator password.
 env~site add~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 env~site add~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
@@ -355,7 +355,7 @@ flag~site drop~--confirm-site~NAME~Repeat the site name exactly.
 flag~site drop~--new-default~OTHER~Required when NAME is the default site.
 flag~site drop~--dry-run~~Print the plan, change nothing. With --json the plan carries a token.
 flag~site drop~--apply~TOKEN~Run the plan of a dry run; refused when the sites, the default or the hosts line changed since (needs --yes).
-flag~site drop~--secrets-stdin~~Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line. For a program that has no terminal.
+flag~site drop~--secrets-stdin~~Read the passwords from standard input, not the environment: KEY=VALUE lines (ADMIN_PASSWORD, MARIADB_ROOT_PASSWORD, BENCHBAR_SUDO_PASSWORD), LF only, ended by an empty line (required). For a program that has no terminal.
 env~site drop~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~app~benchbar app list|add|install|update|focus|unfocus ...~The apps of a bench.~no~no~no~no~none
 cmd~app list~benchbar app list [--json] [--no-sites]~Every app: branch, commit, local changes, the sites that have it.~no~no~no~no~document
@@ -831,7 +831,7 @@ fl_site_arg_name() {
 # fl_need_mariadb_password: MARIADB_ROOT_PASSWORD, only when neither the
 # environment nor benchbar's own store knows one (fl_keychain_get)
 fl_need_mariadb_password() {
-  [[ -z "${MARIADB_ROOT_PASSWORD:-}" ]] || return 0
+  [[ -z "${MARIADB_ROOT_PASSWORD:+x}" ]] || return 0
   [[ -z "$(fl_keychain_get 2>/dev/null || true)" ]] || return 0
   fl_need MARIADB_ROOT_PASSWORD "the MariaDB root password: no working one is known to benchbar"
 }
@@ -855,7 +855,7 @@ fl_noninteractive_preflight() {
       fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
       if [[ -n "$FL_TEAM_PROFILE" && -n "$FL_TEAM_SITE" && "$FL_SITE_SOURCE" == "default" ]]; then FL_SITE="$FL_TEAM_SITE"; fi
       [[ "$FL_ASSUME_YES" == "1" ]] || fl_need "--yes" "to confirm the install plan"
-      [[ -d "${FL_BENCH_DIR}/sites/${FL_SITE}" || -n "${ADMIN_PASSWORD:-}" ]] || fl_need ADMIN_PASSWORD "the Administrator password of the new site ${FL_SITE}"
+      [[ -d "${FL_BENCH_DIR}/sites/${FL_SITE}" || -n "${ADMIN_PASSWORD:+x}" ]] || fl_need ADMIN_PASSWORD "the Administrator password of the new site ${FL_SITE}"
       # json runs skip a root step that would ask; a plain run would wait for the password.
       # BENCHBAR_SUDO=env has the password (checked up front, fl_sudo_env_preflight) or it is named
       if fl_sudo_env_has_password; then
@@ -878,7 +878,7 @@ fl_noninteractive_preflight() {
       fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
       fl_is_bench_dir "$FL_BENCH_DIR" || return 0
       if [[ ! -d "${FL_BENCH_DIR}/sites/${name}" ]]; then
-        [[ -n "${ADMIN_PASSWORD:-}" ]] || fl_need ADMIN_PASSWORD "the Administrator password of the new site ${name}"
+        [[ -n "${ADMIN_PASSWORD:+x}" ]] || fl_need ADMIN_PASSWORD "the Administrator password of the new site ${name}"
         fl_need_mariadb_password
       fi
       # the hosts line asks once and needs sudo (a Mac; Linux never edits /etc/hosts)
