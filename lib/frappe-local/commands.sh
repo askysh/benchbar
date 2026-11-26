@@ -77,7 +77,7 @@ cmd~mariadb-password~benchbar mariadb-password [--yes]~Print the MariaDB root pa
 flag~mariadb-password~--yes~~Do not ask (still refused without a person at a terminal).
 cmd~doctor~benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack CHECK] [--prerequisites] [--fetch]~Read only health report. Exit 1 when something FAILs.~no~no~no~no~document
 flag~doctor~--json~~One JSON document.
-flag~doctor~--fix-hints~~Only the fix commands, one per line.
+flag~doctor~--fix-hints~~Only the fix commands of the FAIL and WARN checks, one per line.
 flag~doctor~--quick~~Skip the slow checks and say which.
 flag~doctor~--ack~CHECK~Silence one named WARN for this bench until its message changes.
 flag~doctor~--unack~CHECK~Undo --ack.
@@ -121,6 +121,7 @@ flag~logs~--since~TIMESTAMP~Only lines at or after it (--json; ISO 8601, or HH:M
 flag~logs~--since-restart~~Only lines after the bench's last start (--json).
 flag~logs~--no-follow~~Print and exit.
 flag~logs~-n~N~The last N lines (default 50); -nN, or a bare number, also works.
+flag~logs~--json~~The lines as JSON.
 cmd~fg~benchbar fg~Stop the service and run honcho in the foreground.~yes~no~no~yes~none
 cmd~watch~benchbar watch~Run bench watch for asset rebuilds.~no~no~no~no~none
 cmd~autostart~benchbar autostart [on|off]~Whether the bench may come back after login.~no~no~no~yes~stream
