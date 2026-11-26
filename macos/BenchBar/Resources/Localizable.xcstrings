@@ -606,17 +606,6 @@
         }
       }
     },
-    "%@…": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@…"
-          }
-        }
-      }
-    },
     "%lld (queue), %lld (cache)": {
       "extractionState": "manual",
       "localizations": {
@@ -6150,17 +6139,6 @@
         }
       }
     },
-    "Moving %@…": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Moving %@…"
-          }
-        }
-      }
-    },
     "Needs about %@ GB free": {
       "extractionState": "manual",
       "localizations": {
@@ -10199,17 +10177,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Starting %@"
-          }
-        }
-      }
-    },
-    "Starting…": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Starting…"
           }
         }
       }
