@@ -1,0 +1,50 @@
+# The commands of the table that the global help (benchbar --help) does not list, one key per line (#371).
+# Every other command has a help~SECTION~KEY record in the HELP block of lib/frappe-local/commands.sh.
+# A new command is either placed in the global help or named here: tests/test-help-source.sh fails on one that is neither.
+db orphans
+run
+op
+op list
+op wait
+help
+commands
+ports
+site
+site open-as
+share
+share start
+share stop
+share extend
+share status
+share code
+share invite
+share lock
+share unlock
+share people
+share devices
+share remove
+share revoke
+share assign
+share log
+share open-as
+share teardown
+share joined
+share leave
+share forget
+lan-guard
+lan-guard status
+lan-guard remove
+lan-guard allow-node
+site snapshot drop
+app
+lock
+bench
+bench forget
+bench remove
+bench scratch
+bench gc
+profile
+labs list
+labs status
+lease
+lease release
