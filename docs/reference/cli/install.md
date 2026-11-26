@@ -101,12 +101,13 @@ minutes. A password on standard input is read into a shell variable that is
 never exported, so no `benchbar` process, phase script or child of the
 install has it in its environment. The MariaDB client gets the root password
 in an option file that is a pipe (`--defaults-extra-file=<(...)`), not in
-`MYSQL_PWD`, and the file is never on disk. Under `bash -x` the call lines of
-the older code that pass a password as an argument still print it; the code of
-the channel itself prints none.
+`MYSQL_PWD`, and the file is never on disk. A run that took its passwords from
+standard input stops tracing itself once it holds them, so `bash -x` shows the
+start of the run and none of the passwords; a run that got them in the
+environment is traced as before, and a trace prints them.
 
 ```bash
-printf 'ADMIN_PASSWORD=%s\nMARIADB_ROOT_PASSWORD=%s\n' "$ADMIN" "$ROOT" |
+printf 'ADMIN_PASSWORD=%s\nMARIADB_ROOT_PASSWORD=%s\n\n' "$ADMIN" "$ROOT" |
   benchbar install --yes --json --secrets-stdin
 ```
 

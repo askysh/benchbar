@@ -113,9 +113,16 @@ fl_secrets_stdin_take() {
   fi
   if ! fl__secrets_read 0; then
     fl_usage_refuse secrets_stdin_invalid "The secrets on standard input were refused: ${FL_SECRETS_ERR}. Nothing was changed." \
-      "Send KEY=VALUE lines (LF only, no value on a second line) with the keys ${FL_SECRETS_KEYS// /, }, ended by an empty line or the end of the input."
+      "Send KEY=VALUE lines (LF only, no value on a second line) with the keys ${FL_SECRETS_KEYS// /, }, ended by an empty line (required)."
   fi
+  fl__secrets_notrace
 }
+
+# fl__secrets_notrace: a run that holds secrets from the channel does not trace
+# the rest of itself: bash prints every command line after expansion, so a
+# "bash -x" trace would show each password at each place that passes it on
+# (a function call, a test, an assignment). The trace stops here, silently.
+fl__secrets_notrace() { { set +x; } 2>/dev/null; return 0; }
 
 # fl__secrets_emit: the passwords the phase scripts need, as the lines
 # fl__secrets_read takes. Builtins only (printf), so no process has them.
@@ -147,4 +154,5 @@ fl_secrets_fd_take() {
   # the process substitutions behind fd 7 and fd 8 hold their pipes on fd 62 and 63: closed, so the
   # phase script's children (bench init, get-app, brew) do not inherit them
   eval "exec 62<&- 63<&-" 2>/dev/null || true
+  fl__secrets_notrace
 }

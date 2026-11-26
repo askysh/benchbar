@@ -463,7 +463,7 @@ benchbar doctor --for-agent  # one JSON document
   the bench. It exits 2 when the MariaDB root password is one of them;
   then ask the person for it, do not look for it.
 - Pass those passwords on standard input, not in the environment, when
-  you can: `printf 'ADMIN_PASSWORD=%s\n' "$pw" | benchbar install --yes
+  you can: `printf 'ADMIN_PASSWORD=%s\n\n' "$pw" | benchbar install --yes
   --json --secrets-stdin` (`KEY=VALUE` lines; `install`, `adopt`, `repair`,
   `pull`, `site add` and `site drop`). An environment variable stays
   readable in `/proc/PID/environ` for the whole run; a password read from

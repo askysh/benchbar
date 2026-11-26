@@ -97,13 +97,17 @@ fl_mariadb_client() {
 # fl_mariadb_cnf PASSWORD: prints the option file that holds PASSWORD, for
 # --defaults-extra-file=<(fl_mariadb_cnf "$pw"). The value is in double
 # quotes, where a backslash and a double quote are escaped with a backslash
+# and a line break is written \n (or \r)
 # (a "#" or a space inside would otherwise end it). xtrace is off while the
 # value is held, so "bash -x" prints no value from here.
 fl_mariadb_cnf() {
   local xt=0 v bs=$'\\' q='"'
   case "$-" in *x*) xt=1; { set +x; } 2>/dev/null ;; esac
-  v="${1//"$bs"/"$bs$bs"}"
-  v="${v//"$q"/"$bs$q"}"
+  # no outer quotes: bash 3.2 keeps the inner quotes of a replacement literally inside "${...}"
+  v=${1//"$bs"/"$bs$bs"}
+  v=${v//"$q"/"$bs$q"}
+  v=${v//$'\n'/${bs}n}
+  v=${v//$'\r'/${bs}r}
   printf '[client]\npassword="%s"\n' "$v"
   if [[ "$xt" == "1" ]]; then set -x; fi
   return 0

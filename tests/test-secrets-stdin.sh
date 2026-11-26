@@ -166,6 +166,70 @@ assert_contains "$trace" "fl__secrets_read" "(the trace is the run's)"
 assert_not_contains "$trace" "$ADMIN" "(xtrace)"
 assert_not_contains "$trace" "R00t-xTrace-77" "(xtrace)"
 
+# ---- the examples of the docs run as written (a copied example must not exit 64)
+# the block of docs/reference/cli/install.md, with benchbar replaced by this checkout, and a dry run added
+fresh
+block="$(awk '/^### Passwords without the environment/{f=1} f&&/^```bash/{b=1;next} b&&/^```/{exit} b' "$ROOT/docs/reference/cli/install.md")"
+[[ -n "$block" ]] || fail "no example under 'Passwords without the environment' in docs/reference/cli/install.md"
+assert_contains "$block" "--secrets-stdin"
+example="${block//benchbar install/\"\$FM\" install --offline --dry-run --bench-dir \"\$BENCH\" --site macdev}"
+set +e
+OUT="$(ADMIN="$ADMIN" ROOT="$ROOT_PW" FM="$FM" BENCH="$BENCH" bash -c "$example" 2>&1)"
+CODE=$?
+set -e
+assert_eq "0" "$CODE" "(the example of the install reference) $OUT"
+# every printf example of a secret list in the docs ends the list with an empty line
+for doc in docs/reference/cli/install.md docs/guides/agents.md docs/windows.md docs/windows-tray.md AGENTS.md; do
+  while IFS= read -r l; do
+    case "$l" in
+      *'\n\n'*) ;;
+      *) fail "$doc: an example of the secret list has no empty line at its end: $l" ;;
+    esac
+  done < <(grep -F "printf 'ADMIN_PASSWORD=" "$ROOT/$doc" || true)
+done
+assert_not_contains "$(grep -rh "secrets-stdin" "$ROOT/lib/frappe-local/secrets.sh" "$ROOT/docs" "$ROOT/AGENTS.md" "$ROOT/changelog.d/167-secrets-stdin.md")" "or the end of the input" "(the old rule is gone from every text)"
+
+# ---- xtrace: the code a phase script and the libraries run once they hold the passwords prints none
+fresh
+X_ADMIN='Adm1n-xT-5521'; X_ROOT='R00t-xT-5521'
+# a phase script run by hand, as benchbar starts it: the passwords on fd 7, the whole script traced
+for ph in 00-mac-system-deps.sh 01-install-bench-and-site.sh; do
+  trace="$(BENCH_DIR="$BENCH" SITE_NAME=macdev FL_SECRETS_FD=7 bash -x "$ROOT/$ph" --yes --offline --dry-run 7< <(printf 'ADMIN_PASSWORD=%s\nMARIADB_ROOT_PASSWORD=%s\n\n' "$X_ADMIN" "$X_ROOT") 2>&1 >/dev/null || true)"
+  assert_contains "$trace" "fl_secrets_fd_take" "($ph: the trace is the script's)"
+  assert_not_contains "$trace" "$X_ADMIN" "($ph under bash -x)"
+  assert_not_contains "$trace" "$X_ROOT" "($ph under bash -x)"
+done
+# the functions that take a password, called with a known one after the channel gave it
+cat >"$TMP_DIR/xtrace-libs.sh" <<'XT'
+. "$ROOT/lib/frappe-local/ui.sh"
+. "$ROOT/lib/frappe-local/run.sh"
+. "$ROOT/lib/frappe-local/platform.sh"
+. "$ROOT/lib/frappe-local/secrets.sh"
+. "$ROOT/lib/frappe-local/state.sh"
+. "$ROOT/lib/frappe-local/mariadb.sh"
+fl_secrets_fd_take
+fl_mariadb_root_verify "$MARIADB_ROOT_PASSWORD" || true
+fl_mariadb_db_exists "$MARIADB_ROOT_PASSWORD" _abc123 || true
+fl_mariadb_db_fresh "$MARIADB_ROOT_PASSWORD" _abc123 || true
+fl_mariadb_server_charset "$MARIADB_ROOT_PASSWORD" >/dev/null || true
+echo "[$(fl_mariadb_cnf "$MARIADB_ROOT_PASSWORD" | wc -l | tr -d ' ')]"
+XT
+trace="$(ROOT="$ROOT" FL_SECRETS_FD=7 bash -x "$TMP_DIR/xtrace-libs.sh" 7< <(printf 'MARIADB_ROOT_PASSWORD=%s\n\n' "$X_ROOT") 2>&1 || true)"
+assert_contains "$trace" "fl_secrets_fd_take" "(the trace is the script's)"
+assert_contains "$trace" "[2]" "(the option file has two lines: the functions ran)"
+assert_not_contains "$trace" "$X_ROOT" "(the libraries under bash -x)"
+
+# ---- the option file: a line break, a backslash, a quote and a hash are escaped, never lost
+cat >"$TMP_DIR/cnf.sh" <<'XT'
+. "$ROOT/lib/frappe-local/mariadb.sh"
+fl_mariadb_cnf "$1"
+XT
+nlpw=$'ab\ncd'
+assert_eq '[client]
+password="ab\ncd"' "$(ROOT="$ROOT" bash "$TMP_DIR/cnf.sh" "$nlpw")" "(a line break is written \n)"
+assert_eq '[client]
+password="a\\b\"c#d e"' "$(ROOT="$ROOT" bash "$TMP_DIR/cnf.sh" 'a\b"c#d e')" "(backslash, quote, hash and space)"
+
 # a terminal on stdin is refused at once, not waited on
 run_fm_tty install --offline --yes --secrets-stdin --bench-dir "$BENCH" --site macdev
 assert_eq "64" "$CODE" "$OUT"
