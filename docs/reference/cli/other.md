@@ -132,11 +132,9 @@ benchbar where
 benchbar docs [TOPIC] [--print]
 ```
 
-Opens this documentation in your browser, or the page of one topic:
-`install`, `quick-start`, `app`, `sites`, `apps`, `doctor`, `teams`,
-`agents`, `mcp`, `cli`, `config`, `json`, `runners`, `troubleshooting`,
-`decisions`, `roadmap` or `contributing`. `benchbar docs --help` lists
-every topic with its aliases.
+Opens this documentation in your browser, or the page of one topic, for
+example `install`, `app`, `doctor`, `troubleshooting` or `roadmap`.
+`benchbar docs --help` lists every topic with its aliases.
 
 | Flag | What it does |
 |---|---|

@@ -3,7 +3,7 @@
 # CONTRIBUTING.md at the root) with Bun.
 #
 # The site describes the last release, so it is built and deployed from main
-# only (docs/DECISIONS.md, "Docs process"). Work lands on next-release, and
+# only (maintainers/DECISIONS.md, "Docs process"). Work lands on next-release, and
 # a feature's pages go live with the release that has the feature.
 #
 # Every pull request to next-release (or main) gets a "Docs build" check: the
@@ -12,7 +12,7 @@
 # request and not after the release. A small "changes" job skips the build
 # when nothing that feeds the docs changed: a skipped job counts as a pass
 # for a required check, where a workflow filtered out by "paths" would leave
-# the check pending forever (docs/DECISIONS.md, "0.5.5: docs site").
+# the check pending forever (maintainers/DECISIONS.md, "0.5.5: docs site").
 #
 # A push to main that changed the docs builds again and deploys to GitHub
 # Pages. This is the official Astro Pages workflow with its steps spelled
@@ -62,6 +62,7 @@ jobs:
           filters: |
             docs:
               - 'docs/**'
+              - 'maintainers/**'
               - 'site/**'
               - 'ROADMAP.md'
               - 'CONTRIBUTING.md'

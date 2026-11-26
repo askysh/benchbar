@@ -70,7 +70,7 @@ export FL_LOCK_WAIT_SECS=0
 # tests of the probes set FL_LOCAL_PROBES=1 and bring their own listeners
 export FL_LOCAL_PROBES=0
 # every FL_* and BENCHBAR_* test seam below is read only when this is 1;
-# a production run ignores them (docs/DECISIONS.md)
+# a production run ignores them (maintainers/DECISIONS.md)
 export FL_TESTING=1
 # the sudo function (lib/frappe-local/sudo.sh) runs this program: the mock
 export FL_SUDO_BIN="$ROOT/tests/mocks/bin/sudo"

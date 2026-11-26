@@ -45,7 +45,7 @@ project_version() {
 }
 
 step "profile formulae"
-"${ROOT}/scripts/check-profile-formulae.sh" || die "a release profile names a formula Homebrew is about to disable" "move the profile in config/release-profiles.tsv (see docs/DECISIONS.md, 0.7.3)"
+"${ROOT}/scripts/check-profile-formulae.sh" || die "a release profile names a formula Homebrew is about to disable" "move the profile in config/release-profiles.tsv (see maintainers/DECISIONS.md, 0.7.3)"
 
 step "check tools"
 for tool in xcodegen xcodebuild hdiutil ditto codesign shasum; do

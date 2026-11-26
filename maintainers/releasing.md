@@ -253,7 +253,7 @@ Before publishing the draft, check:
    run `benchbar.exe --shim-version` and start `BenchBarTray.exe`
    against a distro with a bench.
 3. After publishing, run the one liner from
-   [Windows](windows.md#install) on a clean Windows 11 (a VM or Windows
+   [Windows](../docs/windows.md#install) on a clean Windows 11 (a VM or Windows
    Sandbox) and check these:
    - One line installer: no dialog is expected.
    - Zip route (unpack, start a program yourself): the "Open File -
@@ -273,7 +273,7 @@ from main with a version such as `0.8.0` and `draft_release` off, then
 download the `windows-amd64` (and `windows-arm64`) artifact from the
 run's summary page. Each holds the zip and its `sums-<arch>.txt`. Send
 the zip; the tester unpacks it and runs its own `install.ps1`, as
-[Windows](windows.md#a-test-build-you-were-sent) describes. The
+[Windows](../docs/windows.md#a-test-build-you-were-sent) describes. The
 programs are unsigned, so starting one from the unpacked folder shows the
 Open File security warning and Smart App Control in enforce mode blocks them: testers need it off or in
 evaluation mode.
@@ -297,7 +297,7 @@ ad hoc path of the workflow, running on your Mac.
 
 ### When a test pass finds a bug
 
-Write it in [Known issues](troubleshooting.md#known-issues) in the same
+Write it in [Known issues](../docs/troubleshooting.md#known-issues) in the same
 pull request that files or fixes it: the version, what a person sees, and
 the way around it. Remove the line in the pull request that fixes it. A
 bug found while a release is being cut and not fixed before the tag goes
