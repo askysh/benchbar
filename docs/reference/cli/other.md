@@ -708,6 +708,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `docs` | `--print` |  | Print the page's address instead of opening it. |
 | `self-update` | `--check` |  | This version against the latest. |
 | `self-update` | `--dry-run` |  | Print the plan, change nothing. |
+| `op status` | `--json` |  | One JSON document. It adds the run's done line as result once the run ended. |
 | `op list` | `--running` |  | Only the ones that run now. |
 | `op list` | `--limit` | `N` | At most N (1 to 100, default 20). |
 | `op wait` | `--timeout` | `SECS` | Give up after SECS seconds (the operation goes on); default: wait for it. |

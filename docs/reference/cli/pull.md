@@ -140,10 +140,10 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 |---|---|---|---|
 | `pull` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `pull` | `--as` | `NAME` | Local site name (default SITE.local). |
-| `pull` | `--from-dir` | `DIR` | A backup set downloaded by hand, no SSH. |
-| `pull` | `--remote-bench` | `DIR` | The bench folder on the server. |
-| `pull` | `--new-backup` |  | Run bench backup on the server first. |
-| `pull` | `--keep-secrets` |  | Keep the copy's integrations and stored secrets (by default they are switched off and cleared). A person's decision: refused under --for-agent, benchbar mcp and BENCHBAR_NONINTERACTIVE=1. |
+| `pull` | `--from-dir` | `DIR` | A backup set downloaded by hand (Frappe Cloud), no SSH. |
+| `pull` | `--remote-bench` | `DIR` | The bench folder on the server (default ~/frappe-bench). |
+| `pull` | `--new-backup` |  | Run bench backup on the server first. It also deletes older backups there, and it asks for the site name (or takes --confirm-site). |
+| `pull` | `--keep-secrets` |  | Keep the copy's integrations and stored secrets (by default they are switched off and cleared, and tokens and queued mail are dropped; the Administrator login is kept). A person's decision: refused under --for-agent, benchbar mcp and BENCHBAR_NONINTERACTIVE=1. |
 | `pull` | `--replace` |  | Restore over an existing local site, after backing it up. |
 | `pull` | `--confirm-site` | `SITE` | With --new-backup: the site name, instead of typing it. |
 | `pull` | `--skip-app` | `APP` | Restore without APP (its tables stay behind as orphans); repeat for more apps. |
