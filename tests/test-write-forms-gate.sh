@@ -2,9 +2,11 @@
 # The forms that write benchbar's state while the command reads (#371): app focus NAME, doctor --ack ID and
 # doctor --unack ID. The table keeps `doctor` and `app focus` at "mutating no" (flipping it would make
 # plain `doctor --json` refuse for an agent when two benches are known), so the bench guess gate of the
-# commands that change things (CORE-4, benchbar: "acting on ...") is applied where these forms write:
+# commands that change things (CORE-4, benchbar: "acting on ...") is applied to these forms by their form, in the
+# dispatch, before the run opens its log or writes anything:
 #   - with two benches known and no --bench-dir, an agent (BENCHBAR_NONINTERACTIVE=1) is refused before
-#     anything is written, with the words of the other commands
+#     anything is written (not a state file, not a log, an operation or a history line), with the words of the
+#     other commands and the whole form that was typed in its hint
 #   - a person is told which bench was picked, and the write goes on
 #   - with --bench-dir (or a remembered bench) nothing is said and the write goes on
 #   - the forms that only read behave as they did
