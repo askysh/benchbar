@@ -2,8 +2,9 @@
 # The help text is held byte for byte: benchbar --help (also with no command, and as `help`) and
 # benchbar COMMAND --help for every command and subcommand of the table, with the experiments off
 # and, for the commands of a lab, on (a command of a lab that is off prints its refusal, not its help). The expected text is in
-# tests/golden/help.txt. The global help is printed from the commands table and the HELP block of
-# commands.sh (#371); that every help record names a command of the table is held by tests/test-help-source.sh.
+# tests/golden/help.txt. The global help is printed from the commands table and the layout in
+# lib/frappe-local/help-layout.txt (#371); that every help record names a command of the table is held by
+# tests/test-help-source.sh.
 #
 # After an intended change of a help text: HELP_GOLDEN_WRITE=tests/golden/help.txt bash tests/test-help-golden.sh
 # writes the new file; read its diff before committing it.

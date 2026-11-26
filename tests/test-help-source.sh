@@ -120,3 +120,20 @@ done
 # shellcheck disable=SC2016  # the single quotes are for the inner shell
 loaded="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/commands.sh"; printf "%s\n" "$FL_CMD_TABLE" | grep -c -E "^(sec|help|text)~"; declare -F fl_usage_text | wc -l' "$ROOT" 2>&1 | tr '\n' ' ')"
 assert_eq "0 0 " "$loaded" "(after a start, the table has no layout record and the function that reads the layout is not loaded)"
+
+# ---- 6. a layout file that is gone (a broken or half copied install) is named in a sentence, with the way out;
+#         the shell's own "No such file or directory" from inside help.sh says neither
+copy="$TMP_DIR/no-layout"
+mkdir -p "$copy"
+cp "$ROOT/benchbar" "$copy/benchbar"
+cp -R "$ROOT/lib" "$copy/lib"
+mv "$copy/lib/frappe-local/help-layout.txt" "$copy/lib/frappe-local/help-layout.gone"
+set +e; OUT="$("$copy/benchbar" --help 2>&1)"; CODE="$?"; set -e
+assert_eq "1" "$CODE" "(the global help without its layout file) $OUT"
+assert_contains "$OUT" "[FAIL]" "(the global help without its layout file fails with a sentence)"
+assert_contains "$OUT" "help-layout.txt" "(the sentence names the file)"
+assert_not_contains "$OUT" "No such file or directory" "(not the shell's own error)"
+assert_not_contains "$OUT" "line 1" "(no line number of help.sh)"
+# a command's own help needs no layout: it prints
+set +e; OUT="$("$copy/benchbar" doctor --help 2>&1)"; CODE="$?"; set -e
+assert_eq "0" "$CODE" "(COMMAND --help without the layout file) $OUT"

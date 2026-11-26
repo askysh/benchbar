@@ -1,5 +1,5 @@
 # The commands of the table that the global help (benchbar --help) does not list, one key per line (#371).
-# Every other command has a help~SECTION~KEY record in the HELP block of lib/frappe-local/commands.sh.
+# Every other command has a help~SECTION~KEY record in lib/frappe-local/help-layout.txt.
 # A new command is either placed in the global help or named here: tests/test-help-source.sh fails on one that is neither.
 db orphans
 run
