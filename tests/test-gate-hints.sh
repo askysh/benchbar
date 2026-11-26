@@ -162,7 +162,14 @@ for k, (usage, mut) in cmds.items():
     if mut != "yes":
         continue
     rest = usage[len("benchbar " + k):]
-    if re.search(r"[A-Z]{2,}", rest) or re.search(r"[a-z]\|[a-z]", rest) or k in valued:
+    # a placeholder is one or more capitals outside the brackets of a flag ("benchbar x S" has one too)
+    bare = rest
+    while True:
+        cut = re.sub(r"\[-[^\[\]]*\]", " ", bare)
+        if cut == bare:
+            break
+        bare = cut
+    if re.search(r"(?<![A-Za-z0-9_-])[A-Z][A-Z0-9_]*(?![a-z])", bare) or re.search(r"[a-z]\|[a-z]", rest) or k in valued:
         need.add(k)
 out = []
 for k in sorted(need):
@@ -182,6 +189,17 @@ print("\n".join(out))
 PY
 )"
 assert_eq "" "$missing" "(every mutating key with an argument or a value has a sample or an exemption)"
+
+# a hint with a word left out says so: "..." is not a word to paste (app add would take it for an app's name).
+# A hint with every word in it says nothing of the kind.
+fresh
+BENCHBAR_NONINTERACTIVE=1 run_fm app add https://user:s3cr3t@github.com/org/private.git --dry-run
+assert_eq "1" "$CODE" "(a hint with a word left out) $OUT"
+assert_contains "$OUT" "benchbar app add ... --dry-run --bench-dir PATH (or set BENCH_DIR)" "(the hint, a word left out)"
+assert_contains "$OUT" "Put back what ... stands for" "(a hint with a word left out says that ... is not to be pasted)"
+BENCHBAR_NONINTERACTIVE=1 run_fm app unfocus frappe
+assert_eq "1" "$CODE" "(a hint with every word) $OUT"
+assert_not_contains "$OUT" "stands for" "(a hint with every word in it has no such sentence)"
 
 # a person (no BENCHBAR_NONINTERACTIVE) is told which bench was picked, and the run goes on: no hint, no refusal
 fresh
