@@ -273,12 +273,19 @@ out shim_arm "$shim_arm"
 out wsl "$wsl"
 out real "$real"
 
+# what the summary says of the pin tests (a case inside $( ) in a quoted argument breaks bash 3.2, so it is set here)
+case "$pin_smoke" in
+  0) pin_text="every scenario" ;;
+  1) pin_text="smoke scenarios" ;;
+  *) pin_text="smoke for ${pin_smoke}, every scenario for the others" ;;
+esac
+
 if [[ -n "${PLAN_SUMMARY:-}" ]]; then
   # shellcheck disable=SC2016  # the backticks are markdown
   {
     printf '### CI plan\n\n'
     printf 'Event `%s`, mode `%s`, %s changed file(s). Pin tests: %s.\n\n' "$EVENT" "$mode" "$(printf '%s\n' "$files" | tr ' ' '\n' | grep -c . || true)" \
-      "$(case "$pin_smoke" in 0) printf 'every scenario' ;; 1) printf 'smoke scenarios' ;; *) printf 'smoke for %s, every scenario for the others' "$pin_smoke" ;; esac)"
+      "$pin_text"
     printf '| Leg | Runs | Shards |\n|---|---|---|\n'
     printf '| Linux (bash 5) | %s | %s |\n' "$run_linux" "$n_linux"
     printf '| bash 3.2 container | %s | %s |\n' "$run_bash32" "$n_bash32"
