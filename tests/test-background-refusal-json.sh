@@ -45,11 +45,11 @@ bg_run() {
   BENCHBAR_NONINTERACTIVE=1 run_fm_split "$@" "$mode" --background
 }
 
-# bg_done NAME KIND CODE TEXT [STDERR]: the run printed one done line: exit CODE, TEXT in `error`, no op_id (no operation
+# bg_done NAME KIND CODE TEXT [STDERR [ALT]]: the run printed one done line: exit CODE, TEXT in `error`, no op_id (no operation
 # exists), KIND repair (exit_code beside exit), install (url), pull (site), or other. With STDERR, stderr is that text, byte
 # for byte (ids normalised, nrm), else it holds TEXT and the hint.
 bg_done() {
-  local name="$1" kind="$2" code="$3" text="$4" want="${5:-}" got
+  local name="$1" kind="$2" code="$3" text="$4" want="${5:-}" alt="${6:-}" got
   assert_eq "$code" "$CODE" "($name) $OUT $ERR"
   assert_eq "1" "$(nlines "$OUT")" "($name: one line on stdout) $OUT"
   got="$(printf '%s' "$OUT" | python3 -I -c '
@@ -63,6 +63,8 @@ print("repair" if "exit_code" in d else "install" if "url" in d else "pull" if "
 ' "$code" "$text")" || fail "($name) not a done line with the refusal: $OUT"
   assert_eq "$kind" "$got" "($name: the done line of the command's own stream)"
   if [[ -n "$want" ]]; then
+    # ALT: the other text this refusal may have (the same, with a hint the launcher found at another moment)
+    [[ -z "$alt" || "$(printf '%s' "$ERR" | nrm)" != "$(printf '%s' "$alt" | nrm)" ]] || want="$alt"
     assert_eq "$(printf '%s' "$want" | nrm)" "$(printf '%s' "$ERR" | nrm)" "($name: stderr is byte for byte what it was)"
   else
     assert_contains "$ERR" "$text" "($name: the refusal is on stderr)"
@@ -282,13 +284,15 @@ no_ops "lease"
 # launcher says so with the run's message and exit code. This one IS an operation (its attempt is recorded, as before):
 # one record, and the launcher's done line
 mkdir -p "$FL_STATE_DIR/lock"; printf '%s\n' "$LIVE" >"$FL_STATE_DIR/lock/pid"
-BUSY_ERR="  [FAIL] Another benchbar run is active (pid ${LIVE})."$'\n\n'"Aborting. See benchbar op status OPID and its log. Nothing was started; the attempt is recorded as OPID."
+# the launcher takes the hint from the detached run's stderr file; when the line is not in the file yet it says where to look
+BUSY_ERR="  [FAIL] Another benchbar run is active (pid ${LIVE})."$'\n\n'"Aborting. Wait for it to finish, or remove ${FL_STATE_DIR}/lock if you are sure it is dead. Nothing was started; the attempt is recorded as OPID."
+BUSY_ERR_EARLY="  [FAIL] Another benchbar run is active (pid ${LIVE})."$'\n\n'"Aborting. See benchbar op status OPID and its log. Nothing was started; the attempt is recorded as OPID."
 for mode in --for-agent --jsonl; do
   bg_run "$mode" site backup bbtest.localhost --yes --bench-dir "$BENCH"
-  bg_done "site backup, lock busy $mode" other 1 "Another benchbar run is active" "$BUSY_ERR"
+  bg_done "site backup, lock busy $mode" other 1 "Another benchbar run is active" "$BUSY_ERR" "$BUSY_ERR_EARLY"
 done
 bg_run --json repair --yes --bench-dir "$BENCH"
-bg_done "repair, lock busy --json" repair 1 "Another benchbar run is active" "$BUSY_ERR"
+bg_done "repair, lock busy --json" repair 1 "Another benchbar run is active" "$BUSY_ERR" "$BUSY_ERR_EARLY"
 assert_eq "$((OPS0 + 3))" "$(find "$OPS" -name 'op-*.json' | wc -l | tr -d ' ')" "(three attempts, three records: the done line adds none)"
 rm -f "$FL_STATE_DIR/lock/pid"; rmdir "$FL_STATE_DIR/lock"
 # two benches and none chosen: the guess gate is the detached run's, so the launcher has no refusal: it prints its op_id line
