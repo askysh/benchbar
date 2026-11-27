@@ -48,96 +48,114 @@ token_of() { printf '%s' "$PIN_STDOUT" | jget - 'd["token"]'; }
 # ---- the plan: JSON and text
 fresh_bench
 run "plan json" app add acme_crm --site macdev --dry-run --json "${B[@]}"
-run "plan text" app add acme_crm --site macdev --dry-run "${B[@]}"
-run "plan text, no site" app add acme_crm --dry-run "${B[@]}"
-run "plan json, skip backup" app add acme_crm --site macdev --skip-backup --dry-run --json "${B[@]}"
-run "plan text, skip backup" app add acme_crm --site macdev --skip-backup --dry-run "${B[@]}"
+if pin_full; then
+  run "plan text" app add acme_crm --site macdev --dry-run "${B[@]}"
+  run "plan text, no site" app add acme_crm --dry-run "${B[@]}"
+  run "plan json, skip backup" app add acme_crm --site macdev --skip-backup --dry-run --json "${B[@]}"
+  run "plan text, skip backup" app add acme_crm --site macdev --skip-backup --dry-run "${B[@]}"
+fi
 run "plan json, required app" app add acme_pay --site macdev --dry-run --json "${B[@]}"
-run "plan text, required app" app add acme_pay --site macdev --dry-run "${B[@]}"
-run "plan json, batch" app add acme_crm acme_hr --site macdev --dry-run --json "${B[@]}"
-run "plan text, batch" app add acme_crm acme_hr --site macdev --dry-run "${B[@]}"
-run "plan json, batch with a shared required app" app add acme_pay acme_crm acme_hr --site macdev --dry-run --json "${B[@]}"
-run "plan json, install-on per app" app add acme_crm --install-on macdev acme_hr --dry-run --json "${B[@]}"
-run "plan json, pinned commit" app add acme_crm --commit "$CRM_SHA" --site macdev --dry-run --json "${B[@]}"
-run "plan text, pinned commit" app add acme_crm --commit "$CRM_SHA" --site macdev --dry-run "${B[@]}"
-run "plan json, all sites" app add acme_crm --all-sites --dry-run --json "${B[@]}"
-run "plan json, a branch" app add acme_crm --branch version-15 --site macdev --dry-run --json "${B[@]}"
-run "plan json, a branch that is not there" app add acme_crm --branch nosuch --site macdev --dry-run --json "${B[@]}"
-run "plan json, an unknown app" app add nosuchapp --site macdev --dry-run --json "${B[@]}"
-run "plan json, a url" app add "file://$REMOTES/acme_hr.git" --branch main --site macdev --dry-run --json "${B[@]}"
-run "plan json, the same app twice" app add acme_crm acme_crm --site macdev --dry-run --json "${B[@]}"
-run "plan json, required app nobody has" app add acme_orphan --site macdev --dry-run --json "${B[@]}"
-run "plan text, required app nobody has" app add acme_orphan --site macdev --dry-run "${B[@]}"
-run "plan, install-on with a stray comma" app add acme_crm --install-on ,macdev --dry-run --json "${B[@]}"
-run "plan, install-on a site that is not there" app add acme_crm --install-on nosite --dry-run --json "${B[@]}"
-run "plan, all sites and a site" app add acme_crm --all-sites --site macdev --dry-run --json "${B[@]}"
-run "plan, an unknown option" app add acme_crm --bogus --dry-run --json "${B[@]}"
-run "plan, no app" app add --dry-run --json "${B[@]}"
-run "json without dry run" app add acme_crm --site macdev --json "${B[@]}"
-use_mocks_without uv
-run "plan json, no uv" app add acme_crm --site macdev --dry-run --json "${B[@]}"
-run "plan text, no uv" app add acme_crm --site macdev --dry-run "${B[@]}"
-use_all_mocks
+if pin_full; then
+  run "plan text, required app" app add acme_pay --site macdev --dry-run "${B[@]}"
+  run "plan json, batch" app add acme_crm acme_hr --site macdev --dry-run --json "${B[@]}"
+  run "plan text, batch" app add acme_crm acme_hr --site macdev --dry-run "${B[@]}"
+  run "plan json, batch with a shared required app" app add acme_pay acme_crm acme_hr --site macdev --dry-run --json "${B[@]}"
+  run "plan json, install-on per app" app add acme_crm --install-on macdev acme_hr --dry-run --json "${B[@]}"
+  run "plan json, pinned commit" app add acme_crm --commit "$CRM_SHA" --site macdev --dry-run --json "${B[@]}"
+  run "plan text, pinned commit" app add acme_crm --commit "$CRM_SHA" --site macdev --dry-run "${B[@]}"
+  run "plan json, all sites" app add acme_crm --all-sites --dry-run --json "${B[@]}"
+  run "plan json, a branch" app add acme_crm --branch version-15 --site macdev --dry-run --json "${B[@]}"
+  run "plan json, a branch that is not there" app add acme_crm --branch nosuch --site macdev --dry-run --json "${B[@]}"
+  run "plan json, an unknown app" app add nosuchapp --site macdev --dry-run --json "${B[@]}"
+  run "plan json, a url" app add "file://$REMOTES/acme_hr.git" --branch main --site macdev --dry-run --json "${B[@]}"
+  run "plan json, the same app twice" app add acme_crm acme_crm --site macdev --dry-run --json "${B[@]}"
+  run "plan json, required app nobody has" app add acme_orphan --site macdev --dry-run --json "${B[@]}"
+  run "plan text, required app nobody has" app add acme_orphan --site macdev --dry-run "${B[@]}"
+  run "plan, install-on with a stray comma" app add acme_crm --install-on ,macdev --dry-run --json "${B[@]}"
+  run "plan, install-on a site that is not there" app add acme_crm --install-on nosite --dry-run --json "${B[@]}"
+  run "plan, all sites and a site" app add acme_crm --all-sites --site macdev --dry-run --json "${B[@]}"
+  run "plan, an unknown option" app add acme_crm --bogus --dry-run --json "${B[@]}"
+  run "plan, no app" app add --dry-run --json "${B[@]}"
+  run "json without dry run" app add acme_crm --site macdev --json "${B[@]}"
+  use_mocks_without uv
+  run "plan json, no uv" app add acme_crm --site macdev --dry-run --json "${B[@]}"
+  run "plan text, no uv" app add acme_crm --site macdev --dry-run "${B[@]}"
+  use_all_mocks
+fi
 
 # ---- refusals of --apply before any work
 TOK0="$(printf '%064d' 0)"
-run "apply, bad token" app add acme_crm --site macdev --apply nope --yes --json "${B[@]}"
-run "apply, no --yes" app add acme_crm --site macdev --apply "$TOK0" --json "${B[@]}"
-run "apply with dry run" app add acme_crm --site macdev --apply "$TOK0" --dry-run --yes --json "${B[@]}"
-run "apply, token of another plan" app add acme_crm --site macdev --apply "$TOK0" --yes --json "${B[@]}"
+if pin_full; then
+  run "apply, bad token" app add acme_crm --site macdev --apply nope --yes --json "${B[@]}"
+  run "apply, no --yes" app add acme_crm --site macdev --apply "$TOK0" --json "${B[@]}"
+  run "apply with dry run" app add acme_crm --site macdev --apply "$TOK0" --dry-run --yes --json "${B[@]}"
+  run "apply, token of another plan" app add acme_crm --site macdev --apply "$TOK0" --yes --json "${B[@]}"
+fi
 run "plan for the next ones" app add acme_crm --site macdev --dry-run --json "${B[@]}"
 TOK="$(token_of)"
-FL_PLAN_NOW=$((FL_PLAN_NOW + 7200)) run "apply, expired token" app add acme_crm --site macdev --apply "$TOK" --yes --json "${B[@]}"
-run "cancelled at the prompt" app add acme_crm --site macdev "${B[@]}"
+if pin_full; then
+  FL_PLAN_NOW=$((FL_PLAN_NOW + 7200)) run "apply, expired token" app add acme_crm --site macdev --apply "$TOK" --yes --json "${B[@]}"
+  run "cancelled at the prompt" app add acme_crm --site macdev "${B[@]}"
+fi
 
 # ---- the apply, JSON: one app, its plan and its result; then nothing left to do
 run "apply, one app, json" app add acme_crm --site macdev --apply "$TOK" --yes --json "${B[@]}"
-run "plan, nothing to do" app add acme_crm --site macdev --dry-run --json "${B[@]}"
-TOK="$(token_of)"
-run "apply, nothing to do, json" app add acme_crm --site macdev --apply "$TOK" --yes --json "${B[@]}"
-run "text, nothing to do" app add acme_crm --site macdev --yes "${B[@]}"
-run "text, nothing to do, dry run" app add acme_crm --site macdev --dry-run "${B[@]}"
-printf '# edited\n' >>"$BENCH/apps/acme_crm/acme_crm/__init__.py"
-run "text, nothing to do, dirty app" app add acme_crm --site macdev --yes "${B[@]}"
-git -C "$BENCH/apps/acme_crm" checkout -q -- .
-run "plan, a stale token after the apply" app add acme_hr --site macdev --dry-run --json "${B[@]}"
-TOK="$(token_of)"
-printf 'acme_other\n' >>"$BENCH/sites/apps.txt"
-run "apply, stale token" app add acme_hr --site macdev --apply "$TOK" --yes --json "${B[@]}"
+if pin_full; then
+  run "plan, nothing to do" app add acme_crm --site macdev --dry-run --json "${B[@]}"
+  TOK="$(token_of)"
+  run "apply, nothing to do, json" app add acme_crm --site macdev --apply "$TOK" --yes --json "${B[@]}"
+  run "text, nothing to do" app add acme_crm --site macdev --yes "${B[@]}"
+  run "text, nothing to do, dry run" app add acme_crm --site macdev --dry-run "${B[@]}"
+  printf '# edited\n' >>"$BENCH/apps/acme_crm/acme_crm/__init__.py"
+  run "text, nothing to do, dirty app" app add acme_crm --site macdev --yes "${B[@]}"
+  git -C "$BENCH/apps/acme_crm" checkout -q -- .
+  run "plan, a stale token after the apply" app add acme_hr --site macdev --dry-run --json "${B[@]}"
+  TOK="$(token_of)"
+  printf 'acme_other\n' >>"$BENCH/sites/apps.txt"
+  run "apply, stale token" app add acme_hr --site macdev --apply "$TOK" --yes --json "${B[@]}"
+fi
 
 # ---- the apply, text: one app, a required app, a batch
 fresh_bench
-run "text apply, one app" app add acme_crm --site macdev --yes "${B[@]}"
-fresh_bench
+if pin_full; then
+  run "text apply, one app" app add acme_crm --site macdev --yes "${B[@]}"
+  fresh_bench
+fi
 run "text apply, required app" app add acme_pay --site macdev --yes "${B[@]}"
-fresh_bench
-run "text apply, batch" app add acme_crm acme_hr --site macdev --yes "${B[@]}"
-fresh_bench
-run "text apply, no site" app add acme_crm --yes "${B[@]}"
-fresh_bench
-run "text apply, skip backup" app add acme_crm --site macdev --skip-backup --yes "${B[@]}"
-fresh_bench
-run "text apply, pinned commit" app add acme_crm --commit "$CRM_SHA" --site macdev --yes "${B[@]}"
-run "plan json, batch, json apply" app add acme_pay acme_hr --site macdev --dry-run --json "${B[@]}"
-TOK="$(token_of)"
-fresh_bench
-run "plan json again on a fresh bench" app add acme_pay acme_hr --site macdev --dry-run --json "${B[@]}"
-TOK="$(token_of)"
-run "apply, batch with a required app, json" app add acme_pay acme_hr --site macdev --apply "$TOK" --yes --json "${B[@]}"
+if pin_full; then
+  fresh_bench
+  run "text apply, batch" app add acme_crm acme_hr --site macdev --yes "${B[@]}"
+  fresh_bench
+  run "text apply, no site" app add acme_crm --yes "${B[@]}"
+  fresh_bench
+  run "text apply, skip backup" app add acme_crm --site macdev --skip-backup --yes "${B[@]}"
+  fresh_bench
+  run "text apply, pinned commit" app add acme_crm --commit "$CRM_SHA" --site macdev --yes "${B[@]}"
+  run "plan json, batch, json apply" app add acme_pay acme_hr --site macdev --dry-run --json "${B[@]}"
+  TOK="$(token_of)"
+  fresh_bench
+  run "plan json again on a fresh bench" app add acme_pay acme_hr --site macdev --dry-run --json "${B[@]}"
+  TOK="$(token_of)"
+  run "apply, batch with a required app, json" app add acme_pay acme_hr --site macdev --apply "$TOK" --yes --json "${B[@]}"
+fi
 
 # ---- failures at each step, the plan that follows, the retry
 for spec in "get-app MOCK_BENCH_GET_APP_EXIT" "get-app, early MOCK_BENCH_GET_APP_EARLY_EXIT" "build MOCK_BENCH_BUILD_EXIT" \
   "backup MOCK_BENCH_BACKUP_EXIT" "install MOCK_BENCH_INSTALL_APP_EXIT" "python MOCK_BENCH_REQUIREMENTS_PYTHON_EXIT"; do
   var="${spec##* }"; label="${spec% *}"
+  [[ "$label" == install ]] || pin_full || continue
   fresh_bench
   export "$var=1"
   run "fails at ${label}" app add acme_crm --site macdev --yes "${B[@]}"
   unset "$var"
-  run "plan after ${label}, text" app add acme_crm --site macdev --dry-run "${B[@]}"
-  run "plan after ${label}, json" app add acme_crm --site macdev --dry-run --json "${B[@]}"
+  if pin_full; then
+    run "plan after ${label}, text" app add acme_crm --site macdev --dry-run "${B[@]}"
+    run "plan after ${label}, json" app add acme_crm --site macdev --dry-run --json "${B[@]}"
+  fi
   run "retry after ${label}" app add acme_crm --site macdev --yes "${B[@]}"
-  run "again after the retry" app add acme_crm --site macdev --yes "${B[@]}"
+  if pin_full; then run "again after the retry, ${label}" app add acme_crm --site macdev --yes "${B[@]}"; fi
 done
+pin_smoke_end app-add.txt
 fresh_bench
 run "plan json for a failing apply" app add acme_crm acme_hr --site macdev --dry-run --json "${B[@]}"
 TOK="$(token_of)"

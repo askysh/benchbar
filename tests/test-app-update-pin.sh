@@ -42,26 +42,30 @@ drop_rec() { local f; f="$(pfile)"; [[ ! -e "$f" ]] || unlink "$f"; }
 local_commit() { pin_date; printf 'local\n' >"$APP/acme_crm/local.txt"; git -C "$APP" add -A; git -C "$APP" commit -q -m "local work"; }
 
 # ---- usage and refusals before any work
-run "unknown option" app update acme_crm --bogus "${B[@]}"
+if pin_full; then
+  run "unknown option" app update acme_crm --bogus "${B[@]}"
+fi
 run "no app" app update "${B[@]}"
-run "apply, bad token" app update acme_crm --apply nope --yes "${B[@]}"
 TOK0="$(printf '%064d' 0)"
-run "apply, no --yes" app update acme_crm --apply "$TOK0" "${B[@]}"
-run "apply with dry run" app update acme_crm --apply "$TOK0" --dry-run --yes "${B[@]}"
-run "apply with discard" app update acme_crm --apply "$TOK0" --discard-pending --yes "${B[@]}"
-run "apply=TOKEN form, no --yes" app update acme_crm "--apply=$TOK0" "${B[@]}"
-run "not a git app" app update nosuch --yes "${B[@]}"
-run "discard with json" app update acme_crm --discard-pending --json "${B[@]}"
+if pin_full; then
+  run "apply, bad token" app update acme_crm --apply nope --yes "${B[@]}"
+  run "apply, no --yes" app update acme_crm --apply "$TOK0" "${B[@]}"
+  run "apply with dry run" app update acme_crm --apply "$TOK0" --dry-run --yes "${B[@]}"
+  run "apply with discard" app update acme_crm --apply "$TOK0" --discard-pending --yes "${B[@]}"
+  run "apply=TOKEN form, no --yes" app update acme_crm "--apply=$TOK0" "${B[@]}"
+  run "not a git app" app update nosuch --yes "${B[@]}"
+  run "discard with json" app update acme_crm --discard-pending --json "${B[@]}"
 
-# ---- discard: no record, a record (dry run, real), an unreadable one
-run "discard, nothing to drop" app update acme_crm --discard-pending "${B[@]}"
-write_rec '{"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"","to":"","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"boom","url":"","started_at":"2026-10-29T10:00:00Z","updated_at":"2026-10-29T10:00:00Z"}'
-run "discard, dry run" app update acme_crm --discard-pending --dry-run "${B[@]}"
-run "discard, real" app update acme_crm --discard-pending "${B[@]}"
-write_rec 'not json'
-run "discard unreadable, dry run" app update acme_crm --discard-pending --dry-run "${B[@]}"
-run "update with unreadable record" app update acme_crm --yes "${B[@]}"
-run "discard unreadable, real" app update acme_crm --discard-pending "${B[@]}"
+  # ---- discard: no record, a record (dry run, real), an unreadable one
+  run "discard, nothing to drop" app update acme_crm --discard-pending "${B[@]}"
+  write_rec '{"schema_version":1,"op":"app_update","app":"acme_crm","branch":"main","from":"","to":"","steps":[{"kind":"migrate","target":"macdev","name":"Migrate macdev"},{"kind":"build","target":"acme_crm","name":"Build"}],"failed_step":"migrate","reason":"boom","url":"","started_at":"2026-10-29T10:00:00Z","updated_at":"2026-10-29T10:00:00Z"}'
+  run "discard, dry run" app update acme_crm --discard-pending --dry-run "${B[@]}"
+  run "discard, real" app update acme_crm --discard-pending "${B[@]}"
+  write_rec 'not json'
+  run "discard unreadable, dry run" app update acme_crm --discard-pending --dry-run "${B[@]}"
+  run "update with unreadable record" app update acme_crm --yes "${B[@]}"
+  run "discard unreadable, real" app update acme_crm --discard-pending "${B[@]}"
+fi
 
 # ---- the app is not in a state to update
 printf "# edited
@@ -69,63 +73,90 @@ printf "# edited
 run "dirty tree" app update acme_crm --yes "${B[@]}"
 git -C "$APP" checkout -q -- .
 git -C "$APP" checkout -q --detach
-run "detached head" app update acme_crm --yes "${B[@]}"
+if pin_full; then
+  run "detached head" app update acme_crm --yes "${B[@]}"
+fi
 git -C "$APP" checkout -q main
 REM="$(git -C "$APP" remote | awk 'NR==1')"
 URL="$(git -C "$APP" remote get-url "$REM")"
 git -C "$APP" remote remove "$REM"
-run "no remote" app update acme_crm --yes "${B[@]}"
+if pin_full; then
+  run "no remote" app update acme_crm --yes "${B[@]}"
+fi
 git -C "$APP" remote add "$REM" "$URL"
 git -C "$APP" fetch -q "$REM"
 git -C "$APP" branch -q --set-upstream-to="$REM/main" main
 
 # ---- up to date, and ahead of the remote
 run "up to date" app update acme_crm --yes "${B[@]}"
-run "up to date, dry run" app update acme_crm --dry-run "${B[@]}"
-run "up to date, dry run json" app update acme_crm --dry-run --json "${B[@]}"
+if pin_full; then
+  run "up to date, dry run" app update acme_crm --dry-run "${B[@]}"
+  run "up to date, dry run json" app update acme_crm --dry-run --json "${B[@]}"
+fi
 local_commit
-run "ahead, text" app update acme_crm --yes "${B[@]}"
-run "ahead, dry run json" app update acme_crm --dry-run --json "${B[@]}"
+if pin_full; then
+  run "ahead, text" app update acme_crm --yes "${B[@]}"
+  run "ahead, dry run json" app update acme_crm --dry-run --json "${B[@]}"
+fi
 git -C "$APP" reset -q --hard HEAD~1
 
 # ---- a plan: new commits upstream
 pin_commit "$WORK/acme_crm" acme_crm 2
-run "plan, text" app update acme_crm --dry-run "${B[@]}"
-run "plan, json" app update acme_crm --dry-run --json "${B[@]}"
-TOK="$(printf '%s' "$PIN_STDOUT" | jget - 'd["token"]')"
-run "plan, skip backup, text" app update acme_crm --dry-run --skip-backup "${B[@]}"
-run "plan, skip backup, json" app update acme_crm --dry-run --skip-backup --json "${B[@]}"
-run "cancelled at the prompt" app update acme_crm "${B[@]}"
-use_mocks_without uv
-run "no uv, dry run" app update acme_crm --dry-run "${B[@]}"
-run "no uv, real run" app update acme_crm --yes "${B[@]}"
-use_all_mocks
-run "apply, token of another plan" app update acme_crm --apply "$TOK0" --yes "${B[@]}"
-FL_PLAN_NOW=$((FL_PLAN_NOW + 7200)) run "apply, expired token" app update acme_crm --apply "$TOK" --yes "${B[@]}"
+if pin_full; then
+  run "plan, text" app update acme_crm --dry-run "${B[@]}"
+  run "plan, json" app update acme_crm --dry-run --json "${B[@]}"
+  TOK="$(printf '%s' "$PIN_STDOUT" | jget - 'd["token"]')"
+  run "plan, skip backup, text" app update acme_crm --dry-run --skip-backup "${B[@]}"
+  run "plan, skip backup, json" app update acme_crm --dry-run --skip-backup --json "${B[@]}"
+  run "cancelled at the prompt" app update acme_crm "${B[@]}"
+  use_mocks_without uv
+  run "no uv, dry run" app update acme_crm --dry-run "${B[@]}"
+  run "no uv, real run" app update acme_crm --yes "${B[@]}"
+  use_all_mocks
+  run "apply, token of another plan" app update acme_crm --apply "$TOK0" --yes "${B[@]}"
+  FL_PLAN_NOW=$((FL_PLAN_NOW + 7200)) run "apply, expired token" app update acme_crm --apply "$TOK" --yes "${B[@]}"
+fi
 # a diverged tree: a local commit and a different one upstream
 local_commit
-run "diverged" app update acme_crm --yes "${B[@]}"
+if pin_full; then
+  run "diverged" app update acme_crm --yes "${B[@]}"
+fi
 git -C "$APP" reset -q --hard HEAD~1
-run "plan again" app update acme_crm --dry-run --json "${B[@]}"
-TOK="$(printf '%s' "$PIN_STDOUT" | jget - 'd["token"]')"
+if pin_full; then
+  run "plan again" app update acme_crm --dry-run --json "${B[@]}"
+  TOK="$(printf '%s' "$PIN_STDOUT" | jget - 'd["token"]')"
+fi
 pin_commit "$WORK/acme_crm" acme_crm 1
-run "apply, stale token" app update acme_crm --apply "$TOK" --yes "${B[@]}"
+if pin_full; then
+  run "apply, stale token" app update acme_crm --apply "$TOK" --yes "${B[@]}"
+fi
 run "plan with the third commit" app update acme_crm --dry-run --json "${B[@]}"
 TOK="$(printf '%s' "$PIN_STDOUT" | jget - 'd["token"]')"
 run "apply, good token, json" app update acme_crm --apply "$TOK" --yes --json "${B[@]}"
-run "after apply, up to date" app update acme_crm --yes "${B[@]}"
+if pin_full; then
+  run "after apply, up to date" app update acme_crm --yes "${B[@]}"
+fi
 
 # ---- failures at each step, then the retry that finishes them
 for spec in "backup MOCK_BENCH_BACKUP_EXIT" "fast_forward MOCK_GIT_MERGE_EXIT" "python MOCK_BENCH_REQUIREMENTS_PYTHON_EXIT" \
   "node MOCK_BENCH_REQUIREMENTS_NODE_EXIT" "migrate MOCK_BENCH_MIGRATE_EXIT" "build MOCK_BENCH_BUILD_EXIT"; do
   read -r label var <<<"$spec"
   pin_commit "$WORK/acme_crm" acme_crm 1
+  if ! pin_full && [[ "$label" != migrate ]]; then
+    # a smoke run: the failure and its retry leave the app at the tip, which is all the next scenario needs
+    git -C "$APP" pull -q --ff-only "$REM" main
+    continue
+  fi
   export "$var=1"
   run "fails at ${label}" app update acme_crm --yes "${B[@]}"
   unset "$var"
-  run "pending after ${label}, text" app update acme_crm --dry-run "${B[@]}"
-  run "pending after ${label}, json" app update acme_crm --dry-run --json "${B[@]}"
+  if pin_full; then
+    run "pending after ${label}, text" app update acme_crm --dry-run "${B[@]}"
+    run "pending after ${label}, json" app update acme_crm --dry-run --json "${B[@]}"
+  fi
   run "retry after ${label}" app update acme_crm --yes "${B[@]}"
+  # the scenarios of the other steps and the ones below only run on a full run
+  [[ "$label" != migrate ]] || pin_smoke_end app-update.txt
 done
 pin_commit "$WORK/acme_crm" acme_crm 1
 MOCK_BENCH_MIGRATE_EXIT=1 run "fails at migrate, json" app update acme_crm --yes --json "${B[@]}"

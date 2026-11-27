@@ -262,4 +262,73 @@ for j in cli-macos app; do
   grep -Fxq -- "$PR_GUARD" <<<"$body" || fail "$j: the pull request guard changed"$'\n'"$body"
 done
 
+# ---- the pin tests (tests/lib/pin.sh): they run every scenario unless the plan says smoke (pin_smoke), and only a pull
+# request says it: for every pin test except those whose pinned functions the change touches
+ALL_PINS="test-app-add-pin test-app-update-pin test-lock-apply-pin test-profile-update-pin"
+for e in push schedule workflow_dispatch; do
+  plan EVENT="$e" FILES="lib/frappe-local/apps.sh"
+  assert_eq "0" "$(val pin_smoke)" "($e)"
+done
+plan EVENT=schedule
+assert_eq "0" "$(val pin_smoke)" "(the nightly run)"
+plan EVENT=workflow_dispatch INPUT_TESTS="test-app-update-pin" INPUT_LEGS="linux"
+assert_eq "0" "$(val pin_smoke)" "(dispatch of one pin test)"
+# a pull request that touches no pinned file: smoke for all four
+plan EVENT=pull_request FILES="lib/frappe-local/ports.sh tests/test-ports.sh"
+assert_eq "1" "$(val pin_smoke)" "(another shell file)"
+plan EVENT=pull_request FILES="docs/a.md"
+assert_eq "1" "$(val pin_smoke)" "(docs)"
+# a pull request that changes the file of a pinned function: that pin runs in full (it is not in the smoke list)
+plan EVENT=pull_request FILES="lib/frappe-local/teamlock.sh"
+assert_eq "test-app-add-pin test-app-update-pin test-profile-update-pin" "$(val pin_smoke)" "(teamlock.sh: smoke for the other three)"
+assert_contains "$(val tests)" "test-lock-apply-pin" "(the lock pin runs, in full)"
+plan EVENT=pull_request FILES="lib/frappe-local/apps.sh"
+assert_eq "test-app-add-pin test-lock-apply-pin test-profile-update-pin" "$(val pin_smoke)" "(apps.sh: the update pin in full)"
+plan EVENT=pull_request FILES="lib/frappe-local/app-plan.sh"
+assert_eq "test-app-update-pin test-lock-apply-pin test-profile-update-pin" "$(val pin_smoke)" "(app-plan.sh: the add pin in full)"
+plan EVENT=pull_request FILES="lib/frappe-local/profiles.sh"
+assert_eq "test-app-add-pin test-app-update-pin test-lock-apply-pin" "$(val pin_smoke)" "(profiles.sh: the profile pin in full)"
+plan EVENT=pull_request FILES="lib/frappe-local/apps.sh lib/frappe-local/profiles.sh"
+assert_eq "test-app-add-pin test-lock-apply-pin" "$(val pin_smoke)" "(two files, two pins in full)"
+assert_contains "$(val tests)" "test-app-update-pin"; assert_contains "$(val tests)" "test-profile-update-pin"
+plan EVENT=pull_request FILES="lib/frappe-local/apps.sh lib/frappe-local/app-plan.sh lib/frappe-local/teamlock.sh lib/frappe-local/profiles.sh"
+assert_eq "0" "$(val pin_smoke)" "(all four files: every pin in full)"
+# a file a pinned function only calls into has no pin of its own: smoke
+plan EVENT=pull_request FILES="lib/frappe-local/ui.sh"
+assert_eq "1" "$(val pin_smoke)" "(a helper file)"
+# the change could move a scenario the smoke set leaves out, whatever the file: every pin in full
+for f in tests/test-lock-apply-pin.sh tests/test-profile-update-pin.sh tests/golden/app-add.txt tests/lib/pin.sh tests/lib/pin.sed tests/lib/harness.sh; do
+  plan EVENT=pull_request FILES="$f lib/frappe-local/ports.sh"
+  assert_eq "0" "$(val pin_smoke)" "($f)"
+done
+plan EVENT=pull_request FILES="lib/frappe-local/ports.sh" LABELS="bug test-pin-full"
+assert_eq "0" "$(val pin_smoke)" "(the label test-pin-full)"
+plan EVENT=pull_request FILES="lib/frappe-local/ports.sh" LABELS="bug"
+assert_eq "1" "$(val pin_smoke)" "(another label)"
+plan EVENT=pull_request
+assert_eq "0" "$(val pin_smoke)" "(no base to diff against: everything)"
+# the job summary says it
+plan EVENT=pull_request FILES="lib/frappe-local/ports.sh" PLAN_SUMMARY="$TMP_DIR/summary2.md"
+assert_contains "$(cat "$TMP_DIR/summary2.md")" "Pin tests: smoke scenarios."
+plan EVENT=pull_request FILES="lib/frappe-local/teamlock.sh" PLAN_SUMMARY="$TMP_DIR/summary3.md"
+assert_contains "$(cat "$TMP_DIR/summary3.md")" "Pin tests: smoke for test-app-add-pin test-app-update-pin test-profile-update-pin, every scenario for the others."
+plan EVENT=push FILES="lib/frappe-local/teamlock.sh" PLAN_SUMMARY="$TMP_DIR/summary4.md"
+assert_contains "$(cat "$TMP_DIR/summary4.md")" "Pin tests: every scenario."
+# every pin test is in the lists above (a new one must be added to ALL_PINS and to tests/affected.sh's pin_of)
+assert_eq "$ALL_PINS" "$(for f in tests/test-*-pin.sh; do f="${f##*/}"; printf '%s ' "${f%.sh}"; done | sed 's/ $//')" "(the pin tests)"
+# every CLI job hands the plan's answer to its tests, and the container passes it on
+# shellcheck disable=SC2016  # the ${{ }} is GitHub's, not the shell's
+assert_contains "$(sed -n '/^    outputs:/,/^    steps:/p' .github/workflows/ci.yml)" 'pin_smoke: ${{ steps.plan.outputs.pin_smoke }}'
+for j in cli-macos cli-linux cli-bash32; do
+  body="$(job_of "$j")"
+  [[ -n "$body" ]] || fail "job $j not found in ci.yml"
+  # shellcheck disable=SC2016
+  assert_contains "$body" 'PIN_SMOKE: ${{ needs.changes.outputs.pin_smoke }}' "($j sets PIN_SMOKE)"
+done
+assert_contains "$(job_of cli-bash32)" "-e PIN_SMOKE" "(the container gets PIN_SMOKE)"
+# nothing else sets it: the release build's test step (release-prepare) and any other job run every scenario
+assert_eq "1" "$(grep -rl PIN_SMOKE .github | wc -l | tr -d ' ')" "(only ci.yml names PIN_SMOKE)"
+assert_eq ".github/workflows/ci.yml" "$(grep -rl PIN_SMOKE .github)"
+assert_contains "$(cat .github/actions/release-prepare/action.yml)" "tests/run-tests.sh" "(the release build runs the tests)"
+
 printf 'test-ci-plan: ok\n'

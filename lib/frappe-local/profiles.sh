@@ -1548,8 +1548,11 @@ fl_profile_update_json() {
   printf '}\n'
 }
 
-fl_cmd_profile_update() {
-  local target="" all=0 plan=0 f n sub sname surl sdir i=0 applied=true code=0 udir expect="" to=""
+# fl_cmd_profile_update is split into steps (maintainers/DECISIONS.md, "A long command function is split into steps"):
+# each runs in its shell, is called once, reads and sets its locals, declares none and ends with return 0.
+
+# fl__pu_parse_args ARGS...: the flags and the name. Sets target, all, plan, expect.
+fl__pu_parse_args() {
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --all) all=1; shift ;;
@@ -1560,10 +1563,12 @@ fl_cmd_profile_update() {
       *) [[ -z "$target" ]] && target="$1"; shift ;;
     esac
   done
-  [[ -n "$target" || "$all" == "1" ]] || fl_die "Usage: benchbar profile update NAME|--all [--plan]"
-  fl_profile_json_begin
-  UP_KIND=(); UP_NAME=(); UP_PATH=(); UP_BEHIND=(); UP_DIFF=(); UP_NEW=(); UP_TO=()
-  udir="$(fl_team_profile_user_dir)"
+  return 0
+}
+
+# fl__pu_pick: what is updated, fetched again into UP_*: every import and subscription (--all), a subscription by its
+# name, or a profile by its name (an import or a subscribed file). Reads target, all, udir; sets f, sub, sname, surl, sdir.
+fl__pu_pick() {
   if [[ "$all" == "1" ]]; then
     for f in "$udir"/*.toml; do
       if [[ -f "$f" ]] && fl_profile_file_source "$f" >/dev/null; then fl_profile_update_add imported "$(basename "$f" .toml)" "$f"; fi
@@ -1586,26 +1591,41 @@ fl_cmd_profile_update() {
       fl_die "${target} (${f}) was not imported or subscribed: there is nothing to update it from." "Edit the file itself, or import it: benchbar profile import URL --as ${target}"
     fi
   fi
-  if [[ "$plan" == "1" ]]; then
-    while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do
-      if [[ -n "${UP_DIFF[$i]}" ]]; then
-        fl_info "${UP_NAME[$i]} (${UP_KIND[$i]}): $([[ -n "${UP_BEHIND[$i]}" ]] && printf '%s commit(s) behind, ' "${UP_BEHIND[$i]}")changes:"
-        printf '%s\n' "${UP_DIFF[$i]}" | sed 's/^/    /'
-        fl_profile_diff_trust_print "${UP_DIFF[$i]}"
-      else
-        fl_ok "${UP_NAME[$i]} (${UP_KIND[$i]}): up to date"
-      fi
-      i=$((i + 1))
-    done
-    if [[ "${OPT_JSON:-0}" == "1" ]]; then fl_profile_update_json "" >&3; fi
-    i=0; while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do [[ -n "${UP_NEW[$i]}" ]] && rm -f "${UP_NEW[$i]}"; i=$((i + 1)); done
-    return 0
-  fi
+  return 0
+}
+
+# fl__pu_plan: --plan prints the review (and the document with --json), drops the fetched files and changes nothing.
+# Reads UP_*; sets i.
+fl__pu_plan() {
+  while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do
+    if [[ -n "${UP_DIFF[$i]}" ]]; then
+      fl_info "${UP_NAME[$i]} (${UP_KIND[$i]}): $([[ -n "${UP_BEHIND[$i]}" ]] && printf '%s commit(s) behind, ' "${UP_BEHIND[$i]}")changes:"
+      printf '%s\n' "${UP_DIFF[$i]}" | sed 's/^/    /'
+      fl_profile_diff_trust_print "${UP_DIFF[$i]}"
+    else
+      fl_ok "${UP_NAME[$i]} (${UP_KIND[$i]}): up to date"
+    fi
+    i=$((i + 1))
+  done
+  if [[ "${OPT_JSON:-0}" == "1" ]]; then fl_profile_update_json "" >&3; fi
+  i=0; while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do [[ -n "${UP_NEW[$i]}" ]] && rm -f "${UP_NEW[$i]}"; i=$((i + 1)); done
+  return 0
+}
+
+# fl__pu_check_expect: --expect DIGEST refuses (and drops the fetched files) when what was reviewed is not what is
+# there now. Reads expect, target, UP_*; sets i.
+fl__pu_check_expect() {
   if [[ -n "$expect" && "$expect" != "$(fl_profile_update_digest)" ]]; then
     i=0; while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do [[ -n "${UP_NEW[$i]}" ]] && rm -f "${UP_NEW[$i]}"; i=$((i + 1)); done
     fl_die "The update changed since it was reviewed (newer content at the source, or a local change). Nothing was changed." \
       "Review it again: benchbar profile update ${target:---all} --plan"
   fi
+  return 0
+}
+
+# fl__pu_apply: writes each import (reviewed) and fast forwards each subscription (asked). Reads UP_*, i; sets n, to,
+# applied, code.
+fl__pu_apply() {
   while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do
     n="${UP_NAME[$i]}"
     if [[ "${UP_KIND[$i]}" == "imported" ]]; then
@@ -1636,8 +1656,31 @@ fl_cmd_profile_update() {
     fi
     i=$((i + 1))
   done
+  return 0
+}
+
+# fl__pu_result: nothing counts as applied in a dry run; the document with --json. Reads applied.
+fl__pu_result() {
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && applied=false
   if [[ "${OPT_JSON:-0}" == "1" ]]; then fl_profile_update_json "$applied" >&3; fi
+  return 0
+}
+
+fl_cmd_profile_update() {
+  local target="" all=0 plan=0 f n sub sname surl sdir i=0 applied=true code=0 udir expect="" to=""
+  fl__pu_parse_args "$@"
+  [[ -n "$target" || "$all" == "1" ]] || fl_die "Usage: benchbar profile update NAME|--all [--plan]"
+  fl_profile_json_begin
+  UP_KIND=(); UP_NAME=(); UP_PATH=(); UP_BEHIND=(); UP_DIFF=(); UP_NEW=(); UP_TO=()
+  udir="$(fl_team_profile_user_dir)"
+  fl__pu_pick
+  if [[ "$plan" == "1" ]]; then
+    fl__pu_plan
+    return 0
+  fi
+  fl__pu_check_expect
+  fl__pu_apply
+  fl__pu_result
   [[ "$code" == "0" ]] || exit 1
 }
 
