@@ -583,6 +583,9 @@ fl_op_background() {
   fl_op_context
   fl_op_write starting
   FL_OP_ID=""; FL_OP_BACKGROUND=0
+  # the detached run starts without this run's stream (its flags, and fd 3, the caller's stdout); a refusal after the start
+  # (fl_op_launch_wait) opens it again
+  fl_background_stream_release
   (
     export FL_OP_PRESET="$id" BENCHBAR_NONINTERACTIVE=1
     if [[ "$OPT_SECRETS_STDIN" == "1" ]]; then
@@ -605,6 +608,7 @@ fl_op_background() {
       fi
     fi
   ) 2>/dev/null
+  fl_background_stream_open
   fl_op_launch_wait "$id"
   # accepted: the line below is the result, and the detached run's stream is its own
   fl_background_stream_release
