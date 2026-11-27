@@ -45,10 +45,11 @@ bg_run() {
   BENCHBAR_NONINTERACTIVE=1 run_fm_split "$@" "$mode" --background
 }
 
-# bg_done NAME KIND CODE TEXT: the run printed one done line: exit CODE, TEXT in `error`, no op_id (no operation exists),
-# KIND repair (exit_code beside exit), install (url), pull (site), or other
+# bg_done NAME KIND CODE TEXT [STDERR]: the run printed one done line: exit CODE, TEXT in `error`, no op_id (no operation
+# exists), KIND repair (exit_code beside exit), install (url), pull (site), or other. With STDERR, stderr is that text, byte
+# for byte (ids normalised, nrm), else it holds TEXT and the hint.
 bg_done() {
-  local name="$1" kind="$2" code="$3" text="$4" got
+  local name="$1" kind="$2" code="$3" text="$4" want="${5:-}" got
   assert_eq "$code" "$CODE" "($name) $OUT $ERR"
   assert_eq "1" "$(nlines "$OUT")" "($name: one line on stdout) $OUT"
   got="$(printf '%s' "$OUT" | python3 -I -c '
@@ -61,8 +62,12 @@ assert "op_id" not in d and "state" not in d, d
 print("repair" if "exit_code" in d else "install" if "url" in d else "pull" if "site" in d else "other")
 ' "$code" "$text")" || fail "($name) not a done line with the refusal: $OUT"
   assert_eq "$kind" "$got" "($name: the done line of the command's own stream)"
-  assert_contains "$ERR" "$text" "($name: the refusal is on stderr)"
-  assert_contains "$ERR" "Aborting." "($name: the hint is on stderr)"
+  if [[ -n "$want" ]]; then
+    assert_eq "$want" "$(printf '%s' "$ERR" | nrm)" "($name: stderr is byte for byte what it was)"
+  else
+    assert_contains "$ERR" "$text" "($name: the refusal is on stderr)"
+    assert_contains "$ERR" "Aborting." "($name: the hint is on stderr)"
+  fi
   assert_not_contains "$ERR" '"event"' "($name: stderr has no JSON)"
 }
 # bg_silent NAME CODE TEXT: nothing on stdout (a document under plain --json: the contract of a read stays), the text on stderr
@@ -72,6 +77,63 @@ bg_silent() {
   assert_contains "$ERR" "$3" "($1: the refusal is on stderr)"
 }
 unchanged() { assert_eq "$BEFORE" "$(state_tree)" "($1: nothing was written, not even a folder)"; }
+# nrm: ids, stamps, paths, pids and times of a text made the same, so that two runs compare
+nrm() {
+  sed -E -e "s#$TMP_DIR#TMP#g" -e "s#$ROOT#ROOT#g" -e 's#op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?#OPID#g' -e 's#[0-9]{8}-[0-9]{6}-[0-9]+#STAMP#g' \
+    -e 's#"pid":[0-9]+#"pid":N#g' -e 's#[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+Z#TS#g' -e 's#"elapsed":[0-9]+#"elapsed":N#g' \
+    -e 's#"duration[a-z_]*":[0-9.]+#"duration":N#g' -e 's#[0-9a-f]{8,}#H#g'
+}
+
+# --- the accepted run of repair and pull (the commands with a stream of their own, so with a writer that could send a
+# second done line): the parent prints exactly one line, the op_id line, and the detached run's own output (its stream file
+# and its stderr file) is what it was before #410. The expected text is tests/golden/background-accepted.txt: the same
+# runs, in this order, on next-release at c3db5f05, normalised (nrm). The runs go in every mode, and with the stream
+# variables in the caller's environment (an outer benchbar exports them): the detached run starts without the parent's
+# stream. The runs share one bench, so a later repair finds less to do than the first: the order is part of the text.
+# >>> accepted runs
+ACC_FILE="$TMP_DIR/accepted-runs.txt"
+: >"$ACC_FILE"
+# golden_add HEADING: the text on stdin joins what the runs wrote (a file: the runs are in pipelines)
+golden_add() { { printf '=== %s
+' "$1"; cat; } >>"$ACC_FILE"; }
+# golden_check: what the runs wrote is the golden file
+golden_check() {
+  local f="$ROOT/tests/golden/background-accepted.txt"
+  [[ -f "$f" ]] || fail "(no golden file $f) $(cat "$ACC_FILE")"
+  assert_eq "$(cat "$f")" "$(cat "$ACC_FILE")" "(accepted runs: the detached run's output is what it was before #410)"
+}
+# accepted_run NAME MODE OUTER ARGS...: OUTER is none, or env: the stream variables in the caller's environment
+accepted_run() {
+  local name="$1" mode="$2" outer="$3" id st; shift 3
+  if [[ "$outer" == env ]]; then
+    FL_JSONL=0 FL_JSON_EVENTS=0 FL_PULL_ACTIVE=0 bg_run "$mode" "$@"
+  else
+    bg_run "$mode" "$@"
+  fi
+  assert_eq "0" "$CODE" "(accepted $name $mode $outer) $OUT $ERR"
+  assert_eq "1" "$(nlines "$OUT")" "(accepted $name $mode $outer: the parent prints one line) $OUT"
+  st="$(printf '%s' "$OUT" | python3 -I -c '
+import json, sys
+d = json.loads(sys.stdin.read())
+assert "event" not in d and d["background"] is True and d["exit"] == 0 and d["output"].endswith(d["op_id"] + ".jsonl"), d
+print(d["state"])')" || fail "(accepted $name $mode $outer) not the op_id line: $OUT"
+  assert_eq "running" "$st" "(accepted $name $mode $outer: the launcher's line says running)"
+  assert_eq "" "$ERR" "(accepted $name $mode $outer: nothing on stderr)"
+  id="$(printf '%s' "$OUT" | python3 -I -c 'import json,sys; print(json.loads(sys.stdin.read())["op_id"])')"
+  # wait for the end of the detached run with a deadline (op wait --timeout), never with a sleep
+  run_fm_split op wait "$id" --timeout 120 --json
+  case "$OUT" in *'"state":"done"'*|*'"state":"failed"'*) ;; *) fail "(accepted $name $mode $outer: the detached run did not end in the deadline) $OUT $ERR" ;; esac
+  { nrm <"$OPS/$id.jsonl"; printf -- '--- stderr\n'; nrm <"$OPS/$id.err"; } | golden_add "$name $mode $outer"
+}
+for mode in --for-agent --jsonl --json; do
+  accepted_run repair "$mode" none repair --yes --bench-dir "$BENCH"
+  accepted_run pull "$mode" none pull build.example.com:mysite --yes --bench-dir "$BENCH"
+done
+accepted_run repair --for-agent env repair --yes --bench-dir "$BENCH"
+accepted_run pull --for-agent env pull build.example.com:mysite --yes --bench-dir "$BENCH"
+golden_check
+# <<< accepted runs
+
 OPS0="$(find "$OPS" -name 'op-*.json' 2>/dev/null | wc -l | tr -d ' ')"
 no_ops() { assert_eq "$OPS0" "$(find "$OPS" -name 'op-*.json' 2>/dev/null | wc -l | tr -d ' ')" "($1: a refusal is not an operation: no record beyond the ${OPS0} of the set up)"; }
 
@@ -139,43 +201,72 @@ for mode in --for-agent --jsonl --json; do
   unchanged "share setup $mode"
 done
 
+# the lab gate on a start that has loaded little: the help of a command of a lab that is off is that refusal (exit 2), not
+# its help, and the gate runs before the stream code is there. What it prints is what next-release prints (c3db5f05, the text
+# is recorded from it), and no run ends with "command not found" (exit 127), which an unguarded call to the stream code made.
+for mode in "" --for-agent --jsonl --json; do
+  for c in "share setup" "share" "lan-guard install"; do
+    # shellcheck disable=SC2086
+    BENCHBAR_NONINTERACTIVE=1 run_fm_split $c --help $mode
+    assert_eq "2" "$CODE" "($c --help $mode, lab off) $OUT $ERR"
+    assert_not_contains "$OUT$ERR" "command not found" "($c --help $mode: the gate runs without the stream code)"
+    case "$mode" in
+      ""|--for-agent)
+        assert_eq "  [FAIL] benchbar ${c%% *} is an experiment and it is off."$'\n\n'"Aborting. Turn it on: benchbar labs on lan-rooms" "$OUT" "($c --help $mode: the refusal, on stdout, as before)"
+        assert_eq "" "$ERR" "($c --help $mode: nothing on stderr)" ;;
+      *)
+        assert_eq "benchbar ${c%% *} is an experiment and it is off. Turn it on: benchbar labs on lan-rooms" "$ERR" "($c --help $mode: stderr as before)"
+        assert_contains "$OUT" "\"exit\":2" "($c --help $mode: the refusal document)"
+        assert_contains "$OUT" "\"error\":\"benchbar ${c%% *} is an experiment and it is off.\"" "($c --help $mode: the refusal document says why)" ;;
+    esac
+  done
+done
+BENCHBAR_NONINTERACTIVE=1 run_fm_split commands --for-agent
+assert_eq "0" "$CODE" "(commands --for-agent) $OUT $ERR"
+assert_not_contains "$OUT$ERR" "command not found" "(commands --for-agent)"
+
 # --- the non interactive preflight (a run nobody watches cannot be asked)
 unset ADMIN_PASSWORD
 for mode in --for-agent --jsonl --json; do
   bg_run "$mode" site add dev2.localhost --bundle minimal --bench-dir "$BENCH"
   bg_doc "site add, ADMIN_PASSWORD $mode" 1 "Cannot start, missing: ADMIN_PASSWORD"
   assert_contains "$OUT" '"missing":["ADMIN_PASSWORD"' "(site add $mode: the document says what is missing)"
-  assert_contains "$ERR" "BENCHBAR_NONINTERACTIVE=1: nothing can be asked; pass them and run the command again. Nothing was changed." "(site add $mode: stderr as it was)"
+  assert_eq "Cannot start, missing: ADMIN_PASSWORD (the Administrator password of the new site dev2.localhost); --yes (to add dev2.localhost to ${FL_HOSTS_FILE} with sudo). BENCHBAR_NONINTERACTIVE=1: nothing can be asked; pass them and run the command again. Nothing was changed." "$ERR" "(site add $mode: stderr is byte for byte what it was)"
   unchanged "site add preflight $mode"
   bg_run "$mode" install --bench-dir "$BENCH"
   bg_doc "install, --yes $mode" 1 "Cannot start, missing: --yes"
   assert_contains "$OUT" '"missing":["--yes"]' "(install $mode: the document says what is missing)"
+  assert_eq "Cannot start, missing: --yes (to confirm the install plan). BENCHBAR_NONINTERACTIVE=1: nothing can be asked; pass them and run the command again. Nothing was changed." "$ERR" "(install $mode: stderr is byte for byte what it was)"
   unchanged "install preflight $mode"
 done
 bg_run --for-agent site restore bbtest.localhost --from 20260929_100001 --bench-dir "$BENCH"
 bg_doc "site restore, --yes --for-agent" 1 "Cannot start, missing: --yes"
+RESTORE_ERR="Cannot start, missing: --yes (to confirm the restore plan (or --apply TOKEN --yes)). BENCHBAR_NONINTERACTIVE=1: nothing can be asked; pass them and run the command again. Nothing was changed."
+assert_eq "$RESTORE_ERR" "$ERR" "(site restore --for-agent: stderr is byte for byte what it was)"
 bg_run --json site restore bbtest.localhost --from 20260929_100001 --bench-dir "$BENCH"
 bg_doc "site restore, --yes --json" 1 "Cannot start, missing: --yes"
+assert_eq "$RESTORE_ERR" "$ERR" "(site restore --json: stderr is byte for byte what it was)"
 no_ops "preflight"
 
 # --- the lease gate
 BENCHBAR_NONINTERACTIVE=1 BENCHBAR_CALLER=agent-a run_fm_split lease take --bench "$BENCH" --for 20 --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "(lease take) $OUT $ERR"
 LEASE="The bench ${BENCH} is leased by agent-a until 2027-01-15T08:20:00Z. Nothing was changed."
+LEASE_ERR="  [FAIL] ${LEASE}"$'\n\n'"Aborting. Wait until it ends or ask the holder to release it; the holder passes --lease ID. A person at a terminal can pass --break-lease."
 for mode in --for-agent --jsonl --json; do
   BENCHBAR_CALLER=agent-b bg_run "$mode" repair --yes --bench-dir "$BENCH"
-  bg_done "repair, lease $mode" repair 1 "$LEASE"
+  bg_done "repair, lease $mode" repair 1 "$LEASE" "$LEASE_ERR"
   assert_contains "$OUT" '"error_id":"lease_held"' "(repair, lease $mode: the stable id)"
   unchanged "repair lease $mode"
   BENCHBAR_CALLER=agent-b bg_run "$mode" pull build.example.com:mysite --yes --bench-dir "$BENCH"
-  bg_done "pull, lease $mode" pull 1 "$LEASE"; unchanged "pull lease $mode"
+  bg_done "pull, lease $mode" pull 1 "$LEASE" "$LEASE_ERR"; unchanged "pull lease $mode"
 done
 for mode in --for-agent --jsonl --json; do
   BENCHBAR_CALLER=agent-b bg_run "$mode" site add dev2.localhost --bundle minimal --yes --bench-dir "$BENCH"
-  bg_done "site add, lease $mode" other 1 "is leased by agent-a"; unchanged "site add lease $mode"
+  bg_done "site add, lease $mode" other 1 "is leased by agent-a" "$LEASE_ERR"; unchanged "site add lease $mode"
 done
 BENCHBAR_CALLER=agent-b bg_run --json app add erpnext --yes --bench-dir "$BENCH"
-bg_silent "app add, lease --json" 1 "is leased by agent-a"; unchanged "app add lease --json"
+bg_silent "app add, lease --json" 1 "is leased by agent-a"; assert_eq "$LEASE_ERR" "$ERR" "(app add, lease --json: stderr is byte for byte what it was)"; unchanged "app add lease --json"
 rm -f "$FL_STATE_DIR/leases.tsv"
 unset FL_NOW
 no_ops "lease"
@@ -184,13 +275,13 @@ no_ops "lease"
 # launcher says so with the run's message and exit code. This one IS an operation (its attempt is recorded, as before):
 # one record, and the launcher's done line
 mkdir -p "$FL_STATE_DIR/lock"; printf '%s\n' "$LIVE" >"$FL_STATE_DIR/lock/pid"
+BUSY_ERR="  [FAIL] Another benchbar run is active (pid ${LIVE})."$'\n\n'"Aborting. See benchbar op status OPID and its log. Nothing was started; the attempt is recorded as OPID."
 for mode in --for-agent --jsonl; do
   bg_run "$mode" site backup bbtest.localhost --yes --bench-dir "$BENCH"
-  bg_done "site backup, lock busy $mode" other 1 "Another benchbar run is active"
-  assert_contains "$ERR" "Nothing was started; the attempt is recorded as op-" "($mode: the attempt is recorded, as before)"
+  bg_done "site backup, lock busy $mode" other 1 "Another benchbar run is active" "$BUSY_ERR"
 done
 bg_run --json repair --yes --bench-dir "$BENCH"
-bg_done "repair, lock busy --json" repair 1 "Another benchbar run is active"
+bg_done "repair, lock busy --json" repair 1 "Another benchbar run is active" "$BUSY_ERR"
 assert_eq "$((OPS0 + 3))" "$(find "$OPS" -name 'op-*.json' | wc -l | tr -d ' ')" "(three attempts, three records: the done line adds none)"
 rm -f "$FL_STATE_DIR/lock/pid"; rmdir "$FL_STATE_DIR/lock"
 # two benches and none chosen: the guess gate is the detached run's, so the launcher has no refusal: it prints its op_id line
