@@ -156,7 +156,8 @@ aff --base main --machine
 assert_eq "mode=none
 tests=
 shellcheck=false
-shellcheck_files=" "$OUT"
+shellcheck_files=
+pin_changed=" "$OUT"
 printf '\n# touched\n' >>"$REPO/lib/frappe-local/sites.sh"
 printf '# x\n' >>"$REPO/tests/test-ports.sh"
 aff --base main --machine
@@ -166,7 +167,15 @@ assert_contains "$OUT" "shellcheck_files=lib/frappe-local/sites.sh tests/test-po
 reset
 aff --machine --files "lib/frappe-local/sites.sh docs/a.md"
 assert_contains "$OUT" "mode=affected"
+assert_eq "pin_changed=" "$(printf '%s\n' "$OUT" | sed -n '$p')" "(no pinned file: no pin in full)"
 assert_contains "$OUT" " test-docs" "(--files)"; assert_contains "$OUT" "test-sites"; assert_contains "$OUT" "test-mentions-two" "(--files counts every function as touched)"
+# the file of a pinned function: its pin test runs in full on a pull request (scripts/ci-plan.sh turns the others to smoke)
+for f in apps app-plan teamlock profiles ui; do printf 'fl_%s_x() { :; }\n' "${f//-/_}" >"$REPO/lib/frappe-local/$f.sh"; done
+aff --machine --files "lib/frappe-local/teamlock.sh"
+assert_contains "$OUT" "pin_changed=test-lock-apply-pin"
+aff --machine --files "lib/frappe-local/apps.sh lib/frappe-local/app-plan.sh lib/frappe-local/profiles.sh lib/frappe-local/ui.sh"
+assert_contains "$OUT" "pin_changed=test-app-add-pin test-app-update-pin test-profile-update-pin" "(ui.sh has no pin: the helpers stay on smoke)"
+reset
 aff --machine --files "tests/lib/harness.sh"
 assert_contains "$OUT" "mode=full"
 aff --machine --files "macos/a.swift windows/x.cs"

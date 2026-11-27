@@ -42,22 +42,29 @@ token_of() { printf '%s' "$PIN_STDOUT" | jget - 'd["token"]'; }
 head_of() { git -C "$BENCH/apps/$1" rev-parse HEAD; }
 
 # ---- usage and refusals before any work
-run "unknown option" lock apply --bogus "${B[@]}"
-run "apply, bad token" lock apply --apply nope --yes "${B[@]}"
 TOK0="$(printf '%064d' 0)"
-run "apply, no --yes" lock apply --apply "$TOK0" "${B[@]}"
-run "apply with dry run" lock apply --apply "$TOK0" --dry-run --yes "${B[@]}"
-run "apply, nothing to do, token of nothing" lock apply --apply "$TOK0" --yes "${B[@]}"
+if pin_full; then
+  run "unknown option" lock apply --bogus "${B[@]}"
+  run "apply, bad token" lock apply --apply nope --yes "${B[@]}"
+  run "apply, no --yes" lock apply --apply "$TOK0" "${B[@]}"
+  run "apply with dry run" lock apply --apply "$TOK0" --dry-run --yes "${B[@]}"
+  run "apply, nothing to do, token of nothing" lock apply --apply "$TOK0" --yes "${B[@]}"
+fi
 run "no lockfile at the path" lock apply --lock "$TMP_DIR/none.toml" --yes "${B[@]}"
 
 # ---- in sync
-run "in sync" lock apply --yes "${B[@]}"
-run "in sync, dry run" lock apply --dry-run "${B[@]}"
+if pin_full; then
+  run "in sync" lock apply --yes "${B[@]}"
+  run "in sync, dry run" lock apply --dry-run "${B[@]}"
+fi
 run "in sync, dry run json" lock apply --dry-run --json "${B[@]}"
-run "in sync, other profile in the lock" lock apply --yes "${B[@]}"
-sed_inplace 's/^profile = "v15-lts"$/profile = "v16-lts"/' "$LOCK"
-run "in sync, the lock names another profile" lock apply --yes "${B[@]}"
-cp "$TMP_DIR/lock.good" "$LOCK"
+if pin_full; then
+  run "in sync, other profile in the lock" lock apply --yes "${B[@]}"
+  sed_inplace 's/^profile = "v15-lts"$/profile = "v16-lts"/' "$LOCK"
+  run "in sync, the lock names another profile" lock apply --yes "${B[@]}"
+  cp "$TMP_DIR/lock.good" "$LOCK"
+fi
+# (--lock keeps the path for the bench: the scenarios below see a bench that has one)
 run "in sync, --lock given" lock apply --lock "$LOCK" --yes "${B[@]}"
 
 # ---- behind: the lock pins a newer commit than the checkout has
@@ -66,67 +73,81 @@ NEWEST="$(git -C "$REMOTES/acme_crm.git" rev-parse main)"
 OLD="$(head_of acme_crm)"
 sed_inplace "s/^commit = \"${OLD}\"$/commit = \"${NEWEST}\"/" "$LOCK"
 cp "$LOCK" "$TMP_DIR/lock.behind"
-run "behind, dry run" lock apply --dry-run "${B[@]}"
+if pin_full; then run "behind, dry run" lock apply --dry-run "${B[@]}"; fi
 run "behind, dry run json" lock apply --dry-run --json "${B[@]}"
 TOK="$(token_of)"
-run "behind, cancelled at the prompt" lock apply "${B[@]}"
-FL_PLAN_NOW=$((FL_PLAN_NOW + 7200)) run "behind, apply with an expired token" lock apply --apply "$TOK" --yes "${B[@]}"
-run "behind, apply with a token of another plan" lock apply --apply "$TOK0" --yes "${B[@]}"
-MOCK_BENCH_REQUIREMENTS_PYTHON_EXIT=1 run "behind, requirements fail" lock apply --yes "${B[@]}"
-git -C "$BENCH/apps/acme_crm" reset -q --hard "$OLD"
-MOCK_BENCH_BUILD_EXIT=1 run "behind, build fails" lock apply --yes "${B[@]}"
-git -C "$BENCH/apps/acme_crm" reset -q --hard "$OLD"
-MOCK_GIT_MERGE_EXIT=1 run "behind, the fast forward fails" lock apply --yes "${B[@]}"
-git -C "$BENCH/apps/acme_crm" reset -q --hard "$OLD"
+if pin_full; then
+  run "behind, cancelled at the prompt" lock apply "${B[@]}"
+  FL_PLAN_NOW=$((FL_PLAN_NOW + 7200)) run "behind, apply with an expired token" lock apply --apply "$TOK" --yes "${B[@]}"
+  run "behind, apply with a token of another plan" lock apply --apply "$TOK0" --yes "${B[@]}"
+  MOCK_BENCH_REQUIREMENTS_PYTHON_EXIT=1 run "behind, requirements fail" lock apply --yes "${B[@]}"
+  git -C "$BENCH/apps/acme_crm" reset -q --hard "$OLD"
+  MOCK_BENCH_BUILD_EXIT=1 run "behind, build fails" lock apply --yes "${B[@]}"
+  git -C "$BENCH/apps/acme_crm" reset -q --hard "$OLD"
+  MOCK_GIT_MERGE_EXIT=1 run "behind, the fast forward fails" lock apply --yes "${B[@]}"
+  git -C "$BENCH/apps/acme_crm" reset -q --hard "$OLD"
+else
+  # what the failed applies above leave: the pinned commit is in the clone (a fetch), so the apply below needs no fetch
+  git -C "$BENCH/apps/acme_crm" fetch -q upstream "$NEWEST"
+fi
 run "behind, apply with its token" lock apply --apply "$TOK" --yes --json "${B[@]}"
-git -C "$BENCH/apps/acme_crm" reset -q --hard "$OLD"
-run "behind, text apply" lock apply --yes "${B[@]}"
-run "behind, after the apply" lock apply --yes "${B[@]}"
+if pin_full; then
+  git -C "$BENCH/apps/acme_crm" reset -q --hard "$OLD"
+  run "behind, text apply" lock apply --yes "${B[@]}"
+  run "behind, after the apply" lock apply --yes "${B[@]}"
+fi
 
 # ---- ahead and diverged: local work outranks the lock, and is skipped
 git -C "$BENCH/apps/acme_crm" commit -q --allow-empty -m "local two"
 run "ahead, skipped" lock apply --yes "${B[@]}"
-run "ahead, dry run json" lock apply --dry-run --json "${B[@]}"
+if pin_full; then run "ahead, dry run json" lock apply --dry-run --json "${B[@]}"; fi
 git -C "$BENCH/apps/acme_crm" reset -q --hard HEAD~3
 git -C "$BENCH/apps/acme_crm" commit -q --allow-empty -m "other work"
-run "diverged, skipped" lock apply --yes "${B[@]}"
+if pin_full; then run "diverged, skipped" lock apply --yes "${B[@]}"; fi
 git -C "$BENCH/apps/acme_crm" reset -q --hard "$NEWEST"
 
 # ---- dirty, and a folder that is not a listed git app
-printf 'y\n' >>"$BENCH/apps/acme_crm/acme_crm/__init__.py"
-run "dirty, nothing else to do" lock apply --yes "${B[@]}"
-git -C "$BENCH/apps/acme_crm" reset -q --hard HEAD~1
-printf 'y\n' >>"$BENCH/apps/acme_crm/acme_crm/__init__.py"
-run "dirty and behind, skipped" lock apply --yes "${B[@]}"
-git -C "$BENCH/apps/acme_crm" checkout -q -- .
-git -C "$BENCH/apps/acme_crm" reset -q --hard "$NEWEST"
-mv "$BENCH/apps/acme_base/.git" "$TMP_DIR/base.git.moved"
-run "a folder that is not a git app" lock apply --yes "${B[@]}"
-mv "$TMP_DIR/base.git.moved" "$BENCH/apps/acme_base/.git"
+if pin_full; then
+  printf 'y\n' >>"$BENCH/apps/acme_crm/acme_crm/__init__.py"
+  run "dirty, nothing else to do" lock apply --yes "${B[@]}"
+  git -C "$BENCH/apps/acme_crm" reset -q --hard HEAD~1
+  printf 'y\n' >>"$BENCH/apps/acme_crm/acme_crm/__init__.py"
+  run "dirty and behind, skipped" lock apply --yes "${B[@]}"
+  git -C "$BENCH/apps/acme_crm" checkout -q -- .
+  git -C "$BENCH/apps/acme_crm" reset -q --hard "$NEWEST"
+  mv "$BENCH/apps/acme_base/.git" "$TMP_DIR/base.git.moved"
+  run "a folder that is not a git app" lock apply --yes "${B[@]}"
+  mv "$TMP_DIR/base.git.moved" "$BENCH/apps/acme_base/.git"
+fi
 
 # ---- branch: acme_base follows version-15, the lock says main
 cp "$TMP_DIR/lock.behind" "$LOCK"
 cp "$LOCK" "$TMP_DIR/lock.good2"
-sed_inplace '/name = "acme_base"/,/^$/s/^branch = "version-15"$/branch = "main"/' "$LOCK"
-sed_inplace '/name = "acme_base"/,/^$/{/^commit = /d;}' "$LOCK"
-run "branch, dry run" lock apply --dry-run "${B[@]}"
-run "branch, apply" lock apply --yes "${B[@]}"
-run "branch, again" lock apply --yes "${B[@]}"
-# a detached HEAD with commits no branch holds
-git -C "$BENCH/apps/acme_base" checkout -q --detach
-git -C "$BENCH/apps/acme_base" commit -q --allow-empty -m "work on a detached head"
-sed_inplace '/name = "acme_base"/,/^$/s/^branch = "main"$/branch = "version-15"/' "$LOCK"
-run "detached with work, skipped step" lock apply --yes "${B[@]}"
-git -C "$BENCH/apps/acme_base" switch -q -c detached-work
-run "branch back, after the detached work was kept" lock apply --yes "${B[@]}"
+if pin_full; then
+  sed_inplace '/name = "acme_base"/,/^$/s/^branch = "version-15"$/branch = "main"/' "$LOCK"
+  sed_inplace '/name = "acme_base"/,/^$/{/^commit = /d;}' "$LOCK"
+  run "branch, dry run" lock apply --dry-run "${B[@]}"
+  run "branch, apply" lock apply --yes "${B[@]}"
+  run "branch, again" lock apply --yes "${B[@]}"
+  # a detached HEAD with commits no branch holds
+  git -C "$BENCH/apps/acme_base" checkout -q --detach
+  git -C "$BENCH/apps/acme_base" commit -q --allow-empty -m "work on a detached head"
+  sed_inplace '/name = "acme_base"/,/^$/s/^branch = "main"$/branch = "version-15"/' "$LOCK"
+  run "detached with work, skipped step" lock apply --yes "${B[@]}"
+  git -C "$BENCH/apps/acme_base" switch -q -c detached-work
+  run "branch back, after the detached work was kept" lock apply --yes "${B[@]}"
+fi
 
 # ---- missing: a new repo, and the pin behind its tip
 cp "$TMP_DIR/lock.good2" "$LOCK"
 printf '\n[[app]]\nname = "acme_new"\nrepo = "file://%s/acme_new.git"\nbranch = "main"\ncommit = "%s"\n' "$REMOTES" "$(git -C "$REMOTES/acme_new.git" rev-parse main)" >>"$LOCK"
-run "missing, dry run" lock apply --dry-run "${B[@]}"
-run "missing, dry run json" lock apply --dry-run --json "${B[@]}"
-TOK="$(token_of)"
+if pin_full; then
+  run "missing, dry run" lock apply --dry-run "${B[@]}"
+  run "missing, dry run json" lock apply --dry-run --json "${B[@]}"
+  TOK="$(token_of)"
+fi
 run "missing, apply" lock apply --yes "${B[@]}"
+pin_smoke_end lock-apply.txt
 run "missing, after the clone" lock apply --yes "${B[@]}"
 OLD_PIN="$(git -C "$REMOTES/acme_old.git" rev-parse main)"
 pin_commit "$WORK/acme_old" acme_old 2

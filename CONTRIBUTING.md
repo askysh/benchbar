@@ -53,7 +53,18 @@ A pin test (`tests/test-*-pin.sh`, `tests/lib/pin.sh`) compares the whole
 output of a command, in every way it can end, with a file in
 `tests/golden/`. After an intended change of that output, write the file
 again with `PIN_UPDATE=1 bash tests/test-NAME-pin.sh` and read its diff
-before you commit it.
+before you commit it. A pin test runs every scenario, on your machine and in
+every CI job, unless `PIN_SMOKE` says otherwise: `PIN_SMOKE=1 bash
+tests/test-NAME-pin.sh` is the quick local run (about five scenarios, each
+compared with its own part of the golden file). Only a pull request can run
+the smoke scenarios in CI, and not for a pin test whose pinned functions it
+changes (`lib/frappe-local/apps.sh`, `app-plan.sh`, `teamlock.sh`,
+`profiles.sh`), nor when it changes a pin test, a golden file or
+`tests/lib/pin.*`, runs everything everywhere, or has the label
+`test-pin-full` (a label starts no run: it takes effect on the next push to
+the pull request). In a pin test a scenario inside `if pin_full; then ...
+fi` is outside the smoke set: the setup the next scenario needs stays outside
+the block.
 
 ### What CI will do with your pull request
 
