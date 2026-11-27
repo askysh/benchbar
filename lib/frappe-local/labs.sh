@@ -185,7 +185,7 @@ fl_lab_require() {
     hint="${1} is not available on ${plat} yet"
   fi
   # a --background run answers with its refusal document here, as it did before it had a stream (#410)
-  fl_background_stream_release
+  [[ "${FL_BG_STREAM:-0}" != "1" ]] || fl_background_stream_release
   # a --json document command (a stream gets its done line from fl_die's exit)
   # answers with its error object on stdout, the text on stderr
   if [[ "${OPT_JSON:-0}" == "1" && "${FL_JSONL:-0}" != "1" ]]; then
