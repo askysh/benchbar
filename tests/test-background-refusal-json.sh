@@ -104,7 +104,7 @@ golden_check() {
 }
 # accepted_run NAME MODE OUTER ARGS...: OUTER is none, or env: the stream variables in the caller's environment
 accepted_run() {
-  local name="$1" mode="$2" outer="$3" id st; shift 3
+  local name="$1" mode="$2" outer="$3" id st pid deadline; shift 3
   if [[ "$outer" == env ]]; then
     FL_JSONL=0 FL_JSON_EVENTS=0 FL_PULL_ACTIVE=0 bg_run "$mode" "$@"
   else
@@ -120,9 +120,16 @@ print(d["state"])')" || fail "(accepted $name $mode $outer) not the op_id line: 
   assert_eq "running" "$st" "(accepted $name $mode $outer: the launcher's line says running)"
   assert_eq "" "$ERR" "(accepted $name $mode $outer: nothing on stderr)"
   id="$(printf '%s' "$OUT" | python3 -I -c 'import json,sys; print(json.loads(sys.stdin.read())["op_id"])')"
-  # wait for the end of the detached run with a deadline (op wait --timeout), never with a sleep
+  # wait for the end of the detached run, with a deadline and no fixed sleep: its record (op wait --timeout), then its
+  # process, because repair sends its done line after its record is finished (the exit trap: fl_op_end, fl_repair_done)
   run_fm_split op wait "$id" --timeout 120 --json
   case "$OUT" in *'"state":"done"'*|*'"state":"failed"'*) ;; *) fail "(accepted $name $mode $outer: the detached run did not end in the deadline) $OUT $ERR" ;; esac
+  pid="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["pid"])' "$OPS/$id.json")"
+  deadline=$((SECONDS + 120))
+  while kill -0 "$pid" 2>/dev/null; do
+    [[ "$SECONDS" -lt "$deadline" ]] || fail "(accepted $name $mode $outer: the detached run (pid $pid) is still there after the deadline)"
+    sleep 0.1
+  done
   { nrm <"$OPS/$id.jsonl"; printf -- '--- stderr\n'; nrm <"$OPS/$id.err"; } | golden_add "$name $mode $outer"
 }
 for mode in --for-agent --jsonl --json; do
