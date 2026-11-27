@@ -1,0 +1,4 @@
+### Agents and MCP
+
+- A `--background` run that is refused before it starts now ends with a `done` line on stdout under `--for-agent` and `--jsonl` (and under `--json` for a command that streams), as the same run in front does. Before, `repair --background --dry-run --for-agent`, a lease held by another caller, `up --background`, a `--background` run with `BENCHBAR_SUDO_PASSWORD`, and a detached run that was refused because another run holds the lock, printed nothing on stdout. The line has `exit` 1 and the refusal as `error`; the text on stderr is unchanged, and nothing new is written. A run that is accepted prints the same one `op_id` line as before (#410).
+- The `done` line of `benchbar pull` carries `error_id` (for example `lease_held`) and `missing` where the one of `repair` does, and a `pull` that is refused for a missing input (`MARIADB_ROOT_PASSWORD`) ends with one `done` line and no second document in front of it (#410).
