@@ -182,7 +182,8 @@ Which shape a command prints:
   one of them), before it takes the lock, writes a log or touches a bench.
   In a stream that is a `done` with `exit`, an `error` and `missing`; under
   `--json` on a one document command, one document with the same fields.
-  `repair --json` also ends with a `done` when it stops early (no bench).
+  `repair --json` also ends with a `done` when it stops early (no bench, a lease,
+  or more than one bench and none chosen).
 - `benchbar commands --json` lists every command and subcommand with its
   flags, environment variables and what it needs (`tty`, `sudo`, `network`,
   `mutating`, `json`: `document`, `stream` or `none`); `benchbar COMMAND
@@ -242,7 +243,14 @@ Which line carries it:
   `--bench-dir`. The forms of `app focus NAME` and `doctor --ack|--unack`
   that write while their command reads are refused the same way; the read
   document of `--for-agent` and `--jsonl` has the actions. Plain `--json` of
-  a read still prints nothing for a refusal.
+  a read still prints nothing for a refusal. `repair` and `pull` have a
+  stream of their own, which their command opens late; the dispatch now opens
+  it before the gates, so every refusal that comes before the command (a
+  lease held by another caller, the non interactive preflight, this gate)
+  ends with their own `done` line in every mode, plain `--json` included
+  (`repair` keeps `exit_code` beside `exit`; `pull` has `exit` and `site`,
+  which is `null`). Until then they printed nothing on stdout for these
+  refusals.
 
   ```json
   {"schema_version":1,"cli_version":"0.9.0","event":"done","bench":"/home/u/frappe-bench","exit":1,"changed":[],"warnings":[],"next_actions":[{"command":"benchbar app unfocus frappe --for-agent --bench-dir /home/u/frappe-bench","why":"Run it on this bench","quoted":true},{"command":"benchbar app unfocus frappe --for-agent --bench-dir /home/u/dev/frappe-bench","why":"Run it on this bench","quoted":true},{"command":"benchbar list --json","why":"See the known benches","quoted":true}],"state_after":null,"log":null,"error":"More than one bench is possible and none was chosen: /home/u/frappe-bench, /home/u/dev/frappe-bench."}

@@ -490,6 +490,9 @@ if [[ "$OPT_JSON" == "1" && ( "$COMMAND" == "install" || "$COMMAND" == "adopt" )
 else
   # the other commands that stream (or whose document the stream wraps)
   if [[ "$FL_JSON_MODE" == "stream" || ( "$FL_JSON_MODE" == "doc" && "$OPT_JSONL" == "1" ) ]]; then fl_jsonl_begin_generic; fi
+  # repair and pull have a stream of their own, which their command opens later: open it here, so that every refusal
+  # before it (the gates and the preflight below) is their done line too (stream.sh)
+  fl_own_stream_open
   # the lab gate comes after the stream starts (a stream gets its done line, a --json
   # document its error object) and before the preflight (a lab that is off is exit 2, not
   # a missing input)
