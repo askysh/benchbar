@@ -63,7 +63,7 @@ print("repair" if "exit_code" in d else "install" if "url" in d else "pull" if "
 ' "$code" "$text")" || fail "($name) not a done line with the refusal: $OUT"
   assert_eq "$kind" "$got" "($name: the done line of the command's own stream)"
   if [[ -n "$want" ]]; then
-    assert_eq "$want" "$(printf '%s' "$ERR" | nrm)" "($name: stderr is byte for byte what it was)"
+    assert_eq "$(printf '%s' "$want" | nrm)" "$(printf '%s' "$ERR" | nrm)" "($name: stderr is byte for byte what it was)"
   else
     assert_contains "$ERR" "$text" "($name: the refusal is on stderr)"
     assert_contains "$ERR" "Aborting." "($name: the hint is on stderr)"
