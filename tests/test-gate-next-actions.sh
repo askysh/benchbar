@@ -320,8 +320,8 @@ for mode in --for-agent --jsonl --json; do
 import json, sys
 d = json.loads(sys.stdin.read())
 assert d["event"] == "done" and d["exit"] == 1, d
-# the done line of repair carries the stable id of the refusal; the one of pull has none
-assert d.get("error_id") == ("lease_held" if "exit_code" in d else None), d
+# the done lines of repair and pull both carry the stable id of the refusal (#410)
+assert d.get("error_id") == "lease_held", d
 assert d["error"] == sys.argv[1] + " is leased by agent-a until 2027-01-15T08:20:00Z. Nothing was changed.", d
 assert d["next_actions"] == [] and d["changed"] == [] and d["state_after"] is None, d
 print("repair" if "exit_code" in d else "pull")
@@ -363,6 +363,25 @@ assert_not_contains "$OUT" "exit_code" "(site add: no repair field)"
 BENCHBAR_NONINTERACTIVE=1 run_fm_split status --json --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "(status --json) $OUT $ERR"
 assert_not_contains "$OUT" '"event"' "(status --json: one document, no stream)"
+
+# --- pull's done line carries what repair's carries (#410): the stable id of the refusal and the inputs that were missing.
+# A lease refused it above (error_id lease_held). The preflight is the other refusal that has such a field: pull asks for
+# the MariaDB root password, and a run nobody can ask is refused with `missing`. It is ONE done line, in every mode: the
+# preflight printed its own refusal document when the stream was not its own, and the stream of pull is its own.
+fresh
+for mode in --for-agent --jsonl --json; do
+  BENCHBAR_NONINTERACTIVE=1 MARIADB_ROOT_PASSWORD="" run_fm_split pull build.example.com:mysite --yes "$mode" --bench-dir "$BENCH"
+  assert_eq "2" "$CODE" "(pull, no root password $mode) $OUT $ERR"
+  assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c .)" "(pull, no root password $mode: one JSON line on stdout) $OUT"
+  printf '%s' "$OUT" | python3 -I -c '
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d["event"] == "done" and d["exit"] == 2, d
+assert d["missing"] == ["MARIADB_ROOT_PASSWORD"], d
+assert d["error"].startswith("Cannot start, missing: MARIADB_ROOT_PASSWORD"), d
+' || fail "(pull, no root password $mode) not the done line with what is missing: $OUT"
+  assert_contains "$ERR" "Cannot start, missing: MARIADB_ROOT_PASSWORD" "(pull, no root password $mode: the text is on stderr)"
+done
 
 # --- a refusal that is not this gate has no such actions
 fresh
