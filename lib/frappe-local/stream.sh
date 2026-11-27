@@ -140,6 +140,39 @@ fl_own_stream_open() {
   exec 3>&1
 }
 
+# fl_background_stream_open: a --background run is refused in the dispatch (the lab gate, the lease gate, the preflight,
+# fl_op_background) before its stream would open, so that refusal had no stream to end and stdout stayed empty (#410). The
+# dispatch calls this before the first of them: it opens the stream the run would have had in front, as far as the done
+# line needs it (the writer's state and fd 3, the real stdout; no plan line, no log, no stdin change; nothing is exported,
+# so the detached run does not see it) and the exit trap sends the line. The commands with a document under plain
+# --json have no stream, as in front. A run that is accepted gives the stream back before it prints its op_id line
+# (fl_background_stream_release). The detached run inherits fd 3, the caller's stdout, until its own stream opens in its
+# dispatch (`exec 3>&1` onto its output file, before any work), which closes that copy.
+FL_BG_STREAM=0
+FL_BG_SAVED=""
+fl_background_stream_open() {
+  [[ "${OPT_JSON:-0}" == "1" ]] || return 0
+  FL_BG_SAVED="${FL_JSONL:-0} ${FL_JSON_EVENTS:-0} ${FL_PULL_ACTIVE:-0}"
+  case "$COMMAND" in
+    repair|pull) fl_own_stream_open ;;
+    install|adopt) FL_JSONL=1; FL_JSONL_KIND=own; exec 3>&1 ;;
+    *)
+      [[ "$FL_JSON_MODE" == "stream" || ( "$FL_JSON_MODE" == "doc" && "$OPT_JSONL" == "1" ) ]] || return 0
+      FL_JSONL=1; FL_JSONL_KIND=generic; exec 3>&1 ;;
+  esac
+  FL_BG_STREAM=1
+}
+
+# fl_background_stream_release: the run was accepted: its result is the op_id line the launcher prints, not a done line,
+# and the stream is the detached run's, not this one's. Put the state back and close fd 3.
+fl_background_stream_release() {
+  [[ "$FL_BG_STREAM" == "1" ]] || return 0
+  FL_BG_STREAM=0
+  FL_JSONL_KIND=""
+  read -r FL_JSONL FL_JSON_EVENTS FL_PULL_ACTIVE <<<"$FL_BG_SAVED"
+  exec 3>&-
+}
+
 # fl_repair_done CODE: repair --json ends with one done line, however the run
 # ends (the engine's end, or an fl_die on the way). exit_code is the field of
 # 0.8, exit the shared one: both carry the process exit code.

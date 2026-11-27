@@ -606,6 +606,8 @@ fl_op_background() {
     fi
   ) 2>/dev/null
   fl_op_launch_wait "$id"
+  # accepted: the line below is the result, and the detached run's stream is its own
+  fl_background_stream_release
   if [[ "$OPT_JSON" == "1" ]]; then
     fl_next_action "$(fl_fix_cmd benchbar op wait "$id")" "Wait for it to end (add --timeout SECS to give up waiting; --json for the result)"
     fl_next_action "$(fl_fix_cmd benchbar op status "$id" --json)" "Where it is now: the step, the last progress line, the exit"
