@@ -521,4 +521,8 @@ assert bad(by[6]) and "control character" in by[6]["result"]["content"][0]["text
 assert_eq "True" "$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | jget - 'any(t["name"] == "benchbar_op_status" and t["annotations"]["readOnlyHint"] is True for t in d["result"]["tools"])')"
 assert_eq "True" "$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | jget - 'all("background" in t["inputSchema"]["properties"] for t in d["result"]["tools"] if t["name"] in ("benchbar_app_add", "benchbar_site_restore")) and not any("background" in t["inputSchema"]["properties"] for t in d["result"]["tools"] if t["name"] in ("benchbar_site_add", "benchbar_up"))')"
 
+# the op list and the prune read the ids from a variable, not from a pipe: on macOS a printf into the process
+# substitution failed with "Interrupted system call" (a signal during a blocked write), and the reader lost ids
+assert_eq "0" "$(grep -c '< <(fl_op_ids)' "$ROOT/lib/frappe-local/ops.sh")" "(no process substitution of fl_op_ids)"
+
 printf 'ok\n'

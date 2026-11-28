@@ -34,6 +34,9 @@
 # upgrade renames it (one atomic mv in the checkout), unless a run holds
 # its lock right now; until then the old folder is used as is.
 
+# shellcheck source=lib/frappe-local/excl.sh
+declare -F fl_mkdir_excl >/dev/null || . "${BASH_SOURCE[0]%/*}/excl.sh"
+
 # fl_state_dir_in_v VAR DIR: DIR/.benchbar, or DIR/.frappe-local while a
 # run holds that one's lock
 fl_state_dir_in_v() {
@@ -79,7 +82,7 @@ fl_state_guard_stale() {
 # else stays, and the folder with it, never deleted.
 fl_state_guard_drop() {
   local __d
-  rm -f "${1}/pid" 2>/dev/null || true
+  rm -f "${1}/pid" "${1}/claim" 2>/dev/null || true
   if [[ -L "${1}/bin/benchbar" ]]; then rm -f "${1}/bin/benchbar" 2>/dev/null || true; fi
   for __d in bin shell; do
     if [[ -d "${1}/${__d}" ]]; then rmdir "${1}/${__d}" 2>/dev/null || true; fi
@@ -97,7 +100,8 @@ fl_state_guard_reclaim() {
 }
 
 # fl_state_guard_take GUARD: one first run at a time. The guard is a folder
-# (mkdir is atomic) holding the owner's pid, made before any check of the
+# (made by fl_mkdir_excl: one run of several wins, under any mkdir) holding
+# the owner's pid, made before any check of the
 # move. A run that finds it held waits up to 5 s for the owner to finish; a
 # stale one (fl_state_guard_stale, or no pid written by the end of the
 # wait) is reclaimed. Returns 1 while a live run still holds it: the caller
@@ -106,7 +110,7 @@ fl_state_guard_take() {
   local __g="$1" __i __round
   # the braces make 2>/dev/null cover the redirection too: a guard another
   # run dropped in between would otherwise print "No such file" to stderr
-  if mkdir "$__g" 2>/dev/null; then { printf '%s\n' "$$" >"${__g}/pid"; } 2>/dev/null || true; return 0; fi
+  if fl_mkdir_excl "$__g"; then { printf '%s\n' "$$" >"${__g}/pid"; } 2>/dev/null || true; return 0; fi
   for __round in 1 2; do
     for ((__i = 0; __i < 50; __i++)); do
       [[ -d "$__g" ]] || break
@@ -118,7 +122,7 @@ fl_state_guard_take() {
     fl_state_guard_reclaim "$__g" && break
     # another waiter reclaimed it first and holds it now: one more wait
   done
-  mkdir "$__g" 2>/dev/null || return 1
+  fl_mkdir_excl "$__g" || return 1
   { printf '%s\n' "$$" >"${__g}/pid"; } 2>/dev/null || true
   return 0
 }
@@ -338,15 +342,15 @@ fl__kv_owned() {
 # was in it when it was judged stale) and is still stale, under the guard
 fl__kv_reclaim() {
   local lck="$1" seen="$2" guard="$1.reclaim" stale="$1.stale.$$"
-  if mkdir "$guard" 2>/dev/null; then
+  if fl_mkdir_excl "$guard"; then
     if [[ -d "$lck" && "$(ls -A "$lck" 2>/dev/null)" == "$seen" ]] && fl__kv_stale "$lck" "${3:-}" && mv "$lck" "$stale" 2>/dev/null; then
       rm -rf "$stale"
     fi
-    rmdir "$guard" 2>/dev/null || true
+    fl_rmdir_excl "$guard" || true
     return 0
   fi
   # a reclaimer that died with the guard (a live one holds it for moments)
-  if fl__kv_stale "$guard" "${3:-}"; then rmdir "$guard" 2>/dev/null || true; fi
+  if fl__kv_stale "$guard" "${3:-}"; then fl_rmdir_excl "$guard" || true; fi
 }
 
 # fl__kv_dir_ok FILE: the folder of a state file is there and can be written. A
