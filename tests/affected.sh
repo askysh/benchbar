@@ -97,7 +97,7 @@ lib_family() {
     ui|state|run|lock|excl|process|install-kind|toml) echo "$LIB_CORE test-state-guards test-lease test-ui test-redact test-input-hygiene test-state-migrate test-process test-runner" ;;
     profiles|teamlock|version-policy) echo "test-profiles test-profile-v16 test-version-policy test-doctor-linux test-self-update test-apps-git test-lock test-lock-apply-pin test-profile-update-pin test-json-schema" ;;
     labs) echo "test-labs test-labs-share test-docs test-help-golden test-json-schema" ;;
-    stream) echo "test-json test-envelope test-install-json test-repair-json test-adopt test-lean-load test-json-strings test-tray-fixtures" ;;
+    stream) echo "test-json test-envelope test-install-json test-repair-json test-adopt test-lean-load test-json-strings test-tray-fixtures test-gate-next-actions test-background-refusal-json" ;;
     notices) echo "test-notices test-docs test-json test-lean-load test-status-cost test-tray-fixtures" ;;
     open-as) echo "test-open-as" ;;
     consoles) echo "test-cli" ;;

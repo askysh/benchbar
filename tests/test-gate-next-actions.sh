@@ -320,8 +320,8 @@ for mode in --for-agent --jsonl --json; do
 import json, sys
 d = json.loads(sys.stdin.read())
 assert d["event"] == "done" and d["exit"] == 1, d
-# the done line of repair carries the stable id of the refusal; the one of pull has none
-assert d.get("error_id") == ("lease_held" if "exit_code" in d else None), d
+# the done lines of repair and pull both carry the stable id of the refusal (#410)
+assert d.get("error_id") == "lease_held", d
 assert d["error"] == sys.argv[1] + " is leased by agent-a until 2027-01-15T08:20:00Z. Nothing was changed.", d
 assert d["next_actions"] == [] and d["changed"] == [] and d["state_after"] is None, d
 print("repair" if "exit_code" in d else "pull")
@@ -363,6 +363,74 @@ assert_not_contains "$OUT" "exit_code" "(site add: no repair field)"
 BENCHBAR_NONINTERACTIVE=1 run_fm_split status --json --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "(status --json) $OUT $ERR"
 assert_not_contains "$OUT" '"event"' "(status --json: one document, no stream)"
+
+# --- the run lock is busy: another run holds it (#410 pins what #405 gave: since the stream is open before the lock is
+# asked for, the refusal is a done line too). repair and pull make their run log and their operation record before the
+# lock, so a refusal is recorded as an operation that failed, as it was before #405: the log, the record (failed, exit 1)
+# and one history line. It takes no lock of ours, and the lock stays the other run's. This passes on the base of #410.
+fresh
+mkdir -p "$FL_STATE_DIR/lock"
+sleep 600 &
+LIVEPID=$!
+on_exit "kill $LIVEPID 2>/dev/null"
+printf '%s\n' "$LIVEPID" >"$FL_STATE_DIR/lock/pid"
+files_now() { (cd "$FL_STATE_DIR" && find . -type f | LC_ALL=C sort); }
+before_files="$(files_now)"
+hist_before="$(wc -l <"$FL_STATE_DIR/history.jsonl" 2>/dev/null || echo 0)"
+hist_before="${hist_before//[[:space:]]/}"
+for mode in --for-agent --jsonl --json; do
+  for cmd in "repair --yes" "pull build.example.com:mysite --yes"; do
+    # shellcheck disable=SC2086
+    BENCHBAR_NONINTERACTIVE=1 run_fm_split $cmd $mode --bench-dir "$BENCH"
+    assert_eq "1" "$CODE" "($cmd $mode, run lock busy) $OUT $ERR"
+    assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c .)" "($cmd $mode, run lock busy: one JSON line on stdout) $OUT"
+    kind="$(printf '%s' "$OUT" | python3 -I -c '
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d["event"] == "done" and d["exit"] == 1, d
+assert d["error"] == "Another benchbar run is active (pid " + sys.argv[1] + ").", d
+assert d["changed"] == [] and d["warnings"] == [] and d["next_actions"] == [], d
+assert d["op_id"].startswith("op-"), d
+print("repair" if "exit_code" in d else "pull")
+' "$LIVEPID")"
+    assert_eq "${cmd%% *}" "$kind" "($cmd $mode, run lock busy: the command's own done line)"
+    want="  [FAIL] Another benchbar run is active (pid ${LIVEPID})."$'\n\n'"Aborting. Wait for it to finish, or remove ${FL_STATE_DIR}/lock if you are sure it is dead."
+    assert_eq "$want" "$ERR" "($cmd $mode, run lock busy: stderr is what it was)"
+    assert_eq "$LIVEPID" "$(cat "$FL_STATE_DIR/lock/pid")" "($cmd $mode, run lock busy: the lock is the other run's)"
+  done
+done
+new_files="$(comm -13 <(printf '%s\n' "$before_files") <(files_now))"
+assert_eq "6" "$(printf '%s\n' "$new_files" | grep -c '^\./logs/' || true)" "(run lock busy: six refusals, six run logs)"
+assert_eq "6" "$(printf '%s\n' "$new_files" | grep -c '^\./ops/op-.*\.json$' || true)" "(run lock busy: six operation records)"
+assert_eq "0" "$(printf '%s\n' "$new_files" | grep -vc -e '^\./logs/' -e '^\./ops/op-.*\.json$' || true)" "(run lock busy: nothing else is new)"
+assert_eq "6" "$(( $(wc -l <"$FL_STATE_DIR/history.jsonl") - hist_before ))" "(run lock busy: six history lines)"
+failed=0
+for f in $(printf '%s\n' "$new_files" | grep '^\./ops/'); do
+  if grep -q '"state":"failed".*"exit":1' "$FL_STATE_DIR/$f"; then failed=$((failed + 1)); fi
+done
+assert_eq "6" "$failed" "(run lock busy: every record says failed, exit 1)"
+assert_eq "6" "$(tail -n 6 "$FL_STATE_DIR/history.jsonl" | grep -c '"exit":1' || true)" "(run lock busy: every history line says exit 1)"
+# the lock is still the other run's, and goes with it
+rm -f "$FL_STATE_DIR/lock/pid"; rmdir "$FL_STATE_DIR/lock"
+
+# --- pull's done line carries what repair's carries (#410): the stable id of the refusal and the inputs that were missing.
+# A lease refused it above (error_id lease_held). The preflight is the other refusal that has such a field: pull asks for
+# the MariaDB root password, and a run nobody can ask is refused with `missing`. It is ONE done line, in every mode: the
+# preflight printed its own refusal document when the stream was not its own, and the stream of pull is its own.
+fresh
+for mode in --for-agent --jsonl --json; do
+  BENCHBAR_NONINTERACTIVE=1 MARIADB_ROOT_PASSWORD="" run_fm_split pull build.example.com:mysite --yes "$mode" --bench-dir "$BENCH"
+  assert_eq "2" "$CODE" "(pull, no root password $mode) $OUT $ERR"
+  assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c .)" "(pull, no root password $mode: one JSON line on stdout) $OUT"
+  printf '%s' "$OUT" | python3 -I -c '
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d["event"] == "done" and d["exit"] == 2, d
+assert d["missing"] == ["MARIADB_ROOT_PASSWORD"], d
+assert d["error"].startswith("Cannot start, missing: MARIADB_ROOT_PASSWORD"), d
+' || fail "(pull, no root password $mode) not the done line with what is missing: $OUT"
+  assert_contains "$ERR" "Cannot start, missing: MARIADB_ROOT_PASSWORD" "(pull, no root password $mode: the text is on stderr)"
+done
 
 # --- a refusal that is not this gate has no such actions
 fresh
