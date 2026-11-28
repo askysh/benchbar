@@ -216,7 +216,7 @@ answered counts as no). Each line carries `schema_version`,
 | `gate` | `name` (`new_backup`, `apply`, `replace`), `answer` (`yes`, `no`) | a question the run asked. `new_backup` is `yes` only when the typed (or `--confirm-site`) name matches |
 | `progress` | `file`, `bytes`, `total` | after each downloaded file; `bytes` counts the files so far |
 | `step` | `n`, `id`, `name`, `status` | `n` counts from 1 in the order of `plan.steps`; `status` is `done`, `unchanged`, `skipped` or `failed` |
-| `done` | `exit`, `site`, `warnings`, and on success `url`, `decrypt` and `neutralised` | always the last line: also after a refusal or a failure (`exit` 1) and after `--dry-run` (`dry_run: true`) |
+| `done` | `exit`, `site`, `warnings`, `error_id` and `missing` on a refusal that has them, and on success `url`, `decrypt` and `neutralised` | always the last line: also after a refusal or a failure (`exit` 1) and after `--dry-run` (`dry_run: true`) |
 
 `apps[].status` is `ok`, `missing`, `skipped` (`--skip-app`), `branch
 differs`, `local older` or `local newer`. `decrypt.ok` and

@@ -1331,8 +1331,11 @@ fl_need_check() {
   case "$names" in *'"MARIADB_ROOT_PASSWORD"'*) code=2 ;; esac
   msg="Cannot start, missing: ${list}."
   FL_NEED_MISSING_JSON="$names"
-  if [[ "${FL_JSONL:-0}" == "1" ]]; then
-    # the done line comes from the exit trap; no status is computed for a refusal
+  # a --background run answers with its refusal document here, as it did before it had a stream (#410)
+  [[ "${FL_BG_STREAM:-0}" != "1" ]] || fl_background_stream_release
+  if [[ "${FL_JSONL:-0}" == "1" || "${FL_JSON_EVENTS:-0}" == "1" || "${FL_PULL_ACTIVE:-0}" == "1" ]]; then
+    # the done line comes from the exit trap (repair and pull have their own, open since the dispatch: #410); no status is
+    # computed for a refusal
     FL_DIE_MESSAGE="$msg"
     FL_DONE_NO_STATE=1
     fl_log "ABORT: ${msg}"

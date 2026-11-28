@@ -175,9 +175,12 @@ fl_pull_emit() {
 
 # the done fields pull adds to its own (exit, site, warnings): changed, next_actions, state_after
 fl_pull_done_extra() {
-  local tail
+  local tail ids=""
+  # the stable id of a refusal and the inputs that were missing, as repair's done line has them (#410)
+  [[ -z "$FL_ERROR_ID" ]] || ids=",\"error_id\":\"${FL_ERROR_ID}\""
+  [[ -z "$FL_NEED_MISSING_JSON" ]] || ids="${ids},\"missing\":[${FL_NEED_MISSING_JSON}]"
   fl_done_tail_v tail
-  printf ',"changed":[%s],%s' "$FL_DONE_CHANGED" "$tail"
+  printf '%s,"changed":[%s],%s' "$ids" "$FL_DONE_CHANGED" "$tail"
 }
 
 fl_pull_warn() {
