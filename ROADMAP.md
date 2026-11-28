@@ -46,24 +46,21 @@ the [0.9.0 milestone](https://github.com/askysh/benchbar/milestone/1).
   `bench gc`, leases, `benchbar history --json`, and site snapshots with
   a one step rollback.
 - Parity: restore and pull in the Mac app, and the same actions in the
-  Windows tray, with Open as, Quick Switch and a Sharing tab.
+  Windows tray, with Open as, Quick Switch and a Sharing tab. The Mac app
+  writes and applies the lockfile (Write Lock File and Apply), each after
+  the CLI's plan.
 - Rooms on Linux with an nftables LAN guard.
-- Verified downloads (attestations), and `benchbar.exe` and the tray can
-  run from an MSIX package.
+- Verified downloads (attestations). `benchbar.exe` and the tray can run
+  from an MSIX package, and CI builds one on every pull request that
+  changes them. No release ships it.
 - Release keys live in a protected environment, CI is tiered, and the
   docs have a features page, a generated CLI reference and a what's new
   page.
 
-**Planned in the milestone, not merged yet:**
-
-- Writing and applying the lockfile from the Mac app (it shows the
-  differences today).
-- A Windows MSIX package that is published. The programs can run from one;
-  nothing is in the Microsoft Store.
-
 **Dropped from 0.9.0**, because each needs hardware or a third party:
 
-- Submitting BenchBar for Windows to the Microsoft Store.
+- Submitting BenchBar for Windows to the Microsoft Store, and with it a
+  published MSIX package.
 - A dedicated virtual machine as a CI runner.
 - A check of the CLI on a real Intel Mac.
 
