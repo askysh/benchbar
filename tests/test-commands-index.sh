@@ -78,7 +78,7 @@ DIFF="$(lib '
 ')"
 case "$DIFF" in
   "asked "*) n="${DIFF#asked }"; [[ "$n" -gt 2000 ]] || fail "only $n lookups were compared" ;;
-  *) fail "the index and the scan of the table differ:"$'\n'"$(printf '%s\n' "$DIFF" | head -20)" ;;
+  *) fail "the index and the scan of the table differ:"$'\n'"$(printf '%s\n' "$DIFF" | sed -n '1,20p')" ;;
 esac
 
 # ---- 3. with the index a lookup reads no table: it answers with the table emptied

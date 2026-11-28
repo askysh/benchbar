@@ -91,7 +91,7 @@ case "${1:-}" in
     if [[ "$want" != "$have" ]]; then
       printf 'commands-index: lib/frappe-local/commands-index.sh is not what the commands table gives.\n' >&2
       printf 'A cmd or flag record of commands.sh changed. Make the index again: bash scripts/commands-index.sh --write\n' >&2
-      diff <(printf '%s\n' "$have") <(printf '%s\n' "$want") | head -20 >&2 || true
+      diff <(printf '%s\n' "$have") <(printf '%s\n' "$want") | sed -n '1,20p' >&2 || true
       exit 1
     fi
     printf 'commands-index: ok\n' ;;
