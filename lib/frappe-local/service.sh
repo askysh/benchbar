@@ -14,6 +14,8 @@ FL_R_LISTEN_JS=""
 FL_R_HELPERS=""
 # 1 once fl_render_all filled the six variables above for the current context
 FL_RENDERED=0
+# 1 once the three of them that up and restart read (the Procfile and its two listen files) are filled
+FL_RENDERED_PROCFILE=0
 FL_CRASH_MAX_STARTS="${FL_CRASH_MAX_STARTS:-3}"
 FL_CRASH_WINDOW="${FL_CRASH_WINDOW:-600}"
 FL_UP_WAIT_SECS="${FL_UP_WAIT_SECS:-45}"
@@ -138,23 +140,50 @@ fl_autostart_enabled() {
 # fl_render_forget: what was rendered no longer counts (a new context)
 fl_render_forget() {
   FL_RENDERED=0
+  FL_RENDERED_PROCFILE=0
   unset FL_R_RUNNER FL_R_PLIST FL_R_PROCFILE FL_R_LISTEN_PY FL_R_LISTEN_JS FL_R_HELPERS
 }
 
 # fl_render_ensure: FL_R_* hold the service files of this context. Every
 # function that reads one calls this first, in its own shell and not inside
-# a $( ), or each subshell would render again.
+# a $( ), or each subshell would render again. The Procfile and the listen
+# files are not rendered again when fl_render_procfile_ensure did them.
 fl_render_ensure() {
-  [[ "$FL_RENDERED" == "1" ]] || fl_render_all
+  [[ "$FL_RENDERED" == "1" ]] && return 0
+  fl_render_procfile_ensure
+  fl_render_rest
+  FL_RENDERED=1
 }
 
+# fl_render_procfile_ensure: FL_R_PROCFILE, FL_R_LISTEN_PY and FL_R_LISTEN_JS
+# hold the Procfile and the listen files of this context. The functions that
+# read only these (fl_listen_files_stale, act_write_procfile: what up and
+# restart ask) call this and not fl_render_ensure: the runner (288 lines), the
+# agent's plist and the shell helpers are half of a full render, and a hash
+# program each. Same rule as above: not inside a $( ).
+fl_render_procfile_ensure() {
+  [[ "$FL_RENDERED_PROCFILE" == "1" ]] && return 0
+  fl_render_procfile
+  FL_RENDERED_PROCFILE=1
+}
+
+# fl_render_all: everything again. The commands that change what the files
+# say (ports, site, scheduler, listen mode) call it after the change.
 fl_render_all() {
+  fl_render_procfile
+  FL_RENDERED_PROCFILE=1
+  fl_render_rest
+  FL_RENDERED=1
+}
+
+# fl_render_rest: the runner, the agent's plist (or the systemd unit) and the
+# shell helpers; the Procfile and the listen files are fl_render_procfile's
+fl_render_rest() {
   local honcho="${FL_HONCHO:-${FL_BENCH_DIR}/env/bin/honcho}" run_at_load=true
   # a path or site the templates cannot carry renders escaped here (doctor
   # reports it as bench_path); the commands that write or start call
   # fl_require_plain_bench first and refuse
   fl_autostart_enabled || run_at_load=false
-  fl_render_procfile
   fl_runner_extra_args
   FL_R_RUNNER="$(fl_template_render bench-run.sh \
     "BENCH_DIR=${FL_BENCH_DIR}" \
@@ -171,7 +200,6 @@ fl_render_all() {
   # the agent's plist, or the systemd unit on Linux
   fl_render_agent "$run_at_load"
   FL_R_HELPERS="$(fl_rc_helpers_render "$(fl_rc_profile)" "$(fl_helpers_cli)")"
-  FL_RENDERED=1
 }
 
 # The Procfile and, for the default "local" listen mode, the two files its web

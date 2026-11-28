@@ -457,7 +457,7 @@ chk_procfile() {
 # Procfile.lean (no service) or a foreign one is not this check's: the
 # procfile check says so, and nothing here knows how that bench starts.
 fl_listen_files_stale() {
-  fl_render_ensure
+  fl_render_procfile_ensure
   local st
   st="$(fl_template_status "$(fl_procfile_path)" "$FL_R_PROCFILE")"
   case "$st" in

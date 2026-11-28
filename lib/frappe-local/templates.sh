@@ -45,7 +45,11 @@ FL_LAST_BACKUP=""
 
 fl_content_hash() {
   local sum
-  if command -v shasum >/dev/null 2>&1; then
+  if [[ "$OSTYPE" == linux* ]] && command -v sha256sum >/dev/null 2>&1; then
+    # the same 12 hex digits as shasum -a 256, from the C program: on Linux shasum is a Perl script
+    # (a start is 20 ms there, sha256sum's is 1 ms), and a render of the service files hashes six
+    sum="$(sha256sum)"; printf '%s\n' "${sum:0:12}"
+  elif command -v shasum >/dev/null 2>&1; then
     # the first 12 hex digits, cut in bash (one program, not two)
     sum="$(shasum -a 256)"; printf '%s\n' "${sum:0:12}"
   elif command -v sha256sum >/dev/null 2>&1; then
