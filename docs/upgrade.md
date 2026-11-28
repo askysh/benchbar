@@ -89,8 +89,9 @@ else on your Mac uses that Redis, stop it:
 brew services stop redis
 ```
 
-BenchBar does not stop it for you, because it cannot tell whether you or
-another program started it.
+BenchBar does not stop it on its own, because it cannot tell whether you
+or another program started it: `benchbar repair` in a terminal offers to,
+and asks first.
 
 ## From the one line installer to Homebrew
 
