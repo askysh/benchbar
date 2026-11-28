@@ -56,7 +56,9 @@ MANAGED="$HOME/.local/share/benchbar"
 BASELINE_BENCH="frappe-bench==5.31.1"
 # The doctor checks that may warn after the upgrade, per platform, each with
 # its reason. Anything else that is not ok fails upgrade-clean.
-UPGRADE_WARN_OK_DARWIN=""
+# redis_6379: the 0.8.3 install started Homebrew's redis service, which 0.9.0 neither starts nor
+# stops (a Redis on 6379 may be someone else's); doctor warns with the fix, and docs/upgrade.md says so.
+UPGRADE_WARN_OK_DARWIN="redis_6379"
 UPGRADE_WARN_OK_LINUX=""
 # the CLI under test: the checkout's for a fresh install, the installed one
 # (the managed checkout the one line installer made) in the upgrade jobs
