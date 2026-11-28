@@ -25,7 +25,7 @@
 # The records are plain text here, in a here document that bash only parses (`:`
 # ignores it): reading one into a variable with `read -d ''` costs 27 ms on every
 # start, on bash 3.2 and on bash 5, because the reader gets it byte by byte.
-# fl_cmd_load reads them from this file instead (1 to 2 ms, and no program: status
+# fl_cmd_load reads them from this file instead (about 1 ms, and no program: status
 # and list are polled and `cat` is one), and `commands --json` reads this file
 # again, line by line, as it writes. Edit the records here; the lines
 # `: <<'TABLE'` and `TABLE` mark where they start and end.
@@ -526,11 +526,46 @@ flag~notices~--all~~Hide every notice.
 TABLE
 
 
+# ---- the index of the table (commands-index.sh, made by scripts/commands-index.sh --write)
+# The key of a command, one of its fields and its flags are asked on every start. A scan of the
+# table for one of them is a temp file of the whole table and up to 500 lines read (3 to 8 ms on
+# bash 3.2, issue 137). The index has one variable per key for the fields and one for the flags,
+# so a lookup is one expansion. It also says how many bytes the table has (fl_cmd_load).
+# FL_CMD_INDEXED: 1 once the index is read, 0 when the file is not there: the lookups then scan
+# the table and fl_cmd_load looks for its end, as both did before there was an index.
+FL_CMD_INDEXED=""
+FL_CMD_TABLE_BYTES=""
+fl__cmd_index() {
+  [[ -z "$FL_CMD_INDEXED" ]] || return 0
+  FL_CMD_INDEXED=0
+  [[ -r "${FL_CMD_FILE%/*}/commands-index.sh" ]] || return 0
+  # shellcheck source=lib/frappe-local/commands-index.sh
+  . "${FL_CMD_FILE%/*}/commands-index.sh"
+}
+
+# fl__cmd_idx_v VAR PREFIX KEY: the index variable of KEY (PREFIX is FL_CMDX or FL_CMDF), empty
+# when the index has none. KEY holds words a person typed, and a name read through ${!name} is
+# evaluated (an array subscript in it would run a command): only lowercase letters, digits,
+# spaces and dashes ever reach a name. A space is __ and a dash is _ in the name, so "--" is
+# refused too: it would read as the space of another key.
+fl__cmd_idx_v() {
+  local __n
+  case "$3" in
+    ""|*[!abcdefghijklmnopqrstuvwxyz0123456789\ -]*|*--*) printf -v "$1" '%s' ""; return 0 ;;
+  esac
+  __n="${3// /__}"; __n="${2}_${__n//-/_}"
+  printf -v "$1" '%s' "${!__n:-}"
+}
+
 # fl_cmd_load: FL_CMD_TABLE, the records between the two marker lines above. The lines
-# before them are counted, the file is read whole (no program: `read -d ''` gets a file
-# byte by byte on bash 3.2, and a string built line by line is quadratic), and the
-# records are cut out with an offset and one pattern: % takes the last end marker, so
-# no other line of this file may be just TABLE (tests/test-commands-cost.sh checks).
+# before them are counted and the file is read whole (no program: `read -d ''` gets a file
+# byte by byte on bash 3.2, and a string built line by line is quadratic). The index says how
+# many bytes the records are, so they are cut out by two numbers, and that cut is taken only
+# when the end marker stands right behind it: an index that is out of step with the table can
+# never give a wrong table. Without that number the end is looked for with one pattern (% takes
+# the last end marker, so no other line of this file may be just TABLE: tests/test-commands-cost.sh
+# checks). That search costs 10 ms on bash 3.2, on every start, and more with every line of
+# code below the table: bash measures the rest of the string again at each step back.
 # LC_ALL=C: bytes, not characters.
 fl_cmd_load() {
   local LC_ALL=C line off=0 t
@@ -539,8 +574,13 @@ fl_cmd_load() {
     [[ "$line" != ": <<'TABLE'" ]] || break
   done <"$FL_CMD_FILE"
   t="$(<"$FL_CMD_FILE")"
-  t="${t:off}"
-  FL_CMD_TABLE="${t%$'\nTABLE\n'*}"
+  fl__cmd_index
+  if [[ "$FL_CMD_TABLE_BYTES" =~ ^[0-9]+$ && "${t:off+FL_CMD_TABLE_BYTES:7}" == $'\nTABLE\n' ]]; then
+    FL_CMD_TABLE="${t:off:FL_CMD_TABLE_BYTES}"
+  else
+    t="${t:off}"
+    FL_CMD_TABLE="${t%$'\nTABLE\n'*}"
+  fi
   # a file that cannot be read twice (commands.sh sourced from a pipe) gives no record and, before, no error
   [[ -n "$FL_CMD_TABLE" ]] || fl_die "The commands table could not be read from ${FL_CMD_FILE}." "commands.sh has to be sourced from a file, not from a pipe or a process substitution."
 }
@@ -581,29 +621,76 @@ read -r -d '' FL_CMD_GLOBAL_FLAGS <<'FLAGS' || true
 FLAGS
 fl_cmd_global_flags() { printf '%s\n' "$FL_CMD_GLOBAL_FLAGS"; }
 
-# fl_cmd_key_for COMMAND ARG: the table key: "COMMAND ARG" when the table has
-# that subcommand, else COMMAND; fails when the table knows neither
+# fl_cmd_key_for_v VAR COMMAND ARG: the table key: "COMMAND ARG" when the table has that
+# subcommand, else COMMAND. Sets VAR to it; VAR is empty and the return is 1 when the table
+# knows neither. Three words where the table has them (site snapshot drop): the third is the
+# global ARGS[1]. No subshell and, with the index, no read of the table.
+fl_cmd_key_for_v() {
+  local __c="$2" __a="${3:-}" __third="${ARGS[1]:-}" __hit
+  fl__cmd_index
+  if [[ "$FL_CMD_INDEXED" != 1 ]]; then
+    fl__cmd_key_scan_v "$1" "$__c" "$__a" || return 1
+    return 0
+  fi
+  if [[ -n "$__a" && "$__a" != -* && -n "$__third" && "$__third" != -* ]]; then
+    fl__cmd_idx_v __hit FL_CMDX "${__c} ${__a} ${__third}"
+    if [[ -n "$__hit" ]]; then printf -v "$1" '%s' "${__c} ${__a} ${__third}"; return 0; fi
+  fi
+  if [[ -n "$__a" && "$__a" != -* ]]; then
+    fl__cmd_idx_v __hit FL_CMDX "${__c} ${__a}"
+    if [[ -n "$__hit" ]]; then printf -v "$1" '%s' "${__c} ${__a}"; return 0; fi
+  fi
+  fl__cmd_idx_v __hit FL_CMDX "$__c"
+  if [[ -n "$__hit" ]]; then printf -v "$1" '%s' "$__c"; return 0; fi
+  printf -v "$1" '%s' ""
+  return 1
+}
+
+# fl_cmd_key_for COMMAND ARG: the same, printed (for a caller in a $( ): one subshell)
 fl_cmd_key_for() {
-  local cmd="$1" arg="${2:-}" line third="${ARGS[1]:-}"
-  # three words where the table has them (site snapshot drop): the third is the global ARGS[1]
-  if [[ -n "$arg" && "$arg" != -* && -n "$third" && "$third" != -* ]]; then
-    while IFS= read -r line; do
-      [[ "$line" == "cmd~${cmd} ${arg} ${third}~"* ]] && { printf '%s' "${cmd} ${arg} ${third}"; return 0; }
+  local __key
+  fl_cmd_key_for_v __key "$@" || return 1
+  printf '%s' "$__key"
+}
+
+# fl__cmd_key_scan_v VAR COMMAND ARG: fl_cmd_key_for_v by reading the table (no index file)
+fl__cmd_key_scan_v() {
+  local __cmd="$2" __arg="${3:-}" __line __t="${ARGS[1]:-}"
+  if [[ -n "$__arg" && "$__arg" != -* && -n "$__t" && "$__t" != -* ]]; then
+    while IFS= read -r __line; do
+      [[ "$__line" == "cmd~${__cmd} ${__arg} ${__t}~"* ]] && { printf -v "$1" '%s' "${__cmd} ${__arg} ${__t}"; return 0; }
     done <<<"$FL_CMD_TABLE"
   fi
-  if [[ -n "$arg" && "$arg" != -* ]]; then
-    while IFS= read -r line; do
-      [[ "$line" == "cmd~${cmd} ${arg}~"* ]] && { printf '%s' "${cmd} ${arg}"; return 0; }
+  if [[ -n "$__arg" && "$__arg" != -* ]]; then
+    while IFS= read -r __line; do
+      [[ "$__line" == "cmd~${__cmd} ${__arg}~"* ]] && { printf -v "$1" '%s' "${__cmd} ${__arg}"; return 0; }
     done <<<"$FL_CMD_TABLE"
   fi
-  while IFS= read -r line; do
-    [[ "$line" == "cmd~${cmd}~"* ]] && { printf '%s' "$cmd"; return 0; }
+  while IFS= read -r __line; do
+    [[ "$__line" == "cmd~${__cmd}~"* ]] && { printf -v "$1" '%s' "$__cmd"; return 0; }
   done <<<"$FL_CMD_TABLE"
+  printf -v "$1" '%s' ""
   return 1
 }
 
 # fl_cmd_attr_v VAR KEY FIELD: tty, sudo, network, mutating or json of KEY
 fl_cmd_attr_v() {
+  local __rec __r=""
+  fl__cmd_index
+  if [[ "$FL_CMD_INDEXED" != 1 ]]; then fl__cmd_attr_scan_v "$@"; return 0; fi
+  fl__cmd_idx_v __rec FL_CMDX "$2"
+  case "$3" in
+    tty) __r="${__rec%%~*}" ;;
+    sudo) __r="${__rec#*~}"; __r="${__r%%~*}" ;;
+    network) __r="${__rec#*~*~}"; __r="${__r%%~*}" ;;
+    mutating) __r="${__rec#*~*~*~}"; __r="${__r%%~*}" ;;
+    json) __r="${__rec##*~}" ;;
+  esac
+  printf -v "$1" '%s' "$__r"
+}
+
+# fl__cmd_attr_scan_v VAR KEY FIELD: fl_cmd_attr_v by reading the table (no index file)
+fl__cmd_attr_scan_v() {
   local __line __k __u __s __t __sd __n __m __j __r=""
   while IFS= read -r __line; do
     [[ "$__line" == "cmd~${2}~"* ]] || continue
@@ -739,17 +826,32 @@ fl_cmd_flag_check() {
     case "$tok" in -?*) hit=1; break ;; esac
   done
   [[ "$hit" == 1 ]] || return 0
-  while IFS= read -r line; do
-    case "$line" in
-      "flag~${key}~"*)
-        rest="${line#flag~"${key}"~}"; name="${rest%%~*}"; rest="${rest#*~}"; val="${rest%%~*}"
-        case "$name" in
-          --*) longs="${longs}${name} " ;;
-          *) shorts="${shorts}${name} " ;;
-        esac
-        [[ -z "$val" ]] || valued="${valued}${name} " ;;
-    esac
-  done <<<"$FL_CMD_TABLE"
+  fl__cmd_index
+  if [[ "$FL_CMD_INDEXED" == 1 ]]; then
+    # the flags of KEY from the index: NAME, or NAME= for one that takes a value
+    fl__cmd_idx_v rest FL_CMDF "$key"
+    for name in $rest; do
+      val=""
+      case "$name" in *=) val=1; name="${name%=}" ;; esac
+      case "$name" in
+        --*) longs="${longs}${name} " ;;
+        *) shorts="${shorts}${name} " ;;
+      esac
+      [[ -z "$val" ]] || valued="${valued}${name} "
+    done
+  else
+    while IFS= read -r line; do
+      case "$line" in
+        "flag~${key}~"*)
+          rest="${line#flag~"${key}"~}"; name="${rest%%~*}"; rest="${rest#*~}"; val="${rest%%~*}"
+          case "$name" in
+            --*) longs="${longs}${name} " ;;
+            *) shorts="${shorts}${name} " ;;
+          esac
+          [[ -z "$val" ]] || valued="${valued}${name} " ;;
+      esac
+    done <<<"$FL_CMD_TABLE"
+  fi
   for tok in "$@"; do
     [[ "$tok" != -- ]] || break
     if [[ "$skip" == 1 ]]; then skip=0; continue; fi
@@ -845,7 +947,7 @@ fl_refuse_json() {
 fl_args_validate() {
   local key usage bad n="${FL_ARGS_FLAGS_N:--1}"
   [[ "${#ARGS[@]}" -gt 0 ]] || return 0
-  key="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")" || return 0
+  fl_cmd_key_for_v key "$COMMAND" "${ARGS[0]:-}" || return 0
   if [[ "$n" -lt 0 || "$n" -gt "${#ARGS[@]}" ]]; then n="${#ARGS[@]}"; fi
   fl_cmd_flag_check "$key" "${ARGS[@]:0:$n}" && return 0
   fl_cmd_usage_v usage "$key"
@@ -874,7 +976,7 @@ FL_JSON_KEY=""
 FL_JSON_MODE=""
 fl_json_mode_resolve() {
   local mut kind
-  FL_JSON_KEY="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")" || FL_JSON_KEY=""
+  fl_cmd_key_for_v FL_JSON_KEY "$COMMAND" "${ARGS[0]:-}" || FL_JSON_KEY=""
   # a command or subcommand that does not exist ends the stream like any refusal: one done line
   if [[ -z "$FL_JSON_KEY" && ( "$OPT_FOR_AGENT" == "1" || "$OPT_JSONL" == "1" ) ]]; then
     export BENCHBAR_NONINTERACTIVE=1 NO_COLOR=1
