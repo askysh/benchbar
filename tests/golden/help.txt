@@ -1863,10 +1863,16 @@ All commands: benchbar commands --json
   [FAIL] benchbar share is an experiment and it is off.
 
 Aborting. Turn it on: benchbar labs on lan-rooms
-=== benchbar share joined --help [labs: none] (exit 2)
-  [FAIL] benchbar share is an experiment and it is off.
+=== benchbar share joined --help [labs: none] (exit 0)
+benchbar share joined: The rooms this computer joined: id (16 digits of the host key), room, host,
+  address, whether it is open here, the seat and the local address. Reads only, and dials no room.
 
-Aborting. Turn it on: benchbar labs on lan-rooms
+Usage: benchbar share joined [--json]
+
+Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
+Needs: a terminal to ask questions: no; sudo: no; the network: no.
+Changes things: no. JSON: document.
+All commands: benchbar commands --json
 === benchbar share leave --help [labs: none] (exit 0)
 benchbar share leave: Leave a room: the host is told, so the seat is free and its sessions end, and
   the local address closes. The room and this computer's key for its host stay. ROOM is the id from
@@ -3952,16 +3958,6 @@ Environment:
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: yes; sudo: no; the network: yes.
 Changes things: yes. JSON: document.
-All commands: benchbar commands --json
-=== benchbar share joined --help [labs: lan-rooms,quick-switch] (exit 0)
-benchbar share joined: The rooms this computer joined: id (16 digits of the host key), room, host,
-  address, whether it is open here, the seat and the local address. Reads only, and dials no room.
-
-Usage: benchbar share joined [--json]
-
-Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
-Needs: a terminal to ask questions: no; sudo: no; the network: no.
-Changes things: no. JSON: document.
 All commands: benchbar commands --json
 === benchbar lan-guard --help [labs: lan-rooms,quick-switch] (exit 0)
 benchbar lan-guard: The LAN guard: on macOS a pf anchor (com.apple/250.benchbar), on Linux an

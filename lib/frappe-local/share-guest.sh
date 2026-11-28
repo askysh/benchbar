@@ -143,6 +143,9 @@ fl_sg_refuse() {
     which_room) msg="This computer joined more than one room."; fix="Name one by its id: benchbar share joined lists them." ;;
     no_rooms) msg="This computer joined no room."; fix="Join one: benchbar share join" ;;
     busy) msg="Another benchbar share command is at work on the rooms of this computer."; fix="Wait for it to end, then run the command again." ;;
+    forwarder_stuck)
+      msg="This computer is in the room, but the local address of the room ${host} had before is still open: its process (guest-forward.js) did not end, and it shows that room's pages."
+      fix="Stop that process yourself, then run benchbar share join ${where} again: no code is needed." ;;
     forwarder|no_port) msg="The room's local address did not start: no port from 41000 to 41999 could be opened on this computer." ;;
     seat_taken) msg="That seat was just taken."; fix="Run the command again and pick another." ;;
     host_assigns) msg="${host} gives out the seats in this room: a guest cannot take one."; fix="Ask ${host} for yours, then run benchbar share join ${where} again." ;;

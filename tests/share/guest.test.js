@@ -738,3 +738,203 @@ test("leave ends a forwarder that ignores stop, and says so when it cannot", asy
     assert.strictEqual(await GUEST_CLI.stopForwarder({ dir }, id), false);
     second.kill("SIGKILL");
 });
+
+// ---------------------------------------------------------------- the follow-ups of the join reviews (#353)
+
+// A waiter judged a lock stale, and before it moved the lock aside the holder let go and a second holder
+// took it. The waiter moves the second holder's lock, sees that it is not the one it judged, and gives it
+// back. While the lock is aside the path is free: a third waiter can make its own file there.
+test("a lock moved aside by mistake goes back to its holder, and a waiter that made its file in the gap does not hold the lock", () => {
+    const dir = H.tmpDir();
+    const lock = path.join(dir, "x.lock");
+    const real = { read: fs.readFileSync, rename: fs.renameSync, stat: fs.statSync };
+    const past = new Date(Date.now() - 600_000);
+    fs.writeFileSync(lock, "dead");
+    fs.utimesSync(lock, past, past);
+    let swapped = false;
+    let gap = false;
+    fs.readFileSync = (file, ...rest) => {
+        const text = real.read(file, ...rest);
+        if (file === lock && !swapped && text === "dead") {
+            swapped = true;
+            fs.rmSync(lock);
+            fs.writeFileSync(lock, "second", { flag: "wx" });
+        }
+        return text;
+    };
+    fs.renameSync = (from, to) => {
+        real.rename(from, to);
+        if (from === lock && !gap) {
+            gap = true;
+            fs.writeFileSync(lock, "third", { flag: "wx" });
+        }
+    };
+    try {
+        assert.throws(() => guest.lockedSync(lock, () => "in", { staleMs: 5_000, timeoutMs: 150 }), refused("busy"));
+    } finally {
+        fs.readFileSync = real.read;
+        fs.renameSync = real.rename;
+    }
+    assert.deepStrictEqual([swapped, gap], [true, true]);
+    assert.strictEqual(fs.readFileSync(lock, "utf8"), "second", "the second holder's lock was not given back");
+    assert.deepStrictEqual(fs.readdirSync(dir), ["x.lock"], "a helper file of the break was left behind");
+
+    // the third waiter's side of it: it made its file while another waiter was breaking a lock (the guard
+    // is there). It waits for the guard to go, and holds the lock only when the file is still its own.
+    const guard = `${lock}.reclaim`;
+    fs.rmSync(lock);
+    fs.writeFileSync(guard, "breaker");
+    let looks = 0;
+    fs.statSync = (file, ...rest) => {
+        if (file === guard && ++looks === 3) {
+            fs.writeFileSync(`${lock}.back`, "second");
+            real.rename(`${lock}.back`, lock);
+            fs.rmSync(guard);
+        }
+        return real.stat(file, ...rest);
+    };
+    let ran = false;
+    try {
+        assert.throws(() => guest.lockedSync(lock, () => { ran = true; }, { staleMs: 5_000, timeoutMs: 150 }), refused("busy"));
+    } finally {
+        fs.statSync = real.stat;
+    }
+    assert.strictEqual(ran, false, "a waiter that made its file in the gap ran as the holder");
+    assert.strictEqual(fs.readFileSync(lock, "utf8"), "second");
+});
+
+// The holder of a lock was killed 4.5 s ago. With the limits as they are by default, a waiter must still be
+// waiting when the lock turns stale (10 s after its last touch), and take it then.
+test("a waiter outlasts the lock of a killed holder: the default wait is longer than the stale limit", async () => {
+    const dir = H.tmpDir();
+    const lock = path.join(dir, "x.lock");
+    fs.writeFileSync(lock, "dead");
+    const killed = new Date(Date.now() - 4_500);
+    fs.utimesSync(lock, killed, killed);
+    const work = `const g = require(${JSON.stringify(path.join(__dirname, "../../lib/frappe-local/share/guest.js"))});
+        try { process.stdout.write("got=" + g.lockedSync(${JSON.stringify(lock)}, () => "in") + "\\n"); } catch (e) { process.stdout.write("error=" + e.code + "\\n"); }`;
+    const r = await start(["-e", work]);
+    assert.deepStrictEqual([r.got, r.error], ["in", undefined], r.text);
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+});
+
+test("a connection that closes its side before it sent a request gives its slot back at once", async () => {
+    const forwarder = new forward.Forwarder({
+        localHost: "room-0123456789abcdef.localhost", port: await H.freePort(), hostLabel: "Host", maxConnections: 2,
+        connect: async () => { throw new guest.Refusal("unreachable"); }
+    });
+    try {
+        const port = await forwarder.start();
+        const open = () => new Promise((resolve, reject) => {
+            const socket = net.connect(port, LOOPBACK, () => resolve(socket));
+            socket.on("error", () => {});
+            socket.once("error", reject);
+        });
+        const a = await open();
+        const b = await open();
+        a.end();
+        b.end();
+        await H.sleep(300);
+        assert.strictEqual(forwarder.active, 0, "a connection that only closed its side still holds a slot");
+        const reply = await browse(port, forwarder.expectedHost, "/app");
+        assert.ok(reply.status === 502 && reply.text.includes("Not sharing right now"), reply.text);
+    } finally {
+        forwarder.stop();
+    }
+});
+
+// A program on the room's control socket, for the cases a real forwarder cannot be made to show.
+// `answer` is the body of a function (n: how many requests came before this one) that returns the object to
+// send, or null to send nothing; `after` is how long after its start it begins to answer.
+const fakeForwarder = (dir, id, answer, after = 0) => {
+    const child = spawn(process.execPath, ["-e", `
+        const net = require("net");
+        const born = Date.now();
+        let n = 0;
+        const answer = (n) => { ${answer} };
+        net.createServer((c) => {
+            c.on("error", () => {});
+            c.on("data", () => setTimeout(() => { const a = answer(n++); if (a) c.end(JSON.stringify(a) + "\\n"); }, Math.max(0, ${after} - (Date.now() - born))));
+        }).listen(${JSON.stringify(path.join(dir, `${id}.sock`))}, () => process.stdout.write("up\\n"));
+        setInterval(() => {}, 1000);`], { stdio: ["ignore", "pipe", "ignore"] });
+    H.track(() => child.kill("SIGKILL"));
+    return new Promise((resolve) => child.stdout.once("data", () => resolve(child)));
+};
+
+test("stopping a forwarder: one that is slow to answer is not taken for gone, and the pid that is ended is the one it names just before", async () => {
+    const dir = H.tmpDir();
+    const id = "ab".repeat(8);
+    // it accepts the connection and never answers: it runs, so the address is not reported closed
+    const silent = await fakeForwarder(dir, id, "return null;");
+    assert.strictEqual(await GUEST_CLI.stopForwarder({ dir }, id, { stopMs: 300, tries: 3, statusMs: 300 }), false);
+    silent.kill("SIGKILL");
+    await new Promise((resolve) => silent.once("close", resolve));
+    assert.strictEqual(await GUEST_CLI.stopForwarder({ dir }, id), true, "a dead forwarder's socket file was taken for a running one");
+
+    // its first answer names another process (a pid from an answer that is seconds old can be anybody's by
+    // now); the answer just before the end names its own
+    fs.rmSync(path.join(dir, `${id}.sock`), { force: true });
+    const bystander = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+    H.track(() => bystander.kill("SIGKILL"));
+    const stubborn = await fakeForwarder(dir, id, `return { ok: true, pid: n === 0 ? ${bystander.pid} : process.pid, port: 41000 };`);
+    const ended = new Promise((resolve) => stubborn.once("close", resolve));
+    assert.strictEqual(await GUEST_CLI.stopForwarder({ dir }, id, { stopMs: 300, tries: 3, statusMs: 300 }), true);
+    await ended;
+    assert.doesNotThrow(() => process.kill(bystander.pid, 0), "a process that is not the forwarder was ended");
+    bystander.kill("SIGKILL");
+});
+
+test("a forwarder that runs and is slow to answer is waited for: no second one is started beside it", async () => {
+    const dir = H.tmpDir();
+    const id = savedRoom(dir);
+    const ctx = GUEST_CLI.context({ dir });
+    const mark = path.join(dir, "started");
+    const recorder = path.join(dir, "recorder");
+    fs.writeFileSync(recorder, `#!/bin/sh\necho started >>"${mark}"\n`, { mode: 0o700 });
+    await fakeForwarder(dir, id, `return { ok: true, pid: process.pid, port: 41000, url: "http://x.localhost:41000/", state: "offline", seat: null, site: "", deadline_epoch: null };`, 2_600);
+    const node = process.execPath;
+    process.execPath = recorder;   // what guest-cli starts a forwarder with
+    let opened;
+    try {
+        opened = await GUEST_CLI.ops.open({ id }, ctx);
+    } finally {
+        process.execPath = node;
+    }
+    assert.deepStrictEqual([opened.forwarding, opened.local_port, opened.state], [true, 41000, "offline"]);
+    await H.sleep(200);
+    assert.ok(!fs.existsSync(mark), "a second forwarder was started beside the one that runs");
+});
+
+test("two joins to one host at once: the key one of them made is not removed under the other when it fails", async () => {
+    await withGateway({}, async (gw) => {
+        const dir = H.tmpDir();
+        const hostHex = gw.host.fp.slice(7);
+        const id = hostHex.slice(0, 16);
+        const ctx = GUEST_CLI.context({ dir });
+        H.track(() => forward.ask(dir, id, "stop", 2000));
+        const req = { allow_loopback: true, address: LOOPBACK, host_pin: hostHex, code: await roomCode(gw), name: "Lab PC", model: "Linux" };
+        // the first makes the key and fails (nothing listens at its port); the second, started a moment later, uses that key
+        const failing = GUEST_CLI.ops.join({ ...req, port: await H.freePort() }, ctx);
+        const joining = GUEST_CLI.ops.join({ ...req, port: gw.port }, ctx);
+        await assert.rejects(failing, refused("unreachable"));
+        const joined = await joining;
+        assert.deepStrictEqual([joined.id, joined.forwarding], [id, true]);
+        assert.ok(ctx.keys.load(hostHex), "the key of the room that was joined is gone");
+        assert.deepStrictEqual(fs.readdirSync(dir).filter((n) => n.endsWith(".join")), [], "the lock of the join was left behind");
+    });
+});
+
+test("a join that cannot stop the forwarder of the room this host had before says so, and keeps the room it joined", async () => {
+    await withGateway({}, async (gw) => {
+        const dir = H.tmpDir();
+        const hostHex = gw.host.fp.slice(7);
+        const id = hostHex.slice(0, 16);
+        // it answers and cannot be ended: the pid it names is nobody's
+        await fakeForwarder(dir, id, `return { ok: true, pid: ${2 ** 22 + 12345}, port: 41000, url: "http://old.localhost:41000/", state: "ended", seat: null, site: "" };`);
+        const joined = cli(dir, "join", { address: LOOPBACK, port: gw.port, host_pin: hostHex, code: await roomCode(gw), name: "Lab PC", model: "Linux" });
+        assert.deepStrictEqual([joined.code, joined.error], [1, "forwarder_stuck"], joined.text);
+        assert.deepStrictEqual(guest.roomsStore(dir).load().map((r) => r.id), [id], "the room that was joined was not saved");
+        assert.ok(fs.existsSync(path.join(dir, "keys", `${hostHex}.pem`)), "the key of the room that was joined is gone");
+        assert.strictEqual((await people(gw)).length, 1);
+    });
+});
