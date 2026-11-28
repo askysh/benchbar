@@ -246,7 +246,7 @@ assert_calls_not_contain '^bench (migrate|build|update|start)'
   . "$ROOT/lib/frappe-local/ports.sh"
   . "$ROOT/lib/frappe-local/plan-token.sh"
   . "$ROOT/lib/frappe-local/port-management.sh"
-  FL_STATE_DIR="$TMP_DIR/pm-token-state"; mkdir -p "$FL_STATE_DIR"; FL_STATE_FILE="$FL_STATE_DIR/state.env"; : >"$FL_STATE_FILE"; FL_LOG_FILE=/dev/null
+  FL_STATE_DIR="$TMP_DIR/pm-token-state"; mkdir -p "$FL_STATE_DIR"; FL_STATE_FILE="$FL_STATE_DIR/state.env"; : >"$FL_STATE_FILE"; FL_LOG_FILE=/dev/null; FL_VERSION="$VER"
   fl_abs_path() { printf '%s' "$1"; }
   fl_is_bench_dir() { :; }
   fl_pm_known_reservations() { :; }
@@ -265,7 +265,11 @@ assert_calls_not_contain '^bench (migrate|build|update|start)'
     printf '+- benchbar adopt -+\n  %s\n  [ok] 1. Write Procfile.lean: done (%ss)\n' "$WORDING" "$RANDOM"
     [[ -z "${FL_PM_PLAN_FILE:-}" ]] || printf '%s|%s\n' "$1" "$ACTIONS" >>"$FL_PM_PLAN_FILE"
   }
-  token_of() { CURRENT="$1" ACTIONS="$2" WORDING="$3" fl_pm_build "$TMP_DIR/bench-one" >/dev/null 2>&1; printf '%s' "$PM_TOKEN"; }
+  # a fault in the build ends this subshell under set -e: its stderr is in a file the failure prints
+  token_of() {
+    CURRENT="$1" ACTIONS="$2" WORDING="$3" fl_pm_build "$TMP_DIR/bench-one" >/dev/null 2>"$TMP_DIR/pm-token.err"       || fail "(fl_pm_build failed) $(cat "$TMP_DIR/pm-token.err")"
+    printf '%s' "$PM_TOKEN"
+  }
   base="$(token_of '8000 9000 11000 13000' 'agent_write runner_write' 'adopt only adds the background service files.')"
   assert_eq "$base" "$(token_of '8000 9000 11000 13000' 'agent_write runner_write' 'Adopt adds the service files only.')" "(the same plan in other words keeps its token)"
   other="$(token_of '8001 9001 11001 13001' 'agent_write runner_write' 'adopt only adds the background service files.')"
