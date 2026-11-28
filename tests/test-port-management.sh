@@ -240,6 +240,7 @@ assert_calls_not_contain '^bench (migrate|build|update|start)'
 # The token of a port plan is made from the plan's fields (the benches, their modes, the port blocks, the
 # service actions and what they are made from), not from the preview's text (#361): a preview whose text
 # differs only in wording or timing keeps the token, a changed port block or a changed action list does not.
+# shellcheck disable=SC2031  # ROOT is the harness's, only read here
 (
   . "$ROOT/lib/frappe-local/ui.sh"
   . "$ROOT/lib/frappe-local/ports.sh"
