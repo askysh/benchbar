@@ -19,14 +19,14 @@ window-general.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-ge
 window-health.png	docs/app.md	DocsSnapshotTests.docsWindowTabs (docs-window-health-light)	2026-11-28	current (0.9.0)
 window-overview.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-overview-light)	2026-11-28	current (0.9.0)
 window-profiles.png	docs/app.md, docs/guides/teams.md	DocsSnapshotTests.docsWindowTabs (docs-window-profiles-light)	2026-11-28	current (0.9.0)
-windows-bench.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
-windows-flyout-dark.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
-windows-flyout-light.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
-windows-window.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
-windows-wizard-bench.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
-windows-wizard-check.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
-windows-wizard-review.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
-windows-wizard-welcome.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
+windows-bench.png	docs/windows-tray.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
+windows-flyout-dark.png	docs/windows-tray.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
+windows-flyout-light.png	docs/windows-tray.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
+windows-window.png	docs/windows-tray.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
+windows-wizard-bench.png	docs/windows.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
+windows-wizard-check.png	docs/windows.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
+windows-wizard-review.png	docs/windows.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
+windows-wizard-welcome.png	docs/windows.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
 wizard-check.png	docs/app.md	DocsSnapshotTests.docsWizard (docs-wizard-check-light)	2026-11-28	current (0.9.0)
 wizard-review.png	docs/app.md, docs/quick-start.md	DocsSnapshotTests.docsWizard (docs-wizard-review-light)	2026-11-01	current (0.9.0): rendered again on 2026-11-28, the same image byte for byte
 wizard-welcome.png	docs/app.md, docs/quick-start.md, docs/install.md	DocsSnapshotTests.docsWizard (docs-wizard-welcome-light)	2026-11-01	current (0.9.0): rendered again on 2026-11-28, the same image byte for byte
