@@ -131,17 +131,17 @@ public static class ShareJson
         o["people"] is JsonArray a
             ? [.. a.OfType<JsonObject>().Where(p => JsonRead.Str(p, "id") is { Length: > 0 }).Select(p => new SharePerson(JsonRead.Str(p, "id")!,
                 ShareGuestText.Clean(JsonRead.Str(p, "name") ?? JsonRead.Str(p, "id")), NullIfEmpty(JsonRead.Str(p, "model")), JsonRead.Str(p, "ip"), JsonRead.Str(p, "seat_id"),
-                NullIfEmpty(JsonRead.Str(p, "seat_full_name")), JsonRead.Bool(p, "online"), JsonRead.Str(p, "last_seen")))]
+                NullIfEmpty(JsonRead.Str(p, "seat_full_name"), ShareGuestText.NameMax), JsonRead.Bool(p, "online"), JsonRead.Str(p, "last_seen")))]
             : [];
 
     public static IReadOnlyList<ShareSeat> Seats(JsonObject o) =>
         o["seats"] is JsonArray a
             ? [.. a.OfType<JsonObject>().Where(s => JsonRead.Str(s, "seat_id") is { Length: > 0 }).Select(s => new ShareSeat(JsonRead.Str(s, "seat_id")!,
-                ShareGuestText.Clean(JsonRead.Str(s, "full_name") ?? JsonRead.Str(s, "seat_id")), JsonRead.Strings(s, "roles"), JsonRead.Str(s, "held_by")))]
+                ShareGuestText.Clean(JsonRead.Str(s, "full_name") ?? JsonRead.Str(s, "seat_id"), ShareGuestText.NameMax), [.. JsonRead.Strings(s, "roles").Select(r => ShareGuestText.Clean(r))], JsonRead.Str(s, "held_by")))]
             : [];
 
     /// <summary>The name, model and seat of a guest are what the guest chose: one line of plain text on the host's screen too.</summary>
-    private static string? NullIfEmpty(string? text) => text is null ? null : ShareGuestText.Clean(text) is { Length: > 0 } clean ? clean : null;
+    private static string? NullIfEmpty(string? text, int max = 80) => text is null ? null : ShareGuestText.Clean(text, max) is { Length: > 0 } clean ? clean : null;
 
     public static ShareRoom Room(JsonObject o) => new(People(o), Seats(o), JsonRead.Str(o, "seat_mode") == "host");
 

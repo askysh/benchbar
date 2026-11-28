@@ -1,0 +1,3 @@
+  [FAIL] This computer is in the room, but the local address of the room Test Host had before is still open: its process (guest-forward.js) did not end, and it shows that room's pages.
+
+Aborting. Stop that process yourself, then run benchbar share join 127.0.0.1:38999 again: no code is needed.

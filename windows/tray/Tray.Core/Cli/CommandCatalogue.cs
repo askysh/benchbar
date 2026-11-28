@@ -32,6 +32,9 @@ public sealed class CommandCatalogue
     /// <summary>The labs that were on when the CLI printed this catalogue (<c>labs</c>): the commands of a lab that is off are not in it.</summary>
     public IReadOnlyList<string> Labs { get; init; } = [];
 
+    /// <summary>The CLI printed <c>labs</c> at all. One that does not leaves no command out for a lab that is off, so reading the catalogue again would not change it.</summary>
+    public bool HasLabsField { get; init; }
+
     /// <summary>The CLI lists <paramref name="name"/> ("up", "lock write").</summary>
     public bool Has(string name) => _byName.ContainsKey(name);
 
@@ -51,7 +54,7 @@ public sealed class CommandCatalogue
                 .Select(f => new CommandFlag(JsonRead.Str(f, "name")!, JsonRead.Str(f, "value"), JsonRead.Str(f, "help") ?? "")).ToList();
             commands.Add(new CommandInfo(name, JsonRead.Str(c, "usage") ?? "", JsonRead.Str(c, "summary") ?? "", JsonRead.Bool(c, "mutating"), flags));
         }
-        return new CommandCatalogue(commands, JsonRead.Str(o, "cli_version")) { Labs = JsonRead.Strings(o, "labs") };
+        return new CommandCatalogue(commands, JsonRead.Str(o, "cli_version")) { Labs = JsonRead.Strings(o, "labs"), HasLabsField = o["labs"] is JsonArray };
     }
 }
 
