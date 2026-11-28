@@ -13,7 +13,7 @@ profile-import.png	docs/guides/teams.md	DocsSnapshotTests.docsProfileSheets (doc
 runners-more.png	docs/runners.md, docs/app.md	by hand (no snapshot test yet)	2026-11-01	current (0.9.0): the drawings of these runners did not change since the image was made (checked 2026-11-28)
 runners.png	docs/app.md	by hand (no snapshot test yet)	2026-09-24	current (0.9.0): the drawings of these runners did not change since the image was made (checked 2026-11-28)
 social-preview.png	the GitHub social preview (uploaded by hand in the repository settings)	scripts/social-preview.swift	2026-11-19	current (0.9.0 wording)
-window-about.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-about)	2026-11-01	review: the pane shows the version of the build, so it waits for the 0.9.0 build (release candidate pass)
+window-about.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-about-light)	2026-11-28	current (0.9.0)
 window-apps.png	docs/app.md	DocsSnapshotTests.docsWindowTabs (docs-window-apps-light)	2026-11-28	current (0.9.0)
 window-general.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-general-light)	2026-11-28	current (0.9.0)
 window-health.png	docs/app.md	DocsSnapshotTests.docsWindowTabs (docs-window-health-light)	2026-11-28	current (0.9.0)
