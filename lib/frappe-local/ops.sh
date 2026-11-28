@@ -71,7 +71,7 @@ fl__op_stamp_secs_v() {
 }
 
 # fl_op_new_id_v VAR: a new op id, its file made empty (noclobber, so two runs never share one). The id sorts
-# after every id that is already there (fl_op_ids): the clock can step back (a VM that syncs its time does so by
+# after every id that is already there (fl_op_ids_v): the clock can step back (a VM that syncs its time does so by
 # seconds, WSL every 30 s), and a run that starts after a step would carry an older stamp than the run before it.
 # So when the clock is not past the newest stamp in the folder, the id takes that stamp and a -N one above the
 # newest -N of it, and N, not the pid, orders the runs of one stamp. A stamp more than FL_OP_CLOCK_SKEW seconds
@@ -343,7 +343,7 @@ fl_op_result_v() {
   printf -v "$1" '%s' "$__line"
 }
 
-# fl_op_ids: every op id, newest first. An id is op-DATE-TIME-PID[-N]: the date and the time are fixed width text,
+# fl_op_ids_v: every op id, newest first. An id is op-DATE-TIME-PID[-N]: the date and the time are fixed width text,
 # the N (the run's place within one stamp, see fl_op_new_id_v) and the pid are numbers, compared in that order. Sorted
 # as text, pid 9998 came after 10001 and "-5" after "-5-1". One sort for the whole list, no fork per op.
 # An id whose stamp is more than FL_OP_CLOCK_SKEW seconds ahead of the clock (a resumed VM, a bad RTC) is not the
@@ -351,8 +351,10 @@ fl_op_result_v() {
 # takes it. Several of them follow each other from the nearest stamp to the furthest, the furthest is pruned first.
 # These have the newest stamps, so they are the first lines of the sort: the clock's stamp is made once per call
 # (one date call) and an id is converted to seconds (fl__op_stamp_secs_v) only while it is text greater than that.
-fl_op_ids() {
-  local __now __nowsecs="" __sec __id __far="" __past=0
+# fl_op_ids_v VAR sets VAR to that list, one id per line; the callers read it from the variable, because a printf
+# into a process substitution can fail on macOS with "Interrupted system call" and drop ids (test-ops).
+fl_op_ids_v() {
+  local __now __nowsecs="" __sec __id __far="" __past=0 __ids=""
   __now="$(date +%Y%m%d-%H%M%S)"
   while IFS= read -r __id; do
     if [[ "$__past" != "1" ]]; then
@@ -363,12 +365,12 @@ fl_op_ids() {
       fi
       __past=1
     fi
-    printf '%s\n' "$__id"
+    __ids="${__ids}${__id}"$'\n'
   done < <(fl__op_ids_sorted)
-  printf '%s' "$__far"
+  printf -v "$1" '%s' "${__ids}${__far}"
 }
 
-# fl__op_ids_sorted: the op ids, newest stamp first (see fl_op_ids)
+# fl__op_ids_sorted: the op ids, newest stamp first (see fl_op_ids_v)
 fl__op_ids_sorted() {
   # shellcheck disable=SC2010  # names this tool made, matched by a strict pattern
   ls -1 "$(fl_ops_dir)" 2>/dev/null | grep -E '^op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?\.json$' | sed 's/\.json$//' \
@@ -424,7 +426,7 @@ fl_op_one() {
 
 # fl_op_list_cmd: the operations, newest first (--limit N, --running)
 fl_op_list_cmd() {
-  local limit=20 running=0 id rec n=0 doc eff docs="" sep="" a rows=() cmd ago step i=0
+  local limit=20 running=0 id ids rec n=0 doc eff docs="" sep="" a rows=() cmd ago step i=0
   local args=("$@")
   while [[ "$i" -lt "${#args[@]}" ]]; do
     a="${args[$i]}"
@@ -438,6 +440,7 @@ fl_op_list_cmd() {
   done
   [[ "$limit" =~ ^[0-9]+$ && "$limit" -ge 1 && "$limit" -le 100 ]] || fl_die "--limit takes a number from 1 to 100." "Example: benchbar op list --limit 10"
   rows+=("Op|Command|State|Took|Step")
+  fl_op_ids_v ids
   while IFS= read -r id; do
     [[ -n "$id" && "$n" -lt "$limit" ]] || continue
     fl_op_now_v rec eff "$id"
@@ -448,7 +451,7 @@ fl_op_list_cmd() {
     docs="${docs}${sep}${doc%$'\n'}"; sep=","
     fl_op_field_v cmd "$rec" command; fl_op_ago_v ago "$rec"; fl_op_field_v step "$rec" id
     rows+=("${id}|${cmd:-?}|${eff}|${ago}|${step:--}")
-  done < <(fl_op_ids)
+  done <<<"$ids"
   if [[ "$OPT_JSON" == "1" ]]; then
     printf '{"schema_version":%d,"cli_version":"%s","ops":[%s]}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$docs"
   elif [[ "$n" == "0" ]]; then
@@ -630,10 +633,11 @@ fl_op_background() {
 # record of a run that still runs stays. Prints how many records went. A temp file of a killed writer
 # (older than a day) goes too.
 fl_op_prune() {
-  local keep n=0 gone=0 id rec eff dir f
+  local keep n=0 gone=0 id ids rec eff dir f
   keep="${FL_KEEP_OPS:-100}"; [[ "$keep" =~ ^[0-9]+$ && "$keep" -ge 1 ]] || keep=100
   dir="$(fl_ops_dir)"
   [[ -d "$dir" ]] || { printf 0; return 0; }
+  fl_op_ids_v ids
   while IFS= read -r id; do
     [[ -n "$id" ]] || continue
     n=$((n + 1))
@@ -647,7 +651,7 @@ fl_op_prune() {
       rm -f "$f" 2>/dev/null || true
     done
     gone=$((gone + 1))
-  done < <(fl_op_ids)
+  done <<<"$ids"
   find "$dir" -maxdepth 1 -type f -name '.op-*.tmp' -mmin +1440 -exec rm -f {} + 2>/dev/null || true
   printf '%s' "$gone"
 }
