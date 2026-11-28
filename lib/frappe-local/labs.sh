@@ -199,10 +199,11 @@ fl_lab_require() {
 
 # fl_lab_undo_key KEY: the commands of a lab that only stop, remove or report what it started. They run
 # while the lab is off too: an experiment that is off must still be undoable, and `labs off` names one of
-# them (lan-guard remove) for the root files it cannot remove itself.
+# them (lan-guard remove) for the root files it cannot remove itself. `share joined` only reads, and with two
+# rooms `share leave` and `share forget` send the person to it for the room's id.
 fl_lab_undo_key() {
   case "$1" in
-    "share stop"|"share status"|"share teardown"|"share leave"|"share forget"|"lan-guard status"|"lan-guard remove") return 0 ;;
+    "share stop"|"share status"|"share teardown"|"share leave"|"share forget"|"share joined"|"lan-guard status"|"lan-guard remove") return 0 ;;
   esac
   return 1
 }

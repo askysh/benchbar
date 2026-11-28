@@ -162,6 +162,12 @@ KEPT="$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/history.s
   FL_ORIG_ARGS=(share join 192.168.1.20 4829 13 7); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"
   FL_ORIG_ARGS=(site backup 482 913); fl_hist_words; printf "%s|" "${FL_HIST_WORDS[@]}"' _ "$ROOT")"
 assert_eq "share|join|192.168.1.20|***|***|share|join|192.168.1.20|***|***|***|--name|x|share|join|192.168.1.20|***|***|share|join|192.168.1.20|***|***|7|site|backup|482|913|" "$KEPT" "(a code split into words after share join is masked; seven digits after it are not one code, but its first six are)"
+# a join that was made while the forwarder of that host's earlier room could not be stopped: the sentence says
+# that this computer is in the room and what is left to do
+STUCK="$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/share-run.sh"; . "$1/lib/frappe-local/share-guest.sh"
+  fl_sg_refuse "error=forwarder_stuck" "Test Host" "192.168.1.20"' _ "$ROOT" 2>&1 || true)"
+assert_contains "$STUCK" "This computer is in the room, but the local address of the room Test Host had before is still open"
+assert_contains "$STUCK" "run benchbar share join 192.168.1.20 again: no code is needed"
 # at a terminal the code and the link are read without an echo
 assert_contains "$(cat "$ROOT/lib/frappe-local/share-guest.sh")" 'IFS= read -r -s -p'
 assert_eq "2" "$(grep -c 'secret$' "$ROOT/lib/frappe-local/share-guest.sh")" "(the code and the invite link are the secrets read)"
