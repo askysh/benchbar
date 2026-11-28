@@ -118,8 +118,7 @@ assert_eq "2" "$(pool 10000 16)" "(10 GB holds two)"
 assert_eq "5" "$(pool 7500 16 5)" "(an explicit SC_JOBS is the caller word)$(cat "$TMP_DIR/pool.raw")"
 
 # ---- the CI job: a per-file deadline, and a job timeout above it
-wf="$(cat "$ROOT/.github/workflows/ci.yml")"
-job="$(printf '%s\n' "$wf" | awk '/^  shellcheck:/{f=1;next} f&&/^  [a-z]/{exit} f')"
+job="$(awk '/^  shellcheck:/{f=1;next} f&&/^  [a-z]/{exit} f' "$ROOT/.github/workflows/ci.yml")"
 assert_contains "$job" "timeout-minutes: 10"
 assert_contains "$job" "SC_FILE_TIMEOUT: 180"
 
