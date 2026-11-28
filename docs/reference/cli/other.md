@@ -1,6 +1,6 @@
 ---
 title: "report and other commands"
-description: "benchbar report, self-update, where, list, commands, console, db, open, users, autostart, listen, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
+description: "benchbar report, self-update, where, list, op, commands, console, db, open, users, autostart, listen, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
 ---
 
 Every command takes the [options for every command](install.md#options-for-every-command).
@@ -20,16 +20,19 @@ Site config files are never copied, only their key names. Any value
 whose key looks like a password, secret, token, key, API or auth
 credential is replaced by `***`, and so is anything shaped like a secret
 whatever its key: `user:password@` in a URL (a redis URL, a git URL with
-a token), JWTs, GitHub, Slack, OpenAI and AWS tokens. Email addresses
-become `<email>`. Your home folder, user name and every name of the Mac
-are replaced by placeholders. `REDACTIONS.txt` inside the zip lists what
+a token), JWTs, GitHub, Slack, OpenAI and AWS tokens. Cookie and
+Set-Cookie headers, `--password VALUE` and `-pVALUE` are masked too. Email
+addresses become `<email>`. Your home folder, user name and every name of
+the Mac are replaced by placeholders. The log tails are program output and
+can hold names or phone numbers from a database error: read them before you
+attach the zip to a public issue. `REDACTIONS.txt` inside the zip lists what
 was replaced. `benchbar logs --json` (and the MCP log tool) applies the
 same rules.
 
 | Flag | What it does |
 |---|---|
 | `--print` | Print the same contents to the terminal instead |
-| `--json` | Write the zip and print `{"zip": path, "redactions": n}`, the [report schema](../../json-schema.md#benchbar-report---json) the app reads |
+| `--json` | Write the zip and print `{"zip": path, "redactions": n}`, the [report schema](../json/state-and-diagnostics.md#benchbar-report---json) the app reads |
 
 Exit codes: 0; 1 when the zip could not be written.
 
@@ -48,13 +51,19 @@ benchbar self-update [--check] [--json] [--dry-run] [--yes]
 Updates the benchbar CLI and the BenchBar app with the one line
 installer (the app's Update Now ran the same command up to 0.7.0; since
 0.7.1 it asks Sparkle). With BenchBar.app installed, `benchbar` hands
-off to the app's CLI, so the app's case below applies. For release 0.7.2:
-`curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.7.2/install.sh | bash -s -- --yes --version v0.7.2`.
+off to the app's CLI, so the app's case below applies.
 It asks the GitHub API for the latest release, shows this CLI's and the
 app's versions and the command, and asks before it runs. The installer
 comes from that release's tag and installs that release, even if a newer
-one is published while you read the prompt. It changes no
-bench and never runs `bench update`.
+one is published while you read the prompt. It is downloaded to a
+temporary file and run only when its sha256 equals the line for
+`install.sh` in that release's `SHA256SUMS`; a release whose sums do not
+list it is refused. A CLI that the installer manages is then checked out
+at the release's tag (`git fetch --tags`, `git checkout vX.Y.Z`): the
+installer pins only the app on a Mac. The addresses are fixed:
+`BENCHBAR_API` and `BENCHBAR_INSTALLER_URL` are read only by the tests
+(`FL_TESTING=1`), and the installer is started without `BENCHBAR_API` and
+`BENCHBAR_REPO`. It changes no bench and never runs `bench update`.
 
 A CLI that is a git checkout of your own (not `~/.local/share/benchbar`)
 gets `--app-only` and the `git -C PATH pull` to run; a CLI installed
@@ -109,7 +118,7 @@ bench.
 
 | Flag | What it does |
 |---|---|
-| `--json` | The same as JSON, the [where schema](../../json-schema.md#benchbar-where---json) |
+| `--json` | The same as JSON, the [where schema](../json/state-and-diagnostics.md#benchbar-where---json) |
 
 Exit codes: 0; 1 for another argument.
 
@@ -123,11 +132,9 @@ benchbar where
 benchbar docs [TOPIC] [--print]
 ```
 
-Opens this documentation in your browser, or the page of one topic:
-`install`, `quick-start`, `app`, `sites`, `apps`, `doctor`, `teams`,
-`agents`, `mcp`, `cli`, `config`, `json`, `runners`, `troubleshooting`,
-`decisions`, `roadmap` or `contributing`. `benchbar docs --help` lists
-every topic with its aliases.
+Opens this documentation in your browser, or the page of one topic, for
+example `install`, `app`, `doctor`, `troubleshooting` or `roadmap`.
+`benchbar docs --help` lists every topic with its aliases.
 
 | Flag | What it does |
 |---|---|
@@ -147,7 +154,11 @@ benchbar --version
 
 The first line is always `benchbar <version>`, which the app and scripts
 read. When BenchBar.app is installed in `~/Applications` or
-`/Applications`, a second line gives the app's version.
+`/Applications`, a second line gives the app's version. When Homebrew's or
+the installer's `benchbar` handed off to the CLI inside the app, a `via`
+line names that copy and its version: the first line is then the app's
+CLI, not the copy you started. If that copy is newer, one more line says
+that the app is what needs the update.
 
 ## list
 
@@ -157,7 +168,7 @@ benchbar list [--json]
 
 Every bench benchbar knows about: path, default site, sites, ports, and
 whether its service is installed. It never pings a site. With `--json`,
-the [list schema](../../json-schema.md#benchbar-list---json).
+the [list schema](../json/list-and-status.md#benchbar-list---json).
 
 Exit codes: 0.
 
@@ -198,6 +209,32 @@ Exit codes: bench's; 1 when the site does not exist.
 
 ```bash
 benchbar db --site macdev
+```
+
+### db orphans
+
+```
+benchbar db orphans [--json]
+```
+
+Lists the databases of frappe's shape (an underscore and 16 hex digits) on the
+MariaDB server that no site of any bench benchbar knows refers to; a database
+that an archived site folder (`archived/sites`) names says so. Read only, and
+it needs the root password like `site drop`. Benchbar never drops them: back
+one up (`mariadb-dump`) and drop it yourself. After
+[`bench remove`](bench.md#bench-remove) or `site drop` the databases are gone,
+so a name here is a leftover of an interrupted `new-site`, a deleted bench
+folder or a restore that went wrong.
+
+A bench you told benchbar to forget, whose folder is still there, counts as
+known. Even so, a listed database may belong to a bench or a program benchbar
+does not know (a folder it was never told of, another user, a restore in
+progress): check the name before you do anything. The JSON says this in `note`.
+
+Exit codes: 0; 2 when the MariaDB root password is unknown.
+
+```bash
+benchbar db orphans --json
 ```
 
 ## open
@@ -390,9 +427,10 @@ benchbar uninstall-service [--bench-dir DIR | --all] [--yes] [--dry-run]
 
 Stops the bench (like `benchbar down`), then removes its launchd agent,
 the runner and `Procfile.lean`, after asking. It also removes the
-`# >>> benchbar >>>` block from your shell rc file, so `benchup` and the
-other helpers are gone for every bench until `benchbar repair` or
-`benchbar service` on a remaining bench writes the block again. The
+`# >>> benchbar >>>` block from your shell rc file, but only with the last
+service: while another bench still has an agent, the block stays and the
+run says so. Without the block `benchup` and the other helpers are gone until
+`benchbar repair` or `benchbar service` writes it again. The
 bench, its sites, apps and databases are not touched; the plist is moved
 to `~/Library/LaunchAgents-disabled/` and the other files are backed up
 first. `--dry-run` shows the steps.
@@ -402,7 +440,7 @@ deleted) but its agent is still installed, it removes only that agent:
 every `com.benchbar.*` agent whose working directory is the path is
 booted out and its plist moved aside. Such an agent otherwise restarts
 every 20 seconds, exits with code 127 and fills the log; doctor's
-[`dead_agents`](../../guides/doctor-and-repair.md#dead_agents) check
+[`dead_agents`](../doctor/service-checks.md#dead_agents) check
 points here.
 
 With `--all` it does the same for every bench that has a benchbar agent
@@ -426,7 +464,129 @@ benchbar uninstall-service --bench-dir ~/dev/v16-bench
 benchbar uninstall-service --all
 ```
 
-To remove BenchBar itself, see [Uninstall](../../install.md#uninstall).
+To remove BenchBar itself, see [Uninstall](../../uninstall.md).
+
+## op
+
+```
+benchbar op status [OP_ID] [--json]
+benchbar op list [--running] [--limit N] [--json]
+benchbar op wait OP_ID [--timeout SECS] [--json]
+```
+
+Every run that changes things (`install`, `repair`, `up`, `app add`, `site
+restore`, `pull` and the rest, but not a dry run or a command that only
+reads) has an **op_id**, like `op-20261119-101500-4242`. It is in the
+`plan`, `step`, `progress` and `done` lines of the run's JSON stream and in
+the one document of a `--json` command, and the run keeps a small record
+of itself in `ops/` in benchbar's state folder: its command, bench, site,
+when it started, its pid, the step that runs, the last progress line, its
+exit and its log. The record is rewritten at every step, so a program that
+did not start the run can follow it. The newest 100 records are kept.
+
+| Command | What it does |
+|---|---|
+| `op status OP_ID` | One operation. With `--json` it is the record, plus the run's `done` line as `result` once the run ended (for a run started with `--background`). Without an op_id: the ten newest |
+| `op list` | The operations, newest first (`--running`: only the ones that run now; `--limit N`, 1 to 100, default 20) |
+| `op wait OP_ID` | Waits until the operation is not running, then prints it. `--timeout SECS` gives up waiting; the operation goes on |
+
+`state` is `starting` (a `--background` run that has not taken over yet),
+`running`, `done`, `failed` (it ended with an exit other than 0) or
+`interrupted`: the record says `running` but its process is gone (or its pid
+belongs to another process now), so the run was killed and wrote no `done` line. Check `log` for how far it got.
+`op wait` exits 0 when the run ended with exit 0 and 1 for anything else (a
+failed run, an interrupted one, a timeout: `--json` says which, with
+`timed_out: true` for a timeout). The `op` commands only read; they take no
+lock and need no bench. The fields are in the
+[JSON schema](../json/operations.md#operation-handles-09).
+
+### --background
+
+```
+benchbar site restore NAME --from STAMP --apply TOKEN --yes --background --json
+```
+
+`--background` starts the command again, detached, and returns at once with
+the op_id. The run's JSON lines go to `ops/OP_ID.jsonl` (its `done` line is
+`result` in `op status --json`), and `op status` and `op wait` follow it. It
+is for the commands that take minutes: `install`, `repair`, `pull`,
+`app add`, `app update`, `site add`, `site backup` and `site restore`. A
+command that takes seconds (`up`, `down`, `restart`, `service`, `adopt`)
+runs in front, and a command only a person runs (`share`, `lan-guard`,
+`labs on`, `site open-as on`, `listen all`, `mariadb-password`,
+`uninstall-service`) never runs unattended, so `--background` refuses them.
+
+A run nobody watches cannot ask: `--background` implies
+`BENCHBAR_NONINTERACTIVE=1`, so it needs `--yes` and the inputs in the
+environment (`ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD`, a `sudo` that does
+not ask), and refuses before it starts when one is missing, as an agent run
+does. It refuses `--dry-run` (a plan is instant) and
+`BENCHBAR_SUDO_PASSWORD` (the password travels on a pipe the detached run
+cannot read; cache the sudo credential, or run in front). The launcher waits up
+to 5 seconds for the run to hold its lock: when another run holds it, that is the
+launcher's refusal (the run's message, exit 1) and nothing was started. Else it
+prints `{"op_id", "command", "state": "running", "pid", "output", "next_actions"}`
+with `--json`, or two lines of text.
+
+Exit codes: 0; 1 for an op that does not exist, a bad id or option, and
+for `op wait` when the operation did not end with exit 0.
+
+```bash
+benchbar app add acme --apply TOKEN --yes --background --json   # {"op_id": "op-20261119-101500-4242", ...}
+benchbar op status op-20261119-101500-4242
+benchbar op wait op-20261119-101500-4242 --timeout 1800 --json
+```
+
+## history
+
+```
+benchbar history [--bench PATH] [--since TIME] [--limit N] [--json]
+```
+
+What ran on this machine, newest first: every run that changed things
+(an `op`, see above), whoever started it. Each entry has the `op_id`, the
+command line, **who started it**, the bench and site, when it started and
+ended, its exit, what it changed and the path of its log. A read, a dry
+run and a run that was refused before it started are not in it; neither is
+a run that was killed (no exit trap ran): `benchbar op list` shows that one
+as `interrupted`.
+
+```
+Started               Who                              Command                               Exit  Bench
+2026-11-19 10:15Z     mcp (benchbar_app_add, claude)   benchbar app add acme --apply ***     0     /home/me/frappe-bench
+2026-11-19 09:02Z     terminal                         benchbar up --bench-dir /home/me/...  0     /home/me/frappe-bench
+```
+
+The command line has its secrets as `***`: the value after a flag named
+like a password, secret, token, key, credential, auth, cookie or session
+(and after `--apply`), the credentials of a URL, and a secret looking
+`KEY=VALUE` or `?query=value`. Passwords are never arguments anyway: they
+come from the environment.
+
+**Who** is `BENCHBAR_CALLER`: `terminal` (a person at a terminal), `app`
+(the Mac app), `tray` (the Windows tray), `mcp` (an agent through
+`benchbar mcp`; the entry also names the MCP tool and the client that made
+the call, and `mcp-calls.jsonl` names the same run by its `op_id`), `agent` (`--for-agent`) or `script` (no terminal on
+stdin: cron, CI, another program). The app, the tray and `benchbar mcp`
+set the variable; without it a terminal on stdin is `terminal` and
+anything else `script`. It is a label the caller sets, not a proof: any
+process of the same user can set it, and a value outside the list is
+ignored. The first line of every run's log says the same: `run: benchbar
+site backup x --bench-dir /home/me/frappe-bench (caller: app, op: op-...)`.
+
+| Option | What it does |
+|---|---|
+| `--bench PATH` | Only the runs on that bench (`--bench-dir` does the same) |
+| `--since TIME` | Only the runs that started since `90m`, `12h`, `7d` or `2w` ago, a date (`2026-11-19`, from midnight UTC) or a time (`2026-11-19T10:15:00Z`) |
+| `--limit N` | At most N entries (1 to 1000, default 20) |
+
+The history is `history.jsonl` in benchbar's state folder (for Homebrew
+and the one line installer, `~/.local/state/benchbar/history.jsonl`; mode
+0600): one line is added when a run ends. It is rotated at 1 MB with three
+older files kept (`history.jsonl.old.1` to `.3`), like the MCP audit log,
+so it reaches back further than the newest 100 operation records. The MCP
+tool is `benchbar_history`. It only reads: no lock, no bench needed. The
+fields are in the [JSON schema](../json/operations.md#action-history-09).
 
 ## commands
 
@@ -450,6 +610,35 @@ Exit codes: 0.
 benchbar commands --json
 ```
 
+## notices
+
+```
+benchbar notices [--json] [--dismiss ID|--all]
+```
+
+The notices an update left behind. A release that changes a default shows
+one notice for it: what changed, the one command or variable that switches
+it back, and a link to [What's new](../../whats-new.md). The first command you
+type in a terminal after the update prints them once on stderr. They are not
+printed for `--json`, `--for-agent`, `benchbar mcp` or
+`BENCHBAR_NONINTERACTIVE=1`, and not after a fresh install. The Mac app shows
+them as a banner in its window.
+
+`benchbar notices` lists the ones still active. Until you dismiss them they are
+also in `status --json` as `notices[]`, each with `id`, `title`, `text`,
+`switch_back`, `doc` (a full URL) and `since`. `--dismiss ID` hides one and
+`--all` hides every one, in the terminal list, in `status --json` and in the
+app. An id that is hidden already is unchanged. The ids are `listen-local`,
+`unknown-flags`, `pull-neutralise` and `room-seats` (the last one only where
+the `lan-rooms` Lab is on or sharing was set up).
+
+Exit codes: 0; 1 for an unknown id or option.
+
+```bash
+benchbar notices --json
+benchbar notices --dismiss listen-local
+```
+
 ## help and version
 
 ```
@@ -467,7 +656,77 @@ one command (for example `benchbar logs --help`). `--version` prints
 
 These tables come from the code (`benchbar commands --json`); the sections above explain them.
 
-<!-- generated:cli-commands list console db open users autostart listen mariadb-password uninstall-service report self-update where docs commands help -->
+<!-- generated:cli-commands list console db open users autostart listen notices mariadb-password uninstall-service report self-update where docs op history commands help -->
+<!-- Generated by scripts/docs-reference.py from the code. Edit the code, then run: python3 -I scripts/docs-reference.py --write -->
+
+| Command | Terminal | `sudo` | Network | Changes things | JSON |
+|---|---|---|---|---|---|
+| `benchbar mariadb-password [--yes]` | yes | no | no | no | none |
+| `benchbar list [--json]` | no | no | no | no | document |
+| `benchbar autostart [on\|off]` | no | no | no | yes | stream |
+| `benchbar listen [local\|all] [--dry-run] [--yes]` | yes | no | no | yes | stream |
+| `benchbar uninstall-service [--all] [--yes] [--dry-run]` | yes | no | no | yes | stream |
+| `benchbar console [--site S]` | yes | no | no | no | none |
+| `benchbar db orphans [--json]` | no | no | no | no | document |
+| `benchbar db [--site S]` | yes | no | no | no | none |
+| `benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]` | no | no | no | no | document |
+| `benchbar users [--site S] [--search Q] [--limit N] [--json]` | no | no | no | no | document |
+| `benchbar report [--print] [--json]` | no | no | no | no | document |
+| `benchbar docs [TOPIC] [--print]` | no | no | no | no | none |
+| `benchbar self-update [--check] [--dry-run] [--json]` | yes | no | yes | yes | document |
+| `benchbar where [--json]` | no | no | no | no | document |
+| `benchbar op status\|list\|wait ...` | no | no | no | no | none |
+| `benchbar op status [OP_ID] [--json]` | no | no | no | no | document |
+| `benchbar op list [--running] [--limit N] [--json]` | no | no | no | no | document |
+| `benchbar op wait OP_ID [--timeout SECS] [--json]` | no | no | no | no | document |
+| `benchbar history [--bench PATH] [--since TIME] [--limit N] [--json]` | no | no | no | no | document |
+| `benchbar help` | no | no | no | no | none |
+| `benchbar commands --json` | no | no | no | no | document |
+| `benchbar notices [--json] [--dismiss ID\|--all]` | no | no | no | no | document |
+
+Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
+JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.
+
+| Command | Flag | Value | What it does |
+|---|---|---|---|
+| `mariadb-password` | `--yes` |  | Do not ask (still refused without a person at a terminal). |
+| `uninstall-service` | `--all` |  | Every bench with a benchbar agent, after one question. Run it before brew uninstall benchbar: brew cannot stop the agents itself. |
+| `uninstall-service` | `--yes` |  | Do not ask; required without a terminal. |
+| `db orphans` | `--json` |  | One document: checked and orphans, each with the archived site folder that names it, if any. |
+| `open` | `--as` | `USER` | Sign in as this user, no password. Refused unless site open-as is on for the site and developer_mode is on. A sign in runs the apps' on_login and on_session_creation hooks as a real login does: last_login, an Activity Log entry, a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User, and Frappe may end the user's oldest session (simultaneous_sessions). |
+| `open` | `--path` | `P` | Where to land, for example /app/todo. Default: /app, or / for a Website User. |
+| `open` | `--no-browser` |  | Start the session, open nothing. |
+| `open` | `--print-url` |  | Print the link (it holds the session id) instead of opening it; in --json as url. With --as, refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp. |
+| `open` | `--json` |  | One JSON document; url only with --print-url. |
+| `users` | `--search` | `TEXT` | Only users whose id or full name contains TEXT. |
+| `users` | `--limit` | `N` | At most N users (1 to 500, default 50). |
+| `users` | `--json` |  | One JSON document. |
+| `report` | `--print` |  | Print to the terminal instead of writing the zip. |
+| `report` | `--out` | `DIR` | Write the zip into this folder (default: the Desktop). |
+| `report` | `--json` |  | Print {"zip": path, "redactions": n}, for the app and scripts. |
+| `docs` | `--print` |  | Print the page's address instead of opening it. |
+| `self-update` | `--check` |  | This version against the latest. |
+| `self-update` | `--dry-run` |  | Print the plan, change nothing. |
+| `op status` | `--json` |  | One JSON document. It adds the run's done line as result once the run ended. |
+| `op list` | `--running` |  | Only the ones that run now. |
+| `op list` | `--limit` | `N` | At most N (1 to 100, default 20). |
+| `op wait` | `--timeout` | `SECS` | Give up after SECS seconds (the operation goes on); default: wait for it. |
+| `history` | `--bench` | `PATH` | Only the runs on this bench. |
+| `history` | `--since` | `TIME` | Only the runs that started since 90m, 12h, 7d, 2w ago, a date (2026-11-19, UTC) or a time (2026-11-19T10:15:00Z). |
+| `history` | `--limit` | `N` | At most N runs (1 to 1000, default 20). |
+| `notices` | `--json` |  | One JSON document: notices[] with id, title, text, switch_back, doc and since. |
+| `notices` | `--dismiss` | `ID` | Hide one notice (also in the BenchBar app). An id that is already hidden is unchanged. |
+| `notices` | `--all` |  | Hide every notice. |
+
+| Command | Environment variable | What it does |
+|---|---|---|
+| `list` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
+| `db orphans` | `MARIADB_ROOT_PASSWORD` | Only when MariaDB has a password benchbar does not know. |
+| `where` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
+| `history` | `BENCHBAR_CALLER` | Who started a run, for the history: terminal, app, tray, mcp, agent or script. The Mac app, the tray and benchbar mcp set it; --for-agent says agent; without it a terminal on stdin is terminal and anything else script. A label the caller sets, not a proof: any process of the user can set it, and a value outside the list is ignored; NAME:REST counts as NAME (the MCP server's holder mcp:CLIENT:PID is mcp). The history never changes BENCHBAR_CALLER, which a lease uses as its holder name. |
+| `commands` | `BENCHBAR_LENIENT_FLAGS` | Applies to every command: 1 turns the error for an unknown option (exit 64) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real. |
+| `commands` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
+<!-- /generated:cli-commands -->
 <!-- Generated by scripts/docs-reference.py from the code. Edit the code, then run: python3 -I scripts/docs-reference.py --write -->
 
 | Command | Terminal | `sudo` | Network | Changes things | JSON |
@@ -485,8 +744,13 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar docs [TOPIC] [--print]` | no | no | no | no | none |
 | `benchbar self-update [--check] [--dry-run] [--json]` | yes | no | yes | yes | document |
 | `benchbar where [--json]` | no | no | no | no | document |
+| `benchbar op status\|list\|wait ...` | no | no | no | no | none |
+| `benchbar op status [OP_ID] [--json]` | no | no | no | no | document |
+| `benchbar op list [--running] [--limit N] [--json]` | no | no | no | no | document |
+| `benchbar op wait OP_ID [--timeout SECS] [--json]` | no | no | no | no | document |
 | `benchbar help` | no | no | no | no | none |
 | `benchbar commands --json` | no | no | no | no | document |
+| `benchbar notices [--json] [--dismiss ID\|--all]` | no | no | no | no | document |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.
@@ -505,11 +769,20 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `users` | `--limit` | `N` | At most N users (1 to 500, default 50). |
 | `users` | `--json` |  | One JSON document. |
 | `report` | `--print` |  | Print to the terminal instead of writing the zip. |
+| `report` | `--out` | `DIR` | Write the zip into this folder (default: the Desktop). |
+| `docs` | `--print` |  | Print the page's address instead of opening it. |
 | `self-update` | `--check` |  | This version against the latest. |
+| `op list` | `--running` |  | Only the ones that run now. |
+| `op list` | `--limit` | `N` | At most N (1 to 100, default 20). |
+| `op wait` | `--timeout` | `SECS` | Give up after SECS seconds (the operation goes on); default: wait for it. |
+| `notices` | `--json` |  | One JSON document: notices[] with id, title, text, switch_back, doc and since. |
+| `notices` | `--dismiss` | `ID` | Hide one notice (also in the BenchBar app). An id that is already hidden is unchanged. |
+| `notices` | `--all` |  | Hide every notice. |
 
 | Command | Environment variable | What it does |
 |---|---|---|
 | `list` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
 | `where` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
+| `commands` | `BENCHBAR_LENIENT_FLAGS` | Applies to every command: 1 turns the error for an unknown option (exit 64) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real. |
 | `commands` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
 <!-- /generated:cli-commands -->

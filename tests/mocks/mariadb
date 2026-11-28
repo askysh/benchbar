@@ -1,7 +1,11 @@
 #!/bin/bash
 # mariadb client mock (copied into the fake brew prefix).
 # The root password lives in $MOCK_STATE/mariadb_root_pw (absent: no password,
-# like a fresh Homebrew install). Logins use MYSQL_PWD, like the CLI.
+# like a fresh Homebrew install). Logins use the password of
+# --defaults-extra-file=FILE (the first option, a pipe like <(...); the file is
+# read once, as a real client does), like the CLI. A MYSQL_PWD with a value in
+# the environment is not a login: it is recorded in $MOCK_STATE/mysql_pwd_seen
+# (the tests assert there is none) and the login then has no password.
 # SQL on stdin is recorded in $MOCK_STATE/mariadb_sql.log; an ALTER USER
 # statement sets the password.
 # MOCK_MARIADB_ROOT_SOCKET_ONLY=1: a fresh Homebrew MariaDB 10.4+, where root
@@ -15,6 +19,18 @@ state="${MOCK_STATE:-/nonexistent}"
 pwfile="$state/mariadb_root_pw"
 user="root"; prev=""
 for a in "$@"; do [[ "$prev" == "-u" ]] && user="$a"; prev="$a"; done
+# the password from the option file: password="..." with \\ and \" escapes undone
+mpw=""
+[[ -z "${MYSQL_PWD:-}" ]] || printf '%s\n' "${0##*/}" >>"$state/mysql_pwd_seen"
+for a in "$@"; do
+  case "$a" in
+    --defaults-extra-file=*)
+      # a real client takes it only as the first option
+      [[ "$1" == "$a" ]] || { echo "mariadb: unknown option '--defaults-extra-file' (it must be the first option)" >&2; exit 7; }
+      line="$(sed -n 's/^password="\(.*\)"$/\1/p' "${a#*=}")"
+      mpw="$(printf '%s' "$line" | sed 's/\\\(.\)/\1/g')" ;;
+  esac
+done
 check_login() {
   local want=""
   # Ubuntu's root is unix_socket: the OS root user (a command run through the
@@ -22,7 +38,7 @@ check_login() {
   if [[ "${MOCK_MARIADB_ROOT_SOCKET_ONLY:-0}" == "1" && "${MOCK_AS_ROOT:-0}" == "1" && "$user" == "root" ]]; then return 0; fi
   if [[ "$user" != "root" ]]; then
     # only the OS user's socket account exists, only in socket mode, only without a password
-    [[ "${MOCK_MARIADB_ROOT_SOCKET_ONLY:-0}" == "1" && "$user" == "${FL_OS_USER:-${USER:-}}" && -z "${MYSQL_PWD:-}" ]] || return 1
+    [[ "${MOCK_MARIADB_ROOT_SOCKET_ONLY:-0}" == "1" && "$user" == "${FL_OS_USER:-${USER:-}}" && -z "$mpw" ]] || return 1
     # MOCK_MARIADB_USER_NO_GRANTS=1: that account may run SELECT 1 and nothing else
     if [[ "${MOCK_MARIADB_USER_NO_GRANTS:-0}" == "1" ]]; then
       case "$*" in *"SELECT 1"*) return 0 ;; *) echo "ERROR 1142 (42000): SELECT command denied to user '${user}'@'localhost'" >&2; return 1 ;; esac
@@ -34,21 +50,27 @@ check_login() {
     return 1
   fi
   [[ -f "$pwfile" ]] && want="$(cat "$pwfile")"
-  [[ "${MYSQL_PWD:-}" == "$want" ]]
+  [[ "$mpw" == "$want" ]]
 }
 case "$*" in
   --version) printf 'mariadb  Ver 15.1 Distrib 10.11.14-MariaDB, for osx10.20 (arm64)\n'; exit 0 ;;
 esac
 case "$*" in
   *"-e "*|*"-sNe "*)
-    check_login || { echo "ERROR 1045 (28000): Access denied for user '${user}'@'localhost' (using password: $([[ -n "${MYSQL_PWD:-}" ]] && echo YES || echo NO))" >&2; exit 1; }
+    check_login || { echo "ERROR 1045 (28000): Access denied for user '${user}'@'localhost' (using password: $([[ -n "$mpw" ]] && echo YES || echo NO))" >&2; exit 1; }
     case "$*" in
+      # ... WHERE SCHEMA_NAME LIKE '\_%': every name in $MOCK_STATE/mariadb_dbs that starts with an underscore
+      *"information_schema.SCHEMATA"*"LIKE"*) grep '^_' "$state/mariadb_dbs" 2>/dev/null || true ;;
       # SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='x': the names in $MOCK_STATE/mariadb_dbs
       *"information_schema.SCHEMATA"*)
         want="$(printf '%s' "$*" | sed -n "s/.*SCHEMA_NAME='\([^']*\)'.*/\1/p")"
         grep -qx -- "$want" "$state/mariadb_dbs" 2>/dev/null && printf '%s\n' "$want" ;;
       # the tables of a database: $MOCK_STATE/mariadb_tables.<db> (a file: the tables are there), its tabUser
       # names in $MOCK_STATE/mariadb_users.<db> (one per line; no file: no tabUser table)
+      # SUM(data_length + index_length) of a database: $MOCK_STATE/mariadb_size.<db> (no file: nothing, like an unknown size)
+      *"data_length"*)
+        want="$(printf '%s' "$*" | sed -n "s/.*TABLE_SCHEMA='\([^']*\)'.*/\1/p")"
+        [[ -f "$state/mariadb_size.$want" ]] && cat "$state/mariadb_size.$want" ;;
       *"information_schema.TABLES"*"TABLE_NAME='tabUser'"*)
         want="$(printf '%s' "$*" | sed -n "s/.*TABLE_SCHEMA='\([^']*\)'.*/\1/p")"
         [[ -f "$state/mariadb_users.$want" ]] && printf '1\n' || printf '0\n' ;;

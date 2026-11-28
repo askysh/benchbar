@@ -39,7 +39,7 @@ final class BenchDiscovery {
         guard let first = deep.first else { return others }
         let depth = first.dropFirst("Stopped at ".count).prefix { $0.isNumber }
         let summary = deep.count == 1 ? first
-            : "Stopped at \(depth) folders deep in \(deep.count) folders: a bench deeper than that is not found. Choose a folder closer to it."
+            : String(localized: "Stopped at \(String(depth)) folders deep in \(String(deep.count)) folders: a bench deeper than that is not found. Choose a folder closer to it.")
         return [summary] + others
     }
 
@@ -74,7 +74,7 @@ final class BenchDiscovery {
         let task = Task { [weak self] in
             guard let self else { return }
             guard let client = store.cliClient else {
-                error = "Choose the benchbar command in General before scanning."
+                error = String(localized: "Choose the benchbar command in General before scanning.")
                 isScanning = false
                 return
             }
@@ -100,7 +100,7 @@ final class BenchDiscovery {
         scanTask?.cancel()
         scanTask = nil
         isScanning = false
-        message = "Scan cancelled."
+        message = String(localized: "Scan cancelled.")
     }
 
     func addSelected() async {
@@ -108,7 +108,7 @@ final class BenchDiscovery {
         let paths = selected.intersection(availablePaths).sorted()
         guard !paths.isEmpty else { return }
         guard store.busyBench == nil else {
-            error = "Wait for the current bench operation to finish, then add your selection."
+            error = String(localized: "Wait for the current bench operation to finish, then add your selection.")
             return
         }
         isAdding = true; error = nil; message = nil
@@ -117,7 +117,7 @@ final class BenchDiscovery {
             try await client.register(benches: paths)
             await store.reloadBenches()
             selected.subtract(paths)
-            message = "Added \(paths.count) \(paths.count == 1 ? "bench" : "benches") to BenchBar."
+            message = String(localized: "Added \(Wording.benches(paths.count)) to BenchBar.")
         } catch {
             self.error = error.localizedDescription
         }

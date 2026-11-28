@@ -31,7 +31,7 @@ struct BenchPage: View {
                 case .overview: BenchOverview(store: store, workbench: workbench, bench: bench, router: router)
                 case .sites: BenchSites(store: store, workbench: workbench, bench: bench, router: router)
                 case .apps: BenchApps(store: store, workbench: workbench, bench: bench)
-                case .health: BenchHealth(store: store, bench: bench, router: router)
+                case .health: BenchHealth(store: store, workbench: workbench, bench: bench, router: router)
                 case .sharing:
                     if Labs.shared.isOn(.lanRooms), let share = ShareCenter.shared.store(for: bench.path) { SharingTab(bench: bench, share: share) }
                 }
@@ -59,7 +59,8 @@ struct BenchPage: View {
                 Text(activity).font(.caption).foregroundStyle(.secondary)
             }
             StatePill(state: bench.state, text: BenchText.headline(bench.state, reason: bench.machine.stopReason,
-                                                                    exitCode: bench.status?.lastExitCode))
+                                                                    exitCode: bench.status?.lastExitCode,
+                                                                    ready: bench.status?.ready))
         }
     }
 }
@@ -90,8 +91,13 @@ struct BenchOverview: View {
     @Bindable var router: WindowRouter
     @State private var schedulerChange: Bool?
     @State private var portSetup: PortSetupRun?
+    @State private var servicing = false
+    @State private var runningCommand = false
+    @State private var tidying: TidyRoute?
 
     private var controls: BenchControls { store.controls(for: bench) }
+    /// What this CLI lists (`commands --json`): a button of a newer command shows only when it is there.
+    private var catalog: CommandCatalog? { workbench.commandState.catalog }
 
     var body: some View {
         let ports = bench.status?.ports ?? bench.summary.ports
@@ -103,20 +109,27 @@ struct BenchOverview: View {
                 }
                 if let error = bench.lastError ?? bench.refreshError {
                     Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+                    if let refusal = LeaseRefusal.parse(error), let action = bench.leaseRefusedAction {
+                        LeaseBreakRow(lease: refusal, title: action.title, canBreak: store.canChange(bench)) {
+                            Task { await store.perform(action, on: bench, breakLease: true) }
+                        }
+                    }
                 }
             }
             if bench.runningSince != nil {
                 ResourceSection(bench: bench)
             }
-            if bench.summary.lockFile != nil {
-                LockSection(workbench: workbench, bench: bench)
+            if bench.summary.lockFile != nil || catalog?.has("lock") == true {
+                LockSection(workbench: workbench, bench: bench, store: store)
             }
+            LeaseSection(workbench: workbench, bench: bench)
+            OperationsSection(workbench: workbench, bench: bench)
             Section {
                 PortConflictAction(store: store, bench: bench)
                 LabeledContent("Default site", value: bench.summary.site)
                 LabeledContent("Web", value: bench.status?.webURL ?? bench.summary.webURL)
                 LabeledContent("Socket.IO port", value: String(ports.socketio))
-                LabeledContent("Redis ports", value: "\(ports.redisQueue) (queue), \(ports.redisCache) (cache)")
+                LabeledContent("Redis ports", value: String(localized: "\(String(ports.redisQueue)) (queue), \(String(ports.redisCache)) (cache)"))
                 LabeledContent("Agent", value: bench.summary.label)
             } header: {
                 HStack {
@@ -133,20 +146,51 @@ struct BenchOverview: View {
             Section("Background jobs") {
                 Toggle(isOn: Binding(get: { bench.schedulerOn ?? false }, set: { schedulerChange = $0 })) {
                     Text("Scheduler")
-                    Text(bench.schedulerOn == nil ? "Needs benchbar 0.4 or later"
-                         : "Runs scheduled jobs (bench schedule) in the background. Changing it restarts a running bench.")
+                    Text(bench.schedulerOn == nil ? String(localized: "Needs benchbar 0.4 or later")
+                         : String(localized: "Runs scheduled jobs (bench schedule) in the background. Changing it restarts a running bench."))
                 }
                 .disabled(bench.schedulerOn == nil || !store.canChange(bench))
+                if catalog?.has("autostart") == true || bench.status?.autostart != nil, !bench.needsService {
+                    Toggle(isOn: Binding(get: { workbench.autostartSetting(for: bench) ?? false },
+                                         set: { on in Task { await workbench.setAutostart(on, on: bench) } })) {
+                        Text("Start after login")
+                        Text(workbench.autostartSetting(for: bench) == nil ? String(localized: "Reading the setting…")
+                             : String(localized: "The bench comes back after you log in, if it was running when you logged out."))
+                    }
+                    .disabled(workbench.autostartSetting(for: bench) == nil || !store.canChange(bench))
+                }
+                if catalog?.has("service") == true {
+                    LabeledContent {
+                        Button(bench.needsService ? String(localized: "Install Service…") : String(localized: "Refresh Service…")) { servicing = true }
+                            .disabled(!store.canChange(bench))
+                    } label: {
+                        Text("Service")
+                        Text(bench.needsService ? String(localized: "Not installed. Shows its plan first.") : String(localized: "Writes the agent and runner files again. Shows its plan first."))
+                    }
+                }
             }
-
         }
         .formStyle(.grouped)
         .sheet(item: $portSetup) { run in PortSetupSheet(run: run) { portSetup = nil } }
+        .sheet(isPresented: $servicing) { ServiceSheet(workbench: workbench, bench: bench) { servicing = false } }
+        .sheet(isPresented: $runningCommand) { RunSheet(workbench: workbench, bench: bench) { runningCommand = false } }
+        .sheet(item: $tidying) { route in
+            switch route {
+            case .tidy: TidySheet(workbench: workbench, bench: bench, removeExpired: { tidying = .plan(.gc) }) { tidying = nil }
+            case .plan(let action): TidyPlanSheet(workbench: workbench, bench: bench, action: action) { tidying = nil }
+            }
+        }
         .task { openRequestedSetup() }
+        .task(id: store.stamp(for: bench)) {
+            await workbench.loadCommands()
+            await workbench.showAutostart(bench)
+        }
+        .task { await workbench.pollLeases(bench) }
+        .task { await workbench.pollOps(bench) }
         .onChange(of: router.setupRequest) { _, _ in openRequestedSetup() }
-        .alert(schedulerChange == true ? "Run the scheduler for \(bench.name)?" : "Stop the scheduler for \(bench.name)?",
+        .alert(schedulerChange == true ? String(localized: "Run the scheduler for \(bench.name)?") : String(localized: "Stop the scheduler for \(bench.name)?"),
                isPresented: Binding(get: { schedulerChange != nil }, set: { if !$0 { schedulerChange = nil } })) {
-            Button(schedulerChange == true ? "Turn On and Restart" : "Turn Off and Restart") {
+            Button(schedulerChange == true ? String(localized: "Turn On and Restart") : String(localized: "Turn Off and Restart")) {
                 guard let on = schedulerChange else { return }
                 schedulerChange = nil
                 Task { await store.setScheduler(on, on: bench) }
@@ -202,16 +246,20 @@ struct BenchOverview: View {
                 }
                 .fixedSize()
             }
-            Button(defaultNeedsHosts ? "Set Up Site…" : "Open Site") {
+            Button(defaultNeedsHosts ? String(localized: "Set Up Site…") : String(localized: "Open Site")) {
                 if defaultNeedsHosts { router.benchTab = .sites }
                 else { Workspace.openSite(bench) }
             }
             .primaryAction(!bench.needsService)
             .disabled(bench.state != .running && !defaultNeedsHosts)
             .fixedSize()
-            MoreMenu(help: editorInMenu ? "The editor, console, database, Finder and the bench path" : "Console, database, Finder and the bench path") {
+            MoreMenu(help: editorInMenu ? String(localized: "The editor, console, database, Finder and the bench path") : String(localized: "Console, database, Finder and the bench path")) {
                 if editorInMenu {
                     editorButton(editor)
+                    Divider()
+                }
+                if catalog?.hasFlag("up", "--services-only") == true {
+                    servicesItems
                     Divider()
                 }
                 Button { Workspace.openShell(.console, site: bench.summary.site, bench: bench, store: store) } label: {
@@ -222,6 +270,20 @@ struct BenchOverview: View {
                     Label("Open Database", systemImage: "cylinder")
                 }
                 .help("bench --site \(bench.summary.site) mariadb, in Terminal, with the site's own database user")
+                if catalog?.has("watch") == true {
+                    Button { Workspace.openWatch(bench: bench, store: store) } label: {
+                        Label("Watch Assets in Terminal", systemImage: "eye")
+                    }
+                    .help("benchbar watch, in Terminal: rebuilds the assets while you edit JS or CSS. Close the window to stop it.")
+                }
+                if workbench.offersRun {
+                    Button { runningCommand = true } label: {
+                        Label("Run Bench Command…", systemImage: "terminal.fill")
+                    }
+                    .disabled(!store.canChange(bench))
+                    .help("One command of benchbar's allow list (migrate, build, doctor and more). A change shows its plan first.")
+                }
+                tidyItems
                 Divider()
                 Button("Show in Finder", systemImage: "folder") { Workspace.openFolder(bench) }
                 Button("Copy Path", systemImage: "doc.on.doc") { Workspace.copy(bench.path) }
@@ -229,12 +291,57 @@ struct BenchOverview: View {
         }
     }
 
+    /// The end of a bench's life (#183), each entry only when the CLI lists its command. A change shows its plan first.
+    @ViewBuilder private var tidyItems: some View {
+        let busy = !store.canChange(bench)
+        if workbench.offersTidy || workbench.offers(.removeService) || workbench.offers(.forget) || workbench.offers(.remove) { Divider() }
+        if workbench.offersTidy {
+            Button { tidying = .tidy } label: { Label("Tidy Up…", systemImage: "sparkles") }
+                .help("Scratch benches, the ones that expired, the databases no site refers to and the hosts lines no bench uses")
+        }
+        if workbench.offers(.removeService), !bench.needsService {
+            Button { tidying = .plan(.removeService) } label: { Label("Remove Service…", systemImage: "gearshape.slash") }
+                .disabled(busy)
+                .help("uninstall-service for this bench: stops it and removes its background service. Shows its plan first.")
+        }
+        if workbench.offers(.forget) {
+            Button { tidying = .plan(.forget) } label: { Label("Forget Bench…", systemImage: "eye.slash") }
+                .disabled(busy)
+                .help("bench forget: takes the bench out of benchbar's list. The folder, sites and databases stay.")
+        }
+        if workbench.offers(.remove) {
+            Button { tidying = .plan(.remove) } label: { Label("Remove Bench…", systemImage: "trash") }
+                .disabled(busy)
+                .help("bench remove: backs up and drops its sites, then moves the folder aside. Asks for the folder name.")
+        }
+    }
+
+    /// Start Services Only and Stop Services, for a bench that is not running, with or without the service
+    /// installed: no plan, the click is the decision.
+    /// The status says whether each Redis answers; without it (an older CLI) both are offered.
+    @ViewBuilder private var servicesItems: some View {
+        let redis = bench.status?.redis
+        // `up --services-only` needs no installed service (the CLI says so), and the state of a bench with none is not "stopped"
+        let notRunning = ServicesOnly.notRunning(needsService: bench.needsService, state: bench.state, processesRunning: bench.status?.processesRunning)
+        let stopped = notRunning && store.canChange(bench)
+        Button { Task { await workbench.setServices(true, on: bench) } } label: {
+            Label("Start Services Only", systemImage: "externaldrive.badge.plus")
+        }
+        .disabled(!stopped || redis?.allRunning == true)
+        .help("up --services-only: the bench's Redis and nothing else, for a restore or a migrate")
+        Button { Task { await workbench.setServices(false, on: bench) } } label: {
+            Label("Stop Services", systemImage: "externaldrive.badge.minus")
+        }
+        .disabled(!stopped || redis?.anyRunning == false)
+        .help("down: stops the Redis that Start Services Only started")
+    }
+
     private func editorButton(_ editor: Editor?) -> some View {
         Button { if let editor { Workspace.openInEditor(bench, editor: editor) } } label: {
-            Label(editor.map { "Open in \($0.name)" } ?? "Open in Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+            Label(editor.map { String(localized: "Open in \($0.name)") } ?? String(localized: "Open in Editor"), systemImage: "chevron.left.forwardslash.chevron.right")
         }
         .disabled(editor == nil)
-        .help(editor == nil ? "Install VS Code or Cursor to open the bench folder in it." : bench.path)
+        .help(editor == nil ? String(localized: "Install VS Code or Cursor to open the bench folder in it.") : bench.path)
     }
 
     private func openRequestedSetup() {
@@ -260,6 +367,8 @@ struct BenchSites: View {
     @State private var hosts: HostsRun?
     @State private var dropping: String?
     @State private var restoring: String?
+    @State private var moving: String?
+    @State private var snapshotting: String?
     @State private var pulling = false
     @State private var findingUser: String?
     @State private var allowingOpenAs: String?
@@ -274,10 +383,10 @@ struct BenchSites: View {
                     HStack(spacing: 8) {
                         Image(systemName: row.isDefault ? "star.fill" : "globe")
                             .foregroundStyle(row.isDefault ? .yellow : .secondary)
-                            .accessibilityLabel(row.isDefault ? "Default site" : "Site")
+                            .accessibilityLabel(row.isDefault ? String(localized: "Default site") : String(localized: "Site"))
                         VStack(alignment: .leading, spacing: 1) {
                             Text(row.name)
-                            Text(row.needsHosts ? "no /etc/hosts line yet" : row.url)
+                            Text(row.needsHosts ? String(localized: "no /etc/hosts line yet") : row.url)
                                 .font(.caption).foregroundStyle(row.needsHosts ? .orange : .secondary)
                             if let last = workbench.backups(of: row.name, on: bench)?.backups.first {
                                 LastBackupLine(backup: last)
@@ -292,13 +401,14 @@ struct BenchSites: View {
                             ProgressView().controlSize(.small)
                         }
                         OpenAsMenu(store: store, bench: bench, row: row) { findingUser = row.name }
-                        Button(row.needsHosts ? "Set Up…" : "Open") {
+                        Button(row.needsHosts ? String(localized: "Set Up…") : String(localized: "Open")) {
                             if row.needsHosts { openHosts() }
                             else { Workspace.open(row.url) }
                         }
                         .disabled(!row.needsHosts && bench.state != .running)
                         SiteMenu(workbench: workbench, bench: bench, row: row, busy: busy, onlySite: rows.count == 1,
-                                 openAs: { turnOpenAs(row) }, restore: { restoring = row.name }) { dropping = row.name }
+                                 openAs: { turnOpenAs(row) }, restore: { restoring = row.name },
+                                 move: { moving = row.name }, snapshots: { snapshotting = row.name }) { dropping = row.name }
                     }
                 }
             } header: {
@@ -320,9 +430,9 @@ struct BenchSites: View {
             }
             if rows.count == 1 {
                 Section {
-                    EmptyStateBlock(symbol: "globe", title: "One site so far",
-                                    line: "A second site shares this bench and its MariaDB, with only Frappe installed.",
-                                    actions: [("Add Site…", { addingSite = true })], disabled: busy)
+                    EmptyStateBlock(symbol: "globe", title: String(localized: "One site so far"),
+                                    line: String(localized: "A second site shares this bench and its MariaDB, with only Frappe installed."),
+                                    actions: [(String(localized: "Add Site…"), { addingSite = true })], disabled: busy)
                 }
             }
             if SiteRow.hostsFix(rows, bench: bench.path) != nil {
@@ -370,6 +480,12 @@ struct BenchSites: View {
         }
         .sheet(item: Binding(get: { restoring.map(DropTarget.init) }, set: { restoring = $0?.site })) { target in
             SiteRestoreSheet(workbench: workbench, bench: bench, site: target.site) { restoring = nil }
+        }
+        .sheet(item: Binding(get: { moving.map(DropTarget.init) }, set: { moving = $0?.site })) { target in
+            SiteMoveSheet(workbench: workbench, bench: bench, site: target.site) { moving = nil }
+        }
+        .sheet(item: Binding(get: { snapshotting.map(DropTarget.init) }, set: { snapshotting = $0?.site })) { target in
+            SnapshotsSheet(workbench: workbench, bench: bench, site: target.site) { snapshotting = nil }
         }
         .sheet(isPresented: $pulling) {
             PullSheet(workbench: workbench, bench: bench) { pulling = false }
@@ -430,15 +546,13 @@ struct LastBackupLine: View {
     private var text: String {
         let size = ByteCountFormatter.string(fromByteCount: backup.sizeBytes, countStyle: .file)
         // a clock that is a little behind must not say "in 2 minutes"
-        let when = backup.time.map { "Backed up " + Self.age(of: $0, now: pinnedNow ?? .now) } ?? "Backed up \(backup.stamp)"
+        let when = backup.time.map { String(localized: "Backed up \(Self.age(of: $0, now: pinnedNow ?? .now))") } ?? String(localized: "Backed up \(backup.stamp)")
         return "\(when), \(size)\(backup.withFiles ? ", with files" : "")"
     }
 
     /// "2 hours ago"; a clock that is a little behind must not say "in 2 minutes".
     static func age(of time: Date, now: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.dateTimeStyle = .named
-        return formatter.localizedString(for: min(time, now), relativeTo: now)
+        Wording.relativeAge(of: time, now: now)
     }
 }
 
@@ -452,10 +566,12 @@ struct SiteMenu: View {
     let onlySite: Bool
     let openAs: () -> Void
     let restore: () -> Void
+    let move: () -> Void
+    let snapshots: () -> Void
     let drop: () -> Void
 
     var body: some View {
-        MoreMenu(help: "Make \(row.name) the default, back it up, restore it or drop it") {
+        MoreMenu(help: String(localized: "Make \(row.name) the default, back it up, snapshot it, restore it or drop it")) {
             if !row.isDefault {
                 Button("Make Default") { Task { await workbench.setDefaultSite(row.name, on: bench) } }
                 Divider()
@@ -471,12 +587,19 @@ struct SiteMenu: View {
             }
             Button("Restore a Backup…", action: restore)
                 .disabled(workbench.backups(of: row.name, on: bench)?.backups.isEmpty ?? true)
+            Button("Snapshots…", action: snapshots)
+                .help("Take a snapshot, see the snapshots of \(row.name), roll it back to one")
+            if workbench.offersMove(from: bench) {
+                Button("Move to Another Bench…", action: move)
+                    .disabled(!SiteMoveText.canMove(row))
+                    .help(SiteMoveText.canMove(row) ? String(localized: "Moves \(row.name) to another bench, under the same name") : String(localized: "The default site never moves; make another site the default first"))
+            }
             Divider()
             Button("Open Console") { Workspace.openShell(.console, site: row.name, bench: bench, store: workbench.store) }
             Button("Open Database") { Workspace.openShell(.db, site: row.name, bench: bench, store: workbench.store) }
             if let enabled = row.openAsEnabled {
                 Divider()
-                Button(enabled ? "Turn Off Open as" : "Allow Open as…", action: openAs)
+                Button(enabled ? String(localized: "Turn Off Open as") : String(localized: "Allow Open as…"), action: openAs)
             }
             Divider()
             Button("Drop Site…", role: .destructive, action: drop)
@@ -522,19 +645,18 @@ struct AddSiteSheet: View {
     private var phase: SheetPhase {
         switch flow.stage {
         case .form:
-            if let error = flow.readError { .failed(error, title: "\(name) cannot be added") } else { .ready }
-        case .reading: .loading("Reading the plan from benchbar…")
+            if let error = flow.readError { .failed(error, title: String(localized: "\(name) cannot be added")) } else { .ready }
+        case .reading: .loading(String(localized: "Reading the plan from benchbar…"))
         case .reviewing: .ready
-        case .applying: .running("Creating \(name)…")
-        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown")
+        case .applying: .running(String(localized: "Creating \(name)…"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench changed since this plan was shown"))
         }
     }
 
     var body: some View {
-        SheetScaffold("Add a Site to \(bench.name)",
+        SheetScaffold(String(localized: "Add a Site to \(bench.name)"),
                       explanation: flow.plan == nil
-                          ? "A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards."
-                          : "Nothing has run yet. These are the steps; Add Site runs exactly this plan.",
+                          ? String(localized: "A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards.") : String(localized: "Nothing has run yet. These are the steps; Add Site runs exactly this plan."),
                       phase: phase, width: flow.plan == nil ? .regular : .wide) {
             if let plan = flow.plan {
                 SiteAddPlanView(plan: plan)
@@ -578,7 +700,7 @@ struct AddSiteSheet: View {
             SecureField("Confirm password", text: $confirm)
         }
         .formStyle(.columns)
-        SheetNote("The password goes to the benchbar process only, never on a command line or to disk. The MariaDB password comes from your Keychain.")
+        SheetNote(String(localized: "The password goes to the benchbar process only, never on a command line or to disk. The MariaDB password comes from your Keychain."))
     }
 
     private func review() {
@@ -598,33 +720,48 @@ struct AddSiteSheet: View {
 
 // MARK: lockfile
 
-/// "In sync" or "N differences" against the bench's benchbar.toml, from
-/// `lock check --json` (read only). No apply here: that is `benchbar lock
-/// apply` in Terminal for now.
+/// "In sync" or "N differences" against the bench's benchbar.toml, from `lock check --json` (read only),
+/// and the two changes the lockfile has: Write Lock File and Apply. Each shows the CLI's own plan in a
+/// sheet first; nothing runs before the click on its button.
 struct LockSection: View {
     let workbench: Workbench
     let bench: BenchModel
+    let store: BenchStore
     @State private var showDrift = false
+    @State private var sheet: LockSheet.Kind?
+
+    private var busy: Bool { !store.canChange(bench) }
 
     var body: some View {
         let check = workbench.lockChecks[bench.path]
         Section {
             HStack(spacing: 8) {
-                if workbench.checkingLock.contains(bench.path) && check == nil {
+                if bench.summary.lockFile == nil {
+                    Image(systemName: "doc.badge.plus").foregroundStyle(.secondary).accessibilityHidden(true)
+                    Text(LockText.noFile).foregroundStyle(.secondary)
+                } else if workbench.checkingLock.contains(bench.path) && check == nil {
                     ProgressView().controlSize(.small)
                     Text("Comparing with the lockfile…").foregroundStyle(.secondary)
                 } else if let check {
                     Image(systemName: check.inSync ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(check.inSync ? .green : .orange)
-                        .accessibilityLabel(check.inSync ? "In sync" : "Differences")
+                        .accessibilityLabel(check.inSync ? String(localized: "In sync") : String(localized: "Differences"))
                     Text(LockText.badge(check))
                 } else if let error = workbench.lockErrors[bench.path] {
                     Image(systemName: "xmark.octagon.fill").foregroundStyle(.red).accessibilityLabel("Error")
                     Text(error).font(.caption).foregroundStyle(.secondary).lineLimit(2).textSelection(.enabled)
                 }
                 Spacer()
-                Button("Check Again") { Task { await workbench.checkLock(bench) } }
-                    .disabled(workbench.checkingLock.contains(bench.path))
+                if bench.summary.lockFile != nil {
+                    Button("Check Again") { Task { await workbench.checkLock(bench) } }
+                        .disabled(workbench.checkingLock.contains(bench.path))
+                    Button("Apply…") { sheet = .apply }
+                        .disabled(busy || check?.inSync == true)
+                        .help("Shows what lock apply would do to the apps, then runs it when you confirm")
+                }
+                Button("Write Lock File…") { sheet = .write }
+                    .disabled(busy)
+                    .help("Shows the file lock write would write from this bench, then writes it when you confirm")
             }
             if let check, !check.drift.isEmpty {
                 DisclosureGroup(isExpanded: $showDrift) {
@@ -641,24 +778,30 @@ struct LockSection: View {
         } header: {
             Text("Lockfile")
         } footer: {
-            Text(LockText.footer(bench.summary.lockFile ?? ""))
+            Text(LockText.footer(bench.summary.lockFile))
         }
         .task(id: bench.path) { await workbench.checkLock(bench) }
         // after a change (an app added or updated) the answer may differ
         .onChange(of: workbench.result) { _, result in
             if result?.scope == bench.path { Task { await workbench.checkLock(bench) } }
         }
+        .sheet(item: $sheet) { kind in
+            LockSheet(workbench: workbench, bench: bench, kind: kind) { sheet = nil }
+        }
     }
 }
 
 nonisolated enum LockText {
     static func badge(_ check: LockCheck) -> String {
-        if check.inSync { return "In sync" }
+        if check.inSync { return String(localized: "In sync") }
         let n = check.drift.count
-        return n == 1 ? "1 difference" : "\(n) differences"
+        return Wording.differences(n)
     }
 
-    static func footer(_ path: String) -> String {
-        "Compared with \(path). To bring the bench in line, run benchbar lock apply in Terminal."
+    static let noFile = String(localized: "No lockfile for this bench yet.")
+
+    static func footer(_ path: String?) -> String {
+        guard let path else { return String(localized: "benchbar.toml pins the apps and sites of this bench for the team. Write Lock File makes one from this bench.") }
+        return String(localized: "Compared with \(path). Apply brings the apps in line; no site is touched.")
     }
 }

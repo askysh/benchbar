@@ -19,7 +19,7 @@ and bundle it was installed with, and a few environment variables.
 Every profile also installs `pkgconf` (pkg-config) and
 `mariadb-connector-c`, which `mysqlclient` needs to build on v16. When
 `uv` is on PATH, `bench` itself is installed with `uv tool install
-frappe-bench`, as the Frappe docs now recommend; an existing pipx install
+frappe-bench==5.31.1`, as the Frappe docs now recommend; an existing pipx install
 is kept, and doctor says which one owns `bench`.
 
 Each profile accepts a range of MariaDB servers: 10.6 to 10.11 for
@@ -68,7 +68,8 @@ escapes, no inline tables.
 | `schema` | no | `1` or `2`; `1` when absent. A file with any schema 2 key must say `schema = 2` |
 | `base` | yes | The built in profile for Python, Node and MariaDB, for example `"v15-lts"` |
 | `description` | no | One line shown by `profile list` |
-| `frappe_branch` | no | Another Frappe branch than the base's |
+| `frappe_branch` | no | Another Frappe branch than the base's. erpnext moves with it: `version-N` and `develop` give the same erpnext branch |
+| `erpnext_branch` | no | The erpnext branch that goes with `frappe_branch`. Required when `frappe_branch` is neither `version-N` nor `develop` and the bundle has erpnext |
 | `frappe_commit` | no | A commit to pin frappe to (7 to 40 lower case hex characters). `install` checks that the clone has it before it builds, and stops otherwise |
 | `erpnext_commit` | no | The same for erpnext (also `[[apps]]` `commit` for an erpnext listed there) |
 | `bundle` | no | An app bundle, instead of `[[apps]]`: a file with both is refused |
@@ -77,8 +78,8 @@ escapes, no inline tables.
 | `source` | no, schema 2 | Where `profile import` fetched the file (an https URL or a path); `profile update` fetches it again |
 | `exported_from` | no, schema 2 | Written by `profile export`, for example `"benchbar 0.6.0, 2026-09-29"` |
 | `[[apps]]` `name` | yes, per app | The app's folder name |
-| `[[apps]]` `repo` | yes, per app | Its git URL. A URL with a user name or token is refused |
-| `[[apps]]` `branch` | yes, per app | The branch to clone |
+| `[[apps]]` `repo` | yes, per app | Its git URL, never empty and without `\|`. A file from someone else (an imported or subscribed profile, a lock inside an app repo) takes `https://`, `ssh://` or `user@host:path`; your own profile and lock also take a local path, `file://`, `http://` and `git://` (`profile create` and `lock write` warn that teammates cannot clone those). `ext::` and other `transport::address` forms are never accepted. A URL with a user name or token is refused |
+| `[[apps]]` `branch` | yes, per app | The branch to clone (never empty, no `\|`) |
 | `[[apps]]` `commit` | no | A commit to pin; a clone that does not reach it stops `install` before anything is built |
 | `[[apps]]` `access` | no, schema 2 | `public`, `private`, `personal` or `unknown`: who can read the repo, as `profile export` found it |
 | `[[apps]]` `requires` | no, schema 2 | The apps this one needs, for example `["acme_base"]`. `install --profile` leaves an app out when one it requires cannot be read |
@@ -103,6 +104,7 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 | `MARIADB_ROOT_PASSWORD` | `install`, `site add`, `pull` | The MariaDB root password. A fresh MariaDB gets a generated one when unset; an existing one is read from the Keychain |
 | `ADMIN_PASSWORD` | `install`, `site add`, `pull` | The Administrator password of a new site; for `pull`, a new Administrator password for the copy |
 | `BENCHBAR_PROFILE_PATH` | `--profile`, `profile` | Colon separated folders with team profiles, for example a clone of your team's config repo |
+| `BENCHBAR_ALLOW_LOCAL_REPOS` | `profile`, `lock` | `1` lets a file from someone else (an import, a subscription, a lock inside an app repo) name a `file://` URL or an absolute path as a `repo`. Off by default |
 | `BENCHBAR_OFFLINE` | `install`, `profile`, doctor | `BENCHBAR_OFFLINE=1`: no network for team profiles, and no remote branch checks in `install`; reachability is `null` and doctor does not fetch subscriptions |
 | `BENCHBAR_LOCK` | `lock`, doctor | The lockfile path, when `--lock` is not given |
 | `BENCH_DIR` | every command | The bench to act on when `--bench-dir` is not given; checked before the remembered bench |
@@ -111,8 +113,10 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 | `BENCHBAR_REPORT_DIR` | `report` | Where the zip goes instead of `~/Desktop` |
 | `NO_COLOR` | every command | `NO_COLOR=1` turns off colors and spinners, like `--plain` |
 | `BENCHBAR_NO_HANDOFF` | every command | `BENCHBAR_NO_HANDOFF=1`: Homebrew's or the one line installer's `benchbar` runs itself instead of handing off to the CLI inside BenchBar.app (0.7.1) |
+| `BENCHBAR_LENIENT_FLAGS` | every command | `BENCHBAR_LENIENT_FLAGS=1`: an option a command does not take is a warning on stderr and the command runs, as it did before 0.9.0. Without it the run stops with exit 64 and names the option and the command's usage line, so a mistyped `--dry-run` can never run for real. It covers an unknown option only: a flag without its value (`--bench-dir` with nothing after it) stays an error. For scripts written against the old behaviour; fix the script when you can |
 | `BENCHBAR_NONINTERACTIVE` | every command | `BENCHBAR_NONINTERACTIVE=1`: nothing is asked. A command that lacks an input names all of them in one error before it takes the lock. `--for-agent` and `benchbar mcp` set it |
-| `BENCHBAR_SUDO` | `install`, `adopt`, `repair`, `ports apply`, `site hosts`, `site add` | `BENCHBAR_SUDO=gui` (macOS): each root step asks in macOS's own password dialog, at most two per run; the BenchBar app sets it. `BENCHBAR_SUDO=env` (Linux): the root steps use `BENCHBAR_SUDO_PASSWORD` and need no terminal; the Windows tray sets it. Any other value is the terminal path |
+| `BENCHBAR_SUDO` | `install`, `adopt`, `repair`, `ports apply`, `site hosts`, `site add` | `BENCHBAR_SUDO=gui` (macOS): each root step asks in macOS's own password dialog, at most two per run; the BenchBar app sets it. `BENCHBAR_SUDO=env` (Linux): the root steps use `BENCHBAR_SUDO_PASSWORD` and need no terminal; the Windows tray sets it. Any other value is the terminal path. The steps that use root are listed in [AGENTS.md](../../AGENTS.md) |
+| `BENCHBAR_CALLER` | every command that changes things, `history` | Who started the run, for `benchbar history` and the first line of the run's log: `terminal`, `app`, `tray`, `mcp`, `agent` or `script`. The Mac app, the tray and `benchbar mcp` set it; `--for-agent` says `agent`; without it a terminal on stdin is `terminal` and anything else `script`. A label, not a proof: any process of the user can set it, and a value outside the list is ignored |
 | `BENCHBAR_APP_PID` | `site open-as on`, `open --as --print-url`, `lan-guard`, `share`, `labs on` | The BenchBar app's process id, set by the app with `BENCHBAR_SUDO=gui` or `BENCHBAR_NONINTERACTIVE=0`. On a Mac those two lift the "needs a terminal" refusal of these commands only when it names a running ancestor of the CLI whose name (the path `ps` prints) is inside a `BenchBar.app`; on Linux and WSL it is not checked. A name check, so a safety rail, not a boundary |
 | `BENCHBAR_SUDO_PASSWORD` | with `BENCHBAR_SUDO=env` | The sudo password (Linux). Read once at startup and removed from the environment; never in an argument, the log or a child process. A wrong one fails at once with `error_id` `sudo_password_wrong`, before any change |
 
@@ -130,6 +134,12 @@ remembered. Without it, benchbar uses `BENCH_DIR` when it is set, then
 the remembered bench, then `~/frappe-bench`, `~/dev/frappe-bench`, and
 any folder directly under `~` or `~/dev` (one level deep) that holds
 `sites/common_site_config.json`. `benchbar scan PATH` looks deeper.
+
+A command that changes things (`up`, `down`, `restart`, `repair`, `service` and the
+like) on a bench picked that way says so: `benchbar: acting on PATH
+(auto-detected ...)` on stderr. Under `--for-agent` or `BENCHBAR_NONINTERACTIVE=1`,
+when more than one bench is known, it refuses to pick and lists them: pass
+`--bench-dir PATH` or set `BENCH_DIR`.
 
 The first bench you install or adopt becomes the default; a second one
 keeps the first as the default unless you pass `--make-default`. See
@@ -152,6 +162,6 @@ moved is in [Port blocks](../concepts/port-blocks.md).
 - The logs and backups of every mutating run are in the same folder:
   `logs/<timestamp>.log` and `backups/<timestamp>/`.
 - The runner writes `<bench>/logs/.benchbar/state.json` on every state
-  change ([schema](../json-schema.md#logsbenchbarstatejson)).
+  change ([schema](json/state-and-diagnostics.md#logsbenchbarstatejson)).
 - Everything else benchbar writes is listed in
   [Troubleshooting](../troubleshooting.md#what-benchbar-writes).

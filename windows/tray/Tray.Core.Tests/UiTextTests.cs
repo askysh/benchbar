@@ -35,5 +35,10 @@ public class UiTextTests
     {
         Assert.Equal("Update to 0.9.1", UiText.Format("MenuUpdateTo", "0.9.1"));
         Assert.Equal("a crashed", UiText.Format("ToastCrashedTitle", "a"));
+        Assert.Equal("Use Debian?", UiText.Format("SettingsUseDistro", "Debian"));
+        Assert.Equal("Type my-site to confirm", UiText.Format("TypeToConfirm", "my-site"));
+        Assert.Equal("Opening as Administrator...", UiText.Format("QuickSwitchOpeningAs", "Administrator"));
+        Assert.Equal("BenchBar needs your Linux password for 2 steps that use sudo.", UiText.Format("LinuxPasswordNeeds", 2, UiText.Get("LinuxPasswordSteps")));
+        Assert.Equal("Warning: x", UiText.Format("LabsWarning", "x"));
     }
 }

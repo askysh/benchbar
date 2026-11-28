@@ -12,9 +12,9 @@
 # Options:
 #   --test      run the Swift tests before building
 #   --debug     build the Debug configuration instead of Release
-#   --sparkle   include Sparkle (BENCHBAR_SPARKLE=YES, see docs/releasing.md)
+#   --sparkle   include Sparkle (BENCHBAR_SPARKLE=YES, see maintainers/releasing.md)
 #
-# Release signing (docs/releasing.md): set BENCHBAR_SIGN_IDENTITY to a
+# Release signing (maintainers/releasing.md): set BENCHBAR_SIGN_IDENTITY to a
 # "Developer ID Application: ..." identity and BENCHBAR_TEAM_ID to your team
 # id. xcodebuild then signs with it and a secure timestamp, and the ad hoc
 # step is skipped. Unset (the default), the app is signed ad hoc.
@@ -66,13 +66,20 @@ pretty() { if command -v xcbeautify >/dev/null 2>&1; then xcbeautify --quiet; el
 step "xcodegen generate (Sparkle: ${BENCHBAR_SPARKLE})"
 (cd "$MACOS" && xcodegen generate --quiet)
 
+# the packages of macos/Package.resolved and no others (MAC-2): the builds
+# below pass -disableAutomaticPackageResolution, so Xcode never resolves again
+step "Swift packages from macos/Package.resolved"
+mkdir -p "$BUILD"
+"${ROOT}/scripts/macos-packages.sh" "$DERIVED"
+
 if [[ "$RUN_TESTS" == "1" ]]; then
   step "xcodebuild test"
   # show the Swift Testing result lines and errors; the full log stays in build/test.log
   mkdir -p "$BUILD"
   set +e
   xcodebuild -project "${MACOS}/BenchBar.xcodeproj" -scheme BenchBar -configuration Debug \
-    -derivedDataPath "$DERIVED" -destination "platform=macOS,arch=arm64" test >"${BUILD}/test.log" 2>&1
+    -derivedDataPath "$DERIVED" -destination "platform=macOS,arch=arm64" \
+    -disableAutomaticPackageResolution test >"${BUILD}/test.log" 2>&1
   code=$?
   set -e
   grep -E '^(✔|✘)|Test run with|\.swift:[0-9]+:[0-9]+: error:|\*\* TEST' "${BUILD}/test.log" | grep -v 'started\.$' || true
@@ -92,12 +99,13 @@ fi
 mkdir -p "$BUILD"
 xcodebuild -project "${MACOS}/BenchBar.xcodeproj" -scheme BenchBar -configuration "$CONFIG" \
   -derivedDataPath "$DERIVED" -destination 'generic/platform=macOS' \
-  "${SIGN_ARGS[@]}" ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"} \
+  -disableAutomaticPackageResolution "${SIGN_ARGS[@]}" ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"} \
   BENCHBAR_APPCAST_URL="$APPCAST_URL" BENCHBAR_SPARKLE_PUBLIC_KEY="$SPARKLE_KEY" \
   -quiet build 2>&1 | tee "${BUILD}/build.log" | pretty
 
 APP="${DERIVED}/Build/Products/${CONFIG}/BenchBar.app"
 [[ -d "$APP" ]] || die "build finished but ${APP} is missing"
+"${ROOT}/scripts/macos-packages.sh" --check
 
 step "copy to macos/build/BenchBar.app"
 rm -rf "${BUILD}/BenchBar.app"

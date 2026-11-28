@@ -24,9 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (a link can launch the app).
     private var pendingURLs: [URL] = []
     /// "Quit when it finishes", chosen in the quit alert while a change ran.
-    private var quitWait = QuitAfterChange()
+    private let quitCoordinator = QuitCoordinator()
     private var benchesLoaded = false
-    private static let urlLog = Logger(subsystem: "com.akashmishra.benchbar", category: "url")
 
     /// Before launch finishes, so a link that launches the app is not lost.
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -66,8 +65,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ShareCenter.shared.attach(store)
         store.confirmWhileSharing = { action, bench in
             guard Labs.shared.isOn(.lanRooms), let line = HostAmbient.benchConfirm(ShareCenter.shared.stores[bench.path]?.status, restart: action == .restart) else { return true }
-            return ShareConfirm.ask(action == .restart ? "Restart \(bench.name)?" : "Stop \(bench.name)?", detail: line,
-                                    button: action == .restart ? "Restart" : "Stop")
+            return ShareConfirm.ask(action == .restart ? String(localized: "Restart \(bench.name)?") : String(localized: "Stop \(bench.name)?"), detail: line,
+                                    button: action == .restart ? String(localized: "Restart") : String(localized: "Stop"))
         }
         ShareCenter.shared.onIconChange = { [weak self] icon in
             self?.statusItemController.setShareIcon(Labs.shared.isOn(.lanRooms) ? icon : .off)
@@ -175,7 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindow.onKey = { Task { await Labs.shared.refresh() } }
         mainWindow.onSight = { [weak self] sight in self?.store.setWindow(sight) }
 
-        logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
+        logWindows = LogWindowController(client: { [weak self] in self?.store.cliClient }) { [weak self] path in self?.openLogsInTerminal(path) }
 
         if Updater.isAvailable { updater = Updater() }
         updateOffer.checkWithSparkle = { [weak self] in self?.updater?.checkForUpdates() }
@@ -227,25 +226,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func makeStatusMenu() -> NSMenu {
-        let menu = NSMenu()
-        if let version = updateOffer?.version {
-            menu.addItem(withTitle: "Update to \(version)…", action: #selector(updateNowAction), keyEquivalent: "").target = self
-            menu.addItem(.separator())
-        }
-        menu.addItem(withTitle: "Open BenchBar", action: #selector(openWindowAction), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Scan Folder…", action: #selector(scanFolderAction), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
-        menu.addItem(withTitle: "About BenchBar", action: #selector(openAboutAction), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Documentation", action: #selector(openDocsAction), keyEquivalent: "").target = self
-        // as in the app menu: Sparkle's item, else the About pane's check
-        if let item = updater?.menuItem() {
-            menu.addItem(item)
-        } else {
-            menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesAction), keyEquivalent: "").target = self
-        }
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        return menu
+        AppMenus.statusMenu(target: self, actions: menuActions, updateVersion: updateOffer?.version, updaterItem: updater?.menuItem())
+    }
+
+    /// The selectors the menus send to this object (`AppMenus`).
+    private var menuActions: AppMenus.Actions {
+        AppMenus.Actions(update: #selector(updateNowAction), openWindow: #selector(openWindowAction),
+                         scanFolder: #selector(scanFolderAction), openSettings: #selector(openSettingsAction),
+                         openAbout: #selector(openAboutAction), openDocs: #selector(openDocsAction),
+                         checkForUpdates: #selector(checkForUpdatesAction),
+                         openMenuBarSettings: #selector(openMenuBarSettingsAction),
+                         showShortcuts: #selector(showShortcutsAction), showWalkthrough: #selector(showWalkthroughAction),
+                         openWhatsNew: #selector(openWhatsNewAction), reportBug: #selector(reportBugAction))
     }
 
     // MARK: commands
@@ -282,79 +274,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if benchesLoaded { handle(url) } else { pendingURLs.append(url) }
     }
 
-    /// One link: URLRouter decides, this only carries it out. Every route is
-    /// a launch or start, stop, restart; nothing that deletes.
+    /// One link: `LinkHandler` decides and acts through `AppLinkEffects`.
     private func handle(_ url: URL) {
-        let benches = store.benches.map {
-            URLRouter.Bench(path: $0.path, name: $0.name, sites: $0.siteRows.map(\.name))
-        }
-        // a link can carry a room code or a profile token: only its scheme and action are logged (MAC-10)
-        let link = URLRouter.logLabel(url)
-        let outcome = URLRouter.route(url, benches: benches, selected: store.selectedPath, lanRooms: Labs.shared.isOn(.lanRooms))
-        // the log line is built from fixed texts and the short label only: never a host, path, query or bench name
-        if let line = URLRouter.rejectionLogLine(link: link, outcome: outcome) {
-            Self.urlLog.notice("\(line, privacy: .public)")
-        }
-        switch outcome {
-        case .ignore:
-            break
-        case .window:
-            openMainWindow()
-        case .share(let target):
-            Self.urlLog.info("share link: a joined room's page")
-            Task { [weak self] in
-                guard let self else { return }
-                // an unknown room only shows the pane; a link never joins (U3)
-                if !(await guest?.open(link: target) ?? false) { mainWindow.show(.network) }
-            }
-        case .shareInvite(let invite):
-            Self.urlLog.info("share invite link: the join sheet, waiting for a click")
-            guest?.open(invite: invite)
-            mainWindow.show(.network)
-        case .profile(let link):
-            Self.urlLog.info("profile link: Team Profiles, sheet prefilled")
-            mainWindow.router.profileRequest = link
-            mainWindow.show(.profiles)
-        case .explain(let message, _):
-            mainWindow.router.notice = message
-            openMainWindow()
-        case .run(let route, let path, let site):
-            guard let bench = store.benches.first(where: { $0.path == path }) else { return }
-            if LinkConfirm.needsAsking(route, setting: settings.confirmLinkActions) {
-                let question = LinkConfirm.question(route, bench: bench.name)
-                guard ShareConfirm.ask(question.title, detail: question.detail, button: question.button, cancelIsDefault: true) else {
-                    Self.urlLog.info("\(route.rawValue, privacy: .public) on \(bench.name, privacy: .public): not confirmed")
-                    return
-                }
-            }
-            Self.urlLog.info("\(route.rawValue, privacy: .public) on \(bench.name, privacy: .public)")
-            switch route {
-            case .up: Task { await store.perform(.up, on: bench) }
-            // with the confirm setting on, the alert above came first and the room confirm still follows
-            case .down: Task { await store.perform(.down, on: bench, fromLink: !settings.confirmLinkActions) }
-            case .restart: Task { await store.perform(.restart, on: bench, fromLink: !settings.confirmLinkActions) }
-            case .open:
-                if let site, let row = bench.siteRows.first(where: { $0.name == site }) {
-                    Workspace.open(row.url)
-                } else {
-                    Workspace.openSite(bench)
-                }
-            case .logs: openLogs(bench)
-            case .window: openBench(bench, tab: .overview, repair: false)
-            case .doctor:
-                openBench(bench, tab: .health, repair: false)
-                Task { await store.runDoctor(on: bench) }
-            case .console, .db:
-                Workspace.openShell(route == .console ? .console : .db, site: site ?? bench.summary.site, bench: bench, store: store)
-            case .editor:
-                if let editor = settings.editor {
-                    Workspace.openInEditor(bench, editor: editor)
-                } else {
-                    mainWindow.router.notice = "Neither VS Code nor Cursor is installed, so there is no editor to open \(bench.name) in."
-                    openMainWindow()
-                }
-            }
-        }
+        let effects = AppLinkEffects(store: store, settings: settings, mainWindow: mainWindow, popover: popover,
+                                     logWindows: logWindows, guestSlot: guestSlot)
+        Task { await LinkHandler.handle(url, effects: effects) }
     }
 
     // MARK: About and Help
@@ -378,7 +302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openDocsAction() { NSWorkspace.shared.open(BenchBarLinks.docs) }
-    @objc private func openReleaseNotesAction() { NSWorkspace.shared.open(BenchBarLinks.changelog) }
+    @objc private func openWhatsNewAction() { NSWorkspace.shared.open(BenchBarLinks.whatsNew) }
 
     @objc private func showShortcutsAction() {
         popover.close()
@@ -405,33 +329,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Mac hosts and closes the forwarder to a room it joined: those ask
     /// too, and Quit anyway is theirs (`QuitPolicy`).
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let hosted = ShareCenter.shared.benchesWithGuests.first
-        let facts = QuitPolicy.Facts(labOn: Labs.shared.isOn(.lanRooms), setupRunning: ShareCenter.shared.setupOrTeardownRunning,
-                                     hostedBench: hosted?.bench, people: hosted?.status?.people ?? 0,
-                                     guestForwarder: guest?.hasRunningForwarder == true,
-                                     changeRunning: store.runningChangeLabel)
-        guard let question = QuitPolicy.question(facts) else {
-            quitWait.disarm()
-            return .terminateNow
+        switch quitCoordinator.reply(in: self) {
+        case .terminateNow: return .terminateNow
+        case .terminateCancel: return .terminateCancel
         }
-        let alert = NSAlert()
-        alert.messageText = question.title
-        alert.informativeText = question.detail
-        alert.addButton(withTitle: "Keep running")
-        alert.addButton(withTitle: question.canWaitForIt ? "Quit when it finishes" : "Quit anyway")
-        guard alert.runModal() == .alertSecondButtonReturn else {
-            quitWait.disarm()
-            return .terminateCancel
-        }
-        guard question.canWaitForIt else { return .terminateNow }
-        // the store says when the change slot is free (onIdle)
-        quitWait.arm()
-        return .terminateCancel
     }
 
     /// The store has nothing running: the quit the person asked to wait for.
     private func quitIfWaiting() {
-        guard quitWait.shouldQuitNow(changeRunning: store.runningChangeLabel != nil) else { return }
+        guard quitCoordinator.storeIsIdle(changeRunning: store.runningChangeLabel != nil) else { return }
         DispatchQueue.main.async { NSApp.terminate(nil) }
     }
 
@@ -509,7 +415,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try Workspace.openLogs(bench, cli: cli)
         } catch {
-            bench.lastError = "Could not open the logs: \(error.localizedDescription)"
+            bench.lastError = String(localized: "Could not open the logs: \(error.localizedDescription)")
         }
     }
 
@@ -523,59 +429,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: main menu
 
-    /// Only visible while a window is open (the app is .regular then), but
-    /// it is what makes ⌘W, ⌘Q and copy and paste work in that window.
+    /// The main menu (AppMenus.mainMenu).
     func makeMainMenu() -> NSMenu {
-        let main = NSMenu()
+        AppMenus.mainMenu(target: self, actions: menuActions, updaterItem: updater?.menuItem())
+    }
+}
 
-        let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About BenchBar", action: #selector(openAboutAction), keyEquivalent: "").target = self
-        if let item = updater?.menuItem() {
-            appMenu.addItem(item)
-        } else {
-            appMenu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesAction), keyEquivalent: "").target = self
-        }
-        appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
-        appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        main.addItem(submenu(appMenu, title: "BenchBar"))
-
-        let edit = NSMenu(title: "Edit")
-        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
-        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
-        edit.addItem(.separator())
-        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
-        main.addItem(submenu(edit, title: "Edit"))
-
-        let window = NSMenu(title: "Window")
-        window.addItem(withTitle: "BenchBar", action: #selector(openWindowAction), keyEquivalent: "").target = self
-        window.addItem(withTitle: "Menu Bar Settings", action: #selector(openMenuBarSettingsAction), keyEquivalent: "").target = self
-        window.addItem(.separator())
-        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
-        window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
-        main.addItem(submenu(window, title: "Window"))
-        NSApp.windowsMenu = window
-
-        // Help last: macOS adds its search field to the menu set as helpMenu
-        let help = NSMenu(title: "Help")
-        help.addItem(withTitle: "BenchBar Documentation", action: #selector(openDocsAction), keyEquivalent: "?").target = self
-        help.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showShortcutsAction), keyEquivalent: "").target = self
-        help.addItem(withTitle: "Show Walkthrough", action: #selector(showWalkthroughAction), keyEquivalent: "").target = self
-        help.addItem(.separator())
-        help.addItem(withTitle: "Release Notes", action: #selector(openReleaseNotesAction), keyEquivalent: "").target = self
-        help.addItem(withTitle: "Report a Bug…", action: #selector(reportBugAction), keyEquivalent: "").target = self
-        main.addItem(submenu(help, title: "Help"))
-        NSApp.helpMenu = help
-        return main
+extension AppDelegate: QuitEnvironment {
+    func quitFacts() -> QuitPolicy.Facts {
+        let hosted = ShareCenter.shared.benchesWithGuests.first
+        return QuitPolicy.Facts(labOn: Labs.shared.isOn(.lanRooms), setupRunning: ShareCenter.shared.setupOrTeardownRunning,
+                                hostedBench: hosted?.bench, people: hosted?.status?.people ?? 0,
+                                guestForwarder: guest?.hasRunningForwarder == true,
+                                changeRunning: store.runningChangeLabel)
     }
 
-    private func submenu(_ menu: NSMenu, title: String) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.submenu = menu
-        return item
+    func confirmQuit(_ question: QuitPolicy.Question) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = question.title
+        alert.informativeText = question.detail
+        alert.addButton(withTitle: String(localized: "Keep running"))
+        alert.addButton(withTitle: question.canWaitForIt ? String(localized: "Quit when it finishes") : String(localized: "Quit anyway"))
+        return alert.runModal() == .alertSecondButtonReturn
     }
 }

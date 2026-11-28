@@ -17,6 +17,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/sudo-env.sh"
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
+# shellcheck source=lib/frappe-local/secrets.sh
+. "${SCRIPT_DIR}/lib/frappe-local/secrets.sh"
 # shellcheck source=lib/frappe-local/run.sh
 . "${SCRIPT_DIR}/lib/frappe-local/run.sh"
 # shellcheck source=lib/frappe-local/platform.sh
@@ -56,8 +58,25 @@ PENDING_STEPS=()
 # --yes is a flag, never a value left in the environment
 FL_ASSUME_YES=0
 
-UV_INSTALLER_URL="${UV_INSTALLER_URL:-https://astral.sh/uv/install.sh}"
-FNM_INSTALLER_URL="${FNM_INSTALLER_URL:-https://fnm.vercel.app/install}"
+# The two installers this script downloads and runs, each pinned to a version
+# and checked against the sha256 of the script before it runs (maintainers/DECISIONS.md,
+# "Supply chain"). To move to a newer version, change the version, the URL and
+# the sum together: curl -fsSL URL | shasum -a 256.
+#   uv:  astral's installer from the GitHub release. It checks the uv archive
+#        it downloads against sha256 values written inside the script, so the
+#        sum below pins the binary too. (astral.sh/uv/VERSION/install.sh is
+#        the same file.)
+#   fnm: the installer script of the fnm tag, run with --release of that tag.
+#        fnm publishes no checksum for its release zips, so the zip the script
+#        downloads is not checked here: only the script and the version are.
+# A mirror or a test sets the URL and the sum together (UV_INSTALLER_URL with
+# UV_INSTALLER_SHA256, FNM_INSTALLER_URL with FNM_INSTALLER_SHA256).
+UV_VERSION=0.13.9
+UV_INSTALLER_URL="${UV_INSTALLER_URL:-https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-installer.sh}"
+UV_INSTALLER_SHA256="${UV_INSTALLER_SHA256:-ccc888115ac831bd9c30855c1d4abeae32fce679701d2aac8e72eb0beffb41c2}"
+FNM_VERSION=1.39.0
+FNM_INSTALLER_URL="${FNM_INSTALLER_URL:-https://raw.githubusercontent.com/Schniz/fnm/v${FNM_VERSION}/.ci/install.sh}"
+FNM_INSTALLER_SHA256="${FNM_INSTALLER_SHA256:-a732195fcf0e69199a21043b9e987a0240d4b12488850c6b13abf2b3b517b522}"
 
 usage() {
   cat <<EOF
@@ -107,6 +126,7 @@ done
 export FL_DRY_RUN
 # the root password is read here (fl_mariadb_root_setup) and must not reach
 # the uv and fnm installers, npm or apt
+fl_secrets_fd_take
 export -n MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 fl_secrets_single_line MARIADB_ROOT_PASSWORD
 
@@ -138,14 +158,24 @@ fl_platform_init
 
 add_pending() { PENDING_STEPS+=("$1"); }
 
-# fl_install_script LABEL URL INTERPRETER [ARGS...]: downloads an installer
-# script to a temporary file and runs it, instead of piping curl into a shell
+# fl_install_script LABEL URL SHA256 INTERPRETER [ARGS...]: downloads an
+# installer script over https to a temporary file, checks its sha256 and only
+# then runs it, instead of piping curl into a shell. A script that does not
+# match is not run.
 fl_install_script() {
-  local label="$1" url="$2" interp="$3" tmp code=0
-  shift 3
+  local label="$1" url="$2" want="$3" interp="$4" tmp code=0 got
+  shift 4
   tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-installer.XXXXXX")"
-  if fl_run_long "download the ${label} installer" curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$tmp" "$url"; then
-    fl_run_long "install ${label}" env UV_NO_MODIFY_PATH=1 INSTALLER_NO_MODIFY_PATH=1 "$interp" "$tmp" "$@" || code=$?
+  if fl_run_long "download the ${label} installer" curl -fsSL --proto '=https' --connect-timeout 15 --retry 3 --retry-delay 2 -o "$tmp" "$url"; then
+    got="$(fl_sha256_of "$tmp")"
+    if [[ "$got" != "$want" ]]; then
+      fl_fail "The ${label} installer from ${url} has sha256 ${got}, not the pinned ${want}. It was not run."
+      fl_info "A mirror needs its own sum: set the URL and sha256 variables of that installer together (see the top of this script)."
+      code=1
+    else
+      fl_ok "${label} installer matches its pinned sha256"
+      fl_run_long "install ${label}" env UV_NO_MODIFY_PATH=1 INSTALLER_NO_MODIFY_PATH=1 "$interp" "$tmp" "$@" || code=$?
+    fi
   else
     code=1
   fi
@@ -154,6 +184,12 @@ fl_install_script() {
 }
 
 fl_section "SYSTEM"
+# before anything else, so that no package is installed on a system the install does not support
+blocker_line="$(fl_linux_distro_blocker)"
+if [[ -n "$blocker_line" ]]; then
+  IFS='|' read -r FL_ERROR_ID blocker_msg blocker_fix <<<"$blocker_line"
+  fl_die "$blocker_msg" "$blocker_fix"
+fi
 fl_preflight_basics "$OFFLINE" "$FL_MIN_DISK_GB" "$HOME"
 if [[ "$FL_IS_WSL" == "1" ]]; then
   fl_ok "$(fl_linux_os_summary) detected, running in WSL (${FL_ARCH})"
@@ -198,16 +234,16 @@ if [[ "$FL_DRY_RUN" == "1" ]]; then
     fl_info "dry-run: every apt package is installed"
   fi
   if ! command -v uv >/dev/null 2>&1 && [[ ! -x "$HOME/.local/bin/uv" ]]; then
-    fl_info "dry-run: curl -LsSf ${UV_INSTALLER_URL} | sh   (uv, into ~/.local/bin, no shell edits)"
+    fl_info "dry-run: download ${UV_INSTALLER_URL}, check sha256 ${UV_INSTALLER_SHA256}, run it with sh   (uv ${UV_VERSION}, into ~/.local/bin, no shell edits)"
   fi
   if [[ ! -x "$(fl__python_bin_for "${FL_PYTHON_BIN_NAME#python}")" ]]; then fl_run uv python install "${FL_PYTHON_BIN_NAME#python}"; fi
   if [[ ! -x "$(fl__node_bindir_for "$FL_NODE_MAJOR")/node" ]]; then
     if ! command -v fnm >/dev/null 2>&1 && [[ ! -x "$(fl__fnm_dir)/fnm" ]]; then
-      fl_info "dry-run: curl -fsSL ${FNM_INSTALLER_URL} | bash -s -- --skip-shell   (fnm, no shell edits)"
+      fl_info "dry-run: download ${FNM_INSTALLER_URL}, check sha256 ${FNM_INSTALLER_SHA256}, run it with bash --release v${FNM_VERSION} --skip-shell   (fnm, no shell edits)"
     fi
     fl_run fnm install "$FL_NODE_MAJOR"
   fi
-  fl_run npm install -g yarn
+  fl_run npm install -g "yarn@${FL_PIN_YARN}"
   fl_info "dry-run: MariaDB root password: set through sudo mariadb on a fresh server, else the stored one is verified"
   fl_mariadb_dropin_apply mariadb-frappe.cnf "$(fl_mariadb_utf8_dropin_path)"
   [[ "$FL_TEMPLATE_CHANGED" != "1" ]] || fl_mariadb_restart_if_running || true
@@ -291,7 +327,7 @@ if [[ -n "${BENCHBAR_PDF_STEP:-}" && "$(fl_wkhtmltopdf_state)" != "patched" ]]; 
   case "$WKHTML_STATE" in
     dry-run) WKHTML_STATE=ok; fl_info "dry-run: the wkhtmltopdf plan is above (benchbar install showed it)" ;;
     skipped) fl_warn "wkhtmltopdf was skipped above (benchbar install asked already): PDFs will not work until it is installed" ;;
-    *) WKHTML_STATE=failed; fl_fail "the wkhtmltopdf install failed above (see benchbar install's output)"; add_pending "WKHTMLTOPDF_FAILED" ;;
+    *) WKHTML_STATE=failed; fl_warn "the wkhtmltopdf install failed above (see benchbar install's output); the bench works, PDF printing does not"; fl_fix "${FL_SELF} repair"; add_pending "WKHTMLTOPDF_FAILED" ;;
   esac
 elif fl_wkhtmltopdf_ensure; then WKHTML_STATE=ok; else
   case "$?" in 2) WKHTML_STATE=skipped ;; *) WKHTML_STATE=failed; add_pending "WKHTMLTOPDF_FAILED" ;; esac
@@ -305,7 +341,7 @@ export PATH="$HOME/.local/bin:$PATH"
 if command -v uv >/dev/null 2>&1; then
   fl_ok "uv at $(command -v uv)"
 else
-  fl_install_script uv "$UV_INSTALLER_URL" sh || fl_die "The uv install failed." "Install it by hand: curl -LsSf ${UV_INSTALLER_URL} | sh"
+  fl_install_script uv "$UV_INSTALLER_URL" "$UV_INSTALLER_SHA256" sh || fl_die "The uv install failed." "Install it by hand: curl -LsSf ${UV_INSTALLER_URL} | sh"
   hash -r 2>/dev/null || true
   command -v uv >/dev/null 2>&1 || fl_die "uv not found after its installer ran." "Look for ~/.local/bin/uv, and put ~/.local/bin on your PATH."
   fl_ok "uv installed at $(command -v uv)"
@@ -331,8 +367,8 @@ if [[ ! -x "${NODE_BINDIR}/node" ]]; then
   FNM_BIN="$(command -v fnm || true)"
   if [[ -z "$FNM_BIN" && -x "$(fl__fnm_dir)/fnm" ]]; then FNM_BIN="$(fl__fnm_dir)/fnm"; fi
   if [[ -z "$FNM_BIN" ]]; then
-    fl_install_script fnm "$FNM_INSTALLER_URL" bash --install-dir "$(fl__fnm_dir)" --skip-shell \
-      || fl_die "The fnm install failed." "Install it by hand: curl -fsSL ${FNM_INSTALLER_URL} | bash -s -- --skip-shell"
+    fl_install_script fnm "$FNM_INSTALLER_URL" "$FNM_INSTALLER_SHA256" bash --install-dir "$(fl__fnm_dir)" --release "v${FNM_VERSION}" --skip-shell \
+      || fl_die "The fnm install failed." "Install it by hand: curl -fsSL ${FNM_INSTALLER_URL} | bash -s -- --release v${FNM_VERSION} --skip-shell"
     FNM_BIN="$(fl__fnm_dir)/fnm"
     [[ -x "$FNM_BIN" ]] || FNM_BIN="$(command -v fnm || true)"
     [[ -n "$FNM_BIN" && -x "$FNM_BIN" ]] || fl_die "fnm not found after its installer ran." "Look in $(fl__fnm_dir)"
@@ -358,7 +394,7 @@ NPM_GLOBALS="$("$NPM_BIN" ls -g --depth=0 2>/dev/null || true)"
 if [[ "$NPM_GLOBALS" == *' yarn@'* ]]; then
   fl_info "yarn already globally installed under Node ${FL_NODE_MAJOR}"
 else
-  fl_run "$NPM_BIN" install -g yarn
+  fl_run "$NPM_BIN" install -g "yarn@${FL_PIN_YARN}"
 fi
 YARN_BIN="${NODE_BINDIR}/yarn"
 [[ -x "$YARN_BIN" ]] || YARN_BIN="$(command -v yarn || true)"
@@ -368,8 +404,14 @@ fl_ok "yarn - ${YARN_VERSION} at ${YARN_BIN}"
 
 fl_section "SHELL CONFIG"
 RC_FILE="$(fl_rc_file)"
-HELPER_BLOCK="$(fl_template_render shell-helpers "PROFILE_EXPORTS=$(fl_profile_path_exports "$FL_PROFILE")" "BENCHBAR=${FL_SELF}")"
-case "$(fl_rc_block_status "$RC_FILE" "$HELPER_BLOCK")" in
+HELPER_BLOCK="$(fl_rc_helpers_render "$FL_PROFILE" "$FL_SELF")"
+# a shell that reads no block of ours (nushell and the like) gets no file
+RC_STATUS=none
+[[ -z "$RC_FILE" ]] || RC_STATUS="$(fl_rc_block_status "$RC_FILE" "$HELPER_BLOCK")"
+case "$RC_STATUS" in
+  none)
+    fl_ok "no shell helper block: ${SHELL##*/} cannot read one; use ${FL_SELF} up, down, restart, status and logs"
+    ;;
   current)
     fl_ok "${RC_FILE} has the benchbar block (profile exports and bench helpers)"
     ;;

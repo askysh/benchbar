@@ -7,7 +7,7 @@ public enum PortMode { Automatic, Fixed }
 
 public static class PortModes
 {
-    public static string Title(PortMode mode) => mode == PortMode.Fixed ? "Fixed" : "Automatic";
+    public static string Title(PortMode mode) => mode == PortMode.Fixed ? UiText.Get("PortsModeFixed") : UiText.Get("PortsModeAutomatic");
 
     public static string Word(PortMode mode) => mode == PortMode.Fixed ? "fixed" : "automatic";
 
@@ -99,7 +99,7 @@ public enum PortGuardAction { Start, Restart }
 
 public static class PortGuard
 {
-    public const string ConflictLead = "Port conflict. Review the proposed resolution before starting.";
+    public static string ConflictLead => UiText.Get("PortsConflictLead");
 
     /// <summary>
     /// <c>ports check --json --bench-dir PATH</c> before a start or restart (macos BenchStore.run). A start of a bench whose own processes
@@ -110,7 +110,7 @@ public static class PortGuard
     {
         var result = await cli.RunJsonAsync(PortArgs.Check(benchPath), null, CliTimeouts.Read, PortsJson.ParseCheck, ct).ConfigureAwait(false);
         if (result.Value is not { } check)
-            return new PortGuardResult(false, false, "The ports could not be checked: " + (result.Error ?? "no answer from benchbar.exe."), null);
+            return new PortGuardResult(false, false, UiText.Format("PortsNotChecked", result.Error ?? UiText.Get("PortsNoAnswer")), null);
         var alreadyRunning = action == PortGuardAction.Start && check.AlreadyRunning == true;
         var conflict = check.Conflicts.Count > 0 && !alreadyRunning;
         return conflict

@@ -17,14 +17,14 @@ unset BENCHBAR_LABS
 fm_out() { set +e; OUT="$("$FM" "$@" 2>/dev/null)"; CODE=$?; set -e; }
 
 # ---- off: refused, hinted, hidden
-for c in "share status" "share setup" "lan-guard status" "lan-guard install"; do
+for c in "share people" "share setup" "share start" "share code" "lan-guard install" "lan-guard allow-node"; do
   # shellcheck disable=SC2086
   run_fm $c --bench-dir "$BENCH"
   assert_eq "2" "$CODE" "$c: $OUT"
   assert_contains "$OUT" "is an experiment and it is off."
   assert_contains "$OUT" "benchbar labs on lan-rooms"
 done
-run_fm share status --json --bench-dir "$BENCH"
+run_fm share people --json --bench-dir "$BENCH"
 assert_eq "2" "$CODE" "$OUT"
 # a stream command is refused by the gate (a done line, exit 2), not by the preflight (exit 1)
 # that wants a person at a terminal; one valid JSON line and no MariaDB hint
@@ -40,6 +40,34 @@ assert_not_contains "$OUT" "lan-guard"
 fm_out commands --json
 assert_eq "['share', 'lan-guard']" "$(printf '%s' "$OUT" | jget - '[g["name"] for g in d["gated"]]')"
 assert_eq "[]" "$(printf '%s' "$OUT" | jget - '[c["name"] for c in d["commands"] if c["name"].split()[0] in ("share", "lan-guard")]')"
+
+# ---- off: what stops, removes or reports the experiment still runs, so that an experiment that is
+# off can always be undone (#159 SHARE-2). Nothing was started here, so each one is a quiet no-op.
+# teardown is a person's command: the app's run (a person clicked) passes, with nothing set up to tear down
+BENCHBAR_SUDO=gui run_fm share teardown --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "unchanged: sharing is not set up"
+for c in "share status" "share stop" "lan-guard status"; do
+  # shellcheck disable=SC2086
+  run_fm $c --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$c: $OUT"
+  assert_not_contains "$OUT" "is an experiment"
+done
+# (share stop leaves its stop marker for a start on its way; the doctor cases below want no share folder)
+rm -rf "$FL_STATE_DIR/share"
+fm_out share status --json --bench-dir "$BENCH"
+assert_eq "0 off" "$CODE $(printf '%s' "$OUT" | jget - 'd["state"]')"
+fm_out lan-guard status --json --bench-dir "$BENCH"
+assert_eq "0 missing" "$CODE $(printf '%s' "$OUT" | jget - 'd["state"]')"
+# their help is shown too, and the refusal of the others names the way out
+run_fm lan-guard remove --help
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "benchbar lan-guard remove"; assert_not_contains "$OUT" "is an experiment"
+run_fm share setup --help
+assert_eq "2" "$CODE" "$OUT"
+# a flag before the subcommand does not hide it from the gate or from the help (review note 5)
+run_fm share --json stop --help
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "benchbar share stop"; assert_not_contains "$OUT" "is an experiment"
+run_fm share --json setup --help
+assert_eq "2" "$CODE" "$OUT"
 
 # ---- on: listed, not gated, runs
 BENCHBAR_LABS=lan-rooms fm_out commands --json
@@ -65,14 +93,32 @@ assert_eq "0" "$CODE" "$OUT"
 printf '<plist/>\n' >"$FL_STATE_DIR/share/job.plist"
 printf '123 running\n' >"$FL_STATE_DIR/share/phase"
 printf '# BenchBar: Frappe bench ports answer this Mac only\n' >"$FL_LANGUARD_ANCHOR"; : >"$FL_LANGUARD_DAEMON"
+# and a node that lan-guard allow-node put on the firewall's list
+mkdir -p "$FL_STATE_DIR/lan-guard"; printf '/opt/homebrew/Cellar/node/22/bin/node\n' >"$FL_STATE_DIR/lan-guard/firewall.allowed"
 : >"$MOCK_LOG"
 BENCHBAR_NONINTERACTIVE=1 fm_out labs off lan-rooms --json
 assert_eq "0" "$CODE" "$OUT"
 assert_no_file "$FL_STATE_DIR/share/job.plist"; assert_no_file "$FL_STATE_DIR/share/phase"
 assert_contains "$(printf '%s' "$OUT" | jget - 'd["warnings"]')" "run: benchbar lan-guard remove"
+assert_contains "$(printf '%s' "$OUT" | jget - 'd["warnings"]')" "the macOS firewall still allows node"
 assert_calls_not_contain '^sudo'
 assert_calls_not_contain '^osascript'
 assert_not_contains "$(cat "$FL_STATE_FILE")" "lan-rooms"
+# the command the warning names runs with the lab off: one dialog, both root files gone
+export FL_OSASCRIPT="$ROOT/tests/mocks/osascript-gui" FL_SOCKETFILTERFW="$ROOT/tests/mocks/bin/socketfilterfw"
+: >"$MOCK_LOG"
+BENCHBAR_SUDO=gui run_fm lan-guard remove --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_no_file "$FL_LANGUARD_ANCHOR"; assert_no_file "$FL_LANGUARD_DAEMON"; assert_no_file "$FL_STATE_DIR/lan-guard/firewall.allowed"
+assert_calls_contain '^pfctl -a com.apple/250.benchbar -F all$'
+assert_calls_contain '^socketfilterfw --remove /opt/homebrew/Cellar/node/22/bin/node$'
+# a share job that is still loaded while the lab is off (an app and a CLI that disagree) can be stopped
+mkdir -p "$FL_STATE_DIR/share"
+printf '<plist/>\n' >"$FL_STATE_DIR/share/job.plist"
+printf '123 running\n' >"$FL_STATE_DIR/share/phase"
+run_fm share stop --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_no_file "$FL_STATE_DIR/share/job.plist"; assert_no_file "$FL_STATE_DIR/share/phase"
 
 # ---- off with nothing started and no lan-guard: quiet
 rm -f "$FL_LANGUARD_ANCHOR" "$FL_LANGUARD_DAEMON"

@@ -122,14 +122,16 @@ internal sealed class RecordingStream : IStreamRunner
 {
     public List<(string File, string[] Args, Dictionary<string, string> Env)> Runs { get; } = [];
     public List<TimeSpan> Timeouts { get; } = [];
+    public List<string?> Stdins { get; } = [];
     public string[] Lines { get; set; } = [];
     public StreamResult Result { get; set; } = new(0, null);
 
     public Task<StreamResult> RunAsync(string fileName, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? environment,
-        Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+        Action<string> onLine, TimeSpan timeout, CancellationToken ct, string? stdin = null)
     {
         Runs.Add((fileName, [.. args], environment is null ? [] : new Dictionary<string, string>(environment)));
         Timeouts.Add(timeout);
+        Stdins.Add(stdin);
         foreach (var line in Lines) onLine(line);
         return Task.FromResult(Result);
     }
@@ -153,7 +155,7 @@ internal sealed class CapturingProcessRunner : IProcessRunner
 internal sealed class BlockedStream : IStreamRunner
 {
     public async Task<StreamResult> RunAsync(string fileName, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? environment,
-        Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+        Action<string> onLine, TimeSpan timeout, CancellationToken ct, string? stdin = null)
     {
         await Task.Yield();
         throw new System.ComponentModel.Win32Exception(1260, "This program is blocked by group policy.");

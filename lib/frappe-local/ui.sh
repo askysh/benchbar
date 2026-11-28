@@ -16,6 +16,40 @@
 # option and says so on stderr, hence the silence.
 shopt -u patsub_replacement 2>/dev/null || true
 
+# bash 3.2 (the bash of macOS) takes SIGCHLD without SA_RESTART. When a
+# background child ends (the update check, a spinner, a timer) while a builtin
+# writes to the terminal, the write fails with EINTR: "printf: write error:
+# Interrupted system call", and under set -e the command ends there, in the
+# middle of its output. bash 4.2 and later restart the write, and no bash 4.0
+# or 4.1 is in use on a system benchbar runs on. So on bash 3.2,
+# for a run that has a terminal, a printf to a terminal whose write failed
+# is tried once more. Only a failed write: printf also returns 1 for a bad
+# argument (printf "%d" abc), after it wrote its output, and a second try
+# would print that output twice. The exit status does not tell the two
+# apart, so the failed call runs again with its output thrown away: a write
+# to /dev/null cannot be interrupted, so a failure there is the arguments',
+# and that run prints the builtin's own message and gives its status. A pipe
+# or a file has no such failure and keeps the builtin's own answer, and a
+# run without a terminal (the app, MCP, a script) does not get the function
+# at all.
+if [[ "${BASH_VERSINFO[0]:-5}" -lt 4 ]] && [[ -t 1 || -t 2 ]]; then
+  # shellcheck disable=SC2059  # the caller's own format and arguments, passed on as they are
+  printf() {
+    if [[ ! -t 1 ]]; then builtin printf "$@"; return; fi
+    builtin printf "$@" 2>/dev/null && return 0
+    builtin printf "$@" >/dev/null || return
+    builtin printf "$@"
+  }
+fi
+
+# The two tools the installer takes from a public registry, at an exact version
+# (INST-9): the bench CLI (PyPI) and yarn (npm). The uv and fnm installers are
+# pinned in 00-linux-system-deps.sh. Fixed here, never read from the
+# environment. To move one, change the number, run tests/test-tool-pins.sh and
+# see "Bumping the tool pins" in maintainers/releasing.md.
+FL_PIN_FRAPPE_BENCH=5.31.1
+FL_PIN_YARN=1.22.22
+
 FL_TTY=0
 FL_UTF8=0
 FL_COLS=80
@@ -110,7 +144,19 @@ fl_log_init() {
   # the phase scripts are child processes: they log to the same file and
   # back up into the same folder
   export FL_LOG_FILE FL_BACKUP_STAMP
+  # a run that makes a log changes things: it is an operation with a handle (ops.sh)
+  fl_op_begin
+  fl_log_header
   fl_state_prune "$dir"
+}
+
+# fl_log_header: the first line of a run's log says what ran and who started it (BENCHBAR_CALLER, history.sh);
+# the command line has its secrets as ***
+fl_log_header() {
+  [[ -n "${FL_LOG_FILE:-}" ]] || return 0
+  fl_caller_resolve
+  fl_hist_words
+  fl_log "run: benchbar ${FL_HIST_WORDS[*]-} (caller: ${FL_CALLER}${FL_OP_ID:+, op: ${FL_OP_ID}})"
 }
 
 # ---------------------------------------------------------------- state limits
@@ -128,12 +174,14 @@ fl_log_init() {
 #                       puts it back, and doctor warns until then)
 #   update checks       update-check.<date>.txt             newest 14
 #   temp files          state.env.XXXXXX of a killed writer older than a day
-# The limits can be changed with FL_KEEP_RUN_LOGS, FL_KEEP_STATE_BACKUPS and
-# FL_KEEP_UPDATE_CHECKS (a number; the tests use small ones). Nothing in a
+#   operation records   ops/op-<date>-<time>-<pid>.json (and .jsonl, .err)   newest 100, and
+#                       every one of a run that still runs (ops.sh)
+# The limits can be changed with FL_KEEP_RUN_LOGS, FL_KEEP_STATE_BACKUPS,
+# FL_KEEP_UPDATE_CHECKS and FL_KEEP_OPS (a number; the tests use small ones). Nothing in a
 # bench or in a site's backup folder is ever pruned here.
 # shellcheck disable=SC2010  # names this tool made, matched by a strict pattern
 fl_state_prune() {
-  local logdir="$1" keep_logs keep_bk keep_uc n f d name logs=0 baks=0 checks=0 temps=0 root
+  local logdir="$1" keep_logs keep_bk keep_uc n f d name logs=0 baks=0 checks=0 temps=0 root ops=0
   [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
   keep_logs="${FL_KEEP_RUN_LOGS:-100}"; [[ "$keep_logs" =~ ^[0-9]+$ && "$keep_logs" -ge 1 ]] || keep_logs=100
   keep_bk="${FL_KEEP_STATE_BACKUPS:-50}"; [[ "$keep_bk" =~ ^[0-9]+$ && "$keep_bk" -ge 1 ]] || keep_bk=50
@@ -176,9 +224,11 @@ fl_state_prune() {
     [[ -n "$f" && -f "$f" && ! -L "$f" ]] || continue
     rm -f "$f" 2>/dev/null && temps=$((temps + 1))
   done < <(find "$FL_STATE_DIR" -maxdepth 3 -type f -name 'state.env.??????' -mmin +1440 2>/dev/null || true)
-  [[ $((logs + baks + checks + temps)) -gt 0 ]] || return 0
-  fl_log "pruned: ${logs} run logs, ${baks} state backup folders, ${checks} update checks, ${temps} temp files"
-  fl_changed pruned "state folder" "removed beyond the limits: ${logs} run logs (keeps ${keep_logs}), ${baks} backup folders (keeps ${keep_bk}), ${checks} update checks (keeps ${keep_uc}), ${temps} old temp files"
+  # the records of operations (ops.sh): the newest FL_KEEP_OPS stay, and every one of a run that still runs
+  ops="$(fl_op_prune)"
+  [[ $((logs + baks + checks + temps + ops)) -gt 0 ]] || return 0
+  fl_log "pruned: ${logs} run logs, ${baks} state backup folders, ${checks} update checks, ${temps} temp files, ${ops} operation records"
+  fl_changed pruned "state folder" "removed beyond the limits: ${logs} run logs (keeps ${keep_logs}), ${baks} backup folders (keeps ${keep_bk}), ${checks} update checks (keeps ${keep_uc}), ${temps} old temp files, ${ops} operation records (keeps the newest ${FL_KEEP_OPS:-100})"
   return 0
 }
 
@@ -197,9 +247,15 @@ fl_redact_url() { local r; fl_redact_url_v r "$1"; printf '%s' "$r"; }
 
 # https://user:token@host/x -> https://host/x (never shown, never written). In
 # ui.sh so the phase scripts have it too: the reach cache of profile check needs it.
+# Any other scheme (ssh://deploy:secret@host/x.git, git://user:pw@host/) loses only
+# the ":password": the user name of an ssh URL is part of the address.
 fl_url_strip_userinfo_v() {
-  if [[ "$2" =~ ^(https?://)[^/@]*@(.*)$ ]]; then printf -v "$1" '%s%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"; else printf -v "$1" '%s' "$2"; fi
+  if [[ "$2" =~ ^(https?://)[^/@]*@(.*)$ ]]; then printf -v "$1" '%s%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+  elif [[ "$2" =~ ^([A-Za-z][A-Za-z0-9+.-]*://)([^/@:]*):[^/@]*@(.*)$ ]]; then printf -v "$1" '%s%s@%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+  else printf -v "$1" '%s' "$2"; fi
 }
+# fl_url_has_secret URL: 0 when URL carries a password or token (user:secret@)
+fl_url_has_secret() { [[ "$1" =~ ^[A-Za-z][A-Za-z0-9+.-]*://[^/@]*:[^/@]*@ ]]; }
 fl_url_strip_userinfo() { local u; fl_url_strip_userinfo_v u "$1"; printf '%s' "$u"; }
 
 
@@ -222,7 +278,9 @@ fl_log_stamp_v() {
     FL_LOG_BASE=$((10#$__h * 3600 + 10#$__m * 60 + 10#$__s))
     FL_LOG_SECONDS0="$SECONDS"
   fi
-  __t=$(((FL_LOG_BASE + SECONDS - FL_LOG_SECONDS0) % 86400))
+  # the stamp follows the wall clock, back too; the second % keeps a time before the first
+  # call (the clock stepped back across midnight) from printing as a negative one
+  __t=$((((FL_LOG_BASE + SECONDS - FL_LOG_SECONDS0) % 86400 + 86400) % 86400))
   printf -v "$1" '%02d:%02d:%02d' $((__t / 3600)) $((__t % 3600 / 60)) $((__t % 60))
 }
 
@@ -258,10 +316,15 @@ fl_sq() { local q="'"; printf "'%s'" "${1//$q/$q\\$q$q}"; }
 
 # ---------------------------------------------------------------- JSON
 
-# fl_json_escape_v VAR TEXT: TEXT with backslashes and quotes escaped and
-# control characters (terminal colors in logs) dropped, as a JSON string
-# needs; in bash, the same bytes `sed | tr -d '\000-\037'` gave. The control
-# characters are listed one by one: a range in bash 3.2 follows the locale.
+# fl_json_escape_v VAR TEXT: TEXT as the inside of a JSON string. Backslash
+# and quote are escaped; a newline, tab and carriage return go as \n, \t and
+# \r; a terminal color code (ESC [ ... final byte) is dropped whole, and so are
+# the internal marks \034 \036 \037 (FL_FIXQ and the row separators); any other
+# control character goes as \u00XX; a byte that is not part of a valid UTF-8
+# character becomes U+FFFD (Python's json.loads and Swift's JSONDecoder refuse
+# a document with one). The control characters are listed one by one: a range
+# in bash 3.2 follows the locale, so the whole function runs under LC_ALL=C
+# (bytes, not characters, as under launchd).
 FL_JSON_CTRL=$'\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037'
 # a whole terminal control sequence: ESC [ parameters (0x30-0x3F)
 # intermediates (0x20-0x2F) final byte (0x40-0x7E). The sets are spelled
@@ -283,9 +346,81 @@ fl__json_csi_len_v() {
   [[ -n "$__csi_c" && "$FL_JSON_CSI_FINAL" == *"$__csi_c"* ]] && __csi_k=$((__csi_k + 1))
   printf -v "$1" '%s' "$__csi_k"
 }
+# fl__json_byte_v VAR CHAR: the value 0-255 of the one byte CHAR (bash 3.2's
+# printf "'c" sign extends a byte above 127, so it is masked). Run under LC_ALL=C.
+fl__json_byte_v() {
+  local __jb
+  printf -v __jb '%d' "'$2"
+  printf -v "$1" '%s' "$((__jb & 255))"
+}
+# fl__json_utf8_v VAR TEXT: TEXT with every byte that is not part of a valid
+# UTF-8 character (overlong forms, surrogates, above U+10FFFF, a lone or cut
+# lead or continuation byte) replaced by U+FFFD. Run under LC_ALL=C. The loop
+# runs once per run of non-ASCII bytes, so a plain string costs one test.
+fl__json_utf8_v() {
+  local __u_s="$2" __u_o="" __u_p __u_b __u_n __u_lo __u_hi __u_i __u_ok __u_c
+  while [[ "$__u_s" == *[![:print:][:cntrl:]]* ]]; do
+    __u_p="${__u_s%%[![:print:][:cntrl:]]*}"
+    __u_o="${__u_o}${__u_p}"
+    __u_s="${__u_s:${#__u_p}}"
+    fl__json_byte_v __u_b "${__u_s:0:1}"
+    __u_n=0 __u_lo=128 __u_hi=191
+    if [[ "$__u_b" -ge 194 && "$__u_b" -le 223 ]]; then __u_n=1
+    elif [[ "$__u_b" -ge 224 && "$__u_b" -le 239 ]]; then
+      __u_n=2
+      [[ "$__u_b" -ne 224 ]] || __u_lo=160
+      [[ "$__u_b" -ne 237 ]] || __u_hi=159
+    elif [[ "$__u_b" -ge 240 && "$__u_b" -le 244 ]]; then
+      __u_n=3
+      [[ "$__u_b" -ne 240 ]] || __u_lo=144
+      [[ "$__u_b" -ne 244 ]] || __u_hi=143
+    fi
+    __u_ok=0
+    if [[ "$__u_n" -gt 0 && "${#__u_s}" -gt "$__u_n" ]]; then
+      __u_ok=1 __u_i=1
+      while [[ "$__u_i" -le "$__u_n" ]]; do
+        fl__json_byte_v __u_c "${__u_s:$__u_i:1}"
+        if [[ "$__u_c" -lt "$__u_lo" || "$__u_c" -gt "$__u_hi" ]]; then __u_ok=0; break; fi
+        __u_lo=128 __u_hi=191
+        __u_i=$((__u_i + 1))
+      done
+    fi
+    if [[ "$__u_ok" == 1 ]]; then
+      __u_o="${__u_o}${__u_s:0:$((__u_n + 1))}"; __u_s="${__u_s:$((__u_n + 1))}"
+    else
+      __u_o="${__u_o}"$'\357\277\275'; __u_s="${__u_s:1}"
+    fi
+  done
+  printf -v "$1" '%s' "${__u_o}${__u_s}"
+}
+# fl_json_cut_v VAR TEXT MAX: at most MAX bytes of TEXT, cut at a character
+# boundary: a UTF-8 character the cut would split is dropped whole (a slice
+# like ${msg:0:500} counts bytes under launchd's C locale and could leave half
+# a character, an invalid string)
+fl_json_cut_v() {
+  local LC_ALL=C __c_s="$2" __c_n="$3" __c_b __c_k=0 __c_l
+  if [[ "${#__c_s}" -le "$__c_n" ]]; then printf -v "$1" '%s' "$__c_s"; return 0; fi
+  __c_b="${__c_s:$__c_n:1}"
+  __c_s="${__c_s:0:$__c_n}"
+  if [[ "$__c_b" == [![:print:][:cntrl:]] ]]; then
+    fl__json_byte_v __c_b "$__c_b"
+    # the first byte cut off is a continuation: the cut is inside a character, so
+    # drop the bytes of it that were kept (its lead byte and what follows it)
+    if [[ "$__c_b" -ge 128 && "$__c_b" -le 191 ]]; then
+      while [[ "$__c_k" -lt 4 && -n "$__c_s" ]]; do
+        __c_l="${__c_s: -1}"; __c_s="${__c_s%?}"; __c_k=$((__c_k + 1))
+        [[ "$__c_l" == [![:print:][:cntrl:]] ]] || break
+        fl__json_byte_v __c_l "$__c_l"
+        [[ "$__c_l" -ge 128 && "$__c_l" -le 191 ]] || break
+      done
+    fi
+  fi
+  printf -v "$1" '%s' "$__c_s"
+}
 fl_json_escape_v() {
-  local __e="$2" __o="" __p __n
+  local LC_ALL=C __e="$2" __o="" __p __n __b
   # nothing to escape (almost every value): no substitutions, no loop
+  if [[ "$__e" == *[![:print:][:cntrl:]]* ]]; then fl__json_utf8_v __e "$__e"; fi
   if [[ "$__e" != *[\\\"$FL_JSON_CTRL]* ]]; then printf -v "$1" '%s' "$__e"; return 0; fi
   __e="${__e//\\/\\\\}"
   __e="${__e//\"/\\\"}"
@@ -298,7 +433,17 @@ fl_json_escape_v() {
     __o="${__o}${__p}"
     __e="${__e:${#__p}}"
     fl__json_csi_len_v __n "$__e"
-    if [[ "$__n" -gt 0 ]]; then __e="${__e:$__n}"; else __e="${__e:1}"; fi
+    if [[ "$__n" -gt 0 ]]; then __e="${__e:$__n}"; continue; fi
+    case "${__e:0:1}" in
+      $'\n') __o="${__o}\\n" ;;
+      $'\t') __o="${__o}\\t" ;;
+      $'\r') __o="${__o}\\r" ;;
+      # the marks the code puts in its own strings (fl_fix_cmd's, the doctor jobs' and the check rows' separators)
+      # never reach a document
+      $'\034'|$'\036'|$'\037') ;;
+      *) fl__json_byte_v __b "${__e:0:1}"; printf -v __b '\\u%04x' "$__b"; __o="${__o}${__b}" ;;
+    esac
+    __e="${__e:1}"
   done
   printf -v "$1" '%s' "${__o}${__e}"
 }
@@ -312,16 +457,27 @@ fl_json_escape() {
 # fl_json_str_v VAR VALUE, fl_json_num_v and fl_json_bool_v put the JSON
 # for VALUE into VAR without the subshell of "$(fl_json_str ...)": status and
 # list build their documents with them, dozens of values per call.
+# An empty string is null here: "no value" (docs/json-schema.md, "Strings and
+# numbers"). fl_json_text_v keeps "" for a field the schema types as a string
+# that can be empty.
 fl_json_str_v() {
   local __s="$2"
   if [[ -z "$__s" ]]; then printf -v "$1" 'null'; return 0; fi
   fl_json_escape_v __s "$__s"
   printf -v "$1" '"%s"' "$__s"
 }
+fl_json_text_v() {
+  local __s="$2"
+  fl_json_escape_v __s "$__s"
+  printf -v "$1" '"%s"' "$__s"
+}
 
+# fl_json_num_v VAR VALUE: VALUE when it is a JSON integer (-?(0|[1-9][0-9]*)),
+# else null: "1-2", "--", "007", "1.5" and "" are not numbers
 fl_json_num_v() {
-  case "$2" in
-    ''|-|*[!0-9-]*) printf -v "$1" 'null' ;;
+  local __n="${2#-}"
+  case "$__n" in
+    ''|*[!0-9]*|0?*) printf -v "$1" 'null' ;;
     *) printf -v "$1" '%s' "$2" ;;
   esac
 }
@@ -331,7 +487,10 @@ fl_json_bool_v() {
 }
 
 fl_json_str() { local j; fl_json_str_v j "$1"; printf '%s' "$j"; }
+fl_json_text() { local j; fl_json_text_v j "$1"; printf '%s' "$j"; }
 fl_json_num() { local j; fl_json_num_v j "$1"; printf '%s' "$j"; }
+# fl_json_error TEXT: an error message for the document, at most 500 bytes
+fl_json_error() { local j; fl_json_cut_v j "$1" 500; fl_json_str "$j"; }
 fl_json_bool() { local j; fl_json_bool_v j "$1"; printf '%s' "$j"; }
 
 # ---------------------------------------------------------------- JSON lines
@@ -361,7 +520,7 @@ fl_jsonl() {
   [[ "$FL_JSONL" == "1" ]] || return 0
   # a dry run streams the plan and done only (FL_JSONL_QUIET)
   [[ "${FL_JSONL_QUIET:-0}" != "1" || "$1" == "done" ]] || return 0
-  { printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_JSONL_VERSION:-${FL_VERSION:-0}}" "$1" "${2:-}" >&3; } 2>/dev/null || true
+  { printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s%s}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_JSONL_VERSION:-${FL_VERSION:-0}}" "$1" "${FL_OP_JSON:-}" "${2:-}" >&3; } 2>/dev/null || true
 }
 
 # fl_log_lines_v VAR: how many lines the run log has now (0 without one)
@@ -389,11 +548,16 @@ fl_log_step_message() {
 fl_jsonl_step() {
   [[ "$FL_JSONL" == "1" ]] || return 0
   local n p f msg="${7:-}"
+  fl_json_cut_v msg "$msg" 1000
   fl_json_num_v n "$1"
   fl_json_str_v p "$3"
   f=",\"n\":${n},\"id\":$(fl_json_str "$2"),\"parent\":${p},\"name\":$(fl_json_str "$4"),\"status\":\"$5\""
-  [[ -z "${6:-}" ]] || f="${f},\"secs\":$6"
-  [[ -z "$msg" ]] || f="${f},\"message\":$(fl_json_str "${msg:0:1000}")"
+  # never negative: $SECONDS follows the wall clock, and a clock that stepped back while the
+  # step ran would send secs below 0
+  if [[ -n "${6:-}" ]]; then
+    if [[ "$6" == -* ]]; then f="${f},\"secs\":0"; else f="${f},\"secs\":$6"; fi
+  fi
+  [[ -z "$msg" ]] || f="${f},\"message\":$(fl_json_str "$msg")"
   [[ -z "${8:-}" ]] || f="${f},\"command\":$(fl_json_str "$8")"
   [[ "$5" != "running" ]] || FL_JSONL_CUR="$2"
   fl_jsonl step "$f"
@@ -425,7 +589,9 @@ FL_DONE_NEXT_N=0
 fl_done_warning_add() {
   [[ "$FL_DONE_WARNINGS_N" -lt 50 ]] || return 0
   FL_DONE_WARNINGS_N=$((FL_DONE_WARNINGS_N + 1))
-  FL_DONE_WARNINGS="${FL_DONE_WARNINGS}${FL_DONE_WARNINGS:+,}$(fl_json_str "${1:0:500}")"
+  local __w
+  fl_json_cut_v __w "$1" 500
+  FL_DONE_WARNINGS="${FL_DONE_WARNINGS}${FL_DONE_WARNINGS:+,}$(fl_json_str "$__w")"
 }
 
 # A fix built by fl_fix_cmd (every word shell quoted, one plain command, an optional `cd DIR &&` before
@@ -467,10 +633,12 @@ fl_fix_quoted_json() { if fl_fix_marked "$1"; then printf true; else printf fals
 fl_next_action() {
   [[ "$FL_DONE_NEXT_N" -lt 20 ]] || return 0
   FL_DONE_NEXT_N=$((FL_DONE_NEXT_N + 1))
-  local __c __q=""
+  local __c __q="" __y
   fl_fix_plain_v __c "$1"
   if fl_fix_marked "$1" && [[ "${#__c}" -le 500 ]]; then __q=',"quoted":true'; fi
-  FL_DONE_NEXT="${FL_DONE_NEXT}${FL_DONE_NEXT:+,}{\"command\":$(fl_json_str "${__c:0:500}"),\"why\":$(fl_json_str "${2:0:500}")${__q}}"
+  fl_json_cut_v __c "$__c" 500
+  fl_json_cut_v __y "${2:-}" 500
+  FL_DONE_NEXT="${FL_DONE_NEXT}${FL_DONE_NEXT:+,}{\"command\":$(fl_json_str "$__c"),\"why\":$(fl_json_str "$__y")${__q}}"
 }
 
 # fl_done_mark_v VAR: where warnings[] and next_actions[] stand now, for fl_done_forget
@@ -565,8 +733,74 @@ fl_doc_emit() {
     return 0
   fi
   if [[ "$kind" == "plan" ]]; then printf '%s\n' "$doc" >&3; return 0; fi
+  # a failing result says why (the envelope: error whenever exit is not 0)
+  if [[ "$code" != "0" && "$doc" != *'"error":'* ]]; then
+    doc="${doc%\}},\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-${FL_LAST_PROBLEM:-the command exited with ${code}}}")}"
+  fi
   fl_done_fields_v f "$code"
-  printf '%s,%s}\n' "${doc%\}}" "$f" >&3
+  FL_DOC_ENVELOPED=1
+  printf '%s%s,%s}\n' "${doc%\}}" "${FL_OP_JSON:-}" "$f" >&3
+}
+
+# ---------------------------------------------------------------- the envelope of a read
+
+# Under --jsonl and --for-agent every command with a JSON mode ends with a
+# line that has `exit` (docs/json-schema.md, "The result envelope"). A
+# command that changes things sends a done line. A command that only reads
+# prints one document, and fl_read_env_begin keeps that document back, so
+# that fl_read_env_finish can add `exit` to it, or, when the run failed
+# before it printed one, print a document that says why. fd 8 is the real
+# stdout; stray text on stdout (the ERR trap's line) goes to stderr.
+FL_READ_ENV=0
+FL_READ_BUF=""
+FL_DOC_ENVELOPED=0
+
+fl_read_env_begin() {
+  [[ -d "$FL_STATE_DIR" ]] || mkdir -p "$FL_STATE_DIR" 2>/dev/null || true
+  # the state folder first; when it is not writable the temp folder holds the
+  # document (fl_read_env_finish removes the file on every exit)
+  FL_READ_BUF="${FL_STATE_DIR}/.read-doc.$$"
+  if ! : >"$FL_READ_BUF" 2>/dev/null; then
+    FL_READ_BUF="${TMPDIR:-/tmp}/.benchbar-read-doc.$$"
+    # no place to keep the document back: the read prints as it did before the envelope
+    : >"$FL_READ_BUF" 2>/dev/null || { FL_READ_BUF=""; return 0; }
+  fi
+  FL_READ_ENV=1
+  exec 8>&1 1>"$FL_READ_BUF"
+}
+
+# fl_read_env_finish CODE: the last line of a read
+fl_read_env_finish() {
+  [[ "$FL_READ_ENV" == "1" ]] || return 0
+  FL_READ_ENV=0
+  local code="$1" line="" doc="" other="" err="" tail=""
+  exec 1>&8 8>&-
+  if [[ -f "$FL_READ_BUF" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ "$line" == '{"schema_version":'*'}' ]]; then doc="$line"; else other="${other}${line}"$'\n'; fi
+    done <"$FL_READ_BUF"
+    rm -f "$FL_READ_BUF"
+  fi
+  [[ -z "$other" ]] || printf '%s' "$other" >&2
+  if [[ "$code" != "0" ]]; then
+    err="${FL_DIE_MESSAGE:-${FL_LAST_PROBLEM:-the command exited with ${code}}}"
+  fi
+  if [[ -n "$doc" ]]; then
+    # a document that has its envelope (the share family) is printed as it is
+    if [[ "$FL_DOC_ENVELOPED" != "1" ]]; then
+      tail=",\"exit\":${code}"
+      # a failing read that printed its findings (doctor, lock check) has no error of its own
+      [[ "$code" == "0" || "$doc" == *'"error":'* ]] || tail="${tail},\"error\":$(fl_json_error "$err")"
+      doc="${doc%\}}${tail}}"
+    fi
+    printf '%s\n' "$doc"
+  else
+    # nothing was printed: the run failed (or had nothing to say) before its document
+    tail="\"exit\":${code}"
+    [[ "$code" == "0" ]] || tail="${tail},\"error\":$(fl_json_error "$err")"
+    printf '{"schema_version":%d,"cli_version":"%s",%s,"warnings":[%s],"next_actions":[%s]}\n' \
+      "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$tail" "$FL_DONE_WARNINGS" "$FL_DONE_NEXT"
+  fi
 }
 
 # fl_doc_rest DOC: the fields after schema_version and cli_version, without braces
@@ -579,11 +813,15 @@ fl_doc_rest() {
 # now; the size of the file in FL_PROGRESS_FILE is the bytes of a download
 fl_jsonl_progress() {
   [[ "$FL_JSONL" == "1" ]] || return 0
-  local bytes=""
+  local bytes="" elapsed="$2"
+  # never negative (a clock that stepped back, as in fl_jsonl_step)
+  [[ "$elapsed" != -* ]] || elapsed=0
   if [[ -n "${FL_PROGRESS_FILE:-}" && -f "$FL_PROGRESS_FILE" ]]; then
     bytes="$(stat -c %s "$FL_PROGRESS_FILE" 2>/dev/null || stat -f %z "$FL_PROGRESS_FILE" 2>/dev/null || true)"
   fi
-  fl_jsonl progress ",\"step\":$(fl_json_str "$FL_JSONL_CUR"),\"label\":$(fl_json_str "$1"),\"elapsed\":$2,\"bytes\":$(fl_json_num "$bytes"),\"total\":null"
+  # the last progress line is in the operation's record too (benchbar op status)
+  fl_op_note_progress "$1" "$elapsed" "$bytes"
+  fl_jsonl progress ",\"step\":$(fl_json_str "$FL_JSONL_CUR"),\"label\":$(fl_json_str "$1"),\"elapsed\":${elapsed},\"bytes\":$(fl_json_num "$bytes"),\"total\":null"
 }
 
 # fl_jsonl_section_end STATUS: closes the open section of a phase script
@@ -623,6 +861,8 @@ fl_jsonl_section_exit() {
 
 fl_section() {
   fl_spinner_pause
+  # a phase script's heading is a step of the operation too
+  [[ -z "$FL_OP_ID" ]] || fl_op_note_step "$(printf '%s' "$1" | tr '[:upper:] ' '[:lower:]_')" "$1" running
   fl_jsonl_section_begin "$1"
   printf '\n%s%s %s%s\n' "$FL_BOLD$FL_BLUE" "==========" "$1 ==========" "$FL_RESET"
   fl_log "== $1 =="
@@ -686,8 +926,18 @@ fl_die() {
 
 # ---------------------------------------------------------------- time
 
+# fl_elapsed_v VAR START: the seconds since START (a value of $SECONDS), never below 0. $SECONDS
+# follows the wall clock: after a clock that stepped back, the difference alone is negative.
+fl_elapsed_v() {
+  local __e=$((SECONDS - $2))
+  [[ "$__e" -ge 0 ]] || __e=0
+  printf -v "$1" '%s' "$__e"
+}
+
 fl_fmt_secs() {
   local s="$1"
+  # a clock that stepped back (a time sync, WSL after sleep) is not a negative duration
+  [[ "$s" != -* ]] || s=0
   if [[ "$s" -ge 3600 ]]; then
     printf '%dh %02dm' $((s / 3600)) $(((s % 3600) / 60))
   elif [[ "$s" -ge 60 ]]; then
@@ -810,29 +1060,36 @@ fl_header() {
 }
 
 # fl_table ROW... where ROW is "col1|col2|col3"; first row is the heading.
+# A cell that can hold a "|" (a path) goes through fl_cell_v first, which writes
+# it as "\|": that one is text, not a column break.
+fl_cell_v() { local __c="$2"; printf -v "$1" '%s' "${__c//|/\\|}"; }
 fl_table() {
-  local row ncols=0 i w widths=() cells
+  local row ncols=0 i w widths=() cells pipe=$'\001'
   fl_spinner_pause
   for row in "$@"; do
+    row="${row//\\|/$pipe}"
     IFS='|' read -r -a cells <<<"$row"
     [[ "${#cells[@]}" -gt "$ncols" ]] && ncols="${#cells[@]}"
     i=0
     for w in "${cells[@]}"; do
+      w="${w//$pipe/|}"
       if [[ -z "${widths[$i]:-}" || "${#w}" -gt "${widths[$i]}" ]]; then widths[i]="${#w}"; fi
       i=$((i + 1))
     done
   done
   local first=1
   for row in "$@"; do
+    fl_log "  ${row//\\|/|}"
+    row="${row//\\|/$pipe}"
     IFS='|' read -r -a cells <<<"$row"
     printf '  '
     i=0
     for w in "${cells[@]}"; do
+      w="${w//$pipe/|}"
       if [[ "$first" == "1" ]]; then printf '%s%-*s%s  ' "$FL_BOLD" "${widths[$i]}" "$w" "$FL_RESET"; else printf '%-*s  ' "${widths[$i]}" "$w"; fi
       i=$((i + 1))
     done
     printf '\n'
-    fl_log "  $row"
     first=0
   done
 }
@@ -918,7 +1175,10 @@ fl_step_glyph() {
 # step INDEX, when it has an id. The message of a failed, skipped or warning
 # step is the CLI's own [FAIL] or [WARN] line, so terminal and stream agree.
 fl_step_json() {
-  [[ "$FL_JSONL" == "1" && -n "${FL_STEP_IDS[$2]:-}" ]] || return 0
+  [[ -n "${FL_STEP_IDS[$2]:-}" ]] || return 0
+  # the step is in the operation's record, whether or not a stream is open
+  fl_op_note_step "${FL_STEP_IDS[$2]}" "${FL_STEP_LABELS[$2]}" "$1"
+  [[ "$FL_JSONL" == "1" ]] || return 0
   local n="" msg="" cmd="${5:-}"
   [[ "$FL_STEP_NUMBERED" != "1" ]] || n=$(($2 + 1))
   case "$1" in
@@ -952,7 +1212,7 @@ fl_step_begin() {
 fl_step_end() {
   local status="$1" detail="${2:-}" i="$FL_STEP_CURRENT" secs
   [[ "$i" -ge 0 ]] || return 0
-  secs=$((SECONDS - FL_STEP_START))
+  fl_elapsed_v secs "$FL_STEP_START"
   FL_STEP_STATUS[i]="$status"
   FL_STEP_SECS[i]="$secs"
   fl_spinner_pause
@@ -960,37 +1220,6 @@ fl_step_end() {
   fl_log "step $((i + 1)) $status ${detail} ($(fl_fmt_secs "$secs"))"
   fl_step_json "$status" "$i" "$secs" "$detail" "${3:-}"
   FL_STEP_CURRENT=-1
-}
-
-# fl_step_run INDEX FUNCTION [ARGS]: runs a quiet step behind a spinner. The
-# function sets FL_STEP_RESULT to done, unchanged, skipped or warning; a
-# non-zero exit means failed. Its output is captured and replayed afterwards
-# so [WARN] and [FAIL] lines are never lost.
-fl_step_run() {
-  local i="$1" fn="$2" out code=0 label
-  shift 2
-  label="${FL_STEP_LABELS[$i]}"
-  FL_STEP_CURRENT="$i"
-  FL_STEP_START="$SECONDS"
-  FL_STEP_STATUS[i]="running"
-  FL_STEP_RESULT="done"
-  out="$(mktemp "${TMPDIR:-/tmp}/benchbar-step.XXXXXX")"
-  fl_log "step $((i + 1)) start: $label"
-  fl_log_lines_v FL_STEP_LOG_FROM
-  fl_step_json running "$i"
-  fl_spinner_start "$((i + 1)). $label" "$out"
-  "$fn" "$@" >"$out" 2>&1 || code=$?
-  fl_spinner_stop
-  fl_log_file_append "$out"
-  if [[ "$code" -ne 0 ]]; then
-    fl_step_end failed
-    fl_tail_indented "$out"
-  else
-    fl_step_end "$FL_STEP_RESULT"
-    grep -E '^[[:space:]]*([^[:space:]]*\[(WARN|FAIL)\]|fix:)' "$out" 2>/dev/null | sed 's/^/   /' || true
-  fi
-  rm -f "$out"
-  return "$code"
 }
 
 fl_steps_summary() {
@@ -1005,19 +1234,6 @@ fl_steps_summary() {
   fl_table "${rows[@]}"
   printf '  total %s\n' "$(fl_fmt_secs "$total")"
   fl_log "total $(fl_fmt_secs "$total")"
-}
-
-fl_steps_counts() {
-  # prints "N unchanged, N to update, N to repair" style counts from a status list
-  local unchanged=0 update=0 repair=0 s
-  for s in "$@"; do
-    case "$s" in
-      unchanged) unchanged=$((unchanged + 1)) ;;
-      update) update=$((update + 1)) ;;
-      repair) repair=$((repair + 1)) ;;
-    esac
-  done
-  printf '%d unchanged, %d to update, %d to repair' "$unchanged" "$update" "$repair"
 }
 
 # ---------------------------------------------------------------- prompts
@@ -1216,7 +1432,37 @@ fl_ask_secret() {
   done
 }
 
+# fl_version_lt A B: true when version A is older than B ("v0.5.8" < "0.6.0",
+# 0.10 after 0.9, a prerelease before its release). The one version compare:
+# it lives here because the entry point, the phase scripts and every test load
+# ui.sh, and two functions of this name in two files once gave two answers. A
+# caller that wants numbers only cuts the suffix off first (fl_dep_fits,
+# fl_notices_since_lt). A version that does not parse is never older.
+fl_version_lt() {
+  local a="${1#v}" b="${2#v}" pa="" pb="" x y i
+  [[ "$a" == *-* ]] && { pa="${a#*-}"; a="${a%%-*}"; }
+  [[ "$b" == *-* ]] && { pb="${b#*-}"; b="${b%%-*}"; }
+  local -a na nb
+  IFS=. read -r -a na <<<"$a"
+  IFS=. read -r -a nb <<<"$b"
+  for ((i = 0; i < ${#na[@]} || i < ${#nb[@]}; i++)); do
+    x="${na[i]:-0}"; y="${nb[i]:-0}"
+    [[ "$x" =~ ^[0-9]+$ && "$y" =~ ^[0-9]+$ ]] || return 1
+    ((10#$x < 10#$y)) && return 0
+    ((10#$x > 10#$y)) && return 1
+  done
+  [[ -n "$pa" && -z "$pb" ]] && return 0
+  [[ -n "$pa" && -n "$pb" && "$pa" < "$pb" ]] && return 0
+  return 1
+}
+
 # what one doctor run reads once (fl_memo, fl_memo_v, the background jobs);
 # loaded here because every lib file and phase script that may ask for it has ui.sh
 # shellcheck source=lib/frappe-local/facts.sh
 . "${BASH_SOURCE[0]%/*}/facts.sh"
+
+# the operation handles (op_id, ops/<op_id>.json, benchbar op ...): here for the same reason
+# shellcheck source=lib/frappe-local/ops.sh
+. "${BASH_SOURCE[0]%/*}/ops.sh"
+# shellcheck source=lib/frappe-local/history.sh
+. "${BASH_SOURCE[0]%/*}/history.sh"

@@ -1,0 +1,3 @@
+  [FAIL] The computer at 127.0.0.1:46767 shows another host key than the one you asked for (--host-key). BenchBar did not connect and sent nothing.
+
+Aborting. Check the key with the host (benchbar share status shows it there). To look at the room again: benchbar share join 127.0.0.1:46767 --dry-run

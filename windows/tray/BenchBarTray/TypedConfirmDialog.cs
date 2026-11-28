@@ -28,13 +28,14 @@ internal sealed class TypedConfirmDialog : Window
         var panel = new StackPanel { Margin = new Thickness(24) };
         panel.Children.Add(Ui.Text(request.Title, 16, FontWeights.SemiBold));
         panel.Children.Add(Ui.Text(request.Message, 13, opacity: 0.85, margin: new Thickness(0, 6, 0, 12)));
-        Box = Ui.Field($"Type {request.Expected} to confirm", "", _ => Sync(), 400);
-        panel.Children.Add(Ui.Labeled($"Type {request.Expected} to confirm", Box));
+        Box = Ui.Field(UiText.Format("TypeToConfirm", request.Expected), "", _ => Sync(), 400);
+        panel.Children.Add(Ui.Labeled(UiText.Format("TypeToConfirm", request.Expected), Box));
 
         var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
-        Confirm = Ui.Button(request.ConfirmLabel, () => DialogResult = true, request.ConfirmLabel);
+        var confirmLabel = request.ConfirmLabel ?? UiText.Get("SitesConfirmDrop");
+        Confirm = Ui.Button(confirmLabel, () => DialogResult = true, confirmLabel);
         Confirm.IsEnabled = false;
-        var cancel = Ui.Button("Cancel", () => DialogResult = false, "Cancel");
+        var cancel = Ui.Button(UiText.Get("Cancel"), () => DialogResult = false, UiText.Get("Cancel"));
         cancel.IsDefault = true;
         cancel.IsCancel = true;
         cancel.Margin = new Thickness(0);

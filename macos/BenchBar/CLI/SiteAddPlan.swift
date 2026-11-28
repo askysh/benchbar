@@ -46,7 +46,7 @@ nonisolated struct SiteAddPlan: ReviewablePlan, Codable {
     var touchesText: [String] {
         touches.compactMap { kind in
             switch kind {
-            case "database": exists ? "the database of \(site)" : "a new MariaDB database and user"
+            case "database": exists ? String(localized: "the database of \(site)") : String(localized: "a new MariaDB database and user")
             case "site_folder": "sites/\(site)"
             case "hosts": nil
             default: kind

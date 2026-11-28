@@ -67,8 +67,8 @@ nonisolated struct PullPlan: ReviewablePlan, Codable {
     /// Only for a CLI without a plan token: what the run does that the plan the person reviewed did
     /// not say, told after the fact. With a token the CLI refuses a changed plan before it starts.
     func differences(from reviewed: PullPlan) -> [String] {
-        var out = steps.filter { !reviewed.steps.contains($0) }.map { "a step the plan did not show: \($0)" }
-        if let name = backup?.name, name != reviewed.backup?.name { out.append("another backup than the one reviewed: \(name)") }
+        var out = steps.filter { !reviewed.steps.contains($0) }.map { String(localized: "a step the plan did not show: \($0)") }
+        if let name = backup?.name, name != reviewed.backup?.name { out.append(String(localized: "another backup than the one reviewed: \(name)")) }
         return out
     }
 
@@ -138,7 +138,7 @@ nonisolated enum PullStream {
     /// (stderr), else its `next_actions` reasons from the done line.
     static func failure(_ output: CommandOutput) -> String {
         let text = CLIClient.summarize(CommandOutput(exitCode: output.exitCode, stdout: "", stderr: output.stderr))
-        return text.isEmpty ? "benchbar pull stopped with exit code \(output.exitCode)." : text
+        return text.isEmpty ? String(localized: "benchbar pull stopped with exit code \(output.exitCode).") : text
     }
 }
 

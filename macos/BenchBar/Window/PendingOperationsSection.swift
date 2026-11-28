@@ -44,7 +44,7 @@ nonisolated enum PendingText {
     /// The confirmation of Drop the Record.
     static func discardMessage(_ operation: PendingOperation) -> String {
         let left = operation.steps.count
-        let steps = left == 1 ? "its 1 step" : "its \(left) steps"
-        return "BenchBar forgets \(steps) and nothing runs now. \(operation.app) stays where it is, so the bench may be half updated: run the update again later to finish it."
+        let steps = Wording.itsSteps(left)
+        return String(localized: "BenchBar forgets \(steps) and nothing runs now. \(operation.app) stays where it is, so the bench may be half updated: run the update again later to finish it.")
     }
 }

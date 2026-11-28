@@ -98,11 +98,19 @@ for f in scripts/unknown-tool.py .shellcheckrc .gitignore tests/data.json; do
   assert_contains "$OUT" "mode=full" "($f)"
   reset
 done
-for f in install.ps1 scripts/app-icon.py windows/tray/a.cs macos/a.swift examples/x.json CHANGELOG.md .github/workflows/other.yml; do
+for f in install.ps1 scripts/app-icon.py windows/tray/a.cs macos/a.swift examples/x.json CHANGELOG.md .github/CODEOWNERS; do
   case "$f" in */*) mkdir -p "$REPO/${f%/*}" ;; esac
   printf 'x\n' >"$REPO/$f"
   aff --base main --machine
   assert_contains "$OUT" "mode=none" "($f)"
+  reset
+done
+# a workflow, Dependabot's file and the pinned Swift packages: the supply chain test
+for f in .github/workflows/other.yml .github/dependabot.yml macos/Package.resolved windows/shim/go.mod; do
+  case "$f" in */*) mkdir -p "$REPO/${f%/*}" ;; esac
+  printf 'x\n' >"$REPO/$f"
+  aff --base main --list
+  assert_contains "$OUT" "affected: test-supply-chain" "($f)"
   reset
 done
 # the fixtures the macOS app tests share with the CLI tests
@@ -131,6 +139,12 @@ printf '### Docs\n' >"$REPO/changelog.d/1-x.md"
 aff --base main --list
 assert_contains "$OUT" "affected: test-changelog" "(changelog.d)"
 reset
+# the seconds per test are data: a new row is not a change to the harness, so it does not run every test
+printf 'test-foo\t10\t10\n' >"$REPO/tests/timings.tsv"
+aff --base main --machine
+assert_contains "$OUT" "mode=affected" "(tests/timings.tsv)"
+assert_contains "$OUT" "tests=test-ci-plan test-suite-hygiene" "(tests/timings.tsv)"
+reset
 # the harness, the mocks, run-tests.sh, the entry point, templates and the selector itself run everything
 printf '# x\n' >>"$REPO/tests/affected.sh"
 aff --base main --list
@@ -142,7 +156,8 @@ aff --base main --machine
 assert_eq "mode=none
 tests=
 shellcheck=false
-shellcheck_files=" "$OUT"
+shellcheck_files=
+pin_changed=" "$OUT"
 printf '\n# touched\n' >>"$REPO/lib/frappe-local/sites.sh"
 printf '# x\n' >>"$REPO/tests/test-ports.sh"
 aff --base main --machine
@@ -152,7 +167,15 @@ assert_contains "$OUT" "shellcheck_files=lib/frappe-local/sites.sh tests/test-po
 reset
 aff --machine --files "lib/frappe-local/sites.sh docs/a.md"
 assert_contains "$OUT" "mode=affected"
+assert_eq "pin_changed=" "$(printf '%s\n' "$OUT" | sed -n '$p')" "(no pinned file: no pin in full)"
 assert_contains "$OUT" " test-docs" "(--files)"; assert_contains "$OUT" "test-sites"; assert_contains "$OUT" "test-mentions-two" "(--files counts every function as touched)"
+# the file of a pinned function: its pin test runs in full on a pull request (scripts/ci-plan.sh turns the others to smoke)
+for f in apps app-plan teamlock profiles ui; do printf 'fl_%s_x() { :; }\n' "${f//-/_}" >"$REPO/lib/frappe-local/$f.sh"; done
+aff --machine --files "lib/frappe-local/teamlock.sh"
+assert_contains "$OUT" "pin_changed=test-lock-apply-pin"
+aff --machine --files "lib/frappe-local/apps.sh lib/frappe-local/app-plan.sh lib/frappe-local/profiles.sh lib/frappe-local/ui.sh"
+assert_contains "$OUT" "pin_changed=test-app-add-pin test-app-update-pin test-profile-update-pin" "(ui.sh has no pin: the helpers stay on smoke)"
+reset
 aff --machine --files "tests/lib/harness.sh"
 assert_contains "$OUT" "mode=full"
 aff --machine --files "macos/a.swift windows/x.cs"
@@ -253,6 +276,11 @@ done
 # exit-code judging (some upstream ones print no ok line). The real run-tests.sh runs here, in a copy of
 # the repository whose tests are stand-ins under real names, so the suite never picks them up.
 RT="$TMP_DIR/rt"
+# The stand in runs below must not take the switches of the run this test is part of. A pull
+# request run names its tests in ONLY_TESTS, and the stand in root has only the six files made
+# here: since the test list is the files (PR 280), run-tests.sh refused the run with "ONLY_TESTS:
+# no such test", and this test failed in every run that picked it with another test.
+unset STRICT_FLAKY NO_SKIP ONLY_TESTS SKIP_TESTS SHARD LIST_ONLY SECS_ONLY SHELLCHECK_FILES
 mkdir -p "$RT/tests" "$RT/lib/frappe-local"
 cp "$ROOT/tests/run-tests.sh" "$RT/tests/run-tests.sh"
 for f in benchbar 00-mac-system-deps.sh 00-linux-system-deps.sh 01-install-bench-and-site.sh 02-background-service.sh lib/frappe-local/x.sh; do

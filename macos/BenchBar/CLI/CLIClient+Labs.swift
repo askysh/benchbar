@@ -62,41 +62,6 @@ nonisolated struct LabsDocument: Codable, Sendable, Equatable {
     }
 }
 
-/// One entry of `changed[]` in the done fields: what the run really changed.
-nonisolated struct DoneChange: Codable, Sendable, Equatable {
-    var kind: String
-    var name: String
-    var detail: String?
-}
-
-/// One entry of `next_actions[]`: a command to run, and why.
-nonisolated struct DoneAction: Codable, Sendable, Equatable {
-    var command: String
-    var why: String?
-}
-
-/// The closing line of a command that changes things (the done fields of docs/json-schema.md).
-nonisolated struct DoneLine: Codable, Sendable, Equatable {
-    var exit: Int?
-    var changed: [DoneChange]?
-    var warnings: [String]?
-    var nextActions: [DoneAction]?
-
-    enum CodingKeys: String, CodingKey {
-        case exit, changed, warnings
-        case nextActions = "next_actions"
-    }
-
-    /// The last line of stdout that is a JSON object; an empty line if there is none.
-    static func parse(_ stdout: String) -> DoneLine {
-        let decoder = JSONDecoder()
-        for line in stdout.split(separator: "\n").reversed() {
-            if let done = try? decoder.decode(DoneLine.self, from: Data(line.utf8)) { return done }
-        }
-        return DoneLine()
-    }
-}
-
 /// Labs (experimental features) through the CLI. The CLI keeps the flags.
 extension CLIClient {
     /// `labs list --json`. A CLI without the command exits non zero: `.failed`.
@@ -115,10 +80,10 @@ extension CLIClient {
     /// call sets the mode to 0 and says it comes from the app with
     /// BENCHBAR_SUDO=gui. `--yes` skips only the CLI's own question.
     @discardableResult
-    func labsSet(name: String, on: Bool) async throws(CLIError) -> DoneLine {
+    func labsSet(name: String, on: Bool) async throws(CLIError) -> ResultEnvelope {
         let output = try await run(["labs", on ? "on" : "off", name, "--yes", "--json"],
                                    timeout: Timeout.action, acceptExitCodes: [0],
                                    extraEnvironment: ["BENCHBAR_NONINTERACTIVE": "0"].merging(Self.guiSudo) { _, new in new })
-        return DoneLine.parse(output.stdout)
+        return output.envelope
     }
 }

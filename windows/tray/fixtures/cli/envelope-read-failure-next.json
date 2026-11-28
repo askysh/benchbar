@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.9.0","exit":1,"error":"No bench at /home/me/missing.","fix":"Run benchbar adopt PATH to register one.","warnings":[],"next_actions":[{"command":"benchbar adopt /home/me/frappe-bench","why":"Register your bench","quoted":true}]}

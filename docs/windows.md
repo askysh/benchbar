@@ -44,15 +44,22 @@ marked by Windows as "from the internet", and that mark brings dialogs.
 
 | Route | What Windows may show | What to do |
 | --- | --- | --- |
-| One line installer (`irm ... \| iex`) | On our Windows 11 test PC (one PC, Smart App Control off): nothing. No SmartScreen dialog, no Defender block and no administrator prompt. The files it writes carry no internet mark, and starting them shows no dialog. | Nothing. |
+| One line installer (`irm ... \| iex`) | On our Windows 11 test PC (one PC, Smart App Control off): nothing. No SmartScreen dialog, no Defender block and no administrator prompt. The files it writes carry no internet mark when it could verify the build provenance (`gh` signed in), and starting them shows no dialog then. | Nothing. |
 | Zip, started with `.\install.ps1` | With the default execution policy: "cannot be loaded because running scripts is disabled on this system". `Unblock-File` does not change that. | Start it with `powershell -ExecutionPolicy Bypass -File .\install.ps1`. |
 | Zip saved by a browser | Edge saves it without a warning, but marks it as downloaded (`Zone.Identifier`, ZoneId 3). Extract All in Explorer marks every file in it. `Expand-Archive` marks none. | Nothing, if you run the installer from the zip. It removes the mark from the files it installs. |
 | Starting a marked program yourself | "Open File - Security Warning: The publisher could not be verified. Are you sure you want to run this software?" with **Run** and **Cancel**. The dialog can open behind other windows. | Click **Run**. If nothing seems to happen, look for a flashing icon in the taskbar. |
 | The tray without the .NET runtime | Microsoft's dialog "You must install .NET Desktop Runtime to run this application." | Install the runtime: see [If Windows blocks it](#if-windows-blocks-it). |
 
-The installer removes the internet mark from every file it installs, for
-every route, so the programs in the install folder start without the
-Open File dialog. It checks every file against `SHA256SUMS` first.
+The installer checks every file against `SHA256SUMS` first. It removes
+the internet mark from the files it installs only when the zip's build
+provenance verified, which needs the [GitHub CLI](https://cli.github.com)
+(`gh`) signed in. The checksums come from the same release as the zip,
+so they find a damaged download, not a swapped one, and they are no reason
+to drop a mark that Windows put there. Without `gh`, or when the check
+fails, the installer keeps the mark and says so, and Windows shows the
+Open File dialog once for each program: click **Run**. A zip you run
+`install.ps1` from after unpacking it has no zip left to verify, so the
+mark stays there too.
 
 ### Smart App Control
 
@@ -106,7 +113,7 @@ The command line tool step runs the
 as `benchbar.exe` inside the distro (`install.sh` from the `v<version>`
 tag, with `--version v<version>`); a development build uses `main`. To
 do it by hand, run in Ubuntu:
-`curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash`.
+`curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash`.
 
 ![The first run wizard at Welcome](images/windows-wizard-welcome.png)
 
@@ -198,7 +205,8 @@ releases for the newest published one that has a Windows zip for your CPU
 `benchbar-windows-<version>-SHA256SUMS.txt` and installs it to
 `%LOCALAPPDATA%\Programs\BenchBar`. Then it:
 
-1. removes the internet mark from the installed files;
+1. removes the internet mark from the installed files when the zip's build
+   provenance verified (`gh attestation verify`), and keeps it otherwise;
 2. puts that folder on your user PATH (`benchbar.exe path install`);
 3. checks the .NET 10 Desktop Runtime and, when `winget` is there, offers
    to install it (Windows asks for permission);
@@ -279,11 +287,14 @@ with the zip:
 
 The installer does this for you. Releases after 0.8.2 also carry a build
 provenance attestation, made by the release workflow. It proves that the
-zip was built from this repository by GitHub Actions. With the
+zip was built from this repository by GitHub Actions. The installer
+checks it when `gh` is installed and signed in, and says so when it
+cannot. The checksums file is attested too. With the
 [GitHub CLI](https://cli.github.com):
 
 ```powershell
-gh attestation verify benchbar-windows-<version>-amd64.zip -R askysh/benchbar
+gh attestation verify benchbar-windows-<version>-amd64.zip -R askysh/benchbar `
+  --signer-workflow askysh/benchbar/.github/workflows/release-windows.yml
 ```
 
 ## If Windows blocks it
@@ -294,9 +305,10 @@ with "Smart App Control is on". See [Smart App Control](#smart-app-control).
 **"Open File - Security Warning: The publisher could not be verified."**
 The file carries an internet mark, for example because you started a
 program from an unpacked zip. Click **Run**. The dialog can open behind
-other windows. The installer removes the mark from what it installs, so
-you should not see this for the installed programs. If you do, run the
-installer again, or run
+other windows. The installer removes the mark from what it installs when it verified
+the zip's build provenance (`gh` signed in). Without that, you see this
+once for each program. To remove the mark yourself, once you have checked
+the zip, run
 `Get-ChildItem "$env:LOCALAPPDATA\Programs\BenchBar" -Recurse | Unblock-File`.
 
 **Microsoft Defender or another antivirus removes a file**, or the
@@ -349,298 +361,15 @@ You can still check what you download:
   shows `NotSigned` today.
 
 Privacy: neither program sends data anywhere except to GitHub's release
-list, for the update check described under [Settings](#settings). Report
+list, for the update check described under [Settings](windows-tray.md#settings). Report
 a Bug writes its zip on your PC, and sends nothing until you post the
 issue yourself.
 
 ## The tray
 
-![The tray flyout in light mode](images/windows-flyout-light.png)
-
-The runner in the notification area sleeps when the benches are stopped,
-runs while one is up, stumbles when a bench crashes and holds a paused
-pose when the crash guard paused it or its ports are taken. With
-Windows animation effects off it shows still poses. It is tinted for a
-light or a dark taskbar.
-
-Left click opens the flyout, one row per bench:
-
-- the state, the name and the default site, with **Start** or **Stop**,
-  and **Restart** in the ⋯ menu;
-- **Open site** in your default browser (see
-  [`*.localhost` names](#localhost-names));
-- **Logs**: the last lines of the bench log in a read only window, with
-  Clear, Copy and Open in Terminal (Windows Terminal, which follows the
-  log with `tail -f`);
-- **VS Code**: the bench folder through the WSL extension
-  (`code --remote wsl+DISTRO PATH`). Without `code` on PATH the row says
-  how to get it;
-- **Doctor**: the checks of `benchbar doctor` with their fix lines and a
-  Copy button. It changes nothing.
-
-Esc closes the flyout, Enter on a row opens the site.
-
-![The tray flyout in dark mode](images/windows-flyout-dark.png)
-
-Right click opens the menu: Open BenchBar, Settings, Open BenchBar at
-logon (a shortcut in your Startup folder, no admin needed), Notifications,
-Appearance (System, Light or Dark), Runner (the seven built in runners, as
-on the Mac, and your own), Check for Updates, Help, Report a Bug and Quit.
-
-### The BenchBar window
-
-Open BenchBar (the tray menu, the button at the top of the flyout, or a
-double click on the tray icon) opens the window. The sidebar lists your
-benches with their sites, then Find Benches and Team Profiles, a **+**
-menu (New Bench, I Already Have a Bench), and Settings and About at the
-foot. A banner says when a newer release is out, and a beta banner stays
-until you dismiss it once. Ctrl+N starts a new bench, Ctrl+, opens
-Settings and F5 checks again.
-
-![The BenchBar window with a bench open on Overview](images/windows-window.png)
-
-A bench has four tabs:
-
-- **Overview**: state, address and uptime, Start or Stop, Restart, Open
-  Site, Logs, Health and **Open in <editor>**, and a line that says why a
-  bench is stopped and what to do next. The Scheduler switch, the lockfile
-  state, Port Settings and Setup, and Console and Database (in Windows
-  Terminal) are here too.
-- **Sites**: Add Site (the plan first, then the Administrator password
-  goes to the CLI in its environment), Make Default, Back Up (with or
-  without files), **Backups...**, **Restore...**, **Drop Site...** (type
-  the site's name to confirm) and Open. Browsers open `*.localhost` names
-  without a hosts line, so BenchBar never edits a hosts file (see
-  [`*.localhost` names](#localhost-names)). **Allow Open as...** in a
-  site's menu turns Open as on for that site, after the Mac app's question
-  (it signs in as any user without a password, and each sign in is a real
-  login that the apps' hooks and the Activity Log see). Turning it on is
-  your decision: nothing in BenchBar does it for you, and **Turn Off Open
-  as** needs no question. While it is on the site says "Open as is on", or
-  why it cannot be used (developer mode off, not the default site, the bench
-  stopped), and **Open as...** opens **Find User**: the site's enabled users,
-  searched by name or email, each with **Open**, which opens the site in your
-  Windows browser signed in as that user. `benchbar.exe` opens the browser
-  itself, so the sign in link, which holds a session, never passes through
-  the tray, a log or the screen. A site whose name Windows cannot find has no
-  Open as. **Pin** in Find User keeps a user (nine at most per site,
-  Administrator is always there) for Quick Switch.
-- **Apps**: Add App (from a git URL, with a branch or a commit, and the
-  sites to install it on; **Add Another App** puts several apps in one
-  plan, each with its own branch, commit and sites, under one token),
-  Update after the dry run, Install on a site, focus pins and Check
-  Remotes. An app with local changes cannot be updated from the window.
-- **Unfinished updates and adds**: when an `app update` or an `app add`
-  stopped part way, the bench page shows a banner above the tabs with
-  what stopped, why, the fix command and two buttons. **Finish Update**
-  or **Finish Add** shows the plan of the same command, which lists only
-  the steps left. **Discard** asks first, then runs
-  `benchbar app update NAME --discard-pending`, which drops the record
-  and runs nothing; it does not undo what already ran. The banner reads
-  `pending_operations` of `benchbar.exe status --json`.
-- **Health**: the doctor checks with the Windows setup checks, Copy fix,
-  and Repair, which shows the plan first and asks for your Linux password
-  once when a step uses sudo.
-
-![A bench on its Sites tab](images/windows-bench.png)
-
-A fifth tab, **Sharing**, is there only while the **Share with people on
-the same Wi-Fi** experiment (`lan-rooms`) is on in Labs. It is the host
-side of a room, with the Mac app's words: **Set up sharing** (the people
-who get a seat, the source of the copy, the plan sheet with what the copy
-holds, and your tick that it holds real data), **Start sharing** for 1 to
-12 hours after a question, **Stop**, **Extend**, **Lock room**, the room
-code (hidden until you press **Show**), **Copy invite** and **New code**,
-the checks, the copy and **Refresh copy**, and the people in the room with
-**Remove**. Every one of those calls is made from your click and asks
-first; nothing runs when the tab opens, it only reads. The room code and
-the invite are read only on your click, kept in memory, never written to a
-log and copied with a mark that keeps them out of the Windows clipboard
-history. The network protection (`benchbar lan-guard install`, and
-`allow-node`) is a button with its own question and runs only when you
-press it; the tray never runs it by itself. Where the command line tool
-has no network protection yet (Linux), the tab shows what `benchbar.exe`
-says and nothing else. While the experiment says it is not on Windows yet
-in Labs, the tab does not appear.
-
-Start and Restart check the bench's ports first, from the window and from
-the flyout. A port another program holds stops the start with the reason
-and Review Port Conflict; BenchBar never stops that program.
-
-The **...** menu of a bench's Overview shows a command only when the CLI
-inside the distro lists it (`benchbar.exe commands --json`, asked once), so
-an older CLI never gets a call it would refuse. **Start Services Only**
-starts the bench's Redis and nothing else, for a restore or a migrate, on a
-stopped bench (`up --services-only`); **Stop Services** puts it away
-(`down`). **Install Service...** (or **Refresh Service...**) and the
-Scheduler box show the plan of `benchbar service` first and run it with its
-token only after your yes. **Write Lockfile...** and **Apply Lockfile...**
-show the text of `lock write --dry-run` or `lock apply --dry-run` and run
-`lock write --yes` or `lock apply --yes` only after your yes; the CLI has no
-plan token for them yet, so a change between the preview and the yes is not
-refused by a token. **Start again after Ubuntu restarts** is `autostart on`
-and `off`. **Watch Assets in Terminal** and **Run in Foreground in
-Terminal** open `benchbar watch` or `benchbar fg` in Windows Terminal inside
-the distro; closing that window ends them. The tray does not run either one
-as a child of its own: they have no way to be stopped from outside, and
-ending `benchbar.exe` on Windows can leave `bench watch` running in the
-distro. On the Health tab a warning has **Acknowledge** (`doctor --ack`),
-which silences it for this bench until its message changes, and an
-acknowledged one has **Undo Acknowledge**; nothing acknowledges by itself and
-a failure has no button. On the New Bench page of the setup wizard the
-warnings and failures of `doctor --prerequisites` for the folder are listed
-with the fix to copy; they stop nothing, the plan on the Review page still
-decides.
-
-**Quick Switch...** in the tray menu opens a small panel over any window:
-Administrator, your pinned users and, when you type two letters or more,
-the site's other users. Up, Down and Enter choose, **0** to **9** open a row
-at once while the field is empty, and Esc closes it. It opens the site of a
-running bench that has Open as on (a list picks the site when there are
-several) in your browser signed in as that user, with the same
-`benchbar.exe open --as` call as Find User, and says why when there is
-nothing to open, for example that Open as is off for the site. The row of the
-last user it opened this run says "last opened". It never turns Open as on.
-There is no keyboard shortcut for it yet.
-
-**Find Benches** scans a folder inside the distro (default your Linux
-home), adds the benches it finds, sets up their ports and their
-management. **Team Profiles** creates a profile from a bench, imports or
-subscribes to one, exports, updates, checks access and removes. A Windows
-file path for import or export is converted with `wslpath`.
-
-**Labs** lists the experiments of `benchbar.exe labs list`, one row each,
-with a switch, a warning, the version it came in and what it is. The
-switch runs `benchbar.exe labs on NAME` or `labs off NAME`, the same calls
-as **Settings > Labs** in the Mac app, so the state is the same in the
-tray, in PowerShell and for an agent. Turning an experiment on is your
-decision, and the click is it: the warning is on the row. An experiment
-that does not list Linux among its platforms (the benches run in WSL)
-stays off and says why; `benchbar labs list` shows each experiment's
-platforms. Turning one off stops what it started.
-
-The log window filters by process, searches, follows the log (while the
-window is open), shows the previous log and opens `tail -f` in Windows
-Terminal. Follow asks every 2 seconds while lines arrive and waits up to 10
-seconds while none do. It asks nothing while the PC is locked or asleep or
-the window is minimized, and catches up with one request when you are
-back. In Windows battery saver it asks at most every 30 seconds. With
-the bench running, the tray's own poll is 60 seconds instead of 30 on
-battery. While the distro is up and every bench was stopped on the last
-poll, the tray only asks Windows whether the distro runs (no `benchbar.exe`
-call, which would keep WSL awake); it reads the benches again after an
-unlock, an action or when the flyout opens, and at least every 20 minutes.
-
-The tray reads the passwords of an install or an adopt (the Administrator
-password, the Linux password for `sudo`) once and hands them to
-`benchbar.exe` in its environment for that one run, because the command
-line tool takes them from `ADMIN_PASSWORD`, `BENCHBAR_SUDO_PASSWORD` and
-`MARIADB_ROOT_PASSWORD` and nowhere else. They are never on a command
-line, in a file or in the tray's logs, and the output of the run is
-cleaned of them. An install can last up to 90 minutes, so for that time the
-values can be read by another program of your own user. This stays so until
-the command line tool can take a secret from standard input or a file.
-
-Settings: Open BenchBar at logon, notifications, check for updates when the window
-opens, **Ask before a link acts** (see [benchbar:// links](#benchbar-links)), the distro (switching runs `benchbar.exe adopt-distro`), the editor
-(VS Code, Cursor or VS Code Insiders), the command line tool's path, and
-the tray's appearance and runner. About: the versions of the tray,
-`benchbar.exe` and the CLI inside the distro, Check for Updates, Report a
-Bug and the MCP line.
-
-When a bench crashes, is paused by the crash guard or meets a port
-conflict, the tray shows one Windows notification with the bench and
-the command that fixes it. It does not repeat it until the state
-changes again. The tray reads the pause the runner records in the bench's
-`state.json` (the same record `benchbar status` shows), and the runner
-inside the distro sends no desktop notification of its own in WSL, so
-there is one notification, not two.
-
-### When the distro is stopped
-
-The tray asks WSL which distros run (`wsl.exe --list --running`), which
-does not start one, and asks `benchbar.exe status` only while the distro
-runs. A stopped distro shows the sleeping runner and a **Start** button
-in the flyout, which starts `benchbar.exe keepalive run`. This keeps the
-tray from waking a distro that WSL shut down after its idle time.
-
-One keepalive runs at a time, for one distro. While it keeps one distro
-awake, Start cannot start a second distro, and the tray says so. Switch
-the distro in Settings, or stop the other keepalive first. This is a
-limit of the beta.
-
-A package update stops a running keepalive, and the task starts only at
-logon. `benchbar.exe keepalive start` runs the installed task again when
-its run process is not alive. It prints nothing and exits 0 when there is
-no task or the run is alive, and it never creates or changes the task. The
-tray calls it after an update.
-
-### Settings
-
-The tray keeps its settings under a `tray` key in
-`%LOCALAPPDATA%\BenchBar\config.json`, the file `benchbar.exe` uses for
-the distro. Custom runners go in `%LOCALAPPDATA%\BenchBar\runners\<id>\`,
-in the format of [Custom runners](runners.md); the frames are scaled to
-the notification area's square slot.
-
-**Check for updates when the BenchBar window opens** is on by default.
-When the window opens, the tray asks GitHub for the latest release, at
-most every six hours, and shows a banner when a newer one is out. Turn it
-off in Settings to stop those checks. Check for Updates in the menu and
-About always asks GitHub, and asks before it opens the release page.
-
-### benchbar:// links
-
-The tray answers `benchbar://` links, so a launcher, a script or a
-bookmark can start, stop and open a bench:
-
-```powershell
-Start-Process "benchbar://up?bench=frappe-bench"
-```
-
-The routes and the `bench=` and `site=` queries are the Mac app's: `up`,
-`down`, `restart`, `open`, `logs`, `window`, `doctor`, `console`, `db`
-and `editor`, plus the two profile links. They are listed in the
-[URL scheme](reference/url-scheme.md) page. On Windows `bench=` takes a
-name or the Linux path of the bench (`/home/you/frappe-bench`, or
-`~/frappe-bench` for a bench in your home folder in the distro).
-`console` and `db` open Windows Terminal inside the distro, like the
-More menu of a bench.
-
-The tray registers the scheme for your user (under
-`HKEY_CURRENT_USER\Software\Classes\benchbar`, so no administrator
-rights) the first time it starts, and the installer writes the same
-values. Uninstalling removes them. If another program already owns
-`benchbar://` (for you or for the whole PC), or another copy of
-`BenchBarTray.exe` that is still there does, the tray leaves it alone, and
-so does the installer. A registration of a copy that is gone is replaced.
-
-If the tray is running, a second start with a link hands the link to it
-and quits; if not, the link starts the tray first and the link waits for
-its first look at your benches. A link that is not one of the routes, or
-is not well formed, does nothing and is logged by its action only (or a
-short hash), never with the bench, the site or the address it carried.
-A link that holds a double quote, a backslash or one of `^ | < >` is
-ignored too; a real link writes those as `%22`, `%5C` and so on.
-
-Any web page can open a `benchbar://` link, and a browser can remember
-"always allow". **Settings > Ask before a link acts** makes the tray ask
-first for `up`, `down`, `restart`, `console` and `db`, with Cancel as the
-default. It is off by default, so launchers and scripts keep working.
-
-Share links (`benchbar://share/...`) need rooms, which are not on Windows
-yet: the tray shows a short note and does nothing else.
-
-### What it costs
-
-At rest the tray polls `benchbar.exe status` every 30 seconds while a
-bench runs and backs off to every 5 minutes when nothing is up. It
-starts nothing at all while the computer sleeps or is locked.
-
-Measured on a Ryzen 7 6800H laptop: about 17 MB of private memory and
-under 0.1 percent of one core at rest, 0.6 percent while the runner
-runs. Once the flyout has been open, WPF keeps its graphics stack
-loaded and the tray stays at about 43 MB.
+The tray has its own page: [The BenchBar tray](windows-tray.md). It covers the
+flyout, the BenchBar window, the settings, `benchbar://` links and what the
+tray costs.
 
 ## Report a bug
 
@@ -684,9 +413,12 @@ benchbar.exe self-update
 
 It shows the version you have and the newest release, asks once, then
 updates all of BenchBar for Windows to that release: `benchbar.exe`, the
-tray app and the BenchBar CLI inside WSL. It runs the one line installer for
-you, so the new files are checked against the release's SHA256 sums and
-Windows shows no SmartScreen dialog for them. The tray app closes and starts
+tray app and the BenchBar CLI inside WSL. It runs the installer of that
+release for you: `install.ps1` of the release's tag, downloaded and
+compared with the release's SHA256 sums before it runs, not whatever is on
+`main`. The installer checks the new files against the same sums, and
+Windows shows no SmartScreen dialog for them when the zip's build
+provenance verified (see [Verify a download](#verify-a-download)). The tray app closes and starts
 again. It ends with one line for each part. Your settings, benches and sites
 stay as they are.
 
@@ -696,7 +428,8 @@ stay as they are.
   older one, or a release candidate (`0.9.0-rc.1`), which the check and a
   plain `self-update` never offer.
 - With no distro set up yet, the CLI part is skipped: the setup installs it.
-- BenchBar from the Microsoft Store is updated by the Store, and
+- BenchBar is not in the Microsoft Store. A copy that runs from an MSIX
+  package, which no release ships yet, is updated by its package, and
   `self-update` changes nothing there.
 
 Running the one line installer again does the same for `benchbar.exe` and
@@ -817,6 +550,17 @@ every distro, so stop your benches first).
   setup check says so. Install it next to the other one with
   `wsl --install -d Ubuntu-24.04` and choose it with
   `benchbar.exe adopt-distro`.
+- **"Do not run benchbar as root or with sudo."** The distro's default user
+  is `root`, so every command runs as root and `benchbar` refuses (exit 64,
+  `error_id` `root_refused`; with `--json` the refusal is JSON). This happens
+  when the distro was imported from a tarball or set up without a user. Create
+  a normal user and make it the default. In PowerShell:
+  `wsl -d Ubuntu-24.04 -u root -- adduser --gecos "" YOURNAME`, then
+  `wsl -d Ubuntu-24.04 -u root -- usermod -aG sudo YOURNAME`, then
+  `wsl -d Ubuntu-24.04 -u root -- sh -c "printf '[user]\ndefault=YOURNAME\n' >> /etc/wsl.conf"`,
+  then `wsl --terminate Ubuntu-24.04`. Install BenchBar again for that user
+  (`benchbar.exe setup run` or the install line from inside the distro), as
+  the files `root` made are not the new user's.
 - **A `benchbar://` link does nothing.** The tray has to be installed
   (or have started once) so that it registered the scheme, and the link
   must be one of the routes. Open the [URL scheme](reference/url-scheme.md)
@@ -850,6 +594,13 @@ every distro, so stop your benches first).
   `BENCHBAR_PROFILE_PATH` (a Linux path of the distro), the
   `BENCHBAR_MCP_TIMEOUT`, `_MAX_BYTES`, `_KILL_GRACE` and `_EOF_GRACE`
   settings and your proxy variables into WSL. No other variable is passed.
+  A caller that has no terminal can send the passwords on standard input
+  instead (`benchbar.exe install --secrets-stdin`, `KEY=VALUE` lines): stdin
+  goes through the shim and `wsl.exe` unchanged, and a password sent that way
+  is in no process's environment of the run. `site restore`, `site move`,
+  `bench remove`, `db orphans` and `share setup` do not take the flag: they
+  still need `MARIADB_ROOT_PASSWORD` in the environment. See
+  [install](reference/cli/install.md#passwords-without-the-environment).
 - **The tray does not open at logon.** The tray's **Open BenchBar at
   logon** makes a shortcut in your Startup folder. Windows can switch a Startup
   entry off in Settings > Apps > Startup. Turn **BenchBar Tray** on there.
@@ -860,18 +611,60 @@ every distro, so stop your benches first).
 
 ## What the tray does not do
 
-- It has no CPU source for the runner, so the runner runs at one speed.
+- The runner in the notification area runs at one speed. The Overview charts
+  the bench's CPU and the runner speed (`benchbar stats`) while it is on
+  screen, but sampling it for the icon would keep a timer running at rest.
+- It has no entry for `benchbar site hosts --prune`. That command is for the
+  macOS hosts file, and the tray never edits the Windows one (a `*.localhost`
+  name needs no line).
 - It never reads files inside the distro: every fact comes from
   `benchbar.exe`.
-- Quick Switch has no global keyboard shortcut yet: open it from the tray
-  menu. Open as needs a `*.localhost` name, which the Windows browser reaches
+- Quick Switch has a global shortcut only when you turn it on in Settings
+  (see above). Open as needs a `*.localhost` name, which the Windows browser reaches
   without a hosts line (see [`*.localhost` names](#localhost-names)). See
   [benchbar open](reference/cli/other.md).
-- It cannot join a room as a guest. The guest side (the room code
-  exchange, the pinned certificate and the local forwarder) is part of the
-  Mac app and has no `benchbar` command, so it is not on Windows yet. A
-  `benchbar://share/...` link shows a note that says so. Hosting a room is
+- The tray joins a room as a guest by the room's address and code, not by
+  an invite link: **Join a room...** on the **Sharing** tab (see
+  [Rooms on Windows](#rooms-on-windows)). The room code exchange, the pinned
+  certificate and the local forwarder run in the distribution through
+  `benchbar share join`; the room opens in the Windows browser on a
+  `localhost` address. For an invite link run `benchbar share join` in WSL.
+  A `benchbar://share/...` link shows a note in the tray. Hosting a room is
   the **Sharing** tab above.
+
+## Rooms on Windows
+
+A room is the host side of **Share with people on the same Wi-Fi**. The bench runs in WSL, so the room's
+address is the one WSL has, and that depends on WSL's networking mode:
+
+- **NAT (the default).** WSL has a private address that only this PC can reach. Nobody on the Wi-Fi can join
+  a room there, and the checks run inside WSL, so they would pass without telling you. A room is not available on
+  WSL NAT: `share preflight`, `share start` and `share invite` refuse and say so.
+- **Mirrored.** WSL shares the PC's own Wi-Fi address. Put `networkingMode=mirrored` under `[wsl2]` in
+  `%UserProfile%\.wslconfig` (Windows 11 22H2 or later; BenchBar never edits that file), then run
+  `wsl.exe --shutdown`. Windows still drops inbound connections to WSL until its Hyper-V firewall allows the
+  room's port. Run this once in a PowerShell opened as administrator:
+
+  ```powershell
+  New-NetFirewallHyperVRule -Name BenchBarRoom -DisplayName "BenchBar room" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8443
+  ```
+
+  `share preflight` and `share start` show this line as a warning, and `share start` goes on. The other way,
+  `Set-NetFirewallHyperVVMSetting -Name '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -DefaultInboundAction Allow`,
+  opens every port of WSL, so the rule above is the narrower one. Microsoft documents both under
+  [mirrored mode networking](https://learn.microsoft.com/windows/wsl/networking#mirrored-mode-networking).
+
+BenchBar reads the mode with `wslinfo --networking-mode`; a WSL that has no `wslinfo` counts as NAT.
+
+**Joining a room** needs neither mode: a guest only connects out, and the browser opens the room on `localhost`
+through WSL's localhost forwarding (on unless `.wslconfig` says `localhostForwarding=false`). The **Sharing** tab
+has **Join a room...** (address, a look at the room and its host key, then the code). See
+[Join a room](guides/share-on-your-network.md#in-the-windows-tray).
+
+The **Sharing** tab has a box, **I give out the seats**, under **Start sharing**. With it ticked, a
+person who joins waits: the tab says how many people wait, and under each name there is a list of
+the free seats with their roles and a button, **Give NAME this seat**. For a person who has a seat
+the same button moves them to the seat picked. Without the tick, guests pick their own seat.
 
 ## Labs
 

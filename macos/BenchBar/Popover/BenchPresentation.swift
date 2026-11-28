@@ -37,37 +37,38 @@ nonisolated struct BenchControls: Equatable, Sendable {
 
 /// Words for the popover.
 nonisolated enum BenchText {
-    static func headline(_ state: BenchState, reason: StopReason?, exitCode: Int?) -> String {
+    /// `ready` (0.9 CLIs) says more than "running": a bench whose code changed needs a restart,
+    /// and one whose site answers but whose realtime server or Redis does not is not ready yet.
+    static func headline(_ state: BenchState, reason: StopReason?, exitCode: Int?, ready: ReadyInfo? = nil) -> String {
+        if state == .running, let ready {
+            if ready.stale == true { return String(localized: "Needs restart (code changed)") }
+            return ready.ready ? String(localized: "Ready") : String(localized: "Running, not ready")
+        }
         switch state {
         case .stopped:
-            return reason == .broken ? "Stopped: needs repair" : "Stopped"
+            return reason == .broken ? String(localized: "Stopped: needs repair") : String(localized: "Stopped")
         case .starting:
-            return "Starting"
+            return String(localized: "Starting")
         case .running:
-            return "Running"
+            return String(localized: "Running")
         case .crashed:
-            if let exitCode { return "Crashed (exit \(exitCode)), restarting" }
-            return "Crashed, restarting"
+            if let exitCode { return String(localized: "Crashed (exit \(exitCode)), restarting") }
+            return String(localized: "Crashed, restarting")
         case .paused:
             switch reason {
-            case .broken: return "Paused: needs repair"
-            case .portConflict: return "Paused: a port is in use"
-            case .manual: return "Stopped"
-            default: return "Paused after repeated crashes"
+            case .broken: return String(localized: "Paused: needs repair")
+            case .portConflict: return String(localized: "Paused: a port is in use")
+            case .manual: return String(localized: "Stopped")
+            default: return String(localized: "Paused after repeated crashes")
             }
         case .unknown:
-            return "State unknown"
+            return String(localized: "State unknown")
         }
     }
 
     /// "45s", "12m", "3h 05m", "2d 4h".
     static func uptime(since start: Date, now: Date) -> String {
-        let seconds = max(0, Int(now.timeIntervalSince(start)))
-        let minutes = seconds / 60, hours = minutes / 60, days = hours / 24
-        if days > 0 { return "\(days)d \(hours % 24)h" }
-        if hours > 0 { return "\(hours)h " + String(format: "%02dm", minutes % 60) }
-        if minutes > 0 { return "\(minutes)m" }
-        return "\(seconds)s"
+        Wording.uptime(Int(now.timeIntervalSince(start)))
     }
 
     /// A CLI command line for a bench, as the user would type it.
@@ -77,9 +78,14 @@ nonisolated enum BenchText {
 }
 
 extension DoctorReport {
-    /// Checks worth reading first: fail, then warn, then anything unknown.
+    /// Checks worth reading first: fail, then warn, then anything unknown. A warning the person
+    /// acknowledged is not among them: the Health tab lists it apart, with Undo.
     nonisolated var needsAttention: [DoctorCheck] {
-        checks.filter { $0.level != .ok }.sorted { Self.rank($0.level) < Self.rank($1.level) }
+        checks.filter { $0.level != .ok && !$0.acked }.sorted { Self.rank($0.level) < Self.rank($1.level) }
+    }
+
+    nonisolated var acknowledged: [DoctorCheck] {
+        checks.filter { $0.level == .warn && $0.acked }
     }
 
     nonisolated var passing: [DoctorCheck] {
@@ -146,7 +152,7 @@ nonisolated enum BenchAggregate {
     /// "2 of 3 up", "none up".
     static func upText(_ states: [BenchState]) -> String {
         let up = upCount(states)
-        return up == 0 ? "none up" : "\(up) of \(states.count) up"
+        return up == 0 ? String(localized: "none up") : String(localized: "\(up) of \(states.count) up")
     }
 }
 

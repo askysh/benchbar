@@ -3,7 +3,9 @@
 # labs.sh: Labs, the experiments that are off until a person turns one on.
 # One global state key, LABS (a space separated list of lab names), owned by
 # `benchbar labs`; the app and the MCP server only read it. BENCHBAR_LABS=a,b
-# in the environment replaces it (tests and CI). A lab gates the top level
+# in the environment replaces it for the tests only (a seam, read under
+# FL_TESTING=1): in a real run nothing in the environment turns a lab on,
+# because only a person does that (`labs on`). A lab gates the top level
 # commands named in its row: while it is off they do not appear in --help or
 # `commands --json`, and running one is refused with exit 2.
 #
@@ -14,14 +16,13 @@
 # from macos, linux, windows (Windows is Linux inside WSL).
 
 read -r -d '' FL_LAB_TABLE <<'TABLE' || true
-lab~lan-rooms~Share with people on the same Wi-Fi~Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose.~Asks for your password once to install a firewall rule, and opens port 8443 on this Mac while a share is on. A share stays up until you stop it.~0.8.2~share,lan-guard~macos
+lab~lan-rooms~Share with people on the same Wi-Fi~Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose.~Asks for your password once to install a firewall rule, and opens port 8443 on this computer while a share is on. A share stays up until you stop it.~0.8.2~share,lan-guard~macos,linux
 lab~quick-switch~Quick Switch panel~A panel on a global keyboard shortcut to open a site as any pinned user.~Holds a system wide keyboard shortcut while the app runs.~0.8.2~~macos
 TABLE
 
 # The readers loop over the variable with a here string, never over a pipe: a
 # loop that returns early would close the pipe on a writer still printing, and
 # Linux bash then prints "printf: write error: Broken pipe" into the output
-fl_lab_table() { printf '%s\n' "$FL_LAB_TABLE"; }
 
 # fl_lab_names_v VAR: every known lab name, space separated
 fl_lab_names_v() {
@@ -52,17 +53,22 @@ fl_lab_attr_v() {
   printf -v "$1" '%s' "$__r"
 }
 
+# fl_lab_env_override: true when the tests' BENCHBAR_LABS is in force. It is a
+# test seam: a production run ignores it (FL_TESTING), so an agent that sets
+# it does not get past the gate of a lab a person left off.
+fl_lab_env_override() { [[ "${FL_TESTING:-}" == "1" && -n "${BENCHBAR_LABS+x}" ]]; }
+
 # fl_lab_list_v VAR: the enabled lab names in force, space separated: the
-# BENCHBAR_LABS override when it is set, else the LABS key of the state file
+# LABS key of the state file (or the tests' BENCHBAR_LABS)
 fl_lab_list_v() {
   local __v
-  if [[ -n "${BENCHBAR_LABS+x}" ]]; then __v="${BENCHBAR_LABS//,/ }"; else __v="$(fl_state_get LABS 2>/dev/null || true)"; fi
+  if fl_lab_env_override; then __v="${BENCHBAR_LABS//,/ }"; else fl_kv_get_v __v "$FL_STATE_FILE" LABS 2>/dev/null || __v=""; fi
   printf -v "$1" '%s' "$__v"
 }
 
 # fl_lab_on NAME: true when the lab is known, listed for this platform and on.
-# The platform test is here, not in `labs on` alone: BENCHBAR_LABS and a
-# state file copied from a Mac must not turn on a lab whose code (pf,
+# The platform test is here, not in `labs on` alone: a state file copied from
+# a Mac (or the tests' BENCHBAR_LABS) must not turn on a lab whose code (pf,
 # launchctl) this platform lacks.
 fl_lab_on() {
   local list n
@@ -73,11 +79,39 @@ fl_lab_on() {
   return 1
 }
 
+# fl_lab_saved NAME: the saved list (the state file, never the override) names the lab, whether or not this
+# platform lists it. A state copied from a Mac keeps such an entry, and `labs off` is how it goes.
+fl_lab_saved() {
+  local n
+  for n in $(fl_state_get LABS 2>/dev/null || true); do [[ "$n" == "$1" ]] && return 0; done
+  return 1
+}
+
 # fl_lab_enabled_v VAR: known labs that are on, space separated
+# (the list is read once: what fl_lab_on says for each name of the table)
 fl_lab_enabled_v() {
-  local __all __n __r=""
+  local __all __n __x __list __r=""
   fl_lab_names_v __all
-  for __n in $__all; do fl_lab_on "$__n" && __r="${__r}${__r:+ }${__n}"; done
+  fl_lab_list_v __list
+  for __n in $__all; do
+    fl_lab_available "$__n" || continue
+    for __x in $__list; do
+      if [[ "$__x" == "$__n" ]]; then __r="${__r}${__r:+ }${__n}"; break; fi
+    done
+  done
+  printf -v "$1" '%s' "$__r"
+}
+
+# fl_lab_cmd_map_v VAR: " word:lab word:lab " for the commands of every lab (the first lab
+# that names a word), the table fl_lab_of_cmd_v searches, read once
+fl_lab_cmd_map_v() {
+  local __k __n __c __x __r=" "
+  while IFS='~' read -r __k __n _ _ _ _ __c _; do
+    [[ "$__k" == lab ]] || continue
+    for __x in ${__c//,/ }; do
+      case "$__r" in *" ${__x}:"*) ;; *) __r="${__r}${__x}:${__n} " ;; esac
+    done
+  done <<<"$FL_LAB_TABLE"
   printf -v "$1" '%s' "$__r"
 }
 
@@ -120,6 +154,8 @@ fl_lab_platform_v() {
 # linux also runs in WSL)
 fl_lab_available() {
   local p plat x
+  # tests only: the lab's own platform list is not what a test of one platform's code is about
+  [[ "${FL_TESTING:-}" == "1" && "${FL_LABS_ANY_PLATFORM:-}" == "1" ]] && return 0
   fl_lab_attr_v p "$1" platforms
   fl_lab_platform_v plat
   for x in ${p//,/ }; do
@@ -161,10 +197,21 @@ fl_lab_require() {
   fl_die "benchbar ${2:-${COMMAND:-this command}} is an experiment and it is off." "$hint" 2
 }
 
+# fl_lab_undo_key KEY: the commands of a lab that only stop, remove or report what it started. They run
+# while the lab is off too: an experiment that is off must still be undoable, and `labs off` names one of
+# them (lan-guard remove) for the root files it cannot remove itself.
+fl_lab_undo_key() {
+  case "$1" in
+    "share stop"|"share status"|"share teardown"|"share leave"|"share forget"|"lan-guard status"|"lan-guard remove") return 0 ;;
+  esac
+  return 1
+}
+
 # fl_lab_gate KEY: the dispatcher's one check; KEY is a command or a table key
 fl_lab_gate() {
   local cmd="${1%% *}" lab
   [[ -n "$cmd" ]] || return 0
+  ! fl_lab_undo_key "$1" || return 0
   lab="$(fl_lab_of_cmd "$cmd")"
   [[ -z "$lab" ]] || fl_lab_require "$lab" "$cmd"
 }
@@ -211,14 +258,14 @@ fl_labs_json() {
     out="${out}${sep}{\"name\":$(fl_json_str "$n"),\"title\":$(fl_json_str "$t"),\"description\":$(fl_json_str "$d"),\"warning\":$(fl_json_str "$w"),\"since\":$(fl_json_str "$s"),\"enabled\":${en},\"commands\":[${cmds}],\"platforms\":[${plats}],\"available\":${av}}"
     sep=","
   done <<<"$FL_LAB_TABLE"
-  printf '{"schema_version":%d,"cli_version":"%s","labs":[%s]}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$out"
+  printf '{"schema_version":%d,"cli_version":"%s","labs":[%s]}\n' "${FL_SCHEMA_VERSION:-1}" "$FL_VERSION" "$out"
 }
 
 # fl_lab_enabled_json_v VAR: ["a","b"] of the enabled labs
 fl_lab_enabled_json_v() {
-  local __e __n __r="" __s=""
+  local __e __n __j __r="" __s=""
   fl_lab_enabled_v __e
-  for __n in $__e; do __r="${__r}${__s}$(fl_json_str "$__n")"; __s=","; done
+  for __n in $__e; do fl_json_str_v __j "$__n"; __r="${__r}${__s}${__j}"; __s=","; done
   printf -v "$1" '[%s]' "$__r"
 }
 
@@ -261,7 +308,7 @@ fl_cmd_labs() {
   fi
   if [[ "$action" == status ]]; then
     if [[ "${OPT_JSON:-0}" == "1" ]]; then
-      printf '{"schema_version":%d,"cli_version":"%s","name":%s,"enabled":%s}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$(fl_json_str "$name")" "$on_now"
+      printf '{"schema_version":%d,"cli_version":"%s","name":%s,"enabled":%s}\n' "${FL_SCHEMA_VERSION:-1}" "$FL_VERSION" "$(fl_json_str "$name")" "$on_now"
     else
       fl_ok "${name}: $([[ "$on_now" == true ]] && printf on || printf off)"
     fi
@@ -294,8 +341,13 @@ fl_cmd_labs() {
       fl_next_action "benchbar labs off ${name}" "Turn it off again"
     fi
   else
-    if [[ "$on_now" != true ]]; then fl_ok "unchanged: ${name} is already off"
+    # an entry in the saved list that this platform never turns on (the lab is not listed for it): off drops it
+    if [[ "$on_now" != true ]] && { fl_lab_available "$name" || ! fl_lab_saved "$name"; }; then fl_ok "unchanged: ${name} is already off"
     elif [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would turn off ${name}"
+    elif [[ "$on_now" != true ]]; then
+      fl_lab_set "$name" 0
+      fl_changed lab "$name" "saved entry removed (this platform does not list it)"
+      fl_ok "${name} was never on here; its saved entry is removed"
     else
       fl_lab_cleanup "$name"
       fl_lab_set "$name" 0
@@ -305,7 +357,7 @@ fl_cmd_labs() {
     fi
   fi
   fl_lab_on "$name" && en=true || en=false
-  if [[ -n "${BENCHBAR_LABS+x}" && "${FL_DRY_RUN:-0}" != "1" ]]; then fl_info "BENCHBAR_LABS is set and overrides the saved list."; fi
+  if fl_lab_env_override && [[ "${FL_DRY_RUN:-0}" != "1" ]]; then fl_info "BENCHBAR_LABS is set and overrides the saved list."; fi
   if [[ "${OPT_JSON:-0}" == "1" || "${FL_JSONL:-0}" == "1" ]]; then
     fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","lab":%s,"enabled":%s}' "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$(fl_json_str "$name")" "$en")"
   fi

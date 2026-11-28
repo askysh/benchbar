@@ -18,34 +18,24 @@
 # upgrade when the cask installed the app. Only that brew command is run
 # from here; Sparkle is the app's to start.
 
-FL_SELFUPDATE_API="${BENCHBAR_API:-https://api.github.com/repos/askysh/benchbar}"
-FL_SELFUPDATE_INSTALLER="${BENCHBAR_INSTALLER_URL:-https://raw.githubusercontent.com/askysh/benchbar/main/install.sh}"
+# The addresses are fixed. BENCHBAR_API and BENCHBAR_INSTALLER_URL (the test
+# seams: a mocked release, a stub installer) are read only under FL_TESTING=1,
+# so an environment that a person or a script leaves set cannot point the
+# update at another server.
+FL_SELFUPDATE_API="https://api.github.com/repos/askysh/benchbar"
+FL_SELFUPDATE_RAW="https://raw.githubusercontent.com/askysh/benchbar"
+FL_SELFUPDATE_DOWNLOADS="https://github.com/askysh/benchbar/releases/download"
+FL_SELFUPDATE_INSTALLER_OVERRIDE=""
+if [[ "${FL_TESTING:-}" == "1" ]]; then
+  FL_SELFUPDATE_API="${BENCHBAR_API:-$FL_SELFUPDATE_API}"
+  FL_SELFUPDATE_INSTALLER_OVERRIDE="${BENCHBAR_INSTALLER_URL:-}"
+fi
 FL_SELFUPDATE_HOME="${BENCHBAR_HOME:-$HOME/.local/share/benchbar}"
 FL_SELFUPDATE_TIMEOUT="${FL_SELFUPDATE_TIMEOUT:-10}"
 FL_SELFUPDATE_BREW_CMD="brew upgrade askysh/tap/benchbar"
 FL_SELFUPDATE_CASK_CMD="brew upgrade askysh/tap/benchbar-app"
 # where a cask may have installed the app, after this Mac's own prefix (tests set it)
 FL_SELFUPDATE_CASK_PREFIXES="${FL_SELFUPDATE_CASK_PREFIXES:-/opt/homebrew /usr/local}"
-
-# fl_version_lt A B: true when version A is older than B ("v0.5.8" < "0.6.0",
-# 0.10 after 0.9, a prerelease before its release)
-fl_version_lt() {
-  local a="${1#v}" b="${2#v}" pa="" pb="" x y i
-  [[ "$a" == *-* ]] && { pa="${a#*-}"; a="${a%%-*}"; }
-  [[ "$b" == *-* ]] && { pb="${b#*-}"; b="${b%%-*}"; }
-  local -a na nb
-  IFS=. read -r -a na <<<"$a"
-  IFS=. read -r -a nb <<<"$b"
-  for ((i = 0; i < ${#na[@]} || i < ${#nb[@]}; i++)); do
-    x="${na[i]:-0}"; y="${nb[i]:-0}"
-    [[ "$x" =~ ^[0-9]+$ && "$y" =~ ^[0-9]+$ ]] || return 1
-    ((10#$x < 10#$y)) && return 0
-    ((10#$x > 10#$y)) && return 1
-  done
-  [[ -n "$pa" && -z "$pb" ]] && return 0
-  [[ -n "$pa" && -n "$pb" && "$pa" < "$pb" ]] && return 0
-  return 1
-}
 
 # fl_selfupdate_latest: "TAG<TAB>PAGE" of the latest GitHub release, or return 1
 fl_selfupdate_latest() {
@@ -134,29 +124,64 @@ fl_selfupdate_plan() {
   return 0
 }
 
-# fl_selfupdate_pin VERSION: SU_INSTALLER, SU_ARGS and SU_COMMAND for that
-# release: its tag's install.sh with --version, so a release published
-# after the prompt cannot change what is installed. Empty or odd: main.
-# Homebrew has no pin: brew installs the version its tap has.
+# fl_selfupdate_pin VERSION: SU_INSTALLER, SU_SUMS, SU_PIN, SU_ARGS and
+# SU_COMMAND for that release: its tag's install.sh with --version, checked
+# against that release's SHA256SUMS before it runs, so a release published
+# after the prompt cannot change what is installed and a file served from
+# main (or from anywhere else) is never run. Without a version there is no
+# command to run: the plan only says what self-update does. Homebrew has no
+# pin: brew installs the version its tap has.
 fl_selfupdate_pin() {
+  SU_PIN=""; SU_INSTALLER=""; SU_SUMS=""
   if [[ "$SU_KIND" == app ]]; then
-    SU_INSTALLER=""; SU_ARGS=(); SU_COMMAND=""
+    SU_ARGS=(); SU_COMMAND=""
     [[ -z "$SU_CASK" ]] || SU_COMMAND="$FL_SELFUPDATE_CASK_CMD"
     return 0
   fi
   if [[ "$SU_KIND" == homebrew ]]; then
-    SU_INSTALLER=""; SU_ARGS=(); SU_COMMAND="$FL_SELFUPDATE_BREW_CMD"
+    SU_ARGS=(); SU_COMMAND="$FL_SELFUPDATE_BREW_CMD"
     return 0
   fi
-  SU_INSTALLER="$FL_SELFUPDATE_INSTALLER"; SU_ARGS=(--yes)
+  SU_ARGS=(--yes)
   [[ "$SU_APP_ONLY" == "1" ]] && SU_ARGS+=(--app-only)
-  if [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
-    [[ -z "${BENCHBAR_INSTALLER_URL:-}" ]] && SU_INSTALLER="https://raw.githubusercontent.com/askysh/benchbar/v${1}/install.sh"
-    SU_ARGS+=(--version "v${1}")
-  fi
-  SU_COMMAND="curl -fsSL ${SU_INSTALLER} | "
+  SU_COMMAND=""
+  [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || return 0
+  SU_PIN="$1"
+  SU_INSTALLER="${FL_SELFUPDATE_RAW}/v${1}/install.sh"
+  SU_SUMS="${FL_SELFUPDATE_DOWNLOADS}/v${1}/SHA256SUMS"
+  [[ -z "$FL_SELFUPDATE_INSTALLER_OVERRIDE" ]] || SU_INSTALLER="$FL_SELFUPDATE_INSTALLER_OVERRIDE"
+  SU_ARGS+=(--version "v${1}")
+  # the same steps self-update takes, as one line to copy
+  SU_COMMAND="cd \"\$(mktemp -d)\" && curl --proto '=https' --tlsv1.2 -fsSL -o install.sh ${SU_INSTALLER} && curl --proto '=https' --tlsv1.2 -fsSL ${SU_SUMS} | grep ' install.sh\$' | shasum -a 256 -c - && "
   [[ -n "$SU_APP_DIR" ]] && SU_COMMAND+="BENCHBAR_APP_DIR=$(printf '%q' "$SU_APP_DIR") "
-  SU_COMMAND+="bash -s -- ${SU_ARGS[*]}"
+  SU_COMMAND+="bash install.sh ${SU_ARGS[*]}"
+}
+
+# fl_selfupdate_fetch: install.sh of the pinned release in SU_TMP, after its
+# sha256 matched the line for install.sh in the release's SHA256SUMS. Dies,
+# with SU_TMP removed, when a download fails, the release lists no install.sh
+# (a release from before the installers were listed) or the hashes differ.
+fl_selfupdate_fetch() {
+  local want have name
+  [[ -n "$SU_PIN" && -n "$SU_INSTALLER" && -n "$SU_SUMS" ]] || fl_die "There is no release to update to." "Run: benchbar self-update --check"
+  SU_TMP="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-selfupdate.XXXXXX")" || fl_die "Could not create a temporary folder."
+  curl --proto '=https' --tlsv1.2 -fsSL --max-time 60 -o "${SU_TMP}/install.sh" "$SU_INSTALLER" 2>/dev/null \
+    || { rm -rf "$SU_TMP"; fl_die "Could not download ${SU_INSTALLER}." "Try again later."; }
+  curl --proto '=https' --tlsv1.2 -fsSL --max-time 60 -o "${SU_TMP}/SHA256SUMS" "$SU_SUMS" 2>/dev/null \
+    || { rm -rf "$SU_TMP"; fl_die "Could not download ${SU_SUMS}." "Try again later."; }
+  want=""
+  while read -r have name _; do
+    case "$name" in install.sh|\*install.sh|./install.sh) want="$have"; break ;; esac
+  done <"${SU_TMP}/SHA256SUMS"
+  if [[ -z "$want" ]]; then
+    rm -rf "$SU_TMP"
+    fl_die "The SHA256SUMS of v${SU_PIN} has no line for install.sh, so the installer cannot be checked and was not run." "Update by hand: see https://github.com/askysh/benchbar/blob/main/docs/upgrade.md"
+  fi
+  have="$(shasum -a 256 "${SU_TMP}/install.sh" | awk '{print $1}')"
+  if [[ "$have" != "$want" ]]; then
+    rm -rf "$SU_TMP"
+    fl_die "install.sh of v${SU_PIN} does not match the release's SHA256SUMS (file ${have}, SHA256SUMS ${want}); it was not run." "Try again later. If it repeats, report it at https://github.com/askysh/benchbar/issues"
+  fi
 }
 
 fl_selfupdate_json() {
@@ -181,8 +206,10 @@ fl_selfupdate_usage() {
   cat <<USAGE
 Usage: benchbar self-update [--check] [--dry-run] [--json] [--yes]
 
-Updates the benchbar CLI and the BenchBar app with the one line installer:
-  curl -fsSL ${FL_SELFUPDATE_INSTALLER} | bash -s -- --yes
+Updates the benchbar CLI and the BenchBar app with the one line installer of
+the release it installs: it downloads install.sh of that release's tag,
+compares its sha256 with the release's SHA256SUMS, and only then runs it
+(with --yes and --version). The CLI is checked out at the release's tag.
 It shows the plan and asks first. It never touches a bench and never runs
 bench update. A CLI that is a git checkout of your own gets --app-only and
 the git pull to run. A CLI installed with Homebrew is upgraded by brew
@@ -295,11 +322,34 @@ fl_cmd_self_update() {
   fi
   fl_confirm "Update BenchBar to ${latest} now?" || { fl_info "Cancelled. Nothing was changed. Later: benchbar self-update"; return 1; }
   [[ -n "$SU_APP_DIR" ]] && export BENCHBAR_APP_DIR="$SU_APP_DIR"
+  fl_selfupdate_fetch
+  fl_ok "install.sh of v${SU_PIN} matches the release's SHA256SUMS"
+  # a CLI that install.sh manages is left at the release's tag: install.sh
+  # pins only the app on a Mac (and a release candidate's CLI)
+  local pin_home="" strip=1
+  [[ "$SU_APP_ONLY" == "1" ]] || pin_home="$FL_SELFUPDATE_HOME"
+  # install.sh reads BENCHBAR_API and BENCHBAR_REPO from the environment: a
+  # left over one would send the checked installer to another server for the
+  # release and the clone. Only the tests (FL_TESTING=1) may set them.
+  [[ "${FL_TESTING:-}" != "1" ]] || strip=0
   # exec: the installer may replace this very script with git pull; the lock
-  # goes first, since exec skips the EXIT trap
+  # goes first, since exec skips the EXIT trap. The inner shell runs the
+  # checked file, removes it, then checks the CLI out at the tag.
   fl_lock_release
   # shellcheck disable=SC2016  # $1 and $@ belong to the inner bash
-  exec bash -c 'set -o pipefail; url="$1"; shift; curl -fsSL "$url" | bash -s -- "$@"' _ "$SU_INSTALLER" "${SU_ARGS[@]}"
+  exec bash -c 'dir="$1"; home="$2"; tag="$3"; strip="$4"; shift 4
+    if [ "$strip" = 1 ]; then
+      env -u BENCHBAR_API -u BENCHBAR_REPO bash "$dir/install.sh" "$@"; rc=$?
+    else
+      bash "$dir/install.sh" "$@"; rc=$?
+    fi
+    rm -rf "$dir"
+    [ "$rc" -eq 0 ] || exit "$rc"
+    if [ -n "$home" ] && [ -e "$home/.git" ]; then
+      git -C "$home" fetch --quiet --tags && git -C "$home" checkout --quiet "$tag" \
+        || { echo "benchbar self-update: could not check the CLI out at $tag in $home (local changes?). The app is updated; the CLI stays as it was. fix: git -C $home checkout $tag" >&2; exit 1; }
+      echo "CLI at $home is at $tag"
+    fi' _ "$SU_TMP" "$pin_home" "v${SU_PIN}" "$strip" "${SU_ARGS[@]}"
 }
 
 # The path helpers of `where` (lean start): they live here, not in checks.sh,
@@ -338,4 +388,24 @@ fl_cli_version_at() {
     if [[ "$line" =~ ^FL_VERSION=\"(.*)\"$ ]]; then printf '%s\n' "${BASH_REMATCH[1]}"; return 0; fi
   done <"$1"
   return 0
+}
+
+# fl_handoff_via_v VAR: the version of the copy that handed off to this run
+# (Homebrew's or the installer's, FL_HANDOFF_FROM), or nothing: no hand off,
+# or a copy whose version cannot be read
+fl_handoff_via_v() {
+  local __s=""
+  printf -v "$1" '%s' ""
+  [[ -n "${FL_HANDOFF_FROM:-}" ]] || return 0
+  __s="$(fl_cli_standalone_script "$FL_HANDOFF_FROM")"
+  [[ -z "$__s" || ! -f "$__s" ]] || printf -v "$1" '%s' "$(fl_cli_version_at "$__s")"
+}
+
+# fl_handoff_newer_hint VERSION: one line for --version and where when the copy
+# that handed off (at VERSION) is newer than this CLI, else nothing. The hand
+# off still happens: one CLI version works on the state, the app's, so the app
+# is what is behind (doctor's Second CLI check says the same).
+fl_handoff_newer_hint() {
+  [[ -n "${1:-}" ]] && fl_version_lt "${FL_VERSION:-0}" "$1" || return 0
+  printf 'it is newer than this CLI (%s), which runs in its place until the app updates: Check for Updates in BenchBar, or: %s\n' "${FL_VERSION:-0}" "$FL_SELFUPDATE_CASK_CMD"
 }

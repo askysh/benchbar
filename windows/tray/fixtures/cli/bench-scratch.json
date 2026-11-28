@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.9.0","bench":"/home/akash/frappe-bench","scratch":true,"ttl_days":3,"scratch_until":1795000000,"exit":0,"changed":[{"kind":"bench","name":"/home/akash/frappe-bench","detail":"scratch for 3 day(s)"}],"warnings":[],"next_actions":[]}

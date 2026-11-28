@@ -7,17 +7,18 @@ public sealed record PlanRunStep(string Id, string Name, InstallStepStatus Statu
 
 /// <summary>The result view: what changed, warnings, what to do next. Built from the apply's done line.</summary>
 public sealed record PlanResultModel(bool Ok, bool Cancelled, string Headline, string? Error, IReadOnlyList<CliChange> Changed,
-    IReadOnlyList<string> Warnings, IReadOnlyList<CliNextAction> NextActions, IReadOnlyList<string> Missing, string? Log)
+    IReadOnlyList<string> Warnings, IReadOnlyList<CliNextAction> NextActions, IReadOnlyList<string> Missing, string? Log, string? Hint = null)
 {
     public static PlanResultModel From(CliStreamResult result)
     {
         var done = result.Done;
         if (result.Cancelled)
-            return new PlanResultModel(false, true, "Stopped", "The run was stopped. Run the plan again to finish it.", done?.Changed ?? [], done?.Warnings ?? [], [], [], done?.Log);
+            return new PlanResultModel(false, true, UiText.Get("PlanStopped"), UiText.Get("PlanRunStopped"), done?.Changed ?? [], done?.Warnings ?? [], [], [], done?.Log);
         if (result.Ok)
-            return new PlanResultModel(true, false, done is { Changed.Count: 0 } ? "Nothing needed changing" : "Done", null, done?.Changed ?? [], done?.Warnings ?? [], done?.NextActions ?? [], [], done?.Log);
-        var problem = result.Problem ?? $"The command failed (exit {result.Exit}).";
-        return new PlanResultModel(false, false, "It did not finish", problem, done?.Changed ?? [], done?.Warnings ?? [], done?.NextActions ?? [], done?.Missing ?? [], done?.Log);
+            return new PlanResultModel(true, false, done is { Changed.Count: 0 } ? UiText.Get("PlanNothingNeeded") : UiText.Get("PlanDone"), null, done?.Changed ?? [], done?.Warnings ?? [], done?.NextActions ?? [], [], done?.Log);
+        var problem = ResultEnvelope.Shown(result.Problem) ?? UiText.Format("PlanCommandFailed", result.Exit);
+        return new PlanResultModel(false, false, UiText.Get("PlanDidNotFinish"), problem, done?.Changed ?? [], done?.Warnings ?? [], done?.NextActions ?? [], done?.Missing ?? [], done?.Log,
+            done is { Error.Length: > 0, Fix.Length: > 0 } && done.Explained != ResultEnvelope.Shown(done.Error) ? ResultEnvelope.Shown(done.Fix) : null);
     }
 }
 
@@ -103,13 +104,56 @@ public sealed class PlanReviewModel : IDisposable
         get
         {
             var title = Request.Title;
-            if (Result is not { } result) return Message ?? $"{title}: no result.";
-            return result.Ok ? $"{title}: {result.Headline.ToLowerInvariant()}." : $"{title}: {result.Headline.ToLowerInvariant()}. {result.Error}".TrimEnd();
+            if (Result is not { } result) return Message ?? UiText.Format("PlanNoResult", title);
+            return result.Ok ? UiText.Format("PlanSummaryOk", title, result.Headline.ToLowerInvariant()) : UiText.Format("PlanSummaryFailed", title, result.Headline.ToLowerInvariant(), result.Error ?? "").TrimEnd();
         }
     }
 
     /// <summary>The plan can be applied: it has no errors, it changes something, and it has a token to apply it with.</summary>
-    public bool CanConfirm => Phase == PlanPhase.Review && Plan is { CanApply: true, HasChanges: true } && (!Request.RequiresToken || Plan.Token is { Length: > 0 });
+    public bool CanConfirm => Phase == PlanPhase.Review && Plan is { CanApply: true, HasChanges: true } && (!Request.RequiresToken || Plan.Token is { Length: > 0 })
+        && NameMatches && (Request.Allows?.Invoke(Plan) ?? true);
+
+    /// <summary>What the person typed for <see cref="PlanReviewRequest.ConfirmName"/>. Reading a new plan clears it: the name is typed again for the plan that is shown.</summary>
+    public string Typed { get; set; } = "";
+
+    public bool NameMatches => Request.ConfirmName is not { } name || TypedConfirm.Matches(name, Typed);
+
+    /// <summary>The button that clears what blocks the plan in review, or null.</summary>
+    public PlanResolver? Blocker => Phase == PlanPhase.Review && Plan is { } plan ? Request.BlockedBy?.Invoke(plan) : null;
+
+    /// <summary>Runs the blocker's button, then reads the plan again. A refusal is said and the plan stays.</summary>
+    public async Task ResolveBlockerAsync(CancellationToken ct = default)
+    {
+        if (Blocker is not { } blocker) return;
+        var ok = await blocker.Resolve().ConfigureAwait(true);
+        if (_disposed) return;
+        if (ok)
+        {
+            await LoadAsync(ct).ConfigureAwait(true);
+            return;
+        }
+        Message = blocker.FailedText;
+        Raise();
+    }
+
+    /// <summary>Who holds the lease that refused the apply (nothing was changed), or null. Only <see cref="BreakLeaseAsync"/> goes past it.</summary>
+    public LeaseRefusal? LeaseRefused { get; private set; }
+
+    private bool _breakLease;
+
+    /// <summary>
+    /// Runs the same apply again with <c>--break-lease</c> after a lease refused it. It is the person's own click, after the sheet asked; the
+    /// CLI allows it to a person only and records the run in the history. Does nothing when no lease refused the last apply.
+    /// </summary>
+    public Task BreakLeaseAsync()
+    {
+        if (Phase != PlanPhase.Finished || LeaseRefused is null || Plan is null) return Task.CompletedTask;
+        _breakLease = true;
+        LeaseRefused = null;
+        Result = null;
+        Phase = PlanPhase.Review;
+        return ConfirmAsync();
+    }
 
     public bool AsksPassword => Request.UsesSudoEnv && Plan is { SudoSteps: > 0 };
 
@@ -121,6 +165,7 @@ public sealed class PlanReviewModel : IDisposable
         Plan = null;
         Message = null;
         Result = null;
+        Typed = "";
         Raise();
         var env = BuildEnv(null);
         if (Request.PlanIsText)
@@ -137,7 +182,7 @@ public sealed class PlanReviewModel : IDisposable
                 Phase = PlanPhase.PlanFailed;
                 // a command without JSON says why on stdout: its [FAIL] line is the reason
                 var fail = preview.TextLines.FirstOrDefault(l => l.Contains("[FAIL]", StringComparison.Ordinal));
-                Message = fail is not null ? fail[(fail.IndexOf("[FAIL]", StringComparison.Ordinal) + 6)..].Trim() : preview.Problem ?? "The preview could not be made.";
+                Message = fail is not null ? fail[(fail.IndexOf("[FAIL]", StringComparison.Ordinal) + 6)..].Trim() : preview.Problem ?? UiText.Get("PlanPreviewFailed");
             }
             Raise();
             return;
@@ -153,7 +198,7 @@ public sealed class PlanReviewModel : IDisposable
         else
         {
             Phase = PlanPhase.PlanFailed;
-            Message = result.Error ?? "The plan could not be made.";
+            Message = result.Error ?? UiText.Get("CommonPlanNotMade");
         }
         Raise();
     }
@@ -188,7 +233,8 @@ public sealed class PlanReviewModel : IDisposable
             Phase = PlanPhase.Running;
             Raise();
 
-            var apply = await _cli.RunStreamAsync(Request.ApplyArgs(plan), env, Request.ApplyTimeout, OnEvent, cts.Token).ConfigureAwait(true);
+            var applyArgs = _breakLease ? LeaseCommands.WithBreak(Request.ApplyArgs(plan)) : Request.ApplyArgs(plan);
+            var apply = await _cli.RunStreamAsync(applyArgs, env, Request.ApplyTimeout, OnEvent, cts.Token).ConfigureAwait(true);
             lock (_gate) _run = null;
             if (_disposed) return;
             Finish(apply);
@@ -204,7 +250,7 @@ public sealed class PlanReviewModel : IDisposable
         if (apply.Done?.WrongSudoPassword == true)
         {
             PasswordWasWrong = true;
-            Message = "Linux did not accept that password. Nothing was changed.";
+            Message = UiText.Get("PlanPasswordRefused");
             Phase = PlanPhase.Review;
         }
         else if (!apply.Ok && !apply.Cancelled && PlanStale.Looks(apply.Problem))
@@ -217,6 +263,8 @@ public sealed class PlanReviewModel : IDisposable
             Result = PlanResultModel.From(apply);
             if (Request.ExplainFailure?.Invoke(apply) is { Length: > 0 } advice) Result = Result with { Error = $"{Result.Error} {advice}".Trim() };
             Outcome = new PlanOutcome(apply.Ok, apply.Cancelled, apply.Done);
+            // a lease that stands in front of the change is shown with its holder; only the person's own click goes past it (BreakLeaseAsync)
+            LeaseRefused = apply.Ok || apply.Cancelled ? null : LeaseRefusal.Parse(apply.Problem);
             Phase = PlanPhase.Finished;
         }
         Raise();
@@ -240,6 +288,7 @@ public sealed class PlanReviewModel : IDisposable
         var env = new SecretEnvironment();
         Request.ConfigureEnv?.Invoke(env);
         if (password is not null) CliSudo.Apply(env, password);
+        if (_breakLease) env.Set(SetupEnv.NonInteractive, "0"); // --break-lease is allowed to a person only; after the sudo mode, which sets 1
         return env;
     }
 
@@ -247,6 +296,9 @@ public sealed class PlanReviewModel : IDisposable
     {
         switch (e)
         {
+            case CliEvent.Step { Value: { IsSubStep: true } sub }:
+                ProgressLabel = sub.Name; // a sub step shares its parent's id: it says what the parent is doing, it is not the parent's status
+                break;
             case CliEvent.Step { Value: var step }:
                 lock (_gate)
                 {

@@ -127,7 +127,7 @@ fl_install_bench_if_needed() {
     # a bench that is on PATH but does not run (its venv's Python was
     # upgraded away) would fail at bench init with a stack trace; say so
     # here with the reinstall for whichever tool owns it
-    local ver reinstall="uv tool install --reinstall frappe-bench"
+    local ver reinstall="uv tool install --reinstall frappe-bench==${FL_PIN_FRAPPE_BENCH}"
     [[ "$(fl_bench_owner)" == "pipx" ]] && reinstall="pipx reinstall frappe-bench"
     if ! ver="$(bench --version 2>/dev/null)"; then
       fl_die "bench at $(command -v bench) does not run (bench --version failed)." "Reinstall it: ${reinstall}"
@@ -136,18 +136,18 @@ fl_install_bench_if_needed() {
     fl_ok "bench ${ver:-(version unknown)} at $(command -v bench)"
     if [[ -n "$ver" && -n "${FL_BENCH_MIN:-}" ]] && fl_version_lt "$ver" "$FL_BENCH_MIN"; then
       fl_warn "bench ${ver} is older than ${FL_BENCH_MIN}, the oldest known to handle profile ${FL_PROFILE}; a newer one is safer"
-      if [[ "$reinstall" == pipx* ]]; then fl_fix "pipx upgrade frappe-bench"; else fl_fix "uv tool upgrade frappe-bench"; fi
+      if [[ "$reinstall" == pipx* ]]; then fl_fix "pipx install --force frappe-bench==${FL_PIN_FRAPPE_BENCH}"; else fl_fix "uv tool install --reinstall frappe-bench==${FL_PIN_FRAPPE_BENCH}"; fi
     fi
     return 0
   fi
   if [[ -n "${BENCHBAR_PLAN_STEP1:-}" ]] && ! command -v uv >/dev/null 2>&1 && ! command -v pipx >/dev/null 2>&1; then
-    fl_dry_run_pending uv && { fl_info "dry-run: frappe-bench is then installed with: uv tool install frappe-bench"; return 0; }
+    fl_dry_run_pending uv && { fl_info "dry-run: frappe-bench is then installed with: uv tool install frappe-bench==${FL_PIN_FRAPPE_BENCH}"; return 0; }
   fi
   if command -v uv >/dev/null 2>&1; then
     # the official docs install bench with uv; uv says where its executables
     # go (UV_TOOL_BIN_DIR, XDG_BIN_HOME, else ~/.local/bin)
     fl_warn "frappe-bench is missing; installing with uv"
-    fl_run uv tool install frappe-bench || fl_die "frappe-bench install failed." "Manual command: uv tool install frappe-bench"
+    fl_run uv tool install "frappe-bench==${FL_PIN_FRAPPE_BENCH}" || fl_die "frappe-bench install failed." "Manual command: uv tool install frappe-bench==${FL_PIN_FRAPPE_BENCH}"
     PIPX_BIN_DIR="$(uv tool dir --bin 2>/dev/null || true)"
     PIPX_BIN_DIR="${PIPX_BIN_DIR:-$HOME/.local/bin}"
     export PATH="${PIPX_BIN_DIR}:$PATH"
@@ -155,7 +155,7 @@ fl_install_bench_if_needed() {
     fl_info "frappe-bench already installed via pipx"
   else
     fl_warn "frappe-bench is missing; installing with pipx"
-    fl_run pipx install frappe-bench || fl_die "frappe-bench install failed." "Manual command: pipx install frappe-bench"
+    fl_run pipx install "frappe-bench==${FL_PIN_FRAPPE_BENCH}" || fl_die "frappe-bench install failed." "Manual command: pipx install frappe-bench==${FL_PIN_FRAPPE_BENCH}"
   fi
   [[ "$FL_DRY_RUN" == "1" ]] && return 0
   command -v bench >/dev/null 2>&1 || fl_die "bench command not found after installing frappe-bench." "Manual check: ls ${PIPX_BIN_DIR:-$HOME/.local/bin}/bench"
@@ -179,9 +179,17 @@ fl_bench_require_uv() {
     return 0
   fi
   local hint="brew install uv"
-  fl_is_linux && hint="curl -LsSf https://astral.sh/uv/install.sh | sh"
+  fl_is_linux && hint="curl -LsSf https://astral.sh/uv/0.13.9/install.sh | sh"
   fl_die "uv is not installed, and bench init needs it to make the bench's environment." \
     "Run ./$(fl_phase00_script) --profile ${FL_PROFILE:-v15-lts} (it installs uv), or by hand: ${hint}"
+}
+
+# fl_uv_install_hint: how uv gets onto this machine, for a fix line: Homebrew on
+# a Mac; on Linux the phase 00 script, which downloads the pinned installer and
+# checks its sum before it runs (nothing else installs uv there)
+fl_uv_install_hint() {
+  if fl_is_linux; then printf '%s/%s --profile %s   (installs uv)' "$FL_SELF_DIR" "$(fl_phase00_script)" "${FL_PROFILE:-v15-lts}"
+  else printf 'brew install uv'; fi
 }
 
 fl_bench_complete() {
@@ -300,7 +308,8 @@ fl_bench_init_if_needed() {
   fi
   fl_info "Running bench init for frappe ref ${frappe_ref}"
   if [[ "$timeout_seconds" -gt 0 ]]; then fl_info "bench init timeout: $((timeout_seconds / 60)) minutes (BENCH_INIT_TIMEOUT_SECONDS changes it)"; else fl_info "bench init has no time limit"; fi
-  fl_run_with_timeout "$timeout_seconds" "bench init" bench init "$bench_dir" --frappe-branch "$frappe_ref" --python "$python_bin" --no-backups --verbose ${init_extra[@]+"${init_extra[@]}"} || init_code=$?
+  fl_git_ext_off
+  fl_run_with_timeout "$timeout_seconds" "bench init" env "${FL_GIT_EXT_OFF[@]}" bench init "$bench_dir" --frappe-branch "$frappe_ref" --python "$python_bin" --no-backups --verbose ${init_extra[@]+"${init_extra[@]}"} || init_code=$?
   if [[ "$init_code" == "124" ]]; then
     fl_die "bench init did not finish within $(fl_fmt_secs "$timeout_seconds")." \
       "Run benchbar install again: the half built bench is moved aside and init starts over. On a slow network or disk give it more time: BENCH_INIT_TIMEOUT_SECONDS=5400 benchbar install"
@@ -320,19 +329,28 @@ fl_commit_present() {
 # fl_commit_reach DIR SHA: true when the clone in DIR has commit SHA, after
 # fetching it when it does not (every remote's branches and tags, then the
 # rest of a shallow history). Git never asks a question here.
+# A fetch that timed out is remembered in FL_REACH_TIMEOUT (its message, else
+# empty) for the caller's error: a missing commit and a stalled remote differ.
+FL_REACH_TIMEOUT=""
+fl__reach_fetch() {
+  fl_git_in "$@" || { [[ "$FL_GR_CODE" != "124" ]] || FL_REACH_TIMEOUT="$FL_GR_ERR"; }
+  return 0
+}
+
 fl_commit_reach() {
   local dir="$1" sha="$2" remote
+  FL_REACH_TIMEOUT=""
   fl_commit_present "$dir" "$sha" && return 0
-  fl_git_net -C "$dir" fetch --all --tags --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+  fl__reach_fetch "$dir" fetch --all --tags --quiet
   fl_commit_present "$dir" "$sha" && return 0
   if [[ "$(git -C "$dir" rev-parse --is-shallow-repository 2>/dev/null || true)" == "true" ]]; then
-    fl_git_net -C "$dir" fetch --all --tags --unshallow --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+    fl__reach_fetch "$dir" fetch --all --tags --unshallow --quiet
   fi
   fl_commit_present "$dir" "$sha" && return 0
   # a single branch clone has not seen a commit that is on another branch: the
   # remote may hand out a commit it has by its hash (GitHub does)
   for remote in $(git -C "$dir" remote 2>/dev/null || true); do
-    fl_git_net -C "$dir" fetch --quiet "$remote" "$sha" >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+    fl__reach_fetch "$dir" fetch --quiet "$remote" "$sha"
     fl_commit_present "$dir" "$sha" && return 0
   done
   return 1
@@ -365,8 +383,12 @@ fl_pin_app_commit() {
     return 0
   fi
   fl_warn "Pinning ${app} to commit ${sha}"
-  fl_commit_reach "$dir" "$sha" || fl_die "The pinned commit ${sha} of ${app} is not in its clone${branch:+ (branch ${branch})} and its remote did not hand it out; nothing was built." \
+  fl_commit_reach "$dir" "$sha" || {
+    [[ -z "$FL_REACH_TIMEOUT" ]] || fl_die "The pinned commit ${sha} of ${app} is not in its clone and a git fetch for it timed out (${FL_REACH_TIMEOUT}); nothing was built." \
+      "Check the network and run it again; for a slow remote raise the deadline: FL_GIT_CLONE_TIMEOUT=300 (seconds, default 120). The clone is ${dir}."
+    fl_die "The pinned commit ${sha} of ${app} is not in its clone${branch:+ (branch ${branch})} and its remote did not hand it out; nothing was built." \
     "Check the commit (it must be on a branch or tag of that repo)$([[ "${#sha}" -ge 40 ]] || printf '; a remote cannot hand out an abbreviated hash, so use the full 40 character hash'), or drop the pin: the next install builds what is there. The clone is ${dir}."
+  }
   fl_run git -C "$dir" checkout --quiet "$sha" \
     || fl_die "commit checkout failed for ${app}." "Manual command: git -C ${dir} checkout ${sha}"
   FL_PINS_APPLIED=1
@@ -385,10 +407,12 @@ fl_get_app_if_needed() {
   else
     fl_info "Getting ${app} at ${branch}"
     if [[ -n "$repo" ]]; then
-      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" bench get-app --branch "$branch" ${skip_flag[@]+"${skip_flag[@]}"} "$repo" \
+      fl_git_ext_off
+      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" env "${FL_GIT_EXT_OFF[@]}" bench get-app --branch "$branch" ${skip_flag[@]+"${skip_flag[@]}"} "$repo" \
         || fl_die "bench get-app failed for ${app}." "Manual command: cd ${bench_dir} && bench get-app --branch ${branch}${skip_flag[*]:+ ${skip_flag[*]}} ${repo}"
     else
-      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" bench get-app --branch "$branch" ${skip_flag[@]+"${skip_flag[@]}"} "$app" \
+      fl_git_ext_off
+      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" env "${FL_GIT_EXT_OFF[@]}" bench get-app --branch "$branch" ${skip_flag[@]+"${skip_flag[@]}"} "$app" \
         || fl_die "bench get-app failed for ${app}." "Manual command: cd ${bench_dir} && bench get-app --branch ${branch}${skip_flag[*]:+ ${skip_flag[*]}} ${app}"
     fi
     fl_changed app "$app" "cloned at ${branch}"
@@ -567,7 +591,7 @@ fl_db_named_by_other_site() {
   # Fails closed: a list that cannot be read, a known or registered bench
   # that is gone (an unmounted volume) or whose sites/ cannot be read counts
   # as naming DB, so nothing is dropped. A bench benchbar has never seen is
-  # not looked at (docs/DECISIONS.md).
+  # not looked at (maintainers/DECISIONS.md).
   if declare -F fl_known_bench_candidates >/dev/null; then
     # every folder benchbar was told of, the unfiltered list: one that is gone
     # (an unmounted volume) fails closed below; one that is there but is no
@@ -749,7 +773,7 @@ fl_site_recover() {
     # db is _ and 16 hex digits (fl_site_marker_db): safe in SQL; the backticks are SQL's
     # shellcheck disable=SC2016
     if ! printf 'DROP DATABASE IF EXISTS `%s`;\nDROP USER IF EXISTS '"'%s'@'%%'"';\nDROP USER IF EXISTS '"'%s'@'localhost'"';\nFLUSH PRIVILEGES;\n' "$db" "$db" "$db" \
-        | MYSQL_PWD="$pw" "$bin" -u root --connect-timeout=5 >>"${FL_LOG_FILE:-/dev/null}" 2>&1; then
+        | "$bin" --defaults-extra-file=<(fl_mariadb_cnf "$pw") -u root --connect-timeout=5 >>"${FL_LOG_FILE:-/dev/null}" 2>&1; then
       FL_SITE_RECOVER_WHY="dropping the database ${db} failed (log: ${FL_LOG_FILE:-none})"
       return 1
     fi

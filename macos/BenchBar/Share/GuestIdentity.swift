@@ -132,3 +132,41 @@ nonisolated final class KeychainIdentity: IdentityProviding, @unchecked Sendable
         return certificate
     }
 }
+
+/// Which client key shows this Mac to which host (#159 SHARE-13). One key for every room let any
+/// two hosts, or one host weeks apart, tell that the same Mac joined. So a room gets a key of its
+/// own, named by the host's key: joining that host again shows the same key (a removal by the host
+/// still holds), and another host sees another one. A room saved without `ownKey` was joined by a
+/// BenchBar before 0.9.0 with the shared key, which its host has on record: it keeps that key.
+nonisolated struct RoomKeys: @unchecked Sendable {
+    let shared: KeychainIdentity
+    let rooms: SavedRoomsStore
+    /// nil is the login keychain; tests pass a temporary file keychain.
+    var keychain: SecKeychain?
+
+    /// The whole hash of the host's key, not the 16 digits a person reads: a host that grinds a key
+    /// with the same first digits as another host's must not get that host's client key shown to it.
+    static func label(forHost host: Data) -> String {
+        "\(KeychainIdentity.defaultLabel) \(host.hex)"
+    }
+
+    /// The key made for one host. It exists once it was used; `reset()` deletes it.
+    func own(_ host: Data) -> KeychainIdentity {
+        KeychainIdentity(label: Self.label(forHost: host), keychain: keychain)
+    }
+
+    func usesSharedKey(_ host: Data) -> Bool {
+        rooms.load().contains { $0.hostPin == host && $0.ownKey != true }
+    }
+
+    func provider(forHost host: Data) -> KeychainIdentity {
+        usesSharedKey(host) ? shared : own(host)
+    }
+
+    /// The key a connection pinned to `pin` shows. An unpinned connection is one of the tests
+    /// only: the app reads a new host's key first and pins the join to it.
+    func provider(for pin: ServerPin) -> KeychainIdentity {
+        if case .pinned(let host) = pin { return provider(forHost: host) }
+        return shared
+    }
+}

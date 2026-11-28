@@ -11,12 +11,12 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs kept_backups bench_path honcho honcho_setuptools procfile bench_listen runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash share_scheduler orphans ping site_not_served"
+FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn toolchain_uv mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs kept_backups bench_path honcho honcho_setuptools procfile bench_listen runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash share_scheduler orphans ping site_not_served"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 # doctor --quick leaves these out: they start brew, python, node, bench, git
 # or ask the site, which takes seconds each; the JSON names them (skipped_checks)
 FL_QUICK_SKIP="brew formula_dates python_leaves pdf_engine app_copies env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio dependency_behind apps_behind ping"
-FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
+# FL_HOSTS_FILE, the file sudo writes, is set in sites.sh, which every start loads
 
 # port_block only exists while a plan moves this bench's ports
 # (FL_PORT_TARGET, set by fl_ports_plan); doctor never shows it.
@@ -89,6 +89,7 @@ fl_check_label() {
     formula_dates) printf 'Formula lifecycle' ;;
     env_setuptools) printf 'env setuptools' ;;
     toolchain_yarn) printf 'yarn' ;;
+    toolchain_uv) printf 'uv' ;;
     mariadb_version) printf 'MariaDB server' ;;
     toolchain_pkgconfig) printf 'pkg-config' ;;
     honcho_setuptools) printf 'honcho imports' ;;
@@ -310,13 +311,13 @@ fl_bench_cli_fix() {
   # a bench that neither uv nor pipx installed: uv's reinstall would land in
   # uv's own folder and leave the broken one first on PATH, so no guess
   if [[ "$owner" == "other" ]]; then
-    printf "the bench at %s was not installed by uv or pipx: reinstall it with the tool that did, or remove it and run: uv tool install frappe-bench" "$(command -v bench 2>/dev/null || printf bench)"
+    printf "the bench at %s was not installed by uv or pipx: reinstall it with the tool that did, or remove it and run: uv tool install frappe-bench==%s" "$(command -v bench 2>/dev/null || printf bench)" "$FL_PIN_FRAPPE_BENCH"
     return 0
   fi
   if [[ "$owner" == "pipx" ]]; then
-    case "$how" in install) printf 'pipx install frappe-bench' ;; *) printf 'pipx reinstall frappe-bench' ;; esac
+    case "$how" in install) printf 'pipx install frappe-bench==%s' "$FL_PIN_FRAPPE_BENCH" ;; *) printf 'pipx reinstall frappe-bench' ;; esac
   else
-    case "$how" in install) printf 'uv tool install frappe-bench' ;; *) printf 'uv tool install --reinstall frappe-bench' ;; esac
+    case "$how" in install) printf 'uv tool install frappe-bench==%s' "$FL_PIN_FRAPPE_BENCH" ;; *) printf 'uv tool install --reinstall frappe-bench==%s' "$FL_PIN_FRAPPE_BENCH" ;; esac
   fi
 }
 
@@ -429,6 +430,7 @@ chk_bench_path() {
 # and socketio lines start with: a Procfile that names a file that is gone
 # would stop the bench, so the files are part of this one check.
 chk_procfile() {
+  fl_render_ensure
   local f
   chk__template "Procfile.lean" "$(fl_procfile_path)" "$FL_R_PROCFILE" write_procfile
   [[ "$CHK_STATUS" == "ok" && -n "$FL_R_LISTEN_PY" ]] || return 0
@@ -455,6 +457,7 @@ chk_procfile() {
 # Procfile.lean (no service) or a foreign one is not this check's: the
 # procfile check says so, and nothing here knows how that bench starts.
 fl_listen_files_stale() {
+  fl_render_ensure
   local st
   st="$(fl_template_status "$(fl_procfile_path)" "$FL_R_PROCFILE")"
   case "$st" in
@@ -511,6 +514,7 @@ chk_bench_listen() {
   fi
 }
 chk_runner() {
+  fl_render_ensure
   chk__template "runner" "$(fl_runner_path)" "$FL_R_RUNNER" write_runner
   # frappe-mac-run.sh from before 0.3.0, left behind if a repair was interrupted
   if [[ "$CHK_STATUS" == "ok" && -f "$(fl_runner_path_legacy)" ]] && ! fl_runner_legacy_in_use; then
@@ -519,6 +523,7 @@ chk_runner() {
 }
 
 chk_agent() {
+  fl_render_ensure
   local plist state pid code
   plist="$(fl_agent_plist_path)"
   chk__template "agent plist" "$plist" "$FL_R_PLIST" write_plist
@@ -549,6 +554,7 @@ FL_HEARTBEAT_STALE_SECS="${FL_HEARTBEAT_STALE_SECS:-90}"
 # future is a clock that moved back, which a beating runner fixes in 30 s
 FL_HEARTBEAT_FUTURE_SECS=5
 chk_runner_heartbeat() {
+  fl_render_ensure
   local hb="${FL_BENCH_DIR}/logs/.benchbar/heartbeat" age fix
   fix="$(fl_fix_cmd "$FL_SELF" restart --bench-dir "$FL_BENCH_DIR")"
   if [[ "$(fl_template_status "$(fl_runner_path)" "$FL_R_RUNNER")" != "current" ]]; then
@@ -596,8 +602,13 @@ chk_stop_flag() {
 }
 
 chk_helpers() {
-  local rc status legacy recorded own=""
+  fl_render_ensure
+  local rc status legacy recorded own="" sh="${SHELL:-}"
   rc="$(fl_rc_file)"
+  if [[ -z "$rc" ]]; then
+    chk__set ok "no helper block: ${sh##*/} cannot read one (benchup and the others are for zsh, bash and fish); use ${FL_SELF} up, down, restart, status and logs"
+    return 0
+  fi
   status="$(fl_rc_block_status "$rc" "$FL_R_HELPERS")"
   legacy="$(fl_rc_legacy_blocks "$rc")"; legacy="${legacy//$'\n'/,}"
   case "$status" in
@@ -884,9 +895,15 @@ chk_legacy_agents() {
 }
 
 # Any bench's agent, not only this one's: a loaded agent whose runner is
-# gone restarts every 20 seconds, exits 127 and writes to its bench.log.
+# gone restarts every 20 seconds, exits 127 and writes to its bench.log (a
+# failure, not a hint: it goes on for as long as the person is logged in).
+# Only runners benchbar writes count, so a person's own script never does.
+# The fix depends on the folder: a folder that is no bench any more loses
+# its agent (the dead_agents action, which repair runs from any bench), this
+# bench's runner is written again by the runner check, another bench that
+# is still there is repaired from its own folder.
 chk_dead_agents() {
-  local list n=0 desc="" fixes="" plist label dir
+  local list n=0 desc="" fixes="" plist label dir act=""
   list="$(fl_dead_agents_list)"
   if [[ -z "$list" ]]; then
     chk__set ok "every loaded benchbar agent has its runner"
@@ -896,9 +913,15 @@ chk_dead_agents() {
     [[ -n "$plist" ]] || continue
     n=$((n + 1))
     desc="${desc}${desc:+; }${label} (${dir:-no folder})"
-    fixes="${fixes}${fixes:+ ; }${FL_SELF} uninstall-service --bench-dir $(fl_sq "$dir")"
+    if [[ -n "$dir" ]] && fl_is_bench_dir "$dir"; then
+      if fl_same_path "$dir" "$FL_BENCH_DIR"; then fixes="${fixes}${fixes:+ ; }${FL_SELF} repair"
+      else fixes="${fixes}${fixes:+ ; }${FL_SELF} repair --bench-dir $(fl_sq "$dir")"; fi
+    else
+      act="dead_agents"
+      fixes="${fixes}${fixes:+ ; }${FL_SELF} uninstall-service --bench-dir $(fl_sq "$dir")"
+    fi
   done <<<"$list"
-  chk__set warn "${n} loaded agent(s) whose runner script is missing, restarted every 20 s: ${desc}" "$fixes"
+  chk__set fail "${n} loaded agent(s) whose runner script is missing, restarted every 20 s: ${desc}" "$fixes" "$act"
 }
 
 fl_mariadb_dropin_path() {
@@ -1323,11 +1346,26 @@ chk_toolchain_yarn() {
   local yarn ver
   yarn="$(fl_bench_which yarn)"
   if [[ -z "$yarn" ]]; then
-    chk__set warn "no yarn on the bench's PATH (bench build needs it)" "$(fl_npm_bin) install -g yarn" yarn_install
+    chk__set warn "no yarn on the bench's PATH (bench build needs it)" "$(fl_npm_bin) install -g yarn@${FL_PIN_YARN}" yarn_install
     return 0
   fi
   ver="$("$yarn" --version 2>/dev/null || true)"
   chk__set ok "yarn ${ver:-found} at ${yarn}"
+}
+
+# uv: frappe-bench 5.31 and later make the bench env with "uv venv" and install
+# into it with "uv pip install" (bench setup env, get-app, setup requirements),
+# whoever installed the bench command itself. Phase 00 installs uv from 0.9.0;
+# a Mac whose bench came from pipx before that has none, and found out when a
+# repair had already moved the env aside (issue 188). Looked for where the CLI
+# looks (PATH, Homebrew's bin, ~/.local/bin): the CLI runs those bench commands,
+# not the bench's processes. No program is started, so --quick keeps it.
+chk_toolchain_uv() {
+  if fl_uv_on_path; then
+    chk__set ok "uv at $(command -v uv)"
+  else
+    chk__set warn "uv is not installed: bench (frappe-bench 5.31 and later) needs it to rebuild the env, to add an app and to update one" "brew install uv" uv_install
+  fi
 }
 
 # The version of the MariaDB server listening on 3306: its own binary when

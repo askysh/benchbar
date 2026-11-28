@@ -29,6 +29,9 @@ public sealed class CommandCatalogue
 
     public string? CliVersion { get; }
 
+    /// <summary>The labs that were on when the CLI printed this catalogue (<c>labs</c>): the commands of a lab that is off are not in it.</summary>
+    public IReadOnlyList<string> Labs { get; init; } = [];
+
     /// <summary>The CLI lists <paramref name="name"/> ("up", "lock write").</summary>
     public bool Has(string name) => _byName.ContainsKey(name);
 
@@ -48,7 +51,7 @@ public sealed class CommandCatalogue
                 .Select(f => new CommandFlag(JsonRead.Str(f, "name")!, JsonRead.Str(f, "value"), JsonRead.Str(f, "help") ?? "")).ToList();
             commands.Add(new CommandInfo(name, JsonRead.Str(c, "usage") ?? "", JsonRead.Str(c, "summary") ?? "", JsonRead.Bool(c, "mutating"), flags));
         }
-        return new CommandCatalogue(commands, JsonRead.Str(o, "cli_version"));
+        return new CommandCatalogue(commands, JsonRead.Str(o, "cli_version")) { Labs = JsonRead.Strings(o, "labs") };
     }
 }
 
@@ -60,6 +63,15 @@ public sealed class CommandSupport(ICliClient cli)
 {
     private readonly object _gate = new();
     private Task<CommandCatalogue?>? _load;
+
+    /// <summary>The catalogue once it was read, else null. Asks nothing: a page that must not start a call of its own reads this.</summary>
+    public CommandCatalogue? Current { get; private set; }
+
+    /// <summary>Asks again, for a catalogue that is known to be out of date (read while a lab was off, or before the CLI was updated). Calls that arrive together share one run.</summary>
+    public Task<CommandCatalogue?> RefreshAsync()
+    {
+        lock (_gate) return _load = LoadAsync();
+    }
 
     /// <summary>The catalogue, or null when the CLI could not be asked (no distro, an older CLI without <c>commands</c>).</summary>
     public Task<CommandCatalogue?> GetAsync()
@@ -75,6 +87,7 @@ public sealed class CommandSupport(ICliClient cli)
         {
             lock (_gate) _load = null;
         }
+        else Current = result.Value;
         return result.Value;
     }
 }

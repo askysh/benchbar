@@ -249,6 +249,45 @@ struct WizardStateTests {
         #expect(s.skippedCommands.map(\.command) == ["benchbar site hosts --bench-dir /Users/you/frappe-bench"])
     }
 
+    /// The Install on Review passes the reviewed plan's token; a refused token
+    /// (the Mac changed) sends the wizard back to Review, which offers Review Again.
+    @Test func theReviewedPlansTokenGoesWithInstallAndAStaleOneReturnsToReview() throws {
+        let token = String(repeating: "a", count: 64)
+        var reviewed = try plan()
+        reviewed.token = token
+        var s = try filled()
+        s.send(.primary)
+        s.send(.planned(reviewed))
+        #expect(s.send(.primary) == [.startInstall(s.request, withRootPassword: false, token: token)])
+        let refusal = #"{"schema_version":1,"cli_version":"0.9.0","event":"done","exit":1,"error":"The install plan changed since it was shown. Nothing was changed."}"#
+        for event in try InstallEvent.decodeAll(refusal) { s.send(.install(event)) }
+        s.send(.installEnded(exitCode: 1, error: nil))
+        #expect(s.page == .review && s.plan == nil && s.planStale != nil && !s.planning)
+        #expect(s.installPhase == .idle)
+        #expect(s.primary == .init(title: "Review Again", enabled: true))
+        #expect(s.send(.primary) == [.planInstall(s.request)])
+        #expect(s.planning && s.planStale == nil)
+        var fresh = try plan()
+        fresh.token = String(repeating: "b", count: 64)
+        s.send(.planned(fresh))
+        #expect(s.primary == .init(title: "Install", enabled: true))
+        #expect(s.send(.primary) == [.startInstall(s.request, withRootPassword: false, token: fresh.token)])
+    }
+
+    /// A failure that is not a refusal of the token stays a failure, and Retry passes no token:
+    /// the machine is part way through, so its plan is no longer the reviewed one.
+    @Test func aRetryPassesNoToken() throws {
+        var reviewed = try plan()
+        reviewed.token = String(repeating: "c", count: 64)
+        var s = try filled()
+        s.send(.primary)
+        s.send(.planned(reviewed))
+        s.send(.primary)
+        try stream(&s, "install-stream-failed")
+        s.send(.installEnded(exitCode: 1, error: nil))
+        #expect(s.send(.primary) == [.startInstall(s.request, withRootPassword: false, token: nil)])
+    }
+
     @Test func aFailedStepCanBeRetriedWithTheSameFlags() throws {
         var s = try installing()
         let request = s.request
@@ -273,6 +312,16 @@ struct WizardStateTests {
         #expect(s.send(.retry).isEmpty)
         s.send(.setRootPassword("root"))
         #expect(s.send(.primary) == [.startInstall(s.request, withRootPassword: true)])
+    }
+
+    @Test func exitSixtyFourIsAPlainFailureNotARootPasswordPrompt() throws {
+        // 64 is EX_USAGE (an option the CLI does not know); only 2 means "the MariaDB root password is unknown"
+        var s = try installing()
+        try stream(&s, "install-stream-exit64")
+        s.send(.installEnded(exitCode: 64, error: nil))
+        guard case .failed(let failure) = s.installPhase else { Issue.record("exit 64 must fail, got \(s.installPhase)"); return }
+        #expect(failure.message.contains("Unknown option for install: --bogus"))
+        #expect(failure.fix?.contains("benchbar install --help") == true)
     }
 
     @Test func stopEndsTheRunAndOffersRunAgain() throws {

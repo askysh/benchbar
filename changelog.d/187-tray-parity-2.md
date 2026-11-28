@@ -1,0 +1,5 @@
+### Windows tray
+
+- The BenchBar window shows a banner for each default an update changed (`notices[]` of `status --json`): what changed, the command that switches it back, a link to the page that explains it, and **Dismiss**, which runs `benchbar notices --dismiss ID`. A bench's Overview says **Ready**, **Needs restart (code changed)** or **Running, not ready** from the `ready` object, with what the bench waits on and the CLI's fix line to copy. An older CLI sends neither, and the window shows neither (#187).
+- **Pull...** on the Sites tab copies a production site over SSH, or a backup folder inside Ubuntu, into a new site. It shows the plan of `benchbar pull --dry-run --json` (backup, apps that differ, what the copy loses) and runs it with `--apply TOKEN --yes` by the token of that plan, so a plan that changed since is refused with nothing changed. The copy is neutralised; **Keep production's passwords and integrations** is off until you tick it and says what that means (#187).
+- About has **Copy** for the JSON entry of the `benchbar mcp` server (Cursor, Claude Desktop) next to the `claude mcp add` line (#187).

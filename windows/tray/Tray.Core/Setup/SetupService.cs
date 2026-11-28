@@ -15,7 +15,7 @@ public sealed record SetupRunResult(int Exit, bool Changed, bool RebootRequired,
     public bool Ok => Exit == 0 && !Cancelled;
 }
 
-/// <summary>The passwords of one install or adopt run. They go in that process's environment and nowhere else.</summary>
+/// <summary>The passwords of one install or adopt run. They go to that one process, on its standard input when the CLI takes them there (<c>--secrets-stdin</c>) and in its environment when it does not.</summary>
 public sealed record InstallSecrets(Secret? Admin, Secret? LinuxPassword, Secret? RootPassword = null);
 
 /// <summary>How an install or adopt stream ended: the process's exit code, the <c>done</c> line when there was one.</summary>
@@ -64,7 +64,7 @@ public interface ISetupService
     Task<string?> ShimVersionAsync(CancellationToken ct);
 
     /// <summary><c>profile list --json</c>: what the New Bench page offers. The default says the list was not read (the page then offers v15-lts only).</summary>
-    Task<ProfileListResult> ListProfilesAsync(CancellationToken ct) => Task.FromResult(new ProfileListResult([], "The profile list was not read."));
+    Task<ProfileListResult> ListProfilesAsync(CancellationToken ct) => Task.FromResult(new ProfileListResult([], UiText.Get("SetupProfileListNotRead")));
 
     /// <summary>
     /// Asks the CLI whether it installs <paramref name="profile"/> here: <c>install --dry-run --json --offline --profile NAME</c>, read for the
@@ -73,7 +73,7 @@ public interface ISetupService
     Task<ProfileGate> CheckProfileAsync(string profile, string benchDir, CancellationToken ct) => Task.FromResult(new ProfileGate(profile, null));
 
     /// <summary><c>doctor --prerequisites --json</c> for a bench that would go to <paramref name="benchDir"/>: read only, no bench needed. The default says it was not read.</summary>
-    Task<PrerequisiteResult> PrerequisitesAsync(string benchDir, CancellationToken ct) => Task.FromResult(new PrerequisiteResult(null, "The prerequisites were not read."));
+    Task<PrerequisiteResult> PrerequisitesAsync(string benchDir, CancellationToken ct) => Task.FromResult(new PrerequisiteResult(null, UiText.Get("SetupPrerequisitesNotRead")));
 }
 
 /// <summary>The profiles of <c>profile list --json</c>, or why they could not be read.</summary>
@@ -90,12 +90,37 @@ public static class SetupEnv
     public const string NonInteractive = "BENCHBAR_NONINTERACTIVE";
 
     /// <summary>For an install or adopt run: sudo steps fed from the environment, nothing ever asks on a terminal.</summary>
-    public static SecretEnvironment ForInstall(InstallSecrets secrets)
+    public static SecretEnvironment ForInstall(InstallSecrets secrets, bool viaStdin = false)
     {
         var env = new SecretEnvironment().Set(Sudo, "env").Set(NonInteractive, "1");
+        if (viaStdin)
+        {
+            // the CLI reads them from its standard input (--secrets-stdin): in no environment of the child or of anything it starts
+            return env.StdinList((AdminPassword, secrets.Admin), (SudoPassword, secrets.LinuxPassword), (MariadbRootPassword, secrets.RootPassword));
+        }
         env.Set(AdminPassword, secrets.Admin).Set(SudoPassword, secrets.LinuxPassword).Set(MariadbRootPassword, secrets.RootPassword);
         return env;
     }
+
+    /// <summary>
+    /// The passwords can go on the CLI's standard input: there is one, and none holds a line break (a list is one line each, so the CLI would
+    /// read the rest as another line; the environment path keeps its own refusal for such a password).
+    /// </summary>
+    public static bool CanUseStdin(InstallSecrets secrets)
+    {
+        var any = false;
+        foreach (var s in new[] { secrets.Admin, secrets.LinuxPassword, secrets.RootPassword })
+        {
+            if (s is not { IsEmpty: false }) continue;
+            any = true;
+            var text = s.Reveal();
+            if (text.Contains(CharLf) || text.Contains(CharCr)) return false;
+        }
+        return any;
+    }
+
+    private const char CharLf = (char)10;
+    private const char CharCr = (char)13;
 }
 
 /// <summary>The real service: <c>benchbar.exe</c> and, for the lists that must not boot a distro, <c>wsl.exe</c>.</summary>
@@ -142,10 +167,10 @@ public sealed class ShimSetupService : ISetupService
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new CliProblemException("benchbar.exe setup check did not answer in " + (probe ? "150" : "120") + " seconds. Wait a minute and run benchbar.exe setup check again.");
+            throw new CliProblemException(UiText.Format("SetupCheckTimeout", probe ? "150" : "120"));
         }
         if (string.IsNullOrWhiteSpace(result.Output))
-            throw new CliProblemException(ShimBenchSource.FirstLine(result.Error) ?? $"benchbar.exe setup check exited with code {result.ExitCode}. Update BenchBar.");
+            throw new CliProblemException(ShimBenchSource.FirstLine(result.Error) ?? UiText.Format("SetupCheckExit", result.ExitCode));
         return CliOutput.Parse(result.Output, "setup check", SetupJson.ParseCheck, requires: "steps");
     }
 
@@ -179,13 +204,17 @@ public sealed class ShimSetupService : ISetupService
         if (done is { } d2)
             return new SetupRunResult(d2.Exit, d2.Changed, d2.RebootRequired, d2.Cancelled, d2.Warnings, d2.NextActions, d2.Exit == 0 ? null : failure ?? redact.Clean(result.Error ?? ""), d2.UserExisted, d2.ErrorId);
         return new SetupRunResult(result.ExitCode == 0 ? 1 : result.ExitCode, false, false, false, [], [],
-            failure ?? (result.Error is null ? "benchbar.exe ended without saying how it went." : redact.Clean(result.Error)));
+            failure ?? (result.Error is null ? UiText.Get("SetupEndedNoWord") : redact.Clean(result.Error)));
     }
 
     public async Task<PlanResult> PlanInstallAsync(InstallRequest request, Secret admin, CancellationToken ct)
     {
-        // The admin password is in the environment too: a CLI that checks its inputs before the dry run refuses the plan without it.
-        var env = new SecretEnvironment().Set(SetupEnv.AdminPassword, admin).Set(SetupEnv.NonInteractive, "1");
+        // The admin password goes to the dry run too: a CLI that checks its inputs before the dry run refuses the plan without it. On the
+        // standard input when the CLI takes it there, as for the install, else in the environment. No sudo mode: nothing runs as root here.
+        var viaStdin = SetupEnv.CanUseStdin(new InstallSecrets(admin, null)) && await CliTakesSecretsStdinAsync("install", ct).ConfigureAwait(false);
+        var env = new SecretEnvironment().Set(SetupEnv.NonInteractive, "1");
+        if (viaStdin) env.StdinList((SetupEnv.AdminPassword, admin));
+        else env.Set(SetupEnv.AdminPassword, admin);
         var redact = new Redactor(env.Secrets);
         InstallPlan? plan = null;
         InstallDone? done = null;
@@ -201,21 +230,25 @@ public sealed class ShimSetupService : ISetupService
             }
             catch (UnsupportedSchemaException) { }
         }
-        var result = await RunStreamAsync(["install", "--dry-run", "--json", .. request.Flags], env, OnLine, PlanTimeout, ct).ConfigureAwait(false);
-        if (done is { Exit: not 0 } failed) return new PlanResult(null, failed.Error ?? failed.Fix ?? "The plan could not be made.", failed.Fix, plan?.Blockers);
-        if (plan is null) return new PlanResult(null, redact.Clean(result.Error ?? "The plan could not be made."));
+        string[] planArgs = ["install", "--dry-run", "--json", .. request.Flags, .. viaStdin ? (string[])["--secrets-stdin"] : []];
+        var result = await RunStreamAsync(planArgs, env, OnLine, PlanTimeout, ct).ConfigureAwait(false);
+        if (done is { Exit: not 0 } failed) return new PlanResult(null, failed.Error ?? failed.Fix ?? UiText.Get("CommonPlanNotMade"), failed.Fix, plan?.Blockers);
+        if (plan is null) return new PlanResult(null, redact.Clean(result.Error ?? UiText.Get("CommonPlanNotMade")));
         return new PlanResult(plan, null);
     }
 
     public Task<InstallRunResult> InstallAsync(InstallRequest request, InstallSecrets secrets, Action<InstallEvent> onEvent, CancellationToken ct) =>
-        StreamInstallAsync(["install", "--yes", "--json", .. request.Flags], secrets, onEvent, ct);
+        StreamInstallAsync(["install", "--yes", "--json", .. (request.ApplyToken is { Length: > 0 } token ? (string[])["--apply", token] : []), .. request.Flags], secrets, onEvent, ct);
 
     public Task<InstallRunResult> AdoptAsync(string benchPath, InstallSecrets secrets, Action<InstallEvent> onEvent, CancellationToken ct) =>
         StreamInstallAsync(["adopt", benchPath, "--yes", "--json"], secrets, onEvent, ct);
 
     private async Task<InstallRunResult> StreamInstallAsync(IReadOnlyList<string> args, InstallSecrets secrets, Action<InstallEvent> onEvent, CancellationToken ct)
     {
-        var env = SetupEnv.ForInstall(secrets);
+        // a CLI that lists --secrets-stdin for this command gets the passwords on its standard input; an older one keeps the environment
+        var viaStdin = SetupEnv.CanUseStdin(secrets) && await CliTakesSecretsStdinAsync(args[0], ct).ConfigureAwait(false);
+        var env = SetupEnv.ForInstall(secrets, viaStdin);
+        if (viaStdin) args = [.. args, "--secrets-stdin"];
         var redact = new Redactor(env.Secrets);
         InstallDone? done = null;
         string? issue = null;
@@ -231,12 +264,41 @@ public sealed class ShimSetupService : ISetupService
         return new InstallRunResult(result.ExitCode, done, issue ?? (result.Error is null ? null : redact.Clean(result.Error)));
     }
 
-    private async Task<StreamResult> RunStreamAsync(IReadOnlyList<string> args, SecretEnvironment env, Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+    /// <summary>
+    /// <c>commands --json</c> lists <c>--secrets-stdin</c> for <paramref name="command"/>. Any trouble reading it (no CLI yet, an older one
+    /// without <c>commands</c>, a timeout) means no: the environment path then runs as before.
+    /// </summary>
+    private async Task<bool> CliTakesSecretsStdinAsync(string command, CancellationToken ct)
     {
-        // The values are placed in the child's environment here, at the last moment, and the dictionary is not kept.
         try
         {
-            return await _stream.RunAsync(Shim, args, env.Materialize(), onLine, timeout, ct).ConfigureAwait(false);
+            var result = await _runner.RunAsync(Shim, CommandCatalogue.Args, ct, TimeSpan.FromSeconds(60)).ConfigureAwait(false);
+            if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.Output))
+            {
+                NoteEnvironmentPath(command, "commands --json gave no answer (exit " + result.ExitCode.ToString(CultureInfo.InvariantCulture) + ")");
+                return false;
+            }
+            var takes = JsonNode.Parse(result.Output) is JsonObject o && CommandCatalogue.Parse(o).HasFlag(command, "--secrets-stdin");
+            if (!takes) NoteEnvironmentPath(command, "the command line tool does not list --secrets-stdin: it is older");
+            return takes;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            NoteEnvironmentPath(command, "commands --json could not be read: " + ex.GetType().Name);
+            return false;
+        }
+    }
+
+    /// <summary>Where a run falls back to the environment, the trace says why (never a value): the passwords are readable by the same user for the run.</summary>
+    private static void NoteEnvironmentPath(string command, string why) =>
+        System.Diagnostics.Trace.TraceWarning("benchbar " + command + ": the passwords go in the environment, not on standard input (" + why + ")");
+
+    private async Task<StreamResult> RunStreamAsync(IReadOnlyList<string> args, SecretEnvironment env, Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+    {
+        // The values are placed in the child's environment (or on its standard input) here, at the last moment, and nothing is kept.
+        try
+        {
+            return await _stream.RunAsync(Shim, args, env.Materialize(), onLine, timeout, ct, env.MaterializeStdin()).ConfigureAwait(false);
         }
         catch (Win32Exception ex)
         {
@@ -281,7 +343,7 @@ public sealed class ShimSetupService : ISetupService
             // --json and no --yes: the distro is recorded, and nothing else (the linger change needs a yes) is touched
             var result = await _runner.RunAsync(Shim, ["adopt-distro", name, "--json"], ct, ShimBenchSource.ActionTimeout).ConfigureAwait(false);
             if (result.ExitCode == 0) return ActionResult.Success;
-            return new ActionResult(result.ExitCode, FailedCheckMessage(result.Output) ?? ShimBenchSource.FirstLine(result.Error) ?? ShimBenchSource.FirstLine(result.Output) ?? $"benchbar.exe exited with code {result.ExitCode}.");
+            return new ActionResult(result.ExitCode, FailedCheckMessage(result.Output) ?? ShimBenchSource.FirstLine(result.Error) ?? ShimBenchSource.FirstLine(result.Output) ?? UiText.Format("SetupExitCode", result.ExitCode));
         }
         catch (Win32Exception ex)
         {
@@ -293,7 +355,7 @@ public sealed class ShimSetupService : ISetupService
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return ActionResult.Failure("benchbar.exe adopt-distro did not finish in 3 minutes.");
+            return ActionResult.Failure(UiText.Get("SetupAdoptTimeout"));
         }
     }
 
@@ -341,7 +403,7 @@ public sealed class ShimSetupService : ISetupService
         {
             var result = await _runner.RunAsync(Shim, ProfilesModel.ListArgs(), ct, CliTimeouts.Read).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(result.Output))
-                return new ProfileListResult([], ShimBenchSource.FirstLine(result.Error) ?? $"benchbar.exe profile list exited with code {result.ExitCode}.");
+                return new ProfileListResult([], ShimBenchSource.FirstLine(result.Error) ?? UiText.Format("SetupProfileListExit", result.ExitCode));
             var profiles = CliOutput.Parse(result.Output, "profile list", json => ProfileListJson.Parse(JsonNode.Parse(json)!.AsObject()), requires: "profiles");
             return new ProfileListResult(profiles, null);
         }
@@ -355,7 +417,7 @@ public sealed class ShimSetupService : ISetupService
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return new ProfileListResult([], "benchbar.exe profile list did not answer in time.");
+            return new ProfileListResult([], UiText.Get("SetupProfileListTimeout"));
         }
     }
 
@@ -366,7 +428,7 @@ public sealed class ShimSetupService : ISetupService
             // exit 1 means a check failed; the document is still printed
             var result = await _runner.RunAsync(Shim, PrerequisiteReport.Args(benchDir), ct, CliTimeouts.Read).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(result.Output))
-                return new PrerequisiteResult(null, ShimBenchSource.FirstLine(result.Error) ?? $"benchbar.exe doctor --prerequisites exited with code {result.ExitCode}.");
+                return new PrerequisiteResult(null, ShimBenchSource.FirstLine(result.Error) ?? UiText.Format("SetupPrerequisitesExit", result.ExitCode));
             var report = CliOutput.Parse(result.Output, "doctor --prerequisites", json => PrerequisiteReport.Parse(JsonNode.Parse(json)!.AsObject()), requires: "prerequisites");
             return new PrerequisiteResult(report, null);
         }
@@ -380,7 +442,7 @@ public sealed class ShimSetupService : ISetupService
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return new PrerequisiteResult(null, "benchbar.exe doctor --prerequisites did not answer in time.");
+            return new PrerequisiteResult(null, UiText.Get("SetupPrerequisitesTimeout"));
         }
     }
 

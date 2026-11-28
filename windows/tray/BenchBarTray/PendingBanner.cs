@@ -26,7 +26,7 @@ internal sealed class PendingBanner : UserControl
         _services = services;
         Content = _root;
         Visibility = Visibility.Collapsed;
-        Ui.Name(this, "Unfinished operations");
+        Ui.Name(this, UiText.Get("PendingName"));
     }
 
     /// <summary>The run behind the last click, for tests.</summary>
@@ -60,10 +60,10 @@ internal sealed class PendingBanner : UserControl
         foreach (var op in _operations)
         {
             var card = new StackPanel();
-            card.Children.Add(Ui.Text("Unfinished " + op.Command, 14, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 2)));
+            card.Children.Add(Ui.Text(UiText.Format("PendingUnfinished", op.Command), 14, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 2)));
             card.Children.Add(Ui.Text(op.Message, 13, opacity: 0.9));
             if (op.Steps.Count > 0)
-                card.Children.Add(Ui.Text("Left to do: " + string.Join(", ", op.Steps.Select(s => s.Target.Length > 0 ? $"{s.Name} ({s.Target})" : s.Name)), 12, opacity: 0.75, margin: new Thickness(0, 2, 0, 0)));
+                card.Children.Add(Ui.Text(UiText.Format("PendingLeft", string.Join(", ", op.Steps.Select(s => s.Target.Length > 0 ? UiText.Format("PendingStepTarget", s.Name, s.Target) : s.Name))), 12, opacity: 0.75, margin: new Thickness(0, 2, 0, 0)));
             var fix = Ui.Mono(op.FixLine(bench));
             fix.Margin = new Thickness(0, 6, 0, 0);
             card.Children.Add(fix);
@@ -71,11 +71,11 @@ internal sealed class PendingBanner : UserControl
             var captured = op;
             if (op.CanResume)
             {
-                var resume = Ui.Button(op.ResumeLabel, () => Pending = ResumeAsync(captured, bench), $"{op.ResumeLabel} of {op.App}", primary: true);
+                var resume = Ui.Button(op.ResumeLabel, () => Pending = ResumeAsync(captured, bench), UiText.Format("PendingResumeName", op.ResumeLabel, op.App), primary: true);
                 resume.IsEnabled = !_busy;
                 buttons.Children.Add(resume);
             }
-            var discard = Ui.Button("Discard...", () => Pending = DiscardAsync(captured, bench), $"Discard the unfinished {op.Command} of {op.App}");
+            var discard = Ui.Button(UiText.Get("PendingDiscard"), () => Pending = DiscardAsync(captured, bench), UiText.Format("PendingDiscardName", op.Command, op.App));
             discard.IsEnabled = !_busy;
             buttons.Children.Add(discard);
             card.Children.Add(buttons);
@@ -88,17 +88,17 @@ internal sealed class PendingBanner : UserControl
     internal async Task ResumeAsync(PendingOperation op, string bench)
     {
         var request = op.IsAdd
-            ? PlanReviewRequest.Tokened($"Finish adding {op.App}", AppCommands.ResumeAdd(op.App, bench)) with
+            ? PlanReviewRequest.Tokened(UiText.Format("PendingFinishAddTitle", op.App), AppCommands.ResumeAdd(op.App, bench)) with
             {
-                ConfirmLabel = "Finish Add",
-                Summary = "An earlier add stopped part way. This plan runs the steps that did not finish and nothing else.",
+                ConfirmLabel = UiText.Get("PendingFinishAdd"),
+                Summary = UiText.Get("PendingFinishAddSummary"),
                 Describe = AppAddBatch.PlanLines,
             }
-            : new PlanReviewRequest($"Finish the update of {op.App}", AppCommands.ResumeUpdatePlan(op.App, bench), _ => AppCommands.Update(op.App, bench))
+            : new PlanReviewRequest(UiText.Format("PendingFinishUpdateTitle", op.App), AppCommands.ResumeUpdatePlan(op.App, bench), _ => AppCommands.Update(op.App, bench))
             {
-                ConfirmLabel = "Finish Update",
+                ConfirmLabel = UiText.Get("PendingFinishUpdate"),
                 RequiresToken = false,
-                Summary = "An earlier update stopped part way. This run does the steps that did not finish and nothing else.",
+                Summary = UiText.Get("PendingFinishUpdateSummary"),
             };
         PlanOutcome outcome;
         try
@@ -116,17 +116,16 @@ internal sealed class PendingBanner : UserControl
     /// <summary>Asks first, then runs <c>app update NAME --discard-pending</c>. The record goes; the app stays as it is and no step runs.</summary>
     internal async Task DiscardAsync(PendingOperation op, string bench)
     {
-        var left = op.Steps.Count == 1 ? "1 step" : $"{op.Steps.Count} steps";
-        var question = $"Drop the record of the unfinished {op.Command} of {op.App}? Its {left} will not run, and BenchBar does not undo what already ran. "
-            + "Nothing else runs now; run the update or add again later if you still want it.";
-        if (!_services.Confirm($"Discard the unfinished {op.Command}", question, "Discard")) return;
+        var left = op.Steps.Count == 1 ? UiText.Get("PendingStepOne") : UiText.Format("PendingStepMany", op.Steps.Count);
+        var question = UiText.Format("PendingDiscardQuestion", op.Command, op.App, left);
+        if (!_services.Confirm(UiText.Format("PendingDiscardTitle", op.Command), question, UiText.Get("PendingDiscardConfirm"))) return;
         _busy = true;
         Rebuild();
         var r = await _services.Cli.RunStreamAsync(AppCommands.DiscardPending(op.App, bench), null, CliTimeouts.Read, _ => { });
         _busy = false;
         PagePanels.OnUi(this, () =>
         {
-            Say(r.Ok ? $"The unfinished {op.Command} of {op.App} was discarded." : r.Problem ?? $"The command failed (exit {r.Exit}).", !r.Ok);
+            Say(r.Ok ? UiText.Format("PendingDiscarded", op.Command, op.App) : r.Problem ?? UiText.Format("PendingFailed", r.Exit), !r.Ok);
             if (r.Ok) _operations = _operations.Where(o => o.Key != op.Key).ToList();
             Rebuild();
             if (r.Ok) _services.RefreshNow();

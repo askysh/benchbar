@@ -3,11 +3,11 @@
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
-run_fm --help; assert_eq "0" "$CODE"; assert_contains "$OUT" "install             Run phase 00"
+run_fm --help; assert_eq "0" "$CODE"; assert_contains "$OUT" "install             Install phase 00"
 run_fm; assert_eq "0" "$CODE"; assert_contains "$OUT" "Usage:"
 run_fm --version; assert_contains "$OUT" "benchbar ${VER}"
 run_fm bogus; assert_eq "1" "$CODE"; assert_contains "$OUT" "Unknown command: bogus"
-run_fm --nope; assert_eq "1" "$CODE"; assert_contains "$OUT" "Unknown option"
+run_fm --nope; assert_eq "64" "$CODE"; assert_contains "$OUT" "Unknown option"
 
 # no bench anywhere: doctor refuses with a hint
 run_fm doctor; assert_eq "1" "$CODE"; assert_contains "$OUT" "No bench at ${HOME}/frappe-bench"

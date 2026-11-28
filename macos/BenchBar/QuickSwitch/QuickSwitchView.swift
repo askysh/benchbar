@@ -159,7 +159,7 @@ struct QuickSwitchView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(rows) { row in line(row, selected: row.id == selectedID) }
                     if model.showsOtherUsersHeading {
-                        sectionTitle("Other users")
+                        sectionTitle(String(localized: "Other users"))
                         ForEach(others) { row in line(row, selected: row.id == selectedID) }
                     }
                     if let copy = model.emptyResultCopy {

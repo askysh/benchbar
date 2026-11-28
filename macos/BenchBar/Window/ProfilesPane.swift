@@ -36,8 +36,8 @@ struct ProfilesPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PaneHeader(symbol: "person.2.fill", tint: .indigo, title: "Team Profiles",
-                       subtitle: "Pin a base profile and your team's apps, then set up a bench from it.") {
+            PaneHeader(symbol: "person.2.fill", tint: .indigo, title: String(localized: "Team Profiles"),
+                       subtitle: String(localized: "Pin a base profile and your team's apps, then set up a bench from it.")) {
                 addMenu
             }
             ChangeResultBanner(workbench: workbench, scope: Workbench.profilesScope)
@@ -119,17 +119,17 @@ struct ProfilesPane: View {
     }
 
     private var removeTitle: String {
-        guard let removing else { return "Remove profile?" }
-        return removing.origin == .subscribed ? "Remove the subscription?" : "Remove \(removing.name)?"
+        guard let removing else { return String(localized: "Remove profile?") }
+        return removing.origin == .subscribed ? String(localized: "Remove the subscription?") : String(localized: "Remove \(removing.name)?")
     }
 
     private func removeMessage(_ profile: ProfileInfo) -> String {
         if profile.origin == .subscribed {
-            let repo = profile.subscription.map { ProfileInfo.shortRepo($0.repo) } ?? "its repository"
+            let repo = profile.subscription.map { ProfileInfo.shortRepo($0.repo) } ?? String(localized: "its repository")
             let siblings = workbench.profiles.filter { $0.subscription?.dir == profile.subscription?.dir && $0.origin == .subscribed }.map(\.name)
-            return "This removes the subscription to \(repo) with all its profiles (\(siblings.joined(separator: ", "))). The folder is moved to ~/.config/benchbar/removed, not deleted. Benches set up from them are not changed."
+            return String(localized: "This removes the subscription to \(repo) with all its profiles (\(siblings.joined(separator: ", "))). The folder is moved to ~/.config/benchbar/removed, not deleted. Benches set up from them are not changed.")
         }
-        return "The file is moved to ~/.config/benchbar/removed, not deleted. Benches set up from it are not changed."
+        return String(localized: "The file is moved to ~/.config/benchbar/removed, not deleted. Benches set up from it are not changed.")
     }
 
     private var profiles: some View {
@@ -137,10 +137,10 @@ struct ProfilesPane: View {
             Section {
                 ForEach(workbench.profiles) { profile in row(profile) }
                 if !workbench.profiles.isEmpty, !workbench.profiles.contains(where: \.isTeam) {
-                    EmptyStateBlock(symbol: "person.2", title: "Only the built in profiles",
-                                    line: "A team profile pins your team's apps and branches, so everyone sets up the same bench.",
-                                    actions: [("Import…", { sheet = .importing(ProfileImportRun(workbench: workbench), autoReview: false) }),
-                                              ("Create from Bench…", { sheet = .create })])
+                    EmptyStateBlock(symbol: "person.2", title: String(localized: "Only the built in profiles"),
+                                    line: String(localized: "A team profile pins your team's apps and branches, so everyone sets up the same bench."),
+                                    actions: [(String(localized: "Import…"), { sheet = .importing(ProfileImportRun(workbench: workbench), autoReview: false) }),
+                                              (String(localized: "Create from Bench…"), { sheet = .create })])
                 }
                 if let error = workbench.profilesError {
                     Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
@@ -159,12 +159,12 @@ struct ProfilesPane: View {
         HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.rowSpacing) {
             Image(systemName: profile.isTeam ? "person.2.fill" : "shippingbox")
                 .foregroundStyle(profile.valid ? Color.accentColor : .red)
-                .accessibilityLabel(!profile.valid ? "Invalid profile" : (profile.isTeam ? "Team profile" : "Profile"))
+                .accessibilityLabel(!profile.valid ? String(localized: "Invalid profile") : (profile.isTeam ? String(localized: "Team profile") : String(localized: "Profile")))
             VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                 HStack(spacing: 6) {
                     Text(profile.name).font(.body.weight(.medium))
                     Tag(text: profile.originText, color: profile.origin == .subscribed ? .indigo : .secondary)
-                    if let base = profile.base { Tag(text: "based on \(base)", color: .secondary) }
+                    if let base = profile.base { Tag(text: String(localized: "based on \(base)"), color: .secondary) }
                     if let outdated = profile.subscription?.outdatedText { Tag(text: outdated, color: .orange) }
                 }
                 if let label = profile.label { Text(label).font(.caption).foregroundStyle(.secondary) }
@@ -184,7 +184,7 @@ struct ProfilesPane: View {
     }
 
     private func menu(_ profile: ProfileInfo) -> some View {
-        MoreMenu(help: "Export, update, check or remove \(profile.name)") {
+        MoreMenu(help: String(localized: "Export, update, check or remove \(profile.name)")) {
             Button("Export…") { sheet = .export(ProfileExportRun(name: profile.name, workbench: workbench)) }
                 .disabled(!profile.canExport)
             if profile.canUpdate {
@@ -195,7 +195,7 @@ struct ProfilesPane: View {
             Button("Show in Finder") { Workspace.reveal([profile.file]) }
             if profile.canRemove {
                 Divider()
-                Button(profile.origin == .subscribed ? "Remove Subscription…" : "Remove…", role: .destructive) { removing = profile }
+                Button(profile.origin == .subscribed ? String(localized: "Remove Subscription…") : String(localized: "Remove…"), role: .destructive) { removing = profile }
             }
         }
     }
@@ -211,8 +211,8 @@ struct CreateProfileSheet: View {
     @State private var benchPath = ""
 
     var body: some View {
-        SheetScaffold("Create a Team Profile",
-                      explanation: "Writes a profile from one bench's apps, branches and Frappe version.") {
+        SheetScaffold(String(localized: "Create a Team Profile"),
+                      explanation: String(localized: "Writes a profile from one bench's apps, branches and Frappe version.")) {
             Form {
                 TextField("Profile name", text: $name, prompt: Text("acme"))
                     .textFieldStyle(.roundedBorder)
@@ -225,7 +225,7 @@ struct CreateProfileSheet: View {
                 Text("Lower case letters, digits, '.', '_' or '-', starting with a letter or digit.")
                     .font(.caption).foregroundStyle(.red)
             }
-            SheetNote("BenchBar reads the bench (its apps, their repositories and branches, and its Frappe version) and writes ~/.config/benchbar/profiles/NAME.toml. The bench is not changed; no site data or password goes into the file.")
+            SheetNote(String(localized: "BenchBar reads the bench (its apps, their repositories and branches, and its Frappe version) and writes ~/.config/benchbar/profiles/NAME.toml. The bench is not changed; no site data or password goes into the file."))
         } actions: {
             CancelButton(action: cancel)
             Button("Create") {

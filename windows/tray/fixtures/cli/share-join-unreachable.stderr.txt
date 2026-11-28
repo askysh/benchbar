@@ -1,0 +1,3 @@
+  [FAIL] The room at 127.0.0.1:1 didn't answer.
+
+Aborting. Check that both computers are on the same Wi-Fi and that the host is still sharing (benchbar share status there). WSL uses NAT networking here and reaches the Wi-Fi through Windows: a VPN or the firewall of Windows can be in the way, so check that Windows itself reaches 127.0.0.1:1.

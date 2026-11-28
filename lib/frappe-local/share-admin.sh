@@ -32,6 +32,8 @@
 #   code         the six digits, and nothing else
 #   invite       the salt (32 hex) and the six digits, apart by a space: one reply, so no rotate between them
 #   people_json  the people as a JSON array of the documented fields only
+#   room_json    "people":[...],"seats":[...]: the people, and every seat of SHARE_JSON (a sixth argument: the
+#                path of share.json) with who holds it. A seat has its id, name and roles, never its user.
 #   people_rows  a line per person, the same fields apart by \x1f
 #   wipe         wiped=N and wipe_failed=M (counts)
 # Text fields lose control, bidirectional and zero width characters (\x1f with them), so no name can
@@ -39,7 +41,7 @@
 # shellcheck disable=SC2016  # JavaScript source
 FL_JS_SHARE_ROOM='
 const net = require("net");
-const [, sock, request, mode] = process.argv.slice(1);
+const [, sock, request, mode, shareJson] = process.argv.slice(1);
 const UNSEEN = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g;
 const shown = (v) => (typeof v === "string" ? v.replace(UNSEEN, "").trim().slice(0, 200) : "");
 const finish = (code, text) => { process.stdout.write(text); process.exit(code); };
@@ -72,6 +74,18 @@ c.on("data", (chunk) => {
   if (!Array.isArray(m.people)) return finish(1, "error=bad_reply\n");
   const people = m.people.filter((p) => p && typeof p === "object").map(person).filter((p) => p.id);
   if (mode === "people_json") return finish(0, JSON.stringify(people));
+  if (mode === "room_json") {
+    let listed = [];
+    try { listed = JSON.parse(require("fs").readFileSync(shareJson, "utf8")).seats; } catch { listed = []; }
+    const seats = (Array.isArray(listed) ? listed : []).filter((s) => s && /^[A-Za-z0-9_-]{1,64}$/.test(s.seat_id)).map((s) => {
+      const holder = people.find((p) => p.seat_id === s.seat_id);
+      return {
+        seat_id: s.seat_id, full_name: shown(s.full_name), roles: (Array.isArray(s.roles) ? s.roles : []).map(shown).filter(Boolean).slice(0, 30),
+        held_by: holder ? holder.id : null, held_by_name: holder ? holder.name : null
+      };
+    });
+    return finish(0, JSON.stringify({ people, seats }).slice(1, -1));
+  }
   const cell = (v) => (v === null ? "" : String(v));
   finish(0, people.map((p) => [p.id, p.name, p.model, p.ip, p.seat_id, p.seat_full_name, p.online, p.joined, p.last_seen].map(cell).join("\x1f") + "\n").join(""));
 });'
@@ -94,6 +108,23 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 const cutoff = Math.max(Number(nowMs) - 14 * 86400000, Number(sinceMs));
 let names = [];
 try { names = fs.readdirSync(dir).filter((n) => /^activity-\d{4}-\d{2}-\d{2}\.log$/.test(n)); } catch { names = []; }
+// the gateway prunes when a share starts and when it ends; a host who reads the log of a share that is
+// long over prunes here, so a file never outlives its 14 days by more than the next look at it
+const oldestKept = new Date(Number(nowMs) - 14 * 86400000).toISOString().slice(0, 10);
+names = names.filter((name) => {
+  if (name.slice(9, 19) >= oldestKept) return true;
+  try { fs.unlinkSync(path.join(dir, name)); } catch { /* read only, or gone: it is skipped all the same */ }
+  return false;
+});
+// the gateway logs a seat by its id; the name shown is the one share.json has for it (the id, for a seat that is gone)
+const seatNames = new Map();
+try {
+  for (const s of JSON.parse(fs.readFileSync(path.join(dir, "share.json"), "utf8")).seats) {
+    if (s && typeof s.seat_id === "string" && typeof s.full_name === "string") seatNames.set(s.seat_id, s.full_name);
+  }
+} catch { /* no share.json: the ids are shown */ }
+// a line of 0.8.3 holds "user" (an e-mail address) and no "seat": shown as it is until it is pruned
+const who = (e) => (typeof e.seat === "string" ? clean(seatNames.get(e.seat) ?? e.seat) : clean(e.user));
 const entries = [];
 for (const name of names) {
   let text = "";
@@ -106,7 +137,7 @@ for (const name of names) {
     if (!(ms >= cutoff) || ms > Number(nowMs) + 86400000) continue;
     if (device && e.device !== device) continue;
     entries.push({
-      ms, ts: e.ts, device: clean(e.device), user: clean(e.user), method: /^[A-Z]{1,16}$/.test(e.method) ? e.method : "",
+      ms, ts: e.ts, device: clean(e.device), user: who(e), method: /^[A-Z]{1,16}$/.test(e.method) ? e.method : "",
       path: redactPath(clean(e.path)), status: Number.isInteger(e.status) ? e.status : 0
     });
   }
@@ -306,6 +337,7 @@ fl_cmd_share_invite() {
   fl_site_json_begin
   FL_DONE_NO_STATE=1
   fl_require_bench
+  fl_share_wsl_gate
   fl_share_control_v SH_STATUS '{"op":"status"}' || fl_die "Sharing is not on: start sharing first, then make the invite." "benchbar share start"
   fl_share_reply_v web_up "$SH_STATUS" web_up
   [[ "$web_up" == true ]] || fl_die "The shared site is not up yet, so an invite would not work: start sharing first, and wait for it." "benchbar share status shows when it is up."
@@ -319,7 +351,7 @@ fl_cmd_share_invite() {
   fl__share_json_unquote_v label "$raw"
   [[ -n "$label" ]] || fl_die "The room has no name." "Stop sharing and start it again."
   fl_sp_lan_v
-  [[ -n "$SP_LAN_IP" ]] || fl_die "This Mac has no IPv4 address on a network, so nobody could reach the room." "Join the office Wi-Fi, then run benchbar share invite again."
+  [[ -n "$SP_LAN_IP" ]] || fl_die "This computer has no IPv4 address on a network, so nobody could reach the room." "Join the office Wi-Fi, then run benchbar share invite again."
   fl_share_fingerprint_v fp "$(fl_share_dir)/host.crt" || fl_die "The host certificate could not be read." "Run benchbar share setup."
   fp="${fp#sha256:}"
 
@@ -390,7 +422,7 @@ fl_cmd_share_lock() {
 # ---------------------------------------------------------------- share people
 
 fl_cmd_share_people() {
-  local a rows line id name model ip seat full online state=on table=()
+  local a rows line id name model ip seat full online state=on table=() held="" waiting=0 seat_mode=null
   for a in "$@"; do fl_die "Unknown argument for share people: $a" "Use: benchbar share people [--json]"; done
   fl_site_json_begin
   FL_DONE_NO_STATE=1
@@ -402,9 +434,12 @@ fl_cmd_share_people() {
     fl_share_wipe_owed
   fi
   if [[ "${OPT_JSON:-0}" == 1 ]]; then
-    rows="[]"
-    if [[ "$state" == on ]]; then fl_share_room_v rows '{"op":"people"}' people_json || fl_die "The gateway did not list the people in the room." "See benchbar share status."; fi
-    fl_doc_emit 0 "$(fl_share_room_doc "\"state\":\"${state}\",\"people\":${rows}")"
+    rows='"people":[],"seats":[]'
+    if [[ "$state" == on ]]; then
+      fl_share_control_v rows '{"op":"people"}' "$FL_JS_SHARE_ROOM" room_json "$(fl_share_dir)/share.json" || fl_die "The gateway did not list the people in the room." "See benchbar share status."
+      fl_share_seat_mode_json_v seat_mode
+    fi
+    fl_doc_emit 0 "$(fl_share_room_doc "\"state\":\"${state}\",${rows},\"seat_mode\":${seat_mode}")"
     return 0
   fi
   if [[ "$state" == off ]]; then fl_info "Sharing is off: nobody is in the room."; return 0; fi
@@ -412,11 +447,38 @@ fl_cmd_share_people() {
   table=("ID|Name|Mac|Address|Seat|Online")
   while IFS=$'\x1f' read -r id name model ip seat full online _; do
     [[ -n "$id" ]] || continue
+    if [[ -n "$seat" ]]; then held="${held} ${seat}"; else waiting=$((waiting + 1)); fi
     [[ -n "$full" ]] || full="${seat:-no seat yet}"
     table+=("${id}|${name//|/}|${model//|/}|${ip//|/}|${full//|/}|$([[ "$online" == true ]] && printf yes || printf no)")
   done <<<"$rows"
   fl_info "People in the room: $((${#table[@]} - 1))"
   [[ "${#table[@]}" == 1 ]] || fl_table "${table[@]}"
+  if [[ "$waiting" -gt 0 ]]; then
+    fl_share_seat_mode_json_v seat_mode
+    if [[ "$seat_mode" == '"host"' ]]; then
+      if [[ "$waiting" == 1 ]]; then fl_warn "1 person waits for a seat from you: in this room a guest cannot take one."
+      else fl_warn "${waiting} people wait for a seat from you: in this room a guest cannot take one."; fi
+    fi
+    fl_share_free_seats "$held"
+  fi
+}
+
+# fl_share_free_seats HELD: the seats of share.json that nobody holds (HELD: the held ids, space separated),
+# with the ids share assign takes. Printed when someone in the room has no seat: in a room where the host
+# gives out the seats (share start --assign-seats) this is how a person gets one.
+fl_share_free_seats() {
+  local lines line id name re='"full_name":"(([^"\\]|\\.)*)"' any=0
+  fl_share_seats_lines_v lines
+  while IFS= read -r line; do
+    id="${line#*\"seat_id\":\"}"; id="${id%%\"*}"
+    [[ "$id" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || continue
+    case " $1 " in *" ${id} "*) continue ;; esac
+    name=""; [[ ! "$line" =~ $re ]] || name="$(printf '"%s"' "${BASH_REMATCH[1]}" | fl_share_json_unquote)"
+    [[ "$any" == 1 ]] || fl_info "Free seats (give one with: benchbar share assign ID SEAT_ID):"
+    any=1
+    fl_info "  ${id}  ${name}"
+  done <<<"$lines"
+  [[ "$any" == 1 ]] || fl_info "No seat is free."
 }
 
 # ---------------------------------------------------------------- share remove
@@ -623,8 +685,8 @@ fl_cmd_share_teardown() {
     if [[ "$had_state" == 1 ]]; then
       fl_share_write_private "${dir}/stop_requested" 600 "" || fl_warn "could not leave the stop marker for a start on its way"
       fl_share_teardown
-      [[ "$SH_BOOTOUT_FAILED" == 0 ]] || fl_die "launchd still lists ${FL_SHARE_JOB_LABEL} after the bootout, so the share may still run; nothing else was torn down." \
-        "Run: launchctl bootout $(fl_share_job_target), then benchbar share teardown again"
+      [[ "$SH_BOOTOUT_FAILED" == 0 ]] || fl_die "$(fl_share_job_manager) still lists ${FL_SHARE_JOB_LABEL} after the bootout, so the share may still run; nothing else was torn down." \
+        "Run: $(fl_share_job_bootout_hint), then benchbar share teardown again"
       [[ "$SH_TORN" == 0 ]] || fl_changed process share "stopped"
     fi
     if [[ "$had_copy" == 1 ]]; then

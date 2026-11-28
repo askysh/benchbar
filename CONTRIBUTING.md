@@ -37,9 +37,34 @@ test builds its own `HOME` and mock state. `tests/run-tests.sh test-doctor`
 runs one file. [docs/testing.md](docs/testing.md) is the guide for
 trying a build on a real Mac.
 
+A failed assertion stops its test file. A block of independent checks can
+call `soft_asserts on` (from `tests/lib/harness.sh`) to list every failure
+and still fail the file at its end; `fail_now` and `soft_checkpoint` stop it
+where a later step needs the earlier ones. `BENCHBAR_SOFT_ASSERTS=1
+tests/run-tests.sh test-doctor` turns that on for a whole run, to see
+everything a change broke. A test never sets its own `EXIT` trap: it calls
+`on_exit 'cmd'` for cleanup, so the harness can still fail the test.
+
 A new test seam (a variable that lets a test replace a program, a path or
 the clock) is read only when `FL_TESTING=1`, which `tests/lib/harness.sh`
 sets: a production run must ignore it.
+
+A pin test (`tests/test-*-pin.sh`, `tests/lib/pin.sh`) compares the whole
+output of a command, in every way it can end, with a file in
+`tests/golden/`. After an intended change of that output, write the file
+again with `PIN_UPDATE=1 bash tests/test-NAME-pin.sh` and read its diff
+before you commit it. A pin test runs every scenario, on your machine and in
+every CI job, unless `PIN_SMOKE` says otherwise: `PIN_SMOKE=1 bash
+tests/test-NAME-pin.sh` is the quick local run (about five scenarios, each
+compared with its own part of the golden file). Only a pull request can run
+the smoke scenarios in CI, and not for a pin test whose pinned functions it
+changes (`lib/frappe-local/apps.sh`, `app-plan.sh`, `teamlock.sh`,
+`profiles.sh`), nor when it changes a pin test, a golden file or
+`tests/lib/pin.*`, runs everything everywhere, or has the label
+`test-pin-full` (a label starts no run: it takes effect on the next push to
+the pull request). In a pin test a scenario inside `if pin_full; then ...
+fi` is outside the smoke set: the setup the next scenario needs stays outside
+the block.
 
 ### What CI will do with your pull request
 
@@ -49,15 +74,23 @@ shellcheck on the changed files, and the app build when `macos/` changed;
 macOS runs only for paths that need a Mac or with the label `test-macos`.
 Pushes to `next-release` and `main` and the nightly run the whole suite on
 macOS, Linux and bash 3.2, install a real bench on Ubuntu under
-`systemd --user` (a pull request gets that run only with the label
-`test-linux`), build the app and build and test the Windows shim and
-tray. Details: [docs/testing.md](docs/testing.md#what-ci-runs).
+`systemd --user` for both profiles and upgrade one from release 0.8.3 (a
+pull request gets those runs only with the label `test-linux`), build the
+app and build and test the Windows shim and tray. The real install and the
+upgrade on a Mac (`real-install.yml`) run nightly, by hand and when the
+label `test-real` is added to a pull request, never on a push: they take
+two of the five macOS runners for about eight minutes. The rules are in the next
+section.
 
 - **Many checks show "skipped".** A job with nothing to do for your
   change is skipped as a whole, and a skipped job passes. A docs only
   change starts no macOS job and no CLI shard beyond the docs tests.
 - **`CI result` is the one required check on `next-release`.** It passes
   when every job that ran passed.
+- **Rerun a few tests.** To run some tests on one platform without a full run,
+  start the CI workflow by hand (Actions, CI, Run workflow) with `tests`
+  (for example `test-run-lock test-lock`) and `legs` (`linux`, `bash32`,
+  `macos`, `shellcheck`, `app`, `shim`, `real`).
 - **Docs build** runs on a pull request that changes `docs/`, `site/`,
   the root `ROADMAP.md` or `CONTRIBUTING.md`, or the code the generated
   reference tables come from. To run it yourself: `bash tests/run-tests.sh
@@ -68,11 +101,70 @@ tray. Details: [docs/testing.md](docs/testing.md#what-ci-runs).
   maintainer** to click "Approve and run": the repository requires it for
   every outside contributor. Nothing is wrong; CI starts after the click.
 
+### Choosing and timing the tests
+
+```bash
+tests/affected.sh                    # only the tests your change touches (from origin/main; --base REF, --all)
+tests/run-tests.sh                   # every test, as many at a time as you have CPUs
+PARALLEL=1 tests/run-tests.sh        # one after another
+tests/run-tests.sh test-doctor       # only the named tests
+SHARD=2/4 tests/run-tests.sh         # the second of four shards, as CI runs them
+ONLY_TESTS="test-a test-b" SHARD=1/2 tests/run-tests.sh   # a list, sharded like the full suite
+LIST_ONLY=1 SHARD=2/4 tests/run-tests.sh   # which tests that shard holds, without running them
+```
+
+`tests/affected.sh` maps the changed files to tests: a file in
+`lib/frappe-local/` picks its own test files, the tests of its family
+(the doctor library picks the doctor and repair tests, and so on: the
+`lib_family` list in the script), every test that names a function it
+changed, `test-cli` and `test-agent-contracts`; the LAN share's
+JavaScript, the app fixtures in `macos/BenchBarTests/Fixtures/`, `scripts/`
+and `docs/` have entries too. A change to the harness, the mocks,
+`run-tests.sh`, `affected.sh` itself, `benchbar`, `templates/`, `config/`
+or the phase scripts runs everything. `affected.sh --lib-coverage` lists
+lib files that no test covers; `test-affected` fails on one, so add a
+`lib_family` entry with a new lib file. Run the whole suite before you hand
+work back.
+
+Each test's output is printed whole when it finishes, in list order, and
+a failing test does not stop the others: the run lists every failure at
+the end and exits 1. `TEST_TIMEOUT` (default 600 seconds) kills a hung
+test and prints its process tree. Every `tests/test-*.sh` is a test: a new
+one needs no entry in any list. Shards are filled heaviest first from the
+seconds in `tests/timings.tsv`; a test without a row counts as 10 seconds,
+so a row is optional.
+
+The app and its Swift tests build with `scripts/macos-build.sh --test`.
+
+Issues and pull requests are welcome. For a bug, attach the zip from
+`benchbar report`; it contains no secrets, paths or names. Shell code
+targets macOS `/bin/bash` 3.2 with no dependencies beyond the ones the
+installer needs, passes shellcheck, and every command stays idempotent:
+a second run changes nothing and says so.
+
+The shards are sized from the seconds per test in `tests/timings.tsv` (one
+row per test: the name, the macOS seconds, the Linux seconds). After many
+tests changed, take a green full run (a push to `next-release`) and run
+`scripts/ci-timings.sh --write RUN_ID`; it rewrites the table. A test
+without a row counts as 10 seconds, so a new test needs no row to run.
+
 ## How the code is written
 
 - **Shell** targets macOS `/bin/bash` 3.2: no associative arrays, no
   `mapfile`, no `${var,,}`. No dependencies beyond the ones the installer
   needs. Every script passes `shellcheck` with the repo's `.shellcheckrc`.
+- **Two older names.** The project was `frappe-mac` until 0.3.0 and its
+  library `frappe-local` before that. The internal spelling stays on
+  purpose, because a rename would touch every file for nothing a person
+  sees: the `fl_` and `FL_` prefixes and the folder `lib/frappe-local/`.
+  What an install has on disk under an old name is still read and
+  migrated: the `frappe-mac` command next to `benchbar`, `com.frappe-mac.*`
+  agents, `frappe-mac-run.sh`, the `# >>> frappe-mac >>>` rc block,
+  `frappe-mac-template:` headers, the `.frappe-local` state folder and the
+  MariaDB drop-in `frappe-mac-local-only.cnf`. None of these goes before
+  1.0.0, and one goes only after a doctor check has named what is left of
+  it. Do not add to the list: a new name, message or temp file says
+  `benchbar`.
 - **Idempotent.** Every command can run twice: a second run changes
   nothing and says `unchanged`. A test for a new step runs it twice and
   checks the second run.
@@ -97,12 +189,28 @@ tray. Details: [docs/testing.md](docs/testing.md#what-ci-runs).
 ## What a pull request needs
 
 - **Against `next-release`.** `main` holds the last release and moves only
-  when one is cut ([docs/releasing.md](docs/releasing.md#branches)).
-- **Small, one topic.** A fix and a refactor are two pull requests.
+  when one is cut ([maintainers/releasing.md](maintainers/releasing.md#branches)).
+- **Small, one topic.** A fix and a refactor are two pull requests. Keep a
+  pull request under about 800 changed lines (generated files and fixtures
+  aside): a larger change is a stack of pull requests, each one reviewable
+  on its own. There is no release pull request: a release fast forwards
+  `main` to commits that were already reviewed ([maintainers/releasing.md](maintainers/releasing.md#branches)).
+- **Reviewed and green.** Every pull request is reviewed before it merges,
+  by the maintainer or by a reviewer that reads it with a fresh context, and
+  the review is a comment on the pull request. It merges only with a green
+  "CI result": that one check needs every job, and the `next-release` and
+  `main` rulesets require it, so a red or still running job blocks the merge.
+- **The issue.** Write `Fixes #123` when the pull request finishes the
+  issue and `Part of #123` when it does not. A pull request for a bug a
+  user reported always names the report. GitHub closes an issue only from
+  a merge into `main`, and pull requests merge into `next-release`, so
+  the issue stays open after the merge: whoever merges closes a finished
+  issue by hand, with a comment that names the pull request.
 - **User docs.** A change a user can see updates the page that tells them
   about it: the guide or the app page under [docs/](docs/), and a row in
   [docs/features.md](docs/features.md) for a new feature, Lab or
-  platform. Updating only the reference page is not enough. The CLI
+  platform. `test-docs` fails when a top level command or an MCP tool is
+  named in no row there. Updating only the reference page is not enough. The CLI
   reference tables (flags, what a command needs, the MCP tools) are
   generated from the code: after you change `lib/frappe-local/commands.sh`
   or `lib/frappe-local/mcp.py`, run `python3 -I scripts/docs-reference.py
@@ -116,7 +224,7 @@ tray. Details: [docs/testing.md](docs/testing.md#what-ci-runs).
   conflict there. `bash scripts/changelog-fold.sh --check` validates yours.
 - **DECISIONS.** One line per non obvious choice: the decision, then the
   reason. CLI and repo choices go in
-  [docs/DECISIONS.md](docs/DECISIONS.md), app choices in
+  [maintainers/DECISIONS.md](maintainers/DECISIONS.md), app choices in
   [macos/DECISIONS.md](macos/DECISIONS.md). If a reviewer would ask "why
   not the obvious way?", that answer is a DECISIONS line.
 - **Tested on.** The OS (the macOS version, or the Ubuntu version, or the
@@ -127,13 +235,50 @@ tray. Details: [docs/testing.md](docs/testing.md#what-ci-runs).
   commit and pull request text: a colon, a comma or a new sentence does
   the work.
 - **Commits** have an imperative subject ("Add", "Fix", "Read") and a
-  body that says why.
+  body that says why. The squash merge title is a plain imperative
+  sentence that ends in the pull request number, for example `Fix the
+  port check for a stopped bench (#123)`. No tool trailers in a commit or
+  a pull request: no `Co-Authored-By` for a tool and no "Generated with"
+  line. The "PR text" check fails a pull request whose title has an em
+  or en dash or whose title, description or commits carry such a trailer
+  (`scripts/check-pr-text.sh`); the reviewer checks the rest of the
+  title before merging.
 
 The pull request template asks for all of this as checkboxes. A docs only
 fix (a typo, a wrong sentence) may go to `main` instead of `next-release`
 when it cannot wait for a release; say so in the pull request. The site
 is built from `main` only, so it shows the last release
-([docs/releasing.md](docs/releasing.md#the-docs-site)).
+([maintainers/releasing.md](maintainers/releasing.md#the-docs-site)).
+
+## Issues
+
+Every new issue gets a first reply within two days, even if the reply is
+only "seen, confirmed" or "cannot reproduce yet, please attach the zip
+from `benchbar report`". A one line reply is enough. The reply says one
+of: confirmed, not reproduced, or fixed on `next-release` in pull request
+N, and links a workaround when there is one.
+
+- **Labels.** One of `bug`, `enhancement` or `question`, one `area:*`
+  label and the platform (`macos`, `linux`, `windows`). `needs-repro`
+  when the version, the platform or the report zip is missing.
+- **Milestone.** An issue that a planned release fixes goes in that
+  release's milestone. The milestone page is the list of what the release
+  holds.
+- **Closing.** A fixed issue is closed with the pull request that fixed
+  it and, at the release, with the version (see
+  [maintainers/releasing.md](maintainers/releasing.md#cutting-a-release)). An open
+  issue means "not fixed yet": do not leave a fixed one open.
+- **Security.** A hole that puts a user at risk is not a public issue.
+  Report it as [SECURITY.md](SECURITY.md) says. A public issue that turns
+  out to be one gets the `security` label and is never a
+  `good first issue`.
+- **`good first issue`** is only for a task that needs no special
+  hardware, no release keys and no knowledge of the whole codebase, and
+  that is still open and still wanted. Check the list when you triage.
+- **Issues filed by an agent.** An agent session that files an issue for
+  the maintainer says so in the first line ("Filed by an agent session
+  for the maintainer."), sets the labels and the milestone, and closes
+  the issue in the pull request that fixes it.
 
 ## AI assisted contributions
 
@@ -156,5 +301,5 @@ terms:
 
 ## Releases
 
-Maintainers cut releases; [docs/releasing.md](docs/releasing.md) has the
+Maintainers cut releases; [maintainers/releasing.md](maintainers/releasing.md) has the
 steps.

@@ -81,6 +81,20 @@ final class GuestRoomStore {
         var model: String = GuestRoomStore.hardwareModel()
         /// The health loop's wait; tests pass one that returns at once.
         var sleep: @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0, tolerance: $0 / 5) }
+        /// Deletes this Mac's client key and certificate; the next join makes new ones.
+        var forgetIdentity: () -> Void = {}
+        /// Whether an invite's address may be dialled: only one of a local network. The interop
+        /// test, whose gateway listens on loopback, is the one caller that passes another answer.
+        var inviteAddressAllowed: (String) -> Bool = ShareInvite.isLocalNetwork
+        /// The key (SPKI hash) a host shows, read on a connection that presents no certificate.
+        /// The app sets it: a first join then learns the host's key before this Mac shows a key,
+        /// so the key shown can be the one made for that host. nil (tests of the older flow): a
+        /// first join shows the shared key to whatever key the host has.
+        var hostKey: (@Sendable (NWEndpoint) async throws(RoomConnectionError) -> Data)?
+        /// The fingerprint of the key this Mac shows to the host with that key; nil: `clientFingerprint`.
+        var roomFingerprint: (@Sendable (Data) -> Data?)?
+        /// Deletes the key made for one host (a room forgotten, or never joined after all).
+        var forgetRoomKey: (Data) -> Void = { _ in }
     }
 
     static let pingInterval: Duration = .seconds(10)
@@ -297,11 +311,30 @@ final class GuestRoomStore {
         inviteNotice = nil
     }
 
+    /// The join on its way that made a key for a host it has not joined: which attempt, which host.
+    private var freshKeyInFlight: (attempt: Int, host: Data)?
+    /// The host the join on its way is pinned to, once that is known.
+    private var joiningHost: Data?
+
+    /// A join that did not end in a saved room gives its fresh key back. Not when a newer attempt
+    /// to the same host took the key over: that one answers for it now.
+    private func dropFreshKey(_ key: Data?, attempt: Int) {
+        guard let key else { return }
+        if let current = freshKeyInFlight, current.host == key, current.attempt != attempt { return }
+        if freshKeyInFlight?.attempt == attempt { freshKeyInFlight = nil }
+        deps.forgetRoomKey(key)
+    }
+
+    /// Whether Join would dial the invite's address (the join sheet says so before the click).
+    func inviteAddressUsed(_ invite: ShareInvite) -> Bool {
+        invite.address.map { deps.inviteAddressAllowed($0.host) } ?? false
+    }
+
     /// Bonjour rooms with the invite's label first, then the invite's address. A TXT record
     /// proves nothing, so every one of them is dialled pinned to the invite's key.
     private func inviteTargets(_ invite: ShareInvite) -> [DiscoveredRoom] {
         var targets = discovered.filter { $0.display.label == invite.room && !$0.display.needsUpdate }
-        if let address = invite.address, let port = NWEndpoint.Port(rawValue: address.port) {
+        if let address = invite.address, deps.inviteAddressAllowed(address.host), let port = NWEndpoint.Port(rawValue: address.port) {
             targets.append(DiscoveredRoom(id: invite.room, endpoint: .hostPort(host: NWEndpoint.Host(address.host), port: port),
                                           display: RoomDisplay(label: invite.room, site: "", protocolV: CPace.protocolVersion)))
         }
@@ -347,10 +380,6 @@ final class GuestRoomStore {
             join = .refused(room, .invalidCode)
             return
         }
-        guard let fg = deps.clientFingerprint() else {
-            join = .refused(room, .failed)
-            return
-        }
         let invite = self.invite
         self.invite?.code = ""
         lastAttempt = now
@@ -361,7 +390,7 @@ final class GuestRoomStore {
         // A host this Mac joined before must show the same key (rejoins are pinned); an
         // invite's host must show the invite's key, checked in the TLS handshake itself.
         let earlier: SavedRoom?
-        let pin: ServerPin
+        var pin: ServerPin
         let targets: [DiscoveredRoom]
         if let invite {
             earlier = saved.first { $0.hostPin == invite.hostPin }
@@ -374,21 +403,50 @@ final class GuestRoomStore {
         }
         var dialed: (transport: any RoomTransport, target: DiscoveredRoom)?
         var failures: [RoomConnectionError] = []
-        for target in targets {
+        // A room this Mac has not joined gets a key of its own, named by the host's key. So that key is
+        // read first, on a connection that shows no certificate, and the join is pinned to it: this Mac
+        // never shows a key to a host before it knows which host it is.
+        if case .firstJoin = pin, let hostKey = deps.hostKey {
+            do {
+                pin = .pinned(try await hostKey(room.endpoint))
+            } catch {
+                failures.append(error)
+            }
+            guard attempt == joinAttempt else { return }
+        }
+        var host: Data?
+        if case .pinned(let key) = pin { host = key }
+        // a key made for this join alone goes again when the join does not end in a saved room
+        let freshKey = deps.roomFingerprint != nil ? host.flatMap { key in saved.contains { $0.hostPin == key } ? nil : key } : nil
+        joiningHost = host
+        if let freshKey { freshKeyInFlight = (attempt, freshKey) }
+        let fg = host.flatMap { key in deps.roomFingerprint.map { $0(key) } } ?? deps.clientFingerprint()
+        guard let fg else {
+            join = .refused(room, .failed)
+            return
+        }
+        for target in (failures.isEmpty ? targets : []) {
             do {
                 let transport = try await deps.dial(target.endpoint, pin)
                 guard attempt == joinAttempt else {
+                    // cancelled while it dialled: no room comes of this join, so its key goes too
                     transport.close()
+                    dropFreshKey(freshKey, attempt: attempt)
                     return
                 }
                 dialed = (transport, target)
                 break
             } catch {
-                guard attempt == joinAttempt else { return }
+                guard attempt == joinAttempt else {
+                    dropFreshKey(freshKey, attempt: attempt)
+                    return
+                }
                 failures.append(error)
             }
         }
         guard let (transport, target) = dialed else {
+            dropFreshKey(freshKey, attempt: attempt)
+            joiningHost = nil
             if failures.contains(.localNetworkDenied) {
                 localNetworkDenied = true
                 join = .refused(room, .localNetworkDenied)
@@ -408,7 +466,10 @@ final class GuestRoomStore {
         let result = await deps.runJoin(transport, code, guestName, deps.model, fg, invite?.check)
         let address = transport.remoteEndpoint
         transport.close()
-        if attempt == joinAttempt { joinTransport = nil }
+        if attempt == joinAttempt {
+            joinTransport = nil
+            joiningHost = nil
+        }
 
         switch result {
         case .failure(let refusal):
@@ -419,8 +480,10 @@ final class GuestRoomStore {
                     lockedUntil = deps.now().addingTimeInterval(Self.lockout)
                 }
             }
+            dropFreshKey(freshKey, attempt: attempt)
             if attempt == joinAttempt { join = .refused(room, refusal) }
         case .success(let joined):
+            if freshKeyInFlight?.attempt == attempt { freshKeyInFlight = nil }
             wrongInARow = 0
             rejoining = nil
             self.invite = nil
@@ -433,7 +496,8 @@ final class GuestRoomStore {
             // The host chooses these words: shown like a TXT record, never with bidi or control characters.
             let entry = SavedRoom(hostFingerprint: Fingerprint.prefix + joined.hostPin.hex, deviceId: joined.deviceId, room: TXTSanitizer.clean(joined.hello.room),
                                   host: TXTSanitizer.clean(joined.hello.host), site: TXTSanitizer.clean(joined.hello.site), serviceName: target.id, lastHost: lastHost, port: port,
-                                  localPort: earlier?.localPort, joinedAt: deps.now(), salt: joined.hello.salt)
+                                  localPort: earlier?.localPort, joinedAt: deps.now(), salt: joined.hello.salt,
+                                  ownKey: freshKey != nil ? true : saved.first { $0.hostPin == joined.hostPin }?.ownKey)
             if let old = forwarders.removeValue(forKey: entry.id) { old.stop() }
             deps.rooms.save(entry)
             saved = deps.rooms.load()
@@ -513,6 +577,10 @@ final class GuestRoomStore {
 
     /// Tells the host first, best effort, so the seat's sessions are wiped there.
     func forget(_ room: SavedRoom) async {
+        // Not while this room is being joined again: the key Forget would delete is the one that join
+        // shows, and a join that ends after it would save a room without its key. The person forgets
+        // it once the join has ended, a few seconds later.
+        if case .joining(let target) = join, target.id == room.serviceName || (joiningHost != nil && joiningHost == room.hostPin) { return }
         _ = try? await withAPI(room) { api async throws(RoomAPIError) in try await api.leave() }
         forwarders.removeValue(forKey: room.id)?.stop()
         deps.rooms.forget(room)
@@ -523,6 +591,14 @@ final class GuestRoomStore {
         pingDue[room.id] = nil
         if case .pickingSeat(let picking, _) = join, picking.id == room.id { join = .none }
         if saved.isEmpty { stopHealthLoop() }
+        // The room's own key goes with it. The key shared by the rooms joined before 0.9.0 goes with
+        // the last of those rooms: no host is left that knows it. Not while a join is on its way,
+        // which may have shown that key to its room.
+        if room.ownKey == true {
+            if let host = room.hostPin, !saved.contains(where: { $0.hostPin == host }) { deps.forgetRoomKey(host) }
+        } else if !saved.contains(where: { $0.ownKey != true }) {
+            if case .joining = join {} else { deps.forgetIdentity() }
+        }
     }
 
     func forgetAll() async {
@@ -601,6 +677,13 @@ final class GuestRoomStore {
             health[room.id] = .ready(deadline: Date(timeIntervalSince1970: TimeInterval(hello.deadline_epoch)))
             forwarders[room.id]?.show(nil)
             answered = true
+            // A room tells its site's name only to the people in it: kept from the first answer on.
+            let site = TXTSanitizer.clean(hello.site_label)
+            if room.site.isEmpty, !site.isEmpty, var named = deps.rooms.load().first(where: { $0.id == room.id }) {
+                named.site = site
+                deps.rooms.save(named)
+                saved = deps.rooms.load()
+            }
         } catch .removed {
             set(await sameRoom(room) ? .removed : .newRoom, for: room)
         } catch {
@@ -630,7 +713,7 @@ final class GuestRoomStore {
             case .hostGone(let seen)?: state = .hostGone(lastSeen: seen)
             default: state = .offline
             }
-        case .seatTaken, .rateLimited, .refused: return
+        case .seatTaken, .hostAssigns, .rateLimited, .refused: return
         }
         set(state, for: room)
     }
@@ -683,11 +766,12 @@ extension GuestRoomStore.Dependencies {
     /// The real thing: Keychain identity, pinned mTLS, the bundled map, the loopback forwarder.
     static func live(identity: KeychainIdentity, defaults: UserDefaults = .standard, openURL: @escaping (URL) -> Void) -> Self {
         let suffix = LocalShareName.installSuffix(defaults: defaults)
+        let keys = RoomKeys(shared: identity, rooms: SavedRoomsStore(defaults: defaults))
         return Self(
             browser: LanRoomBrowser(),
             rooms: SavedRoomsStore(defaults: defaults),
             dial: { endpoint, pin throws(RoomConnectionError) in
-                guard let secIdentity = try? identity.identity() else { throw .unreachable }
+                guard let secIdentity = try? keys.provider(for: pin).identity() else { throw .unreachable }
                 let connection = RoomConnection(endpoint: endpoint, identity: secIdentity, pin: pin)
                 try await connection.open()
                 return connection
@@ -704,10 +788,19 @@ extension GuestRoomStore.Dependencies {
                     : .hostPort(host: NWEndpoint.Host(room.lastHost), port: NWEndpoint.Port(rawValue: room.port) ?? 0)
                 let port = room.localPort ?? LocalShareName.port(for: pin, isFree: { _ in true }) ?? UInt16(LocalShareName.portRange.lowerBound)
                 return ShareForwarder(localHost: LocalShareName.host(label: room.room, suffix: suffix, hostPin: pin), port: port, hostLabel: room.host, pin: pin,
-                                      makeUpstream: ShareForwarder.pinnedUpstream(to: endpoint, identity: identity, pin: pin))
+                                      makeUpstream: ShareForwarder.pinnedUpstream(to: endpoint, identity: keys.provider(forHost: pin), pin: pin))
             },
             openURL: openURL,
-            readPasteboard: { NSPasteboard.general.string(forType: .string) })
+            readPasteboard: { NSPasteboard.general.string(forType: .string) },
+            forgetIdentity: { try? identity.reset() },
+            hostKey: { endpoint throws(RoomConnectionError) in
+                let transport = try await anonymousDial(endpoint)
+                defer { transport.close() }
+                guard let key = transport.serverSPKIHash else { throw .unreachable }
+                return key
+            },
+            roomFingerprint: { host in (try? keys.provider(forHost: host).spkiDER()).map(Fingerprint.raw(spki:)) },
+            forgetRoomKey: { host in try? keys.own(host).reset() })
     }
 }
 

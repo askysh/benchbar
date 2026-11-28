@@ -56,6 +56,9 @@ plan EVENT=pull_request FILES="windows/tray/App.xaml.cs"
 assert_eq "false" "$(val shim)"; assert_eq "[]" "$(val linux_shards)"
 assert_eq "false" "$(val shim_win)"; assert_eq "false" "$(val shim_arm)"; assert_eq "false" "$(val wsl)"
 # the CLI's env records: the shim must forward or exclude every name they document
+# ---- the tool pins (xcodegen among them): the app job checks the new sum
+plan EVENT=pull_request FILES="scripts/ci-install-tool.sh"
+assert_eq "true" "$(val app)"
 plan EVENT=pull_request FILES="lib/frappe-local/commands.sh"
 assert_eq "true" "$(val shim)"; assert_eq "true" "$(val wsl)"
 assert_eq "true" "$(val shim_win)"; assert_eq "true" "$(val shim_arm)"
@@ -204,7 +207,7 @@ assert_eq "test-apps test-cli test-doctor test-lock test-pull " "$got"
 OUT="$(ONLY_TESTS="test-nope" bash tests/run-tests.sh 2>&1)" && CODE=0 || CODE=$?
 assert_eq "1" "$CODE"; assert_contains "$OUT" "no such test: test-nope"
 
-# ---- ci-timings.sh: the two tables from a log, the Linux one averaging the bash 5 and the container legs
+# ---- ci-timings.sh: the table from a log, the Linux column averaging the bash 5 and the container legs
 LOG="$TMP_DIR/run.log"
 t='2026-11-17T09:26:32.3938790Z'
 {
@@ -213,13 +216,119 @@ t='2026-11-17T09:26:32.3938790Z'
   printf 'CLI tests (Linux, shard 1/8)\tCLI tests\t%s --- ok: test-a (20s)\n' "$t"
   printf 'CLI tests (bash 3.2, shard 1/4)\tCLI tests\t%s --- ok: test-a (40s)\n' "$t"
   printf 'shellcheck\tshellcheck\t%s --- ok: shellcheck (150s)\n' "$t"
+  # not tests: a stand in run's line inside a failing test's output, and a quoted line
+  printf 'CLI tests (Linux, shard 2/8)\tCLI tests\t%s --- ok: t-flaky (1s)\n' "$t"
+  printf 'CLI tests (Linux, shard 2/8)\tCLI tests\t%s   | --- ok: test-a (900s)\n' "$t"
 } >"$LOG"
-OUT="$(bash scripts/ci-timings.sh "$LOG")"
-assert_contains "$OUT" 'TEST_SECS_MAC="test-a=100 test-b=50"'
-assert_contains "$OUT" 'TEST_SECS_LINUX="test-a=30"'
-assert_not_contains "$OUT" "shellcheck="
+TAB="$(printf '\t')"
+# the table it starts from: a header, a test the run timed again, one it timed on one platform only, one it did not time
+TABLE="$TMP_DIR/timings.tsv"
+printf '# the header stays\ntest-a\t1\t1\ntest-b\t2\t77\ntest-old\t5\t-\n' >"$TABLE"
+OUT="$(TIMINGS_FILE="$TABLE" bash scripts/ci-timings.sh "$LOG")"
+assert_eq "# the header stays
+test-a${TAB}100${TAB}30
+test-b${TAB}50${TAB}77
+test-old${TAB}5${TAB}-" "$OUT"
+assert_not_contains "$OUT" "shellcheck"
+assert_not_contains "$OUT" "t-flaky"
+assert_contains "$(cat "$TABLE")" "test-a${TAB}1${TAB}1" "(without --write the table is not touched)"
+# --write puts it in the file, and run-tests.sh weighs a test from it
+TIMINGS_FILE="$TABLE" bash scripts/ci-timings.sh --write "$LOG" 2>/dev/null
+assert_contains "$(cat "$TABLE")" "test-a${TAB}100${TAB}30"
+# a table of its own with no rows yet: only what the run timed
+: >"$TMP_DIR/empty.tsv"
+OUT="$(TIMINGS_FILE="$TMP_DIR/empty.tsv" bash scripts/ci-timings.sh "$LOG")"
+assert_eq "test-a${TAB}100${TAB}30
+test-b${TAB}50${TAB}-" "$OUT"
 printf 'nothing\n' >"$LOG"
-OUT="$(bash scripts/ci-timings.sh "$LOG" 2>&1)" && CODE=0 || CODE=$?
+OUT="$(TIMINGS_FILE="$TABLE" bash scripts/ci-timings.sh "$LOG" 2>&1)" && CODE=0 || CODE=$?
 assert_eq "1" "$CODE"; assert_contains "$OUT" '"--- ok'
+
+# ---- the macOS jobs wait for the Linux legs on a pull request (#137, "CI load")
+# A run that is red on Linux, or replaced by the next push within minutes, must not queue for a
+# scarce macOS runner. A push or the nightly runs them whatever Linux says.
+# a Linux leg that passed or that the plan left out lets macOS run; a failed or cancelled one does not
+PR_GUARD="      && (github.event_name != 'pull_request' || ((needs.cli-linux.result == 'success' || needs.cli-linux.result == 'skipped') && (needs.cli-bash32.result == 'success' || needs.cli-bash32.result == 'skipped'))) }}"
+guard_of() { case "$1" in cli-macos) printf '%s' "needs.changes.outputs.macos_n != '0'" ;; app) printf '%s' "needs.changes.outputs.app == 'true'" ;; esac; }
+job_of() { awk -v j="  $1:" '$0 == j { f = 1; next } f && /^  [a-z]/ { exit } f' .github/workflows/ci.yml; }
+for j in cli-macos app; do
+  body="$(job_of "$j")"
+  [[ -n "$body" ]] || fail "job $j not found in ci.yml"
+  assert_contains "$body" "needs: [changes, cli-linux, cli-bash32]" "($j waits for the Linux legs)"
+  # the whole condition, line for line: a moved bracket changes what runs
+  # (a here-string, not a pipe: grep -q under pipefail can end the writer with SIGPIPE)
+  grep -Fxq -- "      \${{ !cancelled() && needs.changes.result == 'success' && $(guard_of "$j")" <<<"$body" ||
+    fail "$j: the first line of its if: changed"$'\n'"$body"
+  grep -Fxq -- "$PR_GUARD" <<<"$body" || fail "$j: the pull request guard changed"$'\n'"$body"
+done
+
+# ---- the pin tests (tests/lib/pin.sh): they run every scenario unless the plan says smoke (pin_smoke), and only a pull
+# request says it: for every pin test except those whose pinned functions the change touches
+ALL_PINS="test-app-add-pin test-app-update-pin test-lock-apply-pin test-profile-update-pin"
+for e in push schedule workflow_dispatch; do
+  plan EVENT="$e" FILES="lib/frappe-local/apps.sh"
+  assert_eq "0" "$(val pin_smoke)" "($e)"
+done
+plan EVENT=schedule
+assert_eq "0" "$(val pin_smoke)" "(the nightly run)"
+plan EVENT=workflow_dispatch INPUT_TESTS="test-app-update-pin" INPUT_LEGS="linux"
+assert_eq "0" "$(val pin_smoke)" "(dispatch of one pin test)"
+# a pull request that touches no pinned file: smoke for all four
+plan EVENT=pull_request FILES="lib/frappe-local/ports.sh tests/test-ports.sh"
+assert_eq "1" "$(val pin_smoke)" "(another shell file)"
+plan EVENT=pull_request FILES="docs/a.md"
+assert_eq "1" "$(val pin_smoke)" "(docs)"
+# a pull request that changes the file of a pinned function: that pin runs in full (it is not in the smoke list)
+plan EVENT=pull_request FILES="lib/frappe-local/teamlock.sh"
+assert_eq "test-app-add-pin test-app-update-pin test-profile-update-pin" "$(val pin_smoke)" "(teamlock.sh: smoke for the other three)"
+assert_contains "$(val tests)" "test-lock-apply-pin" "(the lock pin runs, in full)"
+plan EVENT=pull_request FILES="lib/frappe-local/apps.sh"
+assert_eq "test-app-add-pin test-lock-apply-pin test-profile-update-pin" "$(val pin_smoke)" "(apps.sh: the update pin in full)"
+plan EVENT=pull_request FILES="lib/frappe-local/app-plan.sh"
+assert_eq "test-app-update-pin test-lock-apply-pin test-profile-update-pin" "$(val pin_smoke)" "(app-plan.sh: the add pin in full)"
+plan EVENT=pull_request FILES="lib/frappe-local/profiles.sh"
+assert_eq "test-app-add-pin test-app-update-pin test-lock-apply-pin" "$(val pin_smoke)" "(profiles.sh: the profile pin in full)"
+plan EVENT=pull_request FILES="lib/frappe-local/apps.sh lib/frappe-local/profiles.sh"
+assert_eq "test-app-add-pin test-lock-apply-pin" "$(val pin_smoke)" "(two files, two pins in full)"
+assert_contains "$(val tests)" "test-app-update-pin"; assert_contains "$(val tests)" "test-profile-update-pin"
+plan EVENT=pull_request FILES="lib/frappe-local/apps.sh lib/frappe-local/app-plan.sh lib/frappe-local/teamlock.sh lib/frappe-local/profiles.sh"
+assert_eq "0" "$(val pin_smoke)" "(all four files: every pin in full)"
+# a file a pinned function only calls into has no pin of its own: smoke
+plan EVENT=pull_request FILES="lib/frappe-local/ui.sh"
+assert_eq "1" "$(val pin_smoke)" "(a helper file)"
+# the change could move a scenario the smoke set leaves out, whatever the file: every pin in full
+for f in tests/test-lock-apply-pin.sh tests/test-profile-update-pin.sh tests/golden/app-add.txt tests/lib/pin.sh tests/lib/pin.sed tests/lib/harness.sh; do
+  plan EVENT=pull_request FILES="$f lib/frappe-local/ports.sh"
+  assert_eq "0" "$(val pin_smoke)" "($f)"
+done
+plan EVENT=pull_request FILES="lib/frappe-local/ports.sh" LABELS="bug test-pin-full"
+assert_eq "0" "$(val pin_smoke)" "(the label test-pin-full)"
+plan EVENT=pull_request FILES="lib/frappe-local/ports.sh" LABELS="bug"
+assert_eq "1" "$(val pin_smoke)" "(another label)"
+plan EVENT=pull_request
+assert_eq "0" "$(val pin_smoke)" "(no base to diff against: everything)"
+# the job summary says it
+plan EVENT=pull_request FILES="lib/frappe-local/ports.sh" PLAN_SUMMARY="$TMP_DIR/summary2.md"
+assert_contains "$(cat "$TMP_DIR/summary2.md")" "Pin tests: smoke scenarios."
+plan EVENT=pull_request FILES="lib/frappe-local/teamlock.sh" PLAN_SUMMARY="$TMP_DIR/summary3.md"
+assert_contains "$(cat "$TMP_DIR/summary3.md")" "Pin tests: smoke for test-app-add-pin test-app-update-pin test-profile-update-pin, every scenario for the others."
+plan EVENT=push FILES="lib/frappe-local/teamlock.sh" PLAN_SUMMARY="$TMP_DIR/summary4.md"
+assert_contains "$(cat "$TMP_DIR/summary4.md")" "Pin tests: every scenario."
+# every pin test is in the lists above (a new one must be added to ALL_PINS and to tests/affected.sh's pin_of)
+assert_eq "$ALL_PINS" "$(for f in tests/test-*-pin.sh; do f="${f##*/}"; printf '%s ' "${f%.sh}"; done | sed 's/ $//')" "(the pin tests)"
+# every CLI job hands the plan's answer to its tests, and the container passes it on
+# shellcheck disable=SC2016  # the ${{ }} is GitHub's, not the shell's
+assert_contains "$(sed -n '/^    outputs:/,/^    steps:/p' .github/workflows/ci.yml)" 'pin_smoke: ${{ steps.plan.outputs.pin_smoke }}'
+for j in cli-macos cli-linux cli-bash32; do
+  body="$(job_of "$j")"
+  [[ -n "$body" ]] || fail "job $j not found in ci.yml"
+  # shellcheck disable=SC2016
+  assert_contains "$body" 'PIN_SMOKE: ${{ needs.changes.outputs.pin_smoke }}' "($j sets PIN_SMOKE)"
+done
+assert_contains "$(job_of cli-bash32)" "-e PIN_SMOKE" "(the container gets PIN_SMOKE)"
+# nothing else sets it: the release build's test step (release-prepare) and any other job run every scenario
+assert_eq "1" "$(grep -rl PIN_SMOKE .github | wc -l | tr -d ' ')" "(only ci.yml names PIN_SMOKE)"
+assert_eq ".github/workflows/ci.yml" "$(grep -rl PIN_SMOKE .github)"
+assert_contains "$(cat .github/actions/release-prepare/action.yml)" "tests/run-tests.sh" "(the release build runs the tests)"
 
 printf 'test-ci-plan: ok\n'

@@ -2,7 +2,7 @@
 # (scripts/macos-build.sh runs "xcodegen generate") and is not committed.
 #
 # Optional Sparkle support: BENCHBAR_SPARKLE=YES xcodegen generate
-# (see docs/releasing.md). Off by default.
+# (see maintainers/releasing.md). Off by default.
 name: BenchBar
 
 options:

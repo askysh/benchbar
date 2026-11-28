@@ -1,6 +1,19 @@
 import Foundation
 @testable import BenchBar
 
+/// Polls a condition until it holds or the deadline passes, so a test waits for what it needs and
+/// not for a fixed time: a busy runner only makes it take longer, and a quick machine does not wait.
+/// The deadline is generous (it is only reached when the test would fail anyway).
+func waitForCondition(timeout: Duration = .seconds(10), _ condition: () -> Bool) async -> Bool {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: timeout)
+    while !condition() {
+        if clock.now >= deadline { return false }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    return true
+}
+
 /// Loads a JSON file from BenchBarTests/Fixtures (copied into the test bundle).
 nonisolated enum Fixture {
     private final class Token {}
@@ -24,6 +37,13 @@ nonisolated enum Fixture {
         return String(decoding: try Data(contentsOf: url), as: UTF8.self)
     }
 
+    /// A text fixture (what a command with no JSON prints): BenchBarTests/Fixtures/NAME.EXT.
+    static func text(_ name: String, ext: String) throws -> String {
+        let bundle = Bundle(for: Token.self)
+        guard let url = bundle.url(forResource: name, withExtension: ext) else { throw FixtureError.missing(name) }
+        return String(decoding: try Data(contentsOf: url), as: UTF8.self)
+    }
+
     enum FixtureError: Error { case missing(String) }
 }
 
@@ -33,6 +53,8 @@ nonisolated final class FakeRunner: CommandRunning, @unchecked Sendable {
         var executable: String
         var arguments: [String]
         var environment: [String: String]
+        /// The bytes sent on the child's standard input (`--secrets-stdin`), nil when the call sent none.
+        var input: [UInt8]?
     }
 
     private let lock = NSLock()
@@ -46,7 +68,24 @@ nonisolated final class FakeRunner: CommandRunning, @unchecked Sendable {
     var calls: [Call] { lock.withLock { _calls } }
 
     func run(executable: URL, arguments: [String], environment: [String: String], timeout: Duration) async throws(CLIError) -> CommandOutput {
-        lock.withLock { _calls.append(Call(executable: executable.path, arguments: arguments, environment: environment)) }
+        try perform(executable: executable, arguments: arguments, environment: environment, input: nil)
+    }
+
+    /// The input calls record the bytes with the call, so a test can see what a CLI that takes `--secrets-stdin` would have read.
+    func run(executable: URL, arguments: [String], environment: [String: String], timeout: Duration,
+             qos: QualityOfService, input: [UInt8]?) async throws(CLIError) -> CommandOutput {
+        try perform(executable: executable, arguments: arguments, environment: environment, input: input)
+    }
+
+    func stream(executable: URL, arguments: [String], environment: [String: String], timeout: Duration, input: [UInt8]?,
+                onLine: @escaping @Sendable (String) -> Void) async throws(CLIError) -> Int32 {
+        let output = try perform(executable: executable, arguments: arguments, environment: environment, input: input)
+        for line in output.stdout.split(separator: "\n", omittingEmptySubsequences: true) { onLine(String(line)) }
+        return output.exitCode
+    }
+
+    private func perform(executable: URL, arguments: [String], environment: [String: String], input: [UInt8]?) throws(CLIError) -> CommandOutput {
+        lock.withLock { _calls.append(Call(executable: executable.path, arguments: arguments, environment: environment, input: input)) }
         return try respond(arguments)
     }
 }

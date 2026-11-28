@@ -3,14 +3,46 @@ title: "share and lan-guard"
 description: "benchbar share setup, start, code, invite, lock, people, remove, assign, log, open-as, stop and teardown, and benchbar lan-guard: a room on your Wi-Fi where people sign in to a hardened copy of a dev site."
 ---
 
-**share is an experiment: run `benchbar labs on lan-rooms` first.** While the lab is off, `share` and `lan-guard` are hidden from `--help` and `commands --json` (listed under `gated`) and exit 2 with that hint. `benchbar labs off lan-rooms` stops a running share and, if lan-guard is installed, warns with `run: benchbar lan-guard remove` (it never uses sudo itself).
+**share is an experiment: run `benchbar labs on lan-rooms` first.** While the lab is off, `share` and `lan-guard` are hidden from `--help` and `commands --json` (listed under `gated`) and exit 2 with that hint. The commands that stop, remove or report what the lab started still run while it is off: `share stop`, `share status`, `share teardown`, `lan-guard status` and `lan-guard remove`. `benchbar labs off lan-rooms` stops a running share and, if lan-guard is installed or `lan-guard allow-node` put node on the macOS firewall's list, warns with `run: benchbar lan-guard remove` (it never uses sudo itself).
 
-Sharing opens a **room** on this Mac's network. People on the same Wi-Fi
+Sharing opens a **room** on this computer's network. People on the same Wi-Fi
 join it with a 6 digit **room code**, take a **seat** (one of the Frappe
 users you chose) and use a hardened **copy** of one of your dev sites in
-their own browser. macOS only. Every command takes the
+their own browser. It runs on macOS and, since 0.9.0, on Linux (see [Sharing on Linux](#sharing-on-linux));
+the Mac app is macOS only. Every command takes the
 [options for every command](install.md#options-for-every-command).
-The documents are in the [JSON schema](../../json-schema.md#sharing).
+The documents are in the [JSON schema](../json/share.md#sharing).
+
+## Sharing on Linux
+
+The same commands, with the macOS parts swapped:
+
+| What | macOS | Linux |
+| --- | --- | --- |
+| The LAN guard | a pf anchor and a launch daemon | an nftables table and a systemd unit ([lan-guard install on Linux](#lan-guard-install-on-linux)) |
+| The sharing job | a launchd job | a `systemd --user` unit, `benchbar-share-gateway.service`, written into `$XDG_RUNTIME_DIR/systemd/user` and deleted when the share ends; it is never enabled, so a logout or a reboot ends it, and it is not in `~/.config/systemd/user` where the bench's unit is |
+| Listing on the network | Bonjour (`dns-sd`) | `avahi-publish` when it is installed (`sudo apt install avahi-utils`); without it the room is not listed, `share start` says so, and people join with the address and the code |
+| Keeping the computer awake | `caffeinate` | nothing yet: a laptop that suspends ends the room's reachability until it wakes |
+| Naming the owner of the web port | `lsof` | `ss` |
+| The firewall for node | `lan-guard allow-node` | none; with ufw on, `sudo ufw allow 8443/tcp` for the room's port |
+| The room's label | the Mac's ComputerName | the host name |
+
+`share start` needs a user session with a systemd user manager (the folder `$XDG_RUNTIME_DIR` exists):
+over SSH without a login session, or in a WSL distro without systemd, it stops and says so. In WSL the
+default NAT network is not the office Wi-Fi: its address belongs to the Windows PC, so nobody on the Wi-Fi
+can reach a room there. A room is not available on WSL NAT: `share preflight`, `share start` and
+`share invite` read `wslinfo --networking-mode` (a WSL without `wslinfo` counts as NAT) and refuse, naming
+the fix. With mirrored networking (`networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`,
+then `wsl.exe --shutdown` in Windows) the room has the PC's own Wi-Fi address, and `share preflight` and
+`share start` warn that Windows still blocks inbound connections to WSL until the Hyper-V firewall allows
+the room's port. Run this once in a PowerShell opened as administrator:
+
+```powershell
+New-NetFirewallHyperVRule -Name BenchBarRoom -DisplayName "BenchBar room" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8443
+```
+
+See [Windows](../../windows.md#rooms-on-windows) and Microsoft's
+[mirrored mode networking](https://learn.microsoft.com/windows/wsl/networking#mirrored-mode-networking).
 
 ## The safety model
 
@@ -83,7 +115,7 @@ benchbar share preflight [--static|--critical] [--quiet] [--json]
 
 The checks, each with a status, a message and a `fix_action`. `--static`:
 what is checked before anything starts (the copy, its seats, node, the
-firewall). `--critical`: what a running share repeats (the pf block probed
+firewall; on WSL, the networking mode: `wsl_networking` fails on NAT and warns on mirrored). `--critical`: what a running share repeats (the pf block probed
 from the LAN address, the share web process, the bench's Redis).
 
 Exit codes: 0 when every check passes; 1 when one fails.
@@ -95,12 +127,32 @@ benchbar share preflight --critical
 ## share start
 
 ```
-benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]
+benchbar share start [--for DUR] [--name LABEL] [--open-seats] [--dry-run] [--json]
 ```
 
 Starts the room until the deadline (`--for 30m`, `4h`; 5 minutes to 12
 hours; 4 hours by default). The bench must be running. Refused like
 `share setup`. A second start says "unchanged".
+
+**Who gives a person their seat.** You do. The room code lets a person
+into the room and no further: a person who joins has no seat and sees
+nothing of the copy until you run [`share assign`](#share-assign) for
+them. They cannot take a seat or change to another one themselves.
+[`share people`](#share-people) lists who waits and which seats are free,
+and the start says that guests wait for you. A person keeps their place
+for 10 minutes while they wait. When the room is full, the next person who
+joins takes the place of whoever has waited longest, if that is more than
+2 minutes; [`share remove`](#share-remove) puts out somebody you do not
+know.
+
+`--open-seats` starts the room of 0.8: the code also lets a person take
+any free seat, the most privileged one included, with no action from you
+(and a person without a seat keeps their place for 2 minutes). Use it only
+when everybody who has the code may use every seat. `--assign-seats` names
+the default and is not needed; the two do not go together. On WSL with NAT networking it
+is refused before anything is written, even with `--dry-run`; with mirrored
+networking it warns what the Hyper-V firewall needs (see
+[Sharing on Linux](#sharing-on-linux)).
 
 A start takes about 15 seconds on a 29-app copy: the checks run before
 and after the gateway starts (about 2 seconds each), and the copy's web
@@ -139,7 +191,7 @@ benchbar share invite [--install-url URL] [--json]
 ```
 
 Prints a ready-to-paste invite for your team channel. Its link carries
-the room's name, this Mac's key fingerprint, the code's salt, the code
+the room's name, this computer's key fingerprint, the code's salt, the code
 itself, this Mac's LAN address and gateway port, and the deadline, so
 a guest's BenchBar opens the join sheet with everything filled in. The
 guest still clicks **Join**. Before the code is sent, the guest's app checks
@@ -197,7 +249,10 @@ benchbar share people [--json]
 
 The people in the room: id (`d_` and 8 hex digits), name, Mac model,
 address, seat, online, joined, last seen. `share devices` is another name
-for it.
+for it. When someone in the room has no seat, the free seats follow with
+their ids (`s_` and 8 hex digits), ready for `share assign`. `--json` always
+carries `seats`, every seat of the room with its roles and who holds it,
+and `seat_mode` (`host` or `open`).
 
 ```bash
 benchbar share people
@@ -227,7 +282,10 @@ benchbar share remove d_0123abcd --new-code
 benchbar share assign ID SEAT_ID [--json]
 ```
 
-Moves a person to another free seat; the old seat's sessions end first.
+Gives a person a free seat, or moves them to another one; the old seat's
+sessions end first. This is the only way a person gets or changes a seat,
+unless the room was started with `--open-seats`. `share people` shows the ids of
+the people and of the free seats.
 
 ```bash
 benchbar share assign d_0123abcd s_0a1b2c3d
@@ -242,6 +300,13 @@ benchbar share log [--device ID] [--since TIME] [--limit N] [--json]
 What people in the room opened in the last 14 days: time, Mac, seat,
 method, the first two path segments (never a document name) and the
 status. 200 entries by default, at most 5000.
+
+The log is a file per day in the share folder. It names a seat by its id,
+never by the e-mail address of the seat's user; `share log` shows the
+seat's name. A day's file stops at 16 MB (its last line is
+`/_benchbar/log-full`). Files older than 14 days are deleted when a share
+starts, when it ends and when `share log` reads them; `share teardown`
+deletes all of them.
 
 ```bash
 benchbar share log --device d_0123abcd --since 09:00:00
@@ -297,7 +362,9 @@ benchbar share status --json
 benchbar share extend --by DUR [--json]
 ```
 
-Moves the deadline, up to 12 hours from the start.
+Moves the deadline, up to 12 hours from the start. People in the room stay
+signed in: the browser's cookie has no end date of its own, and every
+session of the copy ends when the share does.
 
 ```bash
 benchbar share extend --by 1h
@@ -382,6 +449,39 @@ a block that still lets a bench port through.
 benchbar lan-guard install --dry-run
 ```
 
+### lan-guard install on Linux
+
+The same command, with nftables in place of pf and systemd in place of
+launchd. It writes the rules file `/etc/benchbar/lan-guard.nft` (one table,
+`inet benchbar`, with one input chain at priority -10 and a policy of
+accept) and the unit `/etc/systemd/system/benchbar-lan-guard.service`, then
+enables the unit and starts it again. The unit loads the table at every boot
+and deletes it when it stops. Only the bench ports are touched, from the
+same list and for the same reason as on macOS: TCP to them is refused with a
+reset unless it comes from loopback, and this machine's own LAN address
+counts as not loopback, which is how `status` proves the rule works.
+
+It needs `nft` (`sudo apt install nftables`) and systemd as the init (in WSL,
+`systemd=true` in `/etc/wsl.conf`); without them it stops before it asks for
+sudo and changes nothing. The root step names the system tools by absolute
+path and carries both files as literals, as on macOS. `BENCHBAR_SUDO=gui` is
+the Mac's dialog and does nothing on Linux. From the Windows tray the
+password comes in `BENCHBAR_SUDO=env`.
+
+**ufw and firewalld.** The guard does not change them. A host that runs ufw
+refuses incoming ports it was not told to allow, and the guard adds to that:
+both can refuse, neither accepts for the other. A room's port (8443) then
+needs a rule of your own, `sudo ufw allow 8443/tcp`; `install` and `status`
+say so when ufw is active. A service that flushes the whole ruleset
+(`nftables.service` reloading `/etc/nftables.conf`, which starts with `flush
+ruleset`) takes the table away: `status` then shows `active: false` and
+`install` loads it again. A published Docker port is forwarded, not
+delivered to this machine, and is outside what the input chain sees.
+
+`lan-guard allow-node` is macOS only: it changes the macOS application
+firewall, and Linux has no such list. On Linux it says so and changes
+nothing.
+
 ## lan-guard status
 
 ```
@@ -389,8 +489,9 @@ benchbar lan-guard status [--json]
 ```
 
 `installed`, `missing` or `outdated`, and `active`: whether the bench ports
-are refused on this Mac's LAN address (null with no LAN address). Reads
-only; never refused.
+are refused on this machine's LAN address (null with no LAN address, or when
+the probe could not run: it needs the bench's Node). `anchor` is the pf
+anchor on macOS and `inet benchbar` on Linux. Reads only; never refused.
 
 ```bash
 benchbar lan-guard status --json
@@ -404,14 +505,30 @@ benchbar lan-guard remove [--yes] [--json]
 
 Unloads and deletes the anchor and its daemon, with sudo once. Asks first.
 Without them the bench ports answer the LAN and `share start` refuses to
-run.
+run. On Linux it stops and disables the unit, deletes the table `inet
+benchbar` (no other table, chain or rule), and removes the unit, the rules
+file and their folder.
 
 It also gives back the pf token that install recorded (`pfctl -X TOKEN`), so
 pf is turned off again when the guard was the only thing that turned it on.
 When pf was already enabled before the first install, remove leaves pf on.
+If an install failed after it turned pf on and its two files are gone
+since, the guard reads "not installed" but the reference is still held:
+remove asks for your password and gives it back.
 A token from before a reboot is stale, and releasing it is harmless. The
 boot daemon takes a reference of its own at every boot; it ends at the next
 reboot, because remove deletes the daemon.
+
+On macOS it also takes out of the firewall's allowed apps every node that
+`lan-guard allow-node` added (`socketfilterfw --remove PATH`), in the same
+root step, so one password covers both. It does so too when the guard itself
+is not installed. An entry that you made yourself in System Settings, or
+that a BenchBar before 0.9.0 added (it kept no record), is left alone: when
+the firewall is on and still allows the gateway's node, remove prints the
+command that takes the entry out.
+
+`lan-guard remove` runs while the `lan-rooms` Lab is off, so the Lab can
+always be undone.
 
 ```bash
 benchbar lan-guard remove
@@ -426,7 +543,15 @@ benchbar lan-guard allow-node [--yes] [--json]
 Adds the realpath of the node the gateway runs on to the macOS firewall's
 allowed apps, with sudo once. "Unchanged" when the firewall is off or
 already allows it. A Homebrew upgrade of node changes the realpath, so the
-`firewall_node` check asks for it again.
+`firewall_node` check asks for it again; that run also takes the entry of
+the older node out.
+
+The firewall keeps its list by program. The entry lets every script that
+this node runs accept incoming connections, on every network, not only the
+gateway of a room: a dev server on another port is then reachable without
+the firewall's own question. The command says so before it asks.
+BenchBar records the path it added (`lan-guard/firewall.allowed` in its
+state folder), and `benchbar lan-guard remove` takes the entry out again.
 
 ```bash
 benchbar lan-guard allow-node
@@ -445,7 +570,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar share setup [--site S] [--from STAMP\|latest] [--backup-now] [--users A,B] [--name LABEL] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | stream |
 | `benchbar share users [--site S] [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
 | `benchbar share preflight [--static\|--critical] [--quiet] [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
-| `benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | stream |
+| `benchbar share start [--for DUR] [--name LABEL] [--open-seats] [--dry-run] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | stream |
 | `benchbar share stop [--json]` (Lab `lan-rooms`) | no | no | no | yes | stream |
 | `benchbar share extend --by DUR [--json]` (Lab `lan-rooms`) | no | no | no | yes | stream |
 | `benchbar share status [--preflight] [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
@@ -461,6 +586,10 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar share log [--device ID] [--since TIME] [--limit N] [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
 | `benchbar share open-as USER [--print-url] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | document |
 | `benchbar share teardown [--yes] [--json]` (Lab `lan-rooms`) | yes | no | no | yes | stream |
+| `benchbar share join [ADDRESS[:PORT]] [--host-key HEX] [--name NAME] [--seat SEAT_ID] [--no-wait] [--no-open] [--dry-run] [--yes] [--json]` (Lab `lan-rooms`) | yes | no | yes | yes | document |
+| `benchbar share joined [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
+| `benchbar share leave [ROOM] [--json]` (Lab `lan-rooms`) | no | no | yes | yes | stream |
+| `benchbar share forget [ROOM] [--json]` (Lab `lan-rooms`) | no | no | yes | yes | stream |
 | `benchbar lan-guard install\|status\|remove\|allow-node ...` (Lab `lan-rooms`) | yes | yes | no | yes | stream |
 | `benchbar lan-guard install [--dry-run] [--yes] [--json]` (Lab `lan-rooms`) | yes | yes | no | yes | stream |
 | `benchbar lan-guard status [--json]` (Lab `lan-rooms`) | no | no | no | no | document |
@@ -488,6 +617,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `share preflight` | `--json` |  | One document: protocol, ok, lan_ip and the checks, each with a status, a message and a fix_action. |
 | `share start` | `--for` | `DUR` | How long the share runs: 30m, 4h; from 5 minutes to 12 hours. Default: 4h. |
 | `share start` | `--name` | `LABEL` | The room's label for this share, at most 40 printable characters. Default: the one share setup recorded. |
+| `share start` | `--open-seats` |  | Guests take a free seat themselves, as before 0.9.0: anyone with the room code takes any free seat, the most privileged one included. Without it you give out the seats: a person who joins waits (up to 10 minutes) until you run benchbar share assign for them, and cannot take or change a seat themselves. |
+| `share start` | `--assign-seats` |  | The default, said out loud: you give out the seats. Not with --open-seats. |
 | `share start` | `--dry-run` |  | Print the plan and start nothing. |
 | `share start` | `--json` |  | JSON lines: plan, steps, done (with the deadline). |
 | `share stop` | `--json` |  | JSON lines: steps, done. |
@@ -501,21 +632,30 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `share invite` | `--json` |  | One document with the invite text and its link: the code is in it, never logged, never stored. |
 | `share lock` | `--json` |  | JSON lines: done, with locked and lock_reason. |
 | `share unlock` | `--json` |  | JSON lines: done, with locked and lock_reason. |
-| `share people` | `--json` |  | One document: state and people, each with id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen. |
+| `share people` | `--json` |  | One document: state; people, each with id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen; seats, every seat of the room with seat_id, full_name, roles, held_by and held_by_name (null for a free seat); seat_mode (host or open). |
 | `share devices` | `--json` |  | As share people --json. |
 | `share remove` | `--new-code` |  | Also draw a new room code, for when the person is not known: a fresh Mac could join again with the old one. The new code also lets the removed Mac back, if they get it. |
 | `share remove` | `--yes` |  | Do not ask first. |
 | `share remove` | `--json` |  | JSON lines: done, with removed, new_code and the wipe. |
+| `share revoke` | `--new-code` |  | As share remove --new-code. |
+| `share revoke` | `--yes` |  | Do not ask first. |
 | `share revoke` | `--json` |  | As share remove --json. |
 | `share assign` | `--json` |  | JSON lines: done, with the device and its new seat. |
 | `share log` | `--device` | `ID` | Only this Mac (an id of share people). |
 | `share log` | `--since` | `TIME` | Only entries at or after it: ISO 8601, YYYY-MM-DD HH:MM:SS, a date, or HH:MM:SS today. |
 | `share log` | `--limit` | `N` | The newest N entries, 1 to 5000. Default: 200. |
-| `share log` | `--json` |  | One document: entries (ts, device, user, method, path, status) and truncated. |
+| `share log` | `--json` |  | One document: entries (ts, device, user, method, path, status) and truncated. user is the seat's name (the seat's id when the room no longer has the seat), never an e-mail address but in a line written by 0.8.3. |
 | `share open-as` | `--print-url` |  | Print the sign-in link instead of opening it; it holds the session. |
 | `share open-as` | `--json` |  | One document without the link (never the session). |
 | `share teardown` | `--yes` |  | Do not ask first. |
 | `share teardown` | `--json` |  | JSON lines: steps, done with copy_dropped, archived_path and state_removed. |
+| `share join` | `--host-key` | `HEX` | Join only if the host shows this key (the 64 hex digits: host_pin of a look with --dry-run --json). Another key is refused before any request, with exit code 3. Public, so an argument is fine. |
+| `share join` | `--name` | `NAME` | The name the host sees for this computer (default: the computer's name). |
+| `share join` | `--seat` | `SEAT_ID` | Take this seat, in a room where guests pick theirs (the host started it with --open-seats). |
+| `share join` | `--no-wait` |  | Do not wait for the host to give a seat: join, say so, and end. |
+| `share join` | `--no-open` |  | Do not open the browser; the address is printed. |
+| `share join` | `--dry-run` |  | Show the room, its address and the host key, and stop: nothing that depends on the code is sent, nothing is saved. |
+| `share join` | `--yes` |  | Do not ask "Join this room?" after an invite link. |
 | `lan-guard install` | `--dry-run` |  | Print what would be written and run, with no sudo. |
 | `lan-guard install` | `--yes` |  | Do not ask first (sudo still asks for the password). |
 | `lan-guard install` | `--json` |  | JSON lines: done, with state, active, ports, anchor and lan_ip. |
@@ -528,4 +668,5 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | Command | Environment variable | What it does |
 |---|---|---|
 | `share setup` | `MARIADB_ROOT_PASSWORD` | Making the copy restores it as MariaDB's root user: the password from the Keychain, this variable, or typed at a terminal. With none of them, setup and its dry run exit 2 before any change. |
+| `share join` | `BENCHBAR_SUDO` | gui: the app or the tray made the run after its own window; the code or the invite link is then the first line of stdin. |
 <!-- /generated:cli-commands -->

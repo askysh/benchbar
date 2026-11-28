@@ -60,6 +60,6 @@ fi
 
 printf 'Version set to %s (%s).\n' "$version" "$kind"
 if [[ "$kind" == final ]]; then
-  printf 'Still yours to write: the %s paragraph in README.md and in ROADMAP.md, then the screenshots (docs/releasing.md).\n' "$version"
+  printf 'Still yours to write: the %s paragraph in README.md and in ROADMAP.md, then the screenshots (maintainers/releasing.md).\n' "$version"
 fi
 VERSION_ROOT="$ROOT" "$HERE/check-version.sh" "$version" || [[ "$kind" == final ]]

@@ -24,14 +24,14 @@ nonisolated enum OpenAsMenuModel {
         }
     }
 
-    static let noPinsHint = "Pin people from Find User… to switch to them here"
+    static let noPinsHint = String(localized: "Pin people from Find User… to switch to them here")
 
     /// What the opt-in alert says. The CLI says the same before it asks in a terminal.
-    static let allowMessage = "Open as signs in to this site as any of its users, without a password.\n\n"
-        + "Each sign in runs the apps' on_login and on_session_creation hooks, as a real login does: it sets last_login, "
-        + "adds an Activity Log entry, mails the System Managers for Administrator and may create an ERPNext Customer or Supplier "
-        + "for a Website User. It may end that user's oldest session.\n\n"
-        + "Use it on development sites only."
+    static let allowMessage = [
+        String(localized: "Open as signs in to this site as any of its users, without a password."),
+        String(localized: "Each sign in runs the apps' on_login and on_session_creation hooks, as a real login does: it sets last_login, adds an Activity Log entry, mails the System Managers for Administrator and may create an ERPNext Customer or Supplier for a Website User. It may end that user's oldest session."),
+        String(localized: "Use it on development sites only."),
+    ].joined(separator: "\n\n")
 
     /// Whether the control is shown, and if it is shown but cannot be used, why.
     enum Availability: Equatable {
@@ -44,10 +44,10 @@ nonisolated enum OpenAsMenuModel {
 
     static func availability(_ row: SiteRow, benchRunning: Bool, benchName: String) -> Availability {
         guard row.openAsEnabled == true, !row.needsHosts else { return .hidden }
-        if row.openAs == true { return benchRunning ? .available : .disabled("Start \(benchName) first") }
+        if row.openAs == true { return benchRunning ? .available : .disabled(String(localized: "Start \(benchName) first")) }
         // opted in but the CLI says open --as would refuse: only the default site can be explained here
         guard row.isDefault else { return .hidden }
-        return .disabled(reasons(row).first ?? "Open as is not usable on \(row.name) now")
+        return .disabled(reasons(row).first ?? String(localized: "Open as is not usable on \(row.name) now"))
     }
 
     /// Why an opted-in site cannot be used, in the order to fix them.
@@ -55,14 +55,14 @@ nonisolated enum OpenAsMenuModel {
         guard row.openAsEnabled == true, row.openAs != true else { return [] }
         var reasons: [String] = []
         if !row.developerModeKnown {
-            reasons.append("Update the benchbar CLI to use Open as")
+            reasons.append(String(localized: "Update the benchbar CLI to use Open as"))
         } else if !row.developerMode {
-            reasons.append("\(row.name) is not in developer mode. Run: bench --site \(row.name) set-config developer_mode 1")
+            reasons.append(String(localized: "\(row.name) is not in developer mode. Run: bench --site \(row.name) set-config developer_mode 1"))
         }
         if !row.isDefault {
-            reasons.append("Only the default site can be used: port 8000 serves only it")
+            reasons.append(String(localized: "Only the default site can be used: port 8000 serves only it"))
         } else if row.developerMode {
-            reasons.append("The web process answers as another site. Run: benchbar site default \(row.name), then benchrestart")
+            reasons.append(String(localized: "The web process answers as another site. Run: benchbar site default \(row.name), then benchrestart"))
         }
         return reasons
     }
@@ -71,7 +71,7 @@ nonisolated enum OpenAsMenuModel {
     static func statusLine(_ row: SiteRow) -> (text: String, warning: Bool)? {
         guard row.openAsEnabled == true else { return nil }
         let why = reasons(row)
-        if why.isEmpty { return ("Open as is on", false) }
+        if why.isEmpty { return (String(localized: "Open as is on"), false) }
         return ("Open as is on, but not usable. " + why.joined(separator: " "), true)
     }
 
@@ -119,7 +119,7 @@ nonisolated enum OpenAsMenuModel {
         var items: [Item] = []
         if let previous = recents.dropFirst().first {
             let label = label(for: previous.user, fullName: previous.fullName, pins: pins)
-            items += [.switchBack(user: previous.user, title: "Switch Back to \(label)"), .divider(1)]
+            items += [.switchBack(user: previous.user, title: String(localized: "Switch Back to \(label)")), .divider(1)]
         }
         let pinned = pins.filter { $0.user != OpenAsStore.administrator }.prefix(OpenAsStore.maxPins)
         for pin in pinned {

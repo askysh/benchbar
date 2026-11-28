@@ -2,21 +2,21 @@ import Foundation
 
 /// Every line the "On your network" pane shows, from the guest store's state (R3.8 copy).
 nonisolated enum NetworkPanePresentation {
-    static let headerTitle = "On your network"
-    static let headerSubtitle = "Rooms that colleagues on this Wi-Fi opened, and the ones you joined."
-    static let title = "Rooms on this Wi-Fi"
-    static let joinedSection = "Your rooms"
+    static let headerTitle = String(localized: "On your network")
+    static let headerSubtitle = String(localized: "Rooms that colleagues on this Wi-Fi opened, and the ones you joined.")
+    static let title = String(localized: "Rooms on this Wi-Fi")
+    static let joinedSection = String(localized: "Your rooms")
     static let nearbySection = "Nearby"
-    static let findingText = "Looking for rooms on this Wi-Fi…"
-    static let emptyText = "No rooms on this Wi-Fi right now. Ask a colleague to start sharing, or paste an invite."
-    static let findRooms = "Find rooms"
+    static let findingText = String(localized: "Looking for rooms on this Wi-Fi…")
+    static let emptyText = String(localized: "No rooms on this Wi-Fi right now. Ask a colleague to start sharing, or paste an invite.")
+    static let findRooms = String(localized: "Find rooms")
     /// The pane's AppStorage key: the Local Network explanation was accepted. Until then
     /// nothing browses, so the macOS prompt never appears from the popover.
     static let explainedKey = "shareGuestExplained"
-    static let localNetworkOff = "Local Network access is off for BenchBar."
-    static let explanation = "BenchBar will ask macOS for Local Network access to find rooms your colleagues share on this Wi-Fi."
-    static let seatTitle = "Pick a seat"
-    static let shareYourOwn = "To share your own bench, turn on Sharing on its page."
+    static let localNetworkOff = String(localized: "Local Network access is off for BenchBar.")
+    static let explanation = String(localized: "BenchBar will ask macOS for Local Network access to find rooms your colleagues share on this Wi-Fi.")
+    static let seatTitle = String(localized: "Pick a seat")
+    static let shareYourOwn = String(localized: "To share your own bench, turn on Sharing on its page.")
 
     /// `{room} · {site}`: before joining, the TXT record is all there is (display only).
     static func nearbyRow(_ room: DiscoveredRoom) -> String {
@@ -34,11 +34,11 @@ nonisolated enum NetworkPanePresentation {
 
     static func nearbyStateText(_ state: NearbyState) -> String {
         switch state {
-        case .checking: return "Checking…"
-        case .open: return "Open"
-        case .locked: return "Locked"
-        case .full: return "Full"
-        case .notAnswering: return "Not answering"
+        case .checking: return String(localized: "Checking…")
+        case .open: return String(localized: "Open")
+        case .locked: return String(localized: "Locked")
+        case .full: return String(localized: "Full")
+        case .notAnswering: return String(localized: "Not answering")
         }
     }
 
@@ -52,7 +52,7 @@ nonisolated enum NetworkPanePresentation {
     }
 
     static func seatsTaken(_ hello: RoomHello) -> String {
-        "\(min(max(hello.people, 0), max(hello.seats, 0))) of \(max(hello.seats, 0)) seats taken"
+        Wording.seatsTaken(min(max(hello.people, 0), max(hello.seats, 0)), of: max(hello.seats, 0))
     }
 
     static func sortedNearby(_ rooms: [DiscoveredRoom], status: [String: GuestRoomStore.NearbyStatus]) -> [DiscoveredRoom] {
@@ -69,19 +69,19 @@ nonisolated enum NetworkPanePresentation {
     }
 
     static func popoverNearby(open: Int) -> String {
-        "Rooms nearby (\(open) open)"
+        String(localized: "Rooms nearby (\(open) open)")
     }
 
     static func joinDisabledReason(_ room: DiscoveredRoom) -> String? {
-        room.display.needsUpdate ? "Update BenchBar to join \(name(room))." : nil
+        room.display.needsUpdate ? String(localized: "Update BenchBar to join \(name(room)).") : nil
     }
 
     static func codePrompt(_ room: DiscoveredRoom) -> String {
-        "Enter the room code from \(name(room))"
+        String(localized: "Enter the room code from \(name(room))")
     }
 
     static func joining(_ room: DiscoveredRoom) -> String {
-        "Joining \(name(room))…"
+        String(localized: "Joining \(name(room))…")
     }
 
     private static func name(_ room: DiscoveredRoom) -> String {
@@ -90,23 +90,23 @@ nonisolated enum NetworkPanePresentation {
 
     static func refusal(_ refusal: JoinRefusal, host: String) -> String {
         switch refusal {
-        case .invalidCode: return "The room code is 6 digits."
-        case .wrongCode: return "That code didn't work. Check with \(host) and try again."
-        case .locked: return "\(host) locked this room."
-        case .full: return "This room is full."
-        case .alreadyJoined: return "This Mac is already in \(host)'s room."
+        case .invalidCode: return String(localized: "The room code is 6 digits.")
+        case .wrongCode: return String(localized: "That code didn't work. Check with \(host) and try again.")
+        case .locked: return String(localized: "\(host) locked this room.")
+        case .full: return String(localized: "This room is full.")
+        case .alreadyJoined: return String(localized: "This Mac is already in \(host)'s room.")
         case .blocked: return removedLine(host: host)
-        case .expired: return "That took too long. Try the code again."
-        case .rateLimited(let seconds): return "Too many tries. Wait \(seconds) seconds and try again."
-        case .needsUpdate: return "Update BenchBar to join \(host)'s room."
-        case .codeDidNotCheckOut: return "This room's code didn't check out. Ask \(host) for the code again."
+        case .expired: return String(localized: "That took too long. Try the code again.")
+        case .rateLimited(let seconds): return String(localized: "Too many tries. Wait \(seconds) seconds and try again.")
+        case .needsUpdate: return String(localized: "Update BenchBar to join \(host)'s room.")
+        case .codeDidNotCheckOut: return String(localized: "This room's code didn't check out. Ask \(host) for the code again.")
         case .identityChanged: return identityChanged(host: host)
-        case .unreachable: return "\(host)'s room didn't answer. Check that you're on the same Wi-Fi."
+        case .unreachable: return String(localized: "\(host)'s room didn't answer. Check that you're on the same Wi-Fi.")
         case .localNetworkDenied: return localNetworkOff
-        case .failed: return "Joining didn't work. Try again."
-        case .inviteExpired: return "This invite has expired. Ask \(host)'s host for a new one."
-        case .notTheInvitedRoom: return "This isn't the room in the invite."
-        case .inviteOutOfDate: return "This invite is out of date (the host changed the code). Ask for a new one."
+        case .failed: return String(localized: "Joining didn't work. Try again.")
+        case .inviteExpired: return String(localized: "This invite has expired. Ask \(host)'s host for a new one.")
+        case .notTheInvitedRoom: return String(localized: "This isn't the room in the invite.")
+        case .inviteOutOfDate: return String(localized: "This invite is out of date (the host changed the code). Ask for a new one.")
         }
     }
 
@@ -118,18 +118,41 @@ nonisolated enum NetworkPanePresentation {
         }
     }
 
-    static let pasteInvite = "Paste invite"
-    static let pasteInviteHelp = "Reads the clipboard once, for a BenchBar invite your colleague sent."
+    static let pasteInvite = String(localized: "Paste invite")
+    static let pasteInviteHelp = String(localized: "Reads the clipboard once, for a BenchBar invite your colleague sent.")
 
+    /// The name is the link's own words, so the headline says where it comes from.
     static func invitePrompt(_ room: DiscoveredRoom) -> String {
-        "Join \(name(room)) from the invite"
+        String(localized: "Join \u{201C}\(name(room))\u{201D} (the name the invite link gives)")
+    }
+
+    /// What the join sheet of an invite shows before Join (#159 SHARE-8). A link can come from a web
+    /// page or a chat, and its label is whatever the link says: the address it leads to and the
+    /// host's key are shown, so the guest can compare the key with the one the host reads out.
+    static func inviteCheck(_ invite: ShareInvite, addressAllowed: Bool) -> (note: String, address: String, key: String) {
+        let address: String
+        if let a = invite.address {
+            address = addressAllowed ? String(localized: "Address: \(a.host):\(String(a.port))")
+                : String(localized: "Address: \(a.host):\(String(a.port)) is not on a local network, so it is not used. The room is looked for by its name.")
+        } else {
+            address = String(localized: "Address: none in the link. The room is looked for by its name.")
+        }
+        return (String(localized: "This room and its name come from an invite link, not from your network. Join only if the key below is the Host key your host sees on their Sharing tab or in benchbar share status (BenchBar 0.9.0 or later shows it)."),
+                address, String(localized: "Host key: \(keyGroups(invite.hostPin))"))
+    }
+
+    /// The first 16 hex digits of a host's key in groups of four, as the host's Sharing tab and
+    /// `benchbar share status` show them.
+    static func keyGroups(_ hostPin: Data) -> String {
+        let hex = Array(ShareDeepLink.fp16(of: hostPin))
+        return stride(from: 0, to: hex.count, by: 4).map { String(hex[$0..<min($0 + 4, hex.count)]) }.joined(separator: " ")
     }
 
     static func inviteProblem(_ problem: ShareInvite.Problem) -> String {
         switch problem {
-        case .notFound: return "There's no BenchBar invite on the clipboard. Copy the whole invite message and try again."
-        case .newerVersion: return "This invite needs a newer BenchBar."
-        case .malformed: return "This invite link is incomplete. Ask for the invite again."
+        case .notFound: return String(localized: "There's no BenchBar invite on the clipboard. Copy the whole invite message and try again.")
+        case .newerVersion: return String(localized: "This invite needs a newer BenchBar.")
+        case .malformed: return String(localized: "This invite link is incomplete. Ask for the invite again.")
         }
     }
 
@@ -139,33 +162,32 @@ nonisolated enum NetworkPanePresentation {
 
     static func health(_ state: GuestRoomStore.RoomHealth, host: String, now: Date) -> String {
         switch state {
-        case .unknown: return "Connecting…"
-        case .ready(let deadline): return "Ready · \(timeLeft(until: deadline, now: now))"
-        case .hostGone(let seen): return "\(host) isn't sharing right now (last seen \(clock(seen)))."
-        case .offline: return "\(host) isn't sharing right now."
+        case .unknown: return String(localized: "Connecting…")
+        case .ready(let deadline): return String(localized: "Ready · \(timeLeft(until: deadline, now: now))")
+        case .hostGone(let seen): return String(localized: "\(host) isn't sharing right now (last seen \(clock(seen))).")
+        case .offline: return String(localized: "\(host) isn't sharing right now.")
         case .removed: return removedLine(host: host)
-        case .newRoom: return "\(host) started a new room. Join with the new room code."
-        case .ended: return "\(host) ended the room."
+        case .newRoom: return String(localized: "\(host) started a new room. Join with the new room code.")
+        case .ended: return String(localized: "\(host) ended the room.")
         case .identityChanged: return identityChanged(host: host)
         }
     }
 
     /// A removal holds only against the code the guest had: a new invite lets them join again.
     static func removedLine(host: String) -> String {
-        "\(host) removed you from this room. Ask \(host) for a new invite to join again."
+        String(localized: "\(host) removed you from this room. Ask \(host) for a new invite to join again.")
     }
 
     /// Forget (or Remove and Join Again) signs this Mac out of the room for good: asked first, like every host action.
     static func forgetConfirm(_ room: SavedRoom, identityChanged: Bool) -> (message: String, detail: String, button: String) {
-        let message = identityChanged ? "Remove \(room.room) and join again?" : "Forget \(room.room)?"
-        let detail = "This Mac signs out of the room and its seat, and the saved room and the host's key are deleted. "
-            + "To join again, \(room.host) has to send a new code or invite."
-        return (message, detail, identityChanged ? "Remove" : "Forget")
+        let message = identityChanged ? String(localized: "Remove \(room.room) and join again?") : String(localized: "Forget \(room.room)?")
+        let detail = String(localized: "This Mac signs out of the room and its seat, and the saved room and the host's key are deleted. To join again, \(room.host) has to send a new code or invite.")
+        return (message, detail, identityChanged ? String(localized: "Remove") : String(localized: "Forget"))
     }
 
     /// Open could not start the connection on this Mac (the loopback port is taken, or the forwarder failed).
     static func openFailed(host: String) -> String {
-        "BenchBar could not open \(host)'s room: its local connection did not start. Another app may hold the port. Try Open again."
+        String(localized: "BenchBar could not open \(host)'s room: its local connection did not start. Another app may hold the port. Try Open again.")
     }
 
     /// Open is offered only when the room can still be opened.
@@ -187,24 +209,30 @@ nonisolated enum NetworkPanePresentation {
 
     static func timeLeft(until deadline: Date, now: Date) -> String {
         let minutes = max(0, Int(deadline.timeIntervalSince(now) / 60))
-        return minutes >= 60 ? "\(minutes / 60) h \(minutes % 60) min left" : "\(minutes) min left"
+        return Wording.timeLeft(minutes: minutes)
+    }
+
+    /// A saved room's headline. The site's name is there once the room told it (after the join).
+    static func savedTitle(_ room: SavedRoom) -> String {
+        [room.room, room.host, room.site].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     static func seatRow(_ seat: RoomSeat) -> (title: String, detail: String) {
         let roles = seat.roles.joined(separator: ", ")
         let title = roles.isEmpty ? seat.full_name : "\(seat.full_name) · \(roles)"
-        return (title, seat.taken_by.map { "taken by \($0)" } ?? "")
+        return (title, seat.taken_by.map { String(localized: "taken by \($0)") } ?? "")
     }
 
     static func seatRefusal(_ error: RoomAPIError, host: String) -> String {
         switch error {
-        case .seatTaken: return "Someone took that seat. Pick another."
-        case .rateLimited: return "Too many seat changes. Wait a minute."
+        case .seatTaken: return String(localized: "Someone took that seat. Pick another.")
+        case .hostAssigns: return String(localized: "\(host) gives out the seats in this room. Ask \(host) for yours, then open the room.")
+        case .rateLimited: return String(localized: "Too many seat changes. Wait a minute.")
         case .removed: return removedLine(host: host)
-        case .ended: return "\(host) ended the room."
+        case .ended: return String(localized: "\(host) ended the room.")
         case .identityChanged: return identityChanged(host: host)
-        case .unreachable: return "\(host) isn't sharing right now."
-        case .refused: return "That seat isn't available."
+        case .unreachable: return String(localized: "\(host) isn't sharing right now.")
+        case .refused: return String(localized: "That seat isn't available.")
         }
     }
 
@@ -215,12 +243,12 @@ nonisolated enum NetworkPanePresentation {
         case .ended, .newRoom: return .ended(host: host)
         case .identityChanged: return .identityChanged(host: host)
         case .hostGone(let seen): return .hostOffline(host: host, lastSeen: clock(seen))
-        case .offline: return .hostOffline(host: host, lastSeen: "a while ago")
+        case .offline: return .hostOffline(host: host, lastSeen: String(localized: "a while ago"))
         case .unknown, .ready: return nil
         }
     }
 
     private static func clock(_ date: Date) -> String {
-        date.formatted(date: .omitted, time: .shortened)
+        Wording.time(date)
     }
 }

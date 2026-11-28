@@ -4,7 +4,7 @@
 # The code that builds, signs and ships a release, and the installers people
 # pipe into a shell, name the maintainer on purpose. With "Require review
 # from Code Owners" turned on for a ruleset these paths need @askysh's
-# approval even once the project has more reviewers (docs/releasing.md,
+# approval even once the project has more reviewers (maintainers/releasing.md,
 # "Who may change the release code").
 /.github/ @askysh
 /.claude/ @askysh
@@ -16,4 +16,4 @@
 /macos/project.yml @askysh
 /macos/sparkle.yml @askysh
 /windows/shim/versioninfo.json @askysh
-/docs/releasing.md @askysh
+/maintainers/releasing.md @askysh

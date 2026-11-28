@@ -165,8 +165,8 @@ test("sign-in: 302 to safeNext with the sid cookie; the user comes from the seat
         const r = await request(gw, { path: "/_benchbar/signin?next=/app/home&user=Administrator", cert: c, headers: { "x-user": "Administrator" } });
         assert.strictEqual(r.status, 302);
         assert.strictEqual(r.headers.location, "/app/home");
-        const expires = new Date(gw.cfg.deadline_epoch * 1000).toUTCString();
-        assert.strictEqual(r.headers["set-cookie"][0], `sid=${H.SID}; Path=/; HttpOnly; SameSite=Lax; Expires=${expires}`);
+        // a session cookie: its end is the share's end (every session is wiped), not a date of its own (SHARE-11)
+        assert.strictEqual(r.headers["set-cookie"][0], `sid=${H.SID}; Path=/; HttpOnly; SameSite=Lax`);
         assert.deepStrictEqual(gw.helper.calls(), [["share.localhost", "mapped@example.com"]]);
 
         for (const [next, want] of [["//evil.example", "/app"], ["/api/method/x", "/app"], [undefined, "/app"], ["/app/a%20b?x=1", "/app/a%20b?x=1"]]) {
@@ -235,7 +235,8 @@ test("hello: the documented fields, no names, the code never; a new code changes
         assert.strictEqual(r.status, 200);
         assert.deepStrictEqual(Object.keys(r.json), ["v", "room", "host", "site", "salt", "locked", "full", "people", "seats"]);
         assert.deepStrictEqual([r.json.v, r.json.room, r.json.host, r.json.site, r.json.locked, r.json.full, r.json.people, r.json.seats],
-            [3, "Test Room", "Test Host", "macdev", false, false, 0, 6]);
+            [3, "Test Room", "Test Host", "", false, false, 0, 6]);
+        assert.ok(!r.text.includes("macdev"), "the source site's name is not told before a join (SHARE-7)");
         assert.ok(!r.text.includes(code));
         assert.ok([403, 405].includes((await request(gw, { method: "POST", path: "/room/hello", ip: "10.31.0.1", body: "" })).status));
         await gw.control({ op: "rotate" });
@@ -638,6 +639,28 @@ test("every bypass attempt is 400, 403 or 404 and upstream records zero hits", a
     });
 });
 
+test("an uploaded HTML, SVG or untyped file comes back as a sandboxed download; an image or PDF only loses sniffing; pages are untouched", async () => {
+    const c = cert("upload1");
+    await withGateway({ devices: [deviceRow(c)] }, async (gw) => {
+        for (const p of ["/files/evil.html", "/private/files/evil.svg", "/files/feed.xml", "/files/blob.bin", "/files/blob.dat"]) {
+            const r = await request(gw, { path: p, cert: c });
+            assert.strictEqual(r.status, 200, p);
+            assert.strictEqual(r.headers["content-security-policy"], "sandbox; default-src 'none'", p);
+            assert.strictEqual(r.headers["content-disposition"], "attachment", p);
+            assert.strictEqual(r.headers["x-content-type-options"], "nosniff", p);
+            assert.strictEqual(r.text, "file-body", p);
+        }
+        const png = await request(gw, { path: "/files/logo.png", cert: c });
+        assert.deepStrictEqual([png.headers["content-security-policy"], png.headers["content-disposition"], png.headers["x-content-type-options"]], [undefined, undefined, "nosniff"]);
+        const pdf = await request(gw, { path: "/private/files/report.pdf", cert: c });
+        assert.deepStrictEqual([pdf.headers["content-security-policy"], pdf.headers["content-disposition"]], [undefined, 'inline; filename="report.pdf"']);
+        const missing = await request(gw, { path: "/files/missing.html", cert: c });
+        assert.deepStrictEqual([missing.status, missing.headers["content-disposition"], missing.headers["x-content-type-options"]], [404, undefined, "nosniff"]);
+        const page = await request(gw, { path: "/app", cert: c });
+        assert.deepStrictEqual([page.headers["content-security-policy"], page.headers["content-disposition"], page.headers["x-content-type-options"]], [undefined, undefined, undefined]);
+    });
+});
+
 test("socket.io, including a WebSocket upgrade, is 404 and reaches nothing", async () => {
     const c = cert("paired4");
     await withGateway({ devices: [deviceRow(c)] }, async (gw) => {
@@ -684,6 +707,92 @@ test("the 5th unpaired connection from one IP is refused; a slot frees when one 
         assert.strictEqual(fifth.ok, false);
         held[0].destroy();
         await until(async () => { const r = await open(); if (r.ok) r.s.destroy(); return r.ok; }, 2000);
+        held.forEach((s) => s.destroy());
+    });
+});
+
+// ---- unpaired connections cannot be held open to keep new guests out (#159 SHARE-3)
+const openTls = (gw, c) => new Promise((resolve) => {
+    const s = tls.connect({ host: "127.0.0.1", port: gw.port, rejectUnauthorized: false, minVersion: "TLSv1.3", key: c && c.key, cert: c && c.cert });
+    s.on("secureConnect", () => resolve({ ok: true, s }));
+    s.on("error", () => resolve({ ok: false, s }));
+    s.on("close", () => resolve({ ok: false, s }));
+    s.resume();
+});
+// the tests all dial from 127.0.0.1, so the per address limit stays out of the pool's way
+const POOL_OF_4 = { max_conns: { per_device: 64, total: 256, unpaired_total: 4, unpaired_per_ip: 8 } };
+const POOL_OF_1 = { max_conns: { per_device: 64, total: 256, unpaired_total: 1, unpaired_per_ip: 1 } };
+
+test("idle connections that fill the unpaired pool are closed, and a new guest gets in", async () => {
+    await withGateway({ config: POOL_OF_4, unpairedIdleMs: 400 }, async (gw) => {
+        const held = [];
+        for (let i = 0; i < 4; i++) {
+            const r = await openTls(gw);
+            assert.strictEqual(r.ok, true, `connection ${i + 1}`);
+            held.push(r.s);
+        }
+        assert.strictEqual((await openTls(gw)).ok, false, "the pool is full");
+        // the handshake is done and nothing is sent: each one loses its slot without any help from the client
+        await until(() => held.every((s) => s.destroyed), 3000);
+        const guest = await joinGuest(gw, cert("idle1"), "10.50.0.1");
+        assert.strictEqual(guest.finishReply.json.status, "joined");
+    });
+});
+
+test("an unpaired connection that keeps asking is closed at its lifetime cap", async () => {
+    await withGateway({ unpairedIdleMs: 300, unpairedMaxMs: 1200 }, async (gw) => {
+        const agent = sinkAgent(null);
+        const started = Date.now();
+        const first = await request(gw, { path: "/room/hello", agent });
+        assert.strictEqual(first.status, 200);
+        // a request was sent in time, so the idle limit is spent; the cap is not
+        await sleep(500);
+        assert.strictEqual(first.socket.destroyed, false, "closed although it sent a request in time");
+        while (!first.socket.destroyed && Date.now() - started < 5000) {
+            await request(gw, { path: "/room/hello", agent }).catch(() => {});
+            await sleep(100);
+        }
+        const took = Date.now() - started;
+        assert.ok(first.socket.destroyed && took >= 1100 && took < 4000, `closed after ${took} ms`);
+        agent.destroy();
+    });
+});
+
+test("a guest that joins keeps its connection past the cap, and its unpaired slot is free at once", async () => {
+    const c = cert("cap1");
+    await withGateway({ config: POOL_OF_1, unpairedIdleMs: 300, unpairedMaxMs: 600 }, async (gw) => {
+        const guest = await joinGuest(gw, c, "10.51.0.1");
+        const sock = guest.helloReply.socket;
+        // the pool holds one connection: a newcomer gets it while the guest's connection is still open
+        const other = await openTls(gw);
+        assert.strictEqual(other.ok, true, "the joined guest still held the unpaired slot");
+        other.s.destroy();
+        await sleep(900);
+        assert.strictEqual(sock.destroyed, false, "the joined guest's connection was closed at the cap");
+        const seats = await request(gw, { path: "/_benchbar/seats", cert: c, agent: guest.agent, headers: AS_JSON });
+        assert.strictEqual(seats.status, 200);
+        assert.strictEqual(seats.socket, sock);
+    });
+});
+
+test("a known device's idle connection is not closed by the unpaired limits", async () => {
+    const c = cert("cap2");
+    await withGateway({ devices: [deviceRow(c)], unpairedIdleMs: 300, unpairedMaxMs: 600 }, async (gw) => {
+        const r = await openTls(gw, c);
+        assert.strictEqual(r.ok, true);
+        await sleep(900);
+        assert.strictEqual(r.s.destroyed, false);
+        r.s.destroy();
+    });
+});
+
+test("a pool that stays full shows as join trouble to the host", async () => {
+    await withGateway({ config: POOL_OF_4 }, async (gw) => {
+        const held = [];
+        for (let i = 0; i < 4; i++) held.push((await openTls(gw)).s);
+        assert.strictEqual((await status(gw)).join_trouble, false);
+        for (let i = 0; i < 5; i++) assert.strictEqual((await openTls(gw)).ok, false);
+        assert.strictEqual((await status(gw)).join_trouble, true);
         held.forEach((s) => s.destroy());
     });
 });
@@ -780,6 +889,103 @@ test("take a seat, switch (the old user is wiped, canonical user only), a held s
         for (const bad of ['{"seat_id":5}', '{"seat_id":"seat1","x":1}', "{}", "[]"]) {
             assert.strictEqual((await request(gw, { method: "POST", path: "/_benchbar/seat", cert: a, body: bad })).status, 400, bad);
         }
+    });
+});
+
+// ---- the host gives out the seats (#159 SHARE-5): the code lets a person in, it does not choose their seat
+test("host seats: a guest cannot take or switch a seat; the host's assign gives it and moves it", async () => {
+    const a = cert("host-a");
+    await withGateway({ config: { seat_mode: "host" } }, async (gw) => {
+        await joinGuest(gw, a, "10.60.0.1");
+        const pick = (seat_id, headers = AS_JSON) => request(gw, { method: "POST", path: "/_benchbar/seat", cert: a, headers, body: JSON.stringify({ seat_id }) });
+        const seats = await request(gw, { path: "/_benchbar/seats", cert: a });
+        assert.strictEqual(seats.status, 200);
+        assert.deepStrictEqual(seats.json[0], { seat_id: "seat1", full_name: "Seat 1", roles: ["Sales User"], taken_by: null, host_assigns: true });
+        assert.ok(seats.json.every((seat) => seat.host_assigns === true));
+
+        for (const headers of [AS_JSON, { accept: "text/html" }]) {
+            const refused = await pick("seat2", headers);
+            assert.deepStrictEqual([refused.status, refused.json], [403, { status: "host_assigns" }]);
+        }
+        assert.strictEqual((await people(gw))[0].seat_id, null, "the pick changed nothing");
+        assert.strictEqual((await request(gw, { path: "/app", cert: a, headers: AS_JSON })).status, 403, "no seat, no proxy");
+        assert.strictEqual((await request(gw, { path: "/_benchbar/signin?next=/app", cert: a, headers: AS_JSON })).status, 403);
+        assert.deepStrictEqual(gw.helper.calls(), []);
+
+        const id = (await people(gw))[0].id;
+        assert.deepStrictEqual(await gw.control({ op: "assign", device: id, seat_id: "seat2" }), { ok: true });
+        assert.strictEqual((await request(gw, { path: "/_benchbar/signin?next=/app", cert: a })).status, 302);
+        assert.deepStrictEqual(gw.helper.calls(), [["share.localhost", "seat2@example.com"]]);
+
+        // a seat the host gave is not a licence to move to another one
+        const move = await pick("seat5");
+        assert.deepStrictEqual([move.status, move.json], [403, { status: "host_assigns" }]);
+        assert.strictEqual((await people(gw))[0].seat_id, "seat2");
+        assert.deepStrictEqual(await gw.control({ op: "assign", device: id, seat_id: "seat5" }), { ok: true });
+        assert.strictEqual((await people(gw))[0].seat_id, "seat5");
+    });
+});
+
+test("host seats: a person without a seat waits 10 minutes for the host, not 2", async () => {
+    const a = cert("host-wait");
+    await withGateway({ config: { seat_mode: "host" }, devices: [seatless(a)] }, async (gw) => {
+        gw.jump(300_000);
+        await sleep(400);
+        assert.strictEqual((await people(gw)).length, 1, "removed while the host could still give a seat");
+        assert.strictEqual((await request(gw, { path: "/_benchbar/room", cert: a })).status, 200);
+        gw.jump(601_000);
+        await until(async () => (await people(gw)).length === 0, 2000);
+        assert.strictEqual((await request(gw, { path: "/_benchbar/room", cert: a, headers: AS_JSON })).json.error, "not_paired");
+    });
+});
+
+test("host seats: a full room makes way for a new guest by letting go of whoever has waited more than 2 minutes", async () => {
+    const seat = (n) => ({ seat_id: `seat${n}`, user: `seat${n}@example.com`, full_name: `Seat ${n}`, roles: [] });
+    const [a, b, c, d] = ["full-a", "full-b", "full-c", "full-d"].map(cert);
+    await withGateway({ config: { seat_mode: "host", seats: [seat(1), seat(2)] } }, async (gw) => {
+        await joinGuest(gw, a, "10.61.0.1", { name: "Asha" });
+        gw.jump(60_000);
+        await joinGuest(gw, b, "10.61.0.2", { name: "Ben" });
+        // both wait, nobody for 2 minutes yet: the room is full, as it says before any join
+        const early = new GuestSession(gw, c, { ip: "10.61.0.3", name: "Cy" });
+        assert.strictEqual((await early.hello()).json.full, true);
+        assert.strictEqual((await early.start(await roomCode(gw))).json.status, "full");
+        // Asha has waited 3 minutes, Ben 2: the next guest takes the place of the one who waited longest
+        gw.jump(180_000);
+        const late = new GuestSession(gw, c, { ip: "10.61.0.4", name: "Cy" });
+        assert.strictEqual((await late.hello()).json.full, false);
+        // Asha's app holds a connection open: it is closed as she gives way, so her app learns it at once
+        const held = await request(gw, { path: "/_benchbar/room", cert: a, agent: sinkAgent(a), headers: AS_JSON });
+        assert.strictEqual(held.status, 200);
+        const asha = (await people(gw)).find((p) => p.name === "Asha");
+        assert.strictEqual((await late.join(await roomCode(gw))).json.status, "joined");
+        assert.deepStrictEqual((await people(gw)).map((p) => p.name).sort(), ["Ben", "Cy"]);
+        await until(() => held.socket.destroyed, 2000);
+        assert.strictEqual((await request(gw, { path: "/_benchbar/room", cert: a, headers: AS_JSON })).json.error, "not_paired");
+        // and the host can read in the activity log who gave way
+        const logFile = await until(() => fs.existsSync(gw.logDir) && fs.readdirSync(gw.logDir).find((f) => f.startsWith("activity-")));
+        const logged = fs.readFileSync(path.join(gw.logDir, logFile), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+        assert.deepStrictEqual(logged.filter((l) => l.path === "/_benchbar/gave-way").map((l) => l.device), [asha.id]);
+        // a host who assigns to her a moment later gets a plain answer
+        assert.deepStrictEqual(await gw.control({ op: "assign", device: asha.id, seat_id: "seat1" }), { ok: false, error: "not_found" });
+        // a person with a seat is never let go, however long they are in the room
+        const ben = (await people(gw)).find((p) => p.name === "Ben");
+        assert.deepStrictEqual(await gw.control({ op: "assign", device: ben.id, seat_id: "seat1" }), { ok: true });
+        gw.jump(480_000);
+        const last = new GuestSession(gw, d, { ip: "10.61.0.5", name: "Di" });
+        assert.strictEqual((await last.join(await roomCode(gw))).json.status, "joined");
+        assert.deepStrictEqual((await people(gw)).map((p) => p.name).sort(), ["Ben", "Di"]);
+    });
+});
+
+test("open seats, the 0.8 behaviour, stays what a config without seat_mode gets", async () => {
+    const a = cert("open-a");
+    await withGateway({ devices: [seatless(a)] }, async (gw) => {
+        assert.strictEqual(gw.cfg.seat_mode, undefined);
+        const seats = await request(gw, { path: "/_benchbar/seats", cert: a });
+        assert.ok(seats.json.every((seat) => !("host_assigns" in seat)));
+        const r = await request(gw, { method: "POST", path: "/_benchbar/seat", cert: a, headers: AS_JSON, body: JSON.stringify({ seat_id: "seat1" }) });
+        assert.strictEqual(r.status, 200);
     });
 });
 
@@ -1115,6 +1321,8 @@ test("a config with no deadline, a past deadline, a deadline beyond the cap, bad
         { config: { seats: [{ ...seat(1), extra: 1 }] } },
         { config: { seats: [{ ...seat(1), roles: "Sales User" }] } },
         { config: { app_routes: "/crm" } },
+        { config: { seat_mode: "anyone" } },
+        { config: { seat_mode: true } },
         { config: { app_routes: Array.from({ length: 33 }, (_, i) => `/r${i}`) } },
         { config: { max_total_s: 99999, deadline_epoch: nowS + 60 } }
     ];
@@ -1243,7 +1451,40 @@ test("the activity log keeps two path segments, nothing from the query, no names
         assert.strictEqual(fs.statSync(full).mode & 0o777, 0o600);
         for (const banned of ["secret", "SO-1", "cookievalue123", "x="]) assert.ok(!text.includes(banned), banned);
         const line = JSON.parse(text.trim().split("\n")[0]);
-        assert.deepStrictEqual([line.user, line.method, line.path, line.status], ["seat1@example.com", "GET", "/app/sales-order", 200]);
+        assert.deepStrictEqual([line.seat, line.method, line.path, line.status], ["seat1", "GET", "/app/sales-order", 200]);
+        assert.ok(!("user" in line) && !text.includes("@"), "the seat's e-mail address is not logged (SHARE-10)");
+    });
+});
+
+test("stopping the share prunes activity files older than 14 days", async () => {
+    await withGateway({}, async (gw) => {
+        fs.mkdirSync(gw.logDir, { recursive: true });
+        const old = path.join(gw.logDir, "activity-2020-01-01.log");
+        const today = path.join(gw.logDir, `activity-${new Date().toISOString().slice(0, 10)}.log`);
+        fs.writeFileSync(old, "{}\n");
+        fs.writeFileSync(today, "{}\n");
+        await gw.control({ op: "stop" });
+        await gw.exited;
+        assert.strictEqual(fs.existsSync(old), false, "the old file is still there after stop");
+        assert.strictEqual(fs.existsSync(today), true);
+    });
+});
+
+test("a guest stays signed in after share extend: the cookie has no expiry of its own", async () => {
+    const c = cert("extend1");
+    const nowS = Math.floor(Date.now() / 1000);
+    await withGateway({ devices: [deviceRow(c)], config: { deadline_epoch: nowS + 600 } }, async (gw) => {
+        const si = await request(gw, { path: "/_benchbar/signin?next=/app", cert: c });
+        assert.strictEqual(si.status, 302);
+        const cookie = si.headers["set-cookie"][0];
+        assert.ok(!/expires|max-age/i.test(cookie), cookie);
+        const ext = await gw.control({ op: "extend", seconds: 3600 });
+        assert.strictEqual(ext.deadline_epoch, nowS + 600 + 3600);
+        // past the deadline the cookie was issued under: a browser still sends it, and the page still comes
+        gw.jump(900_000);
+        const page = await request(gw, { path: "/app", cert: c, headers: { cookie: cookie.split(";")[0] } });
+        assert.strictEqual(page.status, 200);
+        assert.strictEqual(gw.upstream.hits.at(-1).headers.cookie, `sid=${H.SID}`);
     });
 });
 

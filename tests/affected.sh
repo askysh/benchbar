@@ -6,7 +6,7 @@
 #   tests/affected.sh --base REF      the change from REF instead
 #   tests/affected.sh --all           every test (tests/run-tests.sh with no names)
 #   tests/affected.sh --list          print the chosen names, run nothing
-#   tests/affected.sh --machine       print mode=, tests=, shellcheck=, shellcheck_files= lines (CI)
+#   tests/affected.sh --machine       print mode=, tests=, shellcheck=, shellcheck_files=, pin_changed= lines (CI)
 #   tests/affected.sh --lib-coverage  list lib files with no test and no family (test-affected runs it)
 #   tests/affected.sh --files "A B"   take the changed files from the argument, not from git
 #                                     (a function level diff is not available then: every function
@@ -22,7 +22,8 @@
 #                           so on), and every test that names a function whose
 #                           definition the change touched
 #   lib/frappe-local/share/*  the LAN share tests
-#   lib/frappe-local/mcp.py test-mcp, test-docs (the MCP tool table of the docs is generated from it), test-json-schema, test-cli, test-agent-contracts
+#   lib/frappe-local/help-layout.txt   the help tests (lib_family help)
+#   lib/frappe-local/mcp.py test-mcp, test-mcp-parity, test-mcp-commands, test-docs (the MCP tool table of the docs is generated from it), test-json-schema, test-cli, test-agent-contracts
 #   schema/, scripts/json-schema-check.py, the Swift CLI models, the tray's models   test-json-schema
 #   A test split into parts (test-X.sh, test-X-2.sh, ...) is picked whole.
 #   tests/test-X.sh         itself
@@ -33,10 +34,13 @@
 #   windows/tray/fixtures/  test-tray-fixtures (the tray's recorded CLI output)
 #   scripts/X.sh            the tests that run it (script_tests below)
 #   changelog.d/            test-changelog (it checks the fragments)
+#   tests/timings.tsv       test-ci-plan and test-suite-hygiene (the seconds per test: data, not the harness)
 #   docs/, scripts/docs-reference.py   test-docs, test-docs-command
 #   any shell file          shellcheck
 #   tests/share/            test-share-gateway
 #   the release workflows, .github/actions/, scripts/macos-release.sh   test-release-workflows
+#   any workflow, .github/actions/, dependabot.yml, the pinned build tools and
+#   Swift packages, the shim's go.mod   test-supply-chain
 #   macos/, windows/, examples/, site/, .github/, .claude/, install.ps1,
 #   scripts/app-*.py and *.md   nothing here: the app, tray, shim and Windows installer
 #                           jobs, the workflows themselves and the docs site cover them
@@ -69,28 +73,52 @@ done
 # test of its own name needs no entry; every other file needs one
 # (tests/test-affected.sh checks that, with --lib-coverage). LIB_CORE is the
 # set of end to end tests for code every command runs.
-LIB_CORE="test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-json-schema test-run-lock test-status-cost test-tray-fixtures"
+LIB_CORE="test-json-strings test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-json-schema test-run-lock test-status-cost test-tray-fixtures"
 lib_family() {
   case "$1" in
-    checks|doctor) echo "test-doctor test-doctor-hardening test-doctor-linux test-repair test-repair-json test-json test-json-schema" ;;
-    doctor-linux|preflight-linux) echo "test-doctor-linux test-doctor test-repair test-wsl-preflight test-install-linux test-prerequisites-linux" ;;
-    repair) echo "test-repair test-repair-json test-doctor test-doctor-hardening test-install-json" ;;
+    checks|doctor|cmd-doctor) echo "test-write-forms-gate test-doctor test-doctor-hardening test-doctor-linux test-repair test-repair-json test-json test-json-schema" ;;
+    doctor-linux|preflight-linux) echo "test-doctor-linux test-doctor test-repair test-wsl-preflight test-install-linux test-install-failures test-prerequisites-linux" ;;
+    repair|cmd-repair) echo "test-repair test-repair-json test-doctor test-doctor-hardening test-install-json" ;;
     docs) echo "test-docs test-docs-command" ;;
-    commands) echo "test-docs test-docs-command test-labs test-json" ;;
-    apps|app-plan) echo "test-apps test-app-cli test-app-batch test-app-recovery test-pull test-json-schema" ;;
-    bench|benchinfo|benchstate|discovery|freshness) echo "test-bench-flow test-status-cost test-discovery test-multi-bench test-adopt test-json test-json-schema test-freshness test-ports test-port-management test-install-json" ;;
-    sites|site-backups|site-restore|pull) echo "test-sites test-site-backups test-site-restore test-pull test-install-json test-json-schema" ;;
+    commands) echo "test-commands-table test-commands-cost test-help-golden test-help-source test-docs test-docs-command test-labs test-json test-unknown-flags test-envelope test-install-json test-agent-contracts" ;;
+    apps|app-plan) echo "test-apps test-app-cli test-app-batch test-app-recovery test-app-update-pin test-app-add-pin test-pull test-apps-git test-lock test-json-schema" ;;
+    bench|benchinfo|benchstate|discovery|freshness) echo "test-write-forms-gate test-gate-hints test-gate-next-actions test-bench-flow test-status-cost test-discovery test-multi-bench test-adopt test-json test-freshness test-ports test-port-management test-install-json test-json-schema" ;;
+    bench-run) echo "test-bench-run test-bench-run-mcp test-site-backups test-docs test-agent-contracts" ;;
+    sites|site-backups|site-restore|snapshots|pull) echo "test-sites test-bench-run test-site-backups test-site-restore test-snapshots test-snapshots-2 test-pull test-install-json test-json-schema" ;;
     ports|port-management) echo "test-ports test-port-management test-multi-bench test-adopt test-json-schema" ;;
-    service|launchd|systemd|templates|shellrc|mariadb|wkhtmltopdf|platform|platform-linux) echo "test-platform test-platform-linux test-systemd test-service test-templates test-shellrc test-wsl-preflight test-install-linux test-install-json test-phases test-sudo-env test-windows-commands test-hygiene test-homebrew" ;;
+    cmd-install) echo "test-install-json test-install-json-2 test-install-failures test-install-linux test-phases test-fresh-install test-wsl-preflight test-prerequisites-linux test-ports test-service test-adopt test-json" ;;
+    cmd-where) echo "test-lean-load test-status-cost test-mcp test-docs-command test-homebrew test-cli test-json test-version-sources" ;;
+    help) echo "test-help-golden test-help-source test-commands-table test-docs-command test-cli test-labs test-lean-load test-agent-contracts" ;;
+    cmd-service) echo "test-service test-adopt test-install-json test-phases test-platform test-platform-linux test-json" ;;
+    cmd-adopt) echo "test-adopt test-service test-ports test-port-management test-multi-bench test-install-json" ;;
+    service|launchd|systemd|templates|shellrc|mariadb|wkhtmltopdf|platform|platform-linux) echo "test-platform test-platform-linux test-systemd test-service test-templates test-shellrc test-wsl-preflight test-install-linux test-install-failures test-install-json test-phases test-sudo-env test-windows-commands test-hygiene test-homebrew test-secrets-stdin" ;;
+    secrets) echo "test-secrets-stdin test-secrets-stdin-linux test-hygiene test-install-json test-phases test-sudo-env test-ops test-docs" ;;
     sudo|sudo-env) echo "test-sudo-env test-platform-linux test-install-json test-hygiene test-port-management" ;;
     ui|state|run|lock|process|install-kind|toml) echo "$LIB_CORE test-ui test-redact test-input-hygiene test-state-migrate test-process test-runner" ;;
-    profiles|teamlock|version-policy) echo "test-profiles test-profile-v16 test-version-policy test-doctor-linux test-self-update test-json-schema" ;;
-    labs) echo "test-labs test-labs-share test-docs test-json-schema" ;;
+    profiles|teamlock|version-policy) echo "test-profiles test-profile-v16 test-version-policy test-doctor-linux test-self-update test-apps-git test-lock test-lock-apply-pin test-profile-update-pin test-json-schema" ;;
+    labs) echo "test-labs test-labs-share test-docs test-help-golden test-json-schema" ;;
+    stream) echo "test-json test-envelope test-install-json test-repair-json test-adopt test-lean-load test-json-strings test-tray-fixtures" ;;
+    notices) echo "test-notices test-docs test-json test-lean-load test-status-cost test-tray-fixtures" ;;
     open-as) echo "test-open-as" ;;
     consoles) echo "test-cli" ;;
     report) echo "test-report test-redact" ;;
     selfupdate) echo "test-self-update test-install-sh" ;;
-    share|share-admin|share-preflight|share-run|share-site|lan-guard) echo "test-share test-share-admin test-share-preflight test-share-run test-share-gateway test-lan-guard test-labs-share" ;;
+    share|share-admin|share-preflight|share-run|share-site|lan-guard) echo "test-share test-share-admin test-share-preflight test-share-run test-share-gateway test-lan-guard test-lan-guard-linux test-share-linux test-labs-share test-share-join" ;;
+    share-guest) echo "test-share-join test-share-gateway test-labs-share test-history test-docs" ;;
+    lan-guard-linux|share-linux) echo "test-lan-guard-linux test-share-linux test-labs-share" ;;
+    *) return 1 ;;
+  esac
+}
+
+# pin_of NAME: the pin test of the pinned functions that lib/frappe-local/NAME.sh holds. A change to that file runs
+# this pin test in full on a pull request (the others run their smoke scenarios); a file a pinned function only
+# calls into (ui.sh, run.sh, the git helpers) has none, on purpose.
+pin_of() {
+  case "$1" in
+    apps) echo test-app-update-pin ;;
+    app-plan) echo test-app-add-pin ;;
+    teamlock) echo test-lock-apply-pin ;;
+    profiles) echo test-profile-update-pin ;;
     *) return 1 ;;
   esac
 }
@@ -99,13 +127,16 @@ lib_family() {
 script_tests() {
   case "$1" in
     release-notes) echo "test-release-notes" ;;
-    docs-only) echo "test-release-workflows" ;;
+    release-ci-gate|release-promote) echo "test-release-ci-gate test-release-promote test-release-workflows" ;;
+    docs-only) echo "test-release-ci-gate test-release-workflows" ;;
     check-version|bump-version) echo "test-version-sources test-release-notes test-release-workflows" ;;
     changelog-fold) echo "test-changelog test-release-notes" ;;
     app-embed-cli|cli-tarball|homebrew-render) echo "test-packaging test-homebrew" ;;
     macos-appcast) echo "test-macos-appcast" ;;
     check-profile-formulae) echo "test-doctor-hardening test-homebrew" ;;
     ci-plan|ci-timings) echo "test-ci-plan" ;;
+    check-pr-text) echo "test-pr-text" ;;
+    ci-install-tool|macos-packages|macos-build) echo "test-supply-chain" ;;
   esac
 }
 
@@ -160,7 +191,7 @@ pick_family() {
   for t in $1; do pick_parts "$t"; done
 }
 
-full=0 shell=0 lib=0 funcs="" shfiles_all=""
+full=0 shell=0 lib=0 funcs="" shfiles_all="" pin_changed=""
 while IFS= read -r f; do
   [[ -n "$f" ]] || continue
   case "$f" in
@@ -174,13 +205,17 @@ while IFS= read -r f; do
       pick_parts "test-$t"
       fam="$(lib_family "$t" || true)"
       [[ -n "$fam" ]] || fam="$LIB_CORE"
-      pick_family "$fam" ;;
-    lib/frappe-local/mcp.py) lib=1; pick_family "test-mcp test-docs test-json-schema" ;;
+      pick_family "$fam"
+      pin="$(pin_of "$t" || true)"
+      if [[ -n "$pin" ]]; then pick "$pin"; pin_changed="${pin_changed:+$pin_changed }$pin"; fi ;;
+    lib/frappe-local/help-layout.txt) lib=1; pick_family "$(lib_family help)" ;;
+    lib/frappe-local/mcp.py) lib=1; pick_family "test-mcp test-mcp-parity test-mcp-commands test-docs test-json-schema" ;;
     .claude/guard-*.sh | .claude/settings.json) pick test-guards; shell=1 ;;
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;
-    scripts/macos-release.sh) pick test-release-workflows; shell=1 ;;
-    .github/workflows/release.yml | .github/workflows/release-windows.yml | .github/workflows/homebrew-tap.yml | .github/workflows/auto-tag.yml | .github/actions/*) pick_family "test-release-workflows test-version-sources" ;;
+    scripts/macos-release.sh) pick test-release-workflows; pick test-supply-chain; shell=1 ;;
+    .github/workflows/release.yml | .github/workflows/release-windows.yml | .github/workflows/homebrew-tap.yml | .github/workflows/auto-tag.yml | .github/actions/*) pick_family "test-release-workflows test-version-sources"; pick test-supply-chain ;;
+    .github/workflows/* | .github/dependabot.yml | .github/zizmor.yml | .github/actionlint.yaml | macos/Package.swift | macos/Package.resolved | macos/project.yml | macos/sparkle.yml | windows/shim/go.mod) pick test-supply-chain ;;
     macos/BenchBarTests/Fixtures/*) pick_family "test-json test-install-json test-lock test-json-schema" ;;
     windows/tray/fixtures/* | tests/record-tray-fixtures.sh) pick test-tray-fixtures; pick_family test-json-schema; shell=1 ;;
     schema/* | scripts/json-schema-check.py | macos/BenchBar/CLI/* | windows/tray/Tray.Core/*.cs | windows/tray/Tray.Core/Cli/* | windows/tray/Tray.Core/Health/* | windows/tray/Tray.Core/Labs/* | windows/tray/Tray.Core/Logs/*) pick test-json-schema ;;
@@ -188,7 +223,9 @@ while IFS= read -r f; do
       shell=1
       t="${f##*/}"; pick_family "$(script_tests "${t%.sh}")" ;;
     changelog.d/*) pick test-changelog ;;
-    docs/* | scripts/docs-reference.py) pick_family "test-docs test-docs-command" ;;
+    tests/timings.tsv) pick test-ci-plan; pick test-suite-hygiene ;;
+    docs/* | maintainers/* | scripts/docs-reference.py) pick_family "test-docs test-docs-command" ;;
+    site/public/moved-anchors.js) pick test-moved-anchors ;;
     # no CLI test, by design: another job runs it (the app and the tray and shim jobs, the
     # Windows installer test of release-windows.yml for install.ps1, the workflow itself
     # for .github/, docs.yml for site/), or it is prose or agent tooling
@@ -246,7 +283,7 @@ if [[ "$machine" == 1 ]]; then
     if [[ "$t" == shellcheck ]]; then sc=true; else names="${names:+$names }$t"; fi
   done
   if [[ -z "$names" && "$sc" == false ]]; then mode=none; else mode=affected; fi
-  printf 'mode=%s\ntests=%s\nshellcheck=%s\nshellcheck_files=%s\n' "$mode" "$names" "$sc" "${shfiles_all# }"
+  printf 'mode=%s\ntests=%s\nshellcheck=%s\nshellcheck_files=%s\npin_changed=%s\n' "$mode" "$names" "$sc" "${shfiles_all# }" "$pin_changed"
   exit 0
 fi
 

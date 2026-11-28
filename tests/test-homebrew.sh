@@ -10,6 +10,7 @@
 # sides, two BenchBar.app copies, and helpers whose benchbar is gone.
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
+soft_asserts on  # each section checks its own fake prefix and output: report all that fail
 
 # ---- the kind and FL_SELF from SCRIPT_DIR alone
 # kind_of SCRIPT_DIR: "KIND FL_SELF FL_SELF_DIR"
@@ -25,6 +26,13 @@ mkdir -p "$TMP_DIR/clone/.git" "$TMP_DIR/plain"
 assert_eq "checkout $TMP_DIR/clone/benchbar $TMP_DIR/clone" "$(kind_of "$TMP_DIR/clone")"
 assert_eq "other $TMP_DIR/plain/benchbar $TMP_DIR/plain" "$(kind_of "$TMP_DIR/plain")"
 assert_eq "other" "$(kind_of /opt/homebrew/opt/benchbar-dev/libexec | cut -d ' ' -f 1)" "(only the benchbar formula is Homebrew's)"
+# Linuxbrew: the prefix is /home/linuxbrew/.linuxbrew (or ~/.linuxbrew), same shapes
+assert_eq "homebrew /home/linuxbrew/.linuxbrew/opt/benchbar/bin/benchbar /home/linuxbrew/.linuxbrew/opt/benchbar/libexec" "$(kind_of /home/linuxbrew/.linuxbrew/opt/benchbar/libexec)" "(Linuxbrew opt)"
+assert_eq "homebrew /home/linuxbrew/.linuxbrew/opt/benchbar/bin/benchbar /home/linuxbrew/.linuxbrew/opt/benchbar/libexec" "$(kind_of /home/linuxbrew/.linuxbrew/Cellar/benchbar/0.9.0/libexec)" "(Linuxbrew Cellar)"
+assert_eq "homebrew $HOME/.linuxbrew/opt/benchbar/bin/benchbar $HOME/.linuxbrew/opt/benchbar/libexec" "$(kind_of "$HOME/.linuxbrew/Cellar/benchbar/0.9.0/libexec")" "(Linuxbrew in the home folder)"
+# FL_SELF_PREFIX of a Linuxbrew CLI
+# shellcheck disable=SC2016 # expands in the child bash
+assert_eq "/home/linuxbrew/.linuxbrew" "$(SCRIPT_DIR=/home/linuxbrew/.linuxbrew/Cellar/benchbar/0.9.0/libexec bash -c 'set -euo pipefail; . "$0/lib/frappe-local/install-kind.sh"; printf "%s" "$FL_SELF_PREFIX"' "$ROOT")" "(Linuxbrew prefix)"
 
 # ---- where state.sh puts the state for each kind (no folder to move here)
 # state_dir_as KIND: FL_STATE_DIR as state.sh picks it for KIND
@@ -37,6 +45,9 @@ assert_eq "$HOME/.local/state/benchbar" "$(state_dir_as homebrew)"
 assert_eq "$HOME/.local/state/benchbar" "$(state_dir_as managed)"
 assert_eq "$TMP_DIR/plain/.benchbar" "$(state_dir_as checkout)"
 assert_eq "$TMP_DIR/plain/.benchbar" "$(state_dir_as other)"
+# on Linux the state is under XDG_STATE_HOME, the folder the one line installer uses too
+assert_eq "$TMP_DIR/xdg/benchbar" "$(XDG_STATE_HOME="$TMP_DIR/xdg" FL_PLATFORM=linux state_dir_as homebrew)" "(Linuxbrew uses XDG_STATE_HOME)"
+assert_eq "$TMP_DIR/xdg/benchbar" "$(XDG_STATE_HOME="$TMP_DIR/xdg" FL_PLATFORM=linux state_dir_as managed)" "(managed shares it)"
 # a fixed path: the app, an MCP client and launchd never see an
 # XDG_STATE_HOME exported in ~/.zshrc, and must find the same state
 assert_eq "$HOME/.local/state/benchbar" "$(XDG_STATE_HOME="$TMP_DIR/xdg" state_dir_as homebrew)" "(XDG_STATE_HOME is not used)"
@@ -176,10 +187,13 @@ MA="$HOME/work/m-a"; MB="$HOME/work/m-b"; MC="$HOME/work/m-c"
 for b in "$MA" "$MB" "$MC"; do make_fake_bench "$b"; done
 # seed_legacy: the state an install.sh CLI left: MA the default, MB
 # registered; and no state in the new place yet
+CUR_VERSION="$(sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$ROOT/benchbar")"
 seed_legacy() {
   rm -rf "$HOME/.local/share/benchbar" "$NEW"
   mkdir -p "$LEGACY/benches" "$LEGACY/logs" "$LEGACY/backups"
-  printf 'BENCH_DIR=%s\nPIPX_BIN_DIR=%s\n' "$MA" "$HOME/.local/bin" >"$LEGACY/state.env"
+  # LAST_VERSION of the running CLI: the update notices (notices.sh) would record a version
+  # change with their own writes, and this test counts the move's mv and ln alone
+  printf 'BENCH_DIR=%s\nPIPX_BIN_DIR=%s\nLAST_VERSION=%s\n' "$MA" "$HOME/.local/bin" "$CUR_VERSION" >"$LEGACY/state.env"
   printf 'SITE_NAME=macdev\nAUTOSTART=off\n' >"$LEGACY/benches/m-a-0badf00d.env"
   printf '%s\n' "$MB" >"$LEGACY/registered-benches.txt"
   printf 'an old run\n' >"$LEGACY/logs/20260930-120000.log"
@@ -289,7 +303,7 @@ run_bb list --json
 assert_eq "0" "$CODE" "$OUT"
 assert_no_file "$HOME/.local/share/benchbar/.frappe-local"
 [[ -L "$LEGACY" ]] || fail "the renamed folder must be moved and linked"
-assert_eq "BENCH_DIR=$MA" "$(cat "$NEW/state.env")"
+assert_eq "BENCH_DIR=$MA" "$(grep '^BENCH_DIR=' "$NEW/state.env")"  # (the notices may add their own lines)
 
 # the installer's own CLI (managed) moves its state the same way
 seed_legacy
@@ -308,7 +322,7 @@ mkdir -p "$NEW"; printf 'BENCH_DIR=%s\n' "$MC" >"$NEW/state.env"
 run_bb list --json
 assert_eq "0" "$CODE" "$OUT"
 [[ -d "$LEGACY" && ! -L "$LEGACY" ]] || fail "an existing state folder must not be merged into"
-assert_eq "BENCH_DIR=$MC" "$(cat "$NEW/state.env")"
+assert_eq "BENCH_DIR=$MC" "$(grep '^BENCH_DIR=' "$NEW/state.env")"  # (the notices may add their own lines)
 assert_contains "$(listed)" "default=$MC"
 
 # FL_STATE_DIR from the environment wins: nothing moves

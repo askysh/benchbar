@@ -1,6 +1,6 @@
 ---
 title: "Troubleshooting"
-description: "Common stumbles with a local Frappe bench on macOS, the cleanup tool case, what benchbar writes, and how to wipe a bench."
+description: "Common stumbles with a local Frappe bench on macOS, Linux and Windows (WSL), the cleanup tool case, what benchbar writes, and how to wipe a bench."
 ---
 
 Start with `benchbar doctor`. It is read only, every warning and failure
@@ -12,13 +12,34 @@ every replaced file in `backups/<date>-<time>-<pid>/`. The state folder is
 CLI inside BenchBar.app, or `.benchbar` in the folder you cloned;
 `benchbar where` shows it.
 
-On Linux and Windows, see [Install: Linux](install.md#linux) and
+A first `benchbar install` that stops or ends with a warning has its own
+page: [First run problems](first-run-problems.md). On Linux, see also
+[Install: Linux](install.md#linux). On Windows, see
 [Windows and WSL](#windows-and-wsl) below.
 
 ## Common stumbles
 
 **`benchup: command not found`.** Run `source ~/.zshrc` once, or open a
-new Terminal tab.
+new Terminal tab. The helpers follow your login shell: fish has them in
+`~/.config/fish/conf.d/benchbar.fish`, bash on a Mac in `~/.bash_profile`.
+After a change of shell, `benchbar repair` writes them for the new one.
+nushell and a few other shells get none: use `benchbar up` there.
+
+**"Cannot write ...: ... is not writable" or "is not a folder".** A state file's
+folder cannot be written: it belongs to root (an earlier `sudo benchbar`), is on a
+read only volume, or a file sits where a folder belongs. The message names the
+path. Fix the owner or the file, then run again; before 0.9.0 the run waited for
+ever without a word.
+
+**"Waiting for benchbar up (pid ...)".** Another benchbar run holds the lock, for
+example the app and a terminal starting at the same moment. A run waits up to 8
+seconds for it, then stops with "Another benchbar run is active". The lock is
+judged by its owner's pid and start time, so a lock left by a crash is reclaimed
+even when another process now has that pid.
+
+**`benchbar` stops with a "[FAIL] Command failed (exit N): ..." line.** A command
+inside benchbar failed that it does not handle itself. The line names the command,
+the file and the function; `benchbar report` collects the log for a bug report.
 
 **`benchstatus` says `stop flag crash`.** The bench crashed three times in
 ten minutes and paused itself. `benchlogs` shows why, and `--previous`
@@ -117,7 +138,11 @@ PATH` registers it, and shows the plan first.
 **PDFs do not print.** wkhtmltopdf was skipped or is the Homebrew build.
 `benchbar doctor` says which; `benchbar repair` installs the official
 patched Qt package (Intel binary, Rosetta 2 offered on Apple Silicon,
-`sudo` once). If a Homebrew wkhtmltopdf earlier on `PATH` shadows the
+`sudo` once). There is no Apple Silicon build to choose instead: the
+wkhtmltopdf project published one macOS package ever (June 2020, Intel
+only), is archived, and Homebrew's build is not patched. Without Rosetta 2
+PDFs from wkhtmltopdf do not print and everything else works; Frappe v16
+can print with Chromium instead. If a Homebrew wkhtmltopdf earlier on `PATH` shadows the
 package, doctor says so. `brew uninstall wkhtmltopdf` then removes only
 the Homebrew build; the package in `/usr/local/bin` stays and takes
 over.
@@ -143,6 +168,35 @@ passwords are too: enter them again in the copy.
 **Something else.** `benchbar report` writes a redacted zip for a bug
 report; attach it to an issue at
 <https://github.com/askysh/benchbar/issues>.
+
+## Known issues
+
+Problems a test pass found that a release has not fixed yet. Each line
+names the version, what you see, and the way around it. The list is empty
+when there is nothing open; an entry is removed once the fix ships and
+the release notes say so. For a bug that is not listed, search the
+[open issues](https://github.com/askysh/benchbar/issues) and file one with
+the bug form.
+
+- **Two runs at once can both take a state guard** ([#340](https://github.com/askysh/benchbar/issues/340),
+  Ubuntu 25.10 and later, WSL too, where `mkdir` is the uutils one). Three
+  guards in the state code still use a plain `mkdir`, so two `benchbar`
+  commands started in the same instant can both hold one. It is rare. Run
+  one `benchbar` command at a time on such a system (the lease lock and the
+  run lock are not affected).
+- **One keepalive at a time on Windows** (beta). While one distro is kept
+  awake, **Start** cannot start a second distro. Switch the distro in
+  Settings, or stop the other keepalive first
+  ([the Windows page](windows.md)).
+- **Windows programs are not signed** (SignPath declined the project on
+  2026-11-13, and there is no Store package). With Smart App Control on,
+  Windows blocks `benchbar.exe` and BenchBar Tray and the installer stops
+  before it writes anything; a program started from an unpacked zip shows
+  "The publisher could not be verified" (click **Run**). See
+  [Smart App Control](windows.md#smart-app-control).
+- **Intel Macs are not verified** ([#22](https://github.com/askysh/benchbar/issues/22)).
+  The CLI is written to work there and the app is not built for Intel, but
+  nobody has run it end to end. Tell us what you see.
 
 ## Resetting the MariaDB root password
 
@@ -396,6 +450,9 @@ and PATH) do not stop you.
 - **A restart is pending.** When the `reboot` step is missing, restart
   Windows, then run `setup check` again. The tray's **Restart Now** asks
   first.
+- **"Do not run benchbar as root or with sudo" in the distro.** The distro's
+  default user is `root`. Create a user and make it the default: see
+  [the Windows page](windows.md#troubleshooting).
 - **Something else.** Use **Report a Bug** in the tray menu, the wizard
   footer or next to a failed step. It writes a redacted zip and opens the
   bug form. See [Report a bug](windows.md#report-a-bug).
@@ -406,6 +463,15 @@ and PATH) do not stop you.
 
 ## Things to avoid
 
+- Do not run `benchbar` with `sudo` or as root. It refuses ("Do not run
+  benchbar as root"). It asks for `sudo` itself, for the few steps that need
+  it (`/etc/hosts`, the wkhtmltopdf package, the LAN guard). A run as root keeps
+  your home folder on a Mac and leaves root owned files in the state folder, the
+  logs and the bench's lock, which later runs as you cannot write. If that
+  happened, give them back: `sudo chown -R $USER ~/.local/state/benchbar` (or
+  `.benchbar` next to a checkout's CLI) and the bench's `logs` folder.
+  With `--json`, `--jsonl` or `--for-agent` the refusal is JSON (exit 64,
+  `error_id` `root_refused`, `error`, `fix`).
 - Do not use the unversioned Homebrew `mariadb` formula for the v15
   profile. Pin to `mariadb@10.11`.
 - Do not `brew install wkhtmltopdf`. Use the official patched Qt package,

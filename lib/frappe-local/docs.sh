@@ -19,6 +19,18 @@ FL_DOCS_CHECK_SECS="${FL_DOCS_CHECK_SECS:-3}"
 FL_DOCS_TOPICS="home|/|the introduction
 install|/install/|install BenchBar and your first bench
 quick-start,start|/quick-start/|the first ten minutes
+macos|/macos/|start here on a Mac
+linux|/linux/|start here on Linux
+windows|/windows/|BenchBar for Windows
+upgrade,update|/upgrade/|update and migrate
+uninstall|/uninstall/|remove BenchBar
+faq|/faq/|short answers
+glossary|/glossary/|the words the docs use
+features|/features/|every feature and since when
+share,sharing|/guides/share-on-your-network/|share a site on your network
+labs|/guides/labs/|experiments you turn on
+quick-switch|/guides/quick-switch/|open a site as a pinned user
+url-scheme|/reference/url-scheme/|benchbar:// links
 app|/app/|the menu bar app and its window
 sites,benches|/guides/benches-and-sites/|benches and sites
 apps|/guides/apps/|add, install and update apps
@@ -31,7 +43,6 @@ config,configuration|/reference/configuration/|configuration files and variables
 json|/json-schema/|the JSON API
 runners|/runners/|draw your own menu bar runner
 troubleshooting|/troubleshooting/|when something goes wrong
-decisions|/decisions/|why things are the way they are
 roadmap|/roadmap/|what comes next
 contributing|/contributing/|work on BenchBar"
 

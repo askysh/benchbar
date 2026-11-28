@@ -13,7 +13,7 @@ explains the safety model behind it. For the steps, see the
 - **Only the copy is shared, never the site.** `share setup` restores a
   backup of the site into `share.localhost` and hardens it. Your site,
   its database and its files are not reachable from the network.
-- **The bench's ports stay on this Mac.** The LAN guard (a pf anchor, see
+- **The bench's ports stay on this computer.** The LAN guard (a pf anchor on macOS, an nftables table on Linux, see
   [lan-guard](../reference/cli/share.md#lan-guard-install)) refuses web 8000-8099, socket.io 9000-9099, Redis 11000-11099
   and 13000-13099 and MariaDB 3306 to anything but this Mac. Guests reach
   only the gateway on port 8443 (TLS, both sides with a certificate). A
@@ -29,9 +29,27 @@ explains the safety model behind it. For the steps, see the
   the count again) ends the share.
 - **The room code proves membership, not the host's identity.** Anyone who
   has the code can join, with no action from you; you see every join and
-  can remove people. On a first join a guest cannot tell your room from a
+  can remove people. The code does not grant a seat: you give out the
+  seats (`share assign`, **Give a Seat** in the apps), and a guest cannot
+  take or change one. Only a room started with `--open-seats` works as in
+  0.8, where whoever has the code can take any free seat, the most
+  privileged one included. On a first join a guest cannot tell your room from a
   rogue one that also knows the code: the guest's pin of your certificate
-  protects only rejoins.
+  protects only rejoins. A guest who joins from an invite link can check:
+  their join sheet shows 16 digits of the host's key, and yours are on the
+  Sharing tab and in `share status` ("Host key") for you to read out.
+- **A device on the network can slow joins down, not hold them off in
+  silence.** The gateway keeps 16 connections for devices that are not in
+  the room yet, 4 per address. Such a connection must send a request
+  within 10 seconds and is closed 60 seconds after it opened at the
+  latest, so a device that only holds connections open loses them. A
+  device that keeps opening new ones can still crowd new guests out, as
+  it could by flooding the Wi-Fi itself: `share status` then shows
+  `join_trouble`. People already in the room are not affected.
+- **Uploaded files cannot act as pages of the copy.** A file under
+  `/files` or `/private/files` whose type a browser could run (HTML, SVG,
+  XML, anything unknown) reaches a guest as a download, with a sandbox
+  policy on it. Images, PDFs, text, audio and video show as before.
 - **Ten wrong codes lock the room** until you draw a new code. The count is
   for the room, not per guest, so anyone on the network who can reach the
   gateway can lock everyone out by guessing wrong ten times. The lock holds
@@ -45,13 +63,58 @@ explains the safety model behind it. For the steps, see the
 - Sharing ends at its deadline (4 hours by default, at most 12 hours from
   the start) and when you stop it. Every session of the copy ends with it.
 
+## A guest at a terminal
+
+`benchbar share join` is the guest of the Mac app without the app. It
+checks the same things in the same order:
+
+- It reads the host's key on a connection that shows no certificate, and
+  shows you its first 16 digits before you type the code.
+- The join is pinned to that key. A computer that later answers on the
+  same address with another key is refused, and BenchBar says so. It never
+  takes the new key in place of the old one.
+- The room code and an invite link are never arguments of a command. They
+  are in no log, no history and no JSON document.
+- This computer has one key for each host. On macOS the key is in the
+  Keychain. On Linux and WSL it is a file that only you can read, in the
+  `share-guest` folder of BenchBar's state folder.
+- The room opens on `127.0.0.1` only. The local listener passes on a
+  request only when it comes from the room's own page, and it ends after
+  15 minutes without a request.
+
 ## What guests can see
 
 The pages of the copy that their seat's user can open, and the room's
 roster (`In this room`: each person's name, Mac model, seat and whether
 they are online). Not your site, not other benches, not the code. Before
-they join, a guest sees only the room's label, your Mac's name, the site's
-name and the people and seat counts.
+they join, a guest sees only the room's label, your Mac's name and the
+people and seat counts. Every device on the network can read those, so the
+name of the site you copied is not among them: a person learns it once
+they are in the room.
+
+## What the host sees of a guest
+
+The name the guest's Mac gives, its model, its address, and a key their
+BenchBar made for that host alone. Another host sees another key, so two
+hosts cannot tell that the same Mac joined both, also not from the key.
+The same host sees the same key again, which is what makes **Remove**
+hold: a removed Mac cannot come back with the code it used. **Forget** in
+**Your rooms** deletes the room's key; a guest who forgets a room and
+joins it again is a new Mac to the host, so use `share remove ID
+--new-code` for somebody who must stay out. A room that was joined with
+BenchBar 0.8.3 keeps the one key that version showed to every room, until
+the guest forgets it. The join
+itself derives the room code's key material in arithmetic that is not
+constant time. That matters only to a program already running on the
+guest's own Mac, which can read the code on the screen anyway.
+
+The join sheet of an invite shows the address the link leads to and the
+first 16 digits of the host's key, before anything is sent: the label of a
+link is whatever the link says, the key is not. An invite link names the
+host's address only as a hint. BenchBar dials it
+only when it is an address of a local network (10.x, 172.16 to 172.31,
+192.168.x, 169.254.x or 100.64 to 100.127); a link that names any other
+address finds its room by Bonjour or not at all.
 
 ## What the copy holds, and what is taken out
 

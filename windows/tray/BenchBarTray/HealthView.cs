@@ -52,7 +52,7 @@ internal sealed class HealthView : UserControl, IBenchPageView
         _services = services;
         _autoRun = autoRun;
         Content = _root;
-        Ui.Name(this, "Health");
+        Ui.Name(this, UiText.Get("HealthTitle"));
     }
 
     public PageServices Services => _services;
@@ -141,7 +141,7 @@ internal sealed class HealthView : UserControl, IBenchPageView
         var bench = _context.Bench;
         var model = _model;
         _root.Children.Clear();
-        _root.Children.Add(Ui.Title("Health"));
+        _root.Children.Add(Ui.Title(UiText.Get("HealthTitle")));
         _root.Children.Add(Ui.Text(bench.Name, 14, opacity: 0.75, margin: new Thickness(0, 2, 0, 12)));
 
         if (bench.Problem is { Length: > 0 } problem) _root.Children.Add(Banner(problem));
@@ -151,20 +151,20 @@ internal sealed class HealthView : UserControl, IBenchPageView
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
         DockPanel.SetDock(buttons, Dock.Right);
         var labels = new List<string>();
-        RunDoctorButton = Ui.Button("Run Doctor", () => model.RunAsync().Forget(), "Run Doctor " + bench.Name);
+        RunDoctorButton = Ui.Button(UiText.Get("HealthRunDoctor"), () => model.RunAsync().Forget(), UiText.Format("HealthRunDoctorName", bench.Name));
         RunDoctorButton.IsEnabled = !model.IsRunning;
         buttons.Children.Add(RunDoctorButton);
-        labels.Add("Run Doctor");
+        labels.Add(UiText.Get("HealthRunDoctor"));
         var repairable = model.Repairable;
-        RepairButton = Ui.Button("Repair...", StartRepair, "Repair " + bench.Name, primary: repairable);
+        RepairButton = Ui.Button(UiText.Get("HealthRepair"), StartRepair, UiText.Format("HealthRepairName", bench.Name), primary: repairable);
         RepairButton.IsEnabled = repairable && !model.IsRunning && OpenSheet is null;
-        Ui.Name(RepairButton, "Repair " + bench.Name, repairable ? "Shows the plan first; nothing changes until you confirm" : "Nothing repair can fix");
+        Ui.Name(RepairButton, UiText.Format("HealthRepairName", bench.Name), (repairable ? UiText.Get("HealthRepairHint") : UiText.Get("HealthRepairNothing")));
         buttons.Children.Add(RepairButton);
-        labels.Add("Repair...");
+        labels.Add(UiText.Get("HealthRepair"));
         ButtonLabels = labels;
         head.Children.Add(buttons);
         var title = new StackPanel { Orientation = Orientation.Horizontal };
-        title.Children.Add(Ui.Text("Doctor", 18, FontWeights.SemiBold));
+        title.Children.Add(Ui.Text(UiText.Get("HealthDoctor"), 18, FontWeights.SemiBold));
         if (model.Report is { } summary) title.Children.Add(Ui.Text(summary.SummaryText, 13, opacity: 0.75, margin: new Thickness(10, 5, 0, 0)));
         head.Children.Add(title);
         _root.Children.Add(head);
@@ -173,28 +173,28 @@ internal sealed class HealthView : UserControl, IBenchPageView
         if (model.Report is { } report)
         {
             if (report.ProfileIsDefault && report.Profile is { Length: > 0 } profile)
-                card.Children.Add(Ui.Text($"Profile {profile} is only the default: no profile matches this bench's Frappe, so the env checks warn instead of offering a rebuild.", 13, opacity: 0.75, margin: new Thickness(0, 0, 0, 8)));
+                card.Children.Add(Ui.Text(UiText.Format("HealthDefaultProfile", profile), 13, opacity: 0.75, margin: new Thickness(0, 0, 0, 8)));
             if (report.NeedsAttention.Count == 0)
-                card.Children.Add(Line(Ui.CheckGlyph, Ui.StatusBrush(SetupStatus.Ok), "Every check passes."));
+                card.Children.Add(Line(Ui.CheckGlyph, Ui.StatusBrush(SetupStatus.Ok), UiText.Get("HealthAllPass")));
             foreach (var check in report.NeedsAttention) card.Children.Add(CheckRow(check));
             if (report.Passing.Count > 0) card.Children.Add(PassingGroup(report));
         }
         else if (model.IsRunning)
         {
-            card.Children.Add(Ui.Text("Running doctor...", 14, opacity: 0.75));
+            card.Children.Add(Ui.Text(UiText.Get("HealthRunning"), 14, opacity: 0.75));
         }
         else if (!model.HasRun)
         {
-            card.Children.Add(Ui.Text("Doctor has not run yet.", 14, opacity: 0.75));
+            card.Children.Add(Ui.Text(UiText.Get("HealthNotRun"), 14, opacity: 0.75));
         }
-        if (model.IsRunning && model.Report is not null) card.Children.Add(Ui.Text("Running doctor...", 12, opacity: 0.7, margin: new Thickness(0, 6, 0, 0)));
+        if (model.IsRunning && model.Report is not null) card.Children.Add(Ui.Text(UiText.Get("HealthRunning"), 12, opacity: 0.7, margin: new Thickness(0, 6, 0, 0)));
         if (model.Error is { Length: > 0 } error) card.Children.Add(Banner(error, nested: true));
         if (model.AckError is { Length: > 0 } ackError) card.Children.Add(Banner(ackError, nested: true));
         _root.Children.Add(Ui.CardOf(card));
-        _root.Children.Add(Ui.Text("Doctor is read only. Repair shows its plan, and runs only after you confirm, with a backup before each change.", 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 16)));
+        _root.Children.Add(Ui.Text(UiText.Get("HealthDoctorNote"), 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 16)));
 
         // the Windows section: the shim's own rows
-        _root.Children.Add(Ui.Text("Windows", 18, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 8)));
+        _root.Children.Add(Ui.Text(UiText.Get("HealthWindows"), 18, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 8)));
         var windows = new StackPanel();
         if (model.Shim is { } shim && shim.Steps.Count > 0)
         {
@@ -206,10 +206,10 @@ internal sealed class HealthView : UserControl, IBenchPageView
         }
         else
         {
-            windows.Children.Add(Ui.Text(model.IsRunning ? "Checking Windows..." : "Not checked yet.", 14, opacity: 0.75));
+            windows.Children.Add(Ui.Text((model.IsRunning ? UiText.Get("HealthCheckingWindows") : UiText.Get("HealthNotChecked")), 14, opacity: 0.75));
         }
         _root.Children.Add(Ui.CardOf(windows));
-        _root.Children.Add(Ui.Text("These are the rows of benchbar.exe setup check. They never start a stopped distro.", 12, opacity: 0.7));
+        _root.Children.Add(Ui.Text(UiText.Get("HealthWindowsNote"), 12, opacity: 0.7));
         Lines = TextProbe.Lines(_root);
     }
 
@@ -227,13 +227,13 @@ internal sealed class HealthView : UserControl, IBenchPageView
         Grid.SetColumn(body, 1);
         var top = new StackPanel { Orientation = Orientation.Horizontal };
         top.Children.Add(Ui.Text(check.Label, 14, FontWeights.SemiBold));
-        if (check.Acked) top.Children.Add(Ui.Text("acknowledged", 12, opacity: 0.7, margin: new Thickness(8, 2, 0, 0)));
+        if (check.Acked) top.Children.Add(Ui.Text(UiText.Get("HealthAcknowledged"), 12, opacity: 0.7, margin: new Thickness(8, 2, 0, 0)));
         body.Children.Add(top);
         body.Children.Add(Ui.Text(check.Message, 13, opacity: 0.85));
         if (check.FixCommand is { Length: > 0 } fix)
         {
             var line = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
-            var copy = Ui.Button("Copy fix", () => _services.CopyText(fix), "Copy fix for " + check.Label, minWidth: 0);
+            var copy = Ui.Button(UiText.Get("HealthCopyFix"), () => _services.CopyText(fix), UiText.Format("HealthCopyFixName", check.Label), minWidth: 0);
             copy.Margin = new Thickness(8, 0, 0, 0);
             copy.Padding = new Thickness(8, 2, 8, 2);
             DockPanel.SetDock(copy, Dock.Right);
@@ -250,7 +250,7 @@ internal sealed class HealthView : UserControl, IBenchPageView
                 Padding = new Thickness(0),
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            Ui.Name(text, "Fix for " + check.Label);
+            Ui.Name(text, UiText.Format("HealthFixFor", check.Label));
             line.Children.Add(text);
             body.Children.Add(line);
         }
@@ -258,12 +258,12 @@ internal sealed class HealthView : UserControl, IBenchPageView
         {
             // a person's click only: nothing acknowledges a warning by itself, and a failure has no button
             var acked = check.Acked;
-            var ack = Ui.Button(acked ? "Undo Acknowledge" : "Acknowledge", () => ackModel.AckAsync(check, !acked).Forget(),
-                (acked ? "Undo acknowledging " : "Acknowledge ") + check.Label, minWidth: 0);
+            var ack = Ui.Button((acked ? UiText.Get("HealthUndoAck") : UiText.Get("HealthAck")), () => ackModel.AckAsync(check, !acked).Forget(),
+                (acked ? UiText.Format("HealthUndoAckName", check.Label) : UiText.Format("HealthAckName", check.Label)), minWidth: 0);
             ack.Margin = new Thickness(0, 6, 0, 0);
             ack.Padding = new Thickness(8, 2, 8, 2);
             ack.HorizontalAlignment = HorizontalAlignment.Left;
-            ack.ToolTip = acked ? "Show this warning again" : "Silence this warning for this bench until its message changes";
+            ack.ToolTip = (acked ? UiText.Get("HealthUndoAckTip") : UiText.Get("HealthAckTip"));
             body.Children.Add(ack);
         }
         grid.Children.Add(body);
@@ -275,11 +275,11 @@ internal sealed class HealthView : UserControl, IBenchPageView
         var panel = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
         var rows = new StackPanel { Visibility = _showPassing ? Visibility.Visible : Visibility.Collapsed };
         foreach (var check in report.Passing) rows.Children.Add(CheckRow(check));
-        var toggle = Ui.Link(_showPassing ? $"Hide {report.Passing.Count} passing" : $"Show {report.Passing.Count} passing", () =>
+        var toggle = Ui.Link((_showPassing ? UiText.Format("HealthHidePassing", report.Passing.Count) : UiText.Format("HealthShowPassing", report.Passing.Count)), () =>
         {
             _showPassing = !_showPassing;
             Rebuild();
-        }, "Passing checks");
+        }, UiText.Get("HealthPassingName"));
         panel.Children.Add(toggle);
         panel.Children.Add(rows);
         return panel;
@@ -361,7 +361,7 @@ internal sealed class RepairSheet : Window
     {
         Model = model;
         _copy = copy;
-        Title = "Repair " + model.BenchName;
+        Title = UiText.Format("RepairTitle", model.BenchName);
         Width = 600;
         MaxHeight = 760;
         SizeToContent = SizeToContent.Height;
@@ -370,7 +370,7 @@ internal sealed class RepairSheet : Window
         Owner = owner;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         Ui.ApplyTheme(this, theme);
-        Ui.Name(this, "Repair " + model.BenchName);
+        Ui.Name(this, UiText.Format("RepairTitle", model.BenchName));
 
         var grid = new Grid { Margin = new Thickness(24) };
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) });
@@ -417,42 +417,50 @@ internal sealed class RepairSheet : Window
     {
         var panel = new StackPanel { Width = 550 };
         var buttons = new List<(string Label, Action Click, bool Primary, bool Enabled)>();
+        var cancel = UiText.Get("Cancel");
+        var close = UiText.Get("RepairClose");
         switch (Model.Phase)
         {
             case RepairPhase.Planning:
-                panel.Children.Add(Ui.Text("Repair " + Model.BenchName, 18, FontWeights.SemiBold));
-                panel.Children.Add(Ui.Text("Reading the plan (benchbar repair --dry-run)...", 14, opacity: 0.75, margin: new Thickness(0, 8, 0, 0)));
-                buttons.Add(("Cancel", Close, false, true));
+                panel.Children.Add(Ui.Text(UiText.Format("RepairTitle", Model.BenchName), 18, FontWeights.SemiBold));
+                panel.Children.Add(Ui.Text(UiText.Get("RepairReading"), 14, opacity: 0.75, margin: new Thickness(0, 8, 0, 0)));
+                buttons.Add((cancel, Close, false, true));
                 break;
             case RepairPhase.Review:
-                Header(panel, "Repair " + Model.BenchName, "Runs the fixes doctor found, in order, with a backup before each change.");
+                Header(panel, UiText.Format("RepairTitle", Model.BenchName), UiText.Get("RepairReviewLine"));
                 if (Model.Message is { Length: > 0 } message) panel.Children.Add(Ui.CriticalText(message));
-                if (Model.Steps.Count == 0) panel.Children.Add(Ui.Text("Nothing to repair.", 14, FontWeights.SemiBold, margin: new Thickness(0, 12, 0, 0)));
+                if (Model.Steps.Count == 0) panel.Children.Add(Ui.Text(UiText.Get("RepairNothing"), 14, FontWeights.SemiBold, margin: new Thickness(0, 12, 0, 0)));
                 else Steps(panel);
-                panel.Children.Add(Ui.Text("A backup is taken before every change. Broken folders are moved aside, never deleted.", 13, opacity: 0.8, margin: new Thickness(0, 12, 0, 0)));
+                panel.Children.Add(Ui.Text(UiText.Get("RepairBackupNote"), 13, opacity: 0.8, margin: new Thickness(0, 12, 0, 0)));
                 if (Model.HasSudoSteps)
-                    panel.Children.Add(Ui.Text($"{Model.SudoSteps} {(Model.SudoSteps == 1 ? "step uses" : "steps use")} sudo. BenchBar asks for your Linux password when you press Repair; it is used for this run only. Cancel the question and nothing runs.", 13, margin: new Thickness(0, 8, 0, 0)));
-                buttons.Add(("Repair", () => Model.RunAsync().Forget(), true, Model.CanRepair));
-                buttons.Add(("Cancel", Close, false, true));
+                    panel.Children.Add(Ui.Text((Model.SudoSteps == 1 ? UiText.Format("RepairSudoOne", Model.SudoSteps) : UiText.Format("RepairSudoMany", Model.SudoSteps)), 13, margin: new Thickness(0, 8, 0, 0)));
+                buttons.Add((UiText.Get("RepairButton"), () => Model.RunAsync().Forget(), true, Model.CanRepair));
+                buttons.Add((cancel, Close, false, true));
                 break;
             case RepairPhase.Running:
-                Header(panel, "Repairing...", "This cannot be stopped part way. Keep the window open until it ends.");
+                Header(panel, UiText.Get("RepairRunning"), UiText.Get("RepairRunningLine"));
                 Steps(panel);
                 LogLine(panel);
                 break;
             case RepairPhase.Finished:
-                Header(panel, Model.Succeeded ? "Repair finished; every check passes." : "Repair finished with problems left", Model.Succeeded ? null : "See the steps below and the log.");
+                Header(panel, (Model.Succeeded ? UiText.Get("RepairDone") : UiText.Get("RepairProblems")), Model.Succeeded ? null : UiText.Get("RepairSeeSteps"));
                 Steps(panel);
                 LogLine(panel);
-                buttons.Add(("Close", Close, true, true));
+                buttons.Add((close, Close, true, true));
+                break;
+            case RepairPhase.Stale:
+                Header(panel, UiText.Get("RepairStaleTitle"), UiText.Get("RepairStaleLine"));
+                if (Model.Message is { Length: > 0 } refusal) panel.Children.Add(Ui.Text(refusal, 13, opacity: 0.7, margin: new Thickness(0, 8, 0, 0)));
+                buttons.Add((UiText.Get("RepairReviewAgain"), () => Model.LoadPlanAsync().Forget(), true, true));
+                buttons.Add((close, Close, false, true));
                 break;
             default:
-                Header(panel, Model.Steps.Count == 0 ? "No repair plan" : "Repair stopped", null);
+                Header(panel, (Model.Steps.Count == 0 ? UiText.Get("RepairNoPlan") : UiText.Get("RepairStopped")), null);
                 if (Model.Message is { Length: > 0 } failure) panel.Children.Add(Ui.CriticalText(failure));
                 Steps(panel);
                 LogLine(panel);
-                if (Model.Steps.Count == 0) buttons.Add(("Read Plan Again", () => Model.LoadPlanAsync().Forget(), true, true));
-                buttons.Add(("Close", Close, Model.Steps.Count > 0, true));
+                if (Model.Steps.Count == 0) buttons.Add((UiText.Get("RepairReadAgain"), () => Model.LoadPlanAsync().Forget(), true, true));
+                buttons.Add((close, Close, Model.Steps.Count > 0, true));
                 break;
         }
         Lines = TextProbe.Lines(panel);
@@ -463,7 +471,7 @@ internal sealed class RepairSheet : Window
         {
             var button = Ui.Button(label, click, label, primary);
             button.IsEnabled = enabled;
-            if (label is "Cancel" or "Close") button.IsCancel = Model.IsDismissible;
+            if (label == cancel || label == close) button.IsCancel = Model.IsDismissible;
             _bar.Children.Add(button);
         }
         ButtonLabels = buttons.Select(b => b.Label).ToList();
@@ -486,7 +494,7 @@ internal sealed class RepairSheet : Window
             glyph.VerticalAlignment = VerticalAlignment.Top;
             row.Children.Add(glyph);
             var text = new StackPanel();
-            text.Children.Add(Ui.Text(step.Label + (step.Sudo ? "  (asks for your Linux password)" : ""), 14));
+            text.Children.Add(Ui.Text(step.Sudo ? UiText.Format("RepairStepSudo", step.Label) : step.Label, 14));
             if (step.Message.Length > 0 && step.Status != InstallStepStatus.Done) text.Children.Add(Ui.Text(step.Message, 12, opacity: 0.7));
             row.Children.Add(text);
             steps.Children.Add(row);
@@ -498,7 +506,7 @@ internal sealed class RepairSheet : Window
     {
         if (Model.Log is not { Length: > 0 } log) return;
         var row = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
-        var copy = Ui.Button("Copy Log Path", () => _copy(log), "Copy the repair log path", minWidth: 0);
+        var copy = Ui.Button(UiText.Get("RepairCopyLog"), () => _copy(log), UiText.Get("RepairCopyLogName"), minWidth: 0);
         copy.Margin = new Thickness(8, 0, 0, 0);
         DockPanel.SetDock(copy, Dock.Right);
         row.Children.Add(copy);
@@ -517,10 +525,10 @@ internal sealed class RepairSheet : Window
     /// <summary>What a screen reader says for the icon (macos StepIcon.label).</summary>
     public static string StepWord(InstallStepStatus status) => status switch
     {
-        InstallStepStatus.Running => "running",
-        InstallStepStatus.Done or InstallStepStatus.Unchanged => "done",
-        InstallStepStatus.Skipped => "skipped",
-        InstallStepStatus.Failed => "failed",
-        _ => "not started",
+        InstallStepStatus.Running => UiText.Get("RepairStepRunning"),
+        InstallStepStatus.Done or InstallStepStatus.Unchanged => UiText.Get("RepairStepDone"),
+        InstallStepStatus.Skipped => UiText.Get("RepairStepSkipped"),
+        InstallStepStatus.Failed => UiText.Get("RepairStepFailed"),
+        _ => UiText.Get("RepairStepNotStarted"),
     };
 }

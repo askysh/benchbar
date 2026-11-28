@@ -11,7 +11,7 @@ so the schema cannot quietly grow past what is checked. The checks:
                           (a field marked x-conditional may be absent)
   models     the Swift and C# models and mcp.py read only fields the schema has, and need
                           only fields it requires (schema/models.map)
-  docs       docs/json-schema.md and the schema name the same fields
+  docs       the JSON docs (docs/json-schema.md, docs/reference/json) and the schema name the same fields
 
 Exit 1 when a check fails, with one line per problem.
 """
@@ -754,11 +754,23 @@ def doc_section(prose, heading):
     return None
 
 
+def doc_pages():
+    """The JSON pages of the docs: the overview, then one page per command family (docs/reference/json)."""
+    paths = [os.path.join(ROOT, "docs", "json-schema.md")]
+    folder = os.path.join(ROOT, "docs", "reference", "json")
+    if os.path.isdir(folder):
+        paths += [os.path.join(folder, n) for n in sorted(os.listdir(folder)) if n.endswith(".md")]
+    pages = []
+    for path in paths:
+        with open(path, encoding="utf-8") as f:
+            pages.append(f.read())
+    return pages
+
+
 def check_docs():
     """Every field of a definition is named, in code quotes or as a JSON key, in the section its x-doc names."""
     root = load_schema()
-    with open(os.path.join(ROOT, "docs", "json-schema.md")) as f:
-        prose = f.read()
+    pages = doc_pages()
     problems = []
     for name, d in root["$defs"].items():
         names = all_property_names(root, d)
@@ -766,18 +778,22 @@ def check_docs():
             continue
         sections = []
         for heading in d.get("x-doc", []):
-            text = doc_section(prose, heading)
+            text = None
+            for prose in pages:
+                text = doc_section(prose, heading)
+                if text is not None:
+                    break
             if text is None:
-                problems.append("%s: x-doc names the heading %r, which docs/json-schema.md does not have" % (name, heading))
+                problems.append("%s: x-doc names the heading %r, which no JSON page of the docs has" % (name, heading))
             else:
                 sections.append(text)
         if not d.get("x-doc"):
-            problems.append("%s: no x-doc (the heading of docs/json-schema.md that describes it)" % name)
+            problems.append("%s: no x-doc (the heading of the JSON docs that describes it)" % name)
             continue
         text = "\n".join(sections)
         for field in sorted(names):
             if not re.search(r'[`".]' + re.escape(field) + r'[`"\[:]', text):
-                problems.append("%s: docs/json-schema.md does not mention the field %s under %s" % (name, field, " or ".join(d["x-doc"])))
+                problems.append("%s: the JSON docs do not mention the field %s under %s" % (name, field, " or ".join(d["x-doc"])))
     return problems
 
 

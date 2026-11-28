@@ -76,6 +76,14 @@ fl_pm_running() {
 }
 # The caller captures this function with $(...), isolating the real planner: profile/port/render globals do
 # not escape, dry-run guards all writes, and logging goes only to /dev/null.
+# fl_pm_untimed: stdin without the time of a step line, in every form fl_fmt_secs
+# prints ("12s", "1m 05s", "2h 01m") and with a sign (a line an older CLI wrote while the clock
+# stepped back). A time that stays in the text is part of the plan's token: the same plan then
+# has two tokens, and apply says "The port plan changed".
+fl_pm_untimed() {
+  sed -E 's/ \(-?[0-9]+(s|m [0-9]+s|h [0-9]+m)\)//g'
+}
+
 fl_pm_setup_preview() {
   local offset=""
   if [[ "$2" != "$3" ]]; then read -r offset _ <<<"$3"; offset=$((offset - FL_PORT_BASE_WEB)); fi
@@ -157,7 +165,7 @@ fl_pm_build() {
       preview_code=0
       preview="$(fl_pm_setup_preview "$d" "$current" "$proposed" 2>&1)" || preview_code=$?
       # Step timings are presentation only, not an input to the approved plan.
-      preview="$(printf '%s' "$preview" | sed -E 's/ \([0-9]+s\)//g')"
+      preview="$(printf '%s' "$preview" | fl_pm_untimed)"
       [[ "$preview_code" == 0 ]] || blocked='Management setup preview failed. Follow the errors below before applying.'
     fi
     [[ -z "$blocked" ]] || PM_CAN_APPLY=0
@@ -171,8 +179,10 @@ fl_pm_build() {
   evidence="$(while IFS= read -r d; do printf '%s\n' "$d"; cksum "$d/sites/common_site_config.json" "$(fl_bench_state_file_for "$d")" 2>/dev/null || true; done < <({ fl_known_benches; printf '%s\n' "${PM_PATHS[@]}"; } | LC_ALL=C sort -u))"
   agent_files=()
   while IFS= read -r d; do agent_files+=("$d"); done < <(fl_agent_files)
-  PM_TOKEN="$( { printf '%s\n%s' "$rows" "$evidence"; cksum "$FL_STATE_FILE" ${agent_files[@]+"${agent_files[@]}"} 2>/dev/null || true; } | shasum -a 256 | awk '{print $1}')"
-  PM_JSON="{\"schema_version\":1,\"cli_version\":\"${FL_VERSION:-0}\",\"token\":\"$PM_TOKEN\",\"entries\":[$rows],\"can_apply\":$(fl_json_bool "$PM_CAN_APPLY") }"
+  PM_TOKEN_DATA="$( { printf '%s\n%s' "$rows" "$evidence"; cksum "$FL_STATE_FILE" ${agent_files[@]+"${agent_files[@]}"} 2>/dev/null || true; } )"
+  fl_plan_token_v PM_TOKEN "$PM_TOKEN_DATA"
+  # shellcheck disable=SC2153  # PM_TOKEN is set by fl_plan_token_v above
+  PM_JSON="{\"schema_version\":1,\"cli_version\":\"${FL_VERSION}\",\"token\":\"$PM_TOKEN\",\"entries\":[$rows],\"can_apply\":$(fl_json_bool "$PM_CAN_APPLY") }"
 }
 fl_pm_check() {
   PM_TAKEN=""; PM_SOFT=""; fl_pm_known_reservations
@@ -198,7 +208,7 @@ fl_pm_hosts_batch() {
 fl_pm_jstep() { if declare -F fl_jsonl_step >/dev/null; then fl_jsonl_step "$@"; fi; }
 fl_pm_changed() { if declare -F fl_changed >/dev/null; then fl_changed "$@"; fi; }
 fl_cmd_ports() {
-  local sub="${1:-}" token mode i d current offset running
+  local sub="${1:-}" token mode i d current offset running old
   [[ "$#" == 0 ]] || shift
   case "$sub" in
     plan|setup|apply)
@@ -225,13 +235,14 @@ fl_cmd_ports() {
     check)
       fl_bench_load "${OPT_BENCH_DIR:-}"; fl_require_bench; fl_pm_check
       running=0; fl_pm_running && running=1
-      printf '{"schema_version":1,"cli_version":"%s","conflicts":%s,"mode":%s,"already_running":%s}\n' "${FL_VERSION:-0}" "$(fl_pm_strings_json "$PM_CONFLICTS")" "$(fl_json_str "$(fl_pm_mode "$FL_BENCH_DIR")")" "$(fl_json_bool "$running")" ;;
+      printf '{"schema_version":1,"cli_version":"%s","conflicts":%s,"mode":%s,"already_running":%s}\n' "$FL_VERSION" "$(fl_pm_strings_json "$PM_CONFLICTS")" "$(fl_json_str "$(fl_pm_mode "$FL_BENCH_DIR")")" "$(fl_json_bool "$running")" ;;
     mode)
       mode="${1:-}"; [[ "$mode" == automatic || "$mode" == fixed ]] || { fl_fail 'Mode must be automatic or fixed.'; return 1; }
       fl_bench_load "${OPT_BENCH_DIR:-}"; fl_require_bench
+      old="$(fl_pm_mode "$FL_BENCH_DIR")|$(fl_bstate_get PORT_RESERVATION 2>/dev/null || true)"
       fl_bstate_set PORT_MODE "$mode"; fl_bstate_set PORT_RESERVATION "$(fl_pm_current)"
       if [[ "${FL_DRY_RUN:-0}" == 1 ]]; then fl_info "dry-run: would set port mode to $mode. Nothing was changed."
-      else fl_ok "Port mode: $mode. Existing ports are unchanged."; fi ;;
+      else [[ "$old" == "${mode}|$(fl_pm_current)" ]] || fl_changed ports "$FL_BENCH_DIR" "port mode ${mode}"; fl_ok "Port mode: $mode. Existing ports are unchanged."; fi ;;
     apply)
       token="${1:-}"; [[ "$#" == 0 ]] || shift
       [[ "${FL_ASSUME_YES:-0}" == 1 ]] || { fl_fail 'Review ports plan, then pass its token with --yes.'; return 1; }
@@ -239,7 +250,11 @@ fl_cmd_ports() {
       local jl="${FL_JSONL:-0}"; FL_JSONL=0
       fl_pm_build "$@" || { FL_JSONL="$jl"; return 1; }
       FL_JSONL="$jl"
-      [[ "$token" == "$PM_TOKEN" ]] || { fl_fail 'The port plan changed. Review a fresh preview before applying.'; return 1; }
+      fl_plan_token_check "$PM_TOKEN_DATA" "$token" || {
+        if [[ "$?" == 2 ]]; then fl_fail "$(fl_plan_token_expired_text) Review a fresh preview before applying."
+        else fl_fail 'The port plan changed. Review a fresh preview before applying.'; fi
+        return 1
+      }
       [[ "$PM_CAN_APPLY" == 1 ]] || { fl_fail 'The port plan contains blocked benches. Nothing was changed.'; return 1; }
       # Resolve every selected bench's profile/tools before the first write.
       # Adopt deliberately cannot install missing honcho into an existing env.

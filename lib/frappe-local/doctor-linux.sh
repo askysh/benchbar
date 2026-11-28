@@ -16,7 +16,7 @@
 #
 # Doctor stays read only and never reads the MariaDB password file.
 
-FL_CHECK_ORDER="brew mariadb_bind mariadb_utf8 pdf_engine env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs kept_backups bench_path honcho honcho_setuptools procfile bench_listen runner agent runner_heartbeat scheduler stop_flag helpers cli_link cli_duplicate dead_agents hosts port_clash orphans ping site_not_served"
+FL_CHECK_ORDER="brew mariadb_bind mariadb_utf8 pdf_engine env_python env_setuptools bench_version toolchain_node toolchain_yarn toolchain_uv mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs kept_backups bench_path honcho honcho_setuptools procfile bench_listen runner agent runner_heartbeat scheduler stop_flag helpers cli_link cli_duplicate dead_agents hosts port_clash orphans ping site_not_served"
 
 # WSL only: the Windows host and NTP in the distro both set its clock
 if fl_is_wsl; then FL_CHECK_ORDER="${FL_CHECK_ORDER/ mariadb_bind/ wsl_time_sync mariadb_bind}"; fi
@@ -24,7 +24,7 @@ if fl_is_wsl; then FL_CHECK_ORDER="${FL_CHECK_ORDER/ mariadb_bind/ wsl_time_sync
 # repair: no python_leaves, legacy_migrate, hosts_entry or redis_stop. The sudo
 # steps come first: the credential is dropped right after them
 # (fl_sudo_phase_done), before pip, npm and bench run
-FL_ACTION_ORDER="mariadb_bind mariadb_utf8 wkhtmltopdf_install node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache port_block write_procfile write_runner write_plist write_helpers write_cli_link kept_backups rotate_logs"
+FL_ACTION_ORDER="mariadb_bind mariadb_utf8 wkhtmltopdf_install node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache dead_agents port_block write_procfile write_runner write_plist write_helpers write_cli_link kept_backups rotate_logs"
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install"
 
 # the apt packages a bench needs: the first two groups fail, the build ones warn
@@ -154,11 +154,21 @@ chk_toolchain_yarn() {
   local yarn ver
   yarn="$(fl_bench_which yarn)"
   if [[ -z "$yarn" ]]; then
-    chk__set warn "no yarn on the bench's PATH (bench build needs it)" "$(fl_npm_bin) install -g yarn" yarn_install
+    chk__set warn "no yarn on the bench's PATH (bench build needs it)" "$(fl_npm_bin) install -g yarn@${FL_PIN_YARN}" yarn_install
     return 0
   fi
   ver="$("$yarn" --version 2>/dev/null || true)"
   chk__set ok "yarn ${ver:-found} at ${yarn}"
+}
+
+# As on the Mac, with the phase 00 script as the fix: it runs the pinned uv
+# installer after checking its sum, and repair has no action that downloads one.
+chk_toolchain_uv() {
+  if fl_uv_on_path; then
+    chk__set ok "uv at $(command -v uv)"
+  else
+    chk__set warn "uv is not installed: bench (frappe-bench 5.31 and later) needs it to rebuild the env, to add an app and to update one" "$(fl_uv_install_hint)"
+  fi
 }
 
 chk_toolchain_pkgconfig() {
@@ -196,7 +206,7 @@ fl_mariadb_server_version() {
 
 # "formula version" of the server on 3306, the formula being the profile's
 # name for that series (mariadb@10.11), so the policy comparison works
-fl_mariadb_running_formula() {
+fl_mariadb_running_formula_linux() {
   local ver
   # fl_port_listening, not the owner pid: ss hides the owner of the apt mariadbd (user mysql) from a regular user
   fl_port_listening 3306 || return 0
@@ -281,6 +291,7 @@ chk_mariadb_utf8() {
 
 # agent: the bench's systemd user unit. fl_agent_* read systemd (systemd.sh).
 chk_agent() {
+  fl_render_ensure
   local unit state pid code
   unit="$(fl_agent_plist_path)"
   chk__template "systemd unit" "$unit" "$FL_R_PLIST" write_plist
@@ -382,7 +393,7 @@ act_yarn_install() {
   local npm
   npm="$(fl_npm_bin)"
   [[ -x "$npm" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "no npm at ${npm}; install Node ${FL_NODE_MAJOR} first ($(fl_fnm_cmd) install ${FL_NODE_MAJOR})"; return 1; }
-  fl_run_long "npm install -g yarn (Node ${FL_NODE_MAJOR})" "$npm" install -g yarn || return 1
+  fl_run_long "npm install -g yarn@${FL_PIN_YARN} (Node ${FL_NODE_MAJOR})" "$npm" install -g "yarn@${FL_PIN_YARN}" || return 1
   return 0
 }
 
@@ -544,6 +555,14 @@ fl_prereq_platform_first() {
     fl_prereq_add linger ok "lingering is on for ${user}" "" ",\"enabled\":true"
   else
     fl_prereq_add linger warn "lingering is off for ${user}; a bench returns after a reboot only once you log in (install turns it on)" "sudo loginctl enable-linger ${user}" ",\"enabled\":false"
+  fi
+
+  # the user manager the bench unit runs under: sudo -iu, su - and cron have no login
+  # session, so systemctl --user finds no bus (the fix of issue 115)
+  if fl_user_manager_reachable; then
+    fl_prereq_add user_bus ok "the systemd user manager answers for ${user}"
+  else
+    fl_prereq_add user_bus warn "$(fl_user_manager_msg)" "$(fl_user_manager_fix)"
   fi
 
   # memory: MariaDB, Redis, the web server, workers and the asset build

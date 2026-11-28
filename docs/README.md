@@ -8,6 +8,10 @@ Edit them here; GitHub renders them as they are, and the site in `site/`
 (Astro Starlight) builds from this folder. This README is not a page on
 the site.
 
+Pages for maintainers are not in this folder, because everything here is
+published. Decisions and Releasing are in `maintainers/`, and the site
+redirects their old addresses to GitHub.
+
 ## Run the site locally
 
 ```bash
@@ -54,10 +58,29 @@ flag no command has.
   and links to other files in the repo into GitHub links.
 - A new page goes into the sidebar in `site/astro.config.mjs`;
   `tests/test-docs.sh` fails for a page that is in no group. A new user
-  feature also gets a row in `features.md` (platform and version), and a
-  new Lab must be named there.
+  feature also gets a row in `features.md` (platform and version). A new
+  Lab, a new top level command and a new MCP tool must be named in a row
+  there, or `tests/test-docs.sh` fails.
+- The CLI, the apps and the README link to pages and anchors of the site.
+  When you split or rename a page, keep its old anchors working with a
+  data file in `site/public/moved/` (see `moved/json-schema.js`) that the
+  old page loads. `scripts/docs-links.py` checks every such address, and
+  `tests/test-docs.sh` runs it.
 - `ROADMAP.md` and `CONTRIBUTING.md` stay at the repo root; the build
   copies them in as `/roadmap/` and `/contributing/`.
-- A new doctor check needs a `### <check_id>` heading in
-  `guides/doctor-and-repair.md`: the app links doctor lines there, and
-  `tests/test-docs.sh` checks it.
+- A new doctor check needs a `### <check_id>` heading on one of the pages
+  in `reference/doctor/` and a link in `reference/doctor-checks.md`. The
+  app and the CLI link doctor lines to `/guides/doctor-and-repair/#<check_id>`,
+  which the old page sends to the new one: add the id to
+  `site/public/moved/doctor-and-repair.js`. `tests/test-docs.sh` checks it.
+
+## Images
+
+`docs/images/manifest.tsv` lists every image, the page that uses it, what
+makes it and its status. A new image needs a row, and `tests/test-docs.sh`
+fails without one. The Mac screens come from `DocsSnapshotTests` in
+`macos/BenchBarTests`. These tests open real windows, so they run on a Mac
+you are not using, with the `on-screen` marker in the snapshot folder, and
+never in CI. After a release that changed a screen, run them, copy the
+new images in, and update the dates in the manifest. `og-image.png` and
+`social-preview.png` come from `swift scripts/social-preview.swift`.

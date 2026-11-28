@@ -2,7 +2,7 @@
 # on macOS, the app build and Swift tests on macOS, and an unsigned release
 # bundle you can download from the run to try the app without a GitHub release.
 #
-# Tiers (docs/DECISIONS.md, "CI tiering"). The "changes" job runs
+# Tiers (maintainers/DECISIONS.md, "CI tiering"). The "changes" job runs
 # scripts/ci-plan.sh, which decides every other job from the changed files:
 #   pull request   the tests tests/affected.sh picks, on Linux (bash 5) and in
 #                  the bash 3.2 container, in as many shards as their weight
@@ -14,9 +14,10 @@
 #                  entry point, templates, config, the phases or this file
 #                  runs everything everywhere.
 #   push to main or next-release, and the nightly
-#                  everything everywhere, the real install and the Windows
-#                  jobs too (a push that changes only docs, site or *.md skips
-#                  them)
+#                  everything everywhere, the real installs on Linux (both
+#                  profiles, and the upgrade from 0.8.3) and the Windows jobs
+#                  too (a push that changes only docs, site or *.md skips
+#                  them). The real installs on macOS are real-install.yml.
 #   workflow_dispatch
 #                  the inputs "tests" and "legs" pick a subset
 # "CI result" needs every other job and is the one required check: it fails
@@ -27,8 +28,8 @@
 # versions do not know. The CLI jobs run on macos-latest, where /bin/bash
 # is the same 3.2 the CLI targets.
 #
-# Speed (docs/DECISIONS.md, "CI speed" and "CI tiering"): the shards of a leg
-# are balanced from the per test seconds in tests/run-tests.sh
+# Speed (maintainers/DECISIONS.md, "CI speed" and "CI tiering"): the shards of a leg
+# are balanced from the per test seconds in tests/timings.tsv
 # (scripts/ci-timings.sh regenerates them from a run) and sized to about 150
 # seconds each; shellcheck is its own Linux job and checks only the changed
 # files on a pull request, in parallel; the macOS and bash 3.2 shards leave
@@ -76,12 +77,13 @@ permissions:
 
 # One run per pull request: a push to the branch cancels the run before it.
 # The group has the pull request number, not the ref, so a pull request run
-# and the push run after its merge never cancel each other. A push to
-# next-release or main is never cancelled: a full run per merge must finish.
+# and the push run after its merge never cancel each other. On next-release a
+# newer push cancels the older push run (CI-12): every pull request already
+# passed "CI result" on its merge result before it could land, so only the
+# newest tree needs the full push run. A push to main is never cancelled.
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  # only a pull request's older run is stale; a push to next-release or main must finish (a full run per merge)
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/next-release') }}
 
 jobs:
   changes:
@@ -94,6 +96,7 @@ jobs:
     outputs:
       code: ${{ steps.plan.outputs.code }}
       full: ${{ steps.plan.outputs.full }}
+      pin_smoke: ${{ steps.plan.outputs.pin_smoke }}
       tests: ${{ steps.plan.outputs.tests }}
       linux_skip: ${{ steps.plan.outputs.linux_skip }}
       linux_n: ${{ steps.plan.outputs.linux_n }}
@@ -115,10 +118,11 @@ jobs:
     steps:
       # the whole history: the plan diffs against the pull request's base, and
       # affected.sh names the functions a change touched
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       # Everything from the event goes in through env, never into the script text
       - name: Plan the run (scripts/ci-plan.sh)
@@ -139,11 +143,17 @@ jobs:
   # PARALLEL at a time, the tests named in ONLY_TESTS or all of them, minus
   # the tests the platform leaves out (SKIP_TESTS, from the plan).
   # Four of the macOS jobs plus the app job are the five concurrent macOS jobs
-  # of the free plan, so macOS stays the exception on a pull request.
+  # of the free plan, so macOS stays the exception on a pull request. On a
+  # pull request it also waits for the Linux and bash 3.2 legs and is skipped
+  # when one failed or was cancelled: a run that is red there, or replaced
+  # by the next push within minutes, never queues for a macOS runner (#137,
+  # "CI load").
   cli-macos:
     name: CLI tests (macOS, shard ${{ matrix.shard }}/${{ needs.changes.outputs.macos_n }})
-    needs: changes
-    if: needs.changes.outputs.macos_n != '0'
+    needs: [changes, cli-linux, cli-bash32]
+    if: >-
+      ${{ !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.macos_n != '0'
+      && (github.event_name != 'pull_request' || ((needs.cli-linux.result == 'success' || needs.cli-linux.result == 'skipped') && (needs.cli-bash32.result == 'success' || needs.cli-bash32.result == 'skipped'))) }}
     runs-on: macos-latest
     timeout-minutes: 20
     strategy:
@@ -151,9 +161,10 @@ jobs:
       matrix:
         shard: ${{ fromJSON(needs.changes.outputs.macos_shards) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
       - name: Versions
         run: |
@@ -168,10 +179,16 @@ jobs:
           ONLY_TESTS: ${{ needs.changes.outputs.tests }}
           SHELLCHECK: '0'
           SKIP_TESTS: ${{ needs.changes.outputs.macos_skip }}
+          # a flake passes the rerun, and fails the run here: green runs in a row must hold none
+          STRICT_FLAKY: ${{ (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/next-release')) && '1' || '' }}
+          # the pin tests run every scenario; only a pull request whose plan says so runs the smoke ones (scripts/ci-plan.sh)
+          PIN_SMOKE: ${{ needs.changes.outputs.pin_smoke }}
+          # these have node here: a skip would be a pass that ran nothing
+          NO_SKIP: test-share-gateway
         run: /bin/bash tests/run-tests.sh
 
   # The mocked suite on Linux, for the Linux platform layer
-  # (docs/DECISIONS.md, "Linux"). The LAN share and its guard are macOS only
+  # (maintainers/DECISIONS.md, "Linux"). The LAN share and its guard are macOS only
   # (pf, launchd, the Keychain), so the plan leaves them out here.
   cli-linux:
     name: CLI tests (Linux, shard ${{ matrix.shard }}/${{ needs.changes.outputs.linux_n }})
@@ -184,9 +201,10 @@ jobs:
       matrix:
         shard: ${{ fromJSON(needs.changes.outputs.linux_shards) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
       - name: Versions
         run: |
@@ -199,6 +217,11 @@ jobs:
           ONLY_TESTS: ${{ needs.changes.outputs.tests }}
           SHELLCHECK: '0'
           SKIP_TESTS: ${{ needs.changes.outputs.linux_skip }}
+          # a flake passes the rerun, and fails the run here: green runs in a row must hold none
+          STRICT_FLAKY: ${{ (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/next-release')) && '1' || '' }}
+          # the pin tests run every scenario; only a pull request whose plan says so runs the smoke ones (scripts/ci-plan.sh)
+          PIN_SMOKE: ${{ needs.changes.outputs.pin_smoke }}
+          NO_SKIP: test-share-gateway
         run: bash tests/run-tests.sh
 
   # The mocked suite under bash 3.2.57, the bash of macOS, on cheap Linux
@@ -217,9 +240,10 @@ jobs:
       matrix:
         shard: ${{ fromJSON(needs.changes.outputs.bash32_shards) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
       # Packages, each for what the suite runs that busybox does not do the
       # GNU way: coreutils (stat -c, date, mktemp, timeout), findutils (find),
@@ -243,9 +267,25 @@ jobs:
           ONLY_TESTS: ${{ needs.changes.outputs.tests }}
           SHELLCHECK: '0'
           SKIP_TESTS: ${{ needs.changes.outputs.bash32_skip }}
+          # a flake passes the rerun, and fails the run here: green runs in a row must hold none
+          STRICT_FLAKY: ${{ (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/next-release')) && '1' || '' }}
+          # the pin tests run every scenario; only a pull request whose plan says so runs the smoke ones (scripts/ci-plan.sh)
+          PIN_SMOKE: ${{ needs.changes.outputs.pin_smoke }}
+          # bash 3.2.57 by its digest, not only its tag: a tag can be moved.
+          # The digest is of the multi-architecture index of the official
+          # image; a new base image is a change to this line.
+          BASH32_IMAGE: bash:3.2.57@sha256:2556c2da19c32c1614d318645c73a7bf64d38be21cf69e98e3ca51f053983719
         run: |
-          for attempt in 1 2 3; do docker pull -q bash:3.2.57 >/dev/null && break; [ "$attempt" = 3 ] && exit 1; sleep 5; done
-          docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS bash:3.2.57 sh -euc '
+          for attempt in 1 2 3; do docker pull -q "$BASH32_IMAGE" >/dev/null && break; [ "$attempt" = 3 ] && exit 1; sleep 5; done
+          # A flaky test is an annotation and a row in the job summary here too: run-tests.sh
+          # prints the "::warning" line only when it sees GITHUB_ACTIONS, and writes the row
+          # to GITHUB_STEP_SUMMARY, so the container gets both. The summary file of the
+          # runner is not the container user's to write: the suite writes one in a mounted
+          # folder, and the step copies it over when the container ends, failed or not.
+          B32_OUT="$RUNNER_TEMP/bash32-summary"
+          mkdir -p "$B32_OUT" && chmod 777 "$B32_OUT"
+          rc=0
+          docker run --rm -v "$PWD:/w:ro" -v "$B32_OUT:/summary" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS -e CI -e STRICT_FLAKY -e PIN_SMOKE -e GITHUB_ACTIONS -e GITHUB_STEP_SUMMARY=/summary/summary.md "$BASH32_IMAGE" sh -euc '
             for attempt in 1 2 3; do
               apk add --no-cache coreutils findutils diffutils grep sed gawk procps git python3 zip unzip curl perl-utils musl-locales >/dev/null && break
               [ "$attempt" = 3 ] && exit 1
@@ -255,11 +295,14 @@ jobs:
             adduser -D ci
             cp -R /w /home/ci/w && chown -R ci /home/ci/w
             su ci -s /bin/sh -c "cd /home/ci/w && export HOME=/home/ci && git config --global --add safe.directory \"*\" && bash --version | head -n 1 && nproc && bash tests/run-tests.sh"
-          '
+          ' || rc=$?
+          if [ -s "$B32_OUT/summary.md" ]; then cat "$B32_OUT/summary.md" >>"$GITHUB_STEP_SUMMARY"; fi
+          exit "$rc"
 
   # shellcheck once, on its own runner, for every platform's scripts: the files
   # a pull request changed (the plan lists them), every file on a full run. It
-  # runs one shellcheck process per 12 files, one per CPU at a time.
+  # runs one shellcheck process per file, at most 3 at a time (each can take
+  # several GB), each with a deadline that names the file it stops.
   shellcheck:
     name: shellcheck
     needs: changes
@@ -267,119 +310,179 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
       # Homebrew's 0.11.0, the version contributors run on a Mac: Ubuntu's
       # apt package is older and reports findings 0.11.0 does not. The binary
-      # for this runner's CPU, each with its checksum.
-      - name: Install shellcheck 0.11.0
-        run: |
-          case "$(uname -m)" in
-            x86_64) arch=x86_64; sum=4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b ;;
-            aarch64) arch=aarch64; sum=127f13925eadd52c341bca0ebaf9ab0dbd78c6468f30a8f262a528bf8de47546 ;;
-            *) echo "no shellcheck binary pinned for $(uname -m)"; exit 1 ;;
-          esac
-          curl -fsSL -o "$RUNNER_TEMP/sc.tar.xz" "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.$arch.tar.xz"
-          tar -xJf "$RUNNER_TEMP/sc.tar.xz" -C "$RUNNER_TEMP"
-          echo "$sum  $RUNNER_TEMP/shellcheck-v0.11.0/shellcheck" | sha256sum -c -
-          echo "$RUNNER_TEMP/shellcheck-v0.11.0" >>"$GITHUB_PATH"
+      # for this runner's CPU, checked against its sha256
+      # (scripts/ci-install-tool.sh).
+      - name: Install shellcheck
+        run: scripts/ci-install-tool.sh shellcheck
 
       - name: shellcheck
         env:
           SHELLCHECK_FILES: ${{ needs.changes.outputs.shellcheck_files }}
+          # seconds per file; a file that overruns is named and stopped (#137)
+          SC_FILE_TIMEOUT: 180
         run: |
           shellcheck --version | sed -n 2p
+          free -m | sed -n 2p
           bash tests/run-tests.sh shellcheck
 
-  # A real install on Linux: phase 00 from apt, uv and fnm, a v15 bench and
-  # site, the bench under systemd --user, up, the site answering, status and
-  # doctor, down. Slow (a bench build), so only on pushes, the nightly, a
-  # dispatch that asks for it and pull requests labelled test-linux (the plan
-  # says; a push that changes only docs, site or *.md skips it). GitHub's
-  # Ubuntu runners boot systemd, but the runner user has no user manager until
-  # linger starts one (docs/DECISIONS.md, "Linux").
+  # The workflows themselves: actionlint (syntax, expressions, and shellcheck
+  # of every run: block) and zizmor (security audits: unpinned actions,
+  # credentials left on disk, template injection, cache poisoning, excessive
+  # permissions). Both fail the job on any finding. What the repository
+  # accepts on purpose is listed, each with its reason, in
+  # .github/actionlint.yaml and .github/zizmor.yml. Always on (about 30
+  # seconds): a workflow is code that runs with the release keys' neighbours.
+  # Both tools and shellcheck are pinned with a sha256 in
+  # scripts/ci-install-tool.sh. zizmor's online audits (an action's commit
+  # must belong to the repository it names, known vulnerable actions) use the
+  # job's own read-only token.
+  workflows:
+    name: Workflow lint (actionlint, zizmor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
+
+      - name: Install actionlint, zizmor and shellcheck
+        run: |
+          scripts/ci-install-tool.sh shellcheck
+          scripts/ci-install-tool.sh actionlint
+          scripts/ci-install-tool.sh zizmor
+
+      - name: actionlint
+        run: actionlint -color
+
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: zizmor --no-progress .github
+
+  # A real install on Linux, once per profile: phase 00 from apt, uv and fnm,
+  # a bench and site, the bench under systemd --user, a second install that
+  # changes nothing, doctor without a FAIL, up, wait, the site answering on
+  # loopback only (0.9.0, issue 117), status, down. scripts/ci-real.sh holds
+  # the steps, the same ones real-install.yml runs on macOS. Slow (a bench
+  # build), so only on pushes, the nightly, a dispatch that asks for it and
+  # pull requests labelled test-linux (the plan says; a push that changes
+  # only docs, site or *.md skips it).
   cli-linux-real:
-    name: Real install (Linux, v15, systemd --user)
+    name: Real install (Linux, ${{ matrix.profile }}, systemd --user)
     needs: changes
     if: needs.changes.outputs.real == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [v15-lts, v16-lts]
     env:
       ADMIN_PASSWORD: admin-ci-only
-      SITE: linuxdev.localhost
+      PROFILE: ${{ matrix.profile }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
-      # The image ships MySQL (stopped) and its /etc/mysql: mariadb-server
-      # cannot install over them. A throwaway VM, so purging is safe here.
-      - name: Remove the image's MySQL
-        run: |
-          sudo systemctl stop mysql 2>/dev/null || true
-          sudo apt-get purge -y 'mysql-*' >/dev/null
-          sudo rm -rf /etc/mysql /var/lib/mysql
-
-      - name: Start a systemd user manager for the runner user
-        run: |
-          sudo loginctl enable-linger "$USER"
-          sudo systemctl start "user@$(id -u).service"
-          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >>"$GITHUB_ENV"
-          for _ in $(seq 1 20); do
-            XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-system-running 2>/dev/null && break
-            sleep 1
-          done
-          XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-system-running || true
+      - name: Remove the image's MySQL, start a systemd user manager
+        run: scripts/ci-real.sh prepare
 
       - name: benchbar install --yes
-        run: ./benchbar install --yes --site "$SITE"
+        run: scripts/ci-real.sh install
 
-      - name: A second install is unchanged
-        run: ./benchbar install --yes --site "$SITE" 2>&1 | tee "$RUNNER_TEMP/second.log"
+      - name: A second install changes nothing
+        run: scripts/ci-real.sh second-install
 
-      - name: benchbar up and wait for the site
-        run: |
-          ./benchbar up
-          for _ in $(seq 1 90); do
-            curl -fsS "http://$SITE:8000/api/method/ping" && exit 0
-            sleep 2
-          done
-          ./benchbar status --json || true
-          tail -n 100 ~/frappe-bench/logs/bench.log || true
-          exit 1
-
-      # 0.9.0: the dev web server and socketio listen on 127.0.0.1 only (issue 117)
-      - name: The web server and socketio listen on loopback only
-        run: |
-          ss -Hltn
-          rows="$(ss -Hltn '( sport = :8000 or sport = :9000 )' | awk '{print $4}')"
-          test "$(printf '%s\n' "$rows" | grep -c .)" -ge 2 || { echo "expected a listener on 8000 and 9000"; exit 1; }
-          bad="$(printf '%s\n' "$rows" | grep -v '^127\.0\.0\.1:' || true)"
-          test -z "$bad" || { echo "not on loopback: $bad"; exit 1; }
-          ./benchbar doctor --json | python3 -c 'import json,sys; d=json.load(sys.stdin); c=[x for x in d["checks"] if x["id"] == "bench_listen"][0]; assert c["status"] == "ok", c'
-
-      - name: status --json and doctor --json
-        run: |
-          ./benchbar status --json | tee "$RUNNER_TEMP/status.json"
-          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["state"] == "running" and d["web_ping_code"] == 200, d' "$RUNNER_TEMP/status.json"
-          ./benchbar doctor --json >"$RUNNER_TEMP/doctor.json"
-          ./benchbar repair --dry-run
+      - name: doctor, up, wait, a real request, loopback only, status
+        run: scripts/ci-real.sh serve
 
       - name: benchbar down
-        run: |
-          ./benchbar down
-          ! curl -fsS --max-time 3 "http://$SITE:8000/api/method/ping"
+        run: scripts/ci-real.sh down
 
       - name: Logs on failure
         if: failure()
-        run: |
-          systemctl --user status 'benchbar-*' --no-pager || true
-          journalctl --user --no-pager -n 200 || true
-          ls -la ~/.local/state/benchbar/logs || true
-          tail -n 200 ~/.local/state/benchbar/logs/*.log || true
-          cat "$RUNNER_TEMP/doctor.json" 2>/dev/null || true
+        run: scripts/ci-real.sh logs
+
+      - name: Upload the logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: real-install-logs-linux-${{ matrix.profile }}-${{ github.run_attempt }}
+          path: |
+            ~/.local/state/benchbar/logs
+            ~/frappe-bench/logs
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The upgrade a person on 0.8.3 gets: that release through its own
+  # install.sh, a bench and a site made by it and left running, then this
+  # checkout as the update (install.sh --yes pulls the managed checkout). The
+  # bench must still be known, the one time notices show once, doctor names
+  # the service files repair rewrites, and after repair and a restart the site
+  # answers, nothing listens off loopback and doctor has no WARN left. No
+  # check is excused (KNOWN_GAPS of scripts/ci-real.sh is not set).
+  cli-linux-upgrade:
+    name: Upgrade from 0.8.3 (Linux, systemd --user)
+    needs: changes
+    if: needs.changes.outputs.real == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      ADMIN_PASSWORD: admin-ci-only
+    steps:
+      # the whole history and the tags: the old release is installed from a
+      # mirror of this checkout
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Remove the image's MySQL, start a systemd user manager
+        run: scripts/ci-real.sh prepare
+
+      - name: Release 0.8.3, its bench and site
+        run: scripts/ci-real.sh old-install v0.8.3
+
+      - name: Update to this checkout (install.sh --yes)
+        run: scripts/ci-real.sh update
+
+      - name: The bench is still known and the notices show once
+        run: scripts/ci-real.sh upgrade-state
+
+      - name: doctor names what repair must rewrite
+        run: scripts/ci-real.sh upgrade-doctor
+
+      - name: repair, restart, the site answers on loopback only
+        run: scripts/ci-real.sh upgrade-repair
+
+      - name: doctor has no WARN left after the upgrade
+        run: scripts/ci-real.sh upgrade-clean
+
+      - name: Logs on failure
+        if: failure()
+        run: scripts/ci-real.sh logs
+
+      - name: Upload the logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: real-upgrade-logs-linux-${{ github.run_attempt }}
+          path: |
+            ~/.local/state/benchbar/logs
+            ~/frappe-bench/logs
+          if-no-files-found: ignore
+          retention-days: 14
 
   # The Windows shim: vet, unit tests (a fake wsl.exe, so Linux is enough)
   # and both Windows builds, uploaded as one artifact. Runs when windows/shim
@@ -394,14 +497,17 @@ jobs:
       run:
         working-directory: windows/shim
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: windows/shim/go.mod
-          cache-dependency-path: windows/shim/go.sum
+          # no module cache: this job (and wsl) uploads what it builds, and
+          # the one module is a quick download that go.sum verifies
+          cache: false
 
       - name: gofmt and go vet
         run: |
@@ -412,6 +518,15 @@ jobs:
 
       - name: go test
         run: go test ./...
+
+      # Known vulnerabilities in the Go standard library and in x/sys, for
+      # the Windows build (the code it calls, not everything it imports). The
+      # tool is pinned by version, and the Go checksum database checks its
+      # modules. A new advisory fails this job: bump Go (go.mod) or x/sys.
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+          GOOS=windows "$(go env GOPATH)/bin/govulncheck" ./...
 
       - name: Build windows/amd64 and windows/arm64
         run: |
@@ -424,7 +539,7 @@ jobs:
           ls -l "$RUNNER_TEMP"/shim/*/benchbar.exe
 
       - name: Upload the exes
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: benchbar-shim-${{ github.sha }}
           path: ${{ runner.temp }}/shim
@@ -446,11 +561,12 @@ jobs:
         shell: pwsh
         working-directory: windows/shim
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: windows/shim/go.mod
           cache-dependency-path: windows/shim/go.sum
@@ -477,11 +593,12 @@ jobs:
         shell: pwsh
         working-directory: windows/shim
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: windows/shim/go.mod
           cache-dependency-path: windows/shim/go.sum
@@ -513,7 +630,7 @@ jobs:
   # The shim against a real WSL distro on a GitHub hosted Windows runner:
   # Ubuntu 24.04 is installed with Vampire/setup-wsl and the CLI of this
   # checkout is put on the distro's PATH the way the installer does
-  # (~/.local/bin/benchbar). No job depends on a personal machine, so a pull
+  # (~/.local/bin/benchbar) for a normal default user, as a real user has. No job depends on a personal machine, so a pull
   # request from this repo runs in the same fenced VM as any other job. Read
   # only inside the distro: status, exit codes through the hop, quoting, mcp
   # over stdio and wslconfig without --apply.
@@ -538,19 +655,37 @@ jobs:
         shell: pwsh
         working-directory: windows/shim
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: windows/shim/go.mod
-          cache-dependency-path: windows/shim/go.sum
+          # no module cache: this job (and wsl) uploads what it builds, and
+          # the one module is a quick download that go.sum verifies
+          cache: false
 
-      # v7.2.0
       - name: Install the Ubuntu 24.04 WSL distro
-        uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4
+        uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
         with:
           distribution: Ubuntu-24.04
           use-cache: 'true'
+
+      # The hosted runner's distro runs every command as root, and benchbar
+      # refuses root (CORE-9), as it does for a real user whose distro has no
+      # user. Real users run it as a normal user: create one, make it the
+      # distro's default (/etc/wsl.conf, read when the distro starts again) and
+      # stop the distro so that the next wsl.exe call starts it as that user.
+      - name: Make a normal user the default user of the distro
+        run: |
+          wsl.exe -d $env:BENCHBAR_TEST_DISTRO -u root --exec /bin/sh -c 'set -eu; useradd -m -s /bin/bash benchuser; printf "[user]\ndefault=benchuser\n" >> /etc/wsl.conf; cat /etc/wsl.conf'
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          wsl.exe --terminate $env:BENCHBAR_TEST_DISTRO
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $who = (wsl.exe -d $env:BENCHBAR_TEST_DISTRO --exec /bin/sh -c 'id -un').Trim()
+          Write-Host "default user: $who"
+          if ($who -ne 'benchuser') { Write-Error "the distro still starts as '$who'"; exit 1 }
 
       - name: Put the CLI of this checkout in the distro
         run: |
@@ -584,35 +719,34 @@ jobs:
 
   app:
     name: App build, Swift tests and unsigned release bundle (macOS)
-    needs: changes
-    if: needs.changes.outputs.app == 'true'
+    # on a pull request after the Linux legs, as cli-macos does
+    needs: [changes, cli-linux, cli-bash32]
+    if: >-
+      ${{ !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.app == 'true'
+      && (github.event_name != 'pull_request' || ((needs.cli-linux.result == 'success' || needs.cli-linux.result == 'skipped') && (needs.cli-bash32.result == 'success' || needs.cli-bash32.result == 'skipped'))) }}
     runs-on: macos-26
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
 
+      # the same Xcode as release.yml and snapshots.yml (the macos-26 default
+      # today), so the app is tested with the compiler it ships with
       - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
-          xcode-version: latest-stable
-
-      - name: Cache Homebrew downloads
-        uses: actions/cache@v6
-        with:
-          path: ~/Library/Caches/Homebrew
-          key: brew-${{ runner.os }}-${{ runner.arch }}-xcodegen
-          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
+          xcode-version: '26.6'
 
       - name: Install XcodeGen
-        run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
+        run: scripts/ci-install-tool.sh xcodegen
 
       - name: Cache DerivedData and Swift packages
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: macos/build/DerivedData
-          key: deriveddata-${{ runner.os }}-${{ hashFiles('macos/project.yml', 'macos/BenchBar/**/*.swift', 'macos/BenchBarTests/**/*.swift') }}
+          key: deriveddata-${{ runner.os }}-${{ hashFiles('macos/project.yml', 'macos/sparkle.yml', 'macos/Package.resolved', 'macos/BenchBar/**/*.swift', 'macos/BenchBarTests/**/*.swift') }}
           restore-keys: deriveddata-${{ runner.os }}-
 
       # The Release build of the app, ad hoc signed, zipped, imaged and
@@ -620,12 +754,20 @@ jobs:
       - name: Build the unsigned release bundle (scripts/release-local.sh)
         run: scripts/release-local.sh --skip-tests
 
+      # ShareInteropTests join a Swift guest to the Node gateway (the Swift CPace against the gateway's):
+      # node is on the runner image, and the step fails here when it is not, so the tests never skip unseen
+      - name: Node for the share interop tests
+        run: node --version
+
       - name: Swift tests
+        env:
+          # reaches the test host as BENCHBAR_REQUIRE_INTEROP: a missing node fails the interop tests
+          TEST_RUNNER_BENCHBAR_REQUIRE_INTEROP: '1'
         run: |
           set -o pipefail
           xcodebuild -project macos/BenchBar.xcodeproj -scheme BenchBar -configuration Debug \
             -derivedDataPath macos/build/DerivedData -destination 'platform=macOS,arch=arm64' \
-            -skip-testing:BenchBarTests/SnapshotTests \
+            -skip-testing:BenchBarTests/SnapshotTests -disableAutomaticPackageResolution \
             CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= test 2>&1 | tee macos/build/test.log | \
             grep -E '^(✔|✘)|Test run with|Test Suite|error:|\*\* TEST|Executed' || true
           grep -q -E '\*\* TEST SUCCEEDED \*\*|Test run with [0-9]+ tests? passed' macos/build/test.log
@@ -661,7 +803,7 @@ jobs:
         run: scripts/ci-annotate.sh macos/build/build.log macos/build/test.log
 
       - name: Upload the bundle
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: BenchBar-unsigned-${{ github.sha }}
           path: |
@@ -673,7 +815,7 @@ jobs:
 
       - name: Upload the test log on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: swift-test-log
           # the build log too: xcbeautify --quiet can hide an error that has
@@ -691,7 +833,7 @@ jobs:
   ci-result:
     name: CI result
     if: always()
-    needs: [changes, cli-macos, cli-linux, cli-bash32, shellcheck, cli-linux-real, shim, shim-windows, shim-arm64, wsl, app]
+    needs: [changes, cli-macos, cli-linux, cli-bash32, shellcheck, workflows, cli-linux-real, cli-linux-upgrade, shim, shim-windows, shim-arm64, wsl, app]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

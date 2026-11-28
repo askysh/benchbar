@@ -32,17 +32,17 @@ internal sealed class DiscoveryView : UserControl
         _services = services;
         _model = new DiscoveryModel(services.Cli, wsl, recent);
         var root = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
-        root.Children.Add(Ui.Title("Find Benches"));
-        root.Children.Add(Ui.Text("BenchBar searches a folder inside Linux for existing Frappe benches.", 14, opacity: 0.75, margin: new Thickness(0, 6, 0, 12)));
+        root.Children.Add(Ui.Title(UiText.Get("DiscoveryTitle")));
+        root.Children.Add(Ui.Text(UiText.Get("DiscoveryIntro"), 14, opacity: 0.75, margin: new Thickness(0, 6, 0, 12)));
 
         var folderRow = new DockPanel { Margin = new Thickness(0, 0, 0, 8), LastChildFill = true };
-        _scanButton = Ui.Button("Scan", () => _model.ScanAsync().Forget(), "Scan this folder", minWidth: 64);
+        _scanButton = Ui.Button(UiText.Get("DiscoveryScan"), () => _model.ScanAsync().Forget(), UiText.Get("DiscoveryScanName"), minWidth: 64);
         _scanButton.Margin = new Thickness(8, 0, 0, 0);
-        _chooseButton = Ui.Button("Choose Folder...", ShowFolderMenu, "Choose Folder", minWidth: 0);
+        _chooseButton = Ui.Button(UiText.Get("DiscoveryChoose"), ShowFolderMenu, UiText.Get("DiscoveryChooseName"), minWidth: 0);
         _chooseButton.Margin = new Thickness(8, 0, 0, 0);
         DockPanel.SetDock(_scanButton, Dock.Right);
         DockPanel.SetDock(_chooseButton, Dock.Right);
-        _folderBox = Ui.Field("Folder to search in Linux", "", text => _model.Folder = text, width: double.NaN);
+        _folderBox = Ui.Field(UiText.Get("DiscoveryFolderName"), "", text => _model.Folder = text, width: double.NaN);
         _folderBox.HorizontalAlignment = HorizontalAlignment.Stretch;
         _folderBox.KeyDown += (_, e) =>
         {
@@ -54,7 +54,7 @@ internal sealed class DiscoveryView : UserControl
         root.Children.Add(folderRow);
         root.Children.Add(_body);
         Content = root;
-        Ui.Name(this, "Find Benches");
+        Ui.Name(this, UiText.Get("DiscoveryTitle"));
 
         _model.Changed += Render;
         Render();
@@ -114,13 +114,13 @@ internal sealed class DiscoveryView : UserControl
         }
     }
 
-    internal IReadOnlyList<string> ChooseFolderItems() => ["Home folder (~)", .. _model.RecentList];
+    internal IReadOnlyList<string> ChooseFolderItems() => [UiText.Get("DiscoveryHome"), .. _model.RecentList];
 
     private void ShowFolderMenu()
     {
         var menu = new ContextMenu { PlacementTarget = _chooseButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
-        Ui.Name(menu, "Folders");
-        var home = new MenuItem { Header = "Home folder (~)" };
+        Ui.Name(menu, UiText.Get("DiscoveryFolders"));
+        var home = new MenuItem { Header = UiText.Get("DiscoveryHome") };
         home.Click += (_, _) => Pick("~");
         menu.Items.Add(home);
         if (_model.RecentList.Count > 0) menu.Items.Add(new Separator());
@@ -176,14 +176,16 @@ internal sealed class DiscoveryView : UserControl
         if (_model.IsScanning)
         {
             var row = new DockPanel { Margin = new Thickness(0, 4, 0, 8) };
-            var cancel = Ui.Button("Cancel Scan", _model.CancelScan, "Cancel Scan", minWidth: 0);
+            var cancelScan = UiText.Get("DiscoveryCancelScan");
+            var cancel = Ui.Button(cancelScan, _model.CancelScan, cancelScan, minWidth: 0);
             cancel.Margin = new Thickness(12, 0, 0, 0);
             DockPanel.SetDock(cancel, Dock.Right);
             row.Children.Add(cancel);
-            row.Children.Add(Ui.Text("Searching folders...", 14, opacity: 0.8));
+            var searching = UiText.Get("DiscoverySearching");
+            row.Children.Add(Ui.Text(searching, 14, opacity: 0.8));
             _body.Children.Add(row);
-            lines.Add("Searching folders...");
-            buttons.Add("Cancel Scan");
+            lines.Add(searching);
+            buttons.Add(cancelScan);
         }
         if (_model.Error is { } error) Line(error, brush: Ui.CriticalBrush, margin: new Thickness(0, 4, 0, 8));
         if (_model.Message is { } message) Line(message, opacity: 0.8, margin: new Thickness(0, 4, 0, 8));
@@ -191,9 +193,9 @@ internal sealed class DiscoveryView : UserControl
 
         if (_model.HasScanned && _model.Results.Count == 0)
         {
-            AddEmpty("No benches found",
-                "Choose a folder containing a bench or its parent projects. Hidden folders, dependencies, tests and symlinks are skipped.",
-                "Choose Another Folder...", ShowFolderMenu, lines, buttons, !busy);
+            AddEmpty(UiText.Get("DiscoveryNoneTitle"),
+                UiText.Get("DiscoveryNoneLine"),
+                UiText.Get("DiscoveryChooseAnother"), ShowFolderMenu, lines, buttons, !busy);
         }
         else if (_model.Results.Count > 0)
         {
@@ -201,12 +203,12 @@ internal sealed class DiscoveryView : UserControl
         }
         else if (!_model.IsScanning)
         {
-            AddEmpty("Your benches, in one place",
-                "Scan a folder such as your home to find benches, then add the ones you want BenchBar to manage.",
-                "Scan Folder", () => _model.ScanAsync().Forget(), lines, buttons, !busy);
+            AddEmpty(UiText.Get("DiscoveryEmptyTitle"),
+                UiText.Get("DiscoveryEmptyLine"),
+                UiText.Get("DiscoveryScanFolder"), () => _model.ScanAsync().Forget(), lines, buttons, !busy);
         }
 
-        Line("Scanning only reads folders. Add Selected remembers your benches; Set Up Management previews the service changes before you apply them.",
+        Line(UiText.Get("DiscoveryNote"),
             12, 0.7, margin: new Thickness(0, 16, 0, 0));
         Lines = lines;
         ButtonLabels = buttons;
@@ -247,12 +249,12 @@ internal sealed class DiscoveryView : UserControl
     {
         var head = new DockPanel { Margin = new Thickness(0, 8, 0, 6) };
         var all = _model.AllSelected;
-        var toggleLabel = all ? "Deselect All" : "Select All";
+        var toggleLabel = (all ? UiText.Get("DiscoveryDeselectAll") : UiText.Get("DiscoverySelectAll"));
         var toggle = Ui.Button(toggleLabel, () => { if (all) _model.DeselectAll(); else _model.SelectAll(); }, toggleLabel, minWidth: 0);
         toggle.Margin = new Thickness(0);
         toggle.IsEnabled = !busy && (all ? _model.Selected.Count > 0 : _model.SelectablePaths.Count > 0);
         DockPanel.SetDock(toggle, Dock.Right);
-        var count = _model.Results.Count == 1 ? "1 bench found" : $"{_model.Results.Count} benches found";
+        var count = _model.Results.Count == 1 ? UiText.Get("DiscoveryFoundOne") : UiText.Format("DiscoveryFoundMany", _model.Results.Count);
         head.Children.Add(toggle);
         head.Children.Add(Ui.Text(count, 16, FontWeights.SemiBold));
         _body.Children.Add(head);
@@ -262,13 +264,13 @@ internal sealed class DiscoveryView : UserControl
         foreach (var bench in _model.Results) _body.Children.Add(ResultRow(bench, lines, buttons, busy));
 
         var bar = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
-        var setUp = Ui.Button("Set Up Selected...", () => SetUpSelectedAsync().Forget(), "Set Up Selected", primary: true, minWidth: 0);
+        var setUp = Ui.Button(UiText.Get("DiscoverySetUpSelected"), () => SetUpSelectedAsync().Forget(), UiText.Get("DiscoverySetUpSelectedName"), primary: true, minWidth: 0);
         setUp.Margin = new Thickness(0);
         setUp.IsEnabled = _model.CanSetUp && !_working;
-        var add = Ui.Button("Add Selected", () => AddSelectedAsync().Forget(), "Add Selected", minWidth: 0);
+        var add = Ui.Button(UiText.Get("DiscoveryAddSelected"), () => AddSelectedAsync().Forget(), UiText.Get("DiscoveryAddSelected"), minWidth: 0);
         add.Margin = new Thickness(0, 0, 8, 0);
         add.IsEnabled = _model.CanAdd && !_working;
-        var selected = $"{_model.Selected.Count} selected";
+        var selected = UiText.Format("DiscoverySelected", _model.Selected.Count);
         DockPanel.SetDock(setUp, Dock.Right);
         DockPanel.SetDock(add, Dock.Right);
         bar.Children.Add(setUp);
@@ -276,12 +278,12 @@ internal sealed class DiscoveryView : UserControl
         bar.Children.Add(Ui.Text(selected, 14, opacity: 0.7));
         _body.Children.Add(bar);
         lines.Add(selected);
-        buttons.Add("Add Selected");
-        buttons.Add("Set Up Selected...");
+        buttons.Add(UiText.Get("DiscoveryAddSelected"));
+        buttons.Add(UiText.Get("DiscoverySetUpSelected"));
     }
 
     private static string SiteLine(FoundBench bench) =>
-        bench.Ports.Web > 0 ? (bench.Site.Length > 0 ? $"{bench.Site} · Port {bench.Ports.Web}" : $"Port {bench.Ports.Web}") : bench.Site;
+        bench.Ports.Web > 0 ? (bench.Site.Length > 0 ? UiText.Format("DiscoverySitePort", bench.Site, bench.Ports.Web) : UiText.Format("DiscoveryPort", bench.Ports.Web)) : bench.Site;
 
     private UIElement ResultRow(FoundBench bench, List<string> lines, List<string> buttons, bool busy)
     {
@@ -295,13 +297,13 @@ internal sealed class DiscoveryView : UserControl
         {
             var mark = Ui.Text("✓", 16, margin: new Thickness(2, 0, 12, 0));
             mark.Foreground = Ui.StepBrush(InstallStepStatus.Done);
-            Ui.Name(mark, $"{bench.Name} is managed by BenchBar");
+            Ui.Name(mark, UiText.Format("DiscoveryManagedName", bench.Name));
             grid.Children.Add(mark);
         }
         else
         {
             var box = new CheckBox { IsChecked = _model.Selected.Contains(bench.Path), IsEnabled = !busy, Margin = new Thickness(0, 2, 12, 0), VerticalAlignment = VerticalAlignment.Top };
-            Ui.Name(box, $"Select {bench.Name} at {bench.Path}");
+            Ui.Name(box, UiText.Format("DiscoverySelectName", bench.Name, bench.Path));
             var path = bench.Path;
             box.Click += (_, _) => _model.SetSelected(path, box.IsChecked == true);
             grid.Children.Add(box);
@@ -317,7 +319,7 @@ internal sealed class DiscoveryView : UserControl
         lines.Add(SiteLine(bench));
         if (_model.HasPortConflict(bench))
         {
-            const string conflict = "Port conflict · Review during setup";
+            var conflict = UiText.Get("DiscoveryConflict");
             var block = Ui.Caption(conflict);
             block.Foreground = Ui.StepBrush(InstallStepStatus.Failed);
             text.Children.Add(block);
@@ -325,9 +327,9 @@ internal sealed class DiscoveryView : UserControl
         }
         var label = state switch
         {
-            FoundState.Managed => "Managed by BenchBar",
-            FoundState.AddedNeedsSetup => "Added · Management needs setup",
-            _ => "Not adopted",
+            FoundState.Managed => UiText.Get("DiscoveryManaged"),
+            FoundState.AddedNeedsSetup => UiText.Get("DiscoveryAddedNeedsSetup"),
+            _ => UiText.Get("DiscoveryNotAdopted"),
         };
         text.Children.Add(Ui.Caption(label));
         lines.Add(label);
@@ -335,13 +337,13 @@ internal sealed class DiscoveryView : UserControl
 
         if (state != FoundState.Managed)
         {
-            var setup = Ui.Button("Set Up Management...", () => SetUpManagementAsync(bench).Forget(), $"Set Up Management for {bench.Name}", minWidth: 0);
+            var setup = Ui.Button(UiText.Get("DiscoverySetUpManagement"), () => SetUpManagementAsync(bench).Forget(), UiText.Format("DiscoverySetUpManagementName", bench.Name), minWidth: 0);
             setup.Margin = new Thickness(12, 0, 0, 0);
             setup.VerticalAlignment = VerticalAlignment.Top;
             setup.IsEnabled = !busy;
             Grid.SetColumn(setup, 2);
             grid.Children.Add(setup);
-            buttons.Add("Set Up Management...");
+            buttons.Add(UiText.Get("DiscoverySetUpManagement"));
         }
         return Ui.CardOf(grid, new Thickness(0, 0, 0, 6));
     }

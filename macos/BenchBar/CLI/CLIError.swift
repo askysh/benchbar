@@ -27,22 +27,22 @@ extension CLIError: LocalizedError {
     nonisolated var errorDescription: String? {
         switch self {
         case .notFound:
-            return "The benchbar command line tool was not found."
+            return String(localized: "The benchbar command line tool was not found.")
         case .notExecutable(let path):
-            return "\(path) is not an executable file."
+            return String(localized: "\(path) is not an executable file.")
         case .launchFailed(let detail):
-            return "Could not run benchbar: \(detail)"
+            return String(localized: "Could not run benchbar: \(detail)")
         case .timedOut(let command, let seconds):
-            return "benchbar \(command) did not finish within \(seconds) seconds."
+            return String(localized: "benchbar \(command) did not finish within \(String(seconds)) seconds.")
         case .cancelled(let command):
-            return "benchbar \(command) was cancelled."
+            return String(localized: "benchbar \(command) was cancelled.")
         case .failed(let command, let code, let message):
             let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
-            return text.isEmpty ? "benchbar \(command) failed (exit code \(code))." : text
+            return text.isEmpty ? String(localized: "benchbar \(command) failed (exit code \(code)).") : text
         case .invalidJSON(let detail, _):
-            return "benchbar returned output BenchBar could not read (\(detail))."
+            return String(localized: "benchbar returned output BenchBar could not read (\(detail)).")
         case .unsupportedSchema(let found, let supported):
-            return "benchbar speaks JSON schema \(found), this BenchBar understands \(supported). Update BenchBar."
+            return String(localized: "benchbar speaks JSON schema \(found), this BenchBar understands \(supported). Update BenchBar.")
         }
     }
 
@@ -56,19 +56,19 @@ extension CLIError: LocalizedError {
     nonisolated var recoverySuggestion: String? {
         switch self {
         case .notFound(let searched):
-            return "Looked in: \(searched.joined(separator: ", ")). Install it with \(Homebrew.installCLI) (or the one line installer with --no-app), or choose the file in Settings."
+            return String(localized: "Looked in: \(searched.joined(separator: ", ")). Install it with \(Homebrew.installCLI) (or the one line installer with --no-app), or choose the file in Settings.")
         case .notExecutable:
-            return "Choose the benchbar file again in Settings."
+            return String(localized: "Choose the benchbar file again in Settings.")
         case .timedOut:
-            return "Check the bench with benchbar doctor in Terminal."
+            return String(localized: "Check the bench with benchbar doctor in Terminal.")
         case .cancelled:
             return nil
         case .failed:
-            return "Open the logs, or run benchbar doctor in Terminal."
+            return String(localized: "Open the logs, or run benchbar doctor in Terminal.")
         case .invalidJSON(_, let preview):
-            return "Output started with: \(preview)"
+            return String(localized: "Output started with: \(preview)")
         case .unsupportedSchema:
-            return "Update BenchBar, or choose a different benchbar in Settings."
+            return String(localized: "Update BenchBar, or choose a different benchbar in Settings.")
         case .launchFailed:
             return nil
         }

@@ -235,6 +235,54 @@ assert_eq 0 "$CODE" "$OUT"
 assert_calls_not_contain '^pfctl -X'
 clean
 
+# ---------------------------------------------------------------- a root step that fails after pfctl -E keeps the token (#159 SHARE-12)
+# launchd refuses the daemon after pf was enabled: the install fails, and the token it took is on record,
+# so that remove can give the reference back (before, pf stayed enabled until the next reboot)
+clean; : >"$MOCK_STATE/agents/com.benchbar.pf.disabled"
+lg_gui install --yes
+assert_eq 1 "$CODE" "$OUT"; assert_contains "$OUT" "The root step failed"
+assert_eq "was_enabled=0 token=4242" "$(tr '\n' ' ' <"$FL_STATE_DIR/lan-guard/pf.state" | sed 's/ $//')"
+# the same on a terminal, where sudo runs the step
+clean
+lg_tty install --yes
+assert_eq 1 "$CODE" "$OUT"; assert_contains "$OUT" "The root step failed"
+assert_eq "was_enabled=0 token=4242" "$(tr '\n' ' ' <"$FL_STATE_DIR/lan-guard/pf.state" | sed 's/ $//')"
+assert_not_contains "$OUT" "benchbar-pf-" "(the markers are not for the person)"
+# the half installed guard is removed, and the token goes back
+rm -f "$MOCK_STATE/agents/com.benchbar.pf.disabled"
+reset_calls
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_calls_contain '^pfctl -X 4242$'
+assert_no_file "$FL_STATE_DIR/lan-guard/pf.state"
+# the same failed install, and then the two files are gone (deleted by hand, or by a cleanup tool): the guard
+# is "not installed", but the pf reference is still held. remove gives it back all the same (review note 2)
+clean; : >"$MOCK_STATE/agents/com.benchbar.pf.disabled"
+lg_gui install --yes
+assert_eq 1 "$CODE" "$OUT"
+rm -f "$FL_LANGUARD_ANCHOR" "$FL_LANGUARD_DAEMON" "$MOCK_STATE/agents/com.benchbar.pf.disabled"
+assert_file "$FL_STATE_DIR/lan-guard/pf.state"
+reset_calls; rm -f "$MOCK_STATE/osa_reasons"
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_not_contains "$OUT" "unchanged: the guard is not installed"
+assert_calls_contain '^pfctl -X 4242$'
+assert_eq 1 "$(wc -l <"$MOCK_STATE/osa_reasons" | tr -d ' ')" "(one dialog)"
+assert_no_file "$FL_STATE_DIR/lan-guard/pf.state"
+# pf was on before the guard: the record holds nothing to give back, so it goes without a password
+clean; mkdir -p "$FL_STATE_DIR/lan-guard"; printf 'was_enabled=1\ntoken=4242\n' >"$FL_STATE_DIR/lan-guard/pf.state"
+reset_calls
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"; assert_contains "$OUT" "unchanged: the guard is not installed"
+assert_calls_not_contain '^(osascript|sudo|pfctl -X)'
+assert_no_file "$FL_STATE_DIR/lan-guard/pf.state"
+# a step that fails before pf is touched records nothing
+clean; touch "$MOCK_STATE/osa_fail"
+lg_gui install --yes
+rm -f "$MOCK_STATE/osa_fail"
+assert_eq 1 "$CODE" "$OUT"; assert_no_file "$FL_STATE_DIR/lan-guard/pf.state"
+clean
+
 # ---------------------------------------------------------------- allow-node: the realpath, unchanged when allowed or off
 clean; rm -f "$MOCK_STATE/osa_reasons"
 lg_gui allow-node --yes
@@ -256,6 +304,86 @@ chmod 777 "$NODE_REAL_DIR"; reset_calls
 lg_gui allow-node --yes
 chmod 755 "$NODE_REAL_DIR"
 assert_eq 1 "$CODE" "$OUT"; assert_calls_not_contain '^socketfilterfw --add'
+
+# ---------------------------------------------------------------- the firewall entry is on record before root runs (review note 1)
+# a CLI that dies between the root step and its own bookkeeping must not leave an entry nobody can undo:
+# the path is on record first. Here the root step fails; the record names the path, and remove takes it out.
+FW_REC="$FL_STATE_DIR/lan-guard/firewall.allowed"
+cp "$FW_REC" "$TMP_DIR/fw.rec.kept"; rm -f "$FW_REC"
+touch "$MOCK_STATE/osa_fail"
+lg_gui allow-node --yes
+rm -f "$MOCK_STATE/osa_fail"
+assert_eq 1 "$CODE" "$OUT"
+assert_eq "${NODE_REAL_DIR}/node" "$(cat "$FW_REC")" "(recorded although the root step failed)"
+reset_calls
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_calls_contain "^socketfilterfw --remove ${NODE_REAL_DIR}/node\$"
+assert_no_file "$FW_REC"
+mkdir -p "${FW_REC%/*}"; cp "$TMP_DIR/fw.rec.kept" "$FW_REC"
+
+# ---------------------------------------------------------------- the firewall entry is recorded and taken back (#159 SHARE-4)
+# the allow above is on record; an entry the person made themselves (already permitted) never is
+FW_REC="$FL_STATE_DIR/lan-guard/firewall.allowed"
+assert_eq "${NODE_REAL_DIR}/node" "$(cat "$FW_REC")"
+# the question says what the entry opens and how it goes away
+reset_calls
+lg_gui allow-node --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_contains "$OUT" "every script this node runs can then accept incoming connections"
+assert_contains "$OUT" "benchbar lan-guard remove takes"
+# a Homebrew upgrade moves the realpath: the new one is allowed, the old entry goes in the same root step
+NODE_NEW_DIR="$TMP_DIR/nodes/cellar/23/bin"; mkdir -p "$NODE_NEW_DIR"
+cp "$ROOT/tests/mocks/node" "$NODE_NEW_DIR/node"; chmod 755 "$NODE_NEW_DIR/node" "$TMP_DIR/nodes/cellar/23" "$NODE_NEW_DIR"
+ln -sf "$NODE_NEW_DIR/node" "$NODE_LINK_DIR/node"
+reset_calls; rm -f "$MOCK_STATE/osa_reasons"
+lg_gui allow-node --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_calls_contain "^socketfilterfw --add ${NODE_NEW_DIR}/node\$"
+assert_calls_contain "^socketfilterfw --remove ${NODE_REAL_DIR}/node\$"
+assert_eq 1 "$(wc -l <"$MOCK_STATE/osa_reasons" | tr -d ' ')" "(one dialog)"
+assert_eq "${NODE_NEW_DIR}/node" "$(cat "$FW_REC")"
+# remove without the guard installed: the entry alone goes, with one dialog, and the record with it
+reset_calls; rm -f "$MOCK_STATE/osa_reasons"
+lg_gui remove
+assert_eq 1 "$CODE" "(no --yes and no terminal: nothing removed) $OUT"
+assert_calls_not_contain '^socketfilterfw --remove'; assert_file "$FW_REC"
+lg_gui remove --yes --json
+assert_eq 0 "$CODE" "$OUT"
+assert_calls_contain "^socketfilterfw --remove ${NODE_NEW_DIR}/node\$"
+assert_calls_not_contain "^socketfilterfw --remove ${NODE_REAL_DIR}/node\$"
+assert_eq 1 "$(wc -l <"$MOCK_STATE/osa_reasons" | tr -d ' ')" "(one dialog)"
+assert_no_file "$FW_REC"
+assert_contains "$OUT" '"kind":"firewall"'
+assert_not_contains "$OUT" "share start refuses to run"
+# remove with the guard installed: the guard and the entry in one root step
+lg_gui install --yes
+assert_eq 0 "$CODE" "$OUT"
+lg_gui allow-node --yes
+assert_eq 0 "$CODE" "$OUT"; assert_file "$FW_REC"
+reset_calls; rm -f "$MOCK_STATE/osa_reasons"
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_no_file "$FL_LANGUARD_ANCHOR"; assert_no_file "$FW_REC"
+assert_calls_contain '^pfctl -a com.apple/250.benchbar -F all$'
+assert_calls_contain "^socketfilterfw --remove ${NODE_NEW_DIR}/node\$"
+assert_eq 1 "$(wc -l <"$MOCK_STATE/osa_reasons" | tr -d ' ')" "(one dialog)"
+assert_contains "$(cat "$MOCK_STATE/osa_reasons")" "firewall entry for node"
+# a record line that is not an absolute path is never named to root
+mkdir -p "${FW_REC%/*}"; printf 'relative/node\n\n%s\n' "${NODE_NEW_DIR}/node" >"$FW_REC"
+reset_calls
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_calls_contain "^socketfilterfw --remove ${NODE_NEW_DIR}/node\$"
+assert_calls_not_contain '^socketfilterfw --remove relative'
+# no record (an allow of 0.8.3 or the person's own): nothing is removed, one line names the manual command
+rm -f "$MOCK_STATE/fw_app"
+reset_calls
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"; assert_contains "$OUT" "unchanged"
+assert_calls_not_contain '^(osascript|sudo|socketfilterfw --remove)'
+assert_contains "$OUT" "socketfilterfw --remove ${NODE_NEW_DIR}/node"
+ln -sf "$NODE_REAL_DIR/node" "$NODE_LINK_DIR/node"
 rm -f "$MOCK_STATE/fw_state" "$MOCK_STATE/fw_app"
 
 # ---------------------------------------------------------------- no LAN address: active is null

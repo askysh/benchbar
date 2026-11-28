@@ -10,6 +10,8 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "${0%/*}/_mocklib.sh"
 mock_log "$@"
+# the GIT_CONFIG_* variables benchbar sets (protocol.ext.allow=never), for the tests that look
+if [[ -n "${GIT_CONFIG_COUNT:-}" && -n "${MOCK_STATE:-}" ]]; then env | grep '^GIT_CONFIG_' >>"${MOCK_STATE}/git-config-env" || true; fi
 dir=""
 # -c KEY=VALUE options go back in front of the command for the real git
 pre=()

@@ -157,7 +157,7 @@ rm -f "$NODE_DIR"/v22.*/installation/bin/yarn
 scan
 assert_eq "warn" "$(field toolchain_yarn level)"
 assert_eq "yarn_install" "$(field toolchain_yarn action)"
-assert_contains "$(field toolchain_yarn fix_command)" "/installation/bin/npm install -g yarn"
+assert_contains "$(field toolchain_yarn fix_command)" "/installation/bin/npm install -g yarn@1.22.22"
 
 # ---- the site does not resolve (the getent mock knows *.localhost and the listed names)
 scan --site mysite.test
@@ -237,7 +237,7 @@ libcall() { # libcall CODE: runs CODE with the libraries loaded and the Linux la
     eval "$1"' _ "$1"
 }
 # shellcheck disable=SC2016
-assert_eq "mariadb_bind mariadb_utf8 wkhtmltopdf_install node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache port_block write_procfile write_runner write_plist write_helpers write_cli_link kept_backups rotate_logs" "$(libcall 'printf %s "$FL_ACTION_ORDER"')"
+assert_eq "mariadb_bind mariadb_utf8 wkhtmltopdf_install node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache dead_agents port_block write_procfile write_runner write_plist write_helpers write_cli_link kept_backups rotate_logs" "$(libcall 'printf %s "$FL_ACTION_ORDER"')"
 # shellcheck disable=SC2016
 assert_eq "mariadb_bind mariadb_utf8 wkhtmltopdf_install" "$(libcall 'for a in $FL_ACTION_ORDER; do fl_action_needs_sudo "$a" && printf "%s " "$a"; done' | sed 's/ $//')"
 assert_eq "mariadb@10.11 10.11.8" "$(libcall 'fl_mariadb_running_formula')"

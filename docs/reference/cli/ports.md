@@ -29,7 +29,7 @@ a plan with a blocked bench cannot be applied.
 
 | Flag | What it does |
 |---|---|
-| `--json` | The plan with its approval `token` ([schema](../../json-schema.md#port-management)) |
+| `--json` | The plan with its approval `token` ([schema](../json/ports-and-windows.md#port-management)) |
 
 Exit codes: 0; 1 when a path is not a bench or no path is given.
 
@@ -105,7 +105,7 @@ ports, and asks when only a stopped bench shares them.
 | Flag | What it does |
 |---|---|
 | `--bench-dir DIR` | The bench to check |
-| `--json` | Accepted; the output is always JSON ([schema](../../json-schema.md#port-management)) |
+| `--json` | Accepted; the output is always JSON ([schema](../json/ports-and-windows.md#port-management)) |
 
 Exit codes: 0; 1 when no bench is found.
 
@@ -148,17 +148,20 @@ These tables come from the code (`benchbar commands --json`); the sections above
 |---|---|---|---|---|---|
 | `benchbar ports plan\|setup\|apply\|check\|mode ...` | no | no | no | no | none |
 | `benchbar ports plan [--json] -- PATH ...` | no | no | no | no | document |
-| `benchbar ports setup [--dry-run] -- PATH ...` | yes | yes | no | yes | none |
+| `benchbar ports setup [--dry-run] -- PATH ...` | yes | yes | no | yes | stream |
 | `benchbar ports apply TOKEN --yes [--json] -- PATH ...` | no | yes | no | yes | stream |
 | `benchbar ports check [--json]` | no | no | no | no | document |
-| `benchbar ports mode automatic\|fixed` | no | no | no | yes | none |
+| `benchbar ports mode automatic\|fixed` | no | no | no | yes | stream |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
+| `ports plan` | `--json` |  | The plan and its token as one JSON document. |
+| `ports setup` | `--dry-run` |  | Show the preview and change nothing. |
 | `ports apply` | `--yes` |  | Required: the plan was reviewed. |
+| `ports check` | `--json` |  | The conflicts as one JSON document. |
 
 | Command | Environment variable | What it does |
 |---|---|---|

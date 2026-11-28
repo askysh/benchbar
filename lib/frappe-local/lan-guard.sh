@@ -2,6 +2,9 @@
 #
 # lan-guard.sh: benchbar lan-guard install|status|remove|allow-node
 #
+# This file is the macOS guard and the dispatch; Linux has an nftables table and a systemd unit
+# (lan-guard-linux.sh). What follows describes macOS.
+#
 # The LAN guard is a pf anchor (com.apple/250.benchbar, loaded by Apple's own
 # pf.conf through its com.apple/* anchor) that refuses TCP from anything but
 # loopback to every bench port: web 8000:8099, socket.io 9000:9099, Redis
@@ -13,6 +16,11 @@
 # pf and plist text are constants of this CLI (share-preflight.sh), put into the script as single-quoted
 # literals. The script, run as root (sudo /bin/bash -c, or fl_root_run's dialog with BENCHBAR_SUDO=gui),
 # writes them itself. The tests' sudo and osascript mocks map those absolute paths to mocks.
+#
+# allow-node adds the gateway's node to the macOS application firewall. That entry is per program, so it
+# lets every script that node runs accept connections: the paths this CLI added are kept in the state
+# folder (lan-guard/firewall.allowed), a newer node's allow takes the older entry out, and remove takes
+# them all out again with the pf anchor, in the same root step.
 #
 # install, remove and allow-node are a person's decision, like share setup
 # (U3): refused under BENCHBAR_NONINTERACTIVE (so --for-agent and mcp), and
@@ -26,12 +34,16 @@
 FL_LANGUARD_LABEL=com.benchbar.pf
 FL_LANGUARD_PF_ANCHOR_NAME=com.apple/250.benchbar
 FL_LANGUARD_PORTS="8000:8099 9000:9099 11000:11099 13000:13099 3306"
+FL_LANGUARD_FW_TOOL=/usr/libexec/ApplicationFirewall/socketfilterfw
 
 FL_LANGUARD_PF_TEXT="# BenchBar: Frappe bench ports answer this Mac only (benchbar lan-guard install).
 # Web 8000-8099 (Werkzeug debugger included), socket.io 9000-9099, Redis 11000-11099 and 13000-13099, MariaDB 3306.
 # Keyed on ports, not apps, so a brew upgrade cannot reopen it. \"from ! 127.0.0.1\" also blocks this Mac's own
 # LAN address, which is what lets a probe of that address prove the rule works.
 ${FL_SHARE_PF_TEMPLATE}"
+
+# the name the guard goes by: the pf anchor on macOS, the nftables table on Linux (status's "anchor")
+fl_lg_anchor_name() { if fl_is_linux; then printf '%s' "$FL_LGL_TABLE"; else printf '%s' "$FL_LANGUARD_PF_ANCHOR_NAME"; fi; }
 
 # where the checks read the two root files (the tests' seams); root always writes FL_SHARE_PF_*_FILE
 fl_lg_anchor() { printf '%s' "${FL_LANGUARD_ANCHOR:-$FL_SHARE_PF_ANCHOR_FILE}"; }
@@ -40,10 +52,11 @@ fl_lg_daemon() { printf '%s' "${FL_LANGUARD_DAEMON:-$FL_SHARE_PF_DAEMON_FILE}"; 
 # fl_lg_state_v VAR: installed, missing or outdated, by the rule share preflight and share status use
 # (the anchor's non-comment lines, and a daemon that loads it)
 fl_lg_state_v() {
-  local __problem
+  local __problem __a __d
   fl_sp_pf_files_problem_v __problem
+  if fl_is_linux; then __a="$(fl_lgl_rules_path)"; __d="$(fl_lgl_unit_path)"; else __a="$(fl_lg_anchor)"; __d="$(fl_lg_daemon)"; fi
   if [[ -z "$__problem" ]]; then printf -v "$1" installed
-  elif [[ ! -r "$(fl_lg_anchor)" || ! -r "$(fl_lg_daemon)" ]]; then printf -v "$1" missing
+  elif [[ ! -r "$__a" || ! -r "$__d" ]]; then printf -v "$1" missing
   else printf -v "$1" outdated; fi
 }
 
@@ -77,7 +90,7 @@ fl_lg_say_active() {
 fl_lg_require_person() {
   [[ "${FL_DRY_RUN:-0}" != 1 ]] || return 0
   fl_noninteractive && fl_die "benchbar lan-guard $1 runs sudo, a person's decision, so nothing run without a terminal can do it." "Run it in a terminal: benchbar lan-guard $1"
-  [[ -t 0 ]] || fl_person_env_ok BENCHBAR_SUDO gui || fl_die "benchbar lan-guard $1 needs a person at a terminal (it asks for your password), and this run has none.${FL_PERSON_WHY:+ $FL_PERSON_WHY}" "Run it in a terminal: benchbar lan-guard $1"
+  [[ -t 0 ]] || { fl_sudo_gui && fl_person_env_ok BENCHBAR_SUDO gui; } || { fl_is_linux && fl_sudo_env_has_password; } || fl_die "benchbar lan-guard $1 needs a person at a terminal (it asks for your password), and this run has none.${FL_PERSON_WHY:+ $FL_PERSON_WHY}" "Run it in a terminal: benchbar lan-guard $1"
 }
 
 # fl_lg_as_root REASON MANUAL SCRIPT: SCRIPT as root, once: one dialog with BENCHBAR_SUDO=gui, else sudo on
@@ -88,19 +101,25 @@ fl_lg_as_root() {
   local reason="$1" manual="$2" script="$3" code=0 last
   FL_LG_ROOT_OUT=""
   if fl_sudo_gui; then
-    fl_root_run "$reason" "$script" || code=$?
+    # a dialog's failure shows only what the step wrote to stderr: the load half repeats its pf lines there
+    fl_root_run "$reason" "pf_marks_on_stderr=1"$'\n'"$script" || code=$?
     case "$code" in
       0) FL_LG_ROOT_OUT="$FL_ROOT_OUTPUT"; return 0 ;;
       2) fl_die "The password dialog was cancelled; nothing was changed." "Run: ${manual}" ;;
     esac
+    # the step may have enabled pf before it failed: that reference is kept, so that remove can give it back
+    fl_lg_pf_record "$FL_ROOT_OUTPUT"
     last="$(printf '%s\n' "$FL_ROOT_OUTPUT" | grep -v '^[[:space:]]*$' | tail -n 1 || true)"
     fl_die "The root step failed${last:+: ${last}}." "Run: ${manual}"
   fi
   fl_sudo_begin "$reason" || fl_die "sudo was not available, so nothing was changed." "Run in a terminal: ${manual}"
   FL_LG_ROOT_OUT="$(sudo /bin/bash -c "$script" benchbar-root)" || code=$?
-  fl_sudo_drop
+  if fl_is_linux; then fl_sudo_phase_done; else fl_sudo_drop; fi
   printf '%s\n' "$FL_LG_ROOT_OUT" | grep -v '^benchbar-pf-' || true
-  [[ "$code" == 0 ]] || fl_die "The root step failed (exit ${code}); see the log." "Run: ${manual}"
+  if [[ "$code" != 0 ]]; then
+    fl_lg_pf_record "$FL_LG_ROOT_OUT"
+    fl_die "The root step failed (exit ${code}); see the log." "Run: ${manual}"
+  fi
 }
 
 # fl_lg_tools_sh: the tool and file paths every root script names, as shell assignments, one per line
@@ -137,8 +156,20 @@ ROOT
 # pfctl -E takes a reference on pf and prints its token; lan-guard remove gives that reference back with
 # pfctl -X. So the root side says, on stdout, whether pf was enabled before and which token it got
 # ("benchbar-pf-was-enabled 0|1", "benchbar-pf-token N"); fl_lg_pf_record keeps them in the state folder.
+# A step that fails after pfctl -E (launchd refuses the daemon) has taken the reference all the same, so
+# the caller records what a failed step printed too. Behind the password dialog a failure shows stderr
+# only, so there the two lines are said again on stderr as the step ends in failure.
 fl_lg_load_sh() {
   cat <<'ROOT'
+pf_token=""
+pf_marks() {
+  rc=$?
+  if [ "$rc" != 0 ] && [ "${pf_marks_on_stderr:-0}" = 1 ] && [ -n "${pf_was:-}" ]; then
+    printf 'benchbar-pf-was-enabled %s\n' "$pf_was" >&2
+    if [ -n "$pf_token" ]; then printf 'benchbar-pf-token %s\n' "$pf_token" >&2; fi
+  fi
+}
+trap pf_marks EXIT
 pf_was=0
 case "$("$pfctl" -s info 2>/dev/null || true)" in *"Status: Enabled"*) pf_was=1 ;; esac
 pf_out="$("$pfctl" -E -a "$pf_anchor" -f "$anchor" 2>&1)" || { printf '%s\n' "$pf_out" >&2; exit 1; }
@@ -177,7 +208,9 @@ fl_lg_pf_record() {
   while IFS= read -r line; do
     case "$line" in
       "benchbar-pf-was-enabled "[01]) [[ -n "$was" ]] || was="${line##* }" ;;
-      "benchbar-pf-token "[0-9]*) tokens="${tokens}${tokens:+$'\n'}${line##* }" ;;
+      "benchbar-pf-token "[0-9]*)
+        # a failed step may say its token twice (stdout and stderr)
+        case $'\n'"${tokens}"$'\n' in *$'\n'"${line##* }"$'\n'*) ;; *) tokens="${tokens}${tokens:+$'\n'}${line##* }" ;; esac ;;
     esac
   done <<<"$1"
   [[ -n "$was" ]] || return 0
@@ -214,13 +247,76 @@ for t in $pf_tokens; do "$pfctl" -X "$t" || true; done
 ROOT
 }
 
-# fl_lg_allow_node_script REALPATH
+# fl_lg_fw_state: the node paths allow-node added to the macOS firewall, one per line, in the state folder
+fl_lg_fw_state() { printf '%s/lan-guard/firewall.allowed' "$FL_STATE_DIR"; }
+
+# fl_lg_fw_allowed_v VAR: those paths, one per line. Only an absolute path without a control character is
+# ever named to root.
+fl_lg_fw_allowed_v() {
+  local __f __line __r=""
+  __f="$(fl_lg_fw_state)"
+  printf -v "$1" '%s' ""
+  [[ -f "$__f" ]] || return 0
+  while IFS= read -r __line || [[ -n "$__line" ]]; do
+    [[ "$__line" == /* && "$__line" != *[[:cntrl:]]* ]] || continue
+    __r="${__r}${__r:+$'\n'}${__line}"
+  done <"$__f"
+  printf -v "$1" '%s' "$__r"
+}
+
+# fl_lg_fw_record PATHS: keeps PATHS (one per line) as the record, or drops the record when there are none
+fl_lg_fw_record() {
+  local f dir
+  f="$(fl_lg_fw_state)"; dir="${f%/*}"
+  if [[ -z "$1" ]]; then
+    rm -f "$f"
+    return 0
+  fi
+  (umask 077; mkdir -p "$dir")
+  chmod 700 "$dir"
+  printf '%s\n' "$1" >"${f}.new"
+  mv -f "${f}.new" "$f"
+}
+
+# fl_lg_fw_remove_sh PATHS: the root lines that take PATHS (one per line) out of the firewall's list.
+# A path that is no longer listed is not an error.
+fl_lg_fw_remove_sh() {
+  local path
+  [[ -n "$1" ]] || return 0
+  printf 'fw=%s\n' "'${FL_LANGUARD_FW_TOOL}'"
+  while IFS= read -r path; do
+    # shellcheck disable=SC2016  # $fw is the root script's variable
+    [[ -z "$path" ]] || printf '"$fw" --remove %s || true\n' "$(fl_sq "$path")"
+  done <<<"$1"
+}
+
+# fl_lg_allow_node_script REALPATH [OLD_PATHS]: REALPATH is allowed, and the entries of an older node this
+# CLI added (a Homebrew upgrade moved the realpath) go, so that they do not pile up
 fl_lg_allow_node_script() {
-  printf 'set -eu\nfw=%s\nnode=%s\n' "'/usr/libexec/ApplicationFirewall/socketfilterfw'" "$(fl_sq "$1")"
+  printf 'set -eu\nfw=%s\nnode=%s\n' "'${FL_LANGUARD_FW_TOOL}'" "$(fl_sq "$1")"
   cat <<'ROOT'
 "$fw" --add "$node"
 "$fw" --unblockapp "$node"
 ROOT
+  fl_lg_fw_remove_sh "${2:-}"
+}
+
+# fl_lg_fw_legacy_hint: an allow-node of a BenchBar that kept no record (0.8.3 and older) cannot be told
+# from the person's own choice in System Settings, so it is never removed: when the firewall is on and
+# allows the gateway's node, one line names the command that takes the entry out.
+fl_lg_fw_legacy_hint() {
+  local fw problem state app real
+  fw="${FL_SOCKETFILTERFW:-$FL_LANGUARD_FW_TOOL}"
+  [[ -x "$fw" ]] || return 0
+  state="$("$fw" --getglobalstate 2>&1 | tr '[:upper:]' '[:lower:]' || true)"
+  case "$state" in *"state = 1"*) ;; *) return 0 ;; esac
+  fl_sp_node_path_problem_v problem
+  real="${SP_NODE_REAL:-}"
+  [[ -z "$problem" && -n "$real" ]] || return 0
+  app="$("$fw" --getappblocked "$real" 2>&1 || true)"
+  app="$(printf '%s' "${app//"$real"/}" | tr '[:upper:]' '[:lower:]')"
+  [[ "$app" == *"is permitted"* ]] || return 0
+  fl_info "The macOS firewall allows ${real}, and BenchBar has no record that it added the entry. If benchbar lan-guard allow-node did, take it out with: sudo ${FL_LANGUARD_FW_TOOL} --remove ${real}"
 }
 
 fl_lg_doc_v() {
@@ -229,7 +325,7 @@ fl_lg_doc_v() {
   fl_lg_active_v __active
   [[ -z "$SP_LAN_IP" ]] || __ip="$(fl_json_str "$SP_LAN_IP")"
   printf -v "$1" '{"schema_version":%d,"cli_version":"%s","state":"%s","active":%s,"ports":"%s","anchor":"%s","lan_ip":%s}' \
-    "$FL_SCHEMA_VERSION" "$FL_VERSION" "$__state" "$__active" "$FL_LANGUARD_PORTS" "$FL_LANGUARD_PF_ANCHOR_NAME" "$__ip"
+    "$FL_SCHEMA_VERSION" "$FL_VERSION" "$__state" "$__active" "$FL_LANGUARD_PORTS" "$(fl_lg_anchor_name)" "$__ip"
   LG_STATE="$__state"; LG_ACTIVE="$__active"
 }
 
@@ -246,8 +342,10 @@ fl_cmd_lan_guard_status() {
   for a in "$@"; do fl_die "Unknown argument for lan-guard status: $a" "Use: benchbar lan-guard status [--json]"; done
   fl_lg_doc_v doc
   if [[ "${OPT_JSON:-0}" == 1 ]]; then fl_doc_emit 0 "$doc"; return 0; fi
-  fl_info "LAN guard: ${LG_STATE} (pf anchor ${FL_LANGUARD_PF_ANCHOR_NAME}: ${FL_LANGUARD_PORTS})"
+  if fl_is_linux; then fl_info "LAN guard: ${LG_STATE} (nftables table ${FL_LGL_TABLE}: ${FL_LANGUARD_PORTS})"
+  else fl_info "LAN guard: ${LG_STATE} (pf anchor ${FL_LANGUARD_PF_ANCHOR_NAME}: ${FL_LANGUARD_PORTS})"; fi
   fl_lg_say_active
+  ! fl_is_linux || fl_lgl_ufw_note
   [[ "$LG_STATE" == installed && "$LG_ACTIVE" != false ]] || fl_fix "benchbar lan-guard install"
 }
 
@@ -276,6 +374,7 @@ fl_lg_repair() {
 fl_cmd_lan_guard_install() {
   local a state doc
   for a in "$@"; do fl_die "Unknown argument for lan-guard install: $a" "Use: benchbar lan-guard install [--dry-run] [--yes] [--json]"; done
+  if fl_is_linux; then fl_lgl_install; return 0; fi
   fl_lg_require_person install
   fl_lg_state_v state
   if [[ "$state" == installed ]]; then
@@ -308,37 +407,73 @@ fl_cmd_lan_guard_install() {
 }
 
 fl_cmd_lan_guard_remove() {
-  local a state
+  local a state fw_paths guard=1 reason path pf_tokens
   for a in "$@"; do fl_die "Unknown argument for lan-guard remove: $a" "Use: benchbar lan-guard remove [--yes] [--json]"; done
   [[ "${FL_DRY_RUN:-0}" != 1 ]] || fl_die "lan-guard remove has no dry run." "benchbar lan-guard status shows the guard."
+  if fl_is_linux; then fl_lgl_remove; return 0; fi
   fl_lg_require_person remove
-  if [[ ! -e "$(fl_lg_anchor)" && ! -e "$(fl_lg_daemon)" ]]; then
+  fl_lg_fw_allowed_v fw_paths
+  # a pf reference that an install took and never gave back: also when the install failed and its two
+  # files are gone since, so that "not installed" never leaves pf enabled until the next restart
+  fl_lg_pf_tokens_v pf_tokens
+  [[ -e "$(fl_lg_anchor)" || -e "$(fl_lg_daemon)" ]] || guard=0
+  if [[ "$guard" == 0 && -z "$fw_paths" && -z "$pf_tokens" ]]; then
+    # a record with nothing to give back (pf was on before the guard) goes with it, no password needed
+    rm -f "$(fl_lg_pf_state)"
     fl_ok "unchanged: the guard is not installed"
+    fl_lg_fw_legacy_hint
     fl_lg_report
     return 0
   fi
-  fl_warn "Without the guard the bench ports answer the LAN, and benchbar share start refuses to run."
-  fl_confirm "Remove the LAN guard with sudo?" || fl_die "Not removed." "Run: benchbar lan-guard remove"
-  fl_lg_as_root "remove the LAN guard: its pf anchor and its launch daemon" "benchbar lan-guard remove" "$(fl_lg_remove_script)"
+  if [[ "$guard" == 1 ]]; then
+    fl_warn "Without the guard the bench ports answer the LAN, and benchbar share start refuses to run."
+    fl_confirm "Remove the LAN guard with sudo?" || fl_die "Not removed." "Run: benchbar lan-guard remove"
+    reason="remove the LAN guard: its pf anchor and its launch daemon"
+    [[ -z "$fw_paths" ]] || reason="${reason}, and the firewall entry for node"
+  elif [[ -n "$pf_tokens" ]]; then
+    fl_confirm "Give back the pf reference a lan-guard install left behind, with sudo (pf is turned off again if nothing else uses it)?" || fl_die "Not removed." "Run: benchbar lan-guard remove"
+    reason="give back the pf reference a lan-guard install left behind"
+    [[ -z "$fw_paths" ]] || reason="${reason}, and take out the firewall entry for node"
+  else
+    fl_confirm "Take node out of the macOS firewall's allowed list with sudo (benchbar lan-guard allow-node added it)?" || fl_die "Not removed." "Run: benchbar lan-guard remove"
+    reason="take node out of the macOS firewall's allowed list (benchbar lan-guard allow-node added it)"
+  fi
+  # one root step, so one password or dialog: the guard, then the firewall entries this CLI added
+  fl_lg_as_root "$reason" "benchbar lan-guard remove" "$(fl_lg_remove_script; fl_lg_fw_remove_sh "$fw_paths")"
   fl_lg_state_v state
   [[ "$state" == missing ]] || fl_die "The guard files are still there after the root step." "See the log; run benchbar lan-guard remove again."
   rm -f "$(fl_lg_pf_state)"
-  fl_changed lan-guard "$FL_LANGUARD_PF_ANCHOR_NAME" "removed"
-  fl_ok "LAN guard removed"
+  if [[ -n "$fw_paths" ]]; then
+    fl_lg_fw_record ""
+    while IFS= read -r path; do
+      fl_changed firewall "$path" "removed"
+      fl_ok "the firewall no longer lists ${path}"
+    done <<<"$fw_paths"
+  else
+    fl_lg_fw_legacy_hint
+  fi
+  if [[ "$guard" == 1 ]]; then
+    fl_changed lan-guard "$FL_LANGUARD_PF_ANCHOR_NAME" "removed"
+    fl_ok "LAN guard removed"
+  elif [[ -n "$pf_tokens" ]]; then
+    fl_changed lan-guard "pf" "reference given back"
+    fl_ok "the pf reference of the LAN guard is given back"
+  fi
   fl_lg_report
 }
 
 # allow-node: the firewall lets incoming connections reach the node the gateway runs on. A Homebrew upgrade
 # changes that realpath, so share preflight's firewall_node check asks for this again.
 fl_cmd_lan_guard_allow_node() {
-  local a problem fw state app real doc
+  local a problem fw state app real doc mine old="" path
   for a in "$@"; do fl_die "Unknown argument for lan-guard allow-node: $a" "Use: benchbar lan-guard allow-node [--yes] [--json]"; done
+  if fl_is_linux; then fl_lgl_allow_node; return 0; fi
   [[ "${FL_DRY_RUN:-0}" != 1 ]] || fl_die "lan-guard allow-node has no dry run." "benchbar share preflight --static shows the firewall_node check."
   fl_lg_require_person allow-node
   fl_sp_node_path_problem_v problem
   [[ -z "$problem" ]] || fl_die "Node cannot be trusted to run the gateway: ${problem}." "Install Node ${FL_SHARE_MIN_NODE} or later with Homebrew, and keep it writable only by you."
   real="$SP_NODE_REAL"
-  fw="${FL_SOCKETFILTERFW:-/usr/libexec/ApplicationFirewall/socketfilterfw}"
+  fw="${FL_SOCKETFILTERFW:-$FL_LANGUARD_FW_TOOL}"
   [[ -x "$fw" ]] || fl_die "Cannot read the firewall state: ${fw} is missing." ""
   state="$("$fw" --getglobalstate 2>&1 | tr '[:upper:]' '[:lower:]' || true)"
   case "$state" in
@@ -350,19 +485,44 @@ fl_cmd_lan_guard_allow_node() {
       if [[ "$app" == *"is permitted"* ]]; then
         fl_ok "unchanged: the firewall allows ${real}"
       else
-        fl_confirm "Allow ${real} through the firewall with sudo?" || fl_die "Not allowed." "Run: benchbar lan-guard allow-node"
-        fl_lg_as_root "allow node (${real}) through the macOS firewall, for the share gateway" "benchbar lan-guard allow-node" "$(fl_lg_allow_node_script "$real")"
+        # the entries of an older node this CLI added go in the same root step
+        fl_lg_fw_allowed_v mine
+        while IFS= read -r path; do
+          [[ -z "$path" || "$path" == "$real" ]] || old="${old}${old:+$'\n'}${path}"
+        done <<<"$mine"
+        fl_confirm "Allow ${real} through the firewall with sudo? The entry is for the program: every script this node runs can then accept incoming connections, on any network. benchbar lan-guard remove takes it out again." \
+          || fl_die "Not allowed." "Run: benchbar lan-guard allow-node"
+        # on record before root runs: a CLI that dies between the root step and this bookkeeping (a closed
+        # terminal, a kill) must not leave an entry that remove knows nothing of. The older paths stay on
+        # record until the step has taken them out. A step that fails or is cancelled keeps the record
+        # too: a remove of a path the firewall does not list changes nothing.
+        fl_lg_fw_record "${real}${old:+$'\n'${old}}"
+        fl_lg_as_root "allow node (${real}) through the macOS firewall, for the share gateway" "benchbar lan-guard allow-node" "$(fl_lg_allow_node_script "$real" "$old")"
+        fl_lg_fw_record "$real"
         fl_changed firewall "$real" "allowed"
-        fl_ok "the firewall allows ${real}"
+        fl_ok "the firewall allows ${real} (benchbar lan-guard remove takes the entry out again)"
+        while IFS= read -r path; do
+          [[ -z "$path" ]] || fl_ok "the firewall no longer lists ${path} (an older node)"
+        done <<<"$old"
       fi ;;
   esac
   doc="$(printf '{"schema_version":%d,"cli_version":"%s","node":%s}' "$FL_SCHEMA_VERSION" "$FL_VERSION" "$(fl_json_str "$real")")"
   [[ "${OPT_JSON:-0}" != 1 ]] || fl_doc_emit 0 "$doc"
 }
 
+# fl_lg_platform_ok SUB: stops the command, before anything is asked or run as root, on a platform that has
+# no guard: macOS (pf, below) and Linux (nftables, lan-guard-linux.sh) have one. The root scripts of the
+# macOS half name pf, launchd and macOS paths, so they must never be reached from another platform.
+fl_lg_platform_ok() {
+  case "${FL_PLATFORM:-}" in macos|linux) return 0 ;; esac
+  fl_die "benchbar lan-guard ${1} is not available on ${FL_PLATFORM:-this platform}: it has a guard for macOS (pf) and Linux (nftables) only." \
+    "Nothing was changed."
+}
+
 fl_cmd_lan_guard() {
   local sub="${1:-}"
   shift || true
+  case "$sub" in install|status|remove|allow-node) fl_lg_platform_ok "$sub" ;; esac
   case "$sub" in
     install) fl_cmd_lan_guard_install "$@" ;;
     status) fl_cmd_lan_guard_status "$@" ;;

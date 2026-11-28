@@ -5,7 +5,7 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry share_resume kept_backups rotate_logs redis_stop"
+FL_ACTION_ORDER="python_leaves node_install yarn_install uv_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate dead_agents port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry share_resume kept_backups rotate_logs redis_stop"
 # actions whose check may stay a warning after a run without failing it:
 # the user may decline them (or sudo) on purpose
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
@@ -21,7 +21,7 @@ fl_action_label() {
   if fl_is_linux; then
     case "$1" in
       node_install) printf 'fnm install %s (the Node of profile %s; an older Node is not removed)' "$FL_NODE_MAJOR" "$FL_PROFILE"; return 0 ;;
-      yarn_install) printf 'install yarn under Node %s (npm install -g yarn)' "$FL_NODE_MAJOR"; return 0 ;;
+      yarn_install) printf 'install yarn under Node %s (npm install -g yarn@%s)' "$FL_NODE_MAJOR" "$FL_PIN_YARN"; return 0 ;;
       wkhtmltopdf_install) printf 'install the patched wkhtmltopdf package (apt, sudo)'; return 0 ;;
       write_plist) printf 'write and load the systemd user unit'; return 0 ;;
     esac
@@ -29,7 +29,8 @@ fl_action_label() {
   case "$1" in
     python_leaves) printf 'mark %s as user-installed' "$FL_PYTHON_FORMULA" ;;
     node_install) printf 'brew install %s (the Node of profile %s; an older node formula is not removed)' "$FL_NODE_FORMULA" "$FL_PROFILE" ;;
-    yarn_install) printf 'install yarn under %s (npm install -g yarn)' "$FL_NODE_FORMULA" ;;
+    yarn_install) printf 'install yarn under %s (npm install -g yarn@%s)' "$FL_NODE_FORMULA" "$FL_PIN_YARN" ;;
+    uv_install) printf 'brew install uv (bench makes the env and installs apps with it)' ;;
     honcho_install) printf 'install honcho into the bench env' ;;
     honcho_setuptools) printf "install setuptools into honcho's venv" ;;
     env_rebuild) printf 'rebuild the bench env (old env moved aside)' ;;
@@ -41,6 +42,7 @@ fl_action_label() {
     mariadb_utf8) printf 'write the utf8mb4 MariaDB drop-in%s%s' "$(fl_is_linux && printf ' (sudo)')" "$(fl_mariadb_restart_note)" ;;
     wkhtmltopdf_install) printf 'install the patched wkhtmltopdf package (sudo)' ;;
     legacy_migrate) printf 'migrate legacy launchd agents' ;;
+    dead_agents) printf 'boot out and move aside the agents whose runner is gone' ;;
     port_block) printf 'move the bench to port block %s (bench set-config, bench setup redis)' "${FL_PORT_TARGET:-?}" ;;
     write_procfile) printf 'write Procfile.lean' ;;
     write_runner) printf 'write the runner script' ;;
@@ -131,6 +133,22 @@ act_env_rebuild() {
   [[ -x "$py" ]] || py="$(command -v "$FL_PYTHON_BIN_NAME" || true)"
   [[ -n "$py" ]] || { fl_fail "${FL_PYTHON_BIN_NAME} not found; run $(fl_is_linux && printf '00-linux-system-deps.sh' || printf '00-mac-system-deps.sh') first"; return 1; }
   fl_bench_env_exports
+  # the rebuild is "bench setup env", which runs "uv venv": with no bench
+  # command or no uv it cannot run, and the env that would move aside is the
+  # only one the bench has (issue 188). In a dry run the plan above names the
+  # uv install when uv is missing.
+  if [[ "${FL_DRY_RUN:-0}" != "1" ]]; then
+    if ! command -v bench >/dev/null 2>&1; then
+      fl_fail "refusing to rebuild env: the bench command is not on PATH, so nothing could make the new env; the env was not moved"
+      fl_fix "$(fl_bench_cli_fix install)"
+      return 1
+    fi
+    if ! fl_uv_on_path; then
+      fl_fail "refusing to rebuild env: uv is not installed, and bench makes the new env with it (uv venv); the env was not moved"
+      fl_fix "$(fl_uv_install_hint)"
+      return 1
+    fi
+  fi
   fl_move_aside "${FL_BENCH_DIR}/env" broken || return 1
   fl_run_long "bench setup env --python ${py}" fl_in_bench bench setup env --python "$py" || return 1
   fl_run_long "bench setup requirements --python" fl_in_bench bench setup requirements --python || return 1
@@ -170,7 +188,21 @@ act_yarn_install() {
   local npm
   npm="$(fl_npm_bin)"
   [[ -x "$npm" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "no npm at ${npm}; install ${FL_NODE_FORMULA} first"; return 1; }
-  fl_run_long "npm install -g yarn (${FL_NODE_FORMULA})" "$npm" install -g yarn || return 1
+  fl_run_long "npm install -g yarn@${FL_PIN_YARN} (${FL_NODE_FORMULA})" "$npm" install -g "yarn@${FL_PIN_YARN}" || return 1
+  return 0
+}
+
+# uv with Homebrew, as phase 00 does (a Mac only: the check names no action on
+# Linux). It runs before env_rebuild, so one repair of a pipx Mac installs uv
+# and then rebuilds.
+act_uv_install() {
+  if fl_uv_on_path; then
+    fl_info "uv is already installed at $(command -v uv)"
+    FL_STEP_RESULT="unchanged"
+    return 0
+  fi
+  fl_run_long "brew install uv" brew install uv || return 1
+  fl_uv_on_path || [[ "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "brew installed uv, but no uv is on PATH or in ${FL_BREW_PREFIX}/bin"; return 1; }
   return 0
 }
 
@@ -257,6 +289,25 @@ act_legacy_migrate() {
   return 0
 }
 
+# Boots out and moves aside every loaded benchbar agent whose runner script
+# is gone and whose folder is no bench any more (any bench's agent, as the
+# check lists them). A bench that is still there gets its runner written
+# again by write_runner, or by repair run from its own folder; an agent
+# that runs a script benchbar did not write is never in the list.
+act_dead_agents() {
+  local list plist label dir failed=0
+  list="$(fl_dead_agents_list)"
+  [[ -n "$list" ]] || { FL_STEP_RESULT="unchanged"; return 0; }
+  while IFS='|' read -r plist label dir; do
+    [[ -n "$plist" ]] || continue
+    if [[ -n "$dir" ]] && fl_is_bench_dir "$dir"; then continue; fi
+    fl_info "${label}: ${dir:-no folder} is no bench, its runner is gone"
+    fl_agent_retire "$plist" "$label" || failed=1
+  done <<<"$list"
+  [[ "$failed" == "0" ]] || { fl_fail "a dead agent could not be removed; run benchbar repair again once launchd has let go of it"; return 1; }
+  return 0
+}
+
 # Runs before write_procfile and the runner: fl_ports_apply re-renders them
 # with the new ports.
 act_port_block() {
@@ -273,6 +324,7 @@ act_port_block() {
 # The two listen files go down before the Procfile that starts them: a
 # Procfile that names a file that is not there would stop the bench.
 act_write_procfile() {
+  fl_render_ensure
   if [[ -n "$FL_R_LISTEN_PY" ]]; then
     fl_template_apply "$(fl_listen_py_path)" "$FL_R_LISTEN_PY" 644 || return 1
     [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote $(fl_listen_py_path)"
@@ -286,6 +338,7 @@ act_write_procfile() {
 }
 
 act_write_runner() {
+  fl_render_ensure
   [[ "${FL_DRY_RUN:-0}" == "1" ]] || mkdir -p "${FL_BENCH_DIR}/logs" 2>/dev/null || { fl_fail "could not create ${FL_BENCH_DIR}/logs"; return 1; }
   fl_template_apply "$(fl_runner_path)" "$FL_R_RUNNER" 755 || return 1
   [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote $(fl_runner_path)"
@@ -315,6 +368,7 @@ fl_runner_legacy_retire() {
 # So does one running outside BenchBar (bench start): the runner's cleanup
 # would stop that session's processes.
 act_write_plist() {
+  fl_render_ensure
   local plist was_running=0 flag
   plist="$(fl_agent_plist_path)"
   flag="$(fl_stop_flag_path)"
@@ -356,12 +410,16 @@ act_write_plist() {
 }
 
 act_write_helpers() {
-  local rc recorded own=""
+  fl_render_ensure
+  local rc recorded own="" before
   rc="$(fl_rc_file)"
+  # a shell that reads no block of ours (chk_helpers says ok there)
+  [[ -n "$rc" ]] || return 0
+  before="$(fl_state_get RC_FILE 2>/dev/null || true)"
   # under Homebrew a block that runs a checkout with its own state stays:
   # rewritten, benchup would start without that state (chk_helpers)
   if [[ "${FL_INSTALL_KIND:-}" == homebrew ]]; then
-    recorded="$(fl_rc_block_extract "$rc" | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | awk 'NR==1')"
+    fl_rc_recorded_cli_v recorded "$rc"
     [[ -z "$recorded" || ! -e "$recorded" ]] || fl_cli_own_state_v own "$recorded"
     if [[ -n "$own" ]]; then
       fl_warn "the helper block in ${rc} runs ${recorded}, a checkout with its own state (${own}); left as is"
@@ -370,6 +428,14 @@ act_write_helpers() {
   fi
   fl_rc_block_write "$rc" "$FL_R_HELPERS" || return 1
   [[ "${FL_DRY_RUN:-0}" == "1" ]] || fl_ok "helper block written to ${rc} (open a new shell or: source ${rc})"
+  # the block moved with the shell (fish got its own file in 0.9.0, bash on a
+  # Mac the file a login shell reads): the old one is still valid for the
+  # shell that reads it, so it stays, and the person is told
+  if [[ "${FL_DRY_RUN:-0}" != "1" && -n "$before" && "$before" != "$rc" ]]; then
+    case "$(fl_rc_block_state "$before")" in
+      present|legacy) fl_note "the older block in ${before} stays for the shell that reads it; delete it by hand if you no longer use that shell" ;;
+    esac
+  fi
 }
 
 # Links ~/.local/bin/benchbar and frappe-mac to FL_SELF. A link that leads
@@ -433,26 +499,26 @@ fl_hosts_rewrite() {
   shift 2
   # awk's count on both sides: wc -l would miss a last line without a newline
   before="$(awk 'END { print NR }' "$FL_HOSTS_FILE")"
-  if ! sudo env "$@" awk "$prog" "$FL_HOSTS_FILE" | sudo tee "$new" >/dev/null; then
-    sudo rm -f "$new" 2>/dev/null || true
+  if ! sudo "$(fl_root_tool env)" "$@" "$(fl_root_tool awk)" "$prog" "$FL_HOSTS_FILE" | sudo "$(fl_root_tool tee)" "$new" >/dev/null; then
+    sudo "$(fl_root_tool rm)" -f "$new" 2>/dev/null || true
     fl_fail "could not write ${new}; ${FL_HOSTS_FILE} is not written"
     return 1
   fi
-  bad="$(sudo awk 'NF == 0 { next } /^[[:space:]]*#/ { next } $1 ~ /^[0-9A-Fa-f.:]+(%[A-Za-z0-9_.-]+)?\r?$/ { next } { print; exit }' "$new" 2>/dev/null || true)"
-  after="$(sudo awk 'END { print NR }' "$new" 2>/dev/null || printf 'unknown')"
+  bad="$(sudo "$(fl_root_tool awk)" 'NF == 0 { next } /^[[:space:]]*#/ { next } $1 ~ /^[0-9A-Fa-f.:]+(%[A-Za-z0-9_.-]+)?\r?$/ { next } { print; exit }' "$new" 2>/dev/null || true)"
+  after="$(sudo "$(fl_root_tool awk)" 'END { print NR }' "$new" 2>/dev/null || printf 'unknown')"
   if [[ -n "$bad" ]]; then
-    sudo rm -f "$new" 2>/dev/null || true
+    sudo "$(fl_root_tool rm)" -f "$new" 2>/dev/null || true
     fl_fail "${FL_HOSTS_FILE} is not written: the result holds a line that is not 'address names': ${bad}"
     fl_note "fix that line in ${FL_HOSTS_FILE} by hand, then run the command again"
     return 1
   fi
   if [[ "$after" != "$((before + delta))" ]]; then
-    sudo rm -f "$new" 2>/dev/null || true
+    sudo "$(fl_root_tool rm)" -f "$new" 2>/dev/null || true
     fl_fail "${FL_HOSTS_FILE} is not written: expected ${before} + (${delta}) lines, the result has ${after}"
     return 1
   fi
-  sudo chmod 644 "$new" || { sudo rm -f "$new" 2>/dev/null || true; fl_fail "sudo chmod failed; ${FL_HOSTS_FILE} is not written"; return 1; }
-  sudo mv "$new" "$FL_HOSTS_FILE" || { sudo rm -f "$new" 2>/dev/null || true; fl_fail "sudo mv failed; ${FL_HOSTS_FILE} is not written"; return 1; }
+  sudo "$(fl_root_tool chmod)" 644 "$new" || { sudo "$(fl_root_tool rm)" -f "$new" 2>/dev/null || true; fl_fail "sudo chmod failed; ${FL_HOSTS_FILE} is not written"; return 1; }
+  sudo "$(fl_root_tool mv)" "$new" "$FL_HOSTS_FILE" || { sudo "$(fl_root_tool rm)" -f "$new" 2>/dev/null || true; fl_fail "sudo mv failed; ${FL_HOSTS_FILE} is not written"; return 1; }
 }
 
 # BENCHBAR_SUDO=gui: the root side of the /etc/hosts lines as one script
@@ -564,7 +630,7 @@ act_hosts_entry() {
     # shellcheck disable=SC2016  # an awk program
     fl_hosts_rewrite 1 '$0 == ENVIRON["E"] { print ENVIRON["L"] } { print }' "L=${line}" "E=${FL_HOSTS_END}" || return 1
   else
-    printf '\n%s\n%s\n%s\n' "$FL_HOSTS_START" "$line" "$FL_HOSTS_END" | sudo tee -a "$FL_HOSTS_FILE" >/dev/null || { fl_fail "sudo tee failed"; return 1; }
+    printf '\n%s\n%s\n%s\n' "$FL_HOSTS_START" "$line" "$FL_HOSTS_END" | sudo "$(fl_root_tool tee)" -a "$FL_HOSTS_FILE" >/dev/null || { fl_fail "sudo tee failed"; return 1; }
   fi
   fl_hosts_has_site || { fl_fail "${FL_HOSTS_FILE} still has no entry for ${FL_SITE}"; return 1; }
   fl_ok "added '${line}' to ${FL_HOSTS_FILE} (backup: ${FL_LAST_BACKUP:-none})"
@@ -658,7 +724,8 @@ FL_JSON_EVENTS="${FL_JSON_EVENTS:-0}"
 
 fl_event() {
   [[ "$FL_JSON_EVENTS" == "1" ]] || return 0
-  printf '%s\n' "$1" >&3
+  # the operation's handle leads every event (ops.sh)
+  if [[ -n "${FL_OP_ID:-}" ]]; then printf '{"op_id":"%s",%s\n' "$FL_OP_ID" "${1#\{}" >&3; else printf '%s\n' "$1" >&3; fi
 }
 
 # Actions that need sudo: the app cannot type a password, so it shows them
@@ -678,7 +745,7 @@ fl_action_changed_kind() {
 }
 
 fl_event_plan() {
-  local actions="$1" a sep="" fixes f fsep
+  local actions="$1" a sep="" fixes f fsep tok=""
   [[ "$FL_JSON_EVENTS" == "1" ]] || return 0
   local body=""
   for a in $actions; do
@@ -690,7 +757,8 @@ fl_event_plan() {
     body="${body}${sep}{\"id\":\"${a}\",\"label\":$(fl_json_str "$(fl_action_label "$a")"),\"fixes\":[${fixes}],\"sudo\":$(fl_json_bool "$(fl_action_needs_sudo "$a" && printf 1 || printf 0)")}"
     sep=","
   done
-  fl_event "{\"event\":\"plan\",\"schema_version\":${FL_SCHEMA_VERSION:-1},\"cli_version\":\"${FL_VERSION:-0}\",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}"),\"actions\":[${body}],\"backups\":$(fl_json_str "${FL_BACKUP_ROOT}"),\"log\":$(fl_json_str "${FL_LOG_FILE:-}")}"
+  [[ -z "${FL_ENGINE_PLAN_TOKEN:-}" ]] || tok=",\"token\":\"${FL_ENGINE_PLAN_TOKEN}\""
+  fl_event "{\"event\":\"plan\",\"schema_version\":${FL_SCHEMA_VERSION:-1},\"cli_version\":\"${FL_VERSION:-0}\",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}"),\"actions\":[${body}]${tok},\"backups\":$(fl_json_str "${FL_BACKUP_ROOT}"),\"log\":$(fl_json_str "${FL_LOG_FILE:-}")}"
 }
 
 fl_event_step() {
@@ -701,9 +769,14 @@ fl_event_step() {
 
 # fl_repair_engine TITLE [GROUP...]: check, plan, confirm, apply, verify.
 # Returns 0 when everything is healthy afterwards, 1 when something failed.
+# FL_ENGINE_ACTION_FAILED: 1 when an action of the last fl_repair_engine run
+# ended failed, 0 when it did not (a run that only has checks left to look at
+# after its verify pass returns 1 as well); install labels its step with it
+FL_ENGINE_ACTION_FAILED=0
 fl_repair_engine() {
   shift
-  local actions action i n=0 last_sudo rows=() unchanged remaining status labels step_from optional_left="" ids plan_from plan_to
+  FL_ENGINE_ACTION_FAILED=0
+  local actions action i n=0 last_sudo rows=() unchanged remaining status labels step_from optional_left="" ids plan_from plan_to token_actions=""
   fl_doctor_run "$@"
   actions=""
   for action in $(fl_doctor_actions); do
@@ -717,7 +790,19 @@ fl_repair_engine() {
       continue
     fi
     actions="${actions}${actions:+ }${action}"
+    # the token covers the actions a --yes run would take: a question is left out of both, so
+    # the dry run (which lists it) and the real run (which does not) make the same token
+    fl_action_is_question "$action" || token_actions="${token_actions}${token_actions:+ }${action}"
   done
+  # repair --apply TOKEN: the plan of this run must be the plan the token was made for, checked
+  # before anything is asked or run; an empty plan has no token and so never matches one
+  FL_ENGINE_PLAN_TOKEN=""
+  if [[ "${FL_ENGINE_TOKEN_KIND:-}" == "repair" ]]; then
+    local token_data=""
+    [[ -z "$token_actions" ]] || token_data="$(printf 'repair\n%s\n%s\n%s\n%s\n' "$FL_BENCH_DIR" "$FL_SITE" "$FL_PROFILE" "$token_actions")"
+    fl_plan_apply_check "$token_data" "repair" "benchbar repair --dry-run --json --bench-dir ${FL_BENCH_DIR}"
+    [[ -z "$token_data" ]] || fl_plan_token_v FL_ENGINE_PLAN_TOKEN "$token_data"
+  fi
   unchanged=$(( ${#FL_D_IDS[@]} - $(fl_doctor_count warn) - $(fl_doctor_count fail) ))
   # the MariaDB labels name the running benches: one scan, before the labels' subshells
   case " $actions " in *" mariadb_"*) fl_mariadb_running_benches_prime ;; esac
@@ -809,6 +894,9 @@ fl_repair_engine() {
       fl_step_end failed
       fl_event_step "$action" failed "$(fl_log_step_message "${step_from:-0}")"
       status=1
+      # an optional action (wkhtmltopdf, the hosts line) that fails is a warning
+      # for the step, not a failed step: the bench and the service are fine
+      case " $FL_OPTIONAL_ACTIONS " in *" $action "*) ;; *) FL_ENGINE_ACTION_FAILED=1 ;; esac
       case "$action" in
         # a legacy agent that is still loaded must not get a second agent for
         # the same bench next to it (two runners, two honchos)

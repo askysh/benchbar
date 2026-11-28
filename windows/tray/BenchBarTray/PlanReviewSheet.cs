@@ -19,6 +19,7 @@ internal sealed class PlanReviewSheet : Window
     private readonly Action<string>? _onDetachedFinish;
     private readonly TextBlock _live = Ui.Live(Ui.Text("", 12, opacity: 0.7, margin: new Thickness(0, 8, 0, 0)));
     private TextBlock? _elapsedText;
+    private Button? _confirmButton;
     private bool _leaving;
     private readonly ContentControl _body = new() { IsTabStop = false };
     private readonly System.Windows.Threading.DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -91,6 +92,7 @@ internal sealed class PlanReviewSheet : Window
             services.Notify(line);
             services.RefreshNow();
         });
+        sheet.AskBreak = services.Confirm;
         sheet.Closing += (_, _) => { if (sheet._leaving) services.RunStarted(); }; // the window asks before it closes while this goes on
         sheet.ShowDialog();
         var outcome = model.Outcome;
@@ -117,7 +119,7 @@ internal sealed class PlanReviewSheet : Window
     private string ElapsedLine()
     {
         var elapsed = _model.Elapsed;
-        return $"Running for {(int)elapsed.TotalMinutes}:{elapsed.Seconds:00}";
+        return UiText.Format("PlanRunningFor", (int)elapsed.TotalMinutes, elapsed.Seconds.ToString("00"));
     }
 
     private void Rebuild()
@@ -131,37 +133,44 @@ internal sealed class PlanReviewSheet : Window
         {
             case PlanPhase.Loading:
                 panel.Children.Add(Ui.Text(_model.Request.Title, 18, FontWeights.SemiBold));
-                panel.Children.Add(Ui.Text("Reading the plan...", 14, opacity: 0.75, margin: new Thickness(0, 8, 0, 0)));
-                buttons.Add(("Cancel", Close, false, true));
+                panel.Children.Add(Ui.Text(UiText.Get("CommonReadingPlan"), 14, opacity: 0.75, margin: new Thickness(0, 8, 0, 0)));
+                buttons.Add((UiText.Get("Cancel"), Close, false, true));
                 break;
             case PlanPhase.PlanFailed:
-                panel.Children.Add(Ui.Text("There is no plan", 18, FontWeights.SemiBold));
-                panel.Children.Add(Ui.CriticalText(_model.Message ?? "The plan could not be made."));
-                panel.Children.Add(ReportLink(_model.Message ?? "The plan could not be made."));
-                buttons.Add(("Refresh Plan", () => _model.RefreshPlanAsync().Forget(), true, true));
-                buttons.Add(("Close", Close, false, true));
+                panel.Children.Add(Ui.Text(UiText.Get("PlanNoPlan"), 18, FontWeights.SemiBold));
+                panel.Children.Add(Ui.CriticalText(_model.Message ?? UiText.Get("CommonPlanNotMade")));
+                panel.Children.Add(ReportLink(_model.Message ?? UiText.Get("CommonPlanNotMade")));
+                buttons.Add((_model.Request.RefreshLabel, () => _model.RefreshPlanAsync().Forget(), true, true));
+                buttons.Add((UiText.Get("CommonClose"), Close, false, true));
                 break;
             case PlanPhase.Stale:
-                panel.Children.Add(Ui.Text("The plan is out of date", 18, FontWeights.SemiBold));
-                panel.Children.Add(Ui.Text("Something changed since you reviewed it. Nothing was changed. Read the plan again before you apply it.", 14, opacity: 0.85, margin: new Thickness(0, 8, 0, 0)));
-                buttons.Add(("Refresh Plan", () => _model.RefreshPlanAsync().Forget(), true, true));
-                buttons.Add(("Close", Close, false, true));
+                panel.Children.Add(Ui.Text(UiText.Get("PlanStaleTitle"), 18, FontWeights.SemiBold));
+                panel.Children.Add(Ui.Text(UiText.Get("PlanStaleBody"), 14, opacity: 0.85, margin: new Thickness(0, 8, 0, 0)));
+                buttons.Add((_model.Request.RefreshLabel, () => _model.RefreshPlanAsync().Forget(), true, true));
+                buttons.Add((UiText.Get("CommonClose"), Close, false, true));
                 break;
             case PlanPhase.Review when plan is not null:
                 BuildReview(panel, plan);
-                buttons.Add((_model.Request.ConfirmLabel, () => _model.ConfirmAsync().Forget(), true, _model.CanConfirm));
-                buttons.Add(("Cancel", Close, false, true));
+                if (_model.Blocker is { } blocker) buttons.Add((blocker.Label, () => _model.ResolveBlockerAsync().Forget(), true, true));
+                // a plan that waits for a typed name is not confirmed by Enter: the button is never the accent one
+                buttons.Add((_model.Request.ConfirmLabel, () => _model.ConfirmAsync().Forget(), _model.Request.ConfirmName is null && _model.Blocker is null, _model.CanConfirm));
+                buttons.Add((UiText.Get("Cancel"), Close, false, true));
                 break;
             case PlanPhase.Running:
                 BuildRunning(panel);
                 // always a way out: the run is not cancelled, the sheet just stops waiting for it
-                buttons.Add(("Stop Waiting", StopWaiting, false, true));
-                if (_model.CanStop) buttons.Add(("Stop", _model.Stop, false, true));
+                buttons.Add((UiText.Get("PlanStopWaiting"), StopWaiting, false, true));
+                if (_model.CanStop) buttons.Add((UiText.Get("CommonStop"), _model.Stop, false, true));
                 break;
             case PlanPhase.Finished when _model.Result is { } result:
                 BuildResult(panel, result);
-                if (!result.Ok && !result.Cancelled) panel.Children.Add(ReportLink($"{_model.Request.Title}: {result.Error ?? result.Headline}"));
-                buttons.Add(("Close", Close, true, true));
+                if (!result.Ok && !result.Cancelled) panel.Children.Add(ReportLink(UiText.Format("PlanFailedReport", _model.Request.Title, result.Error ?? result.Headline)));
+                if (_model.LeaseRefused is { } lease)
+                {
+                    panel.Children.Add(Ui.Text(UiText.Format("PlanLeaseRefused", lease.Sentence()), 13, FontWeights.SemiBold, margin: new Thickness(0, 10, 0, 0)));
+                    buttons.Add((UiText.Get("OverviewBreakLease"), () => BreakLease(lease), false, true));
+                }
+                buttons.Add((UiText.Get("CommonClose"), Close, true, true));
                 break;
         }
         var lines = new List<string>();
@@ -175,20 +184,31 @@ internal sealed class PlanReviewSheet : Window
         else if (_model.Phase != PlanPhase.Running) _clock.Stop();
 
         _bar.Children.Clear();
+        _confirmButton = null;
         foreach (var (label, click, primary, enabled) in buttons)
         {
             var button = Ui.Button(label, click, label, primary);
             button.IsEnabled = enabled;
-            if (label is "Cancel" or "Close") button.IsCancel = _model.IsDismissible;
+            if (_model.Phase == PlanPhase.Review && label == _model.Request.ConfirmLabel) _confirmButton = button;
+            if (label == UiText.Get("Cancel") || label == UiText.Get("CommonClose")) button.IsCancel = _model.IsDismissible;
             _bar.Children.Add(button);
         }
         ButtonLabels = buttons.Select(b => b.Label).ToList();
         Ui.RestoreFocus(this, focused);
     }
 
+    /// <summary>Asks first, with the holder named; only a yes runs the same apply again with <c>--break-lease</c>. The answer is never the default button.</summary>
+    internal Func<string, string, string, bool> AskBreak { get; set; } = (title, detail, button) => false;
+
+    private void BreakLease(LeaseRefusal lease)
+    {
+        if (!AskBreak(UiText.Format("OverviewBreakLeaseTitle", lease.Holder), lease.BreakQuestion(_model.Request.Title), UiText.Get("OverviewBreakLeaseConfirm"))) return;
+        _model.BreakLeaseAsync().Forget();
+    }
+
     private Button ReportLink(string problem)
     {
-        var link = Ui.Link(BetaText.ReportThisProblem, () => _report(BetaText.ReportThisProblem, problem), "Report this problem");
+        var link = Ui.Link(BetaText.ReportThisProblem, () => _report(BetaText.ReportThisProblem, problem), UiText.Get("CommonReportProblemName"));
         link.Margin = new Thickness(0, 8, 0, 0);
         return link;
     }
@@ -202,15 +222,16 @@ internal sealed class PlanReviewSheet : Window
         {
             foreach (var line in describe(plan)) panel.Children.Add(Ui.Text(line, 13, opacity: 0.9, margin: new Thickness(0, 4, 0, 0)));
         }
-        if (!plan.HasChanges && plan.Errors.Count == 0) panel.Children.Add(Ui.Text("There is nothing to change.", 14, opacity: 0.85, margin: new Thickness(0, 8, 0, 0)));
+        if (!plan.HasChanges && plan.Errors.Count == 0) panel.Children.Add(Ui.Text(UiText.Get("PlanNothingToChange"), 14, opacity: 0.85, margin: new Thickness(0, 8, 0, 0)));
         if (plan.Steps.Count > 0)
         {
-            panel.Children.Add(Ui.Text("Steps", 13, FontWeights.SemiBold, margin: new Thickness(0, 14, 0, 4)));
+            panel.Children.Add(Ui.Text(UiText.Get("PlanSteps"), 13, FontWeights.SemiBold, margin: new Thickness(0, 14, 0, 4)));
             var n = 1;
             foreach (var step in plan.Steps.Where(s => s.WillRun))
             {
                 var line = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
-                line.Children.Add(Ui.Text($"{n++}. {step.Name}{(step.Sudo ? "  (needs sudo)" : "")}", 14));
+                line.Children.Add(Ui.Text(step.Sudo ? UiText.Format("PlanStepSudo", n, step.Name) : UiText.Format("PlanStep", n, step.Name), 14));
+                n++;
                 if (step.Command is { Length: > 0 } cmd) line.Children.Add(Ui.Mono(cmd));
                 if (step.Note is { Length: > 0 } note) line.Children.Add(Ui.Text(note, 12, opacity: 0.7));
                 panel.Children.Add(line);
@@ -222,19 +243,29 @@ internal sealed class PlanReviewSheet : Window
             preview.Margin = new Thickness(0, 12, 0, 0);
             panel.Children.Add(preview);
         }
-        if (plan.Touches.Count > 0) panel.Children.Add(Ui.Text("Changes: " + string.Join(", ", plan.Touches), 13, opacity: 0.8, margin: new Thickness(0, 8, 0, 0)));
+        if (plan.Touches.Count > 0) panel.Children.Add(Ui.Text(UiText.Format("PlanChanges", string.Join(", ", plan.Touches)), 13, opacity: 0.8, margin: new Thickness(0, 8, 0, 0)));
         if (_model.AsksPassword)
-            panel.Children.Add(Ui.Text($"{plan.SudoSteps} {(plan.SudoSteps == 1 ? "step uses" : "steps use")} sudo. BenchBar asks for your Linux password when you confirm; it is used for this run only.", 13, margin: new Thickness(0, 10, 0, 0)));
-        foreach (var warning in plan.Warnings) panel.Children.Add(Ui.Text("Warning: " + warning, 13, margin: new Thickness(0, 6, 0, 0)));
-        foreach (var need in plan.Needs) panel.Children.Add(Ui.Text("Needs: " + need, 13, margin: new Thickness(0, 6, 0, 0)));
+            panel.Children.Add(Ui.Text(plan.SudoSteps == 1 ? UiText.Format("PlanSudoOne", plan.SudoSteps) : UiText.Format("PlanSudoMany", plan.SudoSteps), 13, margin: new Thickness(0, 10, 0, 0)));
+        foreach (var warning in plan.Warnings) panel.Children.Add(Ui.Text(UiText.Format("PlanWarning", warning), 13, margin: new Thickness(0, 6, 0, 0)));
+        foreach (var need in plan.Needs) panel.Children.Add(Ui.Text(UiText.Format("PlanNeeds", need), 13, margin: new Thickness(0, 6, 0, 0)));
+        if (_model.Request.ConfirmName is { } name)
+        {
+            var label = UiText.Format("TypeToConfirm", name);
+            var box = Ui.Field(label, _model.Typed, text =>
+            {
+                _model.Typed = text;
+                if (_confirmButton is not null) _confirmButton.IsEnabled = _model.CanConfirm; // no rebuild: it would take the focus off the box
+            }, 400);
+            panel.Children.Add(new StackPanel { Margin = new Thickness(0, 14, 0, 0), Children = { Ui.Text(label, 13, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 4)), box } });
+        }
     }
 
     private void BuildRunning(StackPanel panel)
     {
-        panel.Children.Add(Ui.Text("Working...", 18, FontWeights.SemiBold));
+        panel.Children.Add(Ui.Text(UiText.Get("CommonWorking"), 18, FontWeights.SemiBold));
         panel.Children.Add(Ui.Text(_model.CanStop
-            ? "You can stop this run, or stop waiting and let it finish in the background."
-            : "This cannot be stopped part way. You can stop waiting: it keeps running and BenchBar tells you when it ends.", 13, opacity: 0.75, margin: new Thickness(0, 4, 0, 10)));
+            ? UiText.Get("PlanCanStop")
+            : UiText.Get("PlanCannotStop"), 13, opacity: 0.75, margin: new Thickness(0, 4, 0, 10)));
         _elapsedText = Ui.Text(ElapsedLine(), 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 8));
         panel.Children.Add(_elapsedText);
         foreach (var step in _model.Steps)
@@ -243,7 +274,7 @@ internal sealed class PlanReviewSheet : Window
             var glyph = Ui.Glyph(StepGlyph(step.Status), 14, Ui.StepBrush(step.Status));
             glyph.Margin = new Thickness(0, 0, 8, 0);
             row.Children.Add(glyph);
-            row.Children.Add(Ui.Text(step.Name + (step.Message is { Length: > 0 } m && step.Status is InstallStepStatus.Failed or InstallStepStatus.Skipped or InstallStepStatus.Warning ? ": " + m : ""), 14));
+            row.Children.Add(Ui.Text(step.Message is { Length: > 0 } m && step.Status is InstallStepStatus.Failed or InstallStepStatus.Skipped or InstallStepStatus.Warning ? UiText.Format("PlanStepMessage", step.Name, m) : step.Name, 14));
             panel.Children.Add(row);
         }
     }
@@ -252,21 +283,22 @@ internal sealed class PlanReviewSheet : Window
     {
         panel.Children.Add(Ui.Text(result.Headline, 18, FontWeights.SemiBold));
         if (result.Error is { Length: > 0 } error) panel.Children.Add(Ui.CriticalText(error));
-        if (result.Missing.Count > 0) panel.Children.Add(Ui.Text("It needs: " + string.Join(", ", result.Missing), 13, margin: new Thickness(0, 6, 0, 0)));
+        if (result.Hint is { Length: > 0 } hint) panel.Children.Add(Ui.Text(hint, 13, margin: new Thickness(0, 4, 0, 0)));
+        if (result.Missing.Count > 0) panel.Children.Add(Ui.Text(UiText.Format("PlanItNeeds", string.Join(", ", result.Missing)), 13, margin: new Thickness(0, 6, 0, 0)));
         if (result.Changed.Count > 0)
         {
-            panel.Children.Add(Ui.Text("Changed", 13, FontWeights.SemiBold, margin: new Thickness(0, 12, 0, 4)));
+            panel.Children.Add(Ui.Text(UiText.Get("PlanChanged"), 13, FontWeights.SemiBold, margin: new Thickness(0, 12, 0, 4)));
             foreach (var change in result.Changed)
-                panel.Children.Add(Ui.Text($"{change.Kind}: {change.Name}{(change.Detail is { Length: > 0 } d ? ", " + d : "")}", 14));
+                panel.Children.Add(Ui.Text(change.Detail is { Length: > 0 } d ? UiText.Format("PlanChangeDetail", change.Kind, change.Name, d) : UiText.Format("PlanChange", change.Kind, change.Name), 14));
         }
-        foreach (var warning in result.Warnings) panel.Children.Add(Ui.Text("Warning: " + warning, 13, margin: new Thickness(0, 6, 0, 0)));
+        foreach (var warning in result.Warnings) panel.Children.Add(Ui.Text(UiText.Format("PlanWarning", warning), 13, margin: new Thickness(0, 6, 0, 0)));
         if (result.NextActions.Count > 0)
         {
-            panel.Children.Add(Ui.Text("Next", 13, FontWeights.SemiBold, margin: new Thickness(0, 12, 0, 4)));
+            panel.Children.Add(Ui.Text(UiText.Get("PlanNext"), 13, FontWeights.SemiBold, margin: new Thickness(0, 12, 0, 4)));
             foreach (var next in result.NextActions)
             {
                 var row = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
-                var copy = Ui.Button("Copy", () => _copy(next.Command), "Copy " + next.Command, minWidth: 0);
+                var copy = Ui.Button(UiText.Get("Copy"), () => _copy(next.Command), UiText.Format("CommonCopyName", next.Command), minWidth: 0);
                 copy.Margin = new Thickness(8, 0, 0, 0);
                 DockPanel.SetDock(copy, Dock.Right);
                 row.Children.Add(copy);

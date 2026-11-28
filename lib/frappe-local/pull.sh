@@ -88,6 +88,10 @@ FL_PULL_NEEDS=""
 # --before-migrate SCRIPT: runs after the restore, before migrate (or where
 # it would be); a failing script stops the run
 FL_PULL_HOOK=""
+# the sha256 of the script when the plan was made; the script is hashed again
+# right before it runs and not run when it differs (a restore can take
+# minutes between the plan and that step)
+FL_PULL_HOOK_SHA=""
 # pull's own JSON lines (plan, step, done); site restore shares the restore
 # steps below and has its own output, so it sets this to 0
 FL_PULL_EMIT=1
@@ -166,7 +170,7 @@ print("benchbar-probe %d %d" % (ok, bad))'
 # fl_pull_emit EVENT [,"field":value...]: one JSON line on the saved stdout (fd 3)
 fl_pull_emit() {
   [[ "${OPT_JSON:-0}" == "1" && "$FL_PULL_EMIT" == "1" ]] || return 0
-  printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$1" "${2:-}" >&3
+  printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s%s}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$1" "${FL_OP_JSON:-}" "${2:-}" >&3
 }
 
 # the done fields pull adds to its own (exit, site, warnings): changed, next_actions, state_after
@@ -226,7 +230,10 @@ fl_pull_on_exit() {
   fi
   if [[ "$FL_PULL_DONE_SENT" == "0" ]]; then
     FL_PULL_DONE_SENT=1
-    fl_pull_emit "done" ",\"exit\":${code},\"site\":$(fl_json_str "$FL_PULL_AS"),\"warnings\":[${FL_PULL_WARNINGS}]$(fl_pull_done_extra)"
+    local perr=""
+    # a failed run says why (the envelope: error whenever exit is not 0)
+    [[ "$code" == "0" ]] || perr=",\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-${FL_LAST_PROBLEM:-the pull failed; see the log}}")"
+    fl_pull_emit "done" ",\"exit\":${code},\"site\":$(fl_json_str "$FL_PULL_AS"),\"warnings\":[${FL_PULL_WARNINGS}]${perr}$(fl_pull_done_extra)"
   fi
 }
 
@@ -387,6 +394,13 @@ fl_pull_parse_args() {
         src="$1"; shift ;;
     esac
   done
+  # a copy with production's integrations and stored passwords live is a person's decision, like
+  # listen all: nothing run without one (--for-agent, benchbar mcp, BENCHBAR_NONINTERACTIVE=1) can
+  # ask for it, the plan included, whatever --yes says. The Mac app and the tray do not set the mode.
+  if [[ "$FL_PULL_KEEP_SECRETS" == "1" ]] && fl_noninteractive; then
+    fl_die "benchbar pull --keep-secrets leaves production's integrations and stored passwords live in the copy, a person's decision, so nothing run without a terminal can ask for it." \
+      "Run the pull without --keep-secrets (the copy is neutralised), or have the person run it in a terminal: benchbar pull ... --keep-secrets"
+  fi
   if [[ -n "$FL_PULL_FROM_DIR" ]]; then
     [[ -z "$src" ]] || fl_die "Pass either HOST:SITE or --from-dir, not both."
     FL_PULL_FROM_DIR="$(cd "$FL_PULL_FROM_DIR" 2>/dev/null && pwd -P)" || fl_die "No folder ${FL_PULL_FROM_DIR}."
@@ -553,7 +567,7 @@ fl_pull_dump_frappe_version() {
       if ($0 ~ /;[ \t]*$/) on = 0
     }' 2>/dev/null | awk 'NR==1' || true)"
   if [[ -z "$v" ]]; then
-    v="$($reader "$1" 2>/dev/null | head -n 40 | awk '/^-- \[frappe\]/ { f = 1; next } /^-- \[/ { f = 0 } f && /^-- version = / { print $4; exit }' 2>/dev/null | awk 'NR==1' || true)"
+    v="$($reader "$1" 2>/dev/null | head -n 40 | awk '/^-- \[frappe\]/ { f = 1; next } /^-- \[/ { f = 0 } f && /^-- version = / && !got { print $4; got = 1 }' 2>/dev/null | awk 'NR==1' || true)"
   fi
   printf '%s' "$v"
 }
@@ -667,6 +681,7 @@ fl_pull_hook_resolve() {
   [[ -f "$h" ]] || fl_die "--before-migrate: no file ${FL_PULL_HOOK}." "Pass the path of an executable script."
   [[ -x "$h" ]] || fl_die "--before-migrate: ${FL_PULL_HOOK} is not executable." "chmod +x ${FL_PULL_HOOK}"
   FL_PULL_HOOK="$h"
+  FL_PULL_HOOK_SHA="$(shasum -a 256 "$h" | awk '{print $1}')"
 }
 
 fl_pull_check_local() {
@@ -1055,13 +1070,21 @@ fl_pull_step_neutralise() {
   rm -f "$tmp"
   if [[ "$code" != "0" || -z "$FL_PULL_NEUTRALISE_ROWS" ]]; then
     fl_fail "could not neutralise ${FL_PULL_AS}: its integrations and stored passwords are still production's"
-    fl_fix "the log has the bench's message: ${FL_LOG_FILE:-}. Run the same pull with --replace once it is fixed, or with --keep-secrets to leave the copy as production had it."
+    if [[ "${SR_NEUTRALISE:-0}" == "1" ]]; then
+      fl_fix "the log has the bench's message: ${FL_LOG_FILE:-}. Plan the same restore again once it is fixed; until then do not start the scheduler or workers on ${FL_PULL_AS}."
+    else
+      fl_fix "the log has the bench's message: ${FL_LOG_FILE:-}. Run the same pull with --replace once it is fixed, or with --keep-secrets to leave the copy as production had it."
+    fi
     return 1
   fi
   fl_neutralise_summary_v summary "$FL_PULL_NEUTRALISE_ROWS"
   fl_neutralise_json_v FL_PULL_NEUTRALISE_JSON "$FL_PULL_NEUTRALISE_ROWS"
   fl_ok "neutralised ${FL_PULL_AS}: ${summary}"
-  fl_info "not touched: customer data (names, emails, phones, documents) is still in the copy; --keep-secrets would have left the integrations and passwords as production had them"
+  if [[ "${SR_NEUTRALISE:-0}" == "1" ]]; then
+    fl_info "not touched: customer data (names, emails, phones, documents) is still in ${FL_PULL_AS}"
+  else
+    fl_info "not touched: customer data (names, emails, phones, documents) is still in the copy; --keep-secrets would have left the integrations and passwords as production had them"
+  fi
 }
 
 # pause_scheduler in common_site_config.json: set by the user, or left by
@@ -1120,6 +1143,15 @@ fl_pull_hook_run() {
 }
 
 fl_pull_step_before_migrate() {
+  local now_sha=""
+  if [[ -n "$FL_PULL_HOOK_SHA" ]]; then
+    [[ -f "$FL_PULL_HOOK" ]] && now_sha="$(shasum -a 256 "$FL_PULL_HOOK" 2>/dev/null | awk '{print $1}')"
+    if [[ "$now_sha" != "$FL_PULL_HOOK_SHA" ]]; then
+      fl_fail "${FL_PULL_HOOK} is not the script the plan showed (its hash changed since the plan); it was not run, and ${FL_PULL_AS} is restored but not migrated"
+      fl_fix "read the script, run it by hand if it is right, then: cd $(printf '%q' "$FL_BENCH_DIR") && bench --site $(printf '%q' "$FL_PULL_AS") migrate"
+      return 1
+    fi
+  fi
   fl_bench_env_exports
   fl_run_long "${FL_PULL_HOOK##*/} (before migrate)" fl_pull_hook_run || {
     fl_fail "the --before-migrate script failed; ${FL_PULL_AS} is restored but not migrated"

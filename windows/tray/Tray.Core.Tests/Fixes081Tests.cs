@@ -145,6 +145,6 @@ public class Fixes081Tests
     [InlineData(null, "https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash")]
     public void TheLinuxInstallLineFollowsTheTrayRelease(string? version, string tail)
     {
-        Assert.Equal("curl -fsSL " + tail, WizardModel.LinuxCliInstallLineFor(version));
+        Assert.Equal("curl --proto '=https' --tlsv1.2 -fsSL " + tail, WizardModel.LinuxCliInstallLineFor(version));
     }
 }

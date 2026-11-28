@@ -960,6 +960,22 @@ nonisolated final class HeldCLI: CommandRunning, @unchecked Sendable {
 
     func answer(_ command: String, _ json: String) { lock.withLock { answers[command] = json } }
 
+    /// The standard input of every call that sent some (`--secrets-stdin`), in order.
+    var inputs: [[UInt8]] { lock.withLock { sentInputs } }
+    private var sentInputs: [[UInt8]] = []
+
+    func run(executable: URL, arguments: [String], environment: [String: String], timeout: Duration,
+             qos: QualityOfService, input: [UInt8]?) async throws(CLIError) -> CommandOutput {
+        if let input { lock.withLock { sentInputs.append(input) } }
+        return try await run(executable: executable, arguments: arguments, environment: environment, timeout: timeout)
+    }
+
+    func stream(executable: URL, arguments: [String], environment: [String: String], timeout: Duration, input: [UInt8]?,
+                onLine: @escaping @Sendable (String) -> Void) async throws(CLIError) -> Int32 {
+        if let input { lock.withLock { sentInputs.append(input) } }
+        return try await stream(executable: executable, arguments: arguments, environment: environment, timeout: timeout, onLine: onLine)
+    }
+
     func release() {
         let held = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
             holding = false
@@ -1080,5 +1096,22 @@ struct BenchTrustTests {
         #expect(merged.agentState == "running")
         #expect(merged.processesRunning == true, "the file's state, not the last status's")
         #expect(fromFile.merged(over: nil) == fromFile)
+    }
+
+    @Test func theFileKeepsReadinessOfTheSameRun() {
+        let ready = ReadyInfo(ready: true)
+        let seen = BenchStatus(schemaVersion: 1, bench: "/b", state: .running, pid: 4242, ready: ready)
+        // the runner's heartbeat, the same run: state.json has no `ready`, the pill keeps it
+        let same = BenchStatus(schemaVersion: 1, bench: "/b", state: .running, pid: 4242, webPingCode: 200, source: "runner")
+        #expect(same.merged(over: seen).ready == ready)
+        // another state or another process: what the CLI saw is stale, so it is dropped
+        let stopped = BenchStatus(schemaVersion: 1, bench: "/b", state: .stopped, source: "runner")
+        #expect(stopped.merged(over: seen).ready == nil)
+        let restarted = BenchStatus(schemaVersion: 1, bench: "/b", state: .running, pid: 5000, source: "runner")
+        #expect(restarted.merged(over: seen).ready == nil)
+        // a status that has its own `ready` keeps it
+        let own = ReadyInfo(ready: false)
+        let fresh = BenchStatus(schemaVersion: 1, bench: "/b", state: .running, pid: 4242, ready: own)
+        #expect(fresh.merged(over: seen).ready == own)
     }
 }

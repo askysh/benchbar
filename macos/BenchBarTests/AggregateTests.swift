@@ -131,6 +131,38 @@ struct TwoBenchStoreTests {
         #expect(bench.schedulerOn == true)
     }
 
+    /// `siteRows` is built when the summary or status changes (not on each read by a view), and it follows both.
+    @Test func cachedSiteRowsFollowTheSummaryAndTheStatus() async throws {
+        base.cli.answer("list", json: try Fixture.string("list-two-benches"))
+        base.cli.answer("status", bench: v15, json: status(v15, "stopped"))
+        base.cli.answer("status", bench: v16, json: try Fixture.string("status-v16-two-sites"))
+        let store = base.makeStore()
+        await store.start(polling: false)
+        let bench = try #require(store.benches.first { $0.path == v16 })
+        #expect(bench.siteRows == SiteRow.make(sites: bench.status?.sites ?? bench.summary.sites, defaultSite: bench.summary.site,
+                                               port: bench.status?.ports?.web ?? bench.summary.ports.web))
+        // a summary change reaches the rows when no status answered for the sites
+        let fresh = BenchModel(summary: bench.summary)
+        fresh.summary.sites = [SiteInfo(name: "only", isDefault: true, hostsEntry: true, pingCode: nil)]
+        fresh.summary.site = "only"
+        #expect(fresh.siteRows.map(\.name) == ["only"])
+        // the rows read twice are the same value
+        #expect(fresh.siteRows == fresh.siteRows)
+    }
+
+    @Test func twoBenchesWithOneNameGetAFolderHint() {
+        let a = SidebarModel.Input(path: "/Users/me/work/frappe-bench", name: "frappe-bench", state: .stopped, isBusy: false, sites: [])
+        let b = SidebarModel.Input(path: "/Users/me/other/frappe-bench", name: "frappe-bench", state: .stopped, isBusy: false, sites: [])
+        let c = SidebarModel.Input(path: "/Users/me/x/v16", name: "v16", state: .stopped, isBusy: false, sites: [])
+        let rows = SidebarModel([a, b, c]).benches
+        #expect(rows.map(\.hint) == ["work", "other", nil])
+    }
+
+    @Test func theSetUpStatesOfTheSharePrimaryAreNamed() {
+        #expect(SharePrimary.setUp.isSetUp && SharePrimary.finishSetup.isSetUp)
+        #expect(!SharePrimary.stop.isSetUp && !SharePrimary.start(enabled: true).isSetUp && !SharePrimary.turnOnProtection.isSetUp)
+    }
+
     @Test func schedulerRunsServiceThenRestartsARunningBench() async throws {
         let store = try await store(v15: "stopped", v16: "running")
         base.cli.answer("service", json: "")

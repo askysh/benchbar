@@ -45,7 +45,7 @@ project_version() {
 }
 
 step "profile formulae"
-"${ROOT}/scripts/check-profile-formulae.sh" || die "a release profile names a formula Homebrew is about to disable" "move the profile in config/release-profiles.tsv (see docs/DECISIONS.md, 0.7.3)"
+"${ROOT}/scripts/check-profile-formulae.sh" || die "a release profile names a formula Homebrew is about to disable" "move the profile in config/release-profiles.tsv (see maintainers/DECISIONS.md, 0.7.3)"
 
 step "check tools"
 for tool in xcodegen xcodebuild hdiutil ditto codesign shasum; do
@@ -97,6 +97,7 @@ TARBALL="${DIST}/benchbar-cli-${VERSION}.tar.gz"
 
 step "checksums"
 (cd "$DIST" && shasum -a 256 "$(basename "$ZIP")" "$(basename "$DMG")" "$(basename "$TARBALL")" >SHA256SUMS)
+(cd "$ROOT" && shasum -a 256 install.sh install.ps1) >>"${DIST}/SHA256SUMS"
 cat "${DIST}/SHA256SUMS"
 
 printf '\n[OK] unsigned release %s in %s\n' "$VERSION" "$DIST"

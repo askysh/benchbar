@@ -67,4 +67,4 @@ To add a section, add its name to `SECTIONS` in
 `scripts/changelog-fold.sh` writes every fragment into `## Unreleased` of
 `CHANGELOG.md` and removes the fragment files. `--print` shows the section
 without writing, and `--check` only validates. A second run with no
-fragments changes nothing. See [docs/releasing.md](../docs/releasing.md).
+fragments changes nothing. See [maintainers/releasing.md](../maintainers/releasing.md).

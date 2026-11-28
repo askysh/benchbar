@@ -46,12 +46,14 @@ nonisolated struct SidebarModel: Equatable, Sendable {
 
     init(_ inputs: [Input], showsNetwork: Bool = false) {
         self.showsNetwork = showsNetwork
+        // one pass for the names, not a scan of every bench per bench
+        let nameCounts = Dictionary(inputs.map { ($0.name, 1) }, uniquingKeysWith: +)
         benches = inputs.map { input in
-            let twins = inputs.filter { $0.name == input.name }.count > 1
+            let twins = nameCounts[input.name, default: 0] > 1
             return Row(path: input.path, name: input.name,
                        hint: twins ? URL(fileURLWithPath: input.path).deletingLastPathComponent().lastPathComponent : nil,
                        state: input.state, isBusy: input.isBusy, sites: input.sites,
-                       guidance: input.guidance.map { [$0.reason, $0.action.map { "Next: \($0.title)" }].compactMap { $0 }.joined(separator: " ") },
+                       guidance: input.guidance.map { [$0.reason, $0.action.map { String(localized: "Next: \($0.title)") }].compactMap { $0 }.joined(separator: " ") },
                        statusText: input.statusText ?? BenchText.headline(input.state, reason: nil, exitCode: nil))
         }
     }
@@ -59,7 +61,7 @@ nonisolated struct SidebarModel: Equatable, Sendable {
     var isEmpty: Bool { benches.isEmpty }
 
     /// Shown instead of the bench rows.
-    static let emptyText = "No bench yet"
+    static let emptyText = String(localized: "No bench yet")
 }
 
 /// What a sidebar row opens.
@@ -69,6 +71,7 @@ nonisolated enum SidebarItem: Hashable, Sendable {
     case site(bench: String, name: String)
     case profiles
     case discovery
+    case history
     case network
 }
 
@@ -77,7 +80,8 @@ extension SidebarModel {
         self.init(benches.map { bench in
             Input(path: bench.path, name: bench.name, state: bench.state, isBusy: bench.isBusy,
                   sites: bench.siteRows.map { Site(name: $0.name, isDefault: $0.isDefault) }, guidance: bench.guidance,
-                  statusText: BenchText.headline(bench.state, reason: bench.machine.stopReason, exitCode: bench.status?.lastExitCode))
+                  statusText: BenchText.headline(bench.state, reason: bench.machine.stopReason, exitCode: bench.status?.lastExitCode,
+                                                 ready: bench.status?.ready))
         }, showsNetwork: showsNetwork)
     }
 }

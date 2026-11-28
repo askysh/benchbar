@@ -41,8 +41,8 @@ fi
 if [[ "$RC" == "1" ]]; then
   printf '## Release candidate\n\n'
   printf 'This is a **pre-release** of BenchBar %s, for testing before the release. It is not offered as an update: Sparkle, the app'"'"'s update banner, `benchbar self-update`, the one line installers and Homebrew all stay on the last release. To try it, name the version:\n\n' "${VERSION%%-*}"
-  printf '```bash\ncurl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v%s/install.sh | bash -s -- --version v%s\n```\n\n' "$VERSION" "$VERSION"
-  printf 'On Windows, the notes below give the PowerShell line. To go back, run the normal installer without a version.\n\n'
+  printf '```bash\ncurl --proto '"'"'=https'"'"' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/v%s/install.sh | bash -s -- --version v%s\n```\n\n' "$VERSION" "$VERSION"
+  printf 'On a Mac this line installs the app and the command line tool at this tag (add `--no-app` for the tool alone). Homebrew and `benchbar self-update` cannot install a candidate: they only see releases. On Windows, the notes below give the PowerShell line. To go back, run the normal installer without a version.\n\n'
   printf '## Changes so far\n'
   printf '%s\n' "$section"
   printf '\n---\n\n'
@@ -57,9 +57,10 @@ fi
 
 printf '## Update\n\n'
 printf 'Already using BenchBar? In the app, click **Update Now** in the update banner or the menu bar menu (BenchBar 0.6 and later check once a day). On 0.5.x, run this in Terminal:\n\n'
-printf '```bash\ncurl -fsSL %s | bash -s -- --yes\n```\n\n' "$INSTALLER"
+printf '```bash\ncurl --proto '"'"'=https'"'"' --tlsv1.2 -fsSL %s | bash -s -- --yes\n```\n\n' "$INSTALLER"
 printf 'It updates the benchbar CLI in `~/.local/share/benchbar` and the app in `~/Applications`, quits a running BenchBar first and never touches a bench. From 0.6 on, `benchbar self-update` runs the same. If your benchbar is a git checkout of your own, `git pull` there and add `--app-only`.\n\n'
-printf 'Installed with Homebrew? Run `brew upgrade`, or click **Update Now** in the app: from 0.7.1 the app carries its command line tool, and Homebrew'"'"'s benchbar hands off to it, so either way updates both. The tap gets a release a few minutes after it is published.\n\n'
+printf 'Installed with Homebrew? Run `brew upgrade --cask askysh/tap/benchbar-app` (a plain `brew upgrade` skips a cask that updates itself), or click **Update Now** in the app. From 0.7.1 the app carries its command line tool and Homebrew'"'"'s benchbar hands off to it, so updating the app updates both; `brew upgrade askysh/tap/benchbar` alone changes only the formula, and the app'"'"'s command line tool is the one that runs. The tap gets the release once its pull request is merged, a few minutes after the release is published.\n\n'
+printf 'What this release means for you, and what to do after the update: [What'"'"'s new](https://benchbar.akashmishra.com/whats-new/).\n\n'
 printf '## Changes\n'
 printf '%s\n' "$section"
 printf '\n---\n\n'
@@ -70,5 +71,5 @@ if [[ "$SIGNED" == "1" ]]; then
 else
   printf 'This build is **not signed with an Apple Developer ID** (ad hoc signature). macOS shows "Apple could not verify" on first open of the DMG: use System Settings > Privacy & Security > Open Anyway, or install with the one liner, which downloads with curl and opens without that prompt:\n\n'
 fi
-printf '```bash\ncurl -fsSL %s | bash\n```\n\n' "$INSTALLER"
+printf '```bash\ncurl --proto '"'"'=https'"'"' --tlsv1.2 -fsSL %s | bash\n```\n\n' "$INSTALLER"
 printf 'Checksums are in `SHA256SUMS`.\n'

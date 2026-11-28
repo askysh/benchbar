@@ -9,26 +9,27 @@ public static class BenchTabs
 
     public static string Label(BenchTab tab) => tab switch
     {
-        BenchTab.Sites => "Sites",
-        BenchTab.Apps => "Apps",
-        BenchTab.Health => "Health",
-        BenchTab.Sharing => "Sharing",
-        _ => "Overview",
+        BenchTab.Sites => UiText.Get("BenchTabSites"),
+        BenchTab.Apps => UiText.Get("BenchTabApps"),
+        BenchTab.Health => UiText.Get("BenchTabHealth"),
+        BenchTab.Sharing => UiText.Get("BenchTabSharing"),
+        _ => UiText.Get("BenchTabOverview"),
     };
 }
 
 /// <summary>The rows below the benches in the sidebar. They open a pane that is not about one bench.</summary>
-public enum SidebarTool { None, FindBenches, TeamProfiles, Labs }
+public enum SidebarTool { None, FindBenches, TeamProfiles, Labs, History }
 
 public static class SidebarTools
 {
-    public static IReadOnlyList<SidebarTool> All { get; } = [SidebarTool.FindBenches, SidebarTool.TeamProfiles, SidebarTool.Labs];
+    public static IReadOnlyList<SidebarTool> All { get; } = [SidebarTool.FindBenches, SidebarTool.TeamProfiles, SidebarTool.History, SidebarTool.Labs];
 
     public static string Title(SidebarTool tool) => tool switch
     {
-        SidebarTool.FindBenches => "Find Benches",
-        SidebarTool.TeamProfiles => "Team Profiles",
-        SidebarTool.Labs => "Labs",
+        SidebarTool.FindBenches => UiText.Get("DiscoveryTitle"),
+        SidebarTool.TeamProfiles => UiText.Get("ProfileTitle"),
+        SidebarTool.Labs => UiText.Get("LabsTitle"),
+        SidebarTool.History => UiText.Get("HistoryTitle"),
         _ => "",
     };
 }

@@ -30,8 +30,8 @@ public static partial class VersionMismatch
         var tray = Parse(trayVersion);
         if (shim is null || tray is null || shim == tray) return null;
         if (SameMinor(shim, tray) && IsNewer(shim, tray)) return null;
-        var where = string.IsNullOrWhiteSpace(shimPath) ? "benchbar.exe" : $"benchbar.exe ({shimPath})";
-        return $"{where} is version {shim} but BenchBar is {tray}. They must match: run the installer again.";
+        var where = string.IsNullOrWhiteSpace(shimPath) ? "benchbar.exe" : UiText.Format("CommonShimAt", shimPath);
+        return UiText.Format("CommonVersionMismatch", where, shim, tray);
     }
 
     /// <summary>True when <paramref name="a"/> is a later X.Y.Z than <paramref name="b"/> (both as <see cref="Parse"/> returns them).</summary>

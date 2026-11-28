@@ -131,7 +131,8 @@ nonisolated struct WizardState: Equatable, Sendable {
         case checkPrerequisites(folder: String)
         case loadProfiles
         case planInstall(InstallRequest)
-        case startInstall(InstallRequest, withRootPassword: Bool)
+        /// `token`: the plan the user reviewed, only for the run Install starts from Review; a run again passes none.
+        case startInstall(InstallRequest, withRootPassword: Bool, token: String? = nil)
         case stopInstall
         /// Find Benches and its folder scan (the existing adoption flow).
         case openFindBenches
@@ -162,6 +163,11 @@ nonisolated struct WizardState: Equatable, Sendable {
     private(set) var plan: InstallPlan?
     private(set) var planning = false
     private(set) var planError: String?
+    /// The CLI refused the plan token: the machine changed between Review and Install.
+    /// Nothing ran; Review Again plans once more.
+    private(set) var planStale: String?
+    /// The run in progress was started with the reviewed plan's token.
+    private var runHasToken = false
 
     private(set) var progress = InstallProgress()
     /// Names of steps the install runs that the reviewed plan did not run:
@@ -212,7 +218,7 @@ nonisolated struct WizardState: Equatable, Sendable {
     /// out of the other.
     var siteClash: String? {
         bench(usingSite: form.site).map {
-            "\($0) already has a site named \(form.site). Cookies ignore the port, so logging in to one bench logs you out of the other. Choose another name."
+            String(localized: "\($0) already has a site named \(form.site). Cookies ignore the port, so logging in to one bench logs you out of the other. Choose another name.")
         }
     }
 
@@ -224,12 +230,12 @@ nonisolated struct WizardState: Equatable, Sendable {
     var formProblem: String? {
         if resolvedFolder.isEmpty || !resolvedFolder.hasPrefix("/") { return "Choose a folder for the bench." }
         if prerequisites?.check("bench_folder")?.level == .fail { return prerequisites?.check("bench_folder")?.message }
-        if !profilesLoaded { return profilesError == nil ? "Reading the profiles…" : "The profiles could not be read. Choose Try Again." }
-        if !profileChoices.contains(where: { $0.name == form.profile }) { return "Choose a profile." }
-        if !bundles.contains(where: { $0.name == form.bundle }) { return "Choose a bundle." }
+        if !profilesLoaded { return profilesError == nil ? String(localized: "Reading the profiles…") : String(localized: "The profiles could not be read. Choose Try Again.") }
+        if !profileChoices.contains(where: { $0.name == form.profile }) { return String(localized: "Choose a profile.") }
+        if !bundles.contains(where: { $0.name == form.bundle }) { return String(localized: "Choose a bundle.") }
         if form.site.isEmpty || !SiteName.isValid(form.site) { return SiteName.rule }
-        if form.adminPassword.isEmpty { return "Choose the Administrator password." }
-        if showsPortField, portOffsetValue == nil { return "The port offset is a whole number." }
+        if form.adminPassword.isEmpty { return String(localized: "Choose the Administrator password.") }
+        if showsPortField, portOffsetValue == nil { return String(localized: "The port offset is a whole number.") }
         return nil
     }
 
@@ -256,29 +262,31 @@ nonisolated struct WizardState: Equatable, Sendable {
 
     var primary: Primary? {
         switch page {
-        case .welcome: return Primary(title: "Set Up a New Bench", enabled: true)
-        case .cliOnly: return Primary(title: "Done", enabled: true)
-        case .check: return Primary(title: "Continue", enabled: canContinueFromCheck)
-        case .newBench: return Primary(title: "Review", enabled: formProblem == nil)
-        case .review: return Primary(title: "Install", enabled: plan != nil && !planning)
+        case .welcome: return Primary(title: String(localized: "Set Up a New Bench"), enabled: true)
+        case .cliOnly: return Primary(title: String(localized: "Done"), enabled: true)
+        case .check: return Primary(title: String(localized: "Continue"), enabled: canContinueFromCheck)
+        case .newBench: return Primary(title: String(localized: "Review"), enabled: formProblem == nil)
+        case .review:
+            if planStale != nil { return Primary(title: String(localized: "Review Again"), enabled: !planning) }
+            return Primary(title: String(localized: "Install"), enabled: plan != nil && !planning)
         case .install:
             switch installPhase {
-            case .failed: return Primary(title: "Retry", enabled: true)
-            case .needsRootPassword: return Primary(title: "Retry", enabled: !rootPassword.isEmpty)
-            case .stopped: return Primary(title: "Run Again", enabled: true)
+            case .failed: return Primary(title: String(localized: "Retry"), enabled: true)
+            case .needsRootPassword: return Primary(title: String(localized: "Retry"), enabled: !rootPassword.isEmpty)
+            case .stopped: return Primary(title: String(localized: "Run Again"), enabled: true)
             case .idle, .running, .succeeded: return nil
             }
-        case .done: return siteURL.map { _ in Primary(title: "Open Site", enabled: true) }
+        case .done: return siteURL.map { _ in Primary(title: String(localized: "Open Site"), enabled: true) }
         }
     }
 
     /// The label of the Back button, nil when the page has none.
     var backTitle: String? {
         switch page {
-        case .welcome: return "Cancel"
-        case .cliOnly, .check, .newBench, .review: return "Back"
-        case .install: return isInstalling ? nil : "Back"
-        case .done: return "Done"
+        case .welcome: return String(localized: "Cancel")
+        case .cliOnly, .check, .newBench, .review: return String(localized: "Back")
+        case .install: return isInstalling ? nil : String(localized: "Back")
+        case .done: return String(localized: "Done")
         }
     }
 
@@ -408,9 +416,17 @@ nonisolated struct WizardState: Equatable, Sendable {
             page = .review
             plan = nil
             planError = nil
+            planStale = nil
             planning = true
             return [.planInstall(request)]
-        case .review: return beginInstall(withRootPassword: false)
+        case .review:
+            if planStale != nil {
+                plan = nil
+                planStale = nil
+                planning = true
+                return [.planInstall(request)]
+            }
+            return beginInstall(withRootPassword: false, token: plan?.token)
         case .install:
             if case .stopped = installPhase { return beginInstall(withRootPassword: !rootPassword.isEmpty) }
             return retry()
@@ -431,6 +447,7 @@ nonisolated struct WizardState: Equatable, Sendable {
         case .review:
             page = .newBench
             planning = false
+            planStale = nil
             return []
         case .install:
             guard !isInstalling else { return [] }
@@ -441,11 +458,12 @@ nonisolated struct WizardState: Equatable, Sendable {
         }
     }
 
-    private mutating func beginInstall(withRootPassword: Bool) -> [Effect] {
+    private mutating func beginInstall(withRootPassword: Bool, token: String? = nil) -> [Effect] {
         page = .install
         resetInstall()
         installPhase = .running
-        return [.startInstall(request, withRootPassword: withRootPassword)]
+        runHasToken = token != nil
+        return [.startInstall(request, withRootPassword: withRootPassword, token: token)]
     }
 
     private mutating func retry() -> [Effect] {
@@ -480,8 +498,18 @@ nonisolated struct WizardState: Equatable, Sendable {
             return []
         }
         guard let done = progress.done else {
-            let message = error ?? "benchbar install ended without a result (exit code \(code))."
+            let message = error ?? String(localized: "benchbar install ended without a result (exit code \(code)).")
             installPhase = .failed(Failure(step: progress.failedStep?.name, message: message, fix: nil, log: progress.log))
+            return []
+        }
+        // the reviewed plan's token was refused before any step: back to Review, nothing changed
+        if done.exit != 0, runHasToken, let message = done.error ?? error, StalePlan.isStale(message) {
+            runHasToken = false
+            resetInstall()
+            page = .review
+            plan = nil
+            planning = false
+            planStale = message
             return []
         }
         switch done.exit {
@@ -492,7 +520,7 @@ nonisolated struct WizardState: Equatable, Sendable {
             installPhase = .needsRootPassword(fix: done.fix)
         default:
             let step = progress.failedStep
-            let message = step?.message ?? done.error ?? done.fix ?? "benchbar install failed (exit \(done.exit))."
+            let message = step?.message ?? done.error ?? done.fix ?? String(localized: "benchbar install failed (exit \(done.exit)).")
             installPhase = .failed(Failure(step: step?.name, message: message, fix: done.fix, log: done.log ?? progress.log))
         }
         return []

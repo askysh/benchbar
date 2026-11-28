@@ -7,30 +7,30 @@ public enum SharePrimary { SetUp, FinishSetup, TurnOnProtection, Start, Stop, Up
 public static class ShareText
 {
     public static readonly IReadOnlyList<int> Hours = [1, 2, 4, 8, 12];
-    public const string LabOff = "Sharing is an experiment. Turn on \"Share with people on the same Wi-Fi\" in Labs to use it.";
-    public const string NewerCli = "Sharing needs a newer BenchBar command line tool.";
-    public const string SetUpIntro = "Share a copy of this site with people on the same Wi-Fi. Setup makes the copy; nothing is shared until you press Start sharing.";
-    public const string LiveUpdates = "Guests see changes after a page refresh.";
-    public const string CodeNote = "Anyone on this Wi-Fi with the code can join. Remove people anytime.";
-    public const string CodeProves = "The code proves someone may join; it does not prove to them that this computer is the host.";
-    public const string InviteCopied = "Invite copied. Paste it in your team channel. New code or Stop makes it stop working.";
-    public const string CopyInviteHelp = "Copies a message with a link that joins this room in one click, code included.";
-    public const string Locked = "Room locked: nobody new can join.";
-    public const string Full = "Room full: every seat is taken.";
-    public const string BudgetLocked = "Too many wrong codes; the room is locked. New code to reopen.";
-    public const string JoinTrouble = "Someone is having trouble joining. Check the code.";
-    public const string WipeOwed = "A sign-out is still owed in the copy. BenchBar retries it on the next room action.";
-    public const string SetupInterrupted = "Sharing setup was interrupted, so Start does not work yet. Choose Finish setup to refresh the copy (the command line: benchbar share setup --refresh).";
-    public const string DriftWarning = "Your apps changed since the copy was made. Guests see the copy's code, not your working tree; Refresh copy to catch up.";
-    public const string RefreshConfirm = "Replaces the copy. Anything guests changed in it is lost.";
-    public const string Acknowledgement = "This copy contains real customer and employee data that your colleagues will be able to read.";
-    public const string RemoveDetail = "They can't join again with the current code. Everyone else stays. To let them back in, copy a new invite and send it to them.";
-    public const string CheckedAtStart = "Checked when sharing starts";
-    public const string LanGuardAsk = "Network protection changes the firewall rules that keep the bench's ports closed to other computers while sharing. It asks for your password, and only after you confirm here.";
-    public const string LanGuardAllowAsk = "This lets sharing through the firewall. It asks for your password, and only after you confirm here.";
-    public const string PeopleTitle = "People in the room";
-    public const string LanGuardUnavailable = "Network protection is not available on Windows yet, so sharing cannot start here.";
-    public const string RootPasswordAdvice = "The tray cannot ask for it. In a terminal, run `benchbar mariadb-password` to read the one BenchBar saved, or run the same command there with MARIADB_ROOT_PASSWORD set.";
+    public static string LabOff => UiText.Get("ShareLabOff");
+    public static string NewerCli => UiText.Get("ShareNewerCli");
+    public static string SetUpIntro => UiText.Get("ShareSetUpIntro");
+    public static string LiveUpdates => UiText.Get("ShareLiveUpdates");
+    public static string CodeNote => UiText.Get("ShareCodeNote");
+    public static string CodeProves => UiText.Get("ShareCodeProves");
+    public static string InviteCopied => UiText.Get("ShareInviteCopied");
+    public static string CopyInviteHelp => UiText.Get("ShareCopyInviteHelp");
+    public static string Locked => UiText.Get("ShareLocked");
+    public static string Full => UiText.Get("ShareFull");
+    public static string BudgetLocked => UiText.Get("ShareBudgetLocked");
+    public static string JoinTrouble => UiText.Get("ShareJoinTrouble");
+    public static string WipeOwed => UiText.Get("ShareWipeOwed");
+    public static string SetupInterrupted => UiText.Get("ShareSetupInterrupted");
+    public static string DriftWarning => UiText.Get("ShareDriftWarning");
+    public static string RefreshConfirm => UiText.Get("ShareRefreshConfirm");
+    public static string Acknowledgement => UiText.Get("ShareAcknowledgement");
+    public static string RemoveDetail => UiText.Get("ShareRemoveDetail");
+    public static string CheckedAtStart => UiText.Get("ShareCheckedAtStart");
+    public static string LanGuardAsk => UiText.Get("ShareLanGuardAsk");
+    public static string LanGuardAllowAsk => UiText.Get("ShareLanGuardAllowAsk");
+    public static string PeopleTitle => UiText.Get("SharePeopleTitle");
+    public static string LanGuardUnavailable => UiText.Get("ShareLanGuardUnavailable");
+    public static string RootPasswordAdvice => UiText.Get("ShareRootPasswordAdvice");
 
     /// <summary>Whether the CLI's LAN guard runs on this platform: the pf anchor is macOS only, and the nftables guard for Linux (so WSL) is not written yet.</summary>
     public const bool LanGuardSupportedHere = false;
@@ -65,79 +65,131 @@ public static class ShareText
 
     public static string Title(SharePrimary primary) => primary switch
     {
-        SharePrimary.SetUp => "Set up sharing",
-        SharePrimary.FinishSetup => "Finish setup",
-        SharePrimary.TurnOnProtection => "Turn on network protection",
-        SharePrimary.Start => "Start sharing",
-        SharePrimary.Stop => "Stop",
-        _ => "Update",
+        SharePrimary.SetUp => UiText.Get("ShareTitleSetUp"),
+        SharePrimary.FinishSetup => UiText.Get("ShareTitleFinishSetup"),
+        SharePrimary.TurnOnProtection => UiText.Get("ShareTitleTurnOnProtection"),
+        SharePrimary.Start => UiText.Get("ShareTitleStart"),
+        SharePrimary.Stop => UiText.Get("ShareTitleStop"),
+        _ => UiText.Get("ShareTitleUpdate"),
     };
 
     /// <summary>3540 s is "59 min", 7260 is "2 h 1 min", 30 is "less than a minute".</summary>
     public static string Countdown(int seconds)
     {
-        if (seconds < 60) return "less than a minute";
+        if (seconds < 60) return UiText.Get("ShareCountdownLessThanAMinute");
         int hours = seconds / 3600, minutes = seconds % 3600 / 60;
-        if (hours == 0) return $"{minutes} min";
-        return minutes == 0 ? $"{hours} h" : $"{hours} h {minutes} min";
+        if (hours == 0) return UiText.Format("ShareCountdownMinutes", minutes);
+        return minutes == 0 ? UiText.Format("ShareCountdownHours", hours) : UiText.Format("ShareCountdownHoursMinutes", hours, minutes);
     }
 
-    public static string Indicator(ShareStatus status) => $"Sharing on your network · {status.DevicesOnline} online · {Countdown(status.SecondsLeft)} left";
+    public static string Indicator(ShareStatus status) => UiText.Format("ShareIndicator", status.DevicesOnline, Countdown(status.SecondsLeft));
 
     /// <summary>Extend choices in minutes, none past what the CLI allows.</summary>
     public static IReadOnlyList<(string Label, int Minutes)> ExtendOptions(int canExtendSeconds) =>
-        [.. new[] { ("+30 min", 30), ("+1 hour", 60) }.Where(o => o.Item2 * 60 <= canExtendSeconds)];
+        [.. new[] { (UiText.Get("ShareExtend30"), 30), (UiText.Get("ShareExtend60"), 60) }.Where(o => o.Item2 * 60 <= canExtendSeconds)];
 
     public static string StopConfirm(int online) => online switch
     {
-        0 => "Stop sharing?",
-        1 => "Stop sharing? 1 person is connected and will be signed out.",
-        _ => $"Stop sharing? {online} people are connected and will be signed out.",
+        0 => UiText.Get("ShareStopConfirmNobody"),
+        1 => UiText.Get("ShareStopConfirmOne"),
+        _ => UiText.Format("ShareStopConfirmMany", online),
     };
 
-    public static string StartConfirm(string site) => $"Start sharing {site} on this network? People on this Wi-Fi who have the room code can join a copy of {site} until you stop.";
+    public static string StartConfirm(string site) => UiText.Format("ShareStartConfirm", site);
 
-    public static string RemoveConfirm(SharePerson person, string site) => $"Remove {person.Name}? Closes their connections and signs them out of {site}.";
+    // --- the host's key (#159 SHARE-8) ---
+
+    /// <summary>"Host key: 0123 4567 89ab cdef": the digits a guest sees on the join sheet of an invite, for the host to read out.
+    /// Null without 16 hex digits.</summary>
+    public static string? HostKeyLine(ShareStatus status)
+    {
+        if (status.HostKey is not { Length: 16 } key || !key.All(Uri.IsHexDigit)) return null;
+        return UiText.Format("ShareHostKeyLine", key[..4], key[4..8], key[8..12], key[12..]);
+    }
+
+    public static string HostKeyHelp => UiText.Get("ShareHostKeyHelp");
+
+    // --- who gives out the seats (#159 SHARE-5) ---
+
+    public static string AssignSeatsToggle => UiText.Get("ShareAssignSeatsToggle");
+    public static string SeatsNeedNewerCli => UiText.Get("ShareSeatsNeedNewerCli");
+
+    public static string StartConfirm(string site, bool assignSeats) =>
+        StartConfirm(site) + (assignSeats ? UiText.Get("ShareStartConfirmHostGives") : UiText.Get("ShareStartConfirmOpen"));
+
+    public static string SeatModeLine(bool hostGivesSeats) => hostGivesSeats
+        ? UiText.Get("ShareSeatModeHost")
+        : UiText.Get("ShareSeatModeOpen");
+
+    public static string SeatCaption(SharePerson person, bool hostGivesSeats) =>
+        person.SeatName ?? (hostGivesSeats ? UiText.Get("ShareSeatCaptionHostWaits") : UiText.Get("ShareSeatCaptionNone"));
+
+    /// <summary>The line above the people while somebody waits for the host; null when nobody does.</summary>
+    public static string? WaitingNotice(IReadOnlyList<SharePerson> people, bool hostGivesSeats)
+    {
+        var waiting = people.Count(p => p.SeatId is null);
+        if (!hostGivesSeats || waiting == 0) return null;
+        return waiting == 1 ? UiText.Get("ShareWaitingOne") : UiText.Format("ShareWaitingMany", waiting);
+    }
+
+    /// <summary>A seat with its roles, so the host sees what it may do before giving it.</summary>
+    public static string SeatTitle(ShareSeat seat) => seat.Roles.Count switch
+    {
+        0 => seat.Name,
+        <= 3 => UiText.Format("ShareSeatTitleRoles", seat.Name, string.Join(", ", seat.Roles)),
+        _ => UiText.Format("ShareSeatTitleMore", seat.Name, string.Join(", ", seat.Roles.Take(3)), seat.Roles.Count - 3),
+    };
+
+    /// <summary>The seats a person can be given: the ones nobody in the room holds, by name.</summary>
+    public static IReadOnlyList<ShareSeat> FreeSeats(IReadOnlyList<ShareSeat> seats, IReadOnlyList<SharePerson> people)
+    {
+        var held = people.Where(p => p.SeatId is not null).Select(p => p.SeatId!).ToHashSet(StringComparer.Ordinal);
+        return [.. seats.Where(s => s.HeldBy is null && !held.Contains(s.Id)).OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    public static string AssignButton(SharePerson person) => person.SeatId is null ? UiText.Format("ShareAssignGive", person.Name) : UiText.Format("ShareAssignMove", person.Name);
+
+    public static string RemoveConfirm(SharePerson person, string site) => UiText.Format("ShareRemoveConfirm", person.Name, site);
 
     public static string ProtectionText(LanGuardState state) => state switch
     {
-        LanGuardState.Installed => "Network protection is on.",
-        LanGuardState.Outdated => "Network protection needs an update.",
-        _ => "Network protection is off. It keeps the bench's own ports closed to the network.",
+        LanGuardState.Installed => UiText.Get("ShareProtectionOn"),
+        LanGuardState.Outdated => UiText.Get("ShareProtectionOutdated"),
+        _ => UiText.Get("ShareProtectionOff"),
     };
 
     public static string? FixLabel(ShareFixAction action) => action switch
     {
-        ShareFixAction.InstallNetworkProtection => "Turn on network protection",
-        ShareFixAction.AllowNodeFirewall => "Allow...",
-        ShareFixAction.UpdateCli => "Update",
-        ShareFixAction.RerunSetup => "Set up again",
-        ShareFixAction.RefreshCopy => "Refresh copy",
-        ShareFixAction.RestartSharing => "Start again",
+        ShareFixAction.InstallNetworkProtection => UiText.Get("ShareFixInstall"),
+        ShareFixAction.AllowNodeFirewall => UiText.Get("ShareFixAllow"),
+        ShareFixAction.UpdateCli => UiText.Get("ShareFixUpdate"),
+        ShareFixAction.RerunSetup => UiText.Get("ShareFixRerun"),
+        ShareFixAction.RefreshCopy => UiText.Get("ShareFixRefresh"),
+        ShareFixAction.RestartSharing => UiText.Get("ShareFixRestart"),
         _ => null, // open_local_network_settings is a macOS panel: no button here, the CLI's own message stays
     };
 
     /// <summary>A check's own words where the app has them; the CLI's id as words otherwise.</summary>
     public static string CheckTitle(ShareCheck check) => check.Id switch
     {
-        "pf_active" => "Network protection",
-        "firewall_node" => "The firewall lets sharing through",
-        "bench_redis_up" => "The bench is running",
-        "lan_ip" => "This computer has a network address",
-        "gateway_reachable" => "The gateway answers on the network",
-        "share_traceback_off" => "Error traces are hidden in the copy",
-        "share_debugger_off" => "The debugger is off in the copy",
-        "copy_present" => "The shared copy is there",
-        "share_web_lan_closed" => "The copy is reachable only through BenchBar",
+        "pf_active" => UiText.Get("ShareCheckPfActive"),
+        "firewall_node" => UiText.Get("ShareCheckFirewallNode"),
+        "bench_redis_up" => UiText.Get("ShareCheckBenchRedis"),
+        "lan_ip" => UiText.Get("ShareCheckLanIp"),
+        "gateway_reachable" => UiText.Get("ShareCheckGateway"),
+        "share_traceback_off" => UiText.Get("ShareCheckTraceback"),
+        "share_debugger_off" => UiText.Get("ShareCheckDebugger"),
+        "copy_present" => UiText.Get("ShareCheckCopyPresent"),
+        "share_web_lan_closed" => UiText.Get("ShareCheckWebClosed"),
         _ => check.Message.Length > 0 ? check.Message : System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(check.Id.Replace('_', ' ')),
     };
 
     public static string CheckStatus(ShareCheckStatus status) => status switch
     {
-        ShareCheckStatus.Ok => "Passed",
-        ShareCheckStatus.Fail => "Failed",
-        ShareCheckStatus.Skip => "Skipped",
-        _ => "Warning",
+        ShareCheckStatus.Ok => UiText.Get("ShareCheckPassed"),
+        ShareCheckStatus.Fail => UiText.Get("ShareCheckFailed"),
+        ShareCheckStatus.Skip => UiText.Get("ShareCheckSkipped"),
+        _ => UiText.Get("ShareCheckWarning"),
     };
 
     /// <summary>The room's state line: the budget lock wins over a host lock or full.</summary>
@@ -149,7 +201,7 @@ public static class ShareText
     }
 
     public static string CopyLine(ShareCopy copy) =>
-        $"Copy made {(copy.AgeSeconds is { } age ? Countdown(age) + " ago" : "earlier")} from {copy.SourceSite ?? "your site"}. Guests' changes stay in the copy.";
+        UiText.Format("ShareCopyLine", copy.AgeSeconds is { } age ? UiText.Format("ShareCopyAgo", Countdown(age)) : UiText.Get("ShareCopyEarlier"), copy.SourceSite ?? UiText.Get("ShareCopyYourSite"));
 
     /// <summary>"Sam · MacBook Air · 192.168.1.31": name and model tell two Sams apart.</summary>
     public static string PersonLine(SharePerson person) => string.Join(" · ", new[] { person.Name, person.Model, person.Ip }.Where(s => !string.IsNullOrEmpty(s)));
@@ -158,11 +210,11 @@ public static class ShareText
     public static IReadOnlyList<SharePerson> Sorted(IEnumerable<SharePerson> people) =>
         [.. people.OrderByDescending(p => p.Online).ThenByDescending(p => p.LastSeen ?? "", StringComparer.Ordinal)];
 
-    public static string RemovedNotice(string name) => $"{name} was removed. To let them back in, send a new invite.";
+    public static string RemovedNotice(string name) => UiText.Format("ShareRemovedNotice", name);
 
-    public static string NeedsDisk(double gb) => $"Needs about {gb.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} GB free";
+    public static string NeedsDisk(double gb) => UiText.Format("ShareNeedsDisk", UiText.OneDecimal(gb));
 
     /// <summary>What the copy holds, one line: "User 5, Customer 3", or none.</summary>
     public static string DataClasses(IReadOnlyDictionary<string, int> classes) =>
-        classes.Count == 0 ? "none counted" : string.Join(", ", classes.OrderBy(c => c.Key, StringComparer.Ordinal).Select(c => $"{c.Key} {c.Value}"));
+        classes.Count == 0 ? UiText.Get("ShareDataNone") : string.Join(", ", classes.OrderBy(c => c.Key, StringComparer.Ordinal).Select(c => $"{c.Key} {c.Value}"));
 }

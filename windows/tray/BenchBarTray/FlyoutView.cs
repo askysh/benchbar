@@ -60,9 +60,9 @@ internal sealed class BenchRow : Border
 /// </summary>
 internal sealed class FlyoutView : UserControl
 {
-    public const string DistroHint = "The tray does not start it on its own.";
-    public const string SetUpLabel = "Set Up BenchBar";
-    public const string MissingDistroHint = "WSL has no distro with that name. Set up BenchBar to install it, or pick another distro in Settings.";
+    public static string DistroHint => UiText.Get("FlyoutDistroHint");
+    public static string SetUpLabel => UiText.Get("CommonSetUpApp");
+    public static string MissingDistroHint => UiText.Get("FlyoutMissingDistroHint");
 
     private static readonly Brush CardBrush = Frozen(new SolidColorBrush(Color.FromArgb(0x1A, 0x80, 0x80, 0x80)));
     private static readonly Brush FocusBrush = Frozen(new SolidColorBrush(Color.FromArgb(0x26, 0x80, 0x80, 0x80)));
@@ -94,9 +94,9 @@ internal sealed class FlyoutView : UserControl
         DockPanel.SetDock(_upText, Dock.Right);
         header.Children.Add(title);
         header.Children.Add(_upText);
-        var openMain = TextButton("Open BenchBar", () => _actions.OpenMain());
+        var openMain = TextButton(UiText.Get("MenuOpen"), () => _actions.OpenMain());
         openMain.Margin = new Thickness(0, 0, 10, 0);
-        Ui.Name(openMain, "Open the BenchBar window");
+        Ui.Name(openMain, UiText.Get("FlyoutOpenMainName"));
         DockPanel.SetDock(openMain, Dock.Right);
         header.Children.Add(openMain);
 
@@ -149,20 +149,20 @@ internal sealed class FlyoutView : UserControl
             _update.Visibility = Visibility.Collapsed;
             return;
         }
-        UpdateText = offer.CanUpdateNow && running ? $"Updating to BenchBar {offer.Version}." : $"BenchBar {offer.Version} is out.";
+        UpdateText = offer.CanUpdateNow && running ? UiText.Format("CommonUpdating", offer.Version) : UiText.Format("CommonUpdateOut", offer.Version);
         var line = new StackPanel();
         line.Children.Add(new TextBlock { Text = UpdateText, FontSize = 12, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) });
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
         if (offer.CanUpdateNow)
         {
-            var update = TextButton(running ? "Updating..." : "Update Now", () => _actions.UpdateNow(), enabled: !running);
-            Ui.Name(update, "Update BenchBar now");
+            var update = TextButton(running ? UiText.Get("AboutUpdating") : UiText.Get("AboutUpdateNow"), () => _actions.UpdateNow(), enabled: !running);
+            Ui.Name(update, UiText.Get("CommonUpdateNowName"));
             buttons.Children.Add(update);
         }
         if (!running)
         {
-            var copy = TextButton("Copy Update Line", () => _actions.CopyText(offer.Command));
-            Ui.Name(copy, "Copy the update line for PowerShell");
+            var copy = TextButton(UiText.Get("CommonCopyUpdate"), () => _actions.CopyText(offer.Command));
+            Ui.Name(copy, UiText.Get("CommonCopyUpdateName"));
             buttons.Children.Add(copy);
         }
         line.Children.Add(buttons);
@@ -186,7 +186,7 @@ internal sealed class FlyoutView : UserControl
             if (notice.ActionLabel is { } label && notice.Action is { } action) buttons.Children.Add(TextButton(label, action));
             if (notice.Dismissible)
             {
-                var close = TextButton("Dismiss", () => dismiss(notice.Key));
+                var close = TextButton(UiText.Get("NoticeDismiss"), () => dismiss(notice.Key));
                 close.Margin = new Thickness(10, 0, 0, 0);
                 buttons.Children.Add(close);
             }
@@ -231,7 +231,7 @@ internal sealed class FlyoutView : UserControl
         SetSnapshot(_snapshot, _upText.Text);
     }
 
-    public void ShowVsCodeMissing() => ShowMessage(VsCode.InstallMessage, "Learn more", VsCode.HelpUrl);
+    public void ShowVsCodeMissing() => ShowMessage(VsCode.InstallMessage, UiText.Get("FlyoutLearnMore"), VsCode.HelpUrl);
 
     public void ShowVsCodeBadPath(string benchPath) => ShowMessage(VsCode.BadPathMessage(benchPath), null, null);
 
@@ -286,7 +286,7 @@ internal sealed class FlyoutView : UserControl
         else if (_snapshot.DistroStopped)
         {
             Mode = FlyoutMode.DistroStopped;
-            _body.Children.Add(_snapshot.DistroMissing ? MissingDistroCard(_snapshot.Distro ?? "The WSL distro") : DistroCard(_snapshot.Distro ?? "The WSL distro"));
+            _body.Children.Add(_snapshot.DistroMissing ? MissingDistroCard(_snapshot.Distro ?? UiText.Get("CommonTheDistro")) : DistroCard(_snapshot.Distro ?? UiText.Get("CommonTheDistro")));
         }
         else if (_snapshot.Benches.Count == 0)
         {
@@ -317,7 +317,7 @@ internal sealed class FlyoutView : UserControl
 
     private Border DistroCard(string distro)
     {
-        var button = new Button { Content = "Start", MinWidth = 64, IsEnabled = !_distroStarting, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
+        var button = new Button { Content = UiText.Get("CommonStart"), MinWidth = 64, IsEnabled = !_distroStarting, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
         button.Click += (_, _) =>
         {
             _distroStarting = true;
@@ -326,9 +326,9 @@ internal sealed class FlyoutView : UserControl
             SetSnapshot(_snapshot, _upText.Text);
         };
         _cardButton = button;
-        CardTitle = $"{distro} is stopped";
+        CardTitle = UiText.Format("CommonDistroStopped", distro);
         CardHint = DistroHint;
-        CardButtons = ["Start"];
+        CardButtons = [UiText.Get("CommonStart")];
         var panel = new StackPanel();
         panel.Children.Add(new TextBlock { Text = CardTitle, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(new TextBlock { Text = CardHint, Opacity = 0.7, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
@@ -339,13 +339,13 @@ internal sealed class FlyoutView : UserControl
     /// <summary>WSL does not have the distro BenchBar is set to (a typo, or it was removed): Start would do nothing, so the next step is setup or Settings.</summary>
     private Border MissingDistroCard(string distro)
     {
-        var button = new Button { Content = "Set Up a Bench", MinWidth = 64, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
+        var button = new Button { Content = UiText.Get("FlyoutSetUpBench"), MinWidth = 64, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
         button.Click += (_, _) => _actions.SetUpBench();
-        AutomationProperties(button, "Set up a bench");
+        AutomationProperties(button, UiText.Get("FlyoutSetUpBenchName"));
         _cardButton = button;
-        CardTitle = $"{distro} is not installed";
+        CardTitle = UiText.Format("CommonDistroMissing", distro);
         CardHint = MissingDistroHint;
-        CardButtons = ["Set Up a Bench"];
+        CardButtons = [UiText.Get("FlyoutSetUpBench")];
         var panel = new StackPanel();
         panel.Children.Add(new TextBlock { Text = CardTitle, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(new TextBlock { Text = CardHint, Opacity = 0.7, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
@@ -355,12 +355,12 @@ internal sealed class FlyoutView : UserControl
 
     private Border EmptyCard()
     {
-        var button = new Button { Content = "Set Up a Bench", MinWidth = 64, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
+        var button = new Button { Content = UiText.Get("FlyoutSetUpBench"), MinWidth = 64, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
         button.Click += (_, _) => _actions.SetUpBench();
-        AutomationProperties(button, "Set up a bench");
+        AutomationProperties(button, UiText.Get("FlyoutSetUpBenchName"));
         _cardButton = button;
-        CardTitle = "No benches found.";
-        CardButtons = ["Set Up a Bench"];
+        CardTitle = UiText.Get("FlyoutNoBenches");
+        CardButtons = [UiText.Get("FlyoutSetUpBench")];
         var panel = new StackPanel();
         panel.Children.Add(new TextBlock { Text = CardTitle, Opacity = 0.7, TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(button);
@@ -369,11 +369,11 @@ internal sealed class FlyoutView : UserControl
 
     private Border ProblemCard(string problem)
     {
-        var copy = new Button { Content = "Copy", MinWidth = 64, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
+        var copy = new Button { Content = UiText.Get("Copy"), MinWidth = 64, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
         copy.Click += (_, _) => _actions.CopyText(problem);
         _cardButton = copy;
         CardTitle = problem;
-        CardButtons = ["Copy"];
+        CardButtons = [UiText.Get("Copy")];
         var panel = new StackPanel();
         panel.Children.Add(new TextBlock { Text = problem, TextWrapping = TextWrapping.Wrap });
         if (!_setupPending)
@@ -384,14 +384,14 @@ internal sealed class FlyoutView : UserControl
         // setup is unfinished (the person closed the wizard): the way back is on the card, first in Tab order
         var setUp = new Button { Content = SetUpLabel, MinWidth = 64, Margin = new Thickness(0, 0, 8, 0) };
         setUp.Click += (_, _) => _actions.SetUpBench();
-        AutomationProperties(setUp, "Set up BenchBar");
+        AutomationProperties(setUp, UiText.Get("FlyoutSetUpAppName"));
         copy.Margin = new Thickness(0);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
         buttons.Children.Add(setUp);
         buttons.Children.Add(copy);
         panel.Children.Add(buttons);
         _cardButton = setUp;
-        CardButtons = [SetUpLabel, "Copy"];
+        CardButtons = [SetUpLabel, UiText.Get("Copy")];
         return Card(panel);
     }
 
@@ -411,7 +411,7 @@ internal sealed class FlyoutView : UserControl
         row.GotKeyboardFocus += (_, e) => { if (e.OriginalSource == row) row.Background = FocusBrush; };
         row.LostKeyboardFocus += (_, _) => row.Background = Brushes.Transparent;
         row.FocusVisualStyle = null;
-        AutomationProperties(row, $"{bench.Name}, {row.StateText}");
+        AutomationProperties(row, UiText.Format("FlyoutRowName", bench.Name, row.StateText));
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -434,7 +434,7 @@ internal sealed class FlyoutView : UserControl
         var running = bench.State is BenchState.Running or BenchState.Starting;
         var action = new Button
         {
-            Content = running ? "Stop" : "Start",
+            Content = running ? UiText.Get("CommonStop") : UiText.Get("CommonStart"),
             MinWidth = 64,
             IsEnabled = !_busy.Contains(bench.Path) && bench.State != BenchState.Unknown,
         };
@@ -442,8 +442,8 @@ internal sealed class FlyoutView : UserControl
         Grid.SetColumn(action, 3);
         row.ActionButton = action;
 
-        var more = new Button { Content = "⋯", Margin = new Thickness(4, 0, 0, 0), MinWidth = 32, ToolTip = "More" };
-        AutomationProperties(more, "More actions");
+        var more = new Button { Content = "⋯", Margin = new Thickness(4, 0, 0, 0), MinWidth = 32, ToolTip = UiText.Get("FlyoutMore") };
+        AutomationProperties(more, UiText.Get("FlyoutMoreName"));
         more.Click += (_, _) => OpenMoreMenu(more, bench);
         Grid.SetColumn(more, 4);
 
@@ -454,17 +454,17 @@ internal sealed class FlyoutView : UserControl
         grid.Children.Add(more);
 
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 2, 0, 0) };
-        var site = TextButton("Open site", () => _actions.OpenSite(bench), enabled: !string.IsNullOrWhiteSpace(bench.WebUrl));
-        var logs = TextButton("Logs", () => _actions.ShowLogs(bench));
-        var code = TextButton("VS Code", () => {
+        var site = TextButton(UiText.Get("FlyoutOpenSite"), () => _actions.OpenSite(bench), enabled: !string.IsNullOrWhiteSpace(bench.WebUrl));
+        var logs = TextButton(UiText.Get("OverviewLogs"), () => _actions.ShowLogs(bench));
+        var code = TextButton(UiText.Get("FlyoutVsCode"), () => {
             switch (_actions.OpenVsCode(bench))
             {
                 case VsCodeOutcome.NotFound: ShowVsCodeMissing(); break;
                 case VsCodeOutcome.BadPath: ShowVsCodeBadPath(bench.Path); break;
             }
         });
-        code.ToolTip = _actions.VsCodeAvailable() ? "Open the bench in VS Code" : VsCode.InstallMessage;
-        var doctor = TextButton("Doctor", () => _actions.ShowDoctor(bench));
+        code.ToolTip = _actions.VsCodeAvailable() ? UiText.Get("FlyoutVsCodeTip") : VsCode.InstallMessage;
+        var doctor = TextButton(UiText.Get("HealthDoctor"), () => _actions.ShowDoctor(bench));
         foreach (var b in new[] { site, logs, code, doctor }) strip.Children.Add(b);
 
         row.Buttons.AddRange([action, more, site, logs, code, doctor]);
@@ -500,7 +500,7 @@ internal sealed class FlyoutView : UserControl
         catch (Exception ex) { result = ActionResult.Failure(ex.Message); }
         _busy.Remove(bench.Path);
         // the line stays under the row until the bench changes state
-        if (!result.Ok) _failures[bench.Path] = (result.Message ?? "The command failed.", bench.State, bench.StopReason);
+        if (!result.Ok) _failures[bench.Path] = (result.Message ?? UiText.Get("ProfileCommandFailed"), bench.State, bench.StopReason);
         Refresh();
     }
 
@@ -513,9 +513,9 @@ internal sealed class FlyoutView : UserControl
     private void OpenMoreMenu(Button anchor, BenchStatus bench)
     {
         var menu = new ContextMenu { PlacementTarget = anchor, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
-        var restart = new MenuItem { Header = "Restart", IsEnabled = bench.State != BenchState.Unknown };
+        var restart = new MenuItem { Header = UiText.Get("OverviewRestart"), IsEnabled = bench.State != BenchState.Unknown };
         restart.Click += async (_, _) => await RunAsync(bench, _actions.Restart);
-        var copy = new MenuItem { Header = "Copy path" };
+        var copy = new MenuItem { Header = UiText.Get("FlyoutCopyPath") };
         copy.Click += (_, _) => _actions.CopyPath(bench);
         menu.Items.Add(restart);
         menu.Items.Add(copy);
@@ -550,7 +550,7 @@ internal sealed class FlyoutView : UserControl
     private static string DefaultSite(BenchStatus bench)
     {
         if (bench.Sites.FirstOrDefault(s => s.IsDefault) is { } def) return def.Name;
-        return string.IsNullOrWhiteSpace(bench.Site) ? "no site" : bench.Site;
+        return string.IsNullOrWhiteSpace(bench.Site) ? UiText.Get("OverviewNoSite") : bench.Site;
     }
 
     private void ShowMessage(string text, string? linkText, string? url)

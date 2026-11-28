@@ -26,14 +26,18 @@ The first line installs the CLI, the `benchbar` formula, and the menu bar
 app, the `benchbar-app` cask, from the `askysh/tap` tap. Type both names:
 Homebrew trusts a third party tap only for the names you type, so the
 cask alone cannot pull in its formula. `benchbar install` sets up the
-bench, the site and the background service as in the
+[bench](glossary.md#bench), the [site](glossary.md#site) and the
+background service as in the
 [Quick start](quick-start.md); with a bench you already have, run
 `benchbar adopt` instead. To check a Mac before installing, without a
-bench, run `benchbar doctor --prerequisites` (Apple Silicon, macOS 14,
-Command Line Tools, Homebrew, free disk, the bench folder, cleanup tools
-and the default ports; each check that is not ok names its fix). The BenchBar app drives `install` and `adopt`
-through `--json --yes`, which prints one JSON event per line; the format
-is in the [JSON API](json-schema.md).
+bench, run `benchbar doctor --prerequisites`. It checks Apple Silicon,
+macOS 14, Command Line Tools, Homebrew, free disk, the bench folder,
+cleanup tools and the default ports. Each check that is not ok names its
+fix.
+
+BenchBar.app drives `install` and `adopt` through `--json --yes`. That
+prints one JSON event per line. The format is in the
+[JSON API](json-schema.md).
 
 The cask needs Apple Silicon and macOS Sonoma or later. For the CLI
 alone, on an Intel Mac too (written for it, not checked on real
@@ -51,7 +55,7 @@ Homebrew's folders, so `brew upgrade` and `brew cleanup` never touch it.
 ## The one line installer
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
 ```
 
 The installer checks macOS, the Command Line Tools and Homebrew, clones
@@ -68,15 +72,30 @@ In more detail, in this order, and it says so before each step:
 1. It checks macOS (the app needs 14 or later; on an older macOS only the
    CLI is installed) and Apple Silicon (it warns on Intel), the Xcode
    Command Line Tools (it offers `xcode-select --install` and waits) and
-   Homebrew (it offers the official installer).
+   Homebrew (it offers the official installer: Homebrew publishes no
+   pinned version of it, so it is always the current one from
+   `raw.githubusercontent.com/Homebrew/install/HEAD`, and benchbar does
+   not check it. Run it yourself first if you want to read it).
 2. It clones the CLI into `~/.local/share/benchbar`, or pulls when the
-   clone exists, links `benchbar` and `frappe-mac` into `~/.local/bin`,
+   clone exists, links `benchbar` and `frappe-mac` (the old name of `benchbar`, kept as an
+   alias) into `~/.local/bin`,
    and adds that folder to `PATH` in `~/.zshrc` inside a
    `# >>> benchbar-path >>>` marker block.
 3. It installs or updates the BenchBar app from the latest GitHub
-   release: the zip is checked against the release's `SHA256SUMS` and
-   unpacked into `~/Applications`. This step is skipped when no release
-   exists yet.
+   release. The zip is checked against the release's `SHA256SUMS`. When
+   `gh` (the GitHub CLI) is installed and signed in, it is also checked
+   against its build provenance (`gh attestation verify`, pinned to this
+   repository's release workflow), and a failure stops the install.
+   Without `gh`, with `gh` signed out, or when `gh` does not answer within
+   30 seconds, it says that only the checksum was checked and prints the
+   command to run by hand. The same goes for a release older than 0.9.0,
+   which has no attestation. The running BenchBar is quit and replaced only
+   after every check passed. The unpacked app must
+   pass `codesign --verify --deep --strict` and `spctl --assess`, which
+   is Gatekeeper's check of the Developer ID signature and the
+   notarization: `curl` sets no quarantine flag, so macOS never checks an
+   app it downloaded. The app is copied next to the old one and renamed
+   over it. This step is skipped when no release exists yet.
 4. It offers `benchbar adopt` for a bench it finds, or `benchbar install`.
 
 The installer never runs `sudo` itself. Homebrew's own installer, if
@@ -92,7 +111,7 @@ The same line works on Ubuntu 24.04 and in WSL. It installs the command
 line tool only, since there is no app on Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
 ```
 
 It needs `git`; when `git` is missing it stops and prints
@@ -108,19 +127,63 @@ WSL it adds that the BenchBar tray on Windows can continue the setup.
 (a detached checkout; a run without it goes back to `main`). `--dry-run`
 and `--uninstall` work as on a Mac; `--app-only` is refused.
 
+### Verify a download by hand
+
+A checksum from the same release only finds a damaged download. The build
+provenance says the file was built by this repository's release workflow
+on GitHub Actions. Every file of a release from 0.9.0 on (the DMG, the
+app zip, the CLI tarball and `SHA256SUMS`) has an attestation. With the
+[GitHub CLI](https://cli.github.com), signed in (`gh auth login`):
+
+```bash
+gh attestation verify BenchBar-<version>.dmg -R askysh/benchbar \
+  --signer-workflow askysh/benchbar/.github/workflows/release.yml
+shasum -a 256 -c SHA256SUMS --ignore-missing
+```
+
+For the app itself, after you copied it to `/Applications`:
+
+```bash
+codesign --verify --deep --strict --verbose=2 /Applications/BenchBar.app
+spctl --assess --type execute --verbose=2 /Applications/BenchBar.app
+```
+
+The first checks the signature, the second asks Gatekeeper, which also
+checks the notarization. Releases before 0.9.0 have no attestation, so
+`install.sh --version v0.8.3` finds none (`gh` answers HTTP 404), says
+that only the checksum was checked and goes on. For 0.9.0 and later, and
+for any other error from `gh`, it stops.
+
+On Linux the installer downloads no file: git fetches the CLI from
+`github.com/askysh/benchbar` over https, and `--version vX.Y.Z` checks
+out that tag.
+
 ### Installer flags
 
 Pass flags after `bash -s --`, for example
-`curl -fsSL .../install.sh | bash -s -- --no-app`.
+`curl --proto '=https' --tlsv1.2 -fsSL .../install.sh | bash -s -- --no-app`.
 
 | Flag | What it does |
 |---|---|
-| `--yes` | Accept every default, no questions (no terminal needed). On a Mac that already has the CLI in `~/.local/share/benchbar` this is an update: the CLI and the app only, no bench is adopted or installed and the Homebrew installer is never run |
+| `--yes` | Accept every default, no questions (no terminal needed). On a Mac that has the CLI already, an update (see below) |
 | `--dry-run` | Print the plan and every command, change nothing |
 | `--no-app` | The CLI only |
 | `--app-only` | The app only |
-| `--version vX.Y.Z` | Install that release of the app instead of the latest. On Linux: check out that release of the CLI. A release candidate (`v0.9.0-rc.1`) is installed only when you name it: the latest never is one |
+| `--version vX.Y.Z` | Install that release of the app, not the latest. A release candidate only when you name it (see below) |
 | `--uninstall` | Remove the app, the links and the PATH block; see [Uninstall](#uninstall) |
+
+On a Mac that already has the CLI in `~/.local/share/benchbar`, `--yes`
+updates the CLI and the app only. It does not adopt or install a bench,
+and it does not run the Homebrew installer.
+
+A release candidate (for example `v0.9.0-rc.1`) is installed only when you
+name it with `--version`: the latest release is never a release candidate,
+and Homebrew and `benchbar self-update` cannot install one.
+
+`--version` also checks out that release of the CLI, as a detached
+checkout, in three cases: on Linux, with `--no-app`, or for a release
+candidate. A later run without `--version` goes back to `main`. In other
+cases (a final release with the app, on a Mac) the CLI stays on `main`.
 
 ## The app from the DMG
 
@@ -130,7 +193,9 @@ drag BenchBar to Applications. Since 0.6.1 the app and the DMG are
 signed with a Developer ID, notarized by Apple and stapled, so BenchBar
 opens like any other download, and later versions arrive through
 **Check for Updates…** (Sparkle). Verify a download with
-`shasum -a 256 -c SHA256SUMS` from the same release.
+`shasum -a 256 -c SHA256SUMS` from the same release, and see
+[Verify a download by hand](#verify-a-download-by-hand) for the
+attestation.
 
 Since 0.7.1 the app carries its own copy of the CLI and runs it, so its
 buttons work without anything else. For `benchbar` and the `bench*`
@@ -177,28 +242,46 @@ app or adopt a bench you have.
 
 ## Linux
 
-From 0.8 the same CLI runs on Linux: Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them), Windows through WSL
-first. `install` takes the v15-lts and v16-lts profiles and team profiles (a team profile follows its base). There is no menu bar app on
-Linux; on Windows a tray app shows the benches of the distro: see [Windows](windows.md).
+From 0.8 the same CLI runs on Linux: Ubuntu 24.04 (the only system it is tested on and supports), Windows through WSL
+first. `install` takes the v15-lts and v16-lts profiles and team profiles (a team profile follows its base). On another system, for
+example Ubuntu 22.04 (MariaDB 10.6) or Debian, `doctor` warns about it and `install` stops before sudo and before it installs any
+package; with `--allow-unsupported-distro` you can try anyway, at your own risk. There is no menu bar app on Linux; on Windows a tray
+app shows the benches of the distro: see [Windows](windows.md).
 
 ```bash
-git clone https://github.com/askysh/benchbar.git && cd benchbar
-./benchbar install
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+benchbar install          # in a new terminal
 ```
+
+The first line is the [installer on Linux](#the-installer-on-linux). To
+work on benchbar itself, clone the repository and run `./benchbar install`
+from the clone. If `install` stops, see
+[First run problems](first-run-problems.md).
 
 `install` runs `00-linux-system-deps.sh`: MariaDB and Redis from apt,
 Python from uv, Node from fnm, the pinned wkhtmltopdf `.deb`, and
-`libnss-myhostname` so `*.localhost` names resolve. It asks for `sudo`
+`libnss-myhostname` so `*.localhost` names resolve. The uv and fnm
+installers are pinned to a version and checked against a sha256 before
+they run, so a changed file at their web address is refused, not run. It asks for `sudo`
 once up front and not at all on a second run. Each bench runs as its own
 `systemd --user` unit, and `loginctl enable-linger` brings a running
 bench back after a reboot. The default site is `linuxdev.localhost`, and
 benchbar never edits `/etc/hosts` there. The `bench*` helpers go to
 `~/.bashrc`. `benchbar doctor --prerequisites` on Linux checks, without a bench and
-without sudo: the distro (Ubuntu 24.04 is tested, others warn), the CPU
-(x86_64 is needed for the PDF package), that you are not root, sudo (your
-user is in the sudo group), apt, systemd, linger, memory, free disk, the
+without sudo: the distro (Ubuntu 24.04 is tested: `--prerequisites` warns about another system, and `install` stops before it changes anything unless you pass `--allow-unsupported-distro`), the CPU
+(x86_64 or arm64 is needed for the PDF package), that you are not root, sudo (your
+user is in the sudo group), apt, systemd, linger, the user bus (`systemctl --user` answers), memory, free disk, the
 bench folder, the default ports and the MariaDB root password state. Each
 check that is not ok names its fix.
+
+Run `install` from a shell that has a user session. Under `sudo -iu USER`,
+`su -` or cron there is no login session, so `systemctl --user` cannot find
+its bus. `install` turns on lingering (`loginctl enable-linger`), which starts
+the user manager, and points `XDG_RUNTIME_DIR` at `/run/user/UID`. When the
+manager still cannot be reached it stops before it changes anything and says
+what to run: `sudo loginctl enable-linger USER`, then run it again from a
+login shell or with `XDG_RUNTIME_DIR=/run/user/$(id -u)`. `benchbar status`
+says `unknown (no user bus)` in that case, not `loaded: no`.
 
 `install` first checks that ports 3306 (MariaDB) and 6379 (the system
 Redis) are free, or held by this distro's own services. In WSL 2 every
@@ -211,6 +294,27 @@ distro. benchbar stops nothing for you.
 
 After the install, run `source ~/.bashrc` (or open a new terminal), then
 `benchup`. The helpers are in `~/.bashrc`, not in `~/.zshrc`.
+
+### Homebrew on Linux
+
+The CLI formula installs on Linux with Homebrew (Linuxbrew) too. The
+app cask is macOS only, so on Linux you install the formula alone:
+
+```bash
+brew install askysh/tap/benchbar
+benchbar install                   # sets up this machine: asks for sudo once
+source ~/.bashrc && benchup
+```
+
+The formula adds only `git` and `curl` on Linux. MariaDB, Redis, Python
+and Node are not Homebrew's here: `benchbar install` gets them from apt,
+uv and fnm, exactly as after the one line installer, and the bench runs
+as a `systemd --user` unit. The state folder is the same too,
+`$XDG_STATE_HOME/benchbar` (`~/.local/state/benchbar` by default), so
+moving between the one line installer and Homebrew keeps your benches.
+`benchbar where --json` says `"install":"homebrew"`, and
+`benchbar self-update` runs `brew upgrade askysh/tap/benchbar` instead
+of the installer. The prefix is usually `/home/linuxbrew/.linuxbrew`.
 
 ### Profiles on Linux
 
@@ -260,8 +364,11 @@ Microsoft Store route. Smart App Control blocks unsigned programs: when
 it is on, the installer stops first and says what to do. The command line
 inside WSL still works then (see
 [Smart App Control](windows.md#smart-app-control)). Every release has
-SHA256SUMS and, from the next release, build provenance you can verify
-(see [Signing and verification](windows.md#signing-and-verification)).
+SHA256SUMS and build provenance you can verify (see
+[Signing and verification](windows.md#signing-and-verification)). The
+installer removes Windows' "downloaded from the internet" mark only when
+`gh` is signed in and verifies the zip's provenance; otherwise the mark
+stays and Windows asks once.
 
 When the tray starts and finds no bench, its
 [first run wizard](windows.md#first-run) checks the PC and sets up WSL,
@@ -271,96 +378,9 @@ Bug, uninstall (`-Uninstall`) and how to verify a download.
 
 ## Updating
 
-BenchBar.app carries its own copy of the CLI, and since 0.7.1 Homebrew's
-and the one line installer's `benchbar` hand off to it once the app is
-installed: whichever `benchbar` you run, it is the app's version. So with
-the app, updating the app updates everything, by either channel:
-
-- **In the app**: **Update Now** (or **Check for Updates…** in the menu
-  bar menu). Sparkle downloads the new version and restarts BenchBar.
-  Your benches keep running.
-- **With Homebrew**, when the cask installed the app:
-
-  ```bash
-  brew upgrade
-  ```
-
-  The cask has `auto_updates`, so brew replaces the app only when the
-  app itself is older than the tap's version: after Sparkle updated it,
-  `brew upgrade` leaves it alone, and when Sparkle has not, brew updates
-  it. Right after a release the tap can be a few minutes behind.
-
-`benchbar where` shows which CLI runs (`install app`) and which one it
-was handed off from. To run Homebrew's or the installer's own copy for
-once, set `BENCHBAR_NO_HANDOFF=1`. A git checkout of your own never
-hands off.
-
-### Without the app
-
-Homebrew's CLI updates with `brew upgrade askysh/tap/benchbar`, which
-`benchbar self-update` runs after asking. The one line installer's CLI
-updates with `benchbar self-update`:
-
-```bash
-benchbar self-update               # shows the plan, asks, then runs the installer
-benchbar self-update --check       # this version against the latest release
-```
-
-or, on any version, including 0.5.x, which has no `self-update`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes
-```
-
-It pulls the CLI in `~/.local/share/benchbar`, replaces the app in
-`~/Applications` (it quits a running BenchBar first), and changes no
-bench: it never adopts, installs or updates a bench and never runs
-`bench update`. It never runs `sudo`. An app in `/Applications` is
-replaced there when that folder is writable (the app and `self-update`
-pass `BENCHBAR_APP_DIR=/Applications`).
-
-The pull is a fast forward only: local changes in
-`~/.local/share/benchbar` stop it with a message instead of being
-overwritten. After an update, run `benchbar doctor`: when it says the
-runner is outdated, `benchbar repair` rewrites it, and a running bench
-picks it up on its next start.
-
-If your `benchbar` is a git checkout of your own, for example
-`~/dev/benchbar`, `self-update` updates only the app (`--app-only`) and
-tells you to update the CLI with `git pull` in that checkout.
-
-## From the one line installer to Homebrew
-
-Your benches keep running through the move: their agents and runners
-never name the CLI.
-
-1. Install with Homebrew:
-
-   ```bash
-   brew install askysh/tap/benchbar askysh/tap/benchbar-app
-   ```
-
-2. Run Homebrew's `repair` by its full path. In this Terminal
-   `~/.local/bin` still leads to the old copy, so plain `benchbar` would
-   run that one:
-
-   ```bash
-   /opt/homebrew/opt/benchbar/bin/benchbar repair
-   ```
-
-   It moves the state to `~/.local/state/benchbar`, points the
-   `~/.local/bin` links at Homebrew's CLI and rewrites the helper block in
-   `~/.zshrc`.
-
-3. Run `source ~/.zshrc`, or open a new Terminal tab.
-4. Later, move `~/.local/share/benchbar` and `~/Applications/BenchBar.app`
-   to the Trash.
-
-Do not use `install.sh --uninstall` for this: it stops every bench's
-agent. Until the old copies are gone, doctor's "Second CLI" and
-"BenchBar.app copies" warnings point at them. Two copies of the app
-matter more than two of the CLI: the login item and Spotlight may open
-the old one, and its CLI is the one every `benchbar` hands off to.
+Updating is on its own page: [Update and migrate](upgrade.md). It covers
+the app, Homebrew, the one line installer and the move from the one line
+installer to Homebrew.
 
 ## After installing
 
@@ -394,80 +414,16 @@ its window starts the [first run wizard](app.md#a-new-bench-from-the-app).
   (`$ZDOTDIR/.zshrc` when set). A fish user gets `fish_add_path` printed at
   the end, a bash user on a Mac the line for `~/.bash_profile`. On Linux
   the block goes to `~/.bashrc`, or `~/.zshrc` when your login shell is zsh.
-  The `bench*` helpers are zsh and bash functions; fish has none.
+  The `bench*` helpers follow your login shell (`$SHELL`). zsh gets them in
+  `~/.zshrc`. fish gets its own file, `~/.config/fish/conf.d/benchbar.fish`,
+  written as fish functions. bash on a Mac gets them in the file a login
+  shell reads: `~/.bash_profile` (or `~/.bash_login` or `~/.profile` when
+  that is the one you have), and `~/.bashrc` only when that file loads it.
+  nushell, xonsh, elvish, tcsh and PowerShell get no file: use `benchbar up`,
+  `benchbar down` and the other long forms there. A helper file that is read
+  only is never replaced: `repair` says so and names the `chmod`.
 
 ## Uninstall
 
-Uninstalling removes BenchBar, not your benches: every bench, site,
-database and the Homebrew packages they use stay. Two things are worth
-knowing first:
-
-- Removing a bench's agent stops that bench. Without the agent it no
-  longer runs in the background; you can still run it by hand with
-  `bench start` in its folder.
-- The logs and file backups of every benchbar run, the remembered
-  benches and the settings benchbar keeps for each bench are in
-  `~/.local/state/benchbar`, for Homebrew and the one line installer
-  alike. Uninstalling keeps that folder; move it to the Trash yourself
-  when you no longer want them. When `~/.local/state` is on another
-  volume than `~/.local/share/benchbar`, the state stays in that
-  checkout's `.benchbar/` folder, and deleting the checkout deletes it.
-
-What `install`, `adopt` and the rest wrote outside the bench stays too,
-and you remove it yourself when you want it gone:
-
-- The marked block in `/etc/hosts` with a line per site (macOS). `benchbar uninstall-service --all` offers to remove it, with `sudo` and a backup, when you run it in a terminal; with `--yes` it prints the command instead and never edits the file.
-- The MariaDB root password: the Keychain item `benchbar-mariadb` on macOS, a 0600 file in the state folder on Linux.
-- The patched wkhtmltopdf package that `install` put in for PDF output; remove it with the package tool of your system.
-- On Linux, the apt packages `install` added (MariaDB, Redis and the rest), and uv and fnm with the Python and Node they fetched, under `~/.local`. On macOS the Homebrew packages stay.
-- The app's login item, when you turned on "Open BenchBar at login": turn it off in the app's Settings first, or remove it in System Settings, General, Login Items. Deleting the app leaves a dead entry there.
-- On Linux, linger for your user (`sudo loginctl disable-linger USER`), and the `~/.bashrc` helper block when you did not use `uninstall-service`.
-- The LAN guard of a room on macOS: `benchbar lan-guard remove` takes out the pf anchor and its launch daemon.
-
-### Homebrew
-
-```bash
-benchbar uninstall-service --all
-brew uninstall --cask benchbar-app
-brew uninstall benchbar
-```
-
-Run `uninstall-service --all` first: `brew uninstall` cannot stop the
-background agents. It asks once, then stops every bench that has a
-benchbar agent and removes its agent, runner and `Procfile.lean`, and the
-`# >>> benchbar >>>` block from `~/.zshrc`.
-
-### The one line installer
-
-To see the plan without changing anything, then to uninstall:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --uninstall --dry-run
-curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --uninstall
-```
-
-It removes the app, the `benchbar` and `frappe-mac` links and the PATH
-block. Then it asks, for each bench's agent, whether to stop the bench
-and remove its agent, runner and `Procfile.lean`, and last whether to
-delete the checkout. Answer no to keep either. With `--yes` the answer
-to both is yes. When `~/.local/state/benchbar` is a link into the
-checkout, the checkout is kept even with `--yes`, and the run says to
-move the state first.
-
-### One bench
-
-To remove only the background service of one bench and keep BenchBar:
-
-```bash
-benchbar uninstall-service --bench-dir ~/frappe-bench   # use your bench's folder
-```
-
-It stops the bench and removes its agent, runner and `Procfile.lean`.
-It also removes the `# >>> benchbar >>>` block from `~/.zshrc`, so
-`benchup` and the other helpers are gone for every bench until
-`benchbar repair` on a remaining bench writes the block again.
-
-benchbar never deletes a whole bench. The only commands that drop or
-overwrite a site's database, `benchbar site drop` and `benchbar pull
---replace`, back it up first. To wipe a bench by hand, see
-[Troubleshooting](troubleshooting.md#wiping-a-bench).
+Uninstalling has its own page: [Uninstall](uninstall.md). It removes
+BenchBar, not your benches.

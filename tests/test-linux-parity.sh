@@ -81,6 +81,15 @@ MOCK_NOTIFY_EXIT=1 trip
 assert_calls_contain '^notify-send '
 paused_crash
 
+# a notify-send that hangs (a dead bus, a locked screen) is cut off by the runner's timeout 5, and the pause
+# is still recorded: the timeout mock shortens the five seconds to one so the test does not wait
+before="$SECONDS"
+MOCK_NOTIFY_HANG=1 MOCK_TIMEOUT_SECS=1 trip
+assert_calls_contain '^timeout 5 notify-send -a BenchBar -u critical '
+assert_calls_contain '^notify-send '
+[[ $((SECONDS - before)) -lt 8 ]] || fail "a hanging notify-send held the runner for $((SECONDS - before)) s"
+paused_crash "(a notify-send that never answers still leaves the record)"
+
 # ---- WSL: the tray reads the record and shows the toast, so the runner adds none
 wsl_kernel
 run_fm service --yes --bench-dir "$BENCH"
@@ -92,5 +101,41 @@ assert_calls_not_contain '^notify-send'
 paused_crash
 set +e; OUT="$("$FM" status --json --bench-dir "$BENCH" 2>/dev/null)"; CODE=$?; set -e
 assert_eq "paused crash" "$(printf '%s' "$OUT" | jget - 'd["state"], d["stop_reason"]' | tr -d "(),'")" "(status reports the crash on Linux, the tray's toast source)"
+
+# ---- part 2: `profile show` names the apt MariaDB, not a Homebrew formula (a Mac keeps the formula)
+run_fm profile show v16-lts
+assert_eq 0 "$CODE" "$OUT"
+assert_contains "$OUT" "mariadb-server from apt (the profile accepts"
+assert_not_contains "$OUT" "mariadb@11.8"
+run_fm profile show v15-lts
+assert_contains "$OUT" "mariadb-server from apt"
+(export FL_PLATFORM=macos; run_fm profile show v16-lts; assert_contains "$OUT" "mariadb@11.8"; assert_not_contains "$OUT" "from apt")
+
+# ---- part 2: an apt or vendor mariadbd on 3306 is found by the version it reports, whatever its path; the
+# Homebrew path parser it used to meet on Linux found only a formula path and so never an apt server
+detect() { # prints "formula version" as the profile policy sees the server on 3306, after benchbar's own load order
+  SCRIPT_DIR="$ROOT" FL_PLATFORM=linux bash -c '
+    . "$SCRIPT_DIR/lib/frappe-local/ui.sh"; . "$SCRIPT_DIR/lib/frappe-local/platform.sh"; fl_platform_load
+    . "$SCRIPT_DIR/lib/frappe-local/version-policy.sh"
+    fl_mariadb_running_formula'
+}
+cat >"$TMP_DIR/mariadbd" <<'SH'
+#!/bin/bash
+echo "mariadbd  Ver ${MOCK_MARIADBD_VERSION:-10.11.8}-MariaDB-0ubuntu0.24.04.1 for debian-linux-gnu on x86_64 (Ubuntu 24.04)"
+SH
+chmod +x "$TMP_DIR/mariadbd"
+export FL_MARIADBD_BIN="$TMP_DIR/mariadbd"
+printf '3306 4711 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
+assert_eq "mariadb@10.11 10.11.8" "$(detect)" "(apt 10.11)"
+assert_eq "mariadb@11.4 11.4.2" "$(MOCK_MARIADBD_VERSION=11.4.2 detect)" "(a vendor 11.4)"
+: >"$MOCK_LISTEN"
+assert_eq "" "$(detect)" "(nothing listens: nothing is detected)"
+
+# ---- part 2: `site hosts` on Linux edits nothing (a *.localhost name resolves), and asks for no sudo
+reset_calls
+run_fm site hosts --bench-dir "$BENCH"
+assert_eq 0 "$CODE" "$OUT"
+assert_contains "$OUT" "every site name resolves to this machine"
+assert_calls_not_contain '^sudo'
 
 printf 'test-linux-parity: ok\n'

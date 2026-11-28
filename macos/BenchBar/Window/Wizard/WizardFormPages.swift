@@ -8,8 +8,8 @@ struct NewBenchPage: View {
 
     var body: some View {
         let state = run.state
-        WizardScaffold("New Bench", explanation: "Where it goes, what it runs on and which apps it starts with.",
-                       phase: state.profilesError.map { .failed($0, title: "Could not read the profiles") } ?? .ready) {
+        WizardScaffold(String(localized: "New Bench"), explanation: String(localized: "Where it goes, what it runs on and which apps it starts with."),
+                       phase: state.profilesError.map { .failed($0, title: String(localized: "Could not read the profiles")) } ?? .ready) {
             Form {
                 LabeledContent("Folder") {
                     HStack(spacing: WindowMetrics.rowSpacing) {
@@ -36,13 +36,13 @@ struct NewBenchPage: View {
                 }
                 LabeledContent("Administrator password") {
                     HStack(spacing: WindowMetrics.rowSpacing) {
-                        PasswordField(label: "Administrator password",
+                        PasswordField(label: String(localized: "Administrator password"),
                                       text: Binding(get: { state.form.adminPassword.value }, set: { run.send(.setAdminPassword($0)) }),
                                       reveal: revealPassword)
                         Toggle(isOn: $revealPassword) { Image(systemName: revealPassword ? "eye.slash" : "eye") }
                             .toggleStyle(.button)
-                            .accessibilityLabel(revealPassword ? "Hide the password" : "Show the password")
-                            .help(revealPassword ? "Hide the password" : "Show the password")
+                            .accessibilityLabel(revealPassword ? String(localized: "Hide the password") : String(localized: "Show the password"))
+                            .help(revealPassword ? String(localized: "Hide the password") : String(localized: "Show the password"))
                     }
                 }
                 if state.showsPortField {
@@ -53,7 +53,7 @@ struct NewBenchPage: View {
                 }
             }
             .formStyle(.columns)
-            SheetNote("The password goes to the benchbar process only, never on a command line or to disk. It is the login of the new site's Administrator.")
+            SheetNote(String(localized: "The password goes to the benchbar process only, never on a command line or to disk. It is the login of the new site's Administrator."))
         } leading: {
             if state.profilesError != nil {
                 Button("Try Again") { run.send(.retryProfiles) }
@@ -69,7 +69,7 @@ struct NewBenchPage: View {
         let choices = state.profileChoices
         Picker("Profile", selection: Binding(get: { state.form.profile }, set: { run.send(.setProfile($0)) })) {
             ForEach(choices) { choice in
-                Text(choice.isTeam ? "\(choice.name) (team)" : choice.label).tag(choice.name)
+                Text(choice.isTeam ? String(localized: "\(choice.name) (team)") : choice.label).tag(choice.name)
             }
         }
         .disabled(choices.isEmpty)
@@ -128,11 +128,11 @@ struct ReviewPage: View {
 
     var body: some View {
         let state = run.state
-        WizardScaffold("Review", explanation: "This is what BenchBar will do. Nothing has changed yet.", phase: phase(state)) {
+        WizardScaffold(String(localized: "Review"), explanation: String(localized: "This is what BenchBar will do. Nothing has changed yet."), phase: phase(state)) {
             if let plan = state.plan {
                 summary(state, plan)
                 stepList(plan, sharedWith: state.bench(usingSite: plan.site))
-                SheetNote("Install starts it, and that is your confirmation. Steps that ask for your password show macOS's own dialog: BenchBar never sees the password. Cancel a dialog and that step is skipped with the command to run yourself.")
+                SheetNote(String(localized: "Install starts it, and that is your confirmation. Steps that ask for your password show macOS's own dialog: BenchBar never sees the password. Cancel a dialog and that step is skipped with the command to run yourself."))
             }
         } actions: {
             WizardBackButton(run: run)
@@ -141,8 +141,11 @@ struct ReviewPage: View {
     }
 
     private func phase(_ state: WizardState) -> SheetPhase {
-        if state.planning { return .loading("Planning the install…") }
-        if let error = state.planError { return .failed(error, title: "No install plan") }
+        if state.planning { return .loading(String(localized: "Planning the install…")) }
+        if state.planStale != nil {
+            return .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The Mac changed since this plan was shown"))
+        }
+        if let error = state.planError { return .failed(error, title: String(localized: "No install plan")) }
         return .ready
     }
 
@@ -181,11 +184,11 @@ struct ReviewPage: View {
                     Text(step.name)
                     if step.sudo {
                         if step.willRun {
-                            Tag(text: "Asks for your password", color: .orange)
+                            Tag(text: String(localized: "Asks for your password"), color: .orange)
                         } else if step.id == "hosts_entry", let bench {
-                            Tag(text: "Already there for \(bench)", color: .orange)
+                            Tag(text: String(localized: "Already there for \(bench)"), color: .orange)
                         } else {
-                            Tag(text: "Already done", color: .secondary)
+                            Tag(text: String(localized: "Already done"), color: .secondary)
                         }
                     }
                 }

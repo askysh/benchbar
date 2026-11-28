@@ -90,7 +90,7 @@ conf_get() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get
 
 # ---- refusals before anything happens
 run_fm pull --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Usage: benchbar pull HOST:SITE"
-run_fm pull "-oProxyCommand=x:$RS" --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"
+run_fm pull "-oProxyCommand=x:$RS" --bench-dir "$BENCH"; assert_eq "64" "$CODE" "$OUT"
 run_fm pull "$SRC" --as "Bad_Name" --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Invalid site name"
 run_fm pull "$SRC" --skip-app frappe --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "frappe cannot be skipped"
 touch "$MOCK_STATE/ssh_refused"
@@ -220,6 +220,26 @@ assert_no_secrets "(keep secrets)"
 run_fm pull "$SRC" --as keepplan --skip-app hrms --keep-secrets --dry-run --bench-dir "$BENCH"
 assert_contains "$OUT" "kept as production had them (--keep-secrets)"
 assert_not_contains "$OUT" "Neutralise the copy"
+# --keep-secrets is a person's decision, like listen all (SVC-4, issue 186): a run nobody watches is
+# refused with one line, whatever --yes says, the plan included, and nothing is read or changed
+for agent in "env" "--for-agent"; do
+  reset_calls
+  if [[ "$agent" == "env" ]]; then
+    BENCHBAR_NONINTERACTIVE=1 run_fm pull "$SRC" --as keepagent --skip-app hrms --keep-secrets --yes --bench-dir "$BENCH"
+  else
+    run_fm pull "$SRC" --as keepagent --skip-app hrms --keep-secrets --yes --for-agent --bench-dir "$BENCH"
+  fi
+  assert_eq "1" "$CODE" "$OUT"
+  assert_contains "$OUT" "--keep-secrets leaves production's integrations and stored passwords live in the copy, a person's decision"
+  assert_no_file "$BENCH/sites/keepagent"
+  assert_calls_not_contain '^(ssh|scp|rsync|bench) ' "(a refused --keep-secrets reaches neither the server nor the bench)"
+done
+BENCHBAR_NONINTERACTIVE=1 run_fm pull "$SRC" --as keepagent --skip-app hrms --keep-secrets --dry-run --json --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "a person's decision"
+# without the flag the same agent run is not refused for it
+BENCHBAR_NONINTERACTIVE=1 run_fm pull "$SRC" --as keepagent --skip-app hrms --dry-run --bench-dir "$BENCH"
+assert_not_contains "$OUT" "a person's decision"
 run_fm pull "$SRC" --as neutplan --skip-app hrms --dry-run --bench-dir "$BENCH"
 assert_contains "$OUT" "Neutralise the copy"
 assert_contains "$OUT" "outbound integrations off, stored secrets cleared"
@@ -532,6 +552,18 @@ assert_calls_contain '^hook ran$'
 assert_calls_not_contain 'hookfail migrate$'
 assert_calls_not_contain 'hookfail clear-cache$'
 unset MY_API_TOKEN DB_PASSWORD KEEP_ME
+# a hook that is not the script of the plan (swapped while the restore ran) is not run
+SWAPPED="$TMP_DIR/swapped.sh"
+# shellcheck disable=SC2016  # the script text is written as it is
+printf '#!/bin/bash\nprintf "swapped hook ran\\n" >>"$MOCK_LOG"\n' >"$SWAPPED"; chmod +x "$SWAPPED"
+reset_calls
+# shellcheck disable=SC2016  # bash -c expands its own variables
+OUT="$(FL_BENCH_DIR="$BENCH" bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/run.sh"; . "$1/lib/frappe-local/pull.sh"
+  FL_PULL_HOOK="$2"; FL_PULL_HOOK_SHA="$3"; FL_PULL_AS=swapsite; fl_pull_step_before_migrate' _ "$ROOT" "$SWAPPED" "$(printf 'the script of the plan' | shasum -a 256 | awk '{print $1}')" 2>&1)" && CODE=0 || CODE=$?
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "is not the script the plan showed"
+assert_contains "$OUT" "swapsite is restored but not migrated"
+assert_calls_not_contain 'swapped hook ran'
 # the plan names the hook and the site it creates
 JOUT="$("$FM" pull --from-dir "$DL" --as hookplan --skip-app hrms --before-migrate "$HOOK" --dry-run --json --bench-dir "$BENCH" 2>/dev/null)" || fail "pull --dry-run --json"
 assert_eq "$HOOK True True" "$(printf '%s\n' "${JOUT%%$'\n'*}" | jget - 'd["before_migrate"] + " " + str(d["migrate"]) + " " + str(d["create_site"])')"

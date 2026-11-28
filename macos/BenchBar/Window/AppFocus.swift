@@ -11,17 +11,17 @@ nonisolated enum FocusPin: String, CaseIterable, Sendable, Identifiable {
 
     var title: String {
         switch self {
-        case .auto: "Auto"
-        case .focus: "Focus"
-        case .ignore: "Ignore"
+        case .auto: String(localized: "Auto")
+        case .focus: String(localized: "Focus")
+        case .ignore: String(localized: "Ignore")
         }
     }
 
     var help: String {
         switch self {
-        case .auto: "Inferred: local changes, another branch than the profile's, or a commit of yours in the last 14 days"
-        case .focus: "Always a focus app: doctor watches the apps it needs, never the app itself"
-        case .ignore: "Never a focus app, even with local changes or recent commits of yours"
+        case .auto: String(localized: "Inferred: local changes, another branch than the profile's, or a commit of yours in the last 14 days")
+        case .focus: String(localized: "Always a focus app: doctor watches the apps it needs, never the app itself")
+        case .ignore: String(localized: "Never a focus app, even with local changes or recent commits of yours")
         }
     }
 
@@ -45,18 +45,19 @@ extension AppInfo {
     nonisolated var focusSummary: String? {
         guard isFocus else { return nil }
         let reasons = (focusReasons ?? []).joined(separator: ", ")
-        return reasons.isEmpty ? "focus app" : "focus app: \(reasons)"
+        return reasons.isEmpty ? String(localized: "focus app") : String(localized: "focus app: \(reasons)")
     }
 
     /// "needed by exponent_ecr, 30 commits / 12 days behind upstream/develop",
     /// only for a dependency of a focus app that is behind.
     nonisolated var dependencySummary: String? {
         guard !isFocus, let neededBy, !neededBy.isEmpty else { return nil }
-        let who = "needed by \(neededBy.joined(separator: ", "))"
+        let who = String(localized: "needed by \(neededBy.joined(separator: ", "))")
         guard let behind, behind > 0 else { return who }
-        var words = "\(behind) commit\(behind == 1 ? "" : "s")"
-        if let days = behindDays, days > 0 { words += " / \(days) day\(days == 1 ? "" : "s")" }
-        return "\(who), \(words) behind \(upstream ?? "its remote")"
+        var words = Wording.commits(behind)
+        if let days = behindDays, days > 0 { words = String(localized: "\(words) / \(Wording.days(days))") }
+        let behindRemote = upstream ?? String(localized: "its remote")
+        return String(localized: "\(who), \(words) behind \(behindRemote)")
     }
 
     /// A dependency of a focus app that is behind its remote: doctor warns.
@@ -82,7 +83,7 @@ struct AppMenu: View {
     let setFocus: (FocusPin) -> Void
 
     var body: some View {
-        MoreMenu(help: "Install \(app.name) on a site or change its focus") {
+        MoreMenu(help: String(localized: "Install \(app.name) on a site or change its focus")) {
             if !missingSites.isEmpty {
                 Section("Install") {
                     ForEach(missingSites, id: \.self) { site in
@@ -90,7 +91,7 @@ struct AppMenu: View {
                     }
                 }
             }
-            Section(app.focus == nil ? "Focus (needs benchbar 0.6 or later)" : "Focus") {
+            Section(app.focus == nil ? String(localized: "Focus (needs benchbar 0.6 or later)") : String(localized: "Focus")) {
                 // an inline picker, so the menu checks the current pin: a
                 // Label's checkmark image is not drawn in a menu
                 Picker("Focus", selection: Binding(get: { app.pin }, set: setFocus)) {

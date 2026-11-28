@@ -29,20 +29,21 @@ it off; a problem while undoing is a warning, and the experiment is off anyway.
 A lab lists its platforms (`macos`, `linux`, `windows`). On another platform
 `labs` shows it as "(not on this platform)" and `labs on` stops with exit
 code 1: "NAME is not available on linux yet". The same test applies to every
-other path: a lab the platform does not list stays off even when
-`BENCHBAR_LABS` or a copied state file names it, and its commands refuse
-with exit 2 and the same sentence.
+other path: a lab the platform does not list stays off even when a copied
+state file names it, and its commands refuse with exit 2 and the same
+sentence.
 
 All of this is benchbar's own state (the `LABS` key). No bench or site changes.
-The BenchBar app shows the same list under Settings. `BENCHBAR_LABS=a,b` in
-the environment replaces the saved list, for tests and CI.
+The BenchBar app shows the same list under Settings. Nothing in the
+environment turns an experiment on: `BENCHBAR_LABS` is read by benchbar's own
+test suite only, and a normal run ignores it.
 
 | Name | What it does | Since | Platforms |
 | --- | --- | --- | --- |
-| `lan-rooms` | Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose. Commands: `share`, `lan-guard`. | 0.8.2 | macOS |
+| `lan-rooms` | Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose. Commands: `share`, `lan-guard`. | 0.8.2 | macOS, Linux |
 | `quick-switch` | A panel on a global keyboard shortcut to open a site as any pinned user. | 0.8.2 | macOS |
 
-The JSON is in [the JSON reference](../../json-schema.md#benchbar-labs---json).
+The JSON is in [the JSON reference](../json/state-and-diagnostics.md#benchbar-labs---json).
 
 ## Flags, needs and environment
 
@@ -70,8 +71,4 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `labs on` | `--yes` |  | Do not ask before turning on (still refused without a person, BENCHBAR_NONINTERACTIVE=1). |
 | `labs off` | `--json` |  | JSON lines, ending in a done line. |
 | `labs status` | `--json` |  | One JSON document. |
-
-| Command | Environment variable | What it does |
-|---|---|---|
-| `labs` | `BENCHBAR_LABS` | Comma separated lab names that replace the saved list (tests and CI). |
 <!-- /generated:cli-commands -->

@@ -55,6 +55,9 @@ struct WorkbenchTests {
         #expect(RepairEvent.parse(#"{"event":"step","action":"build","status":"failed","message":"[FAIL] x"}"#)
                 == .step(action: "build", status: "failed", message: "[FAIL] x"))
         #expect(RepairEvent.parse(#"{"event":"done","exit_code":0,"log":"/l"}"#) == .done(exitCode: 0, log: "/l"))
+        #expect(RepairEvent.parse(#"{"event":"done","exit_code":1,"error":"refused"}"#) == .done(exitCode: 1, log: nil, error: "refused"))
+        #expect(RepairEvent.planToken(#"{"event":"plan","actions":[],"token":"abc"}"#) == "abc")
+        #expect(RepairEvent.planToken(#"{"event":"plan","actions":[]}"#) == nil)
         #expect(RepairEvent.parse(#"{"event":"progress","pct":40}"#) == nil)
         #expect(RepairEvent.parse("[OK] human text") == nil)
     }
@@ -75,10 +78,10 @@ struct WorkbenchTests {
         let bench = try #require(store.benches.first { $0.path == v16 })
         let workbench = Workbench(store: store)
         let token = String(repeating: "ab", count: 32)
-        let error = await workbench.addApp(" https://github.com/acme/acme_erp ", branch: "develop", site: "v16two", token: token, on: bench)
+        let error = await workbench.addApp([AppAddEntry(source: " https://github.com/acme/acme_erp ", branch: "develop", site: "v16two")], token: token, on: bench)
         #expect(error == nil)
-        #expect(base.cli.calls.contains(["app", "add", "https://github.com/acme/acme_erp", "--apply", token, "--yes", "--plain", "--bench-dir", v16,
-                                         "--branch", "develop", "--site", "v16two"]))
+        #expect(base.cli.calls.contains(["app", "add", "https://github.com/acme/acme_erp", "--branch", "develop", "--install-on", "v16two",
+                                         "--apply", token, "--yes", "--plain", "--bench-dir", v16]))
         #expect(!base.cli.calls.contains { $0.starts(with: ["app", "add"]) && !$0.contains("--apply") }, "nothing runs without a token")
         #expect(workbench.result == .init(title: "Add acme_erp", error: nil, scope: v16), "the banner shows on this bench only")
         #expect(bench.activity == nil, "the slot is free again")
@@ -113,7 +116,7 @@ struct WorkbenchTests {
         base.cli.answer("app", .init(exitCode: 1, stdout: "[FAIL] cannot read git@github.com:acme/private.git (no SSH key)", stderr: ""))
         let bench = try #require(store.benches.first { $0.path == v16 })
         let workbench = Workbench(store: store)
-        await workbench.addApp("git@github.com:acme/private.git", branch: "", site: nil, token: "t", on: bench)
+        await workbench.addApp([AppAddEntry(source: "git@github.com:acme/private.git")], token: "t", on: bench)
         #expect(workbench.result?.error?.contains("no SSH key") == true)
         #expect(!base.cli.calls.contains { $0.contains("--branch") }, "an empty branch is left to the CLI")
     }
@@ -178,6 +181,31 @@ struct WorkbenchTests {
         #expect(run.steps.map(\.id) == ["build", "hosts_entry"])
         #expect(run.unreviewedSteps.map(\.id) == ["hosts_entry"])
         #expect(!run.steps[0].unreviewed)
+    }
+
+    /// The plan's token goes with the run (`--apply TOKEN`); the CLI refuses a plan that changed and
+    /// the sheet offers Review Again, which reads the plan once more.
+    @Test func theRepairRunPassesTheTokenAndAStaleRefusalOffersReviewAgain() async throws {
+        let (store, _) = try await store()
+        let bench = try #require(store.benches.first { $0.path == v16 })
+        base.cli.answer("doctor", json: try Fixture.string("doctor"))
+        let token = String(repeating: "d", count: 64)
+        base.cli.answer("repair", json: #"{"event":"plan","actions":[{"id":"build","label":"bench build","fixes":[],"sudo":false}],"token":"\#(token)","log":null}"#)
+        let run = RepairRun(bench: bench, store: store)
+        await run.loadPlan()
+        base.cli.answer("repair", json: #"{"event":"done","exit_code":1,"error":"The repair plan changed since it was shown. Nothing was changed.","log":null}"#)
+        await run.run()
+        #expect(base.cli.calls.contains(["repair", "--apply", token, "--yes", "--json", "--bench-dir", v16]))
+        #expect(run.isStale)
+        #expect(run.sheetPhase == .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown"))
+        let fresh = String(repeating: "e", count: 64)
+        base.cli.answer("repair", json: #"{"event":"plan","actions":[{"id":"build","label":"bench build","fixes":[],"sudo":false},{"id":"write_procfile","label":"write Procfile.lean","fixes":[],"sudo":false}],"token":"\#(fresh)","log":null}"#)
+        await run.loadPlan()
+        #expect(run.phase == .review && run.steps.map(\.id) == ["build", "write_procfile"])
+        base.cli.answer("repair", json: #"{"event":"done","exit_code":0,"log":null}"#)
+        await run.run()
+        #expect(base.cli.calls.contains(["repair", "--apply", fresh, "--yes", "--json", "--bench-dir", v16]))
+        #expect(run.phase == .finished(exitCode: 0))
     }
 
     @Test func aFailedRunIsNotOverwrittenByItsEvents() async throws {
@@ -336,7 +364,7 @@ struct OnDemandTests {
         let (store, workbench, bench) = try await store()
         store.setWindow(WindowSight(isOpen: true, isVisible: true))
         await workbench.showApps(bench)
-        await workbench.addApp("hrms", branch: "", site: nil, token: "t", on: bench)
+        await workbench.addApp([AppAddEntry(source: "hrms")], token: "t", on: bench)
         await workbench.showApps(bench)
         let lists = base.cli.calls.filter { $0.starts(with: ["app", "list"]) }
         #expect(lists.count == 2)

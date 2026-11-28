@@ -43,27 +43,29 @@ jobs:
       DOTNET_NOLOGO: '1'
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: windows/tray/global.json
       - name: Build
-        run: dotnet build BenchBarTray.sln -c Release
+        run: dotnet build BenchBarTray.sln -c Release -p:RestoreLockedMode=true
       - name: Test
         run: dotnet test BenchBarTray.sln -c Release --no-build
       - name: Publish (framework dependent)
-        run: dotnet publish BenchBarTray/BenchBarTray.csproj -c Release -o out/fd --self-contained false
+        run: dotnet publish BenchBarTray/BenchBarTray.csproj -c Release -o out/fd --self-contained false -p:RestoreLockedMode=true
       - name: Start the published tray once (recorded data, then quit)
         run: ./scripts/smoke.ps1 -Dir out/fd -Fixtures fixtures/rest
       - name: Publish (self contained)
         if: ${{ inputs.self_contained }}
-        run: dotnet publish BenchBarTray/BenchBarTray.csproj -c Release -o out/sc --self-contained true
-      - uses: actions/upload-artifact@v7
+        run: dotnet publish BenchBarTray/BenchBarTray.csproj -c Release -o out/sc --self-contained true -p:RestoreLockedMode=true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: BenchBarTray-win-x64
           path: windows/tray/out/fd
           if-no-files-found: error
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ inputs.self_contained }}
         with:
           name: BenchBarTray-win-x64-self-contained
@@ -82,20 +84,22 @@ jobs:
       DOTNET_NOLOGO: '1'
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: windows/tray/global.json
       - name: Test for arm64
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           foreach ($project in 'Tray.Core.Tests/Tray.Core.Tests.csproj', 'BenchBarTray.Tests/BenchBarTray.Tests.csproj') {
-            dotnet test $project -c Release -r win-arm64 -p:Platform=arm64 -p:PlatformTarget=arm64
+            dotnet test $project -c Release -r win-arm64 -p:Platform=arm64 -p:PlatformTarget=arm64 -p:RestoreLockedMode=true
           }
       - name: Publish for arm64 (framework dependent)
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          dotnet publish BenchBarTray/BenchBarTray.csproj -c Release -r win-arm64 --self-contained false -p:Platform=arm64 -p:PlatformTarget=arm64 -o out/arm64
+          dotnet publish BenchBarTray/BenchBarTray.csproj -c Release -r win-arm64 --self-contained false -p:Platform=arm64 -p:PlatformTarget=arm64 -p:RestoreLockedMode=true -o out/arm64
           if (-not (Test-Path out/arm64/BenchBarTray.exe)) { throw 'dotnet publish did not produce BenchBarTray.exe' }
       - name: Start the published tray once (recorded data, then quit)
         run: ./scripts/smoke.ps1 -Dir out/arm64 -Fixtures fixtures/rest

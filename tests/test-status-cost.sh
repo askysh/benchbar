@@ -125,6 +125,22 @@ FL_LOCAL_PROBES=1 shimmed run_fm status --json --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "$checkout_programs" "$(summary)" "(the probes start no program)"
 
+# ---- the action history (history.sh) costs a poll nothing: with a history file in the state folder the same
+# status starts the same programs, and reading the history starts almost none (a lean command)
+for n in 1 2 3 4 5 6; do
+  printf '{"op_id":"op-20261119-10000%s-%s","command":"up","argv":["up"],"caller":"app","mcp":null,"bench":"%s","site":null,"started_at":"2026-11-19T10:00:0%sZ","ended_at":"2026-11-19T10:00:0%sZ","exit":0,"changed":[],"changed_more":0,"cli_version":"0.9.0","log":null}\n' "$n" "$n" "$BENCH" "$n" "$n" >>"$FL_STATE_DIR/history.jsonl"
+done
+reset_calls
+shimmed run_fm status --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$checkout_programs" "$(summary)" "(a history file adds no program to status)"
+reset_calls
+shimmed run_fm history --json --limit 3 --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "3" "$(printf '%s' "$OUT" | jget - 'len(d["history"])')"
+[[ "$(execs)" -le 2 ]] || fail "history --json: $(execs) programs started, budget 2"$'\n'"$(cat "$MOCK_LOG")"
+assert_calls_not_contain '^exec (python3|perl|ruby|date|sed|awk|tr|head|cut|sort)( |$)' "(reading the history forks no per line program)"
+
 # ---- the same status from a Homebrew CLI (a keg copy run by its opt path,
 # its state folder ~/.local/state/benchbar, here a link to the pinned one,
 # the bench its remembered default; the installer's folder is there too,
@@ -291,15 +307,16 @@ for loc in "$UTF8_LOC" C; do
     for s in "/Users/a b/[x](y).z*+?^\$|{}\\q" "/Users/akash/dev/frappe-bench" "/x/bénch/日本"; do
       [[ "$(fl_regex_escape "$s")" == "$(printf "%s" "$s" | sed -e "s/[][\\.*^\$+?(){}|\\\\]/\\\\&/g")" ]] || { echo "regex escape differs for $s"; exit 1; }
     done
+    # (tab, newline and the other control characters are escaped, not deleted: tests/test-json-strings.sh)
     # the reference: the sed | tr the bash reader replaced, with a whole terminal
     # control sequence removed first (0.7.3: the ESC no longer goes alone); the
     # byte ranges of that sed need the C locale
     esc="$(printf "\\033")"
-    for s in "a\\b\"c" $'"'"'tab\there\nnl\x1b[0m'"'"' "é日本 plain"; do
+    for s in "a\\b\"c" $'"'"'plain\x1b[0m'"'"' "é日本 plain"; do
       [[ "$(fl_json_escape "$s")" == "$(printf "%s" "$s" | sed -e "s/\\\\/\\\\\\\\/g" -e "s/\"/\\\\\"/g" | LC_ALL=C sed -e "s#${esc}\\[[0-?]*[ -/]*[@-~]##g" | tr -d "\\000-\\037")" ]] || { echo "json escape differs for $s"; exit 1; }
     done
     # a colored 20 KB log line (logs --json escapes every line): linear, not quadratic
-    long="$(printf "%0.s[x]" $(seq 1 5000))"$'"'"'\x1b[0m end\x01'"'"'
+    long="$(printf "%0.s[x]" $(seq 1 5000))"$'"'"'\x1b[0m end'"'"'
     SECONDS=0
     [[ "$(fl_json_escape "$long")" == "$(printf "%s" "$long" | LC_ALL=C sed -e "s#${esc}\\[[0-?]*[ -/]*[@-~]##g" | tr -d "\\000-\\037")" ]] || { echo "json escape differs for a long line"; exit 1; }
     [[ "$SECONDS" -le 2 ]] || { echo "json escape of a 20 KB line took ${SECONDS}s"; exit 1; }

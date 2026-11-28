@@ -320,7 +320,7 @@ assert_eq "1" "$CODE" "$OUT$ERR"
 assert_not_contains "$OUT$ERR" "482 913"
 assert_eq "" "$(ctl_ops)"
 cli code --bogus
-assert_eq "1" "$CODE" "$OUT$ERR"
+assert_eq "64" "$CODE" "$OUT$ERR"
 
 # ================================================================ the invite (the second exception that carries the code)
 export FL_ROUTE="$ROOT/tests/mocks/bin/route" FL_IPCONFIG="$ROOT/tests/mocks/bin/ipconfig"
@@ -381,7 +381,7 @@ done
 cli invite --install-url
 assert_eq "1" "$CODE" "$OUT$ERR"
 cli invite --bogus
-assert_eq "1" "$CODE" "$OUT$ERR"
+assert_eq "64" "$CODE" "$OUT$ERR"
 # refused for agents and scripts before the socket is asked; nothing carries the code
 ctl_reset
 cli invite --for-agent
@@ -450,14 +450,49 @@ assert_eq "d_0a1b2c3d|Priya Mac|192.168.1.23|s_0a1b2c3d|Priya Nair|True|2026-11-
 assert_eq "None None False" "$(doc '" ".join(str(x) for x in (d["people"][1]["seat_id"], d["people"][1]["seat_full_name"], d["people"][1]["online"]))')"
 assert_not_contains "$OUT" "priya@example.com" "(people never carries the seat's user)"
 assert_not_contains "$OUT" "sha256:"
+# the seats of the room, held or free, so that a host (and both apps) can give one out: id, name, roles,
+# and who holds it. Never the seat's user. seat_mode says who gives out the seats (open: a config without the key).
+assert_eq "seat_mode,seats" "$(doc '",".join(sorted(k for k in d if k in ("seats", "seat_mode")))')"
+assert_eq "full_name,held_by,held_by_name,roles,seat_id" "$(doc '",".join(sorted(d["seats"][0]))')"
+assert_eq "s_0a1b2c3d|Priya Nair|NE|d_0a1b2c3d|Priya Mac" \
+  "$(doc '"|".join(str(x) for x in (d["seats"][0]["seat_id"], d["seats"][0]["full_name"], ",".join(d["seats"][0]["roles"]), d["seats"][0]["held_by"], d["seats"][0]["held_by_name"]))')"
+assert_eq "s_1a2b3c4d|Mgr Singh|Sales User|None|None s_2a2b3c4d|Sam Rao|Stock User|None|None" \
+  "$(doc '" ".join("|".join(str(x) for x in (s["seat_id"], s["full_name"], ",".join(s["roles"]), s["held_by"], s["held_by_name"])) for s in d["seats"][1:])')"
+assert_eq "open" "$(doc 'd["seat_mode"]')"
+assert_not_contains "$OUT" "@example.com" "(no seat's user in the seat list either)"
+printf '{"v": 3, "seat_mode": "host"}\n' >"$SHARE_DIR/gateway.json"
+cli people --json
+assert_eq "host 3" "$(doc '" ".join(str(x) for x in (d["seat_mode"], len(d["seats"])))')"
+# the host gives out the seats and somebody has none: the list says that they wait, and for whom
+cli people
+assert_contains "$OUT" "1 person waits for a seat from you"
+assert_contains "$OUT" "benchbar share assign ID SEAT_ID"
+rm -f "$SHARE_DIR/gateway.json"
+cli people --json
+# the app's and the tray's fixtures hold only keys the CLI prints, the new ones included
+printf '%s' "$OUT" | python3 -I -c '
+import json, sys
+live = json.load(sys.stdin)
+for name in sys.argv[1:]:
+    fixture = json.load(open(name))
+    assert set(fixture) <= set(live) | {"protocol"}, (name, "keys the CLI no longer prints", set(fixture) - set(live))
+    assert set(fixture["seats"][0]) == set(live["seats"][0]), (name, "seat keys", set(fixture["seats"][0]) ^ set(live["seats"][0]))
+    assert fixture["seat_mode"] in ("open", "host"), name
+' "$ROOT/macos/BenchBarTests/Fixtures/share-people.json" "$ROOT/windows/tray/fixtures/cli/share-people.json" || fail "share people --json and the app fixtures disagree"
 cli devices --json
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "2" "$(doc 'len(d["people"])')"
 cli people
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_contains "$OUT" "People in the room"
+assert_not_contains "$OUT" "waits for a seat from you" "(an open room: nobody waits for the host)"
 assert_contains "$OUT" "d_1a2b3c4d"
 assert_contains "$OUT" "Priya Nair"
+# SHARE-5: someone has no seat, so the free seats are listed with the ids share assign takes; a held seat is not
+assert_contains "$OUT" "s_1a2b3c4d  Mgr Singh"
+assert_contains "$OUT" "s_2a2b3c4d  Sam Rao"
+assert_not_contains "$OUT" "s_0a1b2c3d"
+assert_contains "$OUT" "benchbar share assign ID SEAT_ID"
 assert_not_contains "$OUT" "$(printf '\342\200\256')"
 
 # ================================================================ assign
@@ -590,14 +625,23 @@ T1="$(ts 30)"; T2="$(ts 20)"; T3="$(ts 10)"; TOLD="$(ts $((20 * 1440)))"
   printf '{"ts":"%s","device":"d_1a2b3c4d","user":"sam@example.com","method":"POST","path":"/app/customer/CUST-0042?sid=leak","status":200,"cookie":"sid=leakcookie"}\n' "$T2"
   printf '{"ts":"%s","device":"d_0a1b2c3d","user":"priya@example.com","method":"GET","path":"/api/method","status":403}\n' "$T3"
   printf 'not json\n'
+  # what the gateway writes since 0.9.0: the seat's id, no e-mail address (#159 SHARE-10)
+  printf '{"ts":"%s","device":"d_0a1b2c3d","seat":"s_1a2b3c4d","method":"GET","path":"/app/item","status":200}\n' "$T3"
+  printf '{"ts":"%s","device":"d_0a1b2c3d","seat":"s_gone0000","method":"GET","path":"/app/gone","status":200}\n' "$T3"
   printf '{"ts":"%s","device":"d_0a1b2c3d","user":"priya@example.com","method":"GET","path":"/app/old","status":200}\n' "$TOLD"
 } >"$SHARE_DIR/activity-${DAY0}.log"
 printf '{"ts":"%sT10:00:00.000Z","device":"d_0a1b2c3d","user":"priya@example.com","method":"GET","path":"/app/ancient","status":200}\n' "$OLD_DAY" >"$SHARE_DIR/activity-${OLD_DAY}.log"
 chmod 600 "$SHARE_DIR"/activity-*.log
 cli log --json
 assert_eq "0" "$CODE" "$OUT$ERR"
-assert_eq "3 False" "$(doc '" ".join(str(x) for x in (len(d["entries"]), d["truncated"]))')"
-assert_eq "/app/sales-order /app/customer /api/method" "$(doc '" ".join(e["path"] for e in d["entries"])')"
+assert_eq "5 False" "$(doc '" ".join(str(x) for x in (len(d["entries"]), d["truncated"]))')"
+assert_eq "/app/sales-order /app/customer /api/method /app/item /app/gone" "$(doc '" ".join(e["path"] for e in d["entries"])')"
+# a seat id is shown as the seat's name from share.json (or as it is, for a seat the room no longer has);
+# a line of 0.8.3 still shows what it holds, until it is 14 days old
+assert_eq "priya@example.com|Mgr Singh|s_gone0000" "$(doc '"|".join(d["entries"][i]["user"] for i in (0, 3, 4))')"
+# reading the log is also when the files past the 14 days go (before: only at the next share start)
+assert_no_file "$SHARE_DIR/activity-${OLD_DAY}.log"
+assert_file "$SHARE_DIR/activity-${DAY0}.log"
 assert_eq "device,method,path,status,ts,user" "$(doc '",".join(sorted(d["entries"][1]))')"
 assert_not_contains "$OUT" "leak"
 assert_not_contains "$OUT" "CUST-0042"
@@ -606,9 +650,9 @@ assert_not_contains "$OUT" "/app/old"
 cli log --device d_1a2b3c4d --json
 assert_eq "d_1a2b3c4d" "$(doc '" ".join(e["device"] for e in d["entries"])')"
 cli log --since "$T2" --json
-assert_eq "2" "$(doc 'len(d["entries"])')"
+assert_eq "4" "$(doc 'len(d["entries"])')"
 cli log --limit 1 --json
-assert_eq "1 True /api/method" "$(doc '" ".join(str(x) for x in (len(d["entries"]), d["truncated"], d["entries"][0]["path"]))')"
+assert_eq "1 True /app/gone" "$(doc '" ".join(str(x) for x in (len(d["entries"]), d["truncated"], d["entries"][0]["path"]))')"
 for bad in 0 abc 5001; do
   cli log --limit "$bad"
   assert_eq "1" "$CODE" "$OUT$ERR"

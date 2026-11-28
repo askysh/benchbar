@@ -1,1 +1,1 @@
-{"schema_version":1,"conflicts":["8000 has a listener: pid 4242","9000 reserved by /home/akash/b2"],"mode":"fixed","already_running":false}
+{"schema_version":1,"cli_version":"0.8.3","conflicts":["8000 has a listener: pid 4242","9000 reserved by /home/akash/b2"],"mode":"fixed","already_running":false}

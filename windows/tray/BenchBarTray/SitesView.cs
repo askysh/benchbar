@@ -34,7 +34,7 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
     {
         _services = services;
         Content = _root;
-        Ui.Name(this, "Sites");
+        Ui.Name(this, UiText.Get("OverviewSites"));
     }
 
     public PageServices Services => _services;
@@ -69,7 +69,7 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
     public void Bind(BenchContext context)
     {
         var key = string.Join('|', context.Bench.Path, context.Bench.State, context.Bench.WebUrl, context.Site,
-            string.Join(',', context.Bench.Sites.Select(s => s.Name + (s.IsDefault ? "*" : "") + (s.OpenAs is { } o ? $"[{o.Enabled}{o.DeveloperMode}{o.Usable}]" : ""))));
+            string.Join(',', context.Bench.Sites.Select(s => s.Name + (s.IsDefault ? "*" : "") + (s.OpenAs is { } o ? $"[{o.Enabled}{o.DeveloperMode}{o.Usable}]" : ""))), PullAvailable, SnapshotsAvailable, MoveOfferedFor(context.Bench.Path));
         // one view serves every bench: a panel opened for another bench must not outlive the switch
         if (_context is not null && _context.Bench.Path != context.Bench.Path)
         {
@@ -91,14 +91,22 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         _root.Children.Clear();
 
         var head = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
-        var add = Ui.Button("Add Site...", () => OpenAdd(null), primary: true);
+        var add = Ui.Button(UiText.Get("SitesAdd"), () => OpenAdd(null), primary: true);
         add.IsEnabled = !_busy;
         add.Margin = new Thickness(0);
         DockPanel.SetDock(add, Dock.Right);
         if (Rows.Count > 0) head.Children.Add(add); // without sites the empty state below has the one action
-        head.Children.Add(Ui.Title("Sites"));
+        if (PullAvailable == true)
+        {
+            var pull = Ui.Button(UiText.Get("SitesPull"), OpenPull, UiText.Format("SitesPullInto", Bench.Name));
+            pull.IsEnabled = !_busy;
+            pull.Margin = new Thickness(0, 0, Rows.Count > 0 ? 8 : 0, 0);
+            DockPanel.SetDock(pull, Dock.Right);
+            head.Children.Add(pull);
+        }
+        head.Children.Add(Ui.Title(UiText.Get("OverviewSites")));
         _root.Children.Add(head);
-        _root.Children.Add(Ui.Text("The default site is the one benchup waits for, the runner pings and Open uses.", 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 12)));
+        _root.Children.Add(Ui.Text(UiText.Get("SitesDefaultNote"), 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 12)));
 
         if (_message is not null) _root.Children.Add(PagePanels.Banner(_message, _messageIsError));
         _panelHost.IsEnabled = !_busy;
@@ -106,7 +114,7 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
 
         if (Rows.Count == 0)
         {
-            _root.Children.Add(PagePanels.EmptyState($"{Bench.Name} has no site yet.", "Add Site...", () => OpenAdd(null), !_busy));
+            _root.Children.Add(PagePanels.EmptyState(UiText.Format("SitesNone", Bench.Name), UiText.Get("SitesAdd"), () => OpenAdd(null), !_busy));
             return;
         }
         foreach (var row in Rows) _root.Children.Add(RowView(row, Rows.Count == 1));
@@ -124,32 +132,32 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         nameLine.Children.Add(Ui.Text(row.Name, 15, FontWeights.SemiBold));
         if (row.IsDefault)
         {
-            var badge = Ui.Text("default", 11, FontWeights.SemiBold, margin: new Thickness(0));
+            var badge = Ui.Text(UiText.Get("SitesDefaultBadge"), 11, FontWeights.SemiBold, margin: new Thickness(0));
             var pill = new Border { Child = badge, Background = Ui.Card, CornerRadius = new CornerRadius(8), Padding = new Thickness(7, 1, 7, 2), Margin = new Thickness(8, 1, 0, 0) };
-            Ui.Name(pill, "default site");
+            Ui.Name(pill, UiText.Get("SitesDefaultName"));
             nameLine.Children.Add(pill);
         }
         text.Children.Add(nameLine);
-        var detail = Ui.Text(row.NeedsSetUp ? "Windows cannot find this name" : row.Url ?? "no address", 12, opacity: row.NeedsSetUp ? 1 : 0.7);
+        var detail = Ui.Text(row.NeedsSetUp ? UiText.Get("SitesNoResolve") : row.Url ?? UiText.Get("SitesNoAddress"), 12, opacity: row.NeedsSetUp ? 1 : 0.7);
         if (row.NeedsSetUp) detail.Foreground = Ui.CautionTextBrush;
         text.Children.Add(detail);
         if (OpenAsLine(row) is { } openAsLine) text.Children.Add(openAsLine);
         grid.Children.Add(text);
 
-        var action = Ui.Button(row.ActionLabel, () => RowAction(row), $"{row.ActionLabel} {row.Name}", minWidth: 84);
+        var action = Ui.Button(row.ActionLabel, () => RowAction(row), UiText.Format("OverviewActionName", row.ActionLabel, row.Name), minWidth: 84);
         action.IsEnabled = !_busy && (row.NeedsSetUp || row.CanOpen);
         action.Margin = new Thickness(8, 0, 6, 0);
-        if (!row.NeedsSetUp && !row.CanOpen) action.ToolTip = "Start the bench to open the site";
+        if (!row.NeedsSetUp && !row.CanOpen) action.ToolTip = UiText.Get("SitesStartToOpen");
         Grid.SetColumn(action, 1);
         grid.Children.Add(action);
 
-        var entries = SiteMenu.For(row, onlySite, OpenAsFor(row).State).Select(item => new PageMenuEntry(item.Label, item.Enabled, item.Destructive, () => MenuAction(row, item.Action)));
-        var more = PagePanels.MoreButton($"More actions for {row.Name}", entries, !_busy);
+        var entries = SiteMenu.For(row, onlySite, OpenAsFor(row).State, SnapshotsAvailable == true, MoveOffered).Select(item => new PageMenuEntry(item.Label, item.Enabled, item.Destructive, () => MenuAction(row, item.Action)));
+        var more = PagePanels.MoreButton(UiText.Format("SitesMoreActions", row.Name), entries, !_busy);
         Grid.SetColumn(more, 2);
         grid.Children.Add(more);
 
         var card = Ui.CardOf(grid, new Thickness(0, 0, 0, 6));
-        Ui.Name(card, $"Site {row.Name}");
+        Ui.Name(card, UiText.Format("ActivityLeaseSite", row.Name));
         if (_context?.Site == row.Name)
         {
             card.BorderBrush = PagePanels.SelectedBrush;
@@ -174,6 +182,8 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
             case SiteAction.BackUpWithFiles: Start(() => BackUpAsync(row.Name, true)); break;
             case SiteAction.Backups: Start(() => ShowBackupsAsync(row.Name, restore: false)); break;
             case SiteAction.Restore: Start(() => ShowBackupsAsync(row.Name, restore: true)); break;
+            case SiteAction.Move: Start(() => MoveAsync(row.Name)); break;
+            case SiteAction.Snapshots: Start(() => ShowSnapshotsAsync(row.Name)); break;
             case SiteAction.Console: OpenShell(SiteShellKind.Console, row.Name); break;
             case SiteAction.Database: OpenShell(SiteShellKind.Database, row.Name); break;
             case SiteAction.Drop: StartDrop(row.Name); break;
@@ -231,6 +241,14 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         _addPassword = null;
         _addConfirm = null;
         _addProblem = null;
+        _pullFolder = null;
+        _pullSource = null;
+        _pullName = null;
+        _pullKeep = null;
+        _pullProblem = null;
+        _pullKeepNote = null;
+        _snapLabel = null;
+        _snapProblem = null;
         _drop = null;
         SetPanel(null);
     }
@@ -260,24 +278,25 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         });
     }
 
-    private static string Why(CliStreamResult r) => r.Problem ?? $"The command failed (exit {r.Exit}).";
+    private static string Why(CliStreamResult r) => r.Done?.Explained ?? r.Problem ?? UiText.Format("PendingFailed", r.Exit);
 
-    private static string Why<T>(CliResult<T> r) => r.Error ?? r.Done?.Problem ?? $"The command failed (exit {r.Exit}).";
+    private static string Why<T>(CliResult<T> r) => r.Done?.Explained ?? r.Error ?? r.Done?.Problem ?? UiText.Format("PendingFailed", r.Exit);
 
     // --- Make Default, Back Up ---
 
-    internal Task MakeDefaultAsync(string site) => RunBusy($"Making {site} the default site...", async () =>
+    internal Task MakeDefaultAsync(string site) => RunBusy(UiText.Format("SitesMaking", site), async () =>
     {
         var r = await _services.Cli.RunStreamAsync(SiteCommands.MakeDefault(site, Bench.Path), null, CliTimeouts.Plan, _ => { });
-        return r.Ok ? (true, $"{site} is now the default site.") : (false, Why(r));
+        return r.Ok ? (true, UiText.Format("SitesNowDefault", site)) : (false, Why(r));
     });
 
-    internal Task BackUpAsync(string site, bool withFiles) => RunBusy($"Backing up {site}{(withFiles ? " with its files" : "")}... this can take a few minutes.", async () =>
+    internal Task BackUpAsync(string site, bool withFiles) => RunBusy(withFiles ? UiText.Format("SitesBackingUpFiles", site) : UiText.Format("SitesBackingUp", site), async () =>
     {
         var r = await _services.Cli.RunJsonAsync(SiteCommands.BackUp(site, withFiles, Bench.Path), null, CliTimeouts.Apply, SiteJson.ParseBackupResult);
         if (!r.Ok) return (false, Why(r));
         var backup = r.Value!.Backup;
-        return (true, backup is null ? $"{site} was backed up." : $"{site} was backed up: {backup.Stamp}, {ByteSize.Format(backup.SizeBytes)}{(backup.WithFiles ? ", with files" : "")}.");
+        return (true, backup is null ? UiText.Format("SitesBackedUp", site)
+            : backup.WithFiles ? UiText.Format("SitesBackedUpDetailFiles", site, backup.Stamp, ByteSize.Format(backup.SizeBytes)) : UiText.Format("SitesBackedUpDetail", site, backup.Stamp, ByteSize.Format(backup.SizeBytes)));
     });
 
     // --- Console, Database ---
@@ -286,14 +305,13 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
     {
         string? error = null;
         if (_services.Distro() is not { Length: > 0 } distro) error = WslCommands.NoDistroMessage;
-        else if (!SiteNames.IsValid(site)) error = $"{site} is not a name the console can take.";
+        else if (!SiteNames.IsValid(site)) error = UiText.Format("SitesBadName", site);
         else
         {
             var command = kind == SiteShellKind.Console ? WslCommands.Console(site) : WslCommands.Database(site);
             error = _services.OpenTerminal(new TerminalLaunch(distro, Bench.Path, command));
         }
-        var what = kind == SiteShellKind.Console ? "console" : "database shell";
-        Say(error is null ? null : $"The {what} did not open: {error}", error is not null);
+        Say(error is null ? null : kind == SiteShellKind.Console ? UiText.Format("SitesConsoleFailed", error) : UiText.Format("SitesDatabaseFailed", error), error is not null);
         Rebuild();
     }
 
@@ -302,10 +320,10 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
     private void ShowSetUp(SiteRowInfo row)
     {
         var suggestion = SiteNames.WithLocalhost(row.Name);
-        var panel = PagePanels.Panel($"Set up {row.Name}", null,
-            [PagePanels.Line($"Windows finds only names that end in .localhost. {row.Name} would need a line in the Windows hosts file, and BenchBar never edits it."),
-             PagePanels.Line($"Add the site as {suggestion} instead; it opens in your browser without any setup.")],
-            [Ui.Button($"Add {suggestion}...", () => OpenAdd(suggestion), primary: true), Ui.Button("Close", ClosePanel)]);
+        var panel = PagePanels.Panel(UiText.Format("SitesSetUpTitle", row.Name), null,
+            [PagePanels.Line(UiText.Format("SitesSetUpHosts", row.Name)),
+             PagePanels.Line(UiText.Format("SitesSetUpAdvice", suggestion))],
+            [Ui.Button(UiText.Format("SitesAddSuggestion", suggestion), () => OpenAdd(suggestion), primary: true), Ui.Button(UiText.Get("TidyClose"), ClosePanel)]);
         SetPanel(panel);
     }
 
@@ -313,16 +331,16 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
 
     private void OpenAdd(string? name)
     {
-        _addName = Ui.Field("Site name", name ?? "", _ => HideAddProblem(), 360);
-        _addPassword = Ui.Password("Administrator password", _ => { });
-        _addConfirm = Ui.Password("Confirm password", _ => { });
+        _addName = Ui.Field(UiText.Get("SitesFieldName"), name ?? "", _ => HideAddProblem(), 360);
+        _addPassword = Ui.Password(UiText.Get("SitesFieldPassword"), _ => { });
+        _addConfirm = Ui.Password(UiText.Get("SitesFieldConfirm"), _ => { });
         _addProblem = PagePanels.Line("", error: true);
         _addProblem.Visibility = Visibility.Collapsed;
-        var hint = Ui.Text("Names that end in .localhost open in your browser without any setup.", 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 10));
-        var panel = PagePanels.Panel($"Add a site to {Bench.Name}",
-            "A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards.",
-            [Ui.Labeled("Site name", _addName), hint, Ui.Labeled("Administrator password", _addPassword), Ui.Labeled("Confirm password", _addConfirm), _addProblem],
-            [Ui.Button("Review Plan...", () => Start(AddSiteAsync), primary: true), Ui.Button("Cancel", ClosePanel)]);
+        var hint = Ui.Text(UiText.Get("SitesLocalhostHint"), 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 10));
+        var panel = PagePanels.Panel(UiText.Format("SitesAddTitle", Bench.Name),
+            UiText.Get("SitesAddExplain"),
+            [Ui.Labeled(UiText.Get("SitesFieldName"), _addName), hint, Ui.Labeled(UiText.Get("SitesFieldPassword"), _addPassword), Ui.Labeled(UiText.Get("SitesFieldConfirm"), _addConfirm), _addProblem],
+            [Ui.Button(UiText.Get("RunCmdReviewPlan"), () => Start(AddSiteAsync), primary: true), Ui.Button(UiText.Get("Cancel"), ClosePanel)]);
         SetPanel(panel);
         _addName.Focus();
     }
@@ -342,10 +360,10 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
     /// <summary>The problem with the Add Site form, or null when it can go to the plan.</summary>
     internal string? AddFormProblem(string name, Secret password, Secret confirm)
     {
-        if (!SiteNames.IsValid(name)) return name.Length == 0 ? "Enter a site name." : SiteNames.Rule;
-        if (Rows.Any(r => r.Name == name)) return $"{name} is already a site of this bench.";
-        if (password.IsEmpty) return "Enter an Administrator password.";
-        if (!password.SameAs(confirm)) return "The two passwords are not the same.";
+        if (!SiteNames.IsValid(name)) return name.Length == 0 ? UiText.Get("SitesEnterName") : SiteNames.Rule;
+        if (Rows.Any(r => r.Name == name)) return UiText.Format("SitesAlreadySite", name);
+        if (password.IsEmpty) return UiText.Get("SitesEnterPassword");
+        if (!password.SameAs(confirm)) return UiText.Get("SitesPasswordsDiffer");
         return null;
     }
 
@@ -366,12 +384,12 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         }
         if (PanelIsStale) return;
         var benchPath = PanelBench;
-        var request = PlanReviewRequest.Tokened($"Add {name}", SiteCommands.Add(name, benchPath)) with
+        var request = PlanReviewRequest.Tokened(UiText.Format("SitesAddName", name), SiteCommands.Add(name, benchPath)) with
         {
-            ConfirmLabel = "Add Site",
+            ConfirmLabel = UiText.Get("SitesConfirmAdd"),
             UsesSudoEnv = false,
             CanStop = false,
-            Summary = $"Creates {name} on this bench's MariaDB with only Frappe installed. The password goes to benchbar in its environment, never on a command line.",
+            Summary = UiText.Format("SitesAddSummary", name),
             ConfigureEnv = env => env.Set("ADMIN_PASSWORD", password),
         };
         SetBusy(true);
@@ -397,7 +415,7 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
             if (outcome.Applied)
             {
                 ClosePanel();
-                Say($"{name} was added.", false);
+                Say(UiText.Format("SitesAdded", name), false);
                 _services.RefreshNow();
             }
             Rebuild();
@@ -408,24 +426,24 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
 
     internal async Task ShowBackupsAsync(string site, bool restore)
     {
-        var title = restore ? $"Restore {site}" : $"Backups of {site}";
-        SetPanel(PagePanels.Panel(title, null, [PagePanels.Line("Reading the backups...")], [Ui.Button("Close", ClosePanel)]));
+        var title = restore ? UiText.Format("SitesRestoreTitle", site) : UiText.Format("SitesBackupsTitle", site);
+        SetPanel(PagePanels.Panel(title, null, [PagePanels.Line(UiText.Get("SitesReadingBackups"))], [Ui.Button(UiText.Get("TidyClose"), ClosePanel)]));
         var generation = _panelGeneration;
         var r = await _services.Cli.RunJsonAsync(SiteCommands.Backups(site, Bench.Path), null, CliTimeouts.Read, SiteJson.ParseList);
         PagePanels.OnUi(this, () =>
         {
             if (generation != _panelGeneration) return; // the person opened something else meanwhile
-            SetPanel(r.Value is { } list ? BackupsPanel(site, restore, list) : PagePanels.Panel(title, null, [PagePanels.Line(Why(r), error: true)], [Ui.Button("Close", ClosePanel)]));
+            SetPanel(r.Value is { } list ? BackupsPanel(site, restore, list) : PagePanels.Panel(title, null, [PagePanels.Line(Why(r), error: true)], [Ui.Button(UiText.Get("TidyClose"), ClosePanel)]));
         });
     }
 
     private UIElement BackupsPanel(string site, bool restore, SiteBackupList list)
     {
-        var title = restore ? $"Restore {site}" : $"Backups of {site}";
+        var title = restore ? UiText.Format("SitesRestoreTitle", site) : UiText.Format("SitesBackupsTitle", site);
         if (list.Backups.Count == 0)
         {
-            return PagePanels.Panel(title, null, [PagePanels.Line($"{site} has no backup yet.")],
-                [Ui.Button("Back Up", () => { ClosePanel(); Start(() => BackUpAsync(site, false)); }, $"Back Up {site}", primary: true), Ui.Button("Close", ClosePanel)]);
+            return PagePanels.Panel(title, null, [PagePanels.Line(UiText.Format("SitesNoBackup", site))],
+                [Ui.Button(UiText.Get("SitesBackUp"), () => { ClosePanel(); Start(() => BackUpAsync(site, false)); }, UiText.Format("SitesBackUpName", site), primary: true), Ui.Button(UiText.Get("TidyClose"), ClosePanel)]);
         }
         var rows = new List<UIElement>();
         foreach (var backup in list.Backups)
@@ -438,7 +456,7 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
             text.Children.Add(Ui.Text(backup.Stamp, 11, opacity: 0.6));
             grid.Children.Add(text);
             var current = backup;
-            var button = Ui.Button("Restore...", () => Start(() => RestoreAsync(site, current)), $"Restore {site} from {backup.Stamp}", minWidth: 84);
+            var button = Ui.Button(UiText.Get("SitesRestore"), () => Start(() => RestoreAsync(site, current)), UiText.Format("SitesRestoreFrom", site, backup.Stamp), minWidth: 84);
             button.Margin = new Thickness(8, 0, 0, 0);
             button.IsEnabled = backup.CanRestore;
             if (!backup.CanRestore) button.ToolTip = backup.WhyNotRestorable;
@@ -448,10 +466,10 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         }
         var buttons = new List<Button>();
         if (list.Folder is { Length: > 0 } folder)
-            buttons.Add(Ui.Button("Open Folder", () => OpenBackupFolder(folder), $"Open the backup folder of {site}"));
-        buttons.Add(Ui.Button("Close", ClosePanel));
+            buttons.Add(Ui.Button(UiText.Get("SitesOpenFolder"), () => OpenBackupFolder(folder), UiText.Format("SitesOpenFolderName", site)));
+        buttons.Add(Ui.Button(UiText.Get("TidyClose"), ClosePanel));
         return PagePanels.Panel(title,
-            restore ? $"Pick the backup to restore. {site} is backed up first, then its database is replaced." : null,
+            restore ? UiText.Format("SitesPickRestore", site) : null,
             rows, buttons);
     }
 
@@ -460,7 +478,7 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         var distro = _services.Distro();
         if (distro is null)
         {
-            Say("No WSL distro is set. Pick one in Settings, then try again.", true);
+            Say(UiText.Get("SitesNoDistro"), true);
             Rebuild();
             return;
         }
@@ -470,25 +488,25 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
         }
         catch (Exception ex)
         {
-            Say($"The folder did not open: {ex.Message}", true);
+            Say(UiText.Format("SitesFolderFailed", ex.Message), true);
             Rebuild();
         }
     }
 
     internal async Task RestoreAsync(string site, SiteBackup backup)
     {
-        var typed = _services.ConfirmTyped(new TypedConfirmRequest($"Restore {site}",
-            $"This replaces the database{(backup.WithFiles ? " and the files" : "")} of {site} with backup {backup.Stamp}. {site} is backed up first.",
-            site, "Restore"));
+        var typed = _services.ConfirmTyped(new TypedConfirmRequest(UiText.Format("SitesRestoreTitle", site),
+            backup.WithFiles ? UiText.Format("SitesRestoreConfirmFiles", site, backup.Stamp) : UiText.Format("SitesRestoreConfirm", site, backup.Stamp),
+            site, UiText.Get("SitesConfirmRestore")));
         if (typed is null || !TypedConfirm.Matches(site, typed)) return;
         if (PanelIsStale) return;
         var benchPath = PanelBench;
-        var request = PlanReviewRequest.Tokened($"Restore {site} from {backup.Stamp}", SiteCommands.Restore(site, backup, benchPath)) with
+        var request = PlanReviewRequest.Tokened(UiText.Format("SitesRestoreFrom", site, backup.Stamp), SiteCommands.Restore(site, backup, benchPath)) with
         {
-            ConfirmLabel = "Restore",
+            ConfirmLabel = UiText.Get("SitesConfirmRestore"),
             CanStop = false,
             UsesSudoEnv = false,
-            Summary = $"Backs up {site}, replaces it with backup {backup.Stamp}, then runs bench migrate.",
+            Summary = UiText.Format("SitesRestoreSummary", site, backup.Stamp),
         };
         SetBusy(true);
         Rebuild();
@@ -513,7 +531,7 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
             if (outcome.Applied)
             {
                 ClosePanel();
-                Say($"{site} was restored from {backup.Stamp}.", false);
+                Say(UiText.Format("SitesRestored", site, backup.Stamp), false);
                 _services.RefreshNow();
             }
             Rebuild();
@@ -578,14 +596,14 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
     {
         var body = new List<UIElement>();
         var buttons = new List<Button>();
-        string? explanation = "Backs the site up with its files, drops its database and moves its folder to archived/sites. Nothing is deleted from disk.";
+        string? explanation = UiText.Get("SitesDropExplain");
         switch (s.Phase)
         {
             case DropPhase.Review:
                 if (s.IsDefault)
                 {
                     var picker = new ComboBox { ItemsSource = s.Successors, SelectedItem = s.NewDefault, Width = 300, HorizontalAlignment = HorizontalAlignment.Left };
-                    Ui.Name(picker, "New default site");
+                    Ui.Name(picker, UiText.Get("SitesNewDefault"));
                     picker.SelectionChanged += (_, _) =>
                     {
                         if (picker.SelectedItem is string chosen && chosen != s.NewDefault)
@@ -594,47 +612,47 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
                             Start(() => LoadDropPlanAsync(s));
                         }
                     };
-                    body.Add(Ui.Labeled("New default site", picker, $"{s.Site} is the default site: the site you pick becomes the default first."));
+                    body.Add(Ui.Labeled(UiText.Get("SitesNewDefault"), picker, UiText.Format("SitesNewDefaultHelp", s.Site)));
                 }
                 if (s.Plan is { } plan)
                 {
                     var n = 1;
                     foreach (var step in plan.Steps)
                     {
-                        body.Add(PagePanels.Line($"{n++}. {step.Title}"));
+                        body.Add(PagePanels.Line(UiText.Format("SitesStepLine", n++, step.Title)));
                         if (step.Command is { Length: > 0 } command && !step.NeedsPassword) body.Add(Ui.Text(command, 12, opacity: 0.6, margin: new Thickness(18, 0, 0, 4)));
                     }
                 }
                 else if (s.PlanError is { } error) body.Add(PagePanels.Line(error, error: true));
-                else body.Add(PagePanels.Line("Reading the plan..."));
-                buttons.Add(Ui.Button("Cancel", ClosePanel));
-                var drop = Ui.Button("Drop Site...", () => Start(() => ConfirmDropAsync(s)), $"Drop {s.Site}");
+                else body.Add(PagePanels.Line(UiText.Get("SitesReadingPlan")));
+                buttons.Add(Ui.Button(UiText.Get("Cancel"), ClosePanel));
+                var drop = Ui.Button(UiText.Get("SitesDropButton"), () => Start(() => ConfirmDropAsync(s)), UiText.Format("SitesDropName", s.Site));
                 drop.IsEnabled = s.Plan is not null && (!s.IsDefault || s.NewDefault is not null);
                 buttons.Add(drop);
                 break;
             case DropPhase.Running:
                 explanation = null;
-                body.Add(PagePanels.Line($"Backing up and dropping {s.Site}... A backup with files can take a few minutes on a big site."));
+                body.Add(PagePanels.Line(UiText.Format("SitesDropping", s.Site)));
                 break;
             case DropPhase.Done:
                 explanation = null;
-                body.Add(PagePanels.Line(s.Result ?? $"{s.Site} was dropped."));
-                buttons.Add(Ui.Button("Done", ClosePanel, primary: true));
+                body.Add(PagePanels.Line(s.Result ?? UiText.Format("SitesDropped", s.Site)));
+                buttons.Add(Ui.Button(UiText.Get("ProfileDone"), ClosePanel, primary: true));
                 break;
             default:
                 explanation = null;
-                body.Add(PagePanels.Line(s.Failure ?? "The site was not dropped.", error: true));
-                buttons.Add(Ui.Button("Close", ClosePanel));
+                body.Add(PagePanels.Line(s.Failure ?? UiText.Get("SitesNotDroppedAny"), error: true));
+                buttons.Add(Ui.Button(UiText.Get("TidyClose"), ClosePanel));
                 break;
         }
-        SetPanel(PagePanels.Panel($"Drop {s.Site}", explanation, body, buttons));
+        SetPanel(PagePanels.Panel(UiText.Format("SitesDropName", s.Site), explanation, body, buttons));
     }
 
     private async Task ConfirmDropAsync(DropState state)
     {
         if (!ReferenceEquals(_drop, state) || _context is null || state.BenchPath != Bench.Path) return; // the panel belongs to another bench
-        var typed = _services.ConfirmTyped(new TypedConfirmRequest($"Drop {state.Site}",
-            "This backs the site up, drops its database and user, and moves its folder to archived/sites.", state.Site, "Drop"));
+        var typed = _services.ConfirmTyped(new TypedConfirmRequest(UiText.Format("SitesDropName", state.Site),
+            UiText.Get("SitesDropConfirm"), state.Site, UiText.Get("SitesConfirmDrop")));
         if (typed is null || !TypedConfirm.Matches(state.Site, typed)) return;
         state.Phase = DropPhase.Running;
         SetBusy(true);
@@ -652,7 +670,7 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
             else
             {
                 state.Phase = DropPhase.Failed;
-                state.Failure = r.Value is null ? Why(r) : $"{state.Site} was not dropped.";
+                state.Failure = r.Value is null ? Why(r) : UiText.Format("SitesNotDropped", state.Site);
             }
             if (ReferenceEquals(_drop, state)) RenderDrop(state);
             if (!IsLoaded) _services.Notify(state.Result ?? state.Failure ?? "");
@@ -663,10 +681,10 @@ internal sealed partial class SitesView : UserControl, IBenchPageView
 
     private static string DropText(string site, SiteDropResult result)
     {
-        var text = $"{site} was dropped.";
-        if (result.Backup is { } backup) text += $" Backup {backup.Stamp} ({ByteSize.Format(backup.SizeBytes)}) is in its archived folder.";
-        else if (result.ArchivedPath is { Length: > 0 } archived) text += $" Its folder is {archived}.";
-        if (result.NewDefault is { Length: > 0 } next) text += $" {next} is the default site now.";
+        var text = UiText.Format("SitesDropped", site);
+        if (result.Backup is { } backup) text += " " + UiText.Format("SitesDropBackup", backup.Stamp, ByteSize.Format(backup.SizeBytes));
+        else if (result.ArchivedPath is { Length: > 0 } archived) text += " " + UiText.Format("SitesDropFolder", archived);
+        if (result.NewDefault is { Length: > 0 } next) text += " " + UiText.Format("SitesDropNewDefault", next);
         return text;
     }
 }

@@ -101,8 +101,8 @@ public static class SearchText
     public static string Describe(int? current, int total, bool searching)
     {
         if (!searching) return "";
-        if (total == 0) return "no matches";
-        return current is { } c ? $"{c + 1} of {total}" : $"{total} matches";
+        if (total == 0) return UiText.Get("LogsNoMatches");
+        return current is { } c ? UiText.Format("LogsMatchOf", c + 1, total) : UiText.Format("LogsMatches", total);
     }
 
     /// <summary>The next (or previous) match index, wrapping around.</summary>

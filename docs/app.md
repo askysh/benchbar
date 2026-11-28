@@ -3,8 +3,8 @@ title: "The menu bar app"
 description: "The BenchBar menu bar app and window: the runner, the popover, keyboard shortcuts, the pages for each bench, Sharing and On your network, Labs, and what the app never does."
 ---
 
-The BenchBar app lives in the menu bar. It shows every bench as a small
-runner, and a window with a page per bench for its sites, apps and
+BenchBar.app lives in the menu bar. It shows every
+[bench](glossary.md#bench) as a small runner, and a window with a page per bench for its sites, apps and
 health. It installs with [Homebrew](install.md#homebrew) (the
 `benchbar-app` cask), the
 [one line installer](install.md#the-one-line-installer) or the
@@ -32,9 +32,13 @@ pane, or draw your own: see [Custom runners](runners.md).
 
 Click the runner for the popover: bench, site, state and uptime, Start,
 Stop and Restart, the logs and the bench folder, the bench's sites with
-an Open button each (none for a site whose name has no `/etc/hosts` line, unless it ends in `.localhost`; the Sites tab in the window has Set Up…), and a health summary: the first checks that need
-attention with a Copy Fix button, Repair when something is repairable,
-and a button to check again. With more than one bench a picker at the
+an Open button each, and a health summary. The health summary shows the
+first checks that need attention with a Copy Fix button, Repair when
+something is repairable, and a button to check again.
+
+A site has no Open button when its name has no `/etc/hosts` line, unless
+the name ends in `.localhost`. The Sites tab in the window has Set Up…
+for that site. With more than one bench a picker at the
 top chooses which bench the popover shows.
 
 ![The same popover in dark mode](images/popover-dark.png)
@@ -47,14 +51,18 @@ top chooses which bench the popover shows.
 | ⌘D | Stop |
 | ⌘R | Restart |
 | ⌘O | Open the site |
-| ⌘L | Logs: a log window with search and a filter per process |
+| ⌘L | Logs: a log window with search, a filter per process and **Since last start** (see below) |
 | ⌘F | Open the bench folder |
 | ⌘K | Health in the BenchBar window |
 | ⌘M | The BenchBar window |
 | ⌘0 | Open as Administrator, on the default site where Open as is on |
 | ⌘1 to ⌘9 | Open as a pinned user, in menu order |
 | ⇧⌘O | Switch back to the user before |
-| ⌃⌥U | Quick Switch, from any app, once turned on in Settings > Labs |
+| ⌃⌥U | Quick Switch, from any app, once turned on in Settings > Labs (the key can be changed there) |
+
+In the log window, **Since last start** shows the lines since the last start
+(`benchbar logs --json --since-restart`), then only the new lines.
+The worker filter reads `logs/worker.log` through the CLI.
 
 ## Open as a user
 
@@ -118,9 +126,15 @@ only while it is on. In the list:
 Typing filters the list, and from two characters it also searches the site's
 other users. ⌃⌥U again closes it. It uses no Accessibility permission. If
 another app already holds ⌃⌥U, the Labs row says so in red and the lab stays
-on, without a key: turn it off and on again once the other app lets go. The
-key is the physical key that is U on a US keyboard; on another layout BenchBar
-names it by the letter your keyboard shows there.
+on, without a key: pick another key (below), or turn it off and on again once
+the other app lets go.
+
+**Changing the key.** While Quick Switch is on, its row in **Settings > Labs**
+shows the key. Click it, then press the new shortcut: it needs ⌃ or ⌥ (with
+⇧ or ⌘ if you like), and Escape cancels. If another app holds that key, the row says
+so and the old key stays. **Reset** brings back ⌃⌥U. BenchBar remembers the
+choice. A key is the physical key; its name is the letter your keyboard shows
+there (U on a US keyboard), or its printed name such as Space or F5.
 
 After a switch the site's row reads `as {name}`: the pin's label, else the
 user's full name, else the user id. That is BenchBar's own record of its last
@@ -170,7 +184,7 @@ Open it with ⌘M, **Manage Bench…** in the popover, or by
 opening BenchBar again from Finder or Spotlight. The sidebar lists your
 benches first, each with its state dot and its sites beneath it (a site
 opens the bench's Sites tab), then **Team Profiles**, **Find
-Benches** and, while the `lan-rooms` Lab is on, **On your network**. A bench that is not running has one line under its name that
+Benches**, **History** and, while the `lan-rooms` Lab is on, **On your network**. A bench that is not running has one line under its name that
 says why and offers the next step: Start, View Health, Review Port
 Conflict…, Repair… or Set Up Management….
 
@@ -188,22 +202,97 @@ in its footer, and Cancel on the first page goes back to where you were.
 Every bench has a page:
 
 - **Overview**: start, stop and restart (one group of buttons), **Open
-  Site**, the site and ports, and the scheduler switch. **Open in VS
+  Site**, the site and ports, and the background jobs: the scheduler
+  switch, **Start after login** (`benchbar autostart`) and **Install
+  Service…** or **Refresh Service…** (`benchbar service`). **Open in VS
   Code** (or Cursor, chosen in Settings, General) opens the bench folder.
   The ⋯ menu beside Open Site has **Open Console** and **Open Database**
   (Terminal with `benchbar console` and `benchbar db` for the default
-  site), Show in Finder and Copy Path. The ⋯ menu of each site on the
-  Sites tab has both for that site. **Port Settings & Setup…** sits in
+  site), Show in Finder and Copy Path. On a bench that is not running the
+  same menu has **Start Services Only** (`benchbar up --services-only`:
+  the bench's Redis and nothing else, for a restore or a migrate) and
+  **Stop Services** (`benchbar down`); no plan, your click is the
+  decision. The CLI needs no installed service for it, so a bench that has
+  none gets them too. The
+  ⋯ menu of each site on the Sites tab has both for that site. **Port Settings & Setup…** sits in
   the header of the Site and ports section. While the bench runs, two small charts show its CPU
   and memory for the last ten minutes (hover for the value at a moment);
   the popover shows the current values under the bench name. They count
   the bench's own processes, not the shared MariaDB, and are kept in
-  memory only. A bench with a lockfile (`benchbar.toml`) shows **In
-  sync** or **N differences** with the list, from `benchbar lock check`
-  (read only); bring it in line with `benchbar lock apply` in Terminal.
+  memory only. The **Lockfile** section shows **In sync** or **N
+  differences** with the list, from `benchbar lock check` (read only).
+  **Write Lock File…** shows what `benchbar lock write` would write (or
+  change) from this bench and writes it when you confirm; an existing file
+  is backed up first. **Apply…** shows what `benchbar lock apply` would do
+  to the apps (clone, switch a branch, fast forward, then build) and runs
+  it when you confirm; no site is touched. Both plans are the CLI's own
+  text. `lock apply` has no plan token yet, so Apply runs `lock apply
+  --yes` after your OK and the CLI reads the lock file again then; a
+  `benchbar` that gives a token has Apply use it. While an agent holds a
+  lease on the bench or one of its sites, a **Leases** section says who
+  holds it and until when. BenchBar never takes or renews a lease. A
+  change a lease refuses (restart, stop, an app change, a drop or a
+  restore, the lockfile) shows the holder and until when, and offers
+  nothing that breaks the lease except **Break Lease…**: it asks first
+  and then runs the same change with `--break-lease`, which the CLI allows
+  only to a person. The run is in the History. A **Running now** section
+  lists the runs that go on in this bench (`benchbar op list --running`):
+  the command, its step and progress, and when it started, whether a
+  terminal, an agent or the app started it, and how a run you saw going
+  ended (`op status`). It is read only, shown while there is something to
+  show, and read only while the window is open and can be seen (not
+  minimised), every 5 seconds while a run goes on and every 15 otherwise.
+  An update or a restore you start in the app keeps its progress in the
+  sheet; it is not started in the background. The ⋯ menu has
+  **Run Bench Command…** (when `benchbar` lists `run`) and **Watch Assets
+  in Terminal** (`benchbar watch`, which rebuilds the assets while you edit
+  JS or CSS; close the Terminal window to stop it). **Run Bench Command…**
+  offers the commands of the allow list of `benchbar run` (it asks the
+  CLI), a site of the bench and the flags the command takes. A read
+  (`doctor`, `list-apps`, `version`) runs at once and shows its output,
+  marked as data from the bench. `migrate`, `clear-cache`,
+  `clear-website-cache`, `build` and `run-tests` show the plan of
+  `run --dry-run --json` first (the exact command line, whether a backup
+  comes first, the deadline) and run exactly that plan by its own token
+  when you confirm; a bench that changed in between asks you to review
+  the plan again.
+- **The end of a bench's life** (each entry shows when `benchbar` lists
+  its command). The ⋯ menu has **Tidy Up…**, **Remove Service…**,
+  **Forget Bench…** and **Remove Bench…**. **Tidy Up…** marks the bench
+  scratch for 1 to 90 days after you confirm (`benchbar bench scratch`),
+  or not scratch, and lists the scratch benches that expired, the ones
+  that wait and the ones kept (`bench gc --dry-run`), the databases no
+  site refers to (`db orphans`) and the hosts lines no bench has a site for
+  (`site hosts --prune --dry-run`). **Remove Expired…** shows the plan of
+  `bench gc` and runs exactly that plan by its own token as you: it backs
+  up each site, drops its database and moves the folder aside. The
+  orphan databases are only a list: BenchBar never drops a database. The
+  stale hosts lines come with the command `benchbar site hosts --prune` to
+  copy into Terminal: BenchBar never edits `/etc/hosts`, because the
+  command does not edit it for a caller that cannot ask in a terminal
+  (even with the password dialog). **Forget Bench…** and **Remove
+  Bench…** show the plan of `bench forget` and `bench remove` and run it
+  by its token; Remove asks you to type the folder name first, as the
+  command wants it, and the plan refuses the default bench. **Remove
+  Service…** is `uninstall-service --bench-dir` for this bench (never
+  `--all`): it shows the dry run, then removes the agent, runner and
+  Procfile.lean, each backed up first. A bench that changed in between
+  asks you to review the plan again.
 - **Sites**: add a site (it asks for the Administrator password) and open
   any of them. The ⋯ menu of a site makes it the default, backs it up
-  (with or without files) and shows the last backup in Finder. **Drop
+  (with or without files), shows the last backup in Finder and has
+  **Snapshots…**: a snapshot is a backup with its files and the apps it
+  was taken with (`benchbar site snapshot`), kept where frappe's pruning
+  never reaches. The sheet takes one (with a label if you like, nothing in
+  the site changes), lists them (`site snapshots`) with their age, size
+  and whether the bench's apps are still the same, and has **Roll Back…**
+  and **Remove…** on each. Roll Back shows the plan of `benchbar site
+  rollback --dry-run --json` (a snapshot of the site as it is now is taken
+  first, so the rollback can be undone; migrate runs only when the apps
+  differ) and runs exactly that plan by its token after you type the site
+  name; the default site can be rolled back too, as you, and the plan says
+  so. Remove asks first and never offers the undo point of the last
+  rollback. A refused plan or a changed bench shows **Review Again**. **Drop
   Site…** deletes the site's database and database user for good; only
   the backup bench takes first (with files) can bring it back. The sheet
   shows that plan, asks you to type the site name, and reports where the
@@ -211,6 +300,17 @@ Every bench has a page:
   bench. The default site can be dropped only by naming the site that
   takes its place, and the only site of a bench cannot be dropped. Removing the site's `/etc/hosts` line needs
   your password, so the sheet shows that command to run in Terminal.
+  **Move to Another Bench…** (the same menu, when `benchbar` lists `site
+  move` and another bench is registered; never for the default site)
+  picks the bench the site goes to and shows the plan of `benchbar site
+  move --dry-run --json`: the steps, the apps, the new address (the name
+  stays, the port is the other bench's) and what stays (the backups). A
+  running bench is answered with **Stop Bench**, which stops it and reads
+  the plan again. **Move** needs the site name typed and runs exactly that
+  plan by its own token, with the progress of each step; the site is
+  dropped in this bench only after the copy checks out. The end shows the
+  CLI's next steps, and a plan that changed in between shows **Review
+  Again**.
   **Restore a Backup…** (the same menu) puts one of the site's backups
   back, either into the site itself or into a copy under a new name. It
   shows the CLI's plan first (`benchbar site restore --dry-run --json`)
@@ -237,8 +337,13 @@ Every bench has a page:
   MariaDB root password is needed for the restore", in place of a plan.
   Either way, run the command in Terminal with `MARIADB_ROOT_PASSWORD`
   set; the app never asks for it.
-- **Apps**: add an app from the registry or any GitHub URL, and update it
-  after reading the changelog. Each app's ⋯ menu installs it on a site
+- **Apps**: add apps from the registry or any git URL, and update an app
+  after reading the changelog. **Add App…** takes one app or several in one
+  plan: each has its own branch, an optional commit to pin it to (7 to 40
+  hex characters) and the site it is installed on, and **Add Another App**
+  adds a row (up to eight). Review shows one plan with one token
+  (`benchbar app add A B --dry-run --json`); an app another one needs is
+  cloned once, and **Add N Apps** runs exactly that plan. Each app's ⋯ menu installs it on a site
   that lacks it and sets its focus (Auto, Focus, Ignore). The ⋯ menu
   beside **Add App…** has **Refresh Site Lists** and **Check Remotes**.
   An update or an add that stopped part way (a failed migrate, build or
@@ -249,8 +354,16 @@ Every bench has a page:
   `benchbar app update NAME --discard-pending` after asking: none of the
   steps run and the app stays where it is.
   Right click a bench in the sidebar for its actions.
+- **History** (in the sidebar, not on a bench page): everything that ran
+  on this Mac and changed something (`benchbar history --json`), newest
+  first, with who started it (the app, Terminal, an agent through MCP, a
+  script), how it ended and what it changed, and **Show Log** for its log
+  file. It is the CLI's record; nothing here runs anything again.
 - **Health**: doctor's checks, and Repair with its plan shown before
-  anything changes and each step as it runs.
+  anything changes and each step as it runs. **Acknowledge** on a warning
+  (`benchbar doctor --ack`) silences it for this bench until its message
+  changes; it then sits under **acknowledged**, with **Undo**
+  (`--unack`). A failure has no such button, the CLI refuses it.
 - **Sharing**: opens a room for this bench's site on your Wi-Fi. It shows
   only while the `lan-rooms` Lab is on. See
   [Share on your network](#share-on-your-network).
@@ -259,6 +372,16 @@ Every sheet works the same way: the plan or the form first, then your
 confirmation, the run with its progress at the bottom, and the outcome on
 top. Return confirms and Esc cancels; a sheet cannot be closed while its
 change runs. Drop Site is never on Return: it needs the site name typed.
+
+**Install Service…** and **Refresh Service…** show the plan of `benchbar
+service --dry-run --json` (the files it writes, and which step needs your
+password) and run exactly that plan by its token. A step that needs the
+Mac's password asks in macOS's own dialog; BenchBar never sees it, and a
+cancelled dialog skips that step. The window offers a button of a newer
+command only when `benchbar commands --json` lists it, so an older
+`benchbar` never gets a button that would fail. **Start after login** is
+read from `autostart` of `benchbar status --json`; a `benchbar` whose status
+has no such field is asked in words (`benchbar autostart`).
 
 ![The BenchBar window: a bench's overview with Start, Stop, Restart, Open as and Open Site, its resources, site and ports](images/window-overview.png)
 
@@ -388,7 +511,7 @@ asking stops.
 ## Updates
 
 Every release has Sparkle, the macOS updater (see
-[Releasing](releasing.md)). It checks for a new version once a day on
+[Releasing](../maintainers/releasing.md)). It checks for a new version once a day on
 its own and offers it in its own window; **Check for Updates…** in the
 app menu and the menu bar menu asks at once. **Check for Updates** in
 About asks GitHub for the latest release, one request that downloads
@@ -415,7 +538,15 @@ instead.
   update through Homebrew.
 
 The close button on the banner hides it until the next version; the
-menu item stays. See [Updating](install.md#updating).
+menu item stays. See [Updating](upgrade.md#update-the-app-and-the-cli).
+
+After an update that changes a default (0.9.0 changes three: the bench
+listens on this computer only, an unknown option is an error, and `pull`
+neutralises the copy), the BenchBar window also shows a banner for each
+one, one at a time: what changed, the command that switches it back and
+**Learn More**, which opens [What's new](whats-new.md). **Dismiss** runs
+`benchbar notices --dismiss ID`, so the notice is gone in the terminal list
+too. A fresh install shows none.
 
 ## The command line tool inside the app
 
@@ -534,7 +665,7 @@ The one other program it starts is `xcode-select --install`, from Check
 Your Mac, which only opens Apple's installer. It never asks for your
 password itself: for an install, a repair or a hosts line you confirmed,
 the CLI shows macOS's own password dialog (`BENCHBAR_SUDO=gui`, see the
-[JSON schema](json-schema.md#the-privileged-steps-and-benchbar_sudogui)). That
+[JSON schema](reference/json/install-and-doctor.md#the-privileged-steps-and-benchbar_sudogui)). That
 JSON is a documented API: [JSON schema](json-schema.md).
 
 ## Energy

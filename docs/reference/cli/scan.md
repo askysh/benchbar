@@ -29,7 +29,7 @@ example ones macOS privacy settings block, are listed as warnings.
 
 | Flag | What it does |
 |---|---|
-| `--json` | The benches, as `list` entries, and the warnings ([schema](../../json-schema.md#folder-discovery)) |
+| `--json` | The benches, as `list` entries, and the warnings ([schema](../json/state-and-diagnostics.md#folder-discovery)) |
 
 Exit codes: 0, also when nothing is found; 1 when PATH is not a
 readable folder.
@@ -53,7 +53,7 @@ touch the bench. To forget one, delete its line from that file.
 
 | Flag | What it does |
 |---|---|
-| `--json` | Print the `list` response afterwards ([schema](../../json-schema.md#folder-discovery)) |
+| `--json` | Print the `list` response afterwards ([schema](../json/state-and-diagnostics.md#folder-discovery)) |
 | `--dry-run` | Check the paths, write nothing |
 
 Exit codes: 0; 1 when a path is not a bench.
@@ -72,7 +72,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | Command | Terminal | `sudo` | Network | Changes things | JSON |
 |---|---|---|---|---|---|
 | `benchbar scan PATH [--json]` | no | no | no | no | document |
-| `benchbar register PATH...` | no | no | no | yes | none |
+| `benchbar register PATH...` | no | no | no | yes | document |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.

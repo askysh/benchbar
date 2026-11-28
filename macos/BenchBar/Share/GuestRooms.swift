@@ -55,6 +55,9 @@ nonisolated struct SavedRoom: Codable, Identifiable, Equatable, Sendable {
     var joinedAt: Date
     /// The room's public salt at join (not the code), to tell a new room from a removal.
     var salt: String?
+    /// true: this Mac shows the room a key made for its host alone. nil: the room was joined by a
+    /// BenchBar before 0.9.0, with the one key every room saw then; it keeps that key, which its host knows.
+    var ownKey: Bool? = nil
 
     var hostPin: Data? { Fingerprint.raw(fingerprint: hostFingerprint) }
 }

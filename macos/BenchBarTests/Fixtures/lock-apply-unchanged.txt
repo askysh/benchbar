@@ -1,0 +1,11 @@
+
++- benchbar lock apply --------------------------------------------------------+
+| mode     lock                                                                |
+| profile  v15-lts                                                             |
+| bench    /Users/you/frappe-bench |
+| site     macdev                                                              |
++------------------------------------------------------------------------------+
+  .. lockfile /Users/you/frappe-bench/benchbar.toml
+
+Plan
+  [OK] unchanged: the apps match /Users/you/frappe-bench/benchbar.toml

@@ -104,7 +104,9 @@ fl_state_guard_reclaim() {
 # then uses the state where it is.
 fl_state_guard_take() {
   local __g="$1" __i __round
-  if mkdir "$__g" 2>/dev/null; then printf '%s\n' "$$" >"${__g}/pid" 2>/dev/null || true; return 0; fi
+  # the braces make 2>/dev/null cover the redirection too: a guard another
+  # run dropped in between would otherwise print "No such file" to stderr
+  if mkdir "$__g" 2>/dev/null; then { printf '%s\n' "$$" >"${__g}/pid"; } 2>/dev/null || true; return 0; fi
   for __round in 1 2; do
     for ((__i = 0; __i < 50; __i++)); do
       [[ -d "$__g" ]] || break
@@ -117,7 +119,7 @@ fl_state_guard_take() {
     # another waiter reclaimed it first and holds it now: one more wait
   done
   mkdir "$__g" 2>/dev/null || return 1
-  printf '%s\n' "$$" >"${__g}/pid" 2>/dev/null || true
+  { printf '%s\n' "$$" >"${__g}/pid"; } 2>/dev/null || true
   return 0
 }
 
@@ -347,11 +349,32 @@ fl__kv_reclaim() {
   if fl__kv_stale "$guard" "${3:-}"; then rmdir "$guard" 2>/dev/null || true; fi
 }
 
+# fl__kv_dir_ok FILE: the folder of a state file is there and can be written. A
+# failing mkdir of the lock is otherwise taken for "someone else holds it", and
+# the wait never ends (a root owned state folder after a sudo run, a read only
+# volume, a file where a folder belongs). Dies naming the path.
+fl__kv_dir_ok() {
+  local dir="${1%/*}" why=""
+  [[ "$dir" != "$1" ]] || dir="."
+  [[ -d "$dir" ]] || mkdir -p "$dir" 2>/dev/null || true
+  if [[ -e "$dir" && ! -d "$dir" ]]; then why="is not a folder"
+  elif [[ ! -d "$dir" ]]; then why="cannot be created"
+  elif [[ ! -w "$dir" ]]; then why="is not writable (read only, or owned by another user: a run with sudo?)"
+  else return 0; fi
+  fl_die "Cannot write ${1}: ${dir} ${why}." "Make ${dir} a folder your user can write to (ls -ld ${dir} shows the owner), then run again."
+}
+
 fl__kv_lock() {
-  local lck="$1.lck" i=0 seen limit
+  local lck="$1.lck" i=0 seen limit failed=0
+  fl__kv_dir_ok "$1"
   while :; do
     if mkdir "$lck" 2>/dev/null; then
       fl__kv_claim "$lck" && return 0
+    elif [[ ! -d "$lck" ]]; then
+      # nothing holds it and the mkdir still fails: about a minute is enough to know it will not work
+      failed=$((failed + 1))
+      [[ "$failed" -lt 1200 ]] || fl_die "Could not lock ${1}: creating ${lck} keeps failing." "Check the folder's owner and free space (ls -ld ${1%/*}), then run again."
+      fl__kv_dir_ok "$1"
     fi
     i=$((i + 1))
     if [[ $((i % 40)) -eq 0 ]]; then
@@ -381,7 +404,7 @@ fl__kv_lock() {
 fl__kv_claim() {
   local lck="$1" entries
   FL__KV_TOKEN="$$.${RANDOM}${RANDOM}"
-  if : >"${lck}/${FL__KV_TOKEN}" 2>/dev/null; then
+  if { : >"${lck}/${FL__KV_TOKEN}"; } 2>/dev/null; then
     entries=("$lck"/*)
     if [[ "${#entries[@]}" -eq 1 && "${entries[0]}" == "${lck}/${FL__KV_TOKEN}" ]]; then return 0; fi
     rm -f "${lck}/${FL__KV_TOKEN}"
@@ -424,7 +447,7 @@ fl__kv_commit() {
 fl_kv_set() {
   local file="$1" key="$2" value="$3" tmp
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
-  mkdir -p "$(dirname "$file")" 2>/dev/null || true
+  fl__kv_dir_ok "$file"
   # created by appending nothing: two first writers both find no file, and a
   # truncating ": >" from the slower one emptied what the faster one had
   # already written under the lock (a lost key, test-run-lock)
@@ -495,16 +518,23 @@ fl_kv_decode_v() {
   esac
 }
 
-fl_kv_get() {
-  local file="$1" key="$2" raw="" line v
-  [[ -f "$file" && -r "$file" ]] || return 0
+# fl_kv_get_v VAR FILE KEY: the value in VAR, with no subshell; returns 1 (VAR empty) when there is none
+fl_kv_get_v() {
+  local __file="$2" __key="$3" __raw="" __line
+  printf -v "$1" '%s' ""
+  [[ -f "$__file" && -r "$__file" ]] || return 1
   # the last line for KEY wins (fl_kv_set appends); read in bash, as status
   # and list do this a dozen times per call
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ "$line" == "${key}="* ]] && raw="${line#"${key}="}"
-  done <"$file"
-  [[ -n "$raw" ]] || return 0
-  fl_kv_decode_v v "$raw"
+  while IFS= read -r __line || [[ -n "$__line" ]]; do
+    [[ "$__line" == "${__key}="* ]] && __raw="${__line#"${__key}="}"
+  done <"$__file"
+  [[ -n "$__raw" ]] || return 1
+  fl_kv_decode_v "$1" "$__raw"
+}
+
+fl_kv_get() {
+  local v
+  fl_kv_get_v v "$1" "$2" || return 0
   printf '%s\n' "$v"
 }
 
@@ -608,7 +638,11 @@ fl_bench_canonical() {
     */*) parent="${path%/*}" base="${path##*/}"; [[ -n "$parent" ]] || parent=/ ;;
     *) parent=. base="$path" ;;
   esac
-  if [[ -d "$parent" ]]; then printf '%s/%s' "$(cd "$parent" && pwd -P)" "$base"; else printf '%s' "$1"; fi
+  if [[ -d "$parent" ]]; then
+    real="$(cd "$parent" && pwd -P)"
+    # a parent of / gives /name, not //name
+    printf '%s/%s' "${real%/}" "$base"
+  else printf '%s' "$1"; fi
 }
 
 fl_bench_state_file_for() {

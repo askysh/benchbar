@@ -29,20 +29,20 @@ struct SiteDropSheet: View {
     private var sheetPhase: SheetPhase {
         switch phase {
         case .review: .ready
-        case .running: .running("Backing up and dropping \(site)…")
-        case .done: .done(.success("Dropped \(site)"))
-        case .failed(let message): .failed(message, title: "\(site) was not dropped")
+        case .running: .running(String(localized: "Backing up and dropping \(site)…"))
+        case .done: .done(.success(String(localized: "Dropped \(site)")))
+        case .failed(let message): .failed(message, title: String(localized: "\(site) was not dropped"))
         }
     }
 
     var body: some View {
-        SheetScaffold("Drop \(site)",
-                      explanation: "Backs the site up with its files, drops its database and moves its folder to archived/sites. Nothing is deleted from disk.",
+        SheetScaffold(String(localized: "Drop \(site)"),
+                      explanation: String(localized: "Backs the site up with its files, drops its database and moves its folder to archived/sites. Nothing is deleted from disk."),
                       phase: sheetPhase) {
             switch phase {
             case .review: review
             case .running:
-                SheetNote("A backup with files can take a few minutes on a big site.")
+                SheetNote(String(localized: "A backup with files can take a few minutes on a big site."))
             case .done(let result): done(result)
             case .failed: EmptyView()
             }
@@ -58,7 +58,7 @@ struct SiteDropSheet: View {
             case .done:
                 DoneButton(action: close)
             case .failed:
-                DoneButton(title: "Close", action: close)
+                DoneButton(title: String(localized: "Close"), action: close)
             }
         }
         .task(id: newDefault) { await loadPlan() }
@@ -74,7 +74,7 @@ struct SiteDropSheet: View {
                 Picker("New default site", selection: $newDefault) {
                     ForEach(otherSites, id: \.self) { Text($0).tag(Optional($0)) }
                 }
-                SheetNote("\(site) is the default site: the site you pick becomes the default first.")
+                SheetNote(String(localized: "\(site) is the default site: the site you pick becomes the default first."))
             }
         }
         GroupBox("What happens") {
@@ -85,7 +85,7 @@ struct SiteDropSheet: View {
                             Text("\(index + 1).").monospacedDigit().foregroundStyle(.secondary)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(step.title).fixedSize(horizontal: false, vertical: true)
-                                Text(step.needsPassword ? "needs your password: BenchBar shows the command to run in Terminal" : step.command)
+                                Text(step.needsPassword ? String(localized: "needs your password: BenchBar shows the command to run in Terminal") : step.command)
                                     .font(.caption).foregroundStyle(step.needsPassword ? .orange : .secondary)
                             }
                         }
@@ -124,7 +124,7 @@ struct SiteDropSheet: View {
         if let manual = result.manualStep {
             Text("The /etc/hosts line for \(site) is still there. Removing it needs your Mac password; run this in Terminal:")
                 .font(.callout).fixedSize(horizontal: false, vertical: true)
-            CopyableCommand(command: manual, copyLabel: "Copy the command that removes the hosts line")
+            CopyableCommand(command: manual, copyLabel: String(localized: "Copy the command that removes the hosts line"))
         }
     }
 

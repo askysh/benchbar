@@ -3,6 +3,7 @@ import SwiftUI
 /// Doctor for one bench, and Repair when doctor found something repair can fix.
 struct BenchHealth: View {
     let store: BenchStore
+    let workbench: Workbench
     let bench: BenchModel
     @Bindable var router: WindowRouter
     @State private var repair: RepairRun?
@@ -27,9 +28,15 @@ struct BenchHealth: View {
                             .foregroundStyle(.secondary)
                     }
                     if report.needsAttention.isEmpty {
-                        Label("Every check passes.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        Label(report.acknowledged.isEmpty ? String(localized: "Every check passes.") : String(localized: "Nothing needs attention."), systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
                     }
-                    ForEach(report.needsAttention, id: \.rowKey) { CheckRow(check: $0) }
+                    ForEach(report.needsAttention, id: \.rowKey) { check in row(check) }
+                    if !report.acknowledged.isEmpty {
+                        DisclosureGroup("\(report.acknowledged.count) acknowledged") {
+                            ForEach(report.acknowledged, id: \.rowKey) { check in row(check) }
+                        }
+                    }
                     DisclosureGroup("\(report.passing.count) passing") {
                         ForEach(report.passing, id: \.rowKey) { CheckRow(check: $0) }
                     }
@@ -39,6 +46,9 @@ struct BenchHealth: View {
                     Text("Doctor has not run yet.").foregroundStyle(.secondary)
                 }
                 if let error = bench.doctorError {
+                    Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+                }
+                if let error = workbench.parityError[bench.path] {
                     Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
                 }
             } header: {
@@ -59,10 +69,10 @@ struct BenchHealth: View {
                     Button("Repair…") { startRepair() }
                         .primaryAction(repairable)
                         .disabled(!repairable || !store.canChange(bench))
-                        .help(repairable ? "Shows the plan first; nothing changes until you confirm" : "Nothing repair can fix")
+                        .help(repairable ? String(localized: "Shows the plan first; nothing changes until you confirm") : String(localized: "Nothing repair can fix"))
                 }
             } footer: {
-                Text("Doctor is read only. Repair shows its plan, and runs only after you confirm, with a backup before each change.")
+                Text("Doctor is read only. Repair shows its plan, and runs only after you confirm, with a backup before each change. Acknowledge silences one warning for this bench until its message changes; failures cannot be acknowledged.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -71,11 +81,19 @@ struct BenchHealth: View {
         // action on the bench or in the next session, not on every visit
         .task(id: store.stamp(for: bench)) {
             if router.repairRequested { router.repairRequested = false; startRepair() }
+            await workbench.loadCommands()
             await store.showDoctor(on: bench)
         }
         .sheet(item: $repair) { run in
             RepairSheet(run: run) { repair = nil }
         }
+    }
+
+    /// Acknowledge and Undo only when this CLI's doctor has the flag (`commands --json`), and never for a failure.
+    private func row(_ check: DoctorCheck) -> CheckRow {
+        let offered = workbench.commandState.catalog?.hasFlag("doctor", "--ack") == true
+        return CheckRow(check: check, acknowledge: offered ? { on in Task { await workbench.acknowledge(check, on: on, bench: bench) } } : nil,
+                        busy: store.busyBench != nil || bench.isRunningDoctor)
     }
 
     private func startRepair() {
@@ -94,13 +112,14 @@ extension RepairRun {
     /// it and after a failure, so nothing that happened scrolls away.
     var sheetPhase: SheetPhase {
         switch phase {
-        case .planning: .loading("Reading the plan (benchbar repair --dry-run)…")
+        case .planning: .loading(String(localized: "Reading the plan (benchbar repair --dry-run)…"))
         case .review: .ready
-        case .running: .running("Repairing…")
+        case .running: .running(String(localized: "Repairing…"))
         case .finished(let code):
-            .done(code == 0 ? .success("Repair finished; every check passes.")
-                  : .warning("Repair finished with problems left", "See the steps below and the log."))
-        case .failed(let message): .failed(message, title: steps.isEmpty ? "No repair plan" : "Repair stopped")
+            .done(code == 0 ? .success(String(localized: "Repair finished; every check passes."))
+                  : .warning(String(localized: "Repair finished with problems left"), String(localized: "See the steps below and the log.")))
+        case .failed(let message): .failed(message, title: steps.isEmpty ? String(localized: "No repair plan") : String(localized: "Repair stopped"))
+        case .stale: .failed(String(localized: "Nothing was changed. Review the plan again to see what it is now."), title: String(localized: "The bench changed since this plan was shown"))
         }
     }
 }
@@ -111,22 +130,22 @@ struct RepairSheet: View {
     let close: () -> Void
 
     var body: some View {
-        SheetScaffold("Repair \(run.bench.name)",
-                      explanation: "Runs the fixes doctor found, in order, with a backup before each change.",
+        SheetScaffold(String(localized: "Repair \(run.bench.name)"),
+                      explanation: String(localized: "Runs the fixes doctor found, in order, with a backup before each change."),
                       phase: run.sheetPhase) {
-            if run.phase != .planning {
+            if run.phase != .planning, !run.isStale {
                 if run.steps.isEmpty {
                     if run.phase == .review {
-                        SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: "Nothing to repair.")
+                        SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: String(localized: "Nothing to repair."))
                     }
                 } else {
                     stepList
                 }
             }
             if run.phase == .review {
-                SheetNote("A backup is taken before every change (.benchbar/backups). Broken folders are moved aside, never deleted.")
+                SheetNote(String(localized: "A backup is taken before every change (.benchbar/backups). Broken folders are moved aside, never deleted."))
                 if run.hasSudoSteps {
-                    SheetNote("Steps that ask for your password show macOS's own dialog; BenchBar never sees the password. Cancel it and that step is skipped, with the command to run yourself.", tint: .orange)
+                    SheetNote(String(localized: "Steps that ask for your password show macOS's own dialog; BenchBar never sees the password. Cancel it and that step is skipped, with the command to run yourself."), tint: .orange)
                 }
             }
             if let log = run.log, run.phase != .review {
@@ -148,6 +167,9 @@ struct RepairSheet: View {
                 CancelButton(action: close)
             case .running:
                 EmptyView()
+            case .stale:
+                CancelButton(action: close)
+                Button("Review Again") { Task { await run.loadPlan() } }.keyboardShortcut(.defaultAction)
             case .finished, .failed:
                 DoneButton(action: close)
             }
@@ -162,8 +184,8 @@ struct RepairSheet: View {
                     VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                         HStack(spacing: 6) {
                             Text(step.label)
-                            if step.sudo { Tag(text: "Asks for your password", color: .orange) }
-                            if step.unreviewed { Tag(text: "Not in the plan you reviewed", color: .orange) }
+                            if step.sudo { Tag(text: String(localized: "Asks for your password"), color: .orange) }
+                            if step.unreviewed { Tag(text: String(localized: "Not in the plan you reviewed"), color: .orange) }
                         }
                         if !step.message.isEmpty, step.status != "done" {
                             Text(CLIText.plain(step.message)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
@@ -195,7 +217,7 @@ struct StepIcon: View {
         case "done": "done"
         case "skipped": "skipped"
         case "failed": "failed"
-        default: "not started"
+        default: String(localized: "not started")
         }
     }
 }

@@ -33,7 +33,9 @@ assert_contains "$OUT" "${DOCS}/guides/doctor-and-repair/"
 # every topic maps to one of the fixed pages
 for pair in install:/install/ quick-start:/quick-start/ app:/app/ sites:/guides/benches-and-sites/ apps:/guides/apps/ \
   teams:/guides/teams/ agents:/guides/agents/ mcp:/reference/cli/mcp/ cli:/reference/cli/install/ json:/json-schema/ \
-  runners:/runners/ troubleshooting:/troubleshooting/ config:/reference/configuration/ MCP:/reference/cli/mcp/; do
+  runners:/runners/ troubleshooting:/troubleshooting/ config:/reference/configuration/ MCP:/reference/cli/mcp/ \
+  macos:/macos/ linux:/linux/ windows:/windows/ upgrade:/upgrade/ update:/upgrade/ uninstall:/uninstall/ faq:/faq/ glossary:/glossary/ \
+  features:/features/ share:/guides/share-on-your-network/ labs:/guides/labs/ quick-switch:/guides/quick-switch/ url-scheme:/reference/url-scheme/; do
   run_fm docs "${pair%%:*}" --print; assert_eq "0" "$CODE" "$OUT"
   assert_eq "${DOCS}${pair#*:}" "$OUT" "(topic ${pair%%:*})"
 done
@@ -65,7 +67,7 @@ run_fm docs --help; assert_eq "0" "$CODE"
 assert_contains "$OUT" "Usage: benchbar docs [TOPIC]"
 assert_contains "$OUT" "quick-start, start"
 run_fm docs a b; assert_eq "1" "$CODE"; assert_contains "$OUT" "one topic"
-run_fm docs --bogus; assert_eq "1" "$CODE"; assert_contains "$OUT" "Unknown docs option"
+run_fm docs --bogus; assert_eq "64" "$CODE"; assert_contains "$OUT" "Unknown option for docs: --bogus"
 
 # a failing open says so
 MOCK_OPEN_EXIT=1 MOCK_CURL_CODE=200 run_fm docs; assert_eq "1" "$CODE"; assert_contains "$OUT" "could not open"

@@ -3,7 +3,7 @@
 # CONTRIBUTING.md at the root) with Bun.
 #
 # The site describes the last release, so it is built and deployed from main
-# only (docs/DECISIONS.md, "Docs process"). Work lands on next-release, and
+# only (maintainers/DECISIONS.md, "Docs process"). Work lands on next-release, and
 # a feature's pages go live with the release that has the feature.
 #
 # Every pull request to next-release (or main) gets a "Docs build" check: the
@@ -12,7 +12,7 @@
 # request and not after the release. A small "changes" job skips the build
 # when nothing that feeds the docs changed: a skipped job counts as a pass
 # for a required check, where a workflow filtered out by "paths" would leave
-# the check pending forever (docs/DECISIONS.md, "0.5.5: docs site").
+# the check pending forever (maintainers/DECISIONS.md, "0.5.5: docs site").
 #
 # A push to main that changed the docs builds again and deploys to GitHub
 # Pages. This is the official Astro Pages workflow with its steps spelled
@@ -53,13 +53,16 @@ jobs:
     outputs:
       docs: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.docs == 'true' }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           filters: |
             docs:
               - 'docs/**'
+              - 'maintainers/**'
               - 'site/**'
               - 'ROADMAP.md'
               - 'CONTRIBUTING.md'
@@ -69,6 +72,7 @@ jobs:
               - 'lib/frappe-local/labs.sh'
               - 'lib/frappe-local/mcp.py'
               - 'scripts/docs-reference.py'
+              - 'scripts/docs-links.py'
               - 'tests/test-docs.sh'
 
   build:
@@ -82,9 +86,10 @@ jobs:
         working-directory: site
     steps:
       # the whole history: "Last updated" on each page comes from git log
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # the docs' promises to the CLI: a heading per doctor check id, only
       # flags that --help knows, frontmatter on every page
@@ -92,7 +97,7 @@ jobs:
         working-directory: .
         run: bash tests/run-tests.sh test-docs
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: site/.bun-version
 
@@ -109,7 +114,7 @@ jobs:
 
       - name: Upload the site
         if: github.event_name != 'pull_request' && github.event_name != 'schedule' && github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site/dist
 
@@ -131,7 +136,7 @@ jobs:
     steps:
       - name: Deploy
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
   # Weekly, on main: the external links. A failure here is a notice to fix a
   # link, never a block on a pull request.
@@ -148,12 +153,13 @@ jobs:
       run:
         working-directory: site
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: site/.bun-version
 

@@ -12,6 +12,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/install-kind.sh"
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
+# shellcheck source=lib/frappe-local/secrets.sh
+. "${SCRIPT_DIR}/lib/frappe-local/secrets.sh"
 # shellcheck source=lib/frappe-local/run.sh
 . "${SCRIPT_DIR}/lib/frappe-local/run.sh"
 # shellcheck source=lib/frappe-local/platform.sh
@@ -97,6 +99,7 @@ done
 export FL_DRY_RUN
 # the root password is read here (fl_mariadb_root_setup) and must not reach
 # brew, npm or the formulae's own scripts
+fl_secrets_fd_take
 export -n MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 
 if [[ "$LIST_PROFILES" == "1" ]]; then
@@ -221,7 +224,7 @@ NPM_GLOBALS="$("$NPM_BIN" ls -g --depth=0 2>/dev/null || true)"
 if [[ "$NPM_GLOBALS" == *' yarn@'* ]]; then
   fl_info "yarn already globally installed under ${FL_NODE_FORMULA}"
 else
-  fl_run "$NPM_BIN" install -g yarn
+  fl_run "$NPM_BIN" install -g "yarn@${FL_PIN_YARN}"
 fi
 YARN_BIN="$(fl_formula_prefix "$FL_NODE_FORMULA")/bin/yarn"
 [[ -x "$YARN_BIN" ]] || YARN_BIN="$(command -v yarn || true)"
@@ -287,7 +290,9 @@ REDIS_BIN="$(command -v redis-server || true)"
 [[ -x "$REDIS_BIN" ]] || fl_die "redis-server not found." "Try: brew reinstall redis"
 REDIS_VERSION="$("$REDIS_BIN" --version | sed -n 's/.*v=\([0-9.]*\).*/\1/p')"
 fl_ok "redis-server - ${REDIS_VERSION:-unknown} at ${REDIS_BIN}"
-fl_ensure_service_started redis "redis-server"
+# Homebrew's own redis service is not started: each bench runs its own Redis on its own ports (11000 and
+# 13000 by default), and a service on 6379 that nothing uses is what doctor's redis_6379 check warns about
+fl_info "Homebrew's redis service is not started: each bench runs its own Redis"
 
 fl_section "PDF"
 # ok | skipped (declined on purpose, return 2) | failed (download, checksum,
@@ -302,7 +307,7 @@ if [[ -n "${BENCHBAR_PDF_STEP:-}" && "$(fl_wkhtmltopdf_state)" != "patched" ]]; 
   case "$WKHTML_STATE" in
     dry-run) WKHTML_STATE=ok; fl_info "dry-run: the wkhtmltopdf plan is above (benchbar install showed it)" ;;
     skipped) fl_warn "wkhtmltopdf was skipped above (benchbar install asked already): PDFs will not work until it is installed" ;;
-    *) WKHTML_STATE=failed; fl_fail "the wkhtmltopdf install failed above (see benchbar install's output)"; add_pending "WKHTMLTOPDF_FAILED" ;;
+    *) WKHTML_STATE=failed; fl_warn "the wkhtmltopdf install failed above (see benchbar install's output); the bench works, PDF printing does not"; fl_fix "${FL_SELF} repair"; add_pending "WKHTMLTOPDF_FAILED" ;;
   esac
 elif fl_wkhtmltopdf_ensure; then WKHTML_STATE=ok; else
   case "$?" in 2) WKHTML_STATE=skipped ;; *) WKHTML_STATE=failed; add_pending "WKHTMLTOPDF_FAILED" ;; esac
@@ -319,8 +324,14 @@ done
 
 fl_section "SHELL CONFIG"
 ZSHRC="$(fl_rc_file)"
-HELPER_BLOCK="$(fl_template_render shell-helpers "PROFILE_EXPORTS=$(fl_profile_path_exports "$FL_PROFILE")" "BENCHBAR=${FL_SELF}")"
-case "$(fl_rc_block_status "$ZSHRC" "$HELPER_BLOCK")" in
+HELPER_BLOCK="$(fl_rc_helpers_render "$FL_PROFILE" "$FL_SELF")"
+# a shell that reads no block of ours (nushell and the like) gets no file
+RC_STATUS=none
+[[ -z "$ZSHRC" ]] || RC_STATUS="$(fl_rc_block_status "$ZSHRC" "$HELPER_BLOCK")"
+case "$RC_STATUS" in
+  none)
+    fl_ok "no shell helper block: ${SHELL##*/} cannot read one; use ${FL_SELF} up, down, restart, status and logs"
+    ;;
   current)
     fl_ok "${ZSHRC} has the benchbar block (profile exports and bench helpers)"
     ;;

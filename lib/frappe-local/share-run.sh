@@ -82,8 +82,35 @@ fl_share_phase_v() {
 }
 # the runner's own PID (not the test process table of FL_KILL_CMD)
 fl_share_runner_alive() { [[ -n "$1" ]] && kill -0 "$1" 2>/dev/null; }
+# the job: a launchd job on macOS; on Linux a systemd --user unit in the runtime folder (share-linux.sh
+# redefines these, and the three that follow, with the same names)
 fl_share_job_target() { printf '%s/%s' "$(fl_launchd_domain)" "$FL_SHARE_JOB_LABEL"; }
 fl_share_job_loaded() { launchctl print "$(fl_share_job_target)" >/dev/null 2>&1; }
+# the name of the thing that keeps the job, and the command that takes it out by hand
+fl_share_job_manager() { printf 'launchd'; }
+fl_share_job_bootout_hint() { printf 'launchctl bootout %s' "$(fl_share_job_target)"; }
+# fl_share_job_stop: the job is taken out (a run that is not loaded is nothing to do); non zero when it is still listed
+fl_share_job_stop() { fl_agent_bootout "$(fl_share_job_target)"; }
+# fl_share_job_start FILE: loads the job from FILE and starts it; non zero (and a message) when it did not
+fl_share_job_start() {
+  if ! fl_agent_bootstrap "$1" "$FL_SHARE_JOB_LABEL"; then
+    fl_fail "launchd did not load ${FL_SHARE_JOB_LABEL}"
+    return 1
+  fi
+  rm -f "$1"
+  fl_launchd_kickstart "$(fl_share_job_target)" || { fl_fail "launchd did not start ${FL_SHARE_JOB_LABEL}"; return 1; }
+}
+# the tools the runner is given by absolute path: a path that does not exist is an empty one on Linux
+fl_share_dns_sd_bin() { printf '%s' "${FL_SHARE_DNS_SD:-/usr/bin/dns-sd}"; }
+fl_share_caffeinate_bin() { printf '%s' "${FL_SHARE_CAFFEINATE:-/usr/bin/caffeinate}"; }
+fl_share_lsof_bin() { printf '%s' "${FL_SHARE_LSOF:-/usr/sbin/lsof}"; }
+# fl_share_start_note: said once while share start writes the job (Linux: no advertiser)
+fl_share_start_note() { :; }
+# fl_share_job_text SHARE_DIR: the job's own file (the plist) on stdout
+fl_share_job_text() {
+  fl_template_render share.plist "LABEL=${FL_SHARE_JOB_LABEL}" "APP_BUNDLE_ID=${FL_APP_BUNDLE_ID}" "RUNNER=${1}/share-run.sh" \
+    "SHARE_DIR=${1}" "PATH=$(fl_launchd_path_value)" "LOG=${1}/share.log"
+}
 
 # fl_share_dur_v VAR TEXT FLAG: the seconds of "30m" or "4h", from 5 minutes to 12 hours
 fl_share_dur_v() {
@@ -108,7 +135,7 @@ fl_share_control_v() {
   [[ -S "$__sock" ]] || return 1
   fl_sp_node_path_problem_v __problem
   if [[ -n "$__problem" ]]; then fl_log "the control socket is not asked: ${__problem}"; return 1; fi
-  __out="$("$SP_NODE_REAL" -e "${3:-$FL_JS_SHARE_CONTROL}" control "$__sock" "$2" ${4:+"$4"} </dev/null 2>/dev/null 3>&-)" || __code=$?
+  __out="$("$SP_NODE_REAL" -e "${3:-$FL_JS_SHARE_CONTROL}" control "$__sock" "$2" ${4:+"$4"} ${5:+"$5"} </dev/null 2>/dev/null 3>&-)" || __code=$?
   printf -v "$1" '%s' "$__out"
   return "$__code"
 }
@@ -134,6 +161,23 @@ fl_share_gw_str_raw_v() {
   local __text="" __re="\"$2\"[[:space:]]*:[[:space:]]*(\"([^\"\\\\]|\\\\.)*\")"
   [[ ! -f "$(fl_share_dir)/gateway.json" ]] || __text="$(<"$(fl_share_dir)/gateway.json")"
   if [[ "$__text" =~ $__re ]]; then printf -v "$1" '%s' "${BASH_REMATCH[1]}"; else printf -v "$1" '%s' ""; fi
+}
+
+# fl_share_host_key_v VAR: the first 16 hex digits of the host key's fingerprint, as share setup recorded it in
+# share.json (empty without one). The join sheet of an invite shows a guest the same digits (the link's h=),
+# so the host can read them out and the guest can tell the host's room from a link that only uses its label.
+fl_share_host_key_v() {
+  local __fp
+  fl_share_cfg_str_v __fp fingerprint
+  if [[ "$__fp" =~ ^sha256:([0-9a-f]{16})[0-9a-f]{48}$ ]]; then printf -v "$1" '%s' "${BASH_REMATCH[1]}"; else printf -v "$1" '%s' ""; fi
+}
+
+# fl_share_seat_mode_json_v VAR: "host" or "open" (with the quotes), from the gateway.json of the room that
+# runs: who gives a person their seat. A file without the key is an open room.
+fl_share_seat_mode_json_v() {
+  local __m
+  fl_share_gw_str_raw_v __m seat_mode
+  if [[ "$__m" == '"host"' ]]; then printf -v "$1" '"host"'; else printf -v "$1" '"open"'; fi
 }
 
 fl_share_write_private() { # FILE MODE CONTENT: written whole (temp file, then mv), never wider than MODE
@@ -175,7 +219,7 @@ fl_share_wipe_all() {
 # fl_share_teardown: ends a share in whatever state it is: tells the gateway, boots the job out, removes
 # what the runner leaves, empties the room and ends every session of the copy. SH_TORN=1 when there
 # was anything to end (a second stop finds nothing, wipes nothing and says unchanged).
-# SH_BOOTOUT_FAILED=1 when launchd still lists the job afterwards: the caller must not report it stopped.
+# SH_BOOTOUT_FAILED=1 when launchd (systemd on Linux) still lists the job afterwards: the caller must not report it stopped.
 SH_TORN=0; SH_BOOTOUT_FAILED=0
 fl_share_teardown() {
   local dir sock reply f had=0
@@ -185,7 +229,7 @@ fl_share_teardown() {
   for f in "$sock" "$dir/job.plist" "$dir/share-run.sh" "$dir/gateway.json" "$dir/ended" "$dir/phase"; do [[ ! -e "$f" ]] || had=1; done
   [[ "$had" == 1 ]] || return 0
   if [[ -S "$sock" ]] && fl_share_control_v reply '{"op":"stop"}'; then fl_info "the gateway is stopping"; fi
-  if fl_share_job_loaded && ! fl_agent_bootout "$(fl_share_job_target)"; then SH_BOOTOUT_FAILED=1; fi
+  if fl_share_job_loaded && ! fl_share_job_stop; then SH_BOOTOUT_FAILED=1; fi
   rm -f "$sock" "$dir/job.plist" "$dir/share-run.sh" "$dir/gateway.json" "$dir/degraded" "$dir/ended" "$dir/phase"
   fl_share_devices_empty
   fl_share_wipe_all || true
@@ -211,10 +255,13 @@ fl_share_seats_lines_v() {
   printf -v "$1" '%s' "$__out"
 }
 
+# the name of this computer as its owner set it: macOS's ComputerName (share-linux.sh: the hostname)
+fl_share_computer_name() { scutil --get ComputerName 2>/dev/null || true; }
+
 # fl_share_host_label_v VAR: this Mac's name as people see it, cleaned like a room label
 fl_share_host_label_v() {
   local __n
-  __n="$(scutil --get ComputerName 2>/dev/null || true)"
+  __n="$(fl_share_computer_name)"
   fl_share_clean_label_v __n "$__n"
   printf -v "$1" '%s' "${__n:-This Mac}"
 }
@@ -245,27 +292,26 @@ fl_share_gateway_json() {
   # on every interface: a VPN, a phone hotspot or an Ethernet port of this Mac never sees it (SHARE-7)
   fl_sp_lan_v
   [[ -n "$SP_LAN_IP" ]] || { fl_fail "this Mac has no network address for the gateway to listen on"; return 1; }
-  content="$(printf '{\n  "v": 3,\n  "protocol": 3,\n  "listen": {"host": %s, "port": %s},\n  "tls": {"key": %s, "cert": %s},\n  "share_site": %s,\n  "web_port": %s,\n  "deadline_epoch": %s,\n  "started_epoch": %s,\n  "max_total_s": %s,\n  "state_dir": %s,\n  "devices": %s,\n  "control_sock": %s,\n  "log_dir": %s,\n  "python": %s,\n  "signin_helper": %s,\n  "max_conns": {"per_device": 64, "total": 256, "unpaired_total": 16, "unpaired_per_ip": 4},\n  "max_body_mb": 50,\n  "label": %s,\n  "room_label": %s,\n  "site_label": %s,\n  "copy_made": %s,\n  "app_routes": %s,\n  "seats": [\n    %s\n  ]\n}\n' \
+  content="$(printf '{\n  "v": 3,\n  "protocol": 3,\n  "listen": {"host": %s, "port": %s},\n  "tls": {"key": %s, "cert": %s},\n  "share_site": %s,\n  "web_port": %s,\n  "deadline_epoch": %s,\n  "started_epoch": %s,\n  "max_total_s": %s,\n  "state_dir": %s,\n  "devices": %s,\n  "control_sock": %s,\n  "log_dir": %s,\n  "python": %s,\n  "signin_helper": %s,\n  "max_conns": {"per_device": 64, "total": 256, "unpaired_total": 16, "unpaired_per_ip": 4},\n  "max_body_mb": 50,\n  "label": %s,\n  "room_label": %s,\n  "site_label": %s,\n  "copy_made": %s,\n  "app_routes": %s,\n  "seat_mode": "%s",\n  "seats": [\n    %s\n  ]\n}\n' \
     "$(fl_json_str "$SP_LAN_IP")" "$FL_SHARE_GATEWAY_PORT" "$(fl_json_str "${dir}/host.key")" "$(fl_json_str "${dir}/host.crt")" "$(fl_json_str "$FL_SHARE_SITE")" "$web_port" \
     "$2" "$1" "$FL_SHARE_MAX_TOTAL_S" "$(fl_json_str "$dir")" "$(fl_json_str "${dir}/devices.json")" "$(fl_json_str "$(fl_share_sock)")" \
     "$(fl_json_str "$dir")" "$(fl_json_str "${FL_BENCH_DIR}/env/bin/python")" "$(fl_json_str "${lib}/signin.py")" \
-    "$(fl_json_str "$host")" "$3" "$(fl_json_str "$site")" "$(fl_json_str "$copy_made")" "$app_routes" "$seats")"
+    "$(fl_json_str "$host")" "$3" "$(fl_json_str "$site")" "$(fl_json_str "$copy_made")" "$app_routes" "$([[ "${SH_START_SEAT_MODE:-host}" == open ]] && printf open || printf host)" "$seats")"
   fl_share_write_private "${dir}/gateway.json" 600 "$content" || { fl_fail "could not write ${dir}/gateway.json"; return 1; }
 }
 
 # fl_share_render_job ROOM_LABEL BENCHBAR: the runner (0700) and the job's plist (0600) in the share folder
 fl_share_render_job() {
-  local dir runner plist web_port site
+  local dir runner plist web_port
   dir="$(fl_share_dir)"
-  fl_share_cfg_str_v web_port web_port; fl_share_cfg_str_v site site
+  fl_share_cfg_str_v web_port web_port
   runner="$(fl_template_render share-run.sh "SHARE_DIR=${dir}" "SOCK=$(fl_share_sock)" "BENCH=${FL_BENCH_DIR}" "SHARE_SITE=${FL_SHARE_SITE}" \
     "WEB_PORT=${web_port}" "GATEWAY_PORT=${FL_SHARE_GATEWAY_PORT}" "PYTHON=${FL_BENCH_DIR}/env/bin/python" "LIB=${FL_SELF_DIR}/lib/frappe-local" \
-    "NODE=${SP_NODE_REAL}" "BENCHBAR=$2" "DNS_SD=${FL_SHARE_DNS_SD:-/usr/bin/dns-sd}" "CAFFEINATE=${FL_SHARE_CAFFEINATE:-/usr/bin/caffeinate}" \
-    "LSOF=${FL_SHARE_LSOF:-/usr/sbin/lsof}" "CURL=${FL_CURL:-/usr/bin/curl}" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" \
+    "NODE=${SP_NODE_REAL}" "BENCHBAR=$2" "DNS_SD=$(fl_share_dns_sd_bin)" "CAFFEINATE=$(fl_share_caffeinate_bin)" \
+    "LSOF=$(fl_share_lsof_bin)" "CURL=${FL_CURL:-/usr/bin/curl}" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" \
     "SOCK_SECS=${FL_SHARE_SOCK_SECS}" "WARM_SECS=${FL_SHARE_WARM_SECS}" \
-    "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "SITE_LABEL=${site}" "ROOM_LABEL=$1")" || return 1
-  plist="$(fl_template_render share.plist "LABEL=${FL_SHARE_JOB_LABEL}" "APP_BUNDLE_ID=${FL_APP_BUNDLE_ID}" "RUNNER=${dir}/share-run.sh" \
-    "SHARE_DIR=${dir}" "PATH=$(fl_launchd_path_value)" "LOG=${dir}/share.log")" || return 1
+    "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "ROOM_LABEL=$1")" || return 1
+  plist="$(fl_share_job_text "$dir")" || return 1
   if ! fl_share_write_private "${dir}/share-run.sh" 700 "$runner" || ! fl_share_write_private "${dir}/job.plist" 600 "$plist"; then
     fl_fail "could not write the share job into ${dir}"
     return 1
@@ -291,6 +337,9 @@ fl_share_stop_requested() { [[ -e "$(fl_share_dir)/stop_requested" ]]; }
 # ---------------------------------------------------------------- share start
 
 SH_START_FOR=""; SH_START_ROOM_JSON=""; SH_START_NOW=""; SH_START_DEADLINE=""; SH_START_BENCHBAR=""
+# who gives a person their seat: host (you, with share assign: the default since 0.9.0) or open (anyone in
+# the room takes a free one: share start --open-seats)
+SH_START_SEAT_MODE=host
 
 fl_share_start_step_static_preflight() {
   fl_sp_reset
@@ -315,19 +364,16 @@ fl_share_start_step_gateway_config() {
 }
 
 fl_share_start_step_job() {
-  local dir target
-  dir="$(fl_share_dir)"; target="$(fl_share_job_target)"
+  local dir
+  dir="$(fl_share_dir)"
+  fl_share_start_note
   fl_share_render_job "$(printf '%s' "$SH_START_ROOM_JSON" | fl_share_json_unquote)" "$SH_START_BENCHBAR" || return 1
   if fl_share_stop_requested; then fl_fail "benchbar share stop was run while sharing was starting"; return 1; fi
   # the log is this share's: the last one is kept as share.log.1
   if [[ -f "${dir}/share.log" ]]; then mv -f "${dir}/share.log" "${dir}/share.log.1" || true; fi
-  if ! fl_agent_bootstrap "${dir}/job.plist" "$FL_SHARE_JOB_LABEL"; then
-    rm -f "${dir}/job.plist"
-    fl_fail "launchd did not load ${FL_SHARE_JOB_LABEL}"
-    return 1
-  fi
+  # the job file keeps the name job.plist on both platforms: the runner deletes it when it ends
+  fl_share_job_start "${dir}/job.plist" || { rm -f "${dir}/job.plist"; return 1; }
   rm -f "${dir}/job.plist"
-  fl_launchd_kickstart "$target" || { fl_fail "launchd did not start ${FL_SHARE_JOB_LABEL}"; return 1; }
 }
 
 # fl_share_phase_secs PHASE: how long the runner may stay in PHASE, from the limits it was rendered with
@@ -356,7 +402,7 @@ fl_share_start_step_wait_listening() {
     if [[ -n "$pid" ]] && ! fl_share_runner_alive "$pid"; then fl_fail "the sharing job ended while ${ph} (its log: $(fl_share_dir)/share.log)"; return 1; fi
     [[ "${ph:-none}" == "$last" ]] || { last="${ph:-none}"; since="$SECONDS"; }
     if [[ $((SECONDS - since)) -gt "$(fl_share_phase_secs "${ph:-}")" ]]; then
-      fl_fail "the sharing job got no further than ${ph:-being started by launchd} (its log: $(fl_share_dir)/share.log)"; return 1
+      fl_fail "the sharing job got no further than ${ph:-being started by $(fl_share_job_manager)} (its log: $(fl_share_dir)/share.log)"; return 1
     fi
     sleep 0.25
   done
@@ -382,30 +428,52 @@ fl_share_json_unquote() {
 }
 
 fl_share_start_doc() {
-  printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"share_site":%s,"state":"on","label":%s,"port":%s,"started_epoch":%s,"deadline_epoch":%s,"started":%s,"deadline":%s}' \
+  local mode
+  # the room that runs says who gives out its seats (a start that found one running reports that one's)
+  fl_share_seat_mode_json_v mode
+  printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"share_site":%s,"state":"on","label":%s,"port":%s,"started_epoch":%s,"deadline_epoch":%s,"started":%s,"deadline":%s,"seat_mode":%s}' \
     "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_SHARE_SITE")" "$SH_START_ROOM_JSON" "$FL_SHARE_GATEWAY_PORT" \
-    "$1" "$2" "$(fl_json_str "$(fl_share_iso_of "$1")")" "$(fl_json_str "$(fl_share_iso_of "$2")")"
+    "$1" "$2" "$(fl_json_str "$(fl_share_iso_of "$1")")" "$(fl_json_str "$(fl_share_iso_of "$2")")" "$mode"
+}
+
+# fl_share_seat_mode_line: who gives a person their seat in the room that starts, for the start box. The
+# room code is what lets a person in; in an open room it also lets them take any free seat (#159 SHARE-5).
+fl_share_seat_mode_line() {
+  if [[ "$SH_START_SEAT_MODE" == host ]]; then printf 'you give them out: benchbar share assign ID SEAT_ID (benchbar share people lists both)'
+  else printf 'anyone with the code takes any free seat (--open-seats)'; fi
+}
+
+# fl_share_guests_wait_note: said at every start of a room where the host gives out the seats, so that nobody
+# with the habits of 0.8 (guests picked their own seat) ends up with a room where people wait and nothing says why
+fl_share_guests_wait_note() {
+  [[ "$SH_START_SEAT_MODE" == host ]] || return 0
+  fl_info "Guests wait for you: a person who joins has no seat and sees nothing of the copy until you give them one. benchbar share people shows who waits and the free seats; benchbar share assign ID SEAT_ID gives one."
+  fl_info "To let guests take a free seat themselves, as before 0.9.0: benchbar share start --open-seats"
 }
 
 fl_cmd_share_start() {
-  local dur=4h name="" name_given=0 label secs deadline started i id code
+  local dur=4h name="" name_given=0 label secs deadline started i id code assign=0 open=0 running_mode
+  SH_START_SEAT_MODE=host
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
+      --assign-seats) assign=1; shift ;;
+      --open-seats) open=1; SH_START_SEAT_MODE=open; shift ;;
       --for) [[ -n "${2:-}" ]] || fl_die "--for needs a duration." "Example: --for 30m, or --for 4h"; dur="$2"; shift 2 ;;
       --for=*) dur="${1#*=}"; shift ;;
       --name) [[ "$#" -ge 2 ]] || fl_die "--name needs a label." "Example: --name \"Priya's room\""; name="$2"; name_given=1; shift 2 ;;
       --name=*) name="${1#*=}"; name_given=1; shift ;;
-      *) fl_die "Unknown argument for share start: $1" "Use: benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]" ;;
+      *) fl_die "Unknown argument for share start: $1" "Use: benchbar share start [--for DUR] [--name LABEL] [--open-seats] [--dry-run] [--json]" ;;
     esac
   done
+  [[ "$assign" == 0 || "$open" == 0 ]] || fl_die "--assign-seats and --open-seats do not go together." "Use one: --assign-seats (the default: you give out the seats) or --open-seats (guests take a free seat)."
   fl_noninteractive && fl_die "Sharing on the network is a person's decision, so nothing run without a terminal can start it." \
     "Run it in a terminal: benchbar share start"
   [[ -t 0 ]] || fl_person_env_ok BENCHBAR_SUDO gui || fl_die "Sharing needs a person at a terminal, and this run has none.${FL_PERSON_WHY:+ $FL_PERSON_WHY}" \
     "Run it in a terminal: benchbar share start"
-  ! fl_is_linux || fl_die "Sharing on the network needs macOS." "Run it on a Mac."
   fl_share_dur_v secs "$dur" --for
   fl_require_bench
   fl_share_require_setup
+  fl_share_wsl_gate warn
   fl_share_resume_leftover
   rm -f "$(fl_share_dir)/stop_requested"
   fl_sp_nc_open 127.0.0.1 "$FL_REDIS_CACHE_PORT" || fl_die "The bench is not running: its Redis does not answer on ${FL_REDIS_CACHE_PORT}." "Start it (benchbar up), then run this again."
@@ -422,7 +490,10 @@ fl_cmd_share_start() {
     fl_share_gw_int_v started started_epoch
     fl_share_gw_str_raw_v SH_START_ROOM_JSON room_label
     [[ -n "$SH_START_ROOM_JSON" ]] || fl_share_cfg_raw_v SH_START_ROOM_JSON room_label
-    fl_info "unchanged: sharing is already on until $(fl_share_iso_of "$deadline") (benchbar share extend moves the deadline)"
+    # the room that runs keeps its seats as it was started, whatever this start asked for: say which
+    fl_share_seat_mode_json_v running_mode
+    if [[ "$running_mode" == '"host"' ]]; then running_mode="you give out its seats"; else running_mode="its guests take a free seat themselves"; fi
+    fl_info "unchanged: sharing is already on until $(fl_share_iso_of "$deadline"), and ${running_mode} (benchbar share extend moves the deadline; a room with other seats needs benchbar share stop first)"
     [[ "${OPT_JSON:-0}" != 1 ]] || fl_doc_emit 0 "$(fl_share_start_doc "$started" "$deadline")"
     return 0
   fi
@@ -438,14 +509,16 @@ fl_cmd_share_start() {
   started="$(date +%s)"; deadline=$((started + secs))
   fl_header "benchbar share start" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SHARE_SITE"
   if [[ "${OPT_JSON:-0}" == 1 ]]; then
-    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"share_site":%s,"dry_run":%s,"label":%s,"for_s":%s,"deadline":%s,"steps":["static_preflight","gateway_config","job","wait_listening","post_start_preflight"]}' \
+    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"share_site":%s,"dry_run":%s,"label":%s,"for_s":%s,"deadline":%s,"seat_mode":"%s","steps":["static_preflight","gateway_config","job","wait_listening","post_start_preflight"]}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_SHARE_SITE")" "$(fl_json_bool "${FL_DRY_RUN:-0}")" \
-      "$SH_START_ROOM_JSON" "$secs" "$(fl_json_str "$(fl_share_iso_of "$deadline")")")" plan
+      "$SH_START_ROOM_JSON" "$secs" "$(fl_json_str "$(fl_share_iso_of "$deadline")")" "$([[ "$SH_START_SEAT_MODE" == open ]] && printf open || printf host)")" plan
   fi
   fl_box "Share start" \
     "room     $(printf '%s' "$SH_START_ROOM_JSON" | fl_share_json_unquote)" \
     "copy     ${FL_SHARE_SITE}, on port ${FL_SHARE_GATEWAY_PORT} of this Mac's network address" \
-    "until    $(fl_share_iso_of "$deadline") ($(fl_fmt_secs "$secs"))"
+    "until    $(fl_share_iso_of "$deadline") ($(fl_fmt_secs "$secs"))" \
+    "seats    $(fl_share_seat_mode_line)"
+  fl_share_guests_wait_note
   if [[ "${FL_DRY_RUN:-0}" == 1 ]]; then
     fl_info "dry-run: nothing was started or written"
     return 0
@@ -484,6 +557,7 @@ fl_cmd_share_start() {
   fl_next_action "benchbar share stop" "Stop sharing"
   [[ "${OPT_JSON:-0}" != 1 ]] || fl_doc_emit 0 "$(fl_share_start_doc "$SH_START_NOW" "$SH_START_DEADLINE")"
   fl_ok "Sharing ${FL_SHARE_SITE} on your network until $(fl_share_iso_of "$SH_START_DEADLINE")"
+  [[ "$SH_START_SEAT_MODE" != host ]] || fl_next_action "benchbar share people" "guests wait until you give each of them a seat (benchbar share assign ID SEAT_ID)"
 }
 
 # ---------------------------------------------------------------- share stop
@@ -497,8 +571,8 @@ fl_cmd_share_stop() {
   fl_share_write_private "$(fl_share_dir)/stop_requested" 600 "" || fl_warn "could not leave the stop marker for a start on its way"
   fl_share_teardown
   if [[ "$SH_BOOTOUT_FAILED" == 1 ]]; then
-    fl_die "launchd still lists ${FL_SHARE_JOB_LABEL} after the bootout, so the share may still run." \
-      "Run: launchctl bootout $(fl_share_job_target)"
+    fl_die "$(fl_share_job_manager) still lists ${FL_SHARE_JOB_LABEL} after the bootout, so the share may still run." \
+      "Run: $(fl_share_job_bootout_hint)"
   fi
   if [[ "$SH_TORN" == 1 ]]; then
     fl_changed process share "stopped"
@@ -580,8 +654,8 @@ fl_share_preflight_json_v() {
 
 fl_cmd_share_status() {
   local want_pre=0 a dir sock now state=off loaded=0 reply="" started="" deadline="" ended="" degraded="null" error="null"
-  local site web_port label users seats copy lan_guard pre="null" started_json=null deadline_json=null left=0 can=0
-  local total=0 online=0 locked=null lock_reason=null budget=null people=0 trouble=false wipe=0 v files runner_pid runner_phase phase_json=null web_up_json=null interrupted
+  local site web_port label users seats copy lan_guard pre="null" started_json=null deadline_json=null left=0 can=0 seat_mode=null
+  local host_key="" total=0 online=0 locked=null lock_reason=null budget=null people=0 trouble=false wipe=0 v runner_pid runner_phase phase_json=null web_up_json=null interrupted
   for a in "$@"; do
     case "$a" in
       --preflight) want_pre=1 ;;
@@ -636,26 +710,28 @@ fl_cmd_share_status() {
   fi
 
   fl_share_copy_json_v copy
+  fl_share_host_key_v host_key
+  # who gives out the seats of the room that is on (null without one)
+  [[ "$state" != on ]] || fl_share_seat_mode_json_v seat_mode
   interrupted=false
   ! fl_share_setup_interrupted || interrupted=true
-  fl_sp_pf_files_problem_v files
-  if [[ -z "$files" ]]; then lan_guard=installed
-  elif [[ ! -r "${FL_LANGUARD_ANCHOR:-$FL_SHARE_PF_ANCHOR_FILE}" || ! -r "${FL_LANGUARD_DAEMON:-$FL_SHARE_PF_DAEMON_FILE}" ]]; then lan_guard=missing
-  else lan_guard=outdated; fi
+  fl_lg_state_v lan_guard
   fl_sp_lan_v
   [[ "$want_pre" == 0 ]] || fl_share_preflight_json_v pre
 
   if [[ "${OPT_JSON:-0}" == 1 ]]; then
     FL_DONE_NO_STATE=1
-    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","protocol":%d,"bench":%s,"site":%s,"share_site":%s,"state":"%s","phase":%s,"web_up":%s,"degraded":%s,"error":%s,"label":%s,"port":%s,"web_port":%s,"lan_ip":%s,"started":%s,"deadline":%s,"seconds_left":%s,"can_extend_s":%s,"copy":%s,"allowed_users":%s,"seats":%s,"people":%s,"devices_total":%s,"devices_online":%s,"pending":0,"locked":%s,"lock_reason":%s,"budget_left":%s,"join_trouble":%s,"wipe_failed":%s,"lan_guard":"%s","preflight":%s,"setup_interrupted":%s}' \
+    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","protocol":%d,"bench":%s,"site":%s,"share_site":%s,"state":"%s","phase":%s,"web_up":%s,"degraded":%s,"error":%s,"label":%s,"port":%s,"web_port":%s,"lan_ip":%s,"started":%s,"deadline":%s,"seconds_left":%s,"can_extend_s":%s,"copy":%s,"allowed_users":%s,"seats":%s,"people":%s,"devices_total":%s,"devices_online":%s,"pending":0,"locked":%s,"lock_reason":%s,"budget_left":%s,"join_trouble":%s,"wipe_failed":%s,"lan_guard":"%s","preflight":%s,"setup_interrupted":%s,"seat_mode":%s,"host_key":%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$FL_SHARE_PROTOCOL" "$(fl_json_str "$FL_BENCH_DIR")" "$( [[ -n "$site" ]] && fl_json_str "$site" || printf 'null')" \
       "$(fl_json_str "$FL_SHARE_SITE")" "$state" "$phase_json" "$web_up_json" "$degraded" "$error" "${label:-null}" "$FL_SHARE_GATEWAY_PORT" "$web_port" \
       "$( [[ -n "$SP_LAN_IP" ]] && fl_json_str "$SP_LAN_IP" || printf 'null')" "$started_json" "$deadline_json" "$left" "$can" "$copy" "${users:-[]}" \
-      "$seats" "$people" "$total" "$online" "$locked" "$lock_reason" "$budget" "$trouble" "$wipe" "$lan_guard" "$pre" "$interrupted")"
+      "$seats" "$people" "$total" "$online" "$locked" "$lock_reason" "$budget" "$trouble" "$wipe" "$lan_guard" "$pre" "$interrupted" "$seat_mode" "$([[ -n "$host_key" ]] && printf '"%s"' "$host_key" || printf null)")"
     return 0
   fi
   case "$state" in
-    on) fl_ok "Sharing ${FL_SHARE_SITE} until $(fl_share_iso_of "$deadline") ($(fl_fmt_secs "$left") left): ${people} in the room, ${online} online" ;;
+    on) fl_ok "Sharing ${FL_SHARE_SITE} until $(fl_share_iso_of "$deadline") ($(fl_fmt_secs "$left") left): ${people} in the room, ${online} online"
+      if [[ "$seat_mode" == '"host"' ]]; then fl_info "Seats: you give them out (benchbar share people shows who waits; benchbar share assign ID SEAT_ID gives one)."
+      else fl_info "Seats: anyone with the room code takes a free one."; fi ;;
     starting) fl_info "Sharing is starting (${runner_phase})." ;;
     expired) fl_info "Sharing has ended (the deadline passed). benchbar share stop clears it." ;;
     error) fl_warn "Sharing is not running: ${ended:-the gateway does not answer}. benchbar share stop clears it." ;;
@@ -663,4 +739,5 @@ fl_cmd_share_status() {
   esac
   [[ "$degraded" == null ]] || fl_warn "$(awk 'NR == 1' "${dir}/degraded")"
   fl_info "Network protection: ${lan_guard}"
+  [[ -z "$host_key" ]] || fl_info "Host key: ${host_key:0:4} ${host_key:4:4} ${host_key:8:4} ${host_key:12:4} (a guest who joins from your invite link sees these digits before they join; read them out when asked)"
 }

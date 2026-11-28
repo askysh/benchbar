@@ -1,6 +1,6 @@
 # Builds BenchBar and drafts a GitHub release when a v* tag is pushed.
 #
-# Two paths, one workflow (docs/releasing.md):
+# Two paths, one workflow (maintainers/releasing.md):
 #   Developer ID  the release: signed, notarized, stapled, with a Sparkle
 #               appcast. It runs only for a v* tag, in the `release`
 #               environment, which holds the signing, notarization, Sparkle
@@ -43,6 +43,7 @@ on:
 
 permissions:
   contents: write
+  checks: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -53,6 +54,7 @@ jobs:
   check:
     name: Which path
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       mode: ${{ steps.mode.outputs.mode }}
       version: ${{ steps.version.outputs.version }}
@@ -108,7 +110,7 @@ jobs:
     steps:
       # The token stays out of .git/config: the tests and the build run
       # code that is not ours, and the draft step passes it to gh itself.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -150,7 +152,7 @@ jobs:
             [ -n "${!var}" ] || missing="$missing ${var#S_}"
           done
           if [ -n "$missing" ]; then
-            echo "::error title=Signing secrets missing::Not set in the release environment:${missing}. A tag build is never released unsigned. Set them (docs/releasing.md, Secrets) and re-run."
+            echo "::error title=Signing secrets missing::Not set in the release environment:${missing}. A tag build is never released unsigned. Set them (maintainers/releasing.md, Secrets) and re-run."
             exit 1
           fi
           echo "All nine signing secrets are set."
@@ -159,6 +161,7 @@ jobs:
         with:
           version: ${{ env.VERSION }}
           prerelease: ${{ needs.check.outputs.prerelease }}
+          ci_gate: "true"
 
       # The certificate, the notary key and the Sparkle key exist only from
       # here to the cleanup step below. The certificate is imported in this
@@ -177,6 +180,8 @@ jobs:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
           SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          # the Swift tests ran in CI on this tree (the gate above checked it)
+          BENCHBAR_SKIP_TESTS: "1"
         run: |
           umask 077
           # the one folder the script writes the notary and Sparkle key files
@@ -226,7 +231,7 @@ jobs:
     env:
       VERSION: ${{ needs.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -244,3 +249,45 @@ jobs:
           version: ${{ env.VERSION }}
           signed: "false"
           prerelease: ${{ needs.check.outputs.prerelease }}
+
+  # Build provenance for what users download: the dmg, the app zip, the CLI
+  # tarball and SHA256SUMS. A separate job so that id-token and attestations
+  # write are on this job only (the build job holds the signing secrets and
+  # gets neither). It reads no secret, and attests only a tag release: an ad
+  # hoc test build never runs on a tag. `gh attestation verify FILE -R
+  # askysh/benchbar` checks a download; install.sh and homebrew-tap.yml do.
+  attest:
+    name: Attest the release files
+    needs: [check, build-signed]
+    if: needs.check.outputs.mode == 'signed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: BenchBar-${{ needs.check.outputs.version }}
+          path: dist
+
+      - name: Name what is attested
+        id: subjects
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          cd dist
+          ls -l
+          for f in "BenchBar-${VERSION}.dmg" "BenchBar-${VERSION}.zip" "benchbar-cli-${VERSION}.tar.gz" SHA256SUMS; do
+            [ -f "$f" ] || { echo "::error::$f is not in the release files; nothing is attested"; exit 1; }
+          done
+
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/BenchBar-${{ needs.check.outputs.version }}.dmg
+            dist/BenchBar-${{ needs.check.outputs.version }}.zip
+            dist/benchbar-cli-${{ needs.check.outputs.version }}.tar.gz
+            dist/SHA256SUMS

@@ -213,7 +213,7 @@ fl_bench_adopted() {
 # fl_status_print_json [PINGS]: PINGS "ping" asks every site (status --ping);
 # without it only web_ping_code, the default site's, is known.
 fl_status_print_json() {
-  local mode="${1:-none}" j_listen j_labs j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending sched=0
+  local mode="${1:-none}" j_auto j_notices j_listen j_labs j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending j_ready j_leases sched=0
   # a folder benchbar does not know has no site of its own to name: never the
   # default bench's, never one it guessed
   [[ "$ST_STATE" != "not_adopted" ]] || FL_SITE=""
@@ -221,8 +221,11 @@ fl_status_print_json() {
   FL_DEFAULT_PING=""; [[ "$ST_PROCS" == "1" ]] && FL_DEFAULT_PING="$ST_PING"
   fl_sites_json_v j_sites "$mode" 0 1
   fl_redis_json_v j_redis
+  fl_ready_compute "${OPT_DEEP:-0}"
+  fl_ready_json_v j_ready
   fl_scheduler_enabled && sched=1
   fl_json_bool_v j_sched "$sched"
+  fl_autostart_enabled && j_auto=true || j_auto=false
   fl_json_str_v j_listen "$(fl_listen_mode)"
   fl_json_str_v j_file "${FL_BENCH_DIR}/logs/.benchbar/state.json"
   fl_json_str_v j_log "${FL_BENCH_DIR}/logs/bench.log"
@@ -234,7 +237,7 @@ fl_status_print_json() {
   printf '{'
   fl_state_core_json "$ST_STATE" "$ST_REASON" "$ST_PID" "$ST_STARTED" "$ST_EXIT" "$ST_PING"
   fl_bench_bin_v j_bin
-  printf ',"ports":%s,"sites":%s,"scheduler":%s,"listen":%s,"redis":%s,"bench_bin":%s' "$j_ports" "$j_sites" "$j_sched" "$j_listen" "$j_redis" "$j_bin"
+  printf ',"ports":%s,"sites":%s,"scheduler":%s,"autostart":%s,"listen":%s,"redis":%s,"bench_bin":%s' "$j_ports" "$j_sites" "$j_sched" "$j_auto" "$j_listen" "$j_redis" "$j_bin"
   printf ',"state_file":%s,"log":%s,"agent_loaded":%s,"agent_state":%s,"processes_running":%s' \
     "$j_file" "$j_log" "$j_loaded" "$j_astate" "$j_procs"
   # fields from frappe-mac 0.2.0, kept for older readers
@@ -242,7 +245,43 @@ fl_status_print_json() {
     "$j_url" "$j_label" "$([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)" "${ST_FLAG:-none}" "$ST_PING"
   # app update or app add runs that stopped half way, with the steps left
   fl_lab_enabled_json_v j_labs
-  printf ',"pending_operations":%s,"labs":%s}\n' "$j_pending" "$j_labs"
+  fl_notices_json_v j_notices
+  fl_leases_json_v j_leases "$FL_BENCH_DIR"
+  printf ',"pending_operations":%s,"ready":%s,"labs":%s,"notices":%s,"leases":%s}\n' "$j_pending" "$j_ready" "$j_labs" "$j_notices" "$j_leases"
+}
+
+# ---------------------------------------------------------------- leases (the read side)
+#
+# lease.sh owns the leases; status shows the active ones of its bench, so this
+# small reader lives in the lean load. <state folder>/leases.tsv has one lease
+# per line, fields separated by a tab, none empty ("-" for no site, no note):
+#   id kind bench site holder since since_epoch expires expires_epoch minutes note
+# Without leases (no file, or an empty one) it reads nothing and starts no
+# program; with them it asks the clock once.
+
+# fl_lease_now_v VAR: seconds since the epoch (FL_NOW fixes it, only under FL_TESTING=1)
+fl_lease_now_v() {
+  if [[ "${FL_TESTING:-}" == "1" && "${FL_NOW:-}" =~ ^[0-9]+$ ]]; then printf -v "$1" '%s' "$FL_NOW"
+  else printf -v "$1" '%s' "$(date +%s)"; fi
+}
+
+# fl_leases_json_v VAR BENCH: the active leases on BENCH (the bench, or one of
+# its sites) as a JSON array, without their ids: an id is what lets a run
+# change a leased bench, so only `lease take` and a person's `lease list` show it
+fl_leases_json_v() {
+  local __f="${FL_STATE_DIR}/leases.tsv" __now="" __out="" __sep="" id kind b site holder since se exp ee mins note jsite jh jn js je
+  if [[ ! -s "$__f" ]]; then printf -v "$1" '[]'; return 0; fi
+  fl_lease_now_v __now
+  while IFS=$'\t' read -r id kind b site holder since se exp ee mins note || [[ -n "$id" ]]; do
+    [[ "$kind" == "bench" || "$kind" == "site" ]] || continue
+    [[ "$ee" =~ ^[0-9]+$ && "$ee" -gt "$__now" && "$b" == "$2" ]] || continue
+    [[ "$site" != "-" ]] || site=""
+    [[ "$note" != "-" ]] || note=""
+    fl_json_str_v jsite "$site"; fl_json_str_v jh "$holder"; fl_json_str_v jn "$note"; fl_json_str_v js "$since"; fl_json_str_v je "$exp"
+    __out="${__out}${__sep}{\"scope\":\"${kind}\",\"site\":${jsite},\"holder\":${jh},\"note\":${jn},\"since\":${js},\"expires_at\":${je}}"
+    __sep=","
+  done <"$__f"
+  printf -v "$1" '[%s]' "$__out"
 }
 
 # fl_redis_json_v VAR: {"queue":{"port","running"},"cache":{...}}. running is whether
@@ -251,10 +290,139 @@ fl_status_print_json() {
 # by the service, and a stranger on the port look the same here, as they
 # do to the web server that would use them.
 fl_redis_json_v() {
-  local __q=false __c=false
-  fl_tcp_open "$FL_REDIS_QUEUE_PORT" && __q=true
-  fl_tcp_open "$FL_REDIS_CACHE_PORT" && __c=true
-  printf -v "$1" '{"queue":{"port":%s,"running":%s},"cache":{"port":%s,"running":%s}}' "$FL_REDIS_QUEUE_PORT" "$__q" "$FL_REDIS_CACHE_PORT" "$__c"
+  fl_redis_probe
+  printf -v "$1" '{"queue":{"port":%s,"running":%s},"cache":{"port":%s,"running":%s}}' "$FL_REDIS_QUEUE_PORT" "$FL_RD_REDIS_Q" "$FL_REDIS_CACHE_PORT" "$FL_RD_REDIS_C"
+}
+
+# fl_redis_probe: FL_RD_REDIS_Q and FL_RD_REDIS_C (true or false), each port
+# asked once per run; the readiness contract reuses the answer. Clear both to
+# ask again (the wait loop does).
+FL_RD_REDIS_Q=""; FL_RD_REDIS_C=""
+fl_redis_probe() {
+  [[ -z "$FL_RD_REDIS_Q" ]] || return 0
+  FL_RD_REDIS_Q=false; FL_RD_REDIS_C=false
+  fl_tcp_open "$FL_REDIS_QUEUE_PORT" && FL_RD_REDIS_Q=true
+  fl_tcp_open "$FL_REDIS_CACHE_PORT" && FL_RD_REDIS_C=true
+  return 0
+}
+
+# ---------------------------------------------------------------- readiness
+#
+# One definition of "ready", for status --json (the ready object), wait, up
+# and restart. The parts, each true, false or (not asked yet) null:
+#
+#   agent       the service is loaded in launchd or systemd
+#   processes   the bench's processes run
+#   web         the default site answers its ping with a 2xx or 3xx
+#   socketio    the realtime port accepts a connection
+#   redis       the queue and the cache Redis accept a connection
+#   workers     a background worker runs            (deep only)
+#   stale       a Python file under apps/ changed after the bench started,
+#               so the running code is old          (deep only)
+#
+# ready is true when no part is false and stale is not true. The fast path
+# (status without --deep) starts no program beyond what status already runs:
+# agent, processes and web come from fl_status_compute, socketio and redis
+# from bash's /dev/tcp. The deep parts need pgrep, lsof and find, so only
+# wait, up, restart and status --deep ask for them.
+
+# fl_ready_web_ok CODE: the web part, for an HTTP code: 2xx or 3xx
+fl_ready_web_ok() { [[ "$1" =~ ^[23][0-9][0-9]$ ]]; }
+
+# fl_ready_part_ok PART: after fl_ready_compute, whether the part holds
+# (workers and stale count as holding while they are not asked)
+fl_ready_part_ok() {
+  case "$1" in
+    agent) [[ "$RD_AGENT" == true ]] ;;
+    processes) [[ "$RD_PROCESSES" == true ]] ;;
+    web) [[ "$RD_WEB" == true ]] ;;
+    socketio) [[ "$RD_SOCKETIO" == true ]] ;;
+    redis) [[ "$RD_REDIS" == true ]] ;;
+    workers) [[ "$RD_WORKERS" != false ]] ;;
+    stale) [[ "$RD_STALE" != true ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+# fl_ready_stale_v VAR: true when a *.py file under apps/ is newer than the
+# runner that started the bench's processes (state.json's started_at, UTC,
+# before the web server loads its code), false when none is, null when the
+# start time is not known. RD_STALE_FILE names the first one found.
+fl_ready_stale_v() {
+  local __since="" __hit=""
+  RD_STALE_FILE=""
+  if [[ "$SJ_STARTED" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}:[0-9]{2}:[0-9]{2})Z$ ]]; then
+    __since="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+  fi
+  if [[ -z "$__since" || ! -d "${FL_BENCH_DIR}/apps" ]]; then printf -v "$1" '%s' null; return 0; fi
+  # -H follows the symlinks named on the command line: an app folder that is a
+  # link to a checkout elsewhere (bench get-app --soft-link, a dev clone) is searched,
+  # and links inside an app are not followed, so there is no loop to guard against
+  local __app
+  for __app in "${FL_BENCH_DIR}/apps"/*/; do
+    [[ -d "$__app" ]] || continue
+    __hit="$(TZ=UTC find -H "${__app%/}" \( -name node_modules -o -name .git -o -name __pycache__ \) -prune -o -type f -name '*.py' -newermt "$__since" -print -quit 2>/dev/null || true)"
+    [[ -z "$__hit" ]] || break
+  done
+  if [[ -n "$__hit" ]]; then RD_STALE_FILE="${__hit#"${FL_BENCH_DIR}/"}"; printf -v "$1" '%s' true; else printf -v "$1" '%s' false; fi
+}
+
+# fl_ready_compute [deep]: sets RD_* from the ST_* of fl_status_compute (run
+# that first). deep "1" also asks workers and stale.
+fl_ready_compute() {
+  local deep="${1:-0}"
+  RD_AGENT=false; RD_PROCESSES=false; RD_WEB=false; RD_SOCKETIO=false; RD_REDIS=false
+  RD_WORKERS=null; RD_STALE=null; RD_STALE_FILE=""; RD_DEEP=false
+  [[ "$ST_LOADED" != "1" ]] || RD_AGENT=true
+  [[ "$ST_PROCS" != "1" ]] || RD_PROCESSES=true
+  ! fl_ready_web_ok "$ST_PING" || RD_WEB=true
+  if [[ "$ST_PROCS" == "1" ]] && fl_tcp_open "$FL_SOCKETIO_PORT"; then RD_SOCKETIO=true; fi
+  fl_redis_probe
+  [[ "$FL_RD_REDIS_Q" == true && "$FL_RD_REDIS_C" == true ]] && RD_REDIS=true
+  if [[ "$deep" == "1" ]]; then
+    RD_DEEP=true
+    RD_WORKERS=false
+    if [[ "$ST_PROCS" == "1" ]]; then
+      [[ -z "$(fl_pgrep_f ' -m frappe\.utils\.bench_helper frappe worker( |$)' | fl_pids_in_bench)" ]] || RD_WORKERS=true
+      fl_ready_stale_v RD_STALE
+    fi
+  fi
+  RD_WAITING=""
+  local p
+  for p in agent processes web socketio redis workers stale; do
+    fl_ready_part_ok "$p" || RD_WAITING="${RD_WAITING}${RD_WAITING:+ }${p}"
+  done
+  RD_READY=false; [[ -n "$RD_WAITING" ]] || RD_READY=true
+  fl_ready_fix_v RD_FIX
+}
+
+# fl_ready_fix_v VAR: the command that moves the first missing part, empty when ready
+fl_ready_fix_v() {
+  local __f=""
+  if [[ "$RD_READY" == true ]]; then
+    __f=""
+  elif [[ "$ST_STATE" == "not_adopted" ]]; then
+    __f="${FL_SELF} adopt ${FL_BENCH_DIR}"
+  elif [[ "$ST_STATE" == "paused" || "$ST_STATE" == "crashed" ]]; then
+    __f="${FL_SELF} doctor --bench-dir ${FL_BENCH_DIR}"
+  elif [[ "$RD_PROCESSES" != true ]]; then
+    __f="${FL_SELF} up --bench-dir ${FL_BENCH_DIR}"
+  elif [[ "$RD_STALE" == true ]]; then
+    __f="${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}"
+  else
+    __f="${FL_SELF} logs --bench-dir ${FL_BENCH_DIR}"
+  fi
+  printf -v "$1" '%s' "$__f"
+}
+
+# fl_ready_json_v VAR: the ready object of status --json, from the RD_* of fl_ready_compute
+fl_ready_json_v() {
+  local __w="" __p __fix __stale_file
+  for __p in $RD_WAITING; do __w="${__w}${__w:+,}\"${__p}\""; done
+  fl_json_str_v __fix "$RD_FIX"; [[ -n "$RD_FIX" ]] || __fix=null
+  fl_json_str_v __stale_file "$RD_STALE_FILE"; [[ -n "$RD_STALE_FILE" ]] || __stale_file=null
+  printf -v "$1" '{"ready":%s,"deep":%s,"agent":%s,"processes":%s,"web":%s,"socketio":%s,"redis":%s,"workers":%s,"stale":%s,"stale_file":%s,"waiting_on":[%s],"fix":%s}' \
+    "$RD_READY" "$RD_DEEP" "$RD_AGENT" "$RD_PROCESSES" "$RD_WEB" "$RD_SOCKETIO" "$RD_REDIS" "$RD_WORKERS" "$RD_STALE" "$__stale_file" "$__w" "$__fix"
 }
 
 # fl_state_after_v VAR: the bench's status --json object as it is now, for the
@@ -263,7 +431,7 @@ fl_redis_json_v() {
 fl_state_after_v() {
   local __j="null"
   if [[ "${FL_CONTEXT_READY:-0}" == "1" ]] && fl_is_bench_dir "${FL_BENCH_DIR:-}"; then
-    __j="$( set +e; trap - ERR; { fl_status_compute; fl_status_print_json; } 2>/dev/null )" || __j="null"
+    __j="$( set +e; trap - ERR; FL_RD_REDIS_Q=""; { fl_status_compute; fl_status_print_json; } 2>/dev/null )" || __j="null"
     __j="${__j//$'\n'/}"
     [[ "$__j" == "{"*"}" ]] || __j="null"
   fi
@@ -274,7 +442,6 @@ fl_ports_json_v() {
   printf -v "$1" '{"web":%s,"socketio":%s,"redis_queue":%s,"redis_socketio":%s,"redis_cache":%s}' \
     "$FL_WEB_PORT" "$FL_SOCKETIO_PORT" "$FL_REDIS_QUEUE_PORT" "${FL_REDIS_SOCKETIO_PORT:-$FL_REDIS_CACHE_PORT}" "$FL_REDIS_CACHE_PORT"
 }
-fl_ports_json() { local j; fl_ports_json_v j; printf '%s' "$j"; }
 
 # ---------------------------------------------------------------- list
 
@@ -388,7 +555,7 @@ fl_list_entry_json() {
 
 # fl_cmd_list JSON: the default bench is the one commands use without --bench-dir.
 fl_cmd_list() {
-  local json="${1:-0}" default="" d sep="" rows=() benches=() is_default
+  local json="${1:-0}" default="" d sep="" rows=() benches=() is_default cell_name cell_site cell_dir
   fl_bench_detect "${OPT_BENCH_DIR:-}"
   fl_is_bench_dir "$FL_BENCH_DIR" && default="$FL_BENCH_DIR"
   while IFS= read -r d; do
@@ -416,7 +583,8 @@ fl_cmd_list() {
   for d in "${benches[@]}"; do
     fl_bench_load "$d"
     is_default=""; [[ "$d" == "$default" ]] && is_default=" (default)"
-    rows+=("${FL_BENCH_NAME}${is_default}|${FL_SITE}|${FL_WEB_PORT}|${FL_BENCH_DIR}")
+    fl_cell_v cell_name "${FL_BENCH_NAME}${is_default}"; fl_cell_v cell_site "$FL_SITE"; fl_cell_v cell_dir "$FL_BENCH_DIR"
+    rows+=("${cell_name}|${cell_site}|${FL_WEB_PORT}|${cell_dir}")
   done
   fl_table "${rows[@]}"
 }
@@ -429,4 +597,250 @@ fl_site_ping_code() {
     [0-9][0-9][0-9]) printf '%s' "$code" ;;
     *) printf '000' ;;
   esac
+}
+
+# The line a refusal tells the agent to run instead (#401). It is the line that was typed (FL_ORIG_ARGS), in the
+# words the table knows, with --bench-dir PATH added by the caller. One rule for every command behind a gate:
+#   quoted (printf %q): the words of the command's key; the positional words, as many as its usage line names
+#     (fl_hint_slots_v); the flags of the command's records in commands.sh, the global flags and the flags the
+#     dispatch reads for every command (FL_HINT_LOOP_FLAGS), with the value of those that take one
+#   left out, one "..." for a run of them: a flag that could carry a secret (fl_hist_secret_name_p, the words of the
+#     history) and its value; the value of a flag of free text (the table's value is TEXT); a flag the command does
+#     not know (it reaches the gate with BENCHBAR_LENIENT_FLAGS=1) and the word after it; a positional word beyond
+#     the usage line; "--" and everything after it; a word the history or the redactor would change (a URL with
+#     a user or a password in it). A flag whose value is left out goes with it. --bench-dir is dropped: the caller adds it.
+# It runs on the refusal path only, so the table is read there and nowhere else.
+FL_HINT_LOOP_FLAGS=" --json --jsonl --for-agent --yes -y --dry-run --plain --no-color "
+FL_HINT_KNOWN=" "
+FL_HINT_VALUED=" "
+FL_HINT_FREE=" "
+
+# fl_hint_flags_load KEY: FL_HINT_KNOWN, FL_HINT_VALUED and FL_HINT_FREE, each " --a --b " (a flag of the key's
+# records or a global one; one that takes a value; one whose value is free text)
+fl_hint_flags_load() {
+  local IFS=$' \t\n' kind k name val n line
+  FL_HINT_KNOWN="$FL_HINT_LOOP_FLAGS"; FL_HINT_VALUED=" "; FL_HINT_FREE=" "
+  while IFS='~' read -r kind k name val _; do
+    [[ "$kind" == flag && "$k" == "$1" ]] || continue
+    for n in ${name//,/ }; do
+      FL_HINT_KNOWN="${FL_HINT_KNOWN}${n} "
+      [[ -z "$val" ]] || FL_HINT_VALUED="${FL_HINT_VALUED}${n} "
+      [[ "$val" != TEXT ]] || FL_HINT_FREE="${FL_HINT_FREE}${n} "
+    done
+  done <<<"$FL_CMD_TABLE"
+  while IFS= read -r line; do
+    name="${line%%~*}"; val="${line#*~}"; val="${val%%~*}"
+    for n in ${name//,/ }; do
+      FL_HINT_KNOWN="${FL_HINT_KNOWN}${n} "
+      [[ -z "$val" ]] || FL_HINT_VALUED="${FL_HINT_VALUED}${n} "
+    done
+  done <<<"$FL_CMD_GLOBAL_FLAGS"
+}
+
+# fl_hint_slots_v VAR KEY: how many positional words the usage line of KEY names (999: any number). The usage is
+# read as groups: [..] and (..) whose first word is a flag are flags, any other group is one word; a bare word
+# is one word unless it starts with - (a flag; the bare word after one that takes a value is its value). The part
+# after ", then" (the apply step of a plan) and after " -- " is flags or the command's own words and is not read.
+fl_hint_slots_v() {
+  local __usage="" __rest __n=0 __item="" __depth=0 __skip=0 __i __c __first __name
+  fl_cmd_usage_v __usage "$2"
+  if [[ "$__usage" != "benchbar $2"* ]]; then printf -v "$1" '%s' 0; return 0; fi
+  __rest="${__usage#"benchbar $2"}"
+  __rest="${__rest%%, then *}"; __rest="${__rest%% -- *}"
+  __rest="${__rest} "
+  for ((__i = 0; __i < ${#__rest}; __i++)); do
+    __c="${__rest:$__i:1}"
+    case "$__c" in
+      '['|'(') __depth=$((__depth + 1)); __item="${__item}${__c}" ;;
+      ']'|')') __depth=$((__depth - 1)); __item="${__item}${__c}" ;;
+      ' ')
+        if [[ "$__depth" -gt 0 ]]; then __item="${__item}${__c}"; continue; fi
+        [[ -n "$__item" ]] || continue
+        case "$__item" in
+          '['*|'('*)
+            __first="${__item:1}"; __first="${__first%%[[:space:]]*}"
+            case "$__first" in
+              -*|'('*|'[') ;;
+              *) if [[ "$__item" == *...* ]]; then __n=999; else __n=$((__n + 1)); fi ;;
+            esac
+            __skip=0 ;;
+          -*) __name="${__item%%[=,]*}"
+              case "$FL_HINT_VALUED" in *" ${__name} "*) __skip=1 ;; *) __skip=0 ;; esac ;;
+          '|') ;;
+          *...*) __n=999; __skip=0 ;;
+          *) if [[ "$__skip" == 1 ]]; then __skip=0; else __n=$((__n + 1)); fi ;;
+        esac
+        __item="" ;;
+      *) __item="${__item}${__c}" ;;
+    esac
+  done
+  printf -v "$1" '%s' "$__n"
+}
+
+# fl_hint_word_ok WORD: the word may be quoted: the history keeps it as it is (no credentials in a URL, no secret
+# looking KEY=VALUE or query parameter, not cut) and the redactor of the report leaves it alone
+fl_hint_word_ok() {
+  local w="$1" h r
+  [[ "$w" != "..." ]] || return 1
+  fl_hist_word_v h "$w" 0
+  [[ "$h" == "$w" ]] || return 1
+  r="$(printf '%s\n' "$w" | fl_redact_stream)"
+  [[ "$r" == "$w" ]]
+}
+
+# fl_hint_quote_v VAR WORD: WORD as the shell reads it back. printf %q does it for a word with anything but the
+# characters below; the others stay as they are, so the line is the same on bash 3.2 and on bash 5 (5.2 escapes ",")
+fl_hint_quote_v() {
+  case "$2" in
+    ''|*[!A-Za-z0-9_@%+=:,./-]*) printf -v "$1" '%q' "$2" ;;
+    *) printf -v "$1" '%s' "$2" ;;
+  esac
+}
+
+# fl_hint_gap_v VAR LINE: LINE with "..." at its end, unless it ends with one
+fl_hint_gap_v() {
+  if [[ "${2: -4}" == " ..." ]]; then printf -v "$1" '%s' "$2"; else printf -v "$1" '%s' "$2 ..."; fi
+}
+
+# fl_bench_hint_line_v VAR: the line of the hint, without --bench-dir PATH (see above)
+fl_bench_hint_line_v() {
+  local __var="$1" key="" kw=() slots=0 out="" pos=0 i=0 total w name val hasval nextval keep p q words=()
+  words=(${FL_ORIG_ARGS[@]+"${FL_ORIG_ARGS[@]}"})
+  total="${#words[@]}"
+  key="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")" || key=""
+  if [[ -z "$key" ]]; then key="$COMMAND"; FL_HINT_KNOWN="$FL_HINT_LOOP_FLAGS"; FL_HINT_VALUED=" "; FL_HINT_FREE=" "
+  else fl_hint_flags_load "$key"; fi
+  fl_hint_slots_v slots "$key"
+  # shellcheck disable=SC2206
+  kw=($key)
+  out="$key"
+  while [[ "$i" -lt "$total" ]]; do
+    w="${words[$i]}"; i=$((i + 1))
+    case "$w" in
+      --) fl_hint_gap_v out "$out"; break ;;
+      --bench-dir) if [[ "$i" -lt "$total" && "${words[$i]}" != -* ]]; then i=$((i + 1)); fi; continue ;;
+      --bench-dir=*) continue ;;
+      -?*)
+        name="${w%%=*}"; hasval=0; val=""; nextval=0; keep=0
+        [[ "$w" != --*=* ]] || { hasval=1; val="${w#*=}"; }
+        if fl_hist_secret_name_p "$name"; then
+          # a secret flag goes with its value: the word after it, unless the table says the flag takes none
+          case "$FL_HINT_KNOWN" in
+            *" ${name} "*)
+              case "$FL_HINT_VALUED" in
+                *" ${name} "*) nextval=1 ;;
+                # a flag the command knows and that takes no value carries no secret, whatever its name
+                # (pull --keep-secrets): it is quoted, so the hint runs the form that was typed
+                *) if [[ "$hasval" == 0 ]]; then out="${out} ${name}"; keep=1; fi ;;
+              esac ;;
+            *) nextval=1 ;;
+          esac
+        else
+          case "$FL_HINT_KNOWN" in
+            *" ${name} "*)
+              case "$FL_HINT_VALUED" in
+                *" ${name} "*)
+                  if [[ "$hasval" == 0 && "$i" -lt "$total" && "${words[$i]}" != -* ]]; then val="${words[$i]}"; i=$((i + 1)); hasval=2; fi
+                  if [[ "$hasval" == 0 ]]; then out="${out} ${name}"
+                  elif [[ "$FL_HINT_FREE" == *" ${name} "* ]] || ! fl_hint_word_ok "$val"; then fl_hint_gap_v out "$out"
+                  else fl_hint_quote_v q "$val"
+                    if [[ "$hasval" == 1 ]]; then out="${out} ${name}=${q}"; else out="${out} ${name} ${q}"; fi; fi ;;
+                *) if [[ "$hasval" == 0 ]]; then out="${out} ${name}"; else fl_hint_gap_v out "$out"; fi ;;
+              esac
+              keep=1 ;;
+            *) nextval=1 ;;
+          esac
+        fi
+        if [[ "$keep" == 0 ]]; then
+          # a secret flag, or one the command does not know: left out with the word after it (it may be its value)
+          [[ "$hasval" == 1 || "$nextval" == 0 || "$i" -ge "$total" || "${words[$i]}" == -* ]] || i=$((i + 1))
+          fl_hint_gap_v out "$out"
+        fi
+        continue ;;
+    esac
+    pos=$((pos + 1))
+    # the words of the key are in the line already
+    [[ "$pos" -gt "${#kw[@]}" ]] || continue
+    p=$((pos - ${#kw[@]}))
+    if [[ "$p" -le "$slots" ]] && fl_hint_word_ok "$w"; then fl_hint_quote_v q "$w"; out="${out} ${q}"
+    else fl_hint_gap_v out "$out"; fi
+  done
+  printf -v "$__var" '%s' "$out"
+}
+
+# fl_bench_gate_actions LINE N BENCH...: the refusal of the guess gate as next_actions[] of the result envelope, for the
+# reader that sees only stdout (--for-agent, --jsonl: the hint is on stderr). LINE is the line of the hint
+# (fl_bench_hint_line_v), N the number of known benches, BENCH... their paths in the order the refusal names them.
+#   - a line with every word in it: one action for each of the first five benches, the line with --bench-dir and the
+#     path of that bench, quoted as the hint quotes its words (a marked fix, "quoted": true, so a reader may run it as
+#     an argv array); then `benchbar list --json`, which says how many there are when it shows no more than five
+#   - a line with a "..." (a word was left out: a secret, free text, an unknown word): no action has the line, the
+#     three dots would be taken for a word. Only the list, whose reason says what to do: the typed words and
+#     --bench-dir with the path of one of the benches
+# Only the guess gate calls it. Another refusal that knows what the next step is can call fl_next_action itself before
+# fl_die (the lease gate, the lab gate, a missing input): fl_die needs no change, the envelope reads what was collected.
+fl_bench_gate_actions() {
+  local line="$1" n="$2" shown=0 d q why="See the known benches"
+  shift 2
+  if [[ " ${line} " == *" ... "* ]]; then
+    why="See the known benches. A word was left out of the line that was typed (it could hold a secret), so it is not repeated here: run the command again with the words that were typed and --bench-dir with the path of one of them"
+  else
+    for d in "$@"; do
+      [[ "$shown" -lt 5 ]] || break
+      shown=$((shown + 1))
+      fl_hint_quote_v q "$d"
+      fl_next_action "${FL_FIXQ}benchbar ${line} --bench-dir ${q}" "Run it on this bench"
+    done
+    [[ "$n" -le 5 ]] || why="See all ${n} known benches (the first five are listed above)"
+  fi
+  fl_next_action "${FL_FIXQ}benchbar list --json" "$why"
+}
+
+# fl_bench_guess_gate: a command that changes things and was not told which bench
+# (no --bench-dir, no BENCH_DIR, none remembered) acts on the first one
+# fl_bench_detect finds. Say which, and why; and where nobody can be asked
+# (--for-agent, BENCHBAR_NONINTERACTIVE=1) with more than one bench known,
+# refuse to guess. The note goes to stderr: a --json run keeps its stdout.
+# The refusal tells what to run instead: the line that was typed (fl_bench_hint_line_v) with --bench-dir PATH.
+fl_bench_guess_gate() {
+  local d n=0 list="" sep="" line="" gap="" benches=()
+  fl_bench_detect "$OPT_BENCH_DIR"
+  [[ "${FL_BENCH_SOURCE:-}" == "detected" ]] || return 0
+  while IFS= read -r d; do
+    [[ -n "$d" ]] || continue
+    n=$((n + 1)); list="${list}${sep}${d}"; sep=", "; benches+=("$d")
+  done < <(fl_known_benches)
+  if [[ "$n" -gt 1 ]] && fl_noninteractive; then
+    fl_bench_hint_line_v line
+    # a hint with a word left out is not a line to paste: "..." would be taken for a word (an app's name for app add)
+    case " ${line} " in *" ... "*) gap=" Put back what ... stands for: a word that could hold a secret is not printed here." ;; esac
+    # what stderr tells, as the next actions of the envelope (collected here, printed by the done line or the document)
+    fl_bench_gate_actions "$line" "$n" "${benches[@]}"
+    fl_die "More than one bench is possible and none was chosen: ${list}." "Choose one: benchbar ${line} --bench-dir PATH (or set BENCH_DIR).${gap} benchbar list shows them."
+  fi
+  printf 'benchbar: acting on %s (auto-detected: no --bench-dir, BENCH_DIR or remembered bench%s; pass --bench-dir to choose)\n' \
+    "$FL_BENCH_DIR" "$([[ "$n" -gt 1 ]] && printf '; %s benches are known: %s' "$n" "$list")" >&2
+}
+
+# fl_bench_write_gate: the guess gate for the forms that write benchbar's state while their command, in the commands
+# table, reads: app focus NAME, doctor --ack ID and doctor --unack ID. The table says "mutating no" for both keys (it is
+# per command, and "yes" would make doctor --json refuse for an agent with two benches), so the dispatch (benchbar)
+# calls this next to the gate of the table: before the run opens its log, takes the lock or writes anything, with the
+# same notice for a person and the same refusal, with the same hint, for an agent.
+fl_bench_write_gate() {
+  local i=1 a named=0
+  case "$COMMAND" in
+    doctor) [[ -n "$OPT_ACK$OPT_UNACK" ]] || return 0 ;;
+    app) [[ "${ARGS[0]:-}" == focus ]] || return 0
+      while [[ "$i" -lt "${#ARGS[@]}" ]]; do
+        a="${ARGS[$i]}"
+        # the first word that is not a flag is the app: the form that pins (a word after "--" or a flag the command
+        # does not know stays in ARGS, as before)
+        [[ "$a" == -* ]] || named=1
+        i=$((i + 1))
+      done
+      [[ "$named" == 1 ]] || return 0 ;;
+    *) return 0 ;;
+  esac
+  fl_bench_guess_gate
 }

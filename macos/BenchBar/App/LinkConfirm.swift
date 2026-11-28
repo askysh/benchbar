@@ -22,15 +22,15 @@ nonisolated enum LinkConfirm {
 
     static func question(_ route: URLRouter.Route, bench: String) -> Question {
         let (title, button): (String, String) = switch route {
-        case .up: ("Start \(bench)?", "Start")
-        case .down: ("Stop \(bench)?", "Stop")
-        case .restart: ("Restart \(bench)?", "Restart")
-        case .console: ("Open a Frappe console for \(bench)?", "Open Terminal")
-        case .db: ("Open a database session for \(bench)?", "Open Terminal")
-        default: ("Open \(bench)?", "Open")
+        case .up: (String(localized: "Start \(bench)?"), String(localized: "Start"))
+        case .down: (String(localized: "Stop \(bench)?"), String(localized: "Stop"))
+        case .restart: (String(localized: "Restart \(bench)?"), String(localized: "Restart"))
+        case .console: (String(localized: "Open a Frappe console for \(bench)?"), String(localized: "Open Terminal"))
+        case .db: (String(localized: "Open a database session for \(bench)?"), String(localized: "Open Terminal"))
+        default: (String(localized: "Open \(bench)?"), String(localized: "Open"))
         }
         return Question(title: title,
-                        detail: "A benchbar:// link asked for this. A web page or another app can open such a link, so check that you expected it.",
+                        detail: String(localized: "A benchbar:// link asked for this. A web page or another app can open such a link, so check that you expected it."),
                         button: button)
     }
 }

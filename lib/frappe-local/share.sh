@@ -10,6 +10,7 @@
 #   benchbar share users [--site S] [--json]
 #   benchbar share start|stop|extend|status: share-run.sh
 #   benchbar share code|invite|lock|unlock|people|remove|assign|log|open-as|teardown: share-admin.sh
+#   benchbar share join|joined|leave|forget (a guest in somebody else's room): share-guest.sh
 #
 # setup makes the host identity (a P-256 key and certificate under
 # $FL_STATE_DIR/share, mode 0700) and share.localhost, a copy of the site
@@ -85,10 +86,13 @@ fl_share_cfg_str_v() {
   printf -v "$1" '%s' "${__raw%\"}"
 }
 
+# fl_sha256: the SHA-256 of stdin, as shasum prints it (macOS), else sha256sum (Linux)
+fl_sha256() { if [[ -x /usr/bin/shasum ]]; then /usr/bin/shasum -a 256; else sha256sum; fi; }
+
 # fl_share_fingerprint_v VAR CERT: sha256:<hex of the SHA-256 of the certificate's SPKI, DER>
 fl_share_fingerprint_v() {
   local __h
-  __h="$(/usr/bin/openssl x509 -in "$2" -pubkey -noout | /usr/bin/openssl pkey -pubin -outform der | /usr/bin/shasum -a 256 | awk '{print $1}')"
+  __h="$(/usr/bin/openssl x509 -in "$2" -pubkey -noout | /usr/bin/openssl pkey -pubin -outform der | fl_sha256 | awk '{print $1}')"
   [[ "$__h" =~ ^[0-9a-f]{64}$ ]] || { fl_fail "could not read the public key of $2"; return 1; }
   printf -v "$1" 'sha256:%s' "$__h"
 }
@@ -632,22 +636,33 @@ fl_cmd_share() {
     log) fl_cmd_share_log "$@" ;;
     open-as) fl_cmd_share_open_as "$@" ;;
     teardown) fl_cmd_share_teardown "$@" ;;
-    *) fl_die "Usage: benchbar share setup|users|preflight|start|stop|extend|status|code|invite|lock|unlock|people|remove|assign|log|open-as|teardown ..." "Example: benchbar share status" ;;
+    join) fl_cmd_share_join "$@" ;;
+    joined) fl_cmd_share_joined "$@" ;;
+    leave|forget) fl_cmd_share_leave "$sub" "$@" ;;
+    *) fl_die "Usage: benchbar share setup|users|preflight|start|stop|extend|status|code|invite|lock|unlock|people|remove|assign|log|open-as|teardown|join|joined|leave|forget ..." "Example: benchbar share status" ;;
   esac
 }
 
 # fl_lab_off_lan_rooms: what `benchbar labs off lan-rooms` undoes (labs.sh calls it). A running share
 # stops through the share stop path, in a subshell so a refusal cannot end the labs run, with no
 # prompt and no JSON of its own. The pf anchor is root's: it is never removed from here, a warning
-# names the command instead.
+# names the command instead. The local addresses of the rooms this computer joined close too; the
+# rooms and their keys stay for the day the Lab is on again.
 fl_lab_off_lan_rooms() {
-  local rc=0 state
+  local rc=0 state fw
+  if declare -F fl_share_guest_close >/dev/null; then ( fl_share_guest_close ) || true; fi
   if [[ -d "$(fl_share_dir)" ]]; then
     ( OPT_JSON=0; FL_JSONL=0; fl_context_init "${OPT_BENCH_DIR:-}" "${OPT_SITE:-}" "${OPT_PROFILE:-}"; fl_cmd_share_stop ) || rc=1
   fi
   if declare -F fl_lg_state_v >/dev/null; then
     fl_lg_state_v state
     [[ "$state" == missing ]] || fl_warn "lan-guard is still installed and keeps the bench ports off the LAN; to remove it, run: benchbar lan-guard remove"
+  fi
+  # the firewall entry of allow-node is root's too and outlives the lab: it lets every script that node
+  # runs accept connections
+  if declare -F fl_lg_fw_allowed_v >/dev/null; then
+    fl_lg_fw_allowed_v fw
+    [[ -z "$fw" ]] || fl_warn "the macOS firewall still allows node to accept incoming connections (benchbar lan-guard allow-node added the entry); to take it out, run: benchbar lan-guard remove"
   fi
   return "$rc"
 }

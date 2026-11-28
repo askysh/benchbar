@@ -198,10 +198,29 @@ assert_calls_not_contain '^bench (migrate|build|update|start)'
 # Stub the adoption boundary so this is deterministic, independent of launchd.
 (
   . "$ROOT/lib/frappe-local/port-management.sh"
+  # The time a preview step took is not part of the approved plan, in any form the CLI prints it.
+  # Seconds alone were cut, so a step of a minute, or one that ran while the clock stepped back
+  # ("(-2s)" then), gave plan and apply two tokens: "The port plan changed" on an unchanged plan.
+  timed="$(printf '%s\n' \
+    '  [ok] 1. Write Procfile.lean: done (0s)' \
+    '  [ok] 2. Render the runner: done (3 files) (12s)' \
+    '  [ok] 3. Slow step: done (1m 05s)' \
+    '  [ok] 4. Slower step: done (2h 01m)' \
+    '  [ok] 5. Clock stepped back: unchanged (-2s)' \
+    '  [ok] 6. Hosts line: skipped (2 sites)')"
+  plain="$(printf '%s\n' \
+    '  [ok] 1. Write Procfile.lean: done' \
+    '  [ok] 2. Render the runner: done (3 files)' \
+    '  [ok] 3. Slow step: done' \
+    '  [ok] 4. Slower step: done' \
+    '  [ok] 5. Clock stepped back: unchanged' \
+    '  [ok] 6. Hosts line: skipped (2 sites)')"
+  assert_eq "$plain" "$(printf '%s' "$timed" | fl_pm_untimed)" "(step times in every form are cut, a detail in brackets stays)"
   # the apply path asks fl_sudo_gui, which benchbar loads from sudo.sh
   . "$ROOT/lib/frappe-local/sudo.sh"
+  . "$ROOT/lib/frappe-local/plan-token.sh"
   FL_ASSUME_YES=1; FL_HONCHO=honcho
-  fl_pm_build() { PM_PATHS=(first second third); PM_TARGETS=('8000 9000 11000 13000' '8000 9000 11000 13000' '8000 9000 11000 13000'); PM_TOKEN=approved; PM_CAN_APPLY=1; }
+  fl_pm_build() { PM_PATHS=(first second third); PM_TARGETS=('8000 9000 11000 13000' '8000 9000 11000 13000' '8000 9000 11000 13000'); PM_TOKEN_DATA=the-plan; fl_plan_token_v PM_TOKEN "$PM_TOKEN_DATA"; PM_CAN_APPLY=1; }
   fl_bench_load() { FL_BENCH_DIR="$1"; FL_WEB_PORT=8000; FL_SOCKETIO_PORT=9000; FL_REDIS_QUEUE_PORT=11000; FL_REDIS_CACHE_PORT=13000; }
   fl_context_init() { :; }
   fl_pm_running() { return 1; }
@@ -211,7 +230,8 @@ assert_calls_not_contain '^bench (migrate|build|update|start)'
   fl_info() { :; }; fl_ok() { :; }; fl_fail() { printf '%s\n' "$*"; }
   fl_cmd_register() { printf '%s\n' "$1" >>"$TMP_DIR/completed"; }
   cmd_adopt() { printf '%s\n' "$1" >>"$TMP_DIR/attempted"; [[ "$1" != second ]]; }
-  if fl_cmd_ports apply approved first second third >"$TMP_DIR/partial-output" 2>&1; then fail 'partial failure must fail the command'; fi
+  approved=""; fl_plan_token_v approved the-plan
+  if fl_cmd_ports apply "$approved" first second third >"$TMP_DIR/partial-output" 2>&1; then fail 'partial failure must fail the command'; fi
   assert_eq $'first\nsecond' "$(cat "$TMP_DIR/attempted")"
   assert_eq first "$(cat "$TMP_DIR/completed")"
   assert_contains "$(cat "$TMP_DIR/partial-output")" 'Earlier completed benches remain configured'

@@ -1,9 +1,18 @@
 ---
 title: "benchbar JSON API, schema version 1"
-description: "The versioned JSON that benchbar prints for list, status, doctor, logs, repair, apps, lock, profiles, pull and site backups, and the state file the runner writes."
+description: "The versioned JSON that benchbar prints, the rules every reader follows, the result envelope and the done fields. One page per command family lists each document."
+head:
+  - tag: script
+    attrs:
+      src: /moved/json-schema.js
+      defer: true
+  - tag: script
+    attrs:
+      src: /moved-anchors.js
+      defer: true
 ---
 
-`benchbar` (and its alias `frappe-mac`) prints versioned JSON for the
+`benchbar` (and its alias `frappe-mac`, the old name) prints versioned JSON for the
 commands below, and the runner writes one state file per bench. The BenchBar
 app reads nothing else, so this is a public API: coding agents, scripts,
 Raycast extensions and the like can rely on it too.
@@ -12,33 +21,40 @@ Raycast extensions and the like can rely on it too.
 |---|---|
 | `benchbar list --json` | every bench benchbar knows about |
 | `benchbar status --json [--bench-dir DIR]` | the live state of one bench |
+| `benchbar stats --json [--bench-dir DIR]` | CPU and memory of the running bench's own processes (0.9) |
 | `benchbar doctor --json [--bench-dir DIR]` | every health check with its fix |
 | `benchbar app list --json` | the bench's apps, their git state and sites (0.5) |
 | `benchbar app update NAME --dry-run --json` | the changelog and plan of an update (0.5) |
-| `benchbar app focus --json` | focus apps and how far behind the apps they need are (0.6), see [app focus](#benchbar-app-focus---json) |
+| `benchbar app focus --json` | focus apps and how far behind the apps they need are (0.6), see [app focus](reference/json/apps.md#benchbar-app-focus---json) |
 | `benchbar profile list --json` | built in and team profiles, with where each comes from (0.5) |
-| `benchbar profile export\|import\|subscribe\|update\|remove\|check ... --json` | sharing team profiles (0.6), see [profile sharing](#profile-sharing) |
+| `benchbar profile export\|import\|subscribe\|update\|remove\|check ... --json` | sharing team profiles (0.6), see [profile sharing](reference/json/teams.md#profile-sharing) |
 | `benchbar lock check --json` | how the bench differs from its `benchbar.toml` (0.5) |
 | `<bench>/logs/.benchbar/state.json` | the last state transition, written by the runner and the CLI |
 | `<bench>/logs/.benchbar/heartbeat` | since 0.6.1: rewritten in place every 30 seconds while the runner runs; its mtime says the runner is alive |
-| `benchbar pull ... --json` | JSON lines while a production site is copied, see [pull](#benchbar-pull---json) |
-| `benchbar install --json`, `benchbar adopt PATH --json` | JSON lines while a bench is created or adopted (0.8), see [install](#benchbar-install---json) |
-| `benchbar doctor --prerequisites --json` | what the Mac needs before an install, without a bench (0.8), see [prerequisites](#benchbar-doctor---prerequisites---json) |
-| `benchbar report --json` | where the redacted diagnostics zip went (0.5.5), see [report](#benchbar-report---json) |
+| `benchbar pull ... --json` | JSON lines while a production site is copied, see [pull](reference/json/teams.md#benchbar-pull---json) |
+| `benchbar install --json`, `benchbar adopt PATH --json` | JSON lines while a bench is created or adopted (0.8), see [install](reference/json/install-and-doctor.md#benchbar-install---json) |
+| `benchbar doctor --prerequisites --json` | what the Mac needs before an install, without a bench (0.8), see [prerequisites](reference/json/install-and-doctor.md#benchbar-doctor---prerequisites---json) |
+| `benchbar report --json` | where the redacted diagnostics zip went (0.5.5), see [report](reference/json/state-and-diagnostics.md#benchbar-report---json) |
 | `benchbar commands --json` | every command, flag and what it needs (0.8), see [the done fields](#the-done-fields-08) |
-| `benchbar where --json` | how this CLI was installed, the path it records for itself, its state folder and the app (0.7), see [where](#benchbar-where---json) |
-| `benchbar site backup NAME --json` | the backup just taken (0.5.8), see [site backups](#site-backups) |
+| `benchbar where --json` | how this CLI was installed, the path it records for itself, its state folder and the app (0.7), see [where](reference/json/state-and-diagnostics.md#benchbar-where---json) |
+| `benchbar site backup NAME --json` | the backup just taken (0.5.8), see [site backups](reference/json/sites-and-backups.md#site-backups) |
 | `benchbar site backups NAME --json` | every backup of a site (0.5.8) |
+| `benchbar site snapshot NAME --json`, `site snapshots NAME --json` | one snapshot, the snapshots of a site (0.9.0), see [site snapshots](reference/json/sites-and-backups.md#site-snapshots) |
+| `benchbar site rollback NAME --to SNAPSHOT --dry-run --json` | the plan and result of a rollback: [site restore](reference/json/sites-and-backups.md#benchbar-site-restore---json) with a `rollback` block (0.9.0) |
 | `benchbar up\|down\|restart\|service\|site add\|site default --json` | JSON lines ending in one `done` (0.8), see [the done fields](#the-done-fields-08) |
 | `benchbar site drop NAME --json` | the plan (with `--dry-run`) or the result of dropping a site (0.5.8) |
+| `benchbar op status [OP_ID]\|list\|wait OP_ID --json` | the long runs: one record or the recent ones (0.9), see [operation handles](reference/json/operations.md#operation-handles-09) |
+| `<state folder>/ops/<op_id>.json` | the record a run keeps of itself, rewritten at each step (0.9) |
+| `benchbar history [--bench PATH] [--since TIME] [--limit N] --json` | the runs that changed things on this machine, newest first (0.9), see [action history](reference/json/operations.md#action-history-09) |
+| `<state folder>/history.jsonl` | one line per finished run, 1 MB and three older files (0.9) |
 
 ## The schema file
 
 [`schema/benchbar.schema.json`](https://github.com/askysh/benchbar/blob/main/schema/benchbar.schema.json)
-(JSON Schema 2020-12) is the source of truth. The tables below explain it;
-when they and the file disagree, the file is right and the tables are a bug.
-It has one definition under `$defs` per document or stream line that an app or
-the MCP server reads:
+(JSON Schema 2020-12) is the source of truth. This page and the pages below
+explain it; when they and the file disagree, the file is right and the pages
+are a bug. It has one definition under `$defs` per document or stream line
+that an app or the MCP server reads:
 
 | Definition | What it describes |
 |---|---|
@@ -74,9 +90,31 @@ its definition (`schema/fixtures.map`), that what the CLI prints under the
 mocks fits and prints every non conditional field, that the Swift models, the
 tray's C# models and the MCP server read only fields the schema has and need
 only fields it requires (`schema/models.map`, `CLI_READS` in
-`lib/frappe-local/mcp.py`), and that this page names every field of the schema.
-A pull request that adds a field to the CLI's JSON adds it to the schema in
-the same pull request, or the test fails.
+`lib/frappe-local/mcp.py`), and that these pages name every field of the
+schema. A pull request that adds a field to the CLI's JSON adds it to the
+schema in the same pull request, or the test fails.
+
+## The pages
+
+This page holds what every document shares: the rules for readers, the
+done fields, the result envelope and the bench states. Each command family
+has its own page for the fields of its documents.
+
+| Page | Documents |
+|---|---|
+| [List, status, stats, wait and logs](reference/json/list-and-status.md) | `list`, `status`, `stats`, `wait`, `logs` and the `ready` object |
+| [Sites, backups and snapshots](reference/json/sites-and-backups.md) | `site add`, `users`, `service`, `site backup`, snapshots, `site restore` |
+| [Install, adopt, doctor and repair](reference/json/install-and-doctor.md) | `install`, `adopt`, `doctor`, `doctor --prerequisites`, `repair` |
+| [Apps](reference/json/apps.md) | `app list`, `app focus`, `app update`, `app add` |
+| [Lock, profiles and pull](reference/json/teams.md) | `lock check`, the `profile` commands, `pull` |
+| [Run, operation handles, history and leases](reference/json/operations.md) | `run`, `op`, `history`, `notices`, `lease` |
+| [State files, discovery, report, where and labs](reference/json/state-and-diagnostics.md) | `state.json`, `heartbeat`, `scan`, `report`, `where`, `labs` |
+| [Share and lan-guard](reference/json/share.md) | `share`, `lan-guard` |
+| [Ports and the Windows shim](reference/json/ports-and-windows.md) | `ports`, and what `benchbar.exe` adds |
+
+A link to an old heading of this page, such as
+`/json-schema/#benchbar-doctor---json`, still works: the page sends the
+reader to the new page.
 
 ## Rules for readers
 
@@ -89,10 +127,29 @@ the same pull request, or the test fails.
 - Timestamps are ISO 8601 in UTC with a `Z` suffix, for example
   `2026-09-23T10:00:00Z`.
 - `null` means "not known" or "does not apply". Numbers are JSON numbers.
-- JSON goes to stdout on one line. Errors and warnings go to stderr as
-  text. Exit codes: 0 success, 1 failure (for `doctor`: at least one
-  check is `fail`; the JSON is still printed). A missing bench exits 1
-  with a message on stderr and nothing on stdout.
+- Strings and numbers the CLI writes follow these rules (the shell helpers
+  `fl_json_str`, `fl_json_text` and `fl_json_num`, tested by `tests/test-json-strings.sh`):
+  - A string is valid UTF-8, always. A byte that is not part of a valid
+    character (a stray byte in a log line, a character cut in half) is written
+    as U+FFFD. The CLI cuts a long message at a character boundary, so the
+    cut never makes one. Quote and backslash are escaped; newline, tab and
+    carriage return are `\n`, `\t` and `\r`; any other control character is
+    `\u00XX`; a terminal color code (ESC `[` ... final byte) is dropped whole.
+  - An empty value is `null` for a field documented as `string or null` (the
+    usual case: `site`, `stop_reason`, `message`, `command`). A field that
+    can be an empty string on purpose is documented as a plain `string`, and
+    the CLI writes `""` for it (`fl_json_text`). A reader treats `""` and
+    `null` alike for "no value" and must not rely on either for a field the
+    document does not name.
+  - A number is a JSON integer, `-?(0|[1-9][0-9]*)`. A value that is not one
+    (`1-2`, `--`, `007`, `1.5`, empty) is written as `null`, never as the
+    text.
+- A document is one line on stdout. A stream (`--jsonl`, or `--json` of a
+  command that changes things) is many lines, one JSON object each, ending
+  in the `done` line. Errors and warnings go to stderr as text. Exit codes: 0 success, 1 failure (for `doctor`: at least one
+  check is `fail`; the JSON is still printed), 2 the MariaDB root password
+  is unknown, 64 a command line the CLI cannot read (see "Usage errors"
+  below). A missing bench exits 1 with a message on stderr and nothing on stdout.
 - `status --json`, `list --json` and `doctor --json` are read only. They
   never start, stop or write anything, so they are safe to poll. The one
   exception is the one time move of the state folder on the first run
@@ -103,17 +160,19 @@ the same pull request, or the test fails.
 
 Every command that changes things ends with the same fields, once: in the
 `done` line of its stream, or added to the one document it prints. A
-command that read only prints none of them.
+command that only reads has `exit` and, on a failure, `error` (see
+[the result envelope](#the-result-envelope-09)).
 
 | field | meaning |
 |---|---|
+| `op_id` | (0.9) the run's handle, also on every `plan`, `step` and `progress` line; absent when the run ended before it started (a refusal) and in a dry run. See [operation handles](reference/json/operations.md#operation-handles-09) |
 | `exit` | the exit code; the process exits with the same number, so a pipe cannot hide a failure |
-| `changed[]` | what the run changed: `{"kind": "bench"\|"site"\|"app"\|"service"\|"ports"\|"hosts"\|"backup"\|"process"\|"state", "name", "detail"}`. Only what the run really changed: empty on a second run, and in a dry run. `install` reports the bench, the site and the apps its phase scripts create |
+| `changed[]` | what the run changed: `{"kind": "bench"\|"site"\|"app"\|"service"\|"ports"\|"hosts"\|"backup"\|"process"\|"state", "name", "detail"}`. Only what the run really changed: empty on a second run, and in a dry run. A step that failed after it began to change something is listed with a `detail` that starts with `partial:` (a clone that was not built, an `install-app` or `migrate` that failed). `install` reports the bench, the site and the apps its phase scripts create |
 | `warnings[]` | the run's `[WARN]` lines, as text |
 | `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints. `"quoted": true` is added when the command was built with every word quoted for the shell (a program may split it); it is absent for a command written as text |
 | `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`). A stream's is read after the CLI's locks are released; a one document command's and `pull`'s while its lock is still held (a read, so nothing waits on it) |
 | `missing[]` | only on a refusal of the non interactive mode: the inputs the command lacked (`ADMIN_PASSWORD`, `--yes`, `sudo`, `BENCHBAR_SUDO_PASSWORD`, ...) |
-| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. Every CLI done line can carry it. So far: `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change). `password_has_newline` (a password in `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` or `BENCHBAR_SUDO_PASSWORD` holds a line break; it travels on one line; refused before any change, only the variable's name is printed). `systemd_not_running` (Linux, `install` only: PID 1 is not systemd, and MariaDB, Redis and the bench service are systemd services; on WSL the fix names `[boot] systemd=true` in `/etc/wsl.conf`), `bench_on_windows_fs` (WSL, `install` and `adopt`: the bench folder is on the Windows file system, `/mnt/<drive>` or a drvfs or 9p mount; slow, no file watching, broken permissions; `--allow-windows-fs` accepts it), `github_unreachable` (Linux, `install` only: `github.com`, which holds frappe and the uv Pythons, did not answer within 10 seconds, after one retry; the plan's `blockers[]` names it, nothing was changed) and `port_3306_in_use` and `port_6379_in_use` (Linux, `install` only: another program, or on WSL another distro, already listens on the MariaDB or the system Redis port; the plan's `blockers[]` names them, the done line has `exit` 1, the `fix` and the `error`, and nothing was changed, no sudo asked). Docker, a native MariaDB or a second WSL distro are the usual cause: WSL distros share one network, so only one of them can run MariaDB on port 3306. Stop it in the other distro (`sudo systemctl stop mariadb`) and run `install` again; benchbar never stops it. The Windows shim adds `distro_running`, see [Windows shim](#windows-shim) |
+| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. Every CLI done line can carry it. So far: `unknown_flag`, `missing_value` and `root_refused` (exit 64, see "Usage errors"), `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change). `password_has_newline` (a password in `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` or `BENCHBAR_SUDO_PASSWORD` holds a line break; it travels on one line; refused before any change, only the variable's name is printed). `systemd_not_running` (Linux, `install` only: PID 1 is not systemd, and MariaDB, Redis and the bench service are systemd services; on WSL the fix names `[boot] systemd=true` in `/etc/wsl.conf`), `bench_on_windows_fs` (WSL, `install` and `adopt`: the bench folder is on the Windows file system, `/mnt/<drive>` or a drvfs or 9p mount; slow, no file watching, broken permissions; `--allow-windows-fs` accepts it), `linux_distro_unsupported` (Linux, `install` only: the system is not Ubuntu 24.04, the one the install is tested on, so apt would give another MariaDB and the install would stop after it had installed packages; the plan's `blockers[]` names it and nothing was changed; `--allow-unsupported-distro` or `BENCHBAR_ALLOW_UNSUPPORTED_DISTRO=1` tries anyway), `user_bus_unreachable` (Linux, `install` only: `systemctl --user` cannot reach the user manager, as under `sudo -iu`, `su -` or cron, and turning on lingering did not start it; in a dry run it is a warning in `warnings[]`; the run stops before it changes anything, with the fix `sudo loginctl enable-linger USER`, then a login shell or `XDG_RUNTIME_DIR=/run/user/UID`), `github_unreachable` (Linux, `install` only: `github.com`, which holds frappe and the uv Pythons, did not answer within 10 seconds, after one retry; the plan's `blockers[]` names it, nothing was changed) and `port_3306_in_use` and `port_6379_in_use` (Linux, `install` only: another program, or on WSL another distro, already listens on the MariaDB or the system Redis port; the plan's `blockers[]` names them, the done line has `exit` 1, the `fix` and the `error`, and nothing was changed, no sudo asked). Docker, a native MariaDB or a second WSL distro are the usual cause: WSL distros share one network, so only one of them can run MariaDB on port 3306. Stop it in the other distro (`sudo systemctl stop mariadb`) and run `install` again; benchbar never stops it. The Windows shim adds `distro_running`, see [Windows shim](reference/json/ports-and-windows.md#windows-shim) |
 
 Which shape a command prints:
 
@@ -142,6 +201,25 @@ Which shape a command prints:
   log and stderr, a refusal included.
 - `repair --json` keeps `exit_code` in its `done` and adds `exit` with the
   same value. `install`, `adopt` and `pull` add the fields to their `done`.
+- Usage errors: an option the command does not take (`error_id`
+  `unknown_flag`), or a flag that needs a value and has none (`missing_value`:
+  `--bench-dir`, `--site`, `--profile`, `--bundle`, `--port-offset`, `--ack`,
+  `--unack`) exits **64**, the
+  `EX_USAGE` of `sysexits.h`, before the stream, the log, the lock or any
+  change. Exit 2 keeps one meaning, "the MariaDB root password is unknown"
+  (a program that sees 2 asks for that password), and 1 keeps "failure", so a
+  caller that accepts only 0 and 1 reads a usage error as the failure it is.
+  With `--json`, `--jsonl` or `--for-agent` stdout holds the answer on one line
+  and stderr the text: for a command that changes things (or with `--jsonl`) a
+  `done` event with `exit` 64, `error_id`, `error` (the option, named), `fix`
+  (the command's usage line) and the shared done fields; for a command that
+  reads one document with `schema_version`, `cli_version`, `exit`, `error_id`,
+  `error` and `fix`. `BENCHBAR_LENIENT_FLAGS=1` turns an unknown option into a
+  warning on stderr; it does not cover a missing value.
+  The refusal to run as root (`error_id` `root_refused`, a distro whose default
+  user is `root` gets it) has the same shape and the same exit 64, for the same
+  reasons: a client that asked for JSON must get JSON, and 1 or 2 would be read
+  as another failure.
 - `BENCHBAR_NONINTERACTIVE=1` (set by `benchbar mcp` for every CLI it
   starts): nothing is ever asked. A command that needs an input it does
   not have (`ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` when benchbar has none
@@ -150,11 +228,97 @@ Which shape a command prints:
   one of them), before it takes the lock, writes a log or touches a bench.
   In a stream that is a `done` with `exit`, an `error` and `missing`; under
   `--json` on a one document command, one document with the same fields.
-  `repair --json` also ends with a `done` when it stops early (no bench).
+  `repair --json` also ends with a `done` when it stops early (no bench, a lease,
+  or more than one bench and none chosen).
 - `benchbar commands --json` lists every command and subcommand with its
   flags, environment variables and what it needs (`tty`, `sudo`, `network`,
   `mutating`, `json`: `document`, `stream` or `none`); `benchbar COMMAND
   --help` prints that entry.
+
+### The result envelope (0.9)
+
+One shape ends every command that has a JSON mode (`commands --json`
+lists them: `json` is `document` or `stream`), whatever the command and
+however it ended. A program reads the last line of stdout and finds the
+same fields; it never parses stderr text to learn how a run ended. The
+fields of the [done line](#the-done-fields-08) are the envelope.
+
+| field | type | present |
+|---|---|---|
+| `schema_version`, `cli_version` | number, string | always, first |
+| `exit` | integer | always. The process exits with the same number: 0 done, 1 failed, 2 refused (the one input that cannot be guessed, or a lab that is off) |
+| `error` | string | when `exit` is not 0: one sentence, the run's last `[FAIL]` line or the message of the refusal. A read that failed after it printed its findings (`doctor`, `lock check`) has the sentence "the command exited with 1" and its findings say what |
+| `changed[]` | array of `{kind, name, detail}` | commands that change things. Empty on a second run and in a dry run |
+| `warnings[]` | array of strings | commands that change things, and the failure document of a read |
+| `next_actions[]` | array of `{command, why, quoted?}` | the same as `warnings[]` |
+| `state_after` | object or `null` | commands that change things; `null` in a dry run, without a bench, or for several benches |
+| `missing[]`, `error_id` | array of strings, string | only where a refusal or a stable failure has them (see the table above) |
+| `event` | `"done"` | the last line of a stream. A document has none |
+
+Which line carries it:
+
+- **`--for-agent` and `--jsonl`** are the modes with the guarantee. A
+  command that changes things ends its stream with one `done` line (a
+  dry run: `plan`, then `done`). A command that only reads prints one
+  document with `exit` added to its own fields. When a read fails before it
+  has a document (no bench, an unknown name, a bad argument) it prints one
+  document: `schema_version`, `cli_version`, `exit`, `error`, `warnings[]`
+  and `next_actions[]`. A command or subcommand that does not exist ends
+  with a `done` line too.
+- **`--json`** keeps the documents of 0.8 as they were, so a polled
+  `status --json` costs what it did. A command that changes things has the
+  envelope. A read has no `exit` (the process exit code is the answer) and
+  a read that fails prints nothing on stdout and text on stderr. Use
+  `--for-agent` when a program wants the envelope for reads and failures.
+- `ok` is not a field of the envelope and is never needed: `exit == 0` says
+  it. It stays where it already was, on the results of `app add --apply`
+  and `site restore --apply` (always `exit == 0`), so no reader breaks;
+  `share preflight` has its own `ok` (the critical checks passed) beside
+  `exit`. Do not add it to a new command.
+- A command that changes things, run by an agent with more than one bench
+  known and none chosen (no `--bench-dir`, `BENCH_DIR` or remembered bench),
+  is refused before it does anything. The text on stderr says
+  `Choose one: benchbar LINE --bench-dir PATH`; the envelope carries the same
+  in `next_actions[]`, for a program that reads only stdout: one action for
+  each of the first five benches the `error` names (LINE is the line that was
+  typed, `--bench-dir` is that bench's real path, `"quoted": true`), then
+  `benchbar list --json`, with its `why` saying how many benches there are
+  when more than five. A `...` in LINE means a word was left out (it could be a
+  secret); then no action holds the line, and only the list action is given:
+  its `why` says to run the command again with the words that were typed and
+  `--bench-dir`. The forms of `app focus NAME` and `doctor --ack|--unack`
+  that write while their command reads are refused the same way; the read
+  document of `--for-agent` and `--jsonl` has the actions. Plain `--json` of
+  a read still prints nothing for a refusal. `repair` and `pull` have a
+  stream of their own, which their command opens late; the dispatch now opens
+  it before the gates, so every refusal that comes before the command (a
+  lease held by another caller, the non interactive preflight, this gate)
+  ends with their own `done` line in every mode, plain `--json` included
+  (`repair` keeps `exit_code` beside `exit`; `pull` has `exit` and `site`,
+  which is `null`). Until then they printed nothing on stdout for these
+  refusals.
+
+  ```json
+  {"schema_version":1,"cli_version":"0.9.0","event":"done","bench":"/home/u/frappe-bench","exit":1,"changed":[],"warnings":[],"next_actions":[{"command":"benchbar app unfocus frappe --for-agent --bench-dir /home/u/frappe-bench","why":"Run it on this bench","quoted":true},{"command":"benchbar app unfocus frappe --for-agent --bench-dir /home/u/dev/frappe-bench","why":"Run it on this bench","quoted":true},{"command":"benchbar list --json","why":"See the known benches","quoted":true}],"state_after":null,"log":null,"error":"More than one bench is possible and none was chosen: /home/u/frappe-bench, /home/u/dev/frappe-bench."}
+  ```
+- A refusal of the non interactive mode, a usage error and a failure
+  before the command could start (`No bench at ...`) all end with this
+  envelope. A distinct exit code for usage errors is not used yet: a usage
+  error exits 1 with `error` saying what to fix.
+- The MCP server returns the same fields in `structuredContent` of every
+  tool that ran the CLI: `exit` (the CLI's exit code) in every result,
+  `error` when it is not 0, and for an action tool `changed`, `warnings` and
+  `next_actions` copied from the `done` line next to `result`. `exit_code`
+  stays for readers of the first release. A tool error the server raises
+  itself carries `exit` and `error` too: an invalid argument, a bench that is
+  not known, a plan that is missing or stale, and a plan the person did not
+  approve are `exit` 1; a call that ran out of time is 124 and a benchbar
+  that could not be started is 127.
+- A command with no JSON mode (`fg`, `watch`, `console`, `db`, `docs`,
+  `mcp`, `help`, `mariadb-password`, `path` and the groups `site`, `app`,
+  `ports`, `lock`, `profile`, `share`) has no envelope: they are terminals,
+  a text helper or a usage page. `tests/test-envelope.sh` lists them, so a
+  new command has to choose.
 
 ## States
 
@@ -185,1358 +349,3 @@ How `status` decides (live facts win over the state file):
 3. It says `crash`: `paused` with `crash`. `port_conflict`: `paused` with `port_conflict`. Anything else: `paused` with `broken`.
 4. `state.json` says `crashed`: `crashed` (launchd is about to retry).
 5. Otherwise `stopped` with `stop_reason: null`.
-
-## `benchbar list --json`
-
-```json
-{
-  "schema_version": 1,
-  "cli_version": "0.3.0",
-  "default_bench": "/Users/you/frappe-bench",
-  "benches": [
-    {
-      "path": "/Users/you/frappe-bench",
-      "name": "frappe-bench",
-      "site": "macdev",
-      "label": "com.benchbar.frappe-bench",
-      "web_url": "http://macdev:8000",
-      "ports": { "web": 8000, "socketio": 9000, "redis_queue": 11000, "redis_socketio": 13000, "redis_cache": 13000 },
-      "default": true,
-      "service_installed": true,
-      "state_file": "/Users/you/frappe-bench/logs/.benchbar/state.json"
-    }
-  ]
-}
-```
-
-| Field | Type | Notes |
-|---|---|---|
-| `default_bench` | string or null | the bench commands use without `--bench-dir` |
-| `benches[].path` | string | absolute path, the unique key of a bench |
-| `benches[].name` | string | folder name, used in the agent label |
-| `benches[].site` | string | default site |
-| `benches[].label` | string | launchd label, `com.benchbar.<name>` |
-| `benches[].web_url` | string | `http://<site>:<web port>` |
-| `benches[].ports` | object | web, socketio, redis_queue, redis_socketio, redis_cache. `redis_socketio` was added in 0.4: bench keeps it equal to `redis_cache` and frappe v15 and v16 never connect to it; older CLIs leave it out |
-| `benches[].sites` | array | added in 0.4, see [Sites](#sites) |
-| `benches[].default` | bool | same as `path == default_bench` |
-| `benches[].service_installed` | bool | the agent plist exists |
-| `benches[].lock_file` | string or null | the `benchbar.toml` that `lock check` compares with (0.5); `null` without one |
-| `benches[].adopted` | bool | benchbar knows this bench: it has a service, is registered or is the remembered bench. A folder that only looks like a bench under `~` or `~/dev` is listed with `false` (added in 0.9). The MCP tools that change a bench act only on `true` ones |
-| `benches[].state_file` | string | where the runner writes `state.json` |
-
-Benches are found in this order, without duplicates: the remembered
-bench (`state.env` in benchbar's state folder), the `WorkingDirectory` of every
-`com.benchbar.*` and `com.frappe-mac.*` agent, then `~/frappe-bench`,
-`~/dev/frappe-bench` and any `~/*` or `~/dev/*` folder with
-`sites/common_site_config.json`.
-
-`list --json` never pings a site (every `ping_code` is `null`) and looks for no
-listener: it is polled at rest (0.6.1).
-
-## `benchbar status --json`
-
-```json
-{
-  "schema_version": 1,
-  "cli_version": "0.3.0",
-  "bench": "/Users/you/frappe-bench",
-  "name": "frappe-bench",
-  "site": "macdev",
-  "label": "com.benchbar.frappe-bench",
-  "state": "running",
-  "stop_reason": null,
-  "pid": 4242,
-  "started_at": "2026-09-23T10:00:00Z",
-  "last_exit_code": 0,
-  "web_url": "http://macdev:8000",
-  "web_ping_code": 200,
-  "ports": { "web": 8000, "socketio": 9000, "redis_queue": 11000, "redis_socketio": 13000, "redis_cache": 13000 },
-  "state_file": "/Users/you/frappe-bench/logs/.benchbar/state.json",
-  "log": "/Users/you/frappe-bench/logs/bench.log",
-  "agent_loaded": true,
-  "agent_state": "running",
-  "processes_running": true,
-  "url": "http://macdev:8000",
-  "agent": "com.benchbar.frappe-bench",
-  "loaded": "yes",
-  "stop_flag": "none",
-  "ping": "200"
-}
-```
-
-| Field | Type | Notes |
-|---|---|---|
-| `bench` | string | absolute path of the bench |
-| `name`, `site`, `label` | string | as in `list` |
-| `state` | string | see [States](#states) |
-| `stop_reason` | string or null | see [States](#states) |
-| `pid` | number or null | the runner process launchd started; honcho and every bench process are its descendants. Set while `starting` or `running` |
-| `started_at` | string or null | when the current (or last) run started |
-| `last_exit_code` | number or null | exit code of the last run of honcho |
-| `web_url` | string | |
-| `web_ping_code` | number or null | HTTP code of `GET /api/method/ping` with the site as `Host`; `null` when nothing answered. Asked only while processes run, with a 2 second limit (3 seconds before 0.6.1) |
-| `ports` | object | as in `list` |
-| `state_file`, `log` | string | paths |
-| `agent_loaded` | bool | the launchd agent is loaded |
-| `agent_state` | string or null | launchd's own word, for example `running` or `not running` |
-| `processes_running` | bool | any honcho, serve, worker, schedule or socketio process of this bench (before 0.6.1 a port listener counted too) |
-| `sites` | array | added in 0.4, see [Sites](#sites) |
-| `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
-| `listen` | string | added in 0.9: `"local"` (the web server and socketio listen on 127.0.0.1) or `"all"` (every interface, `benchbar listen all`) |
-| `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
-| `labs` | array | added in 0.9: the names of the enabled [labs](#benchbar-labs---json) |
-| `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null), `url` (an add's repo URL, so `app add NAME` can finish an app that was never cloned or that no profile lists; null for an update and for a record an older version wrote) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
-
-Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
-`loaded` (`"yes"` or `"no"`), `stop_flag` (`"manual"`, `"crash"`,
-`"broken"`, `"port_conflict"` or `"none"`), `ping` (string, `"000"` for no answer). In
-0.2.0 `state` held launchd's word (now `agent_state`), and `pid` and
-`last_exit_code` were strings.
-
-Since 0.8, `bench_bin` is the `bench` executable the bench's service runs:
-the first one on the PATH its agent (unit) bakes in, `null` without a
-service or when no such file is there. It is read from the agent file in
-bash, so `status` still starts no process for it. With `--ping`, every
-site is asked only while the bench's processes run; a stopped bench is
-never pinged and never started.
-
-## Sites
-
-`list --json` (per bench), `status --json` and `benchbar site list --json`
-carry the bench's sites, read from `sites/*/site_config.json`:
-
-```json
-"sites": [
-  { "name": "v16dev", "default": true, "hosts_entry": true, "ping_code": 200, "developer_mode": true, "open_as_enabled": true, "open_as": true },
-  { "name": "v16two", "default": false, "hosts_entry": false, "ping_code": null, "developer_mode": false, "open_as_enabled": false, "open_as": false }
-]
-```
-
-| Field | Type | Notes |
-|---|---|---|
-| `name` | string | the site folder |
-| `default` | bool | the site `benchup` waits for, the runner pings and the app opens; `benchbar site default NAME` changes it (and runs `bench use`) |
-| `hosts_entry` | bool | `/etc/hosts` maps it to 127.0.0.1; `benchbar site hosts` adds the missing lines |
-| `ping_code` | number or null | HTTP code of `/api/method/ping` with this site as `Host`; `null` when nothing listens on the web port or nothing answered. Since 0.6.1 `list --json` and `status --json` leave it `null` (they are polled; `web_ping_code` is the default site's ping) unless `status --json --ping` asks every site once; `site list --json` always asks |
-| `developer_mode` | bool | added after 0.8.0: `developer_mode` as frappe sees it, the site's `site_config.json` over `common_site_config.json`; `1` or `true` is on. `benchbar open --as` signs in as another user only when it is on |
-| `open_as_enabled` | bool | added after 0.8.0: the person turned Open as on for this site (`benchbar site open-as on NAME`). Benchbar's own state for the bench; off for every site until then, also for a site added or pulled later |
-| `open_as` | bool | added after 0.8.0: `benchbar open --as` can sign in on this site: `open_as_enabled` and `developer_mode` are on and it is the site the web process answers as (`bench serve` without `--site` answers as the `default_site` of `common_site_config.json` for every name) |
-| `served` | bool or null | `status --json` only, added in 0.8: does the running web process serve this site (its `Host` is not answered with a 404). `null` while the bench is stopped (a stopped bench is never pinged) or when nothing answered. The default site's ping, and with `--ping` every site's, is reused; any other site is asked once, in bash. `false` is a site folder in `sites/` that the running bench does not serve: doctor's `site_not_served` warns about it |
-
-`benchbar site list --json` prints `{"schema_version":1,"cli_version":..,"bench":..,"sites":[..]}`,
-and since 0.7.3 each of its sites also carries the database:
-
-| Field | Type | Notes |
-|---|---|---|
-| `db_name` | string or null | `db_name` from the site's `site_config.json`; `null` when the file has none |
-| `db_port` | number | the site's `db_port`, else the bench's (`common_site_config.json`), else 3306 |
-
-The password is never printed. `list --json` and `status --json` leave
-these two out: they are polled.
-
-Since 0.8 every site result carries `default_site`, the bench's default
-site after the run: `site list` at the top level, and `site add`, `site
-default` and `site drop` in their result. `site add` never moves it (it
-puts it back if `bench new-site` did); only `site default` does.
-`site add`, `site default` and `site drop` end with the [done fields](#the-done-fields-08),
-`site add` and `site default` with `site`, `default_site` and `created`.
-
-## `benchbar site add NAME --dry-run --json`
-
-The plan of a site add, read only, with the token that `--apply TOKEN --yes`
-(and `benchbar_site_add` over MCP) needs. One document; the text goes to
-stderr.
-
-```json
-{"schema_version":1,"cli_version":"0.8.0","bench":"/Users/you/frappe-bench","site":"qa1.localhost","exists":false,
- "apps":["erpnext"],"default_site":"macdev","default_moves":false,"backup":null,"hosts_entry":false,
- "steps":[{"kind":"new_site","name":"Create qa1.localhost","command":"bench new-site qa1.localhost ..."},
-  {"kind":"install","name":"Install erpnext","command":"bench --site qa1.localhost install-app erpnext"}],
- "touches":["database","site_folder"],"changes":true,"token":"3f9c0e...64 hex characters"}
-```
-
-| Field | Type | Notes |
-|---|---|---|
-| `exists` | bool | the site folder is already there (then no `new_site` step) |
-| `default_site` | string | the default site now (`sites/currentsite.txt`); `default_moves` is always `false` |
-| `steps[]` | array | `kind` is `new_site`, `install` or `hosts` (macOS, when the line is missing) |
-| `touches` | array of strings | `database`, `site_folder`, `hosts` |
-| `token` | string | SHA-256 of the plan and of the bench's site list, `apps.txt` and default site |
-
-`--apply TOKEN --yes` recomputes the plan and refuses a token that no longer
-matches before anything changes; then it is a normal `site add` and its
-stream ends in the usual `done` line.
-
-## `benchbar service --dry-run --json`
-
-The plan line of the service stream (as for `adopt --json`) carries a `token`:
-a SHA-256 of the planned actions, the bench, the port block, the scheduler
-choice and the site. `benchbar service --apply TOKEN --yes [--json]` runs that
-plan and refuses, before any action, a token that no longer matches.
-
-## MCP results of the site and service tools
-
-`benchbar_site_add_plan`, `benchbar_site_restore_plan` and
-`benchbar_service_install_plan` return the CLI's plan (for the service, the
-plan line of its stream) as `structuredContent`. The apply tools and
-`benchbar_site_backup` return `exit_code`, `output` (stderr text), `result`
-(the `done` line, or the one document with the done fields) and the state
-after: `sites` (`site list --json`) for `benchbar_site_add` and
-`benchbar_site_restore`, `status` for the others. `benchbar_site_add` adds
-`admin_password_generated: true`, `admin_password_file` (a 0600 file in
-benchbar's state folder, `site-admin/SITE`, where the person reads the
-password) and `admin_password_note` when it generated the new site's
-Administrator password; the password itself is never in a result. If the file
-could not be written, `admin_password_file` is absent and the note says so. `benchbar_up` on a bench whose `state` is
-`not_adopted` returns `service: "missing"`, `started: false`, `next_tool:
-"benchbar_service_install_plan"` and the `status` instead of starting it.
-Any line of CLI text that would name where the MariaDB root password is kept
-is replaced by a note in every result and error.
-
-## `benchbar doctor --json`
-
-```json
-{
-  "schema_version": 1,
-  "cli_version": "0.3.0",
-  "bench": "/Users/you/frappe-bench",
-  "name": "frappe-bench",
-  "site": "macdev",
-  "profile": "v15-lts",
-  "profile_source": "stored",
-  "checks": [
-    {
-      "id": "assets",
-      "group": "bench",
-      "label": "Built assets",
-      "level": "fail",
-      "message": "2 of 2 dist files referenced by assets.json are missing (site loads unstyled)",
-      "fix_command": "cd /Users/you/frappe-bench && bench build",
-      "action": "build",
-      "status": "fail",
-      "fix": "cd /Users/you/frappe-bench && bench build"
-    },
-    {
-      "id": "agent",
-      "group": "service",
-      "label": "launchd agent",
-      "level": "ok",
-      "message": "agent com.benchbar.frappe-bench loaded, running (pid 4242)",
-      "fix_command": null,
-      "action": null,
-      "status": "ok",
-      "fix": ""
-    }
-  ],
-  "summary": { "ok": 19, "warn": 1, "fail": 1 }
-}
-```
-
-| Field | Type | Notes |
-|---|---|---|
-| `profile_source` | string | added in 0.7.3: where `profile` came from, `flag` (`--profile`), `team`, `stored` (remembered for the bench), `detected` (from the bench's Frappe) or `default` (no profile matches this bench; the env checks warn instead of offering a rebuild) |
-| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. 0.7.3 adds `env_setuptools` (group `bench`, action `env_setuptools`), `formula_dates` (group `system`, no action) and `bench_path` (group `service`, no action). `pdf_engine` replaced `wkhtmltopdf` in 0.4. 0.5 adds `apps_txt`, `app_branch_policy`, `lock_parse` and `lock_drift` (group `bench`, no repair action). 0.6 adds `dependency_behind`, `apps_behind` and `profile_outdated` (group `bench`, no repair action); `dependency_behind` is the one id that can appear several times, once per stale dependency. 0.7 adds `app_copies` (group `system`) and `cli_duplicate` (group `service`), both without a repair action, and `helpers` can be `fail` (the block's benchbar is gone) |
-| `checks[].group` | string | `system`, `bench`, `service` or `site` |
-| `checks[].label` | string | short name for humans |
-| `checks[].level` | string | `ok`, `warn` or `fail` |
-| `checks[].message` | string | one line for humans |
-| `checks[].fix_command` | string or null | the exact command a human would run; `null` when nothing needs doing |
-| `checks[].fix_quoted` | boolean | `true` when the code that built `fix_command` quoted every word for the shell and it is one plain command (optionally after `cd DIR &&`), so a program may split it; `false` for a fix written as text. Also on `prerequisites[]` |
-| `checks[].action` | string or null | the `repair` action that fixes it, when `repair` can |
-| `summary` | object | counts per level |
-
-`status` and `fix` are the 0.2.0 names of `level` and `fix_command` (with
-`""` instead of `null`), kept for older readers.
-
-Since 0.8: every check has `"acked"`, and the document has `"acked": [ids]`,
-`"quick"` and `"skipped_checks": [ids]`.
-
-- `doctor --ack CHECK` silences one named `warn` for this bench: it is
-  recorded in the bench's state file with the message it acknowledged, and
-  lapses when the message changes. A `fail` cannot be acknowledged. The
-  check stays in the JSON at level `warn` with `"acked": true`; the text
-  output prints one dim `acked:` line instead of the `[WARN]` and its fix
-  line, and `--fix-hints` leaves it out. `doctor --unack CHECK` undoes it.
-  These two write one line to the state file under the CLI lock; `doctor`
-  itself still writes nothing. Under `--json` they print one small
-  document: `action` (`ack` or `unack`), `check`, `acked` (every id with a
-  stored acknowledgement) and the done fields. An acknowledgement does not
-  make a `not_adopted` bench look adopted. `repair` does not look at
-  acknowledgements.
-- `doctor --quick` leaves out the slow checks (those that start brew,
-  python, node, bench or git, or ask the site) and says which:
-  `"quick": true` and the ids in `skipped_checks`.
-
-## `benchbar logs --json`
-
-```json
-{"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","file":"/Users/you/frappe-bench/logs/bench.log","process":"web","lines":["10:00:01 web.1 | * Running on http://127.0.0.1:8000"]}
-```
-
-`-nN` sets how many lines (after the filter), `--process NAME` keeps one
-honcho process (`web`, `socketio`, `schedule`, `redis_queue`,
-`redis_cache`); lines without a honcho prefix, such as a traceback, stay
-with the process above them. `process` is `null` without a filter.
-`file` is the file that was read: `logs/bench.log`, or `logs/worker.log`,
-`logs/worker.error.log` and `logs/bench.previous.log` for `--worker`,
-`--worker-error` and `--previous`. Since 0.7.3 `--process worker` reads
-`logs/worker.log` unfiltered (and `process` is `null`): `Procfile.lean`
-sends the worker there, so it never appears in `bench.log`; with
-`--worker-error` that file is kept, and `--previous` is refused (there is
-no previous worker log). Control characters are removed, a terminal
-color code as a whole (`[31m` is never left behind). `benchbar mcp` uses it for `benchbar_logs_tail`, whose
-`file` argument (`bench`, `worker`, `worker_error`, `previous`) stands
-for these flags, and which adds `"truncated": true` when it had to drop
-lines to stay under its size cap.
-
-Since 0.7.3 the lines are redacted with the rules of `benchbar report`
-(values of credential-like keys, `user:password@` in URLs, JWT and API
-token shapes become `***`, email addresses `<email>`); the plain
-`benchbar logs` is the file as it is. `-nN` is capped at 2000: when N was
-larger the object carries `"truncated_to":2000` (absent otherwise) and
-holds the newest 2000 lines after the process filter.
-
-Since 0.8 the object also has `mtime` (the file's, `null` without one),
-`since` (the cut off as an ISO time, `null` without one) and `ts`: one entry
-per line of `lines`, in step, an ISO 8601 UTC time where the line carries
-one and `null` where it does not (a traceback line inherits nothing). A
-honcho line's `HH:MM:SS` and the leading `YYYY-MM-DD HH:MM:SS` of other logs
-are local times; the day of a honcho line is worked out backwards from the
-file's `mtime`. `--since TIME` keeps the lines at or after TIME (ISO 8601, a
-zone or none for local time, `YYYY-MM-DD HH:MM:SS`, a date, or `HH:MM:SS`
-today) and the untimed lines under a kept line; `--since-restart` is
-`--since` the bench's last start (`started_at` of `state.json`; without one
-the command refuses). Only the newest 20000 lines of the file are looked
-at. `benchbar_logs_tail` takes `since` and `since_restart`.
-
-## `benchbar repair --json`
-
-Since 0.8 its `done` also carries `exit` (the same number as `exit_code`) and the [done fields](#the-done-fields-08).
-
-A stream: one JSON object per line on stdout, as the run goes. The human
-text goes to the run's log, `logs/<date>-<time>-<pid>.log` in benchbar's state
-folder: `~/.local/state/benchbar` for the one line installer and
-Homebrew since 0.7.0, `.benchbar/` in a git checkout.
-
-```json
-{"event":"plan","schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","dry_run":false,"actions":[{"id":"build","label":"bench build","fixes":["Built assets"],"sudo":false},{"id":"hosts_entry","label":"add macdev to /etc/hosts (sudo)","fixes":["/etc/hosts entry"],"sudo":true}],"backups":"/Users/you/.local/state/benchbar/backups","log":"/Users/you/.local/state/benchbar/logs/20260926-101500-4242.log"}
-{"event":"step","action":"build","status":"running","message":"bench build"}
-{"event":"step","action":"build","status":"done","message":"bench build"}
-{"event":"step","action":"hosts_entry","status":"running","message":"add macdev to /etc/hosts (sudo)"}
-{"event":"step","action":"hosts_entry","status":"skipped","message":"[WARN] skipped without sudo; run: benchbar repair --bench-dir /Users/you/frappe-bench   (adds '127.0.0.1 macdev' inside the benchbar block)"}
-{"event":"done","exit_code":0,"log":"/Users/you/.local/state/benchbar/logs/20260926-101500-4242.log"}
-```
-
-| Event | Fields |
-|---|---|
-| `plan` | `actions[]` with `id` (a repair action), `label`, `fixes` (the doctor checks it fixes), `sudo` (needs a password: skipped without a terminal, or asked for in a macOS dialog under `BENCHBAR_SUDO=gui`, see [the privileged steps](#the-privileged-steps-and-benchbar_sudogui)); `dry_run`; `backups` (the backup root); `log` |
-| `step` | `action`, `status` (`running`, then `done`, `skipped` or `failed`), `message` (for `failed` and `skipped`, the CLI's `[FAIL]` or `[WARN]` line) |
-| `done` | `exit_code` (0 when every check passes afterwards), `log` |
-
-`repair --dry-run --json` prints only the `plan` line and changes
-nothing. Without `--yes` (and without `--dry-run`) nothing is applied:
-the plan is printed, then `done` with exit code 1, because the question
-cannot be answered. An empty `actions` means nothing needs repairing.
-## `benchbar install --json`
-
-Since 0.8 the `done` line also carries `changed`, `warnings`, `next_actions` and `state_after` ([done fields](#the-done-fields-08)); `adopt` the same.
-
-Added in 0.8. A stream, like `pull --json`: one JSON object per line on
-stdout as the run goes, the human text in the run's log
-(`logs/<date>-<time>-<pid>.log` in benchbar's state folder). Every line
-carries `schema_version`, `cli_version` and `event`. The BenchBar app's
-New Bench page reads it.
-
-The stream is only valid with `--yes` (or with `--dry-run`): no question
-can be answered on it, so `install --json` without either prints one
-`done` line with `exit` 1 and an `error`, and changes nothing. Every value
-`install` would ask for comes as a flag or from the environment:
-`--bench-dir`, `--profile`, `--bundle`, `--site`, `--port-offset`,
-`ADMIN_PASSWORD` (the new site's Administrator password; required unless
-the site exists) and the optional `MARIADB_ROOT_PASSWORD`. A missing
-`ADMIN_PASSWORD` is refused the same way, before anything runs. stdin is
-never read.
-
-The stream never prompts for a password. Without `BENCHBAR_SUDO=gui`, a
-cached `sudo` credential or a `NOPASSWD` rule is used (`sudo -n true`);
-otherwise the privileged steps are `skipped` with their `command`, exactly
-like a cancelled dialog (see [the privileged steps](#the-privileged-steps-and-benchbar_sudogui)). On Linux the apt step of phase 00 cannot be skipped: without a
-cached credential the stream ends with `done` and `exit` 1, saying sudo
-is needed.
-
-```json
-{"schema_version":1,"cli_version":"0.8.0","event":"plan","bench":"/Users/you/frappe-bench","site":"macdev","profile":"v15-lts","team_profile":null,"bundle":"minimal","port_offset":0,"web_url":"http://macdev:8000","dry_run":false,"sudo_mode":"gui","steps":[{"n":null,"id":"wkhtmltopdf_install","name":"Install the patched wkhtmltopdf package","sudo":true,"will_run":true},{"n":null,"id":"hosts_entry","name":"Add 127.0.0.1 macdev to /etc/hosts","sudo":true,"will_run":true},{"n":1,"id":"system_deps","name":"System dependencies (00-mac-system-deps.sh)","sudo":false,"will_run":true},{"n":2,"id":"bench_site","name":"Bench and site (01-install-bench-and-site.sh)","sudo":false,"will_run":true},{"n":3,"id":"service","name":"Background service","sudo":false,"will_run":true}],"log":"/Users/you/.local/state/benchbar/logs/20261010-101500-4242.log"}
-{"schema_version":1,"cli_version":"0.8.0","event":"step","n":null,"id":"wkhtmltopdf_install","parent":null,"name":"Install the patched wkhtmltopdf package","status":"running"}
-{"schema_version":1,"cli_version":"0.8.0","event":"progress","step":"wkhtmltopdf_install","label":"download wkhtmltopdf 0.12.6-2 (about 50 MB)","elapsed":10,"bytes":31457280,"total":null}
-{"schema_version":1,"cli_version":"0.8.0","event":"step","n":null,"id":"wkhtmltopdf_install","parent":null,"name":"Install the patched wkhtmltopdf package","status":"done","secs":41}
-{"schema_version":1,"cli_version":"0.8.0","event":"step","n":null,"id":"hosts_entry","parent":null,"name":"Add 127.0.0.1 macdev to /etc/hosts","status":"running"}
-{"schema_version":1,"cli_version":"0.8.0","event":"step","n":null,"id":"hosts_entry","parent":null,"name":"Add 127.0.0.1 macdev to /etc/hosts","status":"skipped","secs":6,"message":"[WARN] the password dialog was cancelled; the line was not added","command":"benchbar site hosts --bench-dir /Users/you/frappe-bench"}
-{"schema_version":1,"cli_version":"0.8.0","event":"step","n":1,"id":"system_deps","parent":null,"name":"System dependencies (00-mac-system-deps.sh)","status":"running"}
-{"schema_version":1,"cli_version":"0.8.0","event":"step","n":null,"id":"python","parent":"system_deps","name":"PYTHON","status":"running"}
-{"schema_version":1,"cli_version":"0.8.0","event":"step","n":null,"id":"python","parent":"system_deps","name":"PYTHON","status":"done","secs":3}
-{"schema_version":1,"cli_version":"0.8.0","event":"step","n":1,"id":"system_deps","parent":null,"name":"System dependencies (00-mac-system-deps.sh)","status":"done","secs":95}
-{"schema_version":1,"cli_version":"0.8.0","event":"done","exit":0,"bench":"/Users/you/frappe-bench","site":"macdev","url":"http://macdev:8000","skipped":[{"id":"hosts_entry","command":"benchbar site hosts --bench-dir /Users/you/frappe-bench"}],"fix":null,"log":"/Users/you/.local/state/benchbar/logs/20261010-101500-4242.log"}
-```
-
-| Event | Fields | Notes |
-|---|---|---|
-| `plan` | `bench`, `site`, `profile` (the built in profile it runs on), `ports_move` (`adopt` and `service`: the ports of the bench would move), `can_apply` (a plan the CLI cannot apply says `false`), `team_profile` (string or null), `bundle`, `port_offset` (the port block the bench gets), `web_url`, `dry_run`, `sudo_mode` (`terminal`, or `gui` under `BENCHBAR_SUDO=gui`), `steps[]`, `blockers[]`, `warnings[]`, `log` | once, first. `blockers[]` is `{id, message, fix}` per thing that would stop the run before it changes anything (the `error_id` values above); empty on macOS and on a free Linux machine. `warnings[]` is `{id, message, fix}` per thing the plan shows and the run goes on from, next to `blockers[]` (empty on macOS and on a healthy machine; Linux only): `wsl_memory_low` (WSL has less than about 5.5 GB), `wsl_disk_low` (the Windows drive has less than 15 GB free), and a host that did not answer within 10 seconds, after one retry: `pypi_unreachable`, `npm_registry_unreachable`, `nodejs_unreachable`, `astral_unreachable` and `apt_mirror_unreachable` (the first `http` or `https` archive in `/etc/apt`; a `file:` or `mirror+file:` one is not probed, and curl does not know apt's own proxy, so it only warns). Pass `--offline` to skip the host probes. `steps[]` lists the two privileged steps first (`n` null, `sudo` true, `will_run` false when nothing needs doing: the patched package is in place, the line is in `/etc/hosts`), then the three numbered steps of the terminal output |
-| `step` | `n`, `id`, `parent`, `name`, `status`, and on the end of a step `secs`; `message` for `failed`, `skipped` and `warning` (the CLI's `[FAIL]` or `[WARN]` line); `command` for a skipped privileged step (what to run by hand) | `status` is `running`, then `done`, `unchanged`, `skipped`, `warning` or `failed`. A step with a `parent` is a section of that phase script (`parent` is `system_deps` or `bench_site`) or an action of the service step (`parent` is `service`, the `id` is a [repair action](#benchbar-repair---json)); its `n` is null |
-| `progress` | `step`, `label`, `elapsed` (seconds), `bytes` and `total` (int or null) | every 10 seconds while a long command runs (a download, `bench init`, `bench get-app`, `bench build`, `bench new-site`); `bytes` only for a download |
-| `done` | `exit`, `bench`, `site`, `url` (null unless `exit` is 0), `skipped[]` (`id`, `command` of every privileged step that was skipped), `fix` (string or null), `log`, and `error` (only for a refusal before the plan) | always the last line, also after a failure or a signal (`exit` is then 128 plus the signal, 143 for SIGTERM, and a step that was running gets no end line). `exit` 2: the MariaDB root password is unknown, `fix` says what to pass (`MARIADB_ROOT_PASSWORD`); run again with it in the environment |
-
-Section ids of the phase scripts: `profile`, `system`, `plan`, `dry_run`,
-`python`, `node`, `database`, `redis`, `pdf`, `build_deps`,
-`shell_config`, `summary`, `ready`, `pending_manual_steps` (phase 00;
-on Linux `00-linux-system-deps.sh` adds `apt_packages` and has no
-`build_deps`);
-`profile`, `advanced_version_mode`, `precheck`, `inputs`, `plan`,
-`verify_db_credentials`, `pipx`, `bench_cli`, `bench_init`, `get_apps`,
-`create_site`, `verify_site`, `install_apps_on_site`, `ready` (phase 01). They are the section headings of the terminal output in
-lowercase with `_`, so a reader should show `name` and treat an `id` it
-does not know as any other section.
-
-`install --dry-run --json` prints the `plan` line, then `done` with
-`exit` 0 and `"dry_run":true`, and changes nothing; the human plan goes
-to the log.
-
-### The privileged steps and `BENCHBAR_SUDO=gui`
-
-The wkhtmltopdf package and the `/etc/hosts` line are the only things
-that run as root. In a terminal the run asks for `sudo` once up front.
-With `BENCHBAR_SUDO=gui` in the environment (the BenchBar app sets it
-for an install, adopt, repair or `site hosts` it started from a sheet the
-user confirmed), each of the two runs as one script through
-`osascript ... with administrator privileges`: macOS shows its own
-password dialog with the step's name, benchbar never sees the password,
-and there is no cached credential afterwards. At most two dialogs per
-run. A cancelled dialog makes that step `skipped` with its `command`,
-and the run goes on; a step that failed behind its dialog is not asked
-again by a later pass of the same run. Only the value `gui` switches the
-mode, on macOS (on Linux it is ignored). Rosetta 2, when the package
-needs it and it is missing, is installed by the package's own script, in
-the same dialog. Without `gui`, `install --json` and `adopt --json` never
-prompt: they use `sudo` only when it needs no password (a cached
-credential, a `NOPASSWD` rule) and skip the steps otherwise.
-
-The commands that read `BENCHBAR_SUDO`: `install`, `adopt`, `repair` (the
-`hosts_entry` and `wkhtmltopdf_install` actions), `site hosts`, `site add`,
-`ports setup` and `ports apply`. `ports apply` puts the missing hosts lines
-of every bench of the batch in one dialog (titled `Add 127.0.0.1 lines for N
-sites to /etc/hosts`); if it is cancelled, each bench's setup prints
-`benchbar site hosts --bench-dir PATH` as its manual step and the run goes
-on. `site drop` still needs a terminal for the line it removes.
-
-### `BENCHBAR_SUDO=env` (Linux)
-
-On Linux, a program without a terminal (the Windows tray, an agent)
-passes the user's sudo password in `BENCHBAR_SUDO_PASSWORD` with
-`BENCHBAR_SUDO=env`. The CLI takes it out of its environment before
-anything else runs (it starts itself once more without the variable, so
-the running process has no copy in `/proc/PID/environ`), checks it once with `sudo -k` and `sudo -S -v`
-before any change, and then runs its sudo steps without a prompt. A
-wrong password ends the run with `exit` 1 and `error_id`
-`sudo_password_wrong`. The password never goes into arguments, `bash -x`
-output, the run log or a child process: in `install` only phase 00 gets
-it, on a file descriptor. Every command forgets it, and drops the sudo
-credential, when its sudo steps are done, before any bench, pip or npm
-step runs. Without a
-password and without a terminal, `install --json` with
-`BENCHBAR_NONINTERACTIVE=1` names `BENCHBAR_SUDO_PASSWORD` in `missing`;
-other commands skip their sudo step with a warning. The commands that
-read it: `install`, `adopt`, `repair`, `service`, `site add` and
-`ports apply`. On macOS it is ignored.
-
-## `benchbar adopt PATH --json`
-
-Added in 0.8, the same stream as `install --json`. Without `--yes` (or
-`--dry-run`) it is refused with one `done` line. The `plan` carries
-`bench`, `site`, `profile`, `port_offset`, `ports_move` (true when adopt
-moves the bench to another port block with `bench set-config -g`),
-`dry_run`, `sudo_mode`, `steps[]` and `log`. Its steps are the service
-actions it applies, numbered from 1 as in the terminal output (`id` a
-repair action, `sudo` true for `hosts_entry`), and they stream as `step`
-events without a `parent`. `done` has `exit`, `bench`, `site`, `url`,
-`skipped[]`, `fix` and `log`. An empty `steps` means the bench is already
-set up.
-
-## `benchbar doctor --prerequisites --json`
-
-Added in 0.8. What a Mac needs before `install`, without a bench: the
-BenchBar app's Check Your Mac page. `--bench-dir PATH` names the folder a
-new bench would go to (default `~/frappe-bench`); it does not have to
-exist.
-
-```json
-{"schema_version":1,"cli_version":"0.8.0","bench":"/Users/you/frappe-bench","prerequisites":[{"id":"apple_silicon","label":"Apple Silicon","level":"ok","message":"arm64","fix_command":null},{"id":"homebrew","label":"Homebrew","level":"fail","message":"brew was not found","fix_command":"/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""}],"summary":{"ok":7,"warn":0,"fail":1}}
-```
-
-Every entry has `id`, `label`, `level`, `message`, `fix_command` and `fix_quoted`
-(as in [doctor](#benchbar-doctor---json)); `disk_free` adds `free_gb` and
-`default_ports` adds `port_offset`.
-
-| `id` | Checks | Levels |
-|---|---|---|
-| `apple_silicon` | `uname -m` is `arm64` | `ok`, `fail` |
-| `macos_version` | macOS 14 or later | `ok`, `fail` |
-| `command_line_tools` | `xcode-select -p` names a folder that exists | `ok`, `fail` (fix `xcode-select --install`) |
-| `homebrew` | `brew` on PATH or in `/opt/homebrew/bin` | `ok`, `fail` (fix: the official install command) |
-| `disk_free` | free space on the volume of `$HOME`; the check carries `free_gb` | `ok` from 20 GB, `warn` from 10 GB, `fail` below |
-| `bench_folder` | the folder is a valid bench path and not under iCloud Drive, Desktop or Documents | `ok`, `warn` (Desktop, Documents), `fail` (iCloud Drive, a path benchbar refuses) |
-| `cleanmymac` | as doctor's `cleanmymac` check, for that folder | `ok`, `warn` |
-| `mole` | as doctor's `mole` check, for that folder | `ok`, `warn` |
-| `default_ports` | ports 8000, 9000, 11000 and 13000 are free; the check carries `port_offset`, the block `install` would give a new bench | `ok`, `warn` (taken: the new bench gets `port_offset`), `fail` (no block up to the last offset is free; `port_offset` is null) |
-
-Every object has the fields of a doctor check (`id`, `label`, `level`,
-`message`, `fix_command`), and every check that is not `ok` has a
-`fix_command`: the command to run, or a plain instruction where there is
-none ("BenchBar needs an Apple Silicon Mac", "update macOS in System
-Settings, Software Update", "free space on the volume of ...").
-
-On Linux (Ubuntu 24.04, WSL too) the list is its own, in this order:
-`linux_distro`, `architecture`, `regular_user`, `sudo` (installed, and
-the user is in the `sudo` or `admin` group; the check never runs sudo),
-`apt` (a mirror answers; unreachable is a `warn`), `systemd` (PID 1;
-carries `enabled`), `linger` (carries `enabled`), `memory` (`warn` below
-3500 MB, `fail` below 1800 MB; carries `total_mb`), `disk_free`,
-`bench_folder`, `mariadb_password` (`warn` with `needs_password` when a
-running MariaDB has a root password benchbar does not know) and
-`default_ports`.
-
-Exit 1 when one is `fail`. `benchbar doctor --prerequisites` prints
-the same list for a person. A plain `doctor` does not print it (its WARN
-and FAIL lines promise a fix line and its exit code the state of the
-bench); `doctor --json` of a bench carries the same array as
-`prerequisites` next to `checks`, not counted in `summary` or in the exit
-code.
-
-## `benchbar app list --json`
-
-Added in 0.5. Every app of the bench: the lines of `sites/apps.txt` in
-order, then any git app in `apps/` that is not listed. The sites come
-from `bench --site S list-apps --format json` (15 seconds per site),
-cached per bench; `--no-sites` reads only the cache, so it never needs
-MariaDB.
-
-```json
-{"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","profile":"v15-lts",
- "sites_checked_at":"2026-09-25T10:00:00Z","sites_error":null,
- "apps":[{"name":"erpnext","in_apps_txt":true,"repo":"https://github.com/frappe/erpnext","remote":"upstream",
-  "branch":"version-15","policy_branch":"version-15","commit":"b5f784612d5b7969b72848dda5b22f10d3a8f764",
-  "dirty":false,"shallow":true,"version":"15.115.0","sites":["macdev"]}]}
-```
-
-| Field | Type | Notes |
-|---|---|---|
-| `sites_checked_at` | string or null | when the site lists were last read from bench |
-| `sites_error` | string or null | why the last read failed for a site (MariaDB down); its apps come from the previous read |
-| `apps[].in_apps_txt` | bool | `false` for a git app that is only a folder (doctor warns) |
-| `apps[].repo` | string or null | the URL of the remote the branch follows (else `upstream`, else the first), without a user name or token |
-| `apps[].remote` | string or null | that remote's name |
-| `apps[].branch` | string or null | `null` on a detached HEAD or without git |
-| `apps[].policy_branch` | string or null | the branch `config/apps.tsv` (or the profile, for frappe) names |
-| `apps[].commit` | string or null | the full HEAD commit |
-| `apps[].dirty` | bool | tracked files have local changes (`git status --porcelain -uno`) |
-| `apps[].shallow` | bool | a shallow clone (bench's `shallow_clone`) |
-| `apps[].version` | string or null | from `sites/apps.json` |
-| `apps[].sites` | array of strings | the sites that have the app installed |
-| `apps[].focus`, `focus_pin`, `focus_reasons`, `requires`, `needed_by`, `upstream`, `behind`, `behind_days` | | added in 0.6, the same fields as [app focus](#benchbar-app-focus---json) |
-
-## `benchbar app focus --json`
-
-Added in 0.6. Every app of the bench, whether it is a focus app (one you
-work on) and why, what it needs, which focus apps need it, and how far it
-is behind its remote branch. Local reads only; `--fetch` fetches the
-dependencies of the focus apps first (so does `doctor --fetch`; nothing
-fetches without the flag). `fetched_at` is benchbar's last such fetch.
-
-```json
-{"schema_version":1,"cli_version":"0.6.0","bench":"/Users/you/frappe-bench","focus_days":14,"fetched_at":"2026-09-29T08:00:00Z",
- "apps":[{"name":"exponent_ecr","focus":true,"focus_pin":"auto","focus_reasons":["your commit 2 day(s) ago"],"requires":["exponent_custom_v1"],
-  "needed_by":[],"upstream":"upstream/develop","behind":0,"behind_days":0},
-  {"name":"exponent_custom_v1","focus":false,"focus_pin":"auto","focus_reasons":[],"requires":[],
-  "needed_by":["exponent_ecr"],"upstream":"upstream/develop","behind":30,"behind_days":12}]}
-```
-
-| Field | Type | Notes |
-|---|---|---|
-| `fetched_at` | string or null | the last fetch of the dependencies that worked |
-| `focus_days` | number | how recent a commit of yours must be to count |
-| `apps[].focus` | bool | a focus app: pinned so, or (pin `auto`) with a reason |
-| `apps[].focus_pin` | string | `auto`, `focus` (`app focus NAME`) or `ignore` (`app unfocus NAME`) |
-| `apps[].focus_reasons` | array of strings | `pinned`, `local changes`, `on BRANCH, not POLICY`, `your commit today` or `your commit N day(s) ago`; empty when not a focus app |
-| `apps[].requires` | array of strings | `required_apps` from the app's `hooks.py`, frappe left out |
-| `apps[].needed_by` | array of strings | the focus apps that need it, directly or through another app; empty for a focus app |
-| `apps[].upstream` | string or null | `REMOTE/BRANCH` the app's branch follows; `null` on a detached HEAD |
-| `apps[].behind` | number or null | commits on the upstream (as last fetched) that HEAD lacks, counted along the upstream's first parent line, so the commits a merge brings in count as the merge (0.8); `null` when unknown (never fetched) |
-| `apps[].behind_days` | number or null | the age in days of the first of those commits (0.8: the first on the first parent line, never a commit a merge brought in) |
-
-`app focus NAME [--auto] --json` and `app unfocus NAME --json` print
-`{"schema_version","cli_version","bench","app","pin","focus","reasons"}`.
-
-## `benchbar app update NAME --dry-run --json`
-
-Since 0.8 `app update NAME --json` without `--dry-run` streams: the plan line (this document's fields), a step per plan step, and a `done` with `updated` and the [done fields](#the-done-fields-08). `--dry-run --json` is still this one document; `--dry-run --jsonl` is the same fields as a `plan` line, then `done`.
-
-Added in 0.5. The plan of an update, after `git fetch` (which changes
-only the app's `.git`). Without `--dry-run`, `--json` streams (see the top of this section).
-
-```json
-{"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","app":"erpnext","remote":"upstream","branch":"version-15",
- "from":"a1b2c3d...","to":"b5f7846...","commits":[{"sha":"b5f7846","subject":"fix: ..."}],"commits_total":12,
- "newer_commits":0,"pending":null,"sites":["macdev"],"skip_backup":false,
- "steps":[{"name":"Back up macdev","command":"bench --site macdev backup","kind":"backup","target":"macdev"},{"name":"Fast forward","command":"git -C apps/erpnext merge --ff-only b5f784612d5b","kind":"fast_forward","target":""}]}
-```
-
-| Field | Type | Notes |
-|---|---|---|
-| `from`, `to` | string | full commits; equal when there is nothing to take (also when the app is ahead of its remote) |
-| `commits` | array | newest first, at most 30, `sha` short |
-| `commits_total` | number | all commits in `from..to` |
-| `sites` | array of strings | the sites that have the app: each is backed up (unless `skip_backup`) and migrated |
-| `steps` | array | in order: `Back up S`, `Fast forward`, `Python requirements`, `Node requirements`, `Migrate S`, `Build`, and `Restart` when the bench runs; empty when there is nothing to do. Each has `kind` (`backup`, `fast_forward`, `requirements_python`, `requirements_node`, `migrate`, `build`, `restart`) and `target` (a site, the app, or `""`) besides `name` and `command` |
-| `pending` | object or null | the record of an earlier run of this update that stopped part way (the same object `status --json` lists in `pending_operations`, plus `schema_version`, `started_at`), or `null`. With a record, `from` and `to` are the range that run reviewed, `steps` are only the steps it did not finish (the run takes them even when the app is already at `to`), and `commits` is `from..to` |
-| `newer_commits` | number | with a record: commits the remote has beyond `to`; they wait for the next run. `0` otherwise |
-
-An app moved by hand since the record was written (its HEAD is neither
-`from` nor `to`; or, once the fast forward is done, not `to`) exits 1 and
-names `--discard-pending`, which drops the record (and logs what it
-dropped) and stops: nothing else runs.
-
-A dirty tree, a detached HEAD or a diverged branch exits 1 with the
-reason as text.
-
-## `benchbar app add URL --dry-run --json`
-
-Since 0.8 the result of `--apply TOKEN --yes --json` (one line) also carries the [done fields](#the-done-fields-08); with `--jsonl` it is a `done` line with the same fields.
-
-Added in 0.6.0. The plan of an app add, read only, with the token that
-`--apply TOKEN --yes` (and `benchbar_app_add` over MCP) needs. The text
-goes to stderr. A refusal the plain `app add` also makes (an unknown
-name, a URL with a token in it, an unknown site, the app on another
-branch) exits 1 with the reason as text; anything else is a plan, with
-`can_apply` saying whether it can run.
-
-```json
-{"schema_version":1,"cli_version":"0.6.0","bench":"/Users/you/frappe-bench","profile":"v15-lts",
- "target":"https://github.com/acme/acme_crm","app":"acme_crm","package":"acme_crm",
- "repo":"https://github.com/acme/acme_crm","branch":"main","commit":"9b1d2c...40 hex characters","commit_source":"branch","branch_source":"remote_default",
- "present":false,"reachable":true,
- "sites":[{"name":"macdev","installed":false}],"sites_error":null,
- "required_apps":[{"name":"acme_base","required_by":"acme_crm","present":false,"resolves":true,
-   "source":"apps_tsv","repo":"https://github.com/acme/acme_base","branch":"main","commit":"4e07aa..."}],
- "missing_required":["acme_base"],"order":["acme_base"],
- "steps":[{"kind":"clone_required","name":"Clone acme_base","command":"bench get-app --skip-assets --branch main https://github.com/acme/acme_base","note":"..."},
-  {"kind":"clone","name":"Clone acme_crm","command":"bench get-app --skip-assets --branch main https://github.com/acme/acme_crm","note":"..."},
-  {"kind":"build","name":"Build","command":"bench build --apps acme_base,acme_crm","note":"..."},
-  {"kind":"install","name":"Install on macdev","command":"bench --site macdev install-app acme_crm","note":"..."},
-  {"kind":"restart","name":"Restart","command":"benchbar restart","note":"only when the bench is running, ..."}],
- "errors":[],"changes":true,"can_apply":true,"reason":null,
- "token":"3f9c0e...64 hex characters"}
-```
-
-| Field | Type | Notes |
-|---|---|---|
-| `target` | string | what was asked for, without a user name or token |
-| `app` | string | the app name: `--name`, else the package folder that holds `hooks.py`, else the repo name |
-| `package` | string or null | that package folder; `null` when `hooks.py` could not be read |
-| `repo` | string | the URL `get-app` gets |
-| `branch` | string or null | `null` when it could not be told (then `errors` says so) |
-| `commit` | string or null | the commit the plan read `hooks.py` from: the pin (always the full hash) when `--commit` is given, else the branch tip; `--apply` stops before build and install when `get-app` checks out another one, and when a pinned commit is not reached by the clone |
-| `commit_source` | string | `pin` (`--commit`; for an app already in the bench, it is at the pin) or `branch` |
-| `branch_source` | string or null | `given` (`--branch`), `policy` (`config/apps.tsv` or the team profile), `remote_default` (the remote's HEAD) or `present` (the branch of the app already in the bench) |
-| `present` | bool | the bench already has the app; then no clone and no build, only installs |
-| `reachable` | bool or null | git could read the repo without a prompt, within the timeout; `null` when the app is present (nothing is fetched) |
-| `sites[]` | array | the target sites (`--site`, `--all-sites`, `--install-on`) and whether each has the app already (in a batch: the union over the apps, `installed` true when no app of the batch needs an install there) |
-| `apps[]` | array | present only when several apps were given: one entry per target, in the order given, with its own `app`, `package`, `target`, `repo`, `branch`, `branch_source`, `commit`, `commit_source`, `present`, `reachable`, `install_on` (the sites of its `--install-on`, empty when it has none), `sites[]` (its own sites and whether it is installed there) and `required_apps` (the names its `hooks.py` requires). The fields above describe the first target; `required_apps[]`, `missing_required`, `order` and `steps[]` cover the whole batch |
-| `sites_error` | string or null | as in `app list --json` |
-| `required_apps[]` | array | every app `hooks.py` requires, followed through the ones that get cloned; `present` in the bench, `resolves` through `source` (`apps_tsv` or `team_profile`) with its `repo`, `branch` and `commit` |
-| `missing_required` | array of strings | the required apps the plan clones or cannot resolve |
-| `order` | array of strings | the apps the plan clones, each after the apps it requires (ties keep the order the plan always had), the apps being added after the ones they need when they are cloned; the required apps of every target are one graph, an app two targets require is cloned once. A cycle in `required_apps` is an `errors` entry, `required_apps cycle: a -> b -> a`, with `can_apply` false |
-| `reason` | string or null | set when a record of an earlier, unfinished add of this app is merged into the plan (the build, installs and restart it did not finish are `steps`, `changes` is true); otherwise `null` |
-| `steps[]` | array | in the order `--apply` runs them; `kind` is `clone_required`, `clone`, `requirements_python` (only when an earlier run left a cloned app without its pip install), `build` (one for every app that is cloned), `install` (one per app and site, site by site, each site in dependency order; named `Install APP on SITE` when several apps were given) or `restart` (once, run only when the bench is running); `note` says what else the step does, for `install` that it changes the site's database like a migrate of these apps |
-| `errors` | array of strings | why the plan cannot run: an unreadable repo, a missing branch, no `hooks.py`, a required app nothing resolves |
-| `changes` | bool | `false` when there is nothing to do |
-| `can_apply` | bool | `false` when `errors` is not empty |
-| `token` | string | SHA-256 of the plan (the commits included, so a branch that moves makes it stale) and of the bench's `sites/apps.txt`, `apps/` folders and site list |
-
-`benchbar app add URL --apply TOKEN --yes --json`, the result:
-`{"schema_version", "cli_version", "bench", "app", "branch", "commit",
-"commit_source", "token", "applied": true, "ok", "steps": [{"kind", "name",
-"status", "reason"}], "apps": [...], "required_apps": [...]}`. `apps[]` has one
-entry per target (always, also for one app) and `required_apps[]` one per
-required app that was cloned: `{"app", "cloned", "clone", "build",
-"installs": [{"site", "status", "migrate", "reason"}]}`. `cloned` is true when
-this run cloned the app; `clone` and `build` are the status of that step
-(`null` when the app had none, for example `build` of an app that was
-already there); each install has the status of its step and the same
-status as `migrate`, because `install-app` is what runs the app's patches
-and syncs its DocTypes (there is no separate migrate step). An install
-skipped because an app it requires failed to install on that site has
-`reason` `after failed install of APP`. Where
-`status` is `done`, `failed`, `skipped` (after a failed step it depends on:
-clone, then build, then install and restart; or a restart of a stopped
-bench) or `pending`. `reason` is `after failed <kind>` for a step skipped
-because of a failure, else null. A failed or skipped step stays in the
-app's pending record, which the next plan merges. Exit 0 when `ok`. A stale
-token or a plan that cannot run exits 1 with no JSON and the reason on
-stderr.
-
-## `benchbar lock check --json`
-
-Added in 0.5. The bench compared with its lockfile (`benchbar.toml`).
-Read only: no network, no database (a site's apps come from the cache
-`app list` fills), only `bench --version` for the bench CLI. Exit 1 on
-any drift; the JSON is still printed.
-
-```json
-{"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","lock_file":"/Users/you/frappe-bench/apps/acme/benchbar.toml",
- "in_sync":false,
- "drift":[{"kind":"commit_behind","app":"erpnext","site":null,"expected":"b5f7846","actual":"a1b2c3d","level":"warn","fix_command":"benchbar lock apply"}],
- "summary":{"ok":12,"warn":1,"fail":0}}
-```
-
-| `kind` | `level` | Meaning |
-|---|---|---|
-| `profile_mismatch` | warn | the lock's `[bench] profile` differs from the bench's (a team profile's base) |
-| `bench_version_mismatch` | warn | the `frappe-bench` CLI version differs |
-| `app_missing` | fail | a lock app has no folder or no `apps.txt` line |
-| `app_extra` | warn | an `apps.txt` app the lock does not name |
-| `repo_mismatch` | warn | the app's remote is another repo (HTTPS and SSH spellings of one repo compare equal) |
-| `branch_mismatch` | warn | another branch, or a detached HEAD (`actual` is `detached`) |
-| `commit_behind` | warn | the pinned commit is ahead of the checkout; `lock apply` fast forwards |
-| `commit_ahead` | warn | the checkout has commits after the pin; `lock apply` leaves it |
-| `commit_diverged` | warn | neither contains the other; `lock apply` leaves it |
-| `commit_unknown` | warn | the pin is not in the local history yet; `lock apply` fetches it |
-| `dirty` | warn | tracked files have local changes |
-| `site_missing` | warn | a lock site has no folder |
-| `site_app_missing` | warn | the site lacks an app the lock lists for it (`app` and `site` are both set) |
-
-`expected` and `actual` are strings or `null`; commits are 7 characters.
-`summary.ok` counts the lock's apps, sites and bench fields without
-drift. Doctor runs the same comparison as `lock_drift` (without the
-bench version) and `lock_parse`, both in group `bench` with `action:
-null`.
-
-`list --json` gains `benches[].lock_file`: the path `lock check` would
-use for that bench (remembered from `--lock`, or `<bench>/benchbar.toml`
-when it exists), else `null`.
-
-## `benchbar profile list --json`
-
-Added in 0.5. The built in profiles, then every team profile file on the
-lookup path (`~/.config/benchbar/profiles/`, then each subscription in
-subscribe order, then each folder of `BENCHBAR_PROFILE_PATH`), invalid
-ones included so a reader can show why. Read only and offline: how far a
-subscription is behind comes from its last fetch.
-
-```json
-{"schema_version":1,"cli_version":"0.6.0","profiles":[
- {"name":"v15-lts","kind":"builtin","source":"builtin","source_url":null,"subscription":null,"shadowed_by":null,"schema":null,
-  "file":"/Users/you/benchbar/config/release-profiles.tsv","base":null,
-  "label":"Frappe/ERPNext v15 LTS","frappe_branch":"version-15","valid":true,"error":null},
- {"name":"acme","kind":"team","source":"subscribed","source_url":"git@github.com:acme/bench-config.git",
-  "subscription":{"repo":"git@github.com:acme/bench-config.git","dir":"/Users/you/.config/benchbar/sources/acme-bench-config",
-   "behind":2,"days":5,"fetched_at":"2026-09-29T10:00:00Z"},"shadowed_by":null,"schema":2,
-  "file":"/Users/you/.config/benchbar/sources/acme-bench-config/profiles/acme.toml","base":"v15-lts",
-  "label":"Acme ERP","frappe_branch":null,"valid":true,"error":null}]}
-```
-
-| Field | Type | Notes |
-|---|---|---|
-| `kind` | string | `builtin` or `team` |
-| `source` | string | `builtin`, `user` (a file in `~/.config/benchbar/profiles`) or `path` (a `BENCHBAR_PROFILE_PATH` folder); 0.6 adds `imported` (a file there that `profile import` wrote) and `subscribed` |
-| `source_url` | string or null | 0.6: the URL or path an imported file came from, or a subscription's repo URL; `null` otherwise |
-| `subscription` | object or null | 0.6: for a subscribed profile, `repo`, `dir`, `behind` (commits the clone lacks, int or null), `days` (age of the oldest of them, int or null) and `fetched_at` (the last successful fetch, or null) |
-| `shadowed_by` | string or null | 0.6: the file that hides this one (an earlier file of the same name, or the built in profiles' file) |
-| `schema` | int or null | 0.6: the file's `schema` (1 when it has none); `null` for built in profiles and invalid files |
-| `file` | string | where it was read from |
-| `base` | string or null | the built in profile a team profile builds on; `null` for built in ones and invalid files |
-| `label` | string or null | the built in label, or a team profile's `description` |
-| `frappe_branch` | string or null | a team profile's override, else the built in branch |
-| `valid` | bool | `false` when `install --profile NAME` would refuse it |
-| `error` | string or null | why: a parse error (`FILE:LINE: not supported: ...`), a name that shadows a built in profile, or a name hidden by an earlier file |
-| `python`, `node`, `mariadb` | string or null | 0.8: the versions the profile brings (`"3.11"`, `"22"`, `"10.11"`), a team profile's from its base; `null` for an invalid file |
-| `linux_supported` | bool or null | 0.9: whether `install --profile NAME` passes the Linux profile gate (Python 3.10 or newer from uv, Node 18 or newer from fnm, a MariaDB that apt gives or the profile accepts). A team profile passes or fails with its base. `null` on macOS, where the gate does not exist, and for an invalid file (`error` says why) |
-| `unsupported_reason` | string or null | 0.9: when `linux_supported` is `false`, the reasons the install prints after "is not supported on Linux yet:", joined with `; `; `null` otherwise |
-
-0.8 adds `bundles` at the top: the app bundles `install --bundle` takes,
-each with `name`, `label`, `apps` (array of app names) and `description`,
-from `config/app-bundles.tsv`.
-
-## Profile sharing
-
-Added in 0.6. With `--json`, each of these prints one document on stdout
-and every human line on stderr. `--plan` is read only (it may ask git and
-the network, never writes) and takes no lock. A write needs `--yes`: a
-question that cannot be answered counts as no and exits 1. A refusal or
-error exits 1; `profile check` exits 0 whatever it finds. `reachable` is
-`true`, `false` (git answered no: no access, no such repo or branch) or
-`null` (offline or timed out, 10 seconds per repo), with `reason` saying
-why when it is not `true`.
-
-### `benchbar profile export NAME --plan --json`
-
-```json
-{"schema_version":1,"cli_version":"0.6.0","name":"acme","base":"v15-lts","apps":[
- {"name":"acme_ecr","repo":"git@github-work:acme/acme_ecr.git","exported_repo":"git@github.com:acme/acme_ecr.git",
-  "current_branch":"wip","exported_branch":"develop","default_branch":"develop","branch_verified":true,
-  "access":"private","requires":["acme_base"],"keep":true}],
- "warnings":["acme_ecr: git@github-work:acme/acme_ecr.git is written as git@github.com:acme/acme_ecr.git"],
- "digest":"5d41aa...64 hex characters"}
-```
-
-| Field | Type | Notes |
-|---|---|---|
-| `apps[].repo` | string | the URL in the profile |
-| `apps[].exported_repo` | string | the URL written: SSH alias resolved with `ssh -G`, user info removed |
-| `apps[].current_branch` | string | the branch in the profile |
-| `apps[].exported_branch` | string | the branch written: `--branch APP=BR`, else the repo's default branch; an app of `config/apps.tsv` on the base's release branch (erpnext on `version-15`) keeps it |
-| `apps[].default_branch` | string or null | what the remote's HEAD points at; `null` when git could not tell |
-| `apps[].branch_verified` | bool | the exported branch exists on the remote |
-| `apps[].access` | string | `public` (a stranger can read it over https), `private`, `personal` (private, and its GitHub owner is a user, not an organisation) or `unknown` (offline, or not an https or SSH URL) |
-| `apps[].requires` | list of strings | from the profile, else from the app's `hooks.py` in the bench (`--bench-dir`) |
-| `apps[].keep` | bool | `false` for an app given to `--drop` |
-| `warnings` | list of strings | for a person: rewritten URLs, unverified branches, personal repos, drops that are refused |
-| `digest` | string | 0.6: SHA-256 of what the plan read: the profile file and each app's URLs, branches, access and requires; the same with or without `--branch` and `--drop` |
-
-`profile export NAME --out FILE [--branch APP=BR]... [--drop APP]... --yes --json`
-writes the file and prints `{"path","apps","dropped"}`: the path, how many
-apps it holds and the dropped ones. Dropping an app that a kept app
-requires is refused with exit 1 and
-`{"error":"...","blocked":[{"app":"acme_base","required_by":["acme_ecr"]}]}`.
-With `--expect DIGEST` it refuses (exit 1, nothing written) when the plan
-no longer matches that digest. BenchBar passes the digest and every kept
-app's branch, so it writes exactly what the sheet showed.
-
-### `benchbar profile import SRC [--as NAME] --plan --json`
-
-```json
-{"schema_version":1,"cli_version":"0.6.0","name":"acme","source":"https://github.com/acme/config/blob/main/acme.toml",
- "exists":true,"diff":"@@ -3 +3 @@\n-description = \"Acme\"\n+description = \"Acme ERP\"","base":"v15-lts",
- "apps":[{"name":"acme_ecr","repo":"git@github.com:acme/acme_ecr.git","branch":"develop","access":"private","requires":["acme_base"]}],
- "check":{"repos":[{"app":"acme_ecr","repo":"git@github.com:acme/acme_ecr.git","reachable":false,"reason":"Permission denied (publickey)."}]},
- "skipped_apps":["acme_ecr"],"digest":"c2a1f0...64 hex characters"}
-```
-
-`exists` is whether `~/.config/benchbar/profiles/NAME.toml` is there;
-`diff` is the unified diff against it (`null` when there is none or they
-are equal). `apps[].access` is `null` when the file does not say.
-`skipped_apps` are the apps `install --profile` would leave out: the
-unreachable ones and every app that requires one. `digest` is the SHA-256
-of the file the import would write. With `--yes --json` it writes and
-prints `{"name","path","source"}`; with `--expect DIGEST` as well, it
-refuses (exit 1, nothing written) when the source changed since that plan.
-
-### `benchbar profile subscribe GIT_URL [--plan|--yes] --json`
-
-`{"repo","dir","profiles"}`: the URL, the clone's folder
-(`~/.config/benchbar/sources/OWNER-REPO`) and the valid profile names in
-it. Subscribing to a URL already subscribed prints the same and changes
-nothing.
-
-### `benchbar profile update NAME|--all --plan --json`
-
-```json
-{"schema_version":1,"cli_version":"0.6.0","updates":[
- {"name":"acme","kind":"subscribed","behind":2,"diff":"diff --git a/profiles/acme.toml ..."}],
- "digest":"77e3b9...64 hex characters"}
-```
-
-`kind` is `imported` or `subscribed`; `behind` is the new commits of a
-subscription (`null` for an import); `diff` is `null` when there is
-nothing new. `digest` covers what the plan showed: each import's fetched
-file and each subscription's upstream commit. With `--yes` the same
-document adds `"applied":true` (`false` when one of them could not be
-applied); `--expect DIGEST` refuses (exit 1, nothing changed) when the
-source has moved on since that plan, and a subscription fast forwards to
-the reviewed commit, not a newer one.
-
-### `benchbar profile remove NAME --yes --json`
-
-`{"name","moved_to"}`: the file or subscription folder now under
-`~/.config/benchbar/removed/<timestamp>/`.
-
-### `benchbar profile check NAME --json`
-
-`{"name","repos":[{"app","repo","reachable","reason","commit"}],"skipped_apps":[...],"frappe_commit","erpnext_commit"}`,
-as in the import plan. Since 0.8 each repo carries the `commit` the profile pins it to (`null` for none), and
-`frappe_commit` and `erpnext_commit` are the profile's pins for the two apps it does not list
-as `[[apps]]` (`null` for none). A pin is read, not tried against the server: whether the clone
-reaches it is checked by `install`, before anything is built.
-
-## `benchbar pull --json`
-
-Since 0.8 the `done` line also carries `changed`, `next_actions` and `state_after` ([done fields](#the-done-fields-08)); its `warnings` are as before. Since 0.9 the `plan` line has `neutralise` and the `done` line `neutralised`. Since 0.9 the `plan` line has `token` (see `--apply TOKEN`).
-
-Added in 0.5. Unlike the commands above, `pull` changes things, so it
-streams: one JSON object per line on stdout, written as the run goes, and
-every human line on stderr. Use it with `--yes` (a gate that cannot be
-answered counts as no). Each line carries `schema_version`,
-`cli_version` and `event`:
-
-```json
-{"schema_version":1,"cli_version":"0.5.0","event":"plan","source":"prod:erp.example.com","host":"prod","remote_site":"erp.example.com","remote_bench":"~/frappe-bench","from_dir":null,"bench":"/Users/you/frappe-bench","site":"erpcopy","replace":false,"backup":{"name":"20260925_020000-erp_example_com-database.sql.gz","new":false,"bytes":734003200,"age_hours":31,"encrypted":false},"encryption_key":true,"apps":[{"app":"frappe","production_version":"15.40.0","production_branch":"version-15","local_version":"15.41.0","local_branch":"version-15","status":"local newer"}],"migrate":true,"steps":["Download the backup","Restore into erpcopy","..."],"dry_run":false}
-{"schema_version":1,"cli_version":"0.5.0","event":"gate","name":"apply","answer":"yes"}
-{"schema_version":1,"cli_version":"0.5.0","event":"progress","file":"20260925_020000-erp_example_com-database.sql.gz","bytes":700000000,"total":734003200}
-{"schema_version":1,"cli_version":"0.5.0","event":"step","n":1,"id":"download","name":"Download the backup","status":"done"}
-{"schema_version":1,"cli_version":"0.5.0","event":"done","exit":0,"site":"erpcopy","url":"http://erpcopy:8000","decrypt":{"ok":12,"failed":0},"warnings":[]}
-```
-
-| Event | Fields | Notes |
-|---|---|---|
-| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `neutralise`, `apps`, `migrate`, `create_site`, `before_migrate`, `needs`, `steps`, `dry_run`, `token` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value. Since 0.8 `create_site` says the target does not exist and a `new_site` step makes it, `before_migrate` is the path of the `--before-migrate` script or `null`, and `migrate` is `false` with `--no-migrate`. Since 0.9 `neutralise` is `false` with `--keep-secrets`. Since 0.9 `token` is a hash of the plan without `dry_run`, `bytes` and `age_hours`: pass it to `--apply TOKEN --yes` with the same arguments to run exactly this plan; a plan that changed since ends the run with exit 1 before anything is changed. A target the restore cannot go into (a folder without a `site_config.json`, a `bench new-site` that did not finish, no MariaDB root password) ends the run before this line, in a dry run too |
-| `gate` | `name` (`new_backup`, `apply`, `replace`), `answer` (`yes`, `no`) | a question the run asked. `new_backup` is `yes` only when the typed (or `--confirm-site`) name matches |
-| `progress` | `file`, `bytes`, `total` | after each downloaded file; `bytes` counts the files so far |
-| `step` | `n`, `id`, `name`, `status` | `n` counts from 1 in the order of `plan.steps`; `status` is `done`, `unchanged`, `skipped` or `failed` |
-| `done` | `exit`, `site`, `warnings`, and on success `url`, `decrypt` and `neutralised` | always the last line: also after a refusal or a failure (`exit` 1) and after `--dry-run` (`dry_run: true`) |
-
-`apps[].status` is `ok`, `missing`, `skipped` (`--skip-app`), `branch
-differs`, `local older` or `local newer`. `decrypt.ok` and
-`decrypt.failed` count the encrypted `__Auth` rows that do and do not
-decrypt with the site's `encryption_key`; `failed` above 0 means stored
-passwords must be entered again; both are 0 when the copy was neutralised. `neutralised` is `{"on":false}` with `--keep-secrets`, else `{"on":true,"counts":{KEY:N,...},"labels":{KEY:"text",...}}`: the rows each part of the neutralisation changed (`stored_secrets` counts the deleted passwords) and the words for them. A key is never removed, so a count of 0 means there was nothing to do. Step ids: `new_backup`, `download`,
-`decrypt`, `local_backup`, `quiesce`, `new_site`, `restore`,
-`encryption_key`, `resume`, `dev_safety`, `neutralise`, `skip_apps`, `before_migrate`,
-`migrate`, `clear_cache`, `admin_password`, `hosts`, `cleanup`, `verify`;
-a run lists only the ones it needs.
-
-No event ever holds a password, the encryption key or a token from an
-app's remote URL.
-
-## `benchbar report --json`
-
-Writes the redacted diagnostics zip (to `~/Desktop`, or `--out DIR`) and
-prints one line on stdout; the human text goes to stderr. The BenchBar
-app's Report a Bug uses it.
-
-```json
-{"schema_version":1,"cli_version":"0.5.5","zip":"/Users/you/Desktop/benchbar-report-20260926-101500.zip","redactions":14}
-```
-
-| Field | Type | Meaning |
-|---|---|---|
-| `zip` | string | absolute path of the zip just written |
-| `redactions` | number | lines on which something was replaced (a credential, the home folder, the username, a name of this Mac); `REDACTIONS.txt` in the zip lists them |
-
-Exit 0 when the zip was written. `--json` with `--print` exits 1.
-
-## `benchbar where --json`
-
-How this CLI was installed and where its things are, since 0.7.0. Read
-only: it needs no bench, takes no lock and writes no log. Scripts, agents
-and the app can use it to tell a Homebrew install from the others instead
-of guessing from paths.
-
-```json
-{"schema_version":1,"cli_version":"0.7.2","install":"app","self":"/Users/you/.local/state/benchbar/bin/benchbar","state_dir":"/Users/you/.local/state/benchbar","state_dir_real":"/Users/you/.local/state/benchbar","app_version":"0.7.2","app_path":"/Applications/BenchBar.app","handoff_from":"/opt/homebrew/opt/benchbar/bin/benchbar","handoff_from_version":"0.7.2"}
-```
-
-| Field | Type | Meaning |
-|---|---|---|
-| `install` | string | `homebrew` (the `benchbar` formula), `managed` (the one line installer's checkout, `~/.local/share/benchbar`), `app` (the CLI inside BenchBar.app, 0.7.1), `checkout` (another git clone, such as `./benchbar` in the repo) or `other`. Treat a value you do not know as `other` |
-| `self` | string | the path of this CLI that the helper block, the `~/.local/bin` links and every printed fix command use. Under Homebrew it is `<prefix>/opt/benchbar/bin/benchbar`, which `brew upgrade` keeps; never a versioned Cellar path. For `app` it is `~/.local/state/benchbar/bin/benchbar`, the link the app keeps to its CLI, or the CLI's own path in an app that is not installed (a build from Xcode) |
-| `state_dir` | string | the folder of the remembered benches, per bench settings, run logs, backups and the lock: `~/.local/state/benchbar` for `homebrew`, `managed` and `app` (a symlink to `~/.local/share/benchbar/.benchbar` when the two are on different volumes), `.benchbar` next to the CLI for the others, or `FL_STATE_DIR` when that is set |
-| `state_dir_real` | string | the folder behind `state_dir`, with every link resolved (0.7.3). The same as `state_dir` unless `~/.local/state/benchbar` is a link to the installer checkout's `.benchbar` on another volume; the human output then shows `state LINK -> REAL` |
-| `app_version` | string or null | the BenchBar app's version, `null` when no app is installed |
-| `app_path` | string or null | for `app`, the app this CLI is part of; otherwise the app it found first, `/Applications` before `~/Applications`; `null` when none |
-| `handoff_from` | string or null | the Homebrew or installer CLI that was run and handed off to this one (0.7.1), `null` when this CLI was run directly |
-| `handoff_from_version` | string or null | the version of that copy (0.7.3), `null` when this CLI was run directly or that copy's version is unknown. A copy newer than `cli_version` hands off to an older CLI: update the app (doctor's `cli_duplicate` says so) |
-
-Exit 0. An argument other than `--json` exits 1.
-
-## `benchbar labs --json`
-
-`labs list --json` is one document, with no done fields (`cli_version` is there since 0.9, as in `labs status` and `ports plan`):
-
-```json
-{"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.8.2","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false}]}
-```
-
-`commands` are the top level commands the lab gates (it may be empty, or name
-a command this version does not have). `platforms` is the list the lab runs
-on (`macos`, `linux`, `windows`) and `available` is true when this machine is
-one of them (WSL counts as `windows` and also runs a `linux` lab). `labs on`
-exits 1 with "NAME is not available on PLATFORM yet" when it is not. `labs status NAME --json` is
-`{"schema_version":1,"name":"lan-rooms","enabled":false}` and exits 1 when off.
-`labs on` and `labs off` stream like `site open-as`: the `done` line carries
-`lab`, `enabled` and the [done fields](#the-done-fields-08). `labs on` exits 2
-with `error` "turning on an experiment is a person's decision" when nothing
-can ask. Added after 0.8.1: `status --json` and `commands --json` have `labs`
-(the enabled names); `commands --json` also has `gated` (`[{"name","lab"}]`
-for a command left out because its lab is off) and a command of an enabled lab
-has `lab`.
-
-## Site backups
-
-Since 0.8 the results of `site backup` and `site drop` (not their plans) also carry the [done fields](#the-done-fields-08), and `site drop`'s plan and result `default_site`. `--jsonl` turns either into a stream whose `done` carries the document's fields.
-
-`site backup`, `site backups` and `site drop` (0.5.8) describe a backup
-the same way. A backup is the files in the site's backup folder that
-share one timestamp:
-
-```json
-{
-  "stamp": "20260929_101500",
-  "time": "2026-09-29T04:45:00Z",
-  "path": "/Users/you/frappe-bench/sites/macdev/private/backups/20260929_101500-macdev-database.sql.gz",
-  "database": "/Users/you/frappe-bench/sites/macdev/private/backups/20260929_101500-macdev-database.sql.gz",
-  "files": "/Users/you/frappe-bench/sites/macdev/private/backups/20260929_101500-macdev-files.tar",
-  "private_files": "/Users/you/frappe-bench/sites/macdev/private/backups/20260929_101500-macdev-private-files.tar",
-  "config": "/Users/you/frappe-bench/sites/macdev/private/backups/20260929_101500-macdev-site_config_backup.json",
-  "size_bytes": 5242880,
-  "with_files": true,
-  "encrypted": false,
-  "partial": false,
-  "complete": true
-}
-```
-
-| Field | Meaning |
-|---|---|
-| `stamp` | the timestamp at the start of the file names, in the site's time zone |
-| `complete` | `false` for a partial set, a set without a database file, or one with an empty part (a cheap check: `site restore` also reads the files to their end) |
-| `time` | when the database file was written, UTC |
-| `path` | the database file, the one a restore needs (else the first file of the set) |
-| `database`, `files`, `private_files`, `config` | each part, `null` when the set has none |
-| `size_bytes` | all parts together |
-| `with_files` | the set has the public or private files |
-| `encrypted`, `partial` | bench's encrypted and partial backups (`-enc`, `-partial`) |
-
-`benchbar site backups NAME --json`: `{"schema_version", "cli_version",
-"bench", "site", "folder", "backups": [backup, ...]}`, newest first.
-
-`benchbar site backup NAME --json`: `{"schema_version", "cli_version",
-"bench", "site", "dry_run", "backup": backup}`; `backup` is `null` in a
-dry run.
-
-`benchbar site drop NAME --confirm-site NAME --dry-run --json`, the plan:
-
-```json
-{
-  "schema_version": 1, "cli_version": "0.5.8",
-  "bench": "/Users/you/frappe-bench", "site": "bbtest.localhost",
-  "dry_run": true, "is_default": false, "new_default": null,
-  "steps": [
-    {"title": "Back up bbtest.localhost with files, drop its database and user, move the folder to archived/sites", "command": "bench drop-site bbtest.localhost", "needs_password": false},
-    {"title": "Remove '127.0.0.1 bbtest.localhost' from /etc/hosts", "command": "sudo, backup first", "needs_password": true}
-  ]
-}
-```
-
-And the result, without `--dry-run`:
-
-| Field | Meaning |
-|---|---|
-| `dropped` | `true`; a failed drop exits 1 with no JSON |
-| `archived_path` | the site folder in `archived/sites/`, `null` if bench put it elsewhere |
-| `backup` | the backup bench took before dropping (inside the archived folder), or `null` |
-| `new_default` | the site that became the default, or `null` |
-| `hosts_removed` | the `/etc/hosts` line was removed |
-| `manual_step` | the command that removes the hosts line by hand when benchbar could not (no terminal for `sudo`, a line outside benchbar's block), else `null` |
-
-### `benchbar site restore --json`
-
-Added in 0.8. The plan of a restore from a backup set, read only, with a
-token. `--apply TOKEN --yes` runs exactly that plan:
-
-```json
-{
-  "schema_version": 1, "cli_version": "0.8.0",
-  "bench": "/Users/you/frappe-bench", "site": "acme.localhost",
-  "new": false, "exists": true,
-  "source": {
-    "site": "acme.localhost",
-    "set": { "stamp": "20260902_090000", "...": "a backup, as above" },
-    "restores_files": true, "encryption_key": true
-  },
-  "backup_first": { "will_run": true, "with_files": true, "folder": "/Users/you/frappe-bench/sites/acme.localhost/private/backups" },
-  "migrate": true, "before_migrate": null, "before_migrate_sha256": null,
-  "touches": ["backup", "database", "files", "site_config"],
-  "steps": [
-    { "id": "local_backup", "name": "Back up acme.localhost with its files", "touches": ["backup"] },
-    { "id": "restore", "name": "Restore 20260902_090000 into acme.localhost with its files", "touches": ["database", "files"] },
-    { "id": "encryption_key", "name": "Carry the encryption key of the set over", "touches": ["site_config"] },
-    { "id": "migrate", "name": "bench migrate", "touches": ["database"] },
-    { "id": "clear_cache", "name": "Clear caches", "touches": ["cache"] },
-    { "id": "verify", "name": "Verify acme.localhost", "touches": [] }
-  ],
-  "warnings": [], "needs": [], "errors": [], "can_apply": true,
-  "token": "8f1c...64 hex characters"
-}
-```
-
-| Field | Meaning |
-|---|---|
-| `site`, `new`, `exists` | the target; `new` is `--new` (the site is created first, with `bench new-site`), `exists` that a site of that name is there |
-| `source.site` | the site whose backups the stamp names (`--from-site`, else the target); `null` for a path |
-| `source.set` | the backup set, as in [Site backups](#site-backups) |
-| `source.restores_files` | `--with-files` was given: the public and private files are restored too |
-| `source.encryption_key` | the set's `site_config_backup.json` has an `encryption_key`, which is carried into the target (never printed) |
-| `backup_first` | an existing target is backed up with its files before anything changes (`will_run`); `folder` is where the set lands |
-| `migrate`, `before_migrate`, `before_migrate_sha256` | `migrate` is `false` with `--no-migrate`; `before_migrate` is the path of the `--before-migrate` script and `before_migrate_sha256` its hash (a changed script makes the token stale) |
-| `touches` | what the run changes: `backup` (an existing target is backed up first), `database`, `files`, `site_config`, `hosts` for a new site whose `/etc/hosts` line is missing, and `common_site_config` when the scheduler of a running bench is paused for the restore |
-| `needs` | inputs a run in a terminal would ask for, for example `["MARIADB_ROOT_PASSWORD"]` when none is stored. In a terminal (no `--json`, no `--yes`) the plan stays applicable; for `--json` it is an error as well, because nothing can answer |
-| `steps` | in the order they run, each with the `touches` of that step. Ids: `local_backup`, `quiesce`, `new_site`, `restore`, `encryption_key`, `resume`, `before_migrate`, `migrate`, `clear_cache`, `hosts`, `verify` |
-| `errors`, `can_apply` | what stops the plan (no such site, a set that is not there, an encrypted or file-less set, MariaDB down, the root password unknown to benchbar, apps the bench lacks, a hook that is not an executable file); `can_apply` is `false` when there is one. The command still exits 0 with `--json` |
-| `token` | a hash of the plan and of what it was made against: the sites, the default site, the hook and the set's files. `--apply` recomputes it and refuses a different one: `The site restore plan changed since it was shown`, nothing changed |
-
-The result of `--apply TOKEN --yes --json`:
-
-| Field | Meaning |
-|---|---|
-| `applied`, `ok` | `ok` is `false` when a step failed (exit 1); the steps after it stay `pending` or `skipped` |
-| `site`, `new`, `token` | as in the plan |
-| `backup` | the backup taken before an existing target was touched (a [backup](#site-backups)), `null` for a new site or when it did not get that far. It must be a new set with its database and both file archives, or the run stops before anything is overwritten. Put it back with `site restore TARGET --from STAMP --with-files --yes` |
-| `set_copy` | for an existing target: the folder under the state backups that holds a copy (hard links, else copies) of the set that was restored. Bench's own backup deletes old backups in the target's folder, so the restore reads the copy, which stays after the run. `null` for a new site |
-| `steps` | `[{"id","name","status"}]`, `status` is `done`, `unchanged`, `skipped`, `failed` or `pending` |
-| `verify` | what the end check found: `apps` (what `bench --site TARGET list-apps` answers), `default_site` (the default site after the run, which is never changed: if a step moved it, it is put back with `bench use` and a warning says so) and `answers` (the web ping of the target while the bench runs, else `null`) |
-| `warnings` | for example `migrate was skipped (--no-migrate)` |
-
-Exit 0 only after the end check passed: the target answers `list-apps`
-with frappe in it, and the default site is where it was. Exit 2 is
-the MariaDB root password unknown to benchbar. The hook (`--before-migrate`)
-runs in the bench folder with `BENCHBAR_SITE`, `BENCHBAR_BENCH` and
-`BENCHBAR_DB_NAME`; variables named like a secret (`*PASSWORD*`, `*SECRET*`,
-`*TOKEN*`, `*PASSPHRASE*`, `*_KEY`) are removed from its environment, and a
-failing hook ends the run before migrate.
-
-## `logs/.benchbar/state.json`
-
-Written on every transition, always by writing a temp file in the same
-folder and renaming it over `state.json`. A reader never sees half a
-file, but a file watcher on `state.json` itself breaks at the first
-rename: watch the `logs/.benchbar/` folder instead.
-
-```json
-{"schema_version":1,"cli_version":"0.3.0","bench":"/Users/you/frappe-bench","name":"frappe-bench","site":"macdev","label":"com.benchbar.frappe-bench","state":"running","stop_reason":null,"pid":4242,"started_at":"2026-09-23T10:00:00Z","last_exit_code":null,"web_url":"http://macdev:8000","web_ping_code":200,"updated_at":"2026-09-23T10:00:14Z","source":"runner"}
-```
-
-It has the core fields of `status` (`schema_version` to `web_ping_code`)
-plus:
-
-| Field | Type | Notes |
-|---|---|---|
-| `updated_at` | string | when this transition was written; it does not move between transitions (the heartbeat is its own file, below) |
-| `source` | string | `runner` (the launchd runner) or `cli` (`up`, `down`, `restart`) |
-
-`cli_version` is the version of the benchbar that wrote the transition:
-for `source: runner`, the one that wrote the runner script. Since 0.7.0 a
-new CLI version alone no longer rewrites the runner (doctor does not count
-it as outdated), so this can be older than `benchbar --version`.
-
-Transitions the runner writes:
-
-| When | `state` | `stop_reason` |
-|---|---|---|
-| the agent starts while a stop flag exists | `stopped` or `paused` | from the flag |
-| honcho or `env/bin/python` is missing | `paused` | `broken` |
-| the runner cannot write the crash history or the stop flag | `paused` | `broken` |
-| the crash guard trips | `paused` | `crash` |
-| a process that is not this bench's still holds one of its ports after the cleanup | `paused` | `port_conflict` |
-| honcho started | `starting` | `null` |
-| the site answered 200 (checked every 2 seconds for 4 minutes) | `running` | `null` |
-| the runner got SIGTERM without a stop flag (logout, restart, shutdown) | `stopped` | `null` |
-| honcho exited 0 without a stop flag (0.7.3: a bench never ends on its own, so launchd restarts it) | `crashed` | `crash` |
-| `benchdown` stopped it | `stopped` | `manual` |
-| honcho exited with an error | `crashed` | `crash` |
-
-The CLI writes `starting` just before `up` and `restart` kick the agent,
-and `stopped` with `manual` after `down`. The state file is a hint for
-fast updates; `status --json` is the truth, because it also checks the
-processes and the site.
-
-## `logs/.benchbar/heartbeat`
-
-Since 0.6.1 the runner rewrites this file every 30 seconds while honcho
-runs, starting just before it writes `starting`. The write is in place
-(no temp file, no rename), so it changes no entry of the folder and a
-folder watcher is not woken by it; only the transitions in `state.json`
-are. The content is the runner's age in seconds, one line; read the
-file's modification time, not the content. The file stays after the
-runner stops.
-
-How a reader uses it, while `state.json` says `running` or `starting`:
-
-| The runner's `pid` | `heartbeat` mtime | Meaning |
-|---|---|---|
-| alive | under 90 seconds old | fresh: `state.json` is the truth, no need to ask the CLI |
-| alive | missing, 90 seconds or older, or dated more than 5 seconds in the future (a clock moved back; a beating runner rewrites it within 30 seconds) | a runner from before 0.6.1 (or one that hangs): ask `status --json`; `benchbar restart` gives the bench a runner that beats |
-| dead | any | the runner is gone without writing its last state: ask `status --json` |
-
-`benchbar doctor` reads the same file (check `runner_heartbeat`).
-
-## Folder discovery
-
-`benchbar scan PATH --json` is read only and returns a schema-version-1 object:
-`schema_version`, `cli_version`, `root` (canonical selected folder), `benches`
-(the same entries as `list`), and `warnings` (strings for skipped unreadable
-folders). A valid folder with no benches returns an empty array; an invalid or
-unreadable root exits 1. Hidden directories, symlinks, dependency/build folders,
-and test/fixture folders are skipped. A found bench's children are not scanned.
-
-`benchbar register PATH ... --json` validates every path, atomically remembers
-the canonical paths in `registered-benches.txt` in the state folder, then returns the
-normal `list` response. It does not create services or change the default bench.
-`--dry-run` does not write the registry. List includes these registered paths
-while they still identify bench directories. Registration is idempotent.
-
-Same-named benches receive distinct launchd labels when necessary, using a
-canonical-path checksum suffix. An installed label owned by the same bench
-is retained. Clients should always use the returned label rather than deriving
-it from the directory name.
-
-## Sharing
-
-`benchbar share` and `benchbar lan-guard` ([reference](reference/cli/share.md)).
-Every document starts with `schema_version` and `cli_version`; under
-`--json` the done fields follow. The streams (setup, start, stop, extend,
-lock, unlock, remove, assign, teardown, and lan-guard install, remove and
-allow-node) end in a done line carrying the fields shown. No document but
-`share code --json` and `share invite --json` ever holds the room code, and
-none holds a session id.
-
-### `benchbar share status --json`
-
-```json
-{"schema_version":1,"cli_version":"…","protocol":3,"bench":"/path/to/bench","site":"mysite.localhost",
- "share_site":"share.localhost","state":"on","phase":null,"web_up":true,"degraded":false,"error":null,
- "label":"Your Mac","port":8443,"web_port":8001,"lan_ip":"192.168.1.20","started":"…","deadline":"…",
- "seconds_left":3600,"can_extend_s":28800,"copy":{…},"allowed_users":["priya@example.com"],"seats":2,
- "people":1,"devices_total":1,"devices_online":1,"pending":0,"locked":false,"lock_reason":null,
- "budget_left":10,"join_trouble":false,"wipe_failed":0,"lan_guard":"installed","preflight":null,
- "setup_interrupted":false}
-```
-
-- `state`: `on`, `off`, `expired` or `error`.
-- `lock_reason`: `host`, `budget` (10 wrong codes; only `share code --new` opens it), `full`, or null.
-- `wipe_failed`: a sign-out that is owed or failed. While sharing is off it
-  reads 1 or more from the marker `share stop` leaves when it could not end
-  every session of the copy. It reads 1 for a moment after every
-  `share remove`, until the removed seat's sessions are gone.
-- `pending` is always 0: there are no join requests to approve in rooms.
-- `lan_guard`: as `lan-guard status`'s `state`.
-- `preflight`: null, or with `--preflight` the critical checks as in `share preflight`.
-- `setup_interrupted`: a setup stopped halfway (no `share.json`, but the one it set
-  aside or the copy is there); `share setup --refresh` finishes it.
-
-### `benchbar share preflight --json`
-
-`{"schema_version":1,"cli_version":"…","protocol":3,"ok":bool,"lan_ip":"…"|null,"checks":[{"id","class","status","message","fix_action"}]}`.
-`class` is `static` or `critical`; `status` is `ok`, `fail`, `warn` or
-`skip`. `fix_action` is a machine name for the app's button (`none`,
-`install_network_protection`, `allow_node_firewall`,
-`open_local_network_settings`, `rerun_setup`, `restart_sharing`, …).
-
-### The room documents
-
-They share `bench`, `share_site` and `wipe`. `wipe` is null when nothing was
-owed, else `{"retried":bool,"wiped":N|null,"wipe_failed":M|null}`.
-
-| Command | Fields |
-|---|---|
-| `share code` | `code` (`"NNNNNN"`, a placeholder here), `new`, `budget_left` |
-| `share invite` | `url` (`benchbar://share/join?v=1&r=…&h=…&s=…&c=…&a=…&x=…`, holds the code), `text` (the message, lines apart by `\n`), `expires_at` (ISO 8601, UTC), `room` |
-| `share lock`, `share unlock` (done) | `locked`, `lock_reason` |
-| `share people` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` |
-| `share remove` (done) | `device`, `name`, `removed`, `new_code` (a bool, never the code) |
-| `share assign` (done) | `device`, `name`, `seat_id`, `seat_full_name` |
-| `share log` | `entries`: `[{ts, device, user, method, path, status}]`, `truncated` |
-| `share open-as` | `user`, `page`, `opened`: never the link or the session id, even with `--print-url` |
-| `share teardown` (done) | `copy_dropped`, `archived_path`, `state_removed` |
-
-### `benchbar lan-guard status --json`
-
-```json
-{"schema_version":1,"cli_version":"…","state":"installed","active":true,
- "ports":"8000:8099 9000:9099 11000:11099 13000:13099 3306","anchor":"com.apple/250.benchbar","lan_ip":"192.168.1.20"}
-```
-
-- `state`: `installed`, `missing` or `outdated` (the anchor's rules differ, or the daemon does not load it).
-- `active`: whether pf refuses the bench ports, by the probe alone (the files are `state`): true when no bench port answered from `lan_ip` and the control port did, false when a bench port answered, null with no LAN address or when the probe could not run.
-
-`lan-guard install` and `remove` end in a done line with the same fields;
-`allow-node`'s carries `node`, the realpath it allowed.
-
-## Port management
-
-`benchbar ports plan --json -- PATH ...` is read-only. Canonical paths are
-sorted and deduplicated. The response has `schema_version: 1`, an opaque `token`,
-`can_apply` (boolean), and `entries`. Each entry includes `path`, `name`, `site`,
-`mode` (`automatic` or `fixed`), `current` and `proposed` port objects (`web`,
-`socketio`, `redis_queue`, `redis_cache`), `conflicts` (strings), `blocked`
-(string or null), `service_installed` (boolean), and `setup_plan` (string, or null when setup is blocked):
-the adoption dry-run output for the proposed allocation, including service
-and hosts changes. The approval token covers this plan.
-
-`ports plan` without `--json` renders a readable preview. `ports setup -- PATH ...`
-shows that preview and asks before applying, without manual token copying.
-`ports setup --dry-run` only previews. Plan, setup and apply use each bench’s
-detected site/profile and reject `--site` or `--profile` overrides.
-
-`ports apply TOKEN --yes -- PATH ...` recomputes the selection under the CLI lock;
-a changed token or any blocked entry fails before adoption. It emits human
-progress, including completed paths and any failing path, and exits nonzero on
-failure. Earlier completed entries remain configured. A new preview is required
-before retrying. With `BENCHBAR_SUDO=gui` it asks for the `/etc/hosts`
-lines of all benches in one macOS password dialog, as `adopt` does for one
-(see [the privileged steps](#the-privileged-steps-and-benchbar_sudogui)).
-Apply does not start services. Socket availability cannot be
-reserved against unrelated programs; start checks again before launching.
-
-`ports check --json --bench-dir PATH` returns `schema_version: 1`, `cli_version` (0.9; the labs and ports documents had none before), `conflicts`
-(strings), `mode`, and `already_running` (boolean, positively owned running
-processes). Clients may treat `up` as idempotent when `already_running` is true;
-restart still needs a conflict check. It checks configured reservations and all listening PIDs,
-ignoring only listeners positively identified as belonging to that bench.
-
-`ports mode automatic|fixed --bench-dir PATH` saves the policy and reserves the
-current ports without moving them. `--dry-run` does not save it. New benches
-default to automatic. Fixed mode means the current allocation stays pinned until
-the policy changes or an explicit CLI `--port-offset` override is requested.
-
-## Windows shim
-
-`benchbar.exe` runs on Windows and forwards to the CLI in the WSL distro. Its
-own JSON is not the CLI's: the setup and report commands are answered by the
-shim itself. The full contract, with the step ids, is in
-[windows/shim/README.md](https://github.com/askysh/benchbar/blob/main/windows/shim/README.md).
-
-- `benchbar.exe setup check --json` prints one document: `schema_version`,
-  `distro`, `ready`, `reboot_pending` and `steps`. Each step has `id`,
-  `status` (`ok`, `missing`, `warn` or `fail`), `title`, `detail`, `action`
-  (the `setup run` action that fixes it, or null), `needs_admin` and
-  `blocking`. It is read only. It also has `packaged` (true when `benchbar.exe`
-  runs from the Microsoft Store package) and `data_dir` (the folder with
-  `config.json`, `setup\`, `reports\` and the logs; in a package the physical
-  `%LOCALAPPDATA%\Packages\<family>\LocalCache\Local\BenchBar`).
-- `benchbar.exe setup run ACTION --jsonl` prints JSON lines: `step` and `log`
-  events, then one `done` line. In the `done` line `changed` is a boolean (the
-  action changed something), not the CLI's `changed[]` list. The line also has
-  `exit`, `reboot_required`, `cancelled`, `warnings` and `next_actions`, and
-  `error_id` when the action failed with a stable id (`distro_running`: the
-  action must stop the running distro, and nothing was changed).
-- `benchbar.exe doctor --json` (also `--jsonl` and `--for-agent`) is the CLI's
-  document with one more key at the end, `windows_checks`: an array of the
-  Windows side's checks (PATH, `distro`, `.wslconfig`, `keepalive`, tray,
-  `cli_version`), each with `id`, `label`, `level`, `message`, `fix_command`
-  and the older `status` and `fix`. `summary` counts only the CLI's checks.
-  Stdout holds the document and nothing else, and the exit code is 1 when a
-  Windows check has the level `fail`. With `--jsonl` the key is added to the
-  `done` line. With `--fix-hints` the fix commands of
-  the failing and warning Windows checks follow the CLI's.
-- `benchbar.exe report-windows --json` prints one line: `schema_version`,
-  `zip`, `included`, `skipped` (what was left out, and why), `issue_url`,
-  `packaged` and `data_dir` (as in `setup check`).
-- `benchbar.exe self-update --check --json` prints one document and exits 0
-  whenever it printed: `schema_version`, `current` (this `benchbar.exe`),
-  `latest` (the newest published release with a Windows zip for this PC, or
-  null), `update_available` (a boolean, false when `latest` is unknown),
-  `install` (`installer`, `store` or `other`), `exe`, `install_dir`, `arch`,
-  `release_url`, `latest_source` (`api`, or `release_page` when GitHub's API
-  was rate limited), `command` (`benchbar.exe self-update`, or null), `notes`,
-  `error` (why `latest` is unknown, or null), and the CLI's side:
-  `cli_distro`, `cli` (the CLI's own `self-update --check --json` document,
-  asked only when the distro already runs) and `cli_error` (why `cli` is
-  null). It changes nothing and never starts a distro.

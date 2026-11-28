@@ -39,7 +39,7 @@ fl_is_bench_dir() {
 
 fl_bench_candidates() {
   local d
-  printf '%s\n' "$HOME/frappe-bench" "$HOME/dev/frappe-bench" "${SCRIPT_DIR}/frappe-bench"
+  printf '%s\n' "$HOME/frappe-bench" "$HOME/dev/frappe-bench"
   for d in "$HOME"/*/sites/common_site_config.json "$HOME"/dev/*/sites/common_site_config.json; do
     [[ -f "$d" ]] || continue
     printf '%s\n' "${d%/sites/common_site_config.json}"
@@ -235,6 +235,34 @@ fl_runner_path() { printf '%s/benchbar-run.sh' "$FL_BENCH_DIR"; }
 
 # The runner's name before 0.3.0. Repair retires it once no agent points at it.
 fl_runner_path_legacy() { printf '%s/frappe-mac-run.sh' "$FL_BENCH_DIR"; }
+
+# The limits of a bench's service (templates/launchagent.plist.tmpl and
+# systemd-user.service.tmpl). The open file limit is always set: launchd's
+# default is 256, which Frappe's file watchers and workers run into. Nice,
+# the background process type (launchd) and MemoryHigh (systemd) keep their
+# no-change values unless the bench's state file says otherwise:
+#   SERVICE_NICE=0..19          scheduling priority, higher is gentler
+#   SERVICE_BACKGROUND=on       launchd ProcessType Background (low CPU and I/O priority)
+#   SERVICE_MEMORY_HIGH=4G      systemd MemoryHigh: reclaim pressure above it, no kill
+# A value that is not valid is ignored (the default stays).
+FL_SERVICE_NOFILE_MAC=10240
+# soft:hard. systemd gives a user unit a hard limit of 524288; naming only the
+# soft limit would set the hard one to the same number and lower it
+FL_SERVICE_NOFILE_LINUX=65536:524288
+# fl_service_limits: sets FL_SVC_NICE, FL_SVC_PROCESS_TYPE, FL_SVC_MEMORY_HIGH
+# and FL_SVC_NOFILE for the bench in context
+fl_service_limits() {
+  local v
+  FL_SVC_NICE=0; FL_SVC_PROCESS_TYPE=Standard; FL_SVC_MEMORY_HIGH=infinity
+  if fl_is_linux; then FL_SVC_NOFILE="$FL_SERVICE_NOFILE_LINUX"; else FL_SVC_NOFILE="$FL_SERVICE_NOFILE_MAC"; fi
+  v="$(fl_bstate_get SERVICE_NICE 2>/dev/null || true)"
+  if [[ "$v" =~ ^([0-9]|1[0-9])$ ]]; then FL_SVC_NICE="$v"; elif [[ -n "$v" ]]; then fl_log "SERVICE_NICE=${v} is not 0 to 19; ignored"; fi
+  v="$(fl_bstate_get SERVICE_BACKGROUND 2>/dev/null || true)"
+  if [[ "$v" == "on" ]]; then FL_SVC_PROCESS_TYPE=Background; elif [[ -n "$v" && "$v" != "off" ]]; then fl_log "SERVICE_BACKGROUND=${v} is not on or off; ignored"; fi
+  v="$(fl_bstate_get SERVICE_MEMORY_HIGH 2>/dev/null || true)"
+  if [[ "$v" =~ ^0+[KMGT]?%?$ ]]; then fl_log "SERVICE_MEMORY_HIGH=${v} is zero: a limit of nothing would starve the bench; ignored (use infinity for no limit)"
+  elif [[ "$v" =~ ^([0-9]+[KMGT]?|[0-9]{1,2}%|infinity)$ ]]; then FL_SVC_MEMORY_HIGH="$v"; elif [[ -n "$v" ]]; then fl_log "SERVICE_MEMORY_HIGH=${v} is not a size; ignored"; fi
+}
 
 # True while an installed agent plist of this bench still runs the old runner.
 fl_runner_legacy_in_use() {

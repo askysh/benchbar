@@ -1,0 +1,2 @@
+{"schema_version":1,"cli_version":"0.8.3","event":"plan","command":"lock apply","bench":"/Users/you/frappe-bench","dry_run":true}
+{"schema_version":1,"cli_version":"0.8.3","event":"done","bench":"/Users/you/frappe-bench","exit":0,"changed":[],"warnings":["apply will run code from these repos: local (get-app runs pip install and a build; an installed app's hooks run on the site)"],"next_actions":[],"state_after":null,"log":null,"dry_run":true}

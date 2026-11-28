@@ -178,4 +178,38 @@ json_call site restore bbtest.localhost --from "$STAMP" --dry-run --json --bench
 json_call site drop bbtest.localhost --confirm-site bbtest.localhost --dry-run --json --bench-dir "$BENCH"; same_keys site-drop-plan.json "site drop --dry-run --json"
 json_call site drop bbtest.localhost --confirm-site bbtest.localhost --json --bench-dir "$BENCH" </dev/null; same_keys site-drop.json "site drop --json"
 
+# ---- the app's fixtures of the 0.9 parity pass, part 2 (macos/BenchBarTests/Fixtures): the command list, doctor's
+# acknowledgements, the service plan and the status' redis keep the keys the app reads
+# keys_subset FIXTURE: the last output (JSON, or JSON lines when the fixture is .jsonl) holds every key of the fixture, one level into the lists
+keys_subset() {
+  printf '%s' "$OUT" | python3 -c '
+import json, sys
+def docs(text):
+    try: return [json.loads(text)]
+    except ValueError: return [json.loads(l) for l in text.splitlines() if l.strip().startswith("{")]
+live = docs(sys.stdin.read()); fixture = docs(open(sys.argv[1]).read())
+def check(f, l, path):
+    assert isinstance(l, dict), (path, "is not an object")
+    assert set(f) <= set(l), (path, sorted(set(f) - set(l)))
+    for k, v in f.items():
+        if isinstance(v, dict) and isinstance(l.get(k), dict): check(v, l[k], path + "." + k)
+        elif isinstance(v, list) and v and isinstance(v[0], dict) and isinstance(l.get(k), list) and l[k] and isinstance(l[k][0], dict): check(v[0], l[k][0], path + "." + k + "[]")
+for f in fixture:
+    # a JSON lines fixture: its plan line against the live plan line, its done line against the live one
+    match = [x for x in live if x.get("event") == f.get("event")] or live
+    check(f, match[0], sys.argv[1].rsplit("/", 1)[-1])
+' "$FIX/$1" || fail "$2 and the app fixture $1 disagree"
+}
+run_fm commands --json; assert_eq "0" "$CODE" "$OUT"; keys_subset commands.json "commands --json"
+cp "$FL_HOSTS_FILE" "$FL_HOSTS_FILE.keep"; : >"$FL_HOSTS_FILE"
+run_fm doctor --json --bench-dir "$BENCH"; keys_subset doctor-warn.json "doctor --json"
+run_fm doctor --ack hosts --json --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"; keys_subset doctor-ack.json "doctor --ack --json"
+run_fm doctor --json --bench-dir "$BENCH"; keys_subset doctor-acked.json "doctor --json after --ack"
+assert_eq "True" "$(printf '%s' "$OUT" | jget - '[c["acked"] for c in d["checks"] if c["id"] == "hosts"][0]')"
+run_fm doctor --unack hosts --json --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"; keys_subset doctor-unack.json "doctor --unack --json"
+mv "$FL_HOSTS_FILE.keep" "$FL_HOSTS_FILE"
+run_fm status --json --bench-dir "$BENCH"; keys_subset status-stopped-services.json "status --json"
+# a bench that has no service: the plan the Install Service sheet reads
+json_call service --dry-run --json --bench-dir "$OTHER"; OUT="$(cat "$MOCK_STATE/json-out")"; keys_subset service-plan.jsonl "service --dry-run --json"
+
 printf 'test-json: ok\n'

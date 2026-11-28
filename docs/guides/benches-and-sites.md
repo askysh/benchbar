@@ -124,11 +124,13 @@ What is kept, and for how long:
   (`logs/<date>-<time>-<pid>.log`), the newest 50 folders of
   `backups/<date>-<time>-<pid>/` (one that still holds a `restore-set`
   copy stays until that copy goes; the three newest per bench are kept),
-  the newest 14 `update-check.<date>.txt` files, and no `state.env.*`
-  temp file older than a day. The pruning runs at the start of a run
-  that makes a log, and the run's `changed[]` says what it removed. The
-  limits are `FL_KEEP_RUN_LOGS`, `FL_KEEP_STATE_BACKUPS` and
-  `FL_KEEP_UPDATE_CHECKS`.
+  the newest 14 `update-check.<date>.txt` files, the newest 100 records
+  of operations (`ops/<op_id>.json`, with the output of a `--background`
+  run; never one that still runs: see [op](../reference/cli/other.md#op)),
+  and no `state.env.*` temp file older than a day. The pruning runs at
+  the start of a run that makes a log, and the run's `changed[]` says what
+  it removed. The limits are `FL_KEEP_RUN_LOGS`, `FL_KEEP_STATE_BACKUPS`,
+  `FL_KEEP_UPDATE_CHECKS` and `FL_KEEP_OPS`.
 - **The bench's own log.** `benchup` keeps the tail of the log it
   replaces in `logs/bench.previous.log` and the three copies before it
   in `logs/bench.previous.1.log` to `.3.log`, so a crash is still there
@@ -152,6 +154,68 @@ itself when the bench is stopped and stops it again; for your own
 `benchbar up --services-only` starts that Redis and nothing else, and
 `benchbar down` stops it. See
 [site restore](../reference/cli/site.md#site-restore).
+
+## Snapshots: save a site, put it back
+
+A snapshot is for "save this site before I try something, and put it back
+in one step". `site snapshot` takes a backup with files (the database,
+the public and private files, `site_config.json`) and moves it out of
+`sites/NAME/private/backups`, which frappe prunes, into
+`sites/NAME/snapshots/<time>-<label>/`, next to a `manifest.json` with the
+time, the label, the size and the apps of the bench with their commits.
+Nothing in the site changes, and nothing removes a snapshot by itself.
+
+```bash
+benchbar site snapshot v16two --label "before the erpnext update"
+benchbar site snapshots v16two              # newest first: label, size, and whether the bench's apps still match
+benchbar site rollback v16two --to latest --dry-run --json
+benchbar site rollback v16two --to latest --apply TOKEN --yes
+```
+
+`site rollback` is `site restore` with a snapshot as its source: the same
+plan, token and run. It first takes a snapshot of the current state
+labelled `before rollback`, so a rollback can itself be undone
+(`site rollback NAME --to latest` right after it goes back), then restores
+the snapshot's database and files into the same site, runs `bench migrate`
+only when the snapshot's app commits differ from the bench's (the plan says
+so; `--no-migrate` stops before it), and ends with the same check as a
+restore. A rollback across an app change is allowed and warned: the
+snapshot's data goes into the bench's current code. `--to` takes the name
+from `site snapshots`, its time stamp, or `latest`. A snapshot that lacks
+a part (the manifest, the database, the public or private files,
+`site_config.json`) is refused, however it is named. A rollback puts back
+the database, the files and the site's `encryption_key`; the other keys of
+`site_config.json` stay as they are now.
+
+The `before rollback` snapshot of a rollback that finished is its undo
+point, and the earlier one is released. A rollback that failed halfway
+leaves its own snapshot protected too (retention and `--prune` never take
+it), and a retry does not move the undo point until it finishes.
+
+The default site is a person's to roll back: an agent (`--for-agent`,
+`benchbar mcp`, `BENCHBAR_NONINTERACTIVE=1`) or a run with no terminal, even
+with `--yes`, gets a plan that cannot be applied, and in a terminal the
+question names it as the default site.
+Another site is never touched.
+
+Retention keeps the newest 10 snapshots (`SNAPSHOT_KEEP` in the bench's
+state file, or `--keep N`), but only reports it: `site snapshots` lists the
+ones beyond the limit, and a person removes them with
+`benchbar site snapshot drop SITE --prune` or one by name with
+`benchbar site snapshot drop SITE SNAPSHOT`. Both ask first and are refused
+for an agent. `--prune` never removes the `before rollback` snapshot of the
+last rollback, and dropping it by name is refused too, because it is the way
+back from that rollback; a person who is sure adds `--force-undo-point`.
+
+A snapshot holds the whole database and the files, so it is as big as a
+backup with files, and `bench backup` writes that set before anything is
+moved (a rollback writes one more before it replaces anything). So both
+commands first check the free space of the volume against the site's files
+plus its largest database dump, and stop with a message when it does not fit;
+`site snapshots` shows what the snapshots hold and what is free. The snapshots
+live in the site's folder: `site drop` and `bench remove` move them into
+`archived/sites/` with it, and their plans say how many and how big. See
+[site snapshot](../reference/cli/site.md#site-snapshot).
 
 `site drop` removes a site for good: its database and database user are
 dropped, and only the backup it takes first can bring them back. Before
@@ -206,10 +270,50 @@ stopped bench shares the ports, it warns and asks, so the two can run one
 at a time. Either way it prints the fix, `benchbar ports setup`, which
 gives each bench its own block.
 
+## Retiring a bench
+
+`benchbar bench forget PATH` takes a bench out of benchbar: its service files
+are backed up and moved aside, its settings and its place in the list go, and
+the folder, its sites and its databases stay. `benchbar bench remove PATH`
+goes further: it backs up each site, drops its database and moves the folder
+to `.benchbar-trash` next to it. Both show a plan first (`--dry-run`) and run
+with `--apply TOKEN --yes`; `remove` is for a person at a terminal and asks you
+to repeat the folder's name.
+
+A bench for a try-out can say so: `benchbar install --scratch --ttl 3` sets it
+up as before and marks it to expire in 3 days. `benchbar bench gc --dry-run`
+lists the ones that expired (never the default bench), and a person at a
+terminal applies the plan. Afterwards `benchbar site hosts --prune` removes the
+hosts lines of sites that are gone, and `benchbar db orphans` lists databases
+no site refers to. See [bench](../reference/cli/bench.md).
+
 ## Port blocks
 
 Each bench has its own port block. How blocks work and how to sort out
 the ports of several benches is in [Port blocks](../concepts/port-blocks.md).
+
+## Limits of the background service
+
+The agent (launchd on a Mac, a systemd user unit on Linux) raises the open
+file limit of the bench: 10240 on a Mac, where launchd's own default of 256
+is too low for Frappe's file watchers, and 65536 on Linux (the hard limit
+stays at systemd's 524288, so the unit sets `LimitNOFILE=65536:524288`). Nothing else
+changes by default: priority is normal and memory is not capped.
+
+Three optional settings go in the bench's own state file (`benchbar where
+--json` shows `state_dir`; the file is `benches/<name>-<hash>.env` in it),
+one `KEY=value` per line, then `benchbar repair` writes the agent again:
+
+| Key | Values | Effect |
+|---|---|---|
+| `SERVICE_NICE` | `0` to `19` | `Nice` (launchd) and `Nice=` (systemd): the bench yields to other programs |
+| `SERVICE_BACKGROUND` | `on` | launchd `ProcessType` Background: low CPU and disk priority (Mac only) |
+| `SNAPSHOT_KEEP` | `1` to `9999` | how many snapshots of a site `site snapshots` and `site snapshot drop --prune` keep (default 10); no service change |
+| `SERVICE_MEMORY_HIGH` | `4G`, `512M`, `50%` | systemd `MemoryHigh=`: the unit is slowed and its memory reclaimed above it, never killed (Linux only). `0` and `0%` are refused: use `infinity` for no limit |
+
+A value that is not valid is ignored and the default stays. A runaway
+worker is still yours to stop with `benchbar down`; these settings only
+make a bench a better neighbour on a laptop.
 
 ## Autostart
 

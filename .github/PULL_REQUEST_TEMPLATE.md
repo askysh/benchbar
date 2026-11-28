@@ -1,6 +1,6 @@
 ## What and why
 
-<!-- What changes, and the problem it solves. Link the issue: Fixes #123. -->
+<!-- What changes, and the problem it solves. Link the issue: "Fixes #123" when this finishes it, "Part of #123" when it does not. -->
 
 ## Tested on
 
@@ -19,7 +19,7 @@ Tick each box, or write "n/a" and why (a CI only change has no guide page).
 - [ ] User docs: the guide or the app page that tells a user about the change is updated, not only the reference page
 - [ ] Features page: a new feature, Lab or platform has a row in `docs/features.md` (platform and version)
 - [ ] A fragment `changelog.d/<issue>-<slug>.md` for a user facing change (not an edit of CHANGELOG.md), or none needed
-- [ ] A DECISIONS line per non obvious choice (docs/DECISIONS.md or macos/DECISIONS.md), or none needed
+- [ ] A DECISIONS line per non obvious choice (maintainers/DECISIONS.md or macos/DECISIONS.md), or none needed
 - [ ] No em dashes or en dashes in the code, the docs or this description
 - [ ] If a command, flag or MCP tool changed: `python3 -I scripts/docs-reference.py --write` was run and its tables are committed
 

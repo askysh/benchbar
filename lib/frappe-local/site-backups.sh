@@ -319,8 +319,10 @@ fl_backup_set_check() {
 
 # In JSON mode only the JSON goes to stdout (on fd 3); every line of text,
 # refusals included, goes to stderr.
+FL_SITE_JSON_ON=0
 fl_site_json_begin() {
-  if [[ "$OPT_JSON" == "1" ]]; then fl_json_doc_begin; fi
+  # once: a second begin would point the document's fd 3 at stderr (site rollback begins, then runs site restore)
+  if [[ "$OPT_JSON" == "1" && "$FL_SITE_JSON_ON" != "1" ]]; then fl_json_doc_begin; FL_SITE_JSON_ON=1; fi
   return 0
 }
 
@@ -370,13 +372,62 @@ fl_cmd_site_backups() {
 }
 
 # fl_backup_field JSON KEY: one scalar of fl_backup_set_json's flat object.
+# A string value is read up to its closing quote (a path may hold a comma);
+# a number, true, false or null up to the next comma or brace.
 fl_backup_field() {
-  printf '%s' "$1" | sed -n "s/.*\"$2\":\"\{0,1\}\([^\",}]*\)\"\{0,1\}[,}].*/\1/p"
+  local v
+  v="$(printf '%s' "$1" | sed -n -E "s/.*\"$2\":\"([^\"]*)\".*/\1/p")"
+  if [[ -z "$v" ]]; then v="$(printf '%s' "$1" | sed -n -E "s/.*\"$2\":([^,}\"]*)[,}].*/\1/p")"; fi
+  printf '%s' "$v"
+}
+
+# fl_site_backup_take NAME [WITH_FILES]: bench --site NAME backup, kept older
+# backups put back, and the new set found. Sets FL_BACKUP_TAKEN_STAMP and
+# FL_BACKUP_TAKEN_SET (the set's JSON); on a failure returns 1 with
+# FL_BACKUP_TAKEN_ERR and FL_BACKUP_TAKEN_HINT. The caller has made the
+# bench's Redis available (fl_bench_redis_up) and stops it afterwards.
+FL_BACKUP_TAKEN_STAMP=""
+FL_BACKUP_TAKEN_SET="null"
+FL_BACKUP_TAKEN_ERR=""
+FL_BACKUP_TAKEN_HINT=""
+fl_site_backup_take() {
+  local name="$1" with_files="${2:-0}" dir before args
+  FL_BACKUP_TAKEN_STAMP=""; FL_BACKUP_TAKEN_SET="null"; FL_BACKUP_TAKEN_ERR=""; FL_BACKUP_TAKEN_HINT=""
+  dir="$(fl_site_backup_dir "$name")"
+  args=(bench --site "$name" backup)
+  [[ "$with_files" == "1" ]] && args+=(--with-files)
+  # what bench writes from now on is the new backup: two backups in one
+  # second share a timestamp, and bench then overwrites the older files,
+  # so the files' age tells, not their names
+  before="$(mktemp "${TMPDIR:-/tmp}/benchbar-backup-start.XXXXXX")"
+  # bench's backup deletes the site's backups older than 23 hours: keep them
+  if ! fl_backups_keep_begin "$name"; then
+    rm -f "$before"
+    FL_BACKUP_TAKEN_ERR="The older backups of ${name} could not be kept while bench takes a new one; nothing was backed up."
+    FL_BACKUP_TAKEN_HINT="Free space on the volume of ${FL_STATE_DIR}, or move the old backups away."
+    return 1
+  fi
+  if ! fl_bench_run_long "bench --site ${name} backup$([[ "$with_files" == "1" ]] && printf ' --with-files')" "$FL_BENCH_DIR" "${args[@]}"; then
+    rm -f "$before"
+    fl_backups_keep_end
+    FL_BACKUP_TAKEN_ERR="The backup of ${name} failed."
+    FL_BACKUP_TAKEN_HINT="Run it by hand to see why: cd ${FL_BENCH_DIR} && ${args[*]}"
+    return 1
+  fi
+  fl_backups_keep_end
+  FL_BACKUP_TAKEN_STAMP="$(find "$dir" -maxdepth 1 -type f -newer "$before" -name '[0-9]*_[0-9]*-*' 2>/dev/null | sed -n 's#.*/\([0-9]\{8\}_[0-9]\{6\}\)-.*#\1#p' | sort -r | awk 'NR==1')"
+  rm -f "$before"
+  if [[ -z "$FL_BACKUP_TAKEN_STAMP" ]]; then
+    FL_BACKUP_TAKEN_ERR="bench reported success, but ${dir} has no new backup."
+    FL_BACKUP_TAKEN_HINT="Look in ${dir}"
+    return 1
+  fi
+  FL_BACKUP_TAKEN_SET="$(fl_backup_set_json "$dir" "$FL_BACKUP_TAKEN_STAMP")"
 }
 
 # site backup NAME [--with-files]: bench --site NAME backup, then the new set.
 fl_cmd_site_backup() {
-  local name="" with_files=0 json="$OPT_JSON" dir before stamp set args
+  local name="" with_files=0 json="$OPT_JSON" dir set args
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --with-files) with_files=1; shift ;;
@@ -398,31 +449,15 @@ fl_cmd_site_backup() {
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")")" plan
     return 0
   fi
-  # what bench writes from now on is the new backup: two backups in one
-  # second share a timestamp, and bench then overwrites the older files,
-  # so the files' age tells, not their names
-  before="$(mktemp "${TMPDIR:-/tmp}/benchbar-backup-start.XXXXXX")"
   fl_bench_env_exports
   # frappe reads the site's settings through the bench's Redis cache
   fl_bench_redis_up "$FL_BENCH_DIR"
-  # bench's backup deletes the site's backups older than 23 hours: keep them
-  if ! fl_backups_keep_begin "$name"; then
-    rm -f "$before"
+  if ! fl_site_backup_take "$name" "$with_files"; then
     fl_bench_redis_down
-    fl_die "The older backups of ${name} could not be kept while bench takes a new one; nothing was backed up." "Free space on the volume of ${FL_STATE_DIR}, or move the old backups away."
+    fl_die "$FL_BACKUP_TAKEN_ERR" "$FL_BACKUP_TAKEN_HINT"
   fi
-  if ! fl_bench_run_long "bench --site ${name} backup$([[ "$with_files" == "1" ]] && printf ' --with-files')" "$FL_BENCH_DIR" "${args[@]}"; then
-    rm -f "$before"
-    fl_backups_keep_end
-    fl_bench_redis_down
-    fl_die "The backup of ${name} failed." "Run it by hand to see why: cd ${FL_BENCH_DIR} && ${args[*]}"
-  fi
-  fl_backups_keep_end
   fl_bench_redis_down
-  stamp="$(find "$dir" -maxdepth 1 -type f -newer "$before" -name '[0-9]*_[0-9]*-*' 2>/dev/null | sed -n 's#.*/\([0-9]\{8\}_[0-9]\{6\}\)-.*#\1#p' | sort -r | awk 'NR==1')"
-  rm -f "$before"
-  [[ -n "$stamp" ]] || fl_die "bench reported success, but ${dir} has no new backup." "Look in ${dir}"
-  set="$(fl_backup_set_json "$dir" "$stamp")"
+  set="$FL_BACKUP_TAKEN_SET"
   fl_changed backup "$name" "$(fl_backup_field "$set" path)"
   if [[ "$json" == "1" ]]; then
     fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":false,"backup":%s}' \
@@ -529,15 +564,19 @@ fl_site_archive_latest() {
   printf '%s' "$newest"
 }
 
-# site drop NAME --confirm-site NAME [--new-default OTHER]
+# site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run [--json] | --apply TOKEN --yes]
+# The plan (--dry-run --json) carries a token: a SHA-256 of the plan and of what it was made from (the
+# site list, the default site, the hosts line, the database name); --apply TOKEN --yes runs that plan and refuses a stale one.
 fl_cmd_site_drop() {
-  local name="" confirm="" new_default="" json="$OPT_JSON" plan_doc="" others=() s st t c p sep="" steps=() archive_before archive="" stamp backup="null" code=0 is_default=0 hosts_place bench_default="" default_failed=0
+  local apply=0 token="" plan_token db_name="" name="" confirm="" new_default="" json="$OPT_JSON" plan_doc="" others=() s st t c p sep="" steps=() archive_before archive="" stamp backup="null" code=0 is_default=0 hosts_place bench_default="" default_failed=0 snap_count=0 snap_bytes=0 snap_json=""
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --confirm-site) confirm="${2:-}"; shift 2 ;;
       --confirm-site=*) confirm="${1#*=}"; shift ;;
       --new-default) new_default="${2:-}"; shift 2 ;;
       --new-default=*) new_default="${1#*=}"; shift ;;
+      --apply) apply=1; token="${2:-}"; shift 2 || shift ;;
+      --apply=*) apply=1; token="${1#*=}"; shift ;;
       -*) fl_die "Unknown option for site drop: $1" "Use: benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--json]" ;;
       *) [[ -z "$name" ]] && name="$1"; shift ;;
     esac
@@ -545,6 +584,11 @@ fl_cmd_site_drop() {
   fl_site_json_begin
   fl_require_bench
   [[ -n "$name" ]] || fl_die "Usage: benchbar site drop NAME --confirm-site NAME [--new-default OTHER]"
+  if [[ "$apply" == "1" ]]; then
+    [[ "$token" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar site drop ${name} --confirm-site ${name} --dry-run --json prints it"
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
+    [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (site drop ${name} --confirm-site ${name} --dry-run --json), then pass its token with --apply TOKEN --yes."
+  fi
   fl_site_valid_name "$name"
   fl_site_require "$name"
   [[ "$confirm" == "$name" ]] || fl_die "Refusing to drop ${name}: --confirm-site must repeat the site name exactly." \
@@ -570,22 +614,33 @@ fl_cmd_site_drop() {
     fl_site_require "$new_default"
   fi
   hosts_place="$(fl_hosts_line_place "$name")"
+  # the database bench drop-site drops is the one the site's own config names: it is in the plan and in the token
+  fl_site_file_value_v db_name "${FL_BENCH_DIR}/sites/${name}/site_config.json" db_name
 
   # the plan: the app shows it before asking, the terminal before running
-  steps+=("Back up ${name} with files, drop its database and user, move the folder to archived/sites|bench drop-site ${name}|0")
+  # the snapshots of the site are in its folder: bench drop-site moves them to archived/sites with it
+  fl_snap_summary "$FL_BENCH_DIR" "$name"
+  snap_count="$FL_SNAP_COUNT"; snap_bytes="$FL_SNAP_BYTES"
+  [[ "$snap_count" -eq 0 ]] || snap_json="$(printf ',"snapshots":{"count":%s,"size_bytes":%s}' "$snap_count" "$snap_bytes")"
+  steps+=("Back up ${name} with files, drop its database and user, move the folder to archived/sites$(fl_snap_phrase "$FL_BENCH_DIR" "$name")|bench drop-site ${name}|0")
   [[ -n "$new_default" ]] && steps+=("Make ${new_default} the default site|bench use ${new_default}|0")
   if [[ "$hosts_place" == "block" ]] && ! fl_site_name_elsewhere "$name" >/dev/null; then
     steps+=("Remove '127.0.0.1 ${name}' from ${FL_HOSTS_FILE}|sudo, backup first|1")
   fi
+  plan_token="$({ printf 'site drop\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' "$FL_BENCH_DIR" "$name" "$is_default" "$new_default" "$FL_SITE" "${others[*]}" "$bench_default" "$hosts_place" "$db_name"; printf '%s\n' "${steps[@]}"; } | shasum -a 256 | awk '{print $1}')"
+  if [[ "$apply" == "1" && "$token" != "$plan_token" ]]; then
+    fl_die "The site drop plan changed since it was shown (the sites, the default site or the hosts line). Nothing was changed." \
+      "Review a fresh plan: benchbar site drop ${name} --confirm-site ${name} --dry-run --json, then pass its token."
+  fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     if [[ "$json" == "1" ]]; then
-      plan_doc="$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":true,"is_default":%s,"new_default":%s,"default_site":%s,"steps":[' \
-        "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_bool "$is_default")" "$(fl_json_str "$new_default")" "$(fl_json_str "$FL_SITE")")"
+      plan_doc="$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":true,"is_default":%s,"new_default":%s,"default_site":%s,"database":%s,"token":"%s","steps":[' \
+        "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_bool "$is_default")" "$(fl_json_str "$new_default")" "$(fl_json_str "$FL_SITE")" "$(fl_json_str "$db_name")" "$plan_token")"
       for st in "${steps[@]}"; do
         IFS='|' read -r t c p <<<"$st"
         plan_doc="${plan_doc}${sep}$(printf '{"title":%s,"command":%s,"needs_password":%s}' "$(fl_json_str "$t")" "$(fl_json_str "$c")" "$(fl_json_bool "$p")")"; sep=","
       done
-      fl_doc_emit 0 "${plan_doc}]}" plan
+      fl_doc_emit 0 "${plan_doc}]${snap_json}}" plan
       return 0
     fi
     fl_info "dry-run: benchbar site drop ${name} would:"
@@ -653,9 +708,9 @@ fl_cmd_site_drop() {
 
   if [[ "$json" == "1" ]]; then
     fl_site_default_file_v bench_default
-    fl_doc_emit "$default_failed" "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":false,"dropped":true,"archived_path":%s,"backup":%s,"new_default":%s,"default_site":%s,"hosts_removed":%s,"manual_step":%s}' \
+    fl_doc_emit "$default_failed" "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":false,"dropped":true,"archived_path":%s,"backup":%s,"new_default":%s,"default_site":%s,"hosts_removed":%s,"manual_step":%s%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_str "$archive")" \
-      "$backup" "$(fl_json_str "$new_default")" "$(fl_json_str "${bench_default:-$FL_SITE}")" "$(fl_json_bool "$FL_HOSTS_REMOVED")" "$(fl_json_str "$FL_HOSTS_MANUAL")")"
+      "$backup" "$(fl_json_str "$new_default")" "$(fl_json_str "${bench_default:-$FL_SITE}")" "$(fl_json_bool "$FL_HOSTS_REMOVED")" "$(fl_json_str "$FL_HOSTS_MANUAL")" "$snap_json")"
     return "$default_failed"
   fi
   fl_ok "dropped ${name}"
@@ -663,5 +718,6 @@ fl_cmd_site_drop() {
     fl_note "backup: $(fl_backup_field "$backup" path)"
   fi
   [[ -n "$archive" ]] && fl_note "the site folder is in ${archive}"
+  [[ "$snap_count" -eq 0 || -z "$archive" ]] || fl_note "its ${snap_count} snapshot(s) ($(fl_fmt_bytes "$snap_bytes")) are in ${archive}/snapshots: benchbar site rollback does not reach them there"
   return "$default_failed"
 }

@@ -303,10 +303,11 @@ fl_freshness_fetch() {
       ts="$(fl_app_git "$app" log -1 --format=%ct HEAD 2>/dev/null || true)"
       [[ "$ts" =~ ^[0-9]+$ ]] && args+=("--shallow-since=@$((ts - 1))")
     fi
+    fl_git_ext_off
     (
       code=0
-      fl_run_capture_timeout "$FL_FRESHNESS_FETCH_TIMEOUT" /dev/null "${codes}/err/${app}" fl__in_dir "$FL_BENCH_DIR" env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10' \
-        git -C "$dir" fetch --quiet --no-tags ${args[@]+"${args[@]}"} "$remote" "+refs/heads/${branch}:refs/remotes/${remote}/${branch}" || code=$?
+      fl_run_capture_timeout "$FL_FRESHNESS_FETCH_TIMEOUT" /dev/null "${codes}/err/${app}" fl__in_dir "$FL_BENCH_DIR" \
+        fl_git_net -C "$dir" fetch --quiet --no-tags ${args[@]+"${args[@]}"} "$remote" "+refs/heads/${branch}:refs/remotes/${remote}/${branch}" || code=$?
       printf '%s' "$code" >"${codes}/${app}"
     ) &
     pids+=("$!")
@@ -524,7 +525,7 @@ fl_cmd_app_focus_list() {
     state="no"; fl_is_focus_app "$app" && state="yes"
     [[ "$(fl_app_focus_pin "$app")" == "auto" ]] || state="${state} (pinned)"
     reasons="$(fl_app_focus_reasons "$app" | tr '\n' ',' | sed 's/,$//; s/,/, /g')"
-    by=""; [[ "$state" == no* ]] && by="$(printf '%s\n' "$FL_FOCUS_DEPS" | awk -v a="$app" '$1 == a {print $2; exit}')"
+    by=""; [[ "$state" == no* ]] && by="$(printf '%s\n' "$FL_FOCUS_DEPS" | awk -v a="$app" '$1 == a && !f {print $2; f = 1}')"
     b="$(fl_app_behind "$app")"; n="?"
     if [[ -n "$b" ]]; then read -r n days up <<<"$b"; [[ "$n" == "0" ]] && n="up to date" || n="${n} (${days}d) ${up}"; fi
     rows+=("${app}|${state}|${reasons:--}|${by//,/, }|${n}")
@@ -555,14 +556,17 @@ fl_cmd_app_focus() {
   [[ "$list" == "0" ]] || fl_die "--list takes no app name." "benchbar app focus --list"
   fl_has_line "$(fl_apps_all || true)" "$app" || fl_die "${app} is not an app of this bench." "benchbar app list shows the apps."
   if [[ "$cmd" == "unfocus" ]]; then pin=ignore; elif [[ "$auto" == "1" ]]; then pin=auto; else pin=focus; fi
+  # app focus NAME writes benchbar's state, and app unfocus NAME too: both took the bench guess gate at the dispatch
+  # (benchbar), before the run opened its log (fl_bench_write_gate for focus, the table record for unfocus)
   fl_bench_state_migrate "$FL_BENCH_DIR"
   fl_app_focus_pin_set "$app" "$pin"
   fl_focus_apps >/dev/null
   if [[ "$OPT_JSON" == "1" ]]; then
     while IFS= read -r a; do [[ -n "$a" ]] && reasons+=("$a"); done < <(fl_app_focus_reasons "$app")
-    printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"pin":%s,"focus":%s,"reasons":%s}\n' \
+    fl_json_doc_begin
+    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"pin":%s,"focus":%s,"reasons":%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$pin")" \
-      "$(fl_json_bool "$(fl_is_focus_app "$app" && printf 1 || printf 0)")" "$(fl_json_str_array ${reasons[@]+"${reasons[@]}"})"
+      "$(fl_json_bool "$(fl_is_focus_app "$app" && printf 1 || printf 0)")" "$(fl_json_str_array ${reasons[@]+"${reasons[@]}"})")"
     return 0
   fi
   case "$pin" in

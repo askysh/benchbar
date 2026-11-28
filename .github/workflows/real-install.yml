@@ -1,0 +1,185 @@
+# Real installs on macOS: nothing is mocked. The jobs run `benchbar install`
+# on a GitHub hosted Mac with Homebrew, MariaDB, Redis, launchd, the Keychain,
+# the wkhtmltopdf package and /etc/hosts, start the bench and ask the site for
+# a page (scripts/ci-real.sh holds the steps and refuses to run anywhere but
+# on a hosted runner).
+#
+#   install   a Mac with no uv and no bench (issue 112): install, a second
+#             install that changes nothing, doctor without a FAIL, up, wait, a
+#             real request, loopback only, status, down
+#   upgrade   release 0.8.3 through its own install.sh, a bench and a site
+#             made by it, then this checkout as the update: the bench is still
+#             known, the notices show once, doctor names what repair rewrites,
+#             repair, restart, the site answers on loopback only
+#
+# The Linux halves (the install of both profiles and the same upgrade) are
+# jobs of ci.yml, where every full run starts them: Linux runners are cheap.
+# These two are not: the repository gets five macOS jobs at a time and a full
+# CI run uses all five. So a pull request and a push never start them
+# (maintainers/DECISIONS.md, "Real installs on macOS"). They run:
+#   nightly              on next-release
+#   by hand              gh workflow run real-install.yml --ref <branch>
+#   on a pull request    when the label test-real is added to it (take the
+#                        label off and put it on again for a new run)
+#   before a release     by hand on the commit that is released: the release
+#                        gate (scripts/release-ci-gate.sh) needs a passed
+#                        "Real install result (macOS)" on it
+#
+# No check is excused: the result job is what the release gate reads, so a
+# check that fails for a known product gap fails the run (scripts/ci-real.sh
+# has KNOWN_GAPS for a gap someone is fixing; nothing sets it here). A failed
+# job uploads benchbar's run logs and the bench's logs as an artifact.
+name: Real install (macOS)
+
+on:
+  schedule:
+    # GitHub runs a schedule from the default branch (main), so the checkouts
+    # take next-release themselves, as in ci.yml
+    - cron: "47 3 * * *"
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: 'Jobs to run, space separated, from: install upgrade (empty: both, and only then is there a result for the release gate)'
+        required: false
+        default: ''
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+# The label is part of the group: another label added to the pull request
+# starts a run that skips every job, and it must not cancel the run test-real
+# started.
+concurrency:
+  group: real-install-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # the Administrator login of a site that lives for one job on a throwaway runner
+  ADMIN_PASSWORD: admin-ci-only
+  HOMEBREW_NO_ANALYTICS: "1"
+  HOMEBREW_NO_ENV_HINTS: "1"
+
+jobs:
+  install:
+    name: Real install (macOS, v15, launchd)
+    if: >-
+      (github.event_name != 'pull_request' || github.event.label.name == 'test-real') &&
+      (inputs.jobs == '' || contains(inputs.jobs, 'install'))
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          persist-credentials: false
+
+      - name: A Mac with no uv and no bench
+        run: scripts/ci-real.sh prepare
+
+      - name: benchbar install --yes
+        run: scripts/ci-real.sh install
+
+      - name: A second install changes nothing
+        run: scripts/ci-real.sh second-install
+
+      - name: doctor, up, wait, a real request, loopback only, status
+        run: scripts/ci-real.sh serve
+
+      - name: benchbar down
+        run: scripts/ci-real.sh down
+
+      - name: Logs on failure
+        if: failure()
+        run: scripts/ci-real.sh logs
+
+      - name: Upload the logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: real-install-logs-macos-${{ github.run_attempt }}
+          path: |
+            ~/.local/state/benchbar/logs
+            ~/frappe-bench/logs
+          if-no-files-found: ignore
+          retention-days: 14
+
+  upgrade:
+    name: Upgrade from 0.8.3 (macOS, launchd)
+    if: >-
+      (github.event_name != 'pull_request' || github.event.label.name == 'test-real') &&
+      (inputs.jobs == '' || contains(inputs.jobs, 'upgrade'))
+    runs-on: macos-26
+    timeout-minutes: 50
+    steps:
+      # the whole history and the tags: the old release is installed from a
+      # mirror of this checkout
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: A Mac with no uv and no bench
+        run: scripts/ci-real.sh prepare
+
+      - name: Release 0.8.3, its bench and site
+        run: scripts/ci-real.sh old-install v0.8.3
+
+      - name: Update to this checkout (install.sh --yes)
+        run: scripts/ci-real.sh update
+
+      - name: The bench is still known and the notices show once
+        run: scripts/ci-real.sh upgrade-state
+
+      - name: doctor names what repair must rewrite
+        run: scripts/ci-real.sh upgrade-doctor
+
+      - name: repair, restart, the site answers on loopback only
+        run: scripts/ci-real.sh upgrade-repair
+
+      - name: A Mac with no uv (env rebuild)
+        run: scripts/ci-real.sh upgrade-no-uv
+
+      - name: doctor has no WARN left after the upgrade
+        run: scripts/ci-real.sh upgrade-clean
+
+      - name: Logs on failure
+        if: failure()
+        run: scripts/ci-real.sh logs
+
+      - name: Upload the logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: real-upgrade-logs-macos-${{ github.run_attempt }}
+          path: |
+            ~/.local/state/benchbar/logs
+            ~/frappe-bench/logs
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The verdict the release gate reads. Only a run of both jobs has one: a run
+  # by hand that names jobs, and a label that is not test-real, skip it.
+  result:
+    name: Real install result (macOS)
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.label.name == 'test-real') &&
+      inputs.jobs == ''
+    needs: [install, upgrade]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Both jobs passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          printf '%s\n' "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if printf '%s\n' "$NEEDS" | jq -e 'all(.[]; .result == "success")' >/dev/null; then
+            echo "the real install and the upgrade passed on macOS"
+          else
+            echo "::error::a real install job failed, was cancelled or did not run (listed above)"
+            exit 1
+          fi

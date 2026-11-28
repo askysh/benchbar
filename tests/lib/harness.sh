@@ -12,7 +12,33 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT_DIR="$ROOT"
 # resolved (/var is /private/var on macOS): the CLI resolves bench paths too
 TMP_DIR="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/benchbar-test.XXXXXX")" && pwd -P)"
-trap 'rm -rf "$TMP_DIR"' EXIT
+# Soft assertions (see soft_asserts below) count their failures in a file, so a failure inside
+# a $(...) subshell counts too. The trap cleans up, then turns a test that recorded failures
+# and otherwise ended well into a failing one.
+SOFT_FILE="$TMP_DIR/soft-fails"
+SOFT_ASSERTS="${BENCHBAR_SOFT_ASSERTS:-0}"
+# on_exit CMD: cleanup the test needs (kill a listener, stop a server); runs in order, each in a
+# subshell, before the folder is removed. So an "exit" or a set -u abort in one cleanup ends only
+# that cleanup, and nothing it does changes the test's status. A cleanup that must change the
+# shell of the test itself is not supported. A test never sets its own EXIT trap: that replaces
+# harness_exit and a soft failure then passes (test-harness checks for it).
+ON_EXIT_CMDS=""
+on_exit() { ON_EXIT_CMDS="${ON_EXIT_CMDS}${1}"$'\n'; }
+harness_exit() {
+  local code="$?" n=0 c
+  while IFS= read -r c; do
+    [[ -z "$c" ]] || ( eval "$c" ) || true
+  done <<<"$ON_EXIT_CMDS"
+  [[ -f "$SOFT_FILE" ]] && n="$(wc -l <"$SOFT_FILE" | tr -d ' ')"
+  cd / 2>/dev/null || true
+  rm -rf "$TMP_DIR"
+  if [[ "$code" == "0" && "$n" != "0" ]]; then
+    printf 'FAIL: %s assertion(s) failed (listed above)\n' "$n" >&2
+    code=1
+  fi
+  exit "$code"
+}
+trap harness_exit EXIT
 
 export HOME="$TMP_DIR/home"
 # the platform the CLI sees: a Mac, whatever the host (use_linux, or
@@ -37,13 +63,17 @@ export FL_HOSTS_FILE="$TMP_DIR/hosts"
 export FL_WKHTML_PKG_BIN="$TMP_DIR/usr-local-bin/wkhtmltopdf"
 export FL_RC_FILE="$HOME/.zshrc"
 export FL_UP_WAIT_SECS=2
+# a run that meets a live lock refuses at once (a production run waits a few seconds first)
+export FL_LOCK_WAIT_SECS=0
 # the status and doctor probes (Redis ports, a site's Host) talk to 127.0.0.1
 # in bash: off, so no test ever meets a real service of this machine; the
 # tests of the probes set FL_LOCAL_PROBES=1 and bring their own listeners
 export FL_LOCAL_PROBES=0
 # every FL_* and BENCHBAR_* test seam below is read only when this is 1;
-# a production run ignores them (docs/DECISIONS.md)
+# a production run ignores them (maintainers/DECISIONS.md)
 export FL_TESTING=1
+# the sudo function (lib/frappe-local/sudo.sh) runs this program: the mock
+export FL_SUDO_BIN="$ROOT/tests/mocks/bin/sudo"
 export FL_KILL_CMD=mockkill
 export BENCHBAR_KILL_CMD=mockkill
 export FL_APP_DIRS="$HOME/Applications"
@@ -68,6 +98,11 @@ export BENCHBAR_APP_PID=4200 FL_PERSON_SELF_PID=4201
 mkdir -p "$HOME/Library/LaunchAgents" "$MOCK_STATE/agents" "$FL_STATE_DIR" "$MOCK_BREW_PREFIX/etc/my.cnf.d" \
   "$MOCK_BREW_PREFIX/opt/python@3.11/bin" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin" "$HOME/.local/bin"
 : >"$MOCK_LOG"; : >"$MOCK_PROCS"; : >"$MOCK_LISTEN"; : >"$MOCK_BREW_SERVICES"
+# the plan token key: a real install makes it at its first plan; made here so a
+# test that checks "a dry run writes nothing" is not the first plan
+(umask 077; printf '%s\n' 5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed >"$FL_STATE_DIR/plan-key")
+# a fixed plan clock, so two plans of one test never straddle a token window
+export FL_PLAN_NOW=1795000000
 # 50 GB free on every volume (the df mock): the installer's 10 GB check must
 # not depend on the runner's disk, which is sometimes below it. A test of
 # the check writes its own value.
@@ -140,7 +175,7 @@ use_all_mocks() { PATH="$SAVED_PATH"; }
 # use_linux: the CLI sees Ubuntu on x86_64 under WSL. Call it right after
 # sourcing this file, before any CLI run (or set BENCHBAR_TEST_PLATFORM=linux
 # before sourcing). Sets FL_PLATFORM, MOCK_UNAME, FL_PROC_VERSION (mentions
-# microsoft), FL_PROC_DIR (add_proc's third argument is /proc/PID/cwd),
+# microsoft), FL_WSLINFO (the wslinfo mock), FL_PROC_DIR (add_proc's third argument is /proc/PID/cwd),
 # FL_OS_RELEASE, XDG_CONFIG_HOME with the systemd user unit folder, SHELL and
 # FL_RC_FILE (bash), a fake uv Python and fnm Node (the mocks copied to where
 # fl_python_bin and fl_node_bin look) and the apt package set dpkg-query reads.
@@ -151,6 +186,8 @@ use_linux() {
   mkdir -p "$FL_PROC_DIR"
   printf 'Linux version 6.6.0-microsoft-standard-WSL2 (root@build) (gcc) #1 SMP\n' >"$FL_PROC_VERSION"
   printf 'NAME="Ubuntu"\nID=ubuntu\nID_LIKE=debian\nVERSION_ID="24.04"\n' >"$FL_OS_RELEASE"
+  # wslinfo: the mock's networking mode (MOCK_WSL_NETMODE, mirrored unless a test says nat), never this machine's
+  export FL_WSLINFO="$ROOT/tests/mocks/bin/wslinfo"
   export XDG_CONFIG_HOME="$HOME/.config"
   unset XDG_STATE_HOME XDG_DATA_HOME UV_PYTHON_INSTALL_DIR FNM_DIR 2>/dev/null || true
   mkdir -p "$XDG_CONFIG_HOME/systemd/user"
@@ -173,7 +210,25 @@ if [[ "${BENCHBAR_TEST_PLATFORM:-}" == "linux" ]]; then use_linux; fi
 
 # ---------------------------------------------------------------- asserts
 
-fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+# fail MSG: stops the test. After "soft_asserts on" it records the failure and carries on, so
+# the later assertions of the file report too; the test then exits 1 at its end.
+fail() {
+  printf 'FAIL: %s\n' "$*" >&2
+  if [[ "${SOFT_ASSERTS:-0}" == "1" ]]; then printf 'x\n' >>"$SOFT_FILE"; return 0; fi
+  exit 1
+}
+# fail_now MSG: stops the test even in soft mode (a later step depends on this one)
+fail_now() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+# soft_asserts on|off: a block of independent checks reports all its failures; turn it off
+# (or call soft_checkpoint) before a step that needs the checks above it to hold.
+# BENCHBAR_SOFT_ASSERTS=1 turns it on for every test, to see everything a change broke.
+soft_asserts() { if [[ "$1" == "on" ]]; then SOFT_ASSERTS=1; else SOFT_ASSERTS=0; fi; }
+# soft_checkpoint: stops the test now if a soft assertion failed before this line
+soft_checkpoint() {
+  [[ -s "$SOFT_FILE" ]] || return 0
+  printf 'FAIL: %s assertion(s) failed before this point\n' "$(wc -l <"$SOFT_FILE" | tr -d ' ')" >&2
+  exit 1
+}
 assert_eq() { [[ "$1" == "$2" ]] || fail "expected [$1], got [$2] ${3:-}"; }
 assert_contains() { case "$1" in *"$2"*) ;; *) fail "expected output to contain [$2] ${3:-}"$'\n'"--- output ---"$'\n'"$1" ;; esac; }
 assert_not_contains() { case "$1" in *"$2"*) fail "expected output NOT to contain [$2] ${3:-}"$'\n'"--- output ---"$'\n'"$1" ;; esac; }
@@ -192,6 +247,15 @@ run_fm() {
   set +e
   OUT="$("$FM" "$@" 2>&1)"
   CODE="$?"
+  set -e
+}
+# run_fm_split ARGS...: as run_fm, with the streams kept apart: OUT is stdout, ERR is stderr
+# (also in $MOCK_STATE/stderr), no terminal on stdin. For JSON, and to assert where a message went.
+run_fm_split() {
+  set +e
+  OUT="$("$FM" "$@" 2>"$MOCK_STATE/stderr" </dev/null)"
+  CODE="$?"
+  ERR="$(cat "$MOCK_STATE/stderr")"
   set -e
 }
 # run_fm_tty ARGS...: as run_fm, with a terminal (a pty) on stdin, the one thing a

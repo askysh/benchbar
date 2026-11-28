@@ -11,15 +11,23 @@ const site = 'https://benchbar.akashmishra.com';
 const rootPage = (label, file, slug) =>
   existsSync(new URL(`../${file}`, import.meta.url)) ? [{ label, slug }] : [];
 
+const repoMaintainers = 'https://github.com/askysh/benchbar/blob/main/maintainers';
+
 export default defineConfig({
   site,
+  // the maintainer pages are in maintainers/, not on this site (DOC-17); the
+  // old addresses go to the files on GitHub
+  redirects: {
+    '/decisions': `${repoMaintainers}/DECISIONS.md`,
+    '/releasing': `${repoMaintainers}/releasing.md`,
+  },
   // the pages live in ../docs and the repo root (src/content.config.ts)
   vite: { server: { fs: { allow: ['..'] } } },
   markdown: { remarkPlugins: [remarkRepoLinks] },
   integrations: [
     starlight({
       title: 'BenchBar',
-      description: 'Local Frappe and ERPNext development benches on macOS, in the background, with a menu bar app.',
+      description: 'Local Frappe and ERPNext development benches on macOS, Linux and Windows (WSL), run in the background, with a menu bar app and a Windows tray.',
       logo: { src: '../docs/images/app-icon.png', alt: 'BenchBar' },
       favicon: '/favicon.png',
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/askysh/benchbar' }],
@@ -31,6 +39,7 @@ export default defineConfig({
       components: {
         SocialIcons: './src/components/TopNav.astro',
         ThemeSelect: './src/components/ThemeToggle.astro',
+        Footer: './src/components/Footer.astro',
       },
       // code blocks take the page's surface colours (src/styles/custom.css);
       // shell snippets get a plain frame instead of a terminal window
@@ -44,7 +53,7 @@ export default defineConfig({
         { tag: 'meta', attrs: { property: 'og:image', content: `${site}/og.png` } },
         { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
         { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
-        { tag: 'meta', attrs: { property: 'og:image:alt', content: 'BenchBar: local Frappe benches on macOS' } },
+        { tag: 'meta', attrs: { property: 'og:image:alt', content: 'BenchBar: local Frappe benches on macOS, Linux and Windows' } },
         { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
         { tag: 'meta', attrs: { name: 'twitter:image', content: `${site}/og.png` } },
         // Umami analytics at analytics.akashmishra.com, only counted on benchbar.akashmishra.com
@@ -55,6 +64,10 @@ export default defineConfig({
             src: 'https://analytics.akashmishra.com/script.js',
             'data-website-id': '44b22d77-3180-41e4-adff-bf868420c142',
             'data-domains': 'benchbar.akashmishra.com',
+            // a browser with Do Not Track on is not counted (docs/privacy.md says so)
+            'data-do-not-track': 'true',
+            // the query string of a page view is not sent (docs/privacy.md says so)
+            'data-exclude-search': 'true',
           },
         },
         // custom events (copied commands, downloads, outbound links): public/analytics-events.js
@@ -68,9 +81,20 @@ export default defineConfig({
           label: 'Start',
           items: [
             { label: 'Introduction', slug: 'index' },
+            { label: "What's new", slug: 'whats-new' },
             { label: 'Features', slug: 'features' },
             { label: 'Install', slug: 'install' },
             { label: 'Quick start', slug: 'quick-start' },
+          ],
+        },
+        {
+          label: 'Platforms',
+          items: [
+            { label: 'macOS', slug: 'macos' },
+            { label: 'Linux', slug: 'linux' },
+            { label: 'Windows', slug: 'windows' },
+            { label: 'The BenchBar tray on Windows', slug: 'windows-tray' },
+            { label: 'The menu bar app', slug: 'app' },
           ],
         },
         {
@@ -80,12 +104,17 @@ export default defineConfig({
             { label: 'Apps', slug: 'guides/apps' },
             { label: 'Teams: profiles, lockfile and pull', slug: 'guides/teams' },
             { label: 'Coding agents and MCP', slug: 'guides/agents' },
-            { label: 'Troubleshooting', slug: 'troubleshooting' },
+            { label: 'Share a site on your network', slug: 'guides/share-on-your-network' },
+            { label: 'Doctor and repair', slug: 'guides/doctor-and-repair' },
+            { label: 'Labs', slug: 'guides/labs' },
+            { label: 'Quick Switch', slug: 'guides/quick-switch' },
+            { label: 'Draw your own runner', slug: 'runners' },
           ],
         },
         {
           label: 'Concepts',
           items: [
+            { label: 'Compared with other ways to run a bench', slug: 'concepts/alternatives' },
             { label: 'Port blocks', slug: 'concepts/port-blocks' },
             { label: 'How sharing keeps your bench safe', slug: 'concepts/sharing-safety' },
           ],
@@ -102,40 +131,64 @@ export default defineConfig({
                 { label: 'ports', slug: 'reference/cli/ports' },
                 { label: 'scan and register', slug: 'reference/cli/scan' },
                 { label: 'site', slug: 'reference/cli/site' },
+                { label: 'bench', slug: 'reference/cli/bench' },
                 { label: 'app', slug: 'reference/cli/app' },
                 { label: 'profile', slug: 'reference/cli/profile' },
                 { label: 'lock', slug: 'reference/cli/lock' },
                 { label: 'pull', slug: 'reference/cli/pull' },
+                { label: 'run', slug: 'reference/cli/run' },
                 { label: 'mcp', slug: 'reference/cli/mcp' },
+                { label: 'lease', slug: 'reference/cli/lease' },
                 { label: 'labs (experiments)', slug: 'reference/cli/labs' },
                 { label: 'share and lan-guard', slug: 'reference/cli/share' },
                 { label: 'report and other commands', slug: 'reference/cli/other' },
               ],
             },
-            { label: 'Doctor checks', slug: 'guides/doctor-and-repair' },
-            { label: 'JSON schema', slug: 'json-schema' },
+            {
+              label: 'Doctor checks',
+              items: [
+                { label: 'All checks', slug: 'reference/doctor-checks' },
+                { label: 'System checks', slug: 'reference/doctor/system-checks' },
+                { label: 'Bench checks', slug: 'reference/doctor/bench-checks' },
+                { label: 'Service and site checks', slug: 'reference/doctor/service-checks' },
+              ],
+            },
+            {
+              label: 'JSON schema',
+              items: [
+                { label: 'Overview and rules', slug: 'json-schema' },
+                { label: 'List, status, stats, logs', slug: 'reference/json/list-and-status' },
+                { label: 'Sites and backups', slug: 'reference/json/sites-and-backups' },
+                { label: 'Install, doctor, repair', slug: 'reference/json/install-and-doctor' },
+                { label: 'Apps', slug: 'reference/json/apps' },
+                { label: 'Lock, profiles, pull', slug: 'reference/json/teams' },
+                { label: 'Run, operations, history', slug: 'reference/json/operations' },
+                { label: 'State files and diagnostics', slug: 'reference/json/state-and-diagnostics' },
+                { label: 'Share and lan-guard', slug: 'reference/json/share' },
+                { label: 'Ports and the Windows shim', slug: 'reference/json/ports-and-windows' },
+              ],
+            },
             { label: 'Configuration', slug: 'reference/configuration' },
             { label: 'URL scheme', slug: 'reference/url-scheme' },
           ],
         },
         {
-          label: 'App',
+          label: 'Help',
           items: [
-            { label: 'The menu bar app', slug: 'app' },
-            { label: 'Runners', slug: 'runners' },
+            { label: 'Troubleshooting', slug: 'troubleshooting' },
+            { label: 'First run problems', slug: 'first-run-problems' },
+            { label: 'FAQ', slug: 'faq' },
+            { label: 'Glossary', slug: 'glossary' },
+            { label: 'Update and migrate', slug: 'upgrade' },
+            { label: 'Uninstall', slug: 'uninstall' },
+            { label: 'Test a build', slug: 'testing' },
+            { label: 'Privacy of this site', slug: 'privacy' },
           ],
-        },
-        {
-          label: 'Windows',
-          items: [{ label: 'BenchBar for Windows', slug: 'windows' }],
         },
         {
           label: 'For contributors',
           items: [
             ...rootPage('Contributing', 'CONTRIBUTING.md', 'contributing'),
-            { label: 'Testing', slug: 'testing' },
-            { label: 'Releasing', slug: 'releasing' },
-            { label: 'Decisions', slug: 'decisions' },
             ...rootPage('Roadmap', 'ROADMAP.md', 'roadmap'),
           ],
         },

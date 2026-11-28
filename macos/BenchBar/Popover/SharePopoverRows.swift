@@ -36,14 +36,14 @@ struct SharePopoverRows: View {
                         .frame(width: 7, height: 7)
                     Text(SharePresentation.indicator(status)).font(.callout).lineLimit(1)
                     Spacer()
-                    Button(share.inviteCopied ? "Copied" : SharePresentation.copyInvite) {
+                    Button(share.inviteCopied ? String(localized: "Copied") : SharePresentation.copyInvite) {
                         Task { await share.copyInvite(write: ShareClipboard.copy) }
                     }
                     .help(share.inviteCopied ? SharePresentation.inviteCopied : SharePresentation.copyInviteHelp)
                     .controlSize(.small)
                     .disabled(share.busy != nil)
                     Button("Stop") {
-                        guard ShareConfirm.ask(SharePresentation.stopConfirm(online: status.devicesOnline), button: "Stop") else { return }
+                        guard ShareConfirm.ask(SharePresentation.stopConfirm(online: status.devicesOnline), button: String(localized: "Stop")) else { return }
                         Task { await share.stop() }
                     }
                     .controlSize(.small)

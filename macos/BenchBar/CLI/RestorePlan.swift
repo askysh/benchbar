@@ -54,9 +54,11 @@ nonisolated struct SiteRestorePlan: ReviewablePlan, Codable {
     var errors: [String]
     var canApply: Bool
     var token: String
+    /// `site rollback`: what the snapshot is and what is taken first (CLI 0.9.0); nil for a restore.
+    var rollback: RollbackInfo? = nil
 
     enum CodingKeys: String, CodingKey {
-        case bench, site, new, exists, source, migrate, touches, steps, warnings, needs, errors, token
+        case bench, site, new, exists, source, migrate, touches, steps, warnings, needs, errors, token, rollback
         case schemaVersion = "schema_version"
         case backupFirst = "backup_first"
         case canApply = "can_apply"
@@ -69,10 +71,10 @@ nonisolated struct SiteRestorePlan: ReviewablePlan, Codable {
     var touchesText: [String] {
         touches.compactMap { kind in
             switch kind {
-            case "backup": "a backup of \(site) with its files, first"
-            case "database": new ? "a new database for \(site)" : "the database of \(site)"
-            case "files": "the public and private files of \(site)"
-            case "site_config": "sites/\(site)/site_config.json (the encryption key)"
+            case "backup": String(localized: "a backup of \(site) with its files, first")
+            case "database": new ? String(localized: "a new database for \(site)") : String(localized: "the database of \(site)")
+            case "files": String(localized: "the public and private files of \(site)")
+            case "site_config": String(localized: "sites/\(site)/site_config.json (the encryption key)")
             case "cache", "hosts", "common_site_config": nil
             default: kind
             }
@@ -90,7 +92,8 @@ nonisolated extension SiteRestorePlan {
                   backupFirst: c.lenient(.backupFirst, BackupFirst(willRun: false, withFiles: false, folder: nil)),
                   migrate: c.lenient(.migrate, true), touches: c.lenient(.touches, []), steps: c.lenient(.steps, []),
                   warnings: c.lenient(.warnings, []), needs: c.lenient(.needs, []), errors: c.lenient(.errors, []),
-                  canApply: c.lenient(.canApply, false), token: try c.decode(String.self, forKey: .token))
+                  canApply: c.lenient(.canApply, false), token: try c.decode(String.self, forKey: .token),
+                  rollback: c.lenient(.rollback, nil))
     }
 }
 

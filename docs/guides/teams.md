@@ -110,7 +110,15 @@ fetched raw), 64 KB at most, and writes
 parses. A file of the same name is diffed and replaced only when you
 confirm. A profile names the repos `install` clones, and their code runs
 in your bench, so import only from people you trust and read the app
-list in the plan (`--plan` shows it without writing anything). `check` asks git, with your own keys and tokens and never a
+list in the plan (`--plan` shows it without writing anything). Reading a
+profile runs nothing from it, but installing one does: `bench get-app` runs
+`pip install` and a build of every repo it names, and an installed app's
+hooks run on your site. So `import`, `subscribe`, `update` and `install`
+print `install will run code from these repos` with the host and owner of
+each one (`github.com/acme`), and a second line for the owners that no app
+of this bench and no line of `config/apps.tsv` uses yet. An update that adds
+or changes a `repo` line says so. An imported or subscribed profile may name only `https://`, `ssh://` or `user@host:path` repos; a profile you wrote yourself, or made with `profile create`, may also name a local path or `http://`, with a warning that teammates cannot clone it. `--plan --json` has the same lists as
+`runs_code_from` and `new_owners`. `check` asks git, with your own keys and tokens and never a
 prompt, whether each repo and branch can be read. The repos are asked
 side by side, 8 at a time, so a profile of 20 repos takes about as long as
 its slowest repo. `install --profile` does the same and leaves out the
@@ -155,7 +163,7 @@ before `BENCHBAR_PROFILE_PATH`, in the order you subscribed; `profile
 list` warns when a name is hidden by an earlier file. Nothing updates on
 its own. When the bench's team profile comes from a subscription that is
 behind, doctor warns
-([`profile_outdated`](doctor-and-repair.md#profile_outdated)) as of the
+([`profile_outdated`](../reference/doctor/bench-checks.md#profile_outdated)) as of the
 last fetch; `benchbar doctor --fetch` checks the remote first.
 
 Every flag is in the [profile reference](../reference/cli/profile.md).
@@ -175,10 +183,14 @@ benchbar lock apply
 
 `lock apply` clones missing apps, switches clean apps to the locked
 branch and fast forwards to pinned commits, then runs requirements and
-build. It never touches a site (it prints the `site add`, `app install`
+build. A lock that lives in an app repo changes when that app is updated,
+so the plan marks each repo that is not in the bench yet (`NEW REPO`) and
+names the owners whose code `apply` will run before it asks. A `commit` in
+a lock is 12 to 40 hex characters: a short prefix is matched by prefix and
+can collide. A lock inside an app repo is read like a file from someone else: its repos must be `https://`, `ssh://` or `user@host:path`. A lock you keep outside `apps/` also takes a local path or `http://`, and `lock write` warns when an app's remote is one teammates cannot clone. It never touches a site (it prints the `site add`, `app install`
 and migrate steps instead) and never overwrites local work: an app with
 local changes or commits of its own is skipped with a warning. Doctor
-reports drift as a warning ([`lock_drift`](doctor-and-repair.md#lock_drift)).
+reports drift as a warning ([`lock_drift`](../reference/doctor/bench-checks.md#lock_drift)).
 
 The file pins each app's repo, branch and, optionally, commit, in the
 order of `sites/apps.txt`, plus the sites and the apps each one has:
@@ -248,7 +260,9 @@ To keep production's integrations and stored passwords, pass
 `--keep-secrets`. The copy then keeps them (and the encryption key
 decrypts them), so keep its scheduler and workers off. A copy that was
 neutralised cannot be switched back: pull again with `--replace
---keep-secrets`.
+--keep-secrets`. The flag is yours to pass: a pull started by an agent
+(`--for-agent`, `benchbar mcp`, `BENCHBAR_NONINTERACTIVE=1`) is refused
+with it.
 
 The encryption key and the passwords never appear on a command line, in
 the output or in the log. The download is kept in

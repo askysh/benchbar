@@ -11,9 +11,20 @@ nonisolated final class HangingRunner: CommandRunning, @unchecked Sendable {
         try await inner.run(executable: executable, arguments: arguments, environment: environment, timeout: timeout)
     }
 
+    func run(executable: URL, arguments: [String], environment: [String: String], timeout: Duration,
+             qos: QualityOfService, input: [UInt8]?) async throws(CLIError) -> CommandOutput {
+        try await inner.run(executable: executable, arguments: arguments, environment: environment, timeout: timeout, qos: qos, input: input)
+    }
+
     func stream(executable: URL, arguments: [String], environment: [String: String], timeout: Duration,
                 onLine: @escaping @Sendable (String) -> Void) async throws(CLIError) -> Int32 {
-        _ = try? await inner.run(executable: executable, arguments: arguments, environment: environment, timeout: timeout)
+        try await stream(executable: executable, arguments: arguments, environment: environment, timeout: timeout, input: nil, onLine: onLine)
+    }
+
+    /// The inner fake records the input with the call.
+    func stream(executable: URL, arguments: [String], environment: [String: String], timeout: Duration, input: [UInt8]?,
+                onLine: @escaping @Sendable (String) -> Void) async throws(CLIError) -> Int32 {
+        _ = try? await inner.run(executable: executable, arguments: arguments, environment: environment, timeout: timeout, qos: .default, input: input)
         do {
             try await Task.sleep(for: .seconds(60))
         } catch {
@@ -172,6 +183,7 @@ struct WizardRunTests {
         await base.waitUntil { !run.isPolling }
         #expect(!run.isPolling)
         let count = base.cli.calls.filter { $0.first == "doctor" }.count
+        // a negative check: a short bounded wait, so a stray poll would have been counted
         try await Task.sleep(for: .milliseconds(120))
         #expect(base.cli.calls.filter { $0.first == "doctor" }.count == count, "no more calls once the row passes")
     }

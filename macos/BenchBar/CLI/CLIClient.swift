@@ -9,6 +9,9 @@ nonisolated struct CLIClient: Sendable {
     let executable: URL
     var runner: any CommandRunning = SubprocessRunner()
     var locator = CLILocator()
+    /// Every command goes ahead although a lease stands (`--break-lease`, as a person: see `breakingLease()`).
+    /// Only the change a person just chose to run again after a lease refused it ever has this on.
+    var breakLease = false
     /// Where the entries of a list the CLI printed but this build could not read are named
     /// (the rest of the list still shows). Logs by default; a test replaces it.
     var onSkipped: @Sendable (_ source: String, _ entries: [String]) -> Void = { source, entries in
@@ -47,6 +50,8 @@ nonisolated struct CLIClient: Sendable {
             "NO_COLOR": "1",
             "TERM": "dumb",
             "LANG": "en_US.UTF-8",
+            // who started the run, for `benchbar history` and the run log's first line (not a proof: the CLI keeps it as a label)
+            "BENCHBAR_CALLER": "app",
         ]
     }
 
@@ -99,8 +104,11 @@ nonisolated struct CLIClient: Sendable {
         return try BenchJSON.decode(BenchList.self, from: Data(output.stdout.utf8))
     }
 
-    func status(bench: String) async throws(CLIError) -> BenchStatus {
-        let output = try await run(["status", "--json", "--bench-dir", bench], timeout: Timeout.query, acceptExitCodes: [0], qos: .utility)
+    /// `deep` also asks the ready parts that start programs (a worker, and whether Python code
+    /// changed since the bench started): only for a bench that runs.
+    func status(bench: String, deep: Bool = false) async throws(CLIError) -> BenchStatus {
+        let output = try await run(["status", "--json"] + (deep ? ["--deep"] : []) + ["--bench-dir", bench],
+                                   timeout: Timeout.query, acceptExitCodes: [0], qos: .utility)
         return try BenchJSON.decode(BenchStatus.self, from: Data(output.stdout.utf8))
     }
 
@@ -173,29 +181,22 @@ nonisolated struct CLIClient: Sendable {
         return list
     }
 
-    /// benchbar app add SOURCE --dry-run --json: the plan and its token. Read
-    /// only; it reads the remote (a shallow clone of hooks.py), so a private
+    /// benchbar app add APP... --dry-run --json: one plan and its token for one app or several.
+    /// Read only; it reads the remotes (a shallow clone of hooks.py), so a private
     /// repository is checked here and a missing key fails in seconds.
-    func addAppPlan(_ source: String, branch: String?, site: String?, bench: String) async throws(CLIError) -> AppAddPlan {
-        let output = try await run(["app", "add", source, "--dry-run", "--json", "--bench-dir", bench] + Self.addAppOptions(branch: branch, site: site),
+    func addAppPlan(_ entries: [AppAddEntry], bench: String) async throws(CLIError) -> AppAddPlan {
+        let output = try await run(["app", "add"] + AppAddBatch.arguments(entries) + ["--dry-run", "--json", "--bench-dir", bench],
                                    timeout: Timeout.doctor, acceptExitCodes: [0])
         return try BenchJSON.decode(AppAddPlan.self, from: Data(output.stdout.utf8))
     }
 
-    /// benchbar app add SOURCE --apply TOKEN: runs the plan the person saw.
+    /// benchbar app add APP... --apply TOKEN: runs the plan the person saw.
     /// The CLI recomputes it under its lock and refuses a token that no
     /// longer matches the bench; the arguments are the plan's.
     @discardableResult
-    func addApp(_ source: String, branch: String?, site: String?, token: String, bench: String) async throws(CLIError) -> CommandOutput {
-        let args = ["app", "add", source, "--apply", token, "--yes", "--plain", "--bench-dir", bench] + Self.addAppOptions(branch: branch, site: site)
+    func addApp(_ entries: [AppAddEntry], token: String, bench: String) async throws(CLIError) -> CommandOutput {
+        let args = ["app", "add"] + AppAddBatch.arguments(entries) + ["--apply", token, "--yes", "--plain", "--bench-dir", bench]
         return try await run(args, timeout: Timeout.long, acceptExitCodes: [0])
-    }
-
-    private static func addAppOptions(branch: String?, site: String?) -> [String] {
-        var args: [String] = []
-        if let branch, !branch.isEmpty { args += ["--branch", branch] }
-        if let site, !site.isEmpty { args += ["--site", site] }
-        return args
     }
 
     @discardableResult
@@ -239,15 +240,17 @@ nonisolated struct CLIClient: Sendable {
 
     /// benchbar site add NAME --apply TOKEN: runs the plan the person saw. The
     /// CLI recomputes it and refuses a token that no longer matches the bench.
-    /// The Administrator password goes in the environment of that one process
-    /// (ADMIN_PASSWORD, as the CLI reads it), never on a command line. The
+    /// The Administrator password goes to that one process on its standard input
+    /// when the CLI lists `--secrets-stdin` for `site add`, and in its environment
+    /// (ADMIN_PASSWORD) for an older CLI, never on a command line. The
     /// hosts line needs sudo, which a process without a terminal cannot ask
     /// for: the CLI skips it and says so (the Sites tab's Add Hosts Lines
     /// sheet runs `site hosts` for that).
     @discardableResult
     func addSite(_ name: String, adminPassword: String, token: String, bench: String) async throws(CLIError) -> CommandOutput {
-        try await run(["site", "add", name, "--apply", token, "--yes", "--plain", "--bench-dir", bench],
-                      timeout: Timeout.long, acceptExitCodes: [0], extraEnvironment: ["ADMIN_PASSWORD": adminPassword])
+        let stdinBytes = await takesSecretsStdin("site add") ? Self.secretList([("ADMIN_PASSWORD", adminPassword)]) : nil
+        return try await run(["site", "add", name, "--apply", token, "--yes", "--plain", "--bench-dir", bench] + (stdinBytes == nil ? [] : ["--secrets-stdin"]),
+                             timeout: Timeout.long, acceptExitCodes: [0], extraEnvironment: stdinBytes == nil ? ["ADMIN_PASSWORD": adminPassword] : [:], input: stdinBytes)
     }
 
     @discardableResult
@@ -306,19 +309,24 @@ nonisolated struct CLIClient: Sendable {
     }
 
     /// The repair plan only (repair --dry-run --json prints one plan line).
-    func repairPlan(bench: String) async throws(CLIError) -> [RepairEvent.Action] {
+    func repairPlan(bench: String) async throws(CLIError) -> RepairPlan {
         let output = try await run(["repair", "--dry-run", "--json", "--bench-dir", bench], timeout: Timeout.doctor, acceptExitCodes: [0, 1])
         for line in output.stdout.split(separator: "\n") {
-            if case .plan(let actions, _)? = RepairEvent.parse(String(line)) { return actions }
+            if case .plan(let actions, _)? = RepairEvent.parse(String(line)) {
+                return RepairPlan(actions: actions, token: RepairEvent.planToken(String(line)))
+            }
         }
         throw .failed(command: "repair", exitCode: output.exitCode, message: Self.summarize(output))
     }
 
-    /// repair --yes --json, with every event handed over as it arrives. The
+    /// repair --yes --json, with every event handed over as it arrives. With the
+    /// token of the plan the user reviewed, `--apply TOKEN` makes the CLI refuse a
+    /// plan that changed since (nothing runs); without one it is the old run. The
     /// steps that need the Mac's password ask in macOS's dialog (BENCHBAR_SUDO=gui);
     /// a cancelled dialog comes back as a skipped step with its command.
-    func repair(bench: String, onEvent: @escaping @Sendable (RepairEvent) -> Void) async throws(CLIError) -> Int32 {
-        try await runner.stream(executable: executable, arguments: ["repair", "--yes", "--json", "--bench-dir", bench],
+    func repair(bench: String, token: String? = nil, onEvent: @escaping @Sendable (RepairEvent) -> Void) async throws(CLIError) -> Int32 {
+        let apply = token.map { ["--apply", $0] } ?? []
+        return try await runner.stream(executable: executable, arguments: ["repair"] + apply + ["--yes", "--json", "--bench-dir", bench],
                                 environment: environment().merging(Self.guiSudo) { _, new in new }, timeout: Timeout.long) { line in
             if let event = RepairEvent.parse(line) { onEvent(event) }
         }
@@ -382,13 +390,17 @@ nonisolated struct CLIClient: Sendable {
     /// list), so the processes the app starts on its own run below the work
     /// a person waits for; `.default` for everything a person asked for.
     func run(_ arguments: [String], timeout: Duration, acceptExitCodes: Set<Int32>,
-             extraEnvironment: [String: String] = [:], qos: QualityOfService = .default) async throws(CLIError) -> CommandOutput {
+             extraEnvironment: [String: String] = [:], qos: QualityOfService = .default, input: [UInt8]? = nil) async throws(CLIError) -> CommandOutput {
+        let arguments = breakLease ? Self.withBreakLease(arguments) : arguments
+        let extraEnvironment = breakLease ? extraEnvironment.merging(Self.person) { _, new in new } : extraEnvironment
         var env = environment().merging(extraEnvironment) { _, new in new }
         // a run that says it is a person's click (BENCHBAR_NONINTERACTIVE=0, open --as) also says which app
         if extraEnvironment["BENCHBAR_NONINTERACTIVE"] == "0" { env.merge(Self.appCaller) { _, new in new } }
-        let output = try await runner.run(executable: executable, arguments: arguments, environment: env, timeout: timeout, qos: qos)
+        let output = try await runner.run(executable: executable, arguments: arguments, environment: env, timeout: timeout, qos: qos, input: input)
         guard acceptExitCodes.contains(output.exitCode) else {
-            throw .failed(command: arguments.first ?? "", exitCode: output.exitCode, message: Self.summarize(output))
+            // the CLI's own sentence (the envelope's error) when it sent one, else the last lines of its text
+            let message = output.envelope.error.flatMap { $0.isEmpty ? nil : CLIText.plain($0) } ?? Self.summarize(output)
+            throw .failed(command: arguments.first ?? "", exitCode: output.exitCode, message: message)
         }
         return output
     }

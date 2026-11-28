@@ -56,10 +56,12 @@ cli_out() {
   run_fm "$@" </dev/null
   # a command that is expected to refuse (ALLOW_EXIT=1) still prints what the tray reads
   [[ "$CODE" == 0 || "${ALLOW_EXIT:-0}" == 1 ]] || fail "benchbar $* exited $CODE: $OUT"
-  printf '%s\n' "$OUT" | TMP="$TMP_DIR" python3 -c '
+  printf '%s\n' "$OUT" | TMP="$TMP_DIR" CHECKOUT="$ROOT" python3 -c '
 import os, sys
 tmp = os.environ["TMP"]
 text = sys.stdin.read()
+# a fix command runs the checkout the recorder runs from: the fixture names plain benchbar
+text = text.replace(os.environ["CHECKOUT"] + "/benchbar ", "benchbar ")
 for old, new in ((tmp + "/home/frappe-bench", "/home/akash/frappe-bench"), (tmp + "/home/empty", "/home/akash/empty"),
                  (tmp + "/home", "/home/akash"), (tmp + "/config", "/opt/benchbar/config"), (tmp, "/tmp/benchbar")):
     text = text.replace(old, new)
@@ -72,7 +74,7 @@ generated() {
     "recorded/list.json|list --json" \
     "recorded/status.json|status --json --bench-dir $BENCH" \
     "cli/ports-check-clean.json|ports check --json --bench-dir $BENCH" \
-    "cli/scan-empty.json|scan --json $HOME/empty"
+    "cli/scan-empty.json|scan --json $HOME/empty"     "cli/envelope-read-failure.json|!status --for-agent --bench-dir $HOME/no-such-bench"     "cli/envelope-usage-error.jsonl|!install --bogus --jsonl"     "cli/envelope-run-refused.jsonl|!run --jsonl --bench-dir $BENCH -- bogus"
 }
 
 # GENERATED_TEXT: fixture file, then the command; commands that print no JSON (autostart) or are
@@ -102,8 +104,22 @@ shapes() {
     "cli/profile-list.json|profile list --json" \
     "cli/profile-list-linux.json|profile list --json" \
     "cli/scan-list.json|list --json" \
+    "cli/status-notices.json|status --json --bench-dir $BENCH" \
+    "cli/status-not-ready.json|status --json --bench-dir $BENCH" \
+    "cli/status-ready.json|status --json --bench-dir $BENCH" \
+    "cli/status-ready-stale.json|status --json --bench-dir $BENCH" \
     "cli/status-pending-update.json|status --json --bench-dir $BENCH" \
-    "cli/status-pending-add.json|status --json --bench-dir $BENCH"
+    "cli/status-pending-add.json|status --json --bench-dir $BENCH" \
+    "cli/snapshots-list.json|site snapshots linuxdev.localhost --json --bench-dir $BENCH" \
+    "cli/lease-list.json|lease list --json" \
+    "cli/history.json|history --json" \
+    "cli/stats.json|stats --json --bench-dir $BENCH" \
+    "cli/stats-stopped.json|stats --json --bench-dir $BENCH" \
+    "cli/op-list.json|op list --json" \
+    "cli/run-plan.json|run --site linuxdev.localhost --dry-run --json --bench-dir $BENCH -- migrate --skip-failing" \
+    "cli/bench-gc-plan.json|bench gc --dry-run --json" \
+    "cli/bench-remove-plan.json|bench remove $BENCH --dry-run --json" \
+    "cli/bench-forget-plan.json|bench forget $BENCH --dry-run --json"
 }
 
 # paths FILE: one line per field path of a JSON document, arrays folded into
@@ -141,9 +157,19 @@ status=0
 
 # ---- generated files
 while IFS='|' read -r file cmd; do
+  # a leading "!" allows a non zero exit: a refusal prints its envelope all the same
+  allow=0; [[ "$cmd" == "!"* ]] && { allow=1; cmd="${cmd#!}"; }
   # shellcheck disable=SC2086  # the command is one word per argument, none has a space
-  cli_out $cmd >"$TMP_OUT/new.json"
-  python3 -I -c 'import json, sys; json.load(open(sys.argv[1]))' "$TMP_OUT/new.json" || fail "$file: the CLI did not print JSON"
+  ALLOW_EXIT="$allow" cli_out $cmd >"$TMP_OUT/new.json"
+  # a refusal also prints its [FAIL] text (stderr is merged here): the envelope is the JSON lines
+  [[ "$allow" == 0 ]] || { grep '^{' "$TMP_OUT/new.json" >"$TMP_OUT/lines.json" || true; mv "$TMP_OUT/lines.json" "$TMP_OUT/new.json"; }
+  python3 -I -c '
+import json, sys
+text = open(sys.argv[1]).read()
+try:
+    json.loads(text)
+except ValueError:
+    [json.loads(l) for l in text.splitlines() if l.strip()]' "$TMP_OUT/new.json" || fail "$file: the CLI did not print JSON"
   if [[ "$CHECK" == 1 ]]; then
     if ! cmp -s "$TMP_OUT/new.json" "$FIXTURES/$file"; then
       printf 'windows/tray/fixtures/%s differs from what the CLI prints now:\n' "$file" >&2
@@ -204,8 +230,11 @@ fix = [l.strip() for l in open(sys.argv[2]) if l.strip()]
 plain = {p.rstrip("+") for p in now}
 unjudged = {p.rstrip("+") for p in now if p.endswith("+")}
 for p in fix:
+    empty = p.endswith("+")
     p = p.rstrip("+")
     if p in plain: continue
+    # an empty array in the fixture (a bench that is ready waits on nothing) stands for the array the CLI fills when it has something to say
+    if empty and p + "[]" in plain: continue
     # below a value the mocks leave empty: cannot be judged
     if any(p.startswith(u + ".") or p.startswith(u + "[]") for u in unjudged): continue
     print(p)

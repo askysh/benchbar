@@ -85,8 +85,9 @@ internal static class Ui
     }
 
     /// <summary>The small rounded "Beta" label next to the app name.</summary>
-    public static Border Pill(string text = BetaText.Pill)
+    public static Border Pill(string? text = null)
     {
+        text ??= BetaText.Pill;
         var pill = new Border
         {
             Child = new TextBlock { Text = text, FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(7, 1, 7, 1) },
@@ -96,7 +97,7 @@ internal static class Ui
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
         };
-        Name(pill, "Beta: BenchBar for Windows is in beta");
+        Name(pill, UiText.Get("CommonBetaPillName"));
         return pill;
     }
 
@@ -356,10 +357,10 @@ internal static class Ui
     /// <summary>The status icon of a check row.</summary>
     public static TextBlock StatusGlyph(SetupStatus status) => status switch
     {
-        SetupStatus.Ok => Glyph(CheckGlyph, 16, Success, "Done"),
-        SetupStatus.Warn => Glyph(WarningGlyph, 16, Caution, "Advice"),
-        SetupStatus.Fail => Glyph(ErrorGlyph, 16, Critical, "Blocked"),
-        _ => Glyph(PendingGlyph, 16, Neutral, "To do"),
+        SetupStatus.Ok => Glyph(CheckGlyph, 16, Success, UiText.Get("WizardDone")),
+        SetupStatus.Warn => Glyph(WarningGlyph, 16, Caution, UiText.Get("CommonStatusAdvice")),
+        SetupStatus.Fail => Glyph(ErrorGlyph, 16, Critical, UiText.Get("CommonStatusBlocked")),
+        _ => Glyph(PendingGlyph, 16, Neutral, UiText.Get("CommonStatusToDo")),
     };
 
     /// <summary>The Mica backdrop of the .NET 10 Fluent theme, by reflection (the property is not public). A failure keeps the plain background.</summary>

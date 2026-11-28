@@ -20,9 +20,11 @@
 # n (the shard count) and shards (a JSON array for the matrix, [] when the leg
 # does not run); shellcheck and shellcheck_files; app, shim, shim_win,
 # shim_arm, wsl, real,
-# full (every leg runs everything) and code (anything beyond docs changed).
+# full (every leg runs everything), pin_smoke (which pin tests run only their smoke
+# scenarios: 0 none, 1 all, or the names of the tests; CI hands it to the tests as
+# PIN_SMOKE) and code (anything beyond docs changed).
 #
-# The rules (docs/DECISIONS.md, "CI tiering"):
+# The rules (maintainers/DECISIONS.md, "CI tiering"):
 #   pull request   the tests tests/affected.sh picks, on Linux and in the
 #                  bash 3.2 container. macOS only when a path that needs macOS
 #                  changed (macos_paths below), or the label test-macos is on.
@@ -34,8 +36,14 @@
 #                  themselves run everything everywhere.
 #   push, schedule everything everywhere (push: unless only docs, site or *.md changed)
 #   dispatch       what INPUT_TESTS and INPUT_LEGS say
-# The shard count of a leg follows its weight in the tables of
-# tests/run-tests.sh: one shard per TARGET table seconds, at most MAX.
+# The pin tests (tests/lib/pin.sh) run every scenario unless this plan says smoke, and
+# only a pull request can say it: push, schedule and dispatch plan no smoke, nor does a
+# pull request that runs everything everywhere, changes a pin test, a golden file or the
+# pin helper, or has the label test-pin-full. Any other pull request plans smoke for
+# every pin test except those whose pinned functions it changes (tests/affected.sh,
+# pin_of: the file of the function), which run in full.
+# The shard count of a leg follows its weight in tests/timings.tsv (run-tests.sh
+# reads it): one shard per TARGET table seconds, at most MAX.
 
 set -euo pipefail
 
@@ -53,7 +61,7 @@ INPUT_LEGS="${INPUT_LEGS:-}"
 # share on Linux, and the Linux layer's WSL and sudo tests on macOS
 SKIP_LINUX="test-share test-share-run test-share-admin test-share-preflight test-lan-guard"
 SKIP_BASH32="test-install-linux test-doctor-linux test-systemd test-platform-linux test-share test-share-run test-share-admin test-share-preflight test-lan-guard"
-SKIP_MACOS="test-install-linux test-doctor-linux test-systemd test-platform-linux test-wsl-preflight test-windows-commands test-sudo-env"
+SKIP_MACOS="test-install-linux test-doctor-linux test-systemd test-platform-linux test-wsl-preflight test-install-failures test-windows-commands test-sudo-env"
 # table seconds one shard takes (about 150 s of wall time on its runner) and the most shards
 TARGET_LINUX=600 MAX_LINUX=8
 TARGET_BASH32=600 MAX_BASH32=8
@@ -62,8 +70,9 @@ TARGET_MACOS=900 MAX_MACOS=4
 # the paths a pull request needs macOS for: BSD tools, launchd, the Keychain,
 # pf and the installers. Everything else is the same bash on Linux.
 macos_paths='^(lib/frappe-local/(platform|launchd|lan-guard|mariadb|sudo|wkhtmltopdf|share[a-z-]*)\.sh|lib/frappe-local/share/.*|00-mac-system-deps\.sh|install\.sh|packaging/.*|templates/(launchagent|share)\.plist\.tmpl|tests/test-(platform|lan-guard|share[a-z-]*|hygiene|service|templates|shellrc|install-sh|homebrew|packaging)\.sh)$'
-app_paths='^(macos/.*|examples/.*|scripts/(macos-[a-z-]+|release-local|app-[a-z-]+|ci-annotate)\.sh|scripts/app-[a-z-]+\.py)$'
+app_paths='^(macos/.*|examples/.*|scripts/(macos-[a-z-]+|release-local|app-[a-z-]+|ci-annotate|ci-install-tool)\.sh|scripts/app-[a-z-]+\.py)$'
 shim_paths='^(windows/shim/.*|lib/frappe-local/commands\.sh)$'
+pin_paths='^tests/(test-[a-z0-9-]+-pin\.sh|golden/.*|lib/pin\.(sh|sed))$'
 ci_paths='^(\.github/workflows/ci\.yml|scripts/ci-plan\.sh)$'
 docs_paths='^(docs/.*|site/.*|.*\.md|LICENSE)$'
 
@@ -112,7 +121,7 @@ if [[ "$files_known" == 1 && -n "${files// /}" ]] && all_match "$docs_paths"; th
 if [[ "$files_known" == 1 && -z "${files// /}" && "$EVENT" != schedule && "$EVENT" != workflow_dispatch ]]; then code=false; fi
 
 # ---- the scope
-full=false mode=none tests="" shellcheck=false shellcheck_files=""
+full=false mode=none tests="" shellcheck=false shellcheck_files="" pin_smoke=0
 macos=false app=false shim=false real=false
 run_linux=false run_bash32=false run_macos=false
 
@@ -173,6 +182,22 @@ case "$EVENT" in
       any_match "$app_paths" && app=true
       any_match "$shim_paths" && shim=true
     fi
+    # a pull request runs the smoke scenarios of the pin tests, unless the change could move one the smoke leaves out
+    if [[ "$mode" == full ]] || any_match "$pin_paths" || has_word "$LABELS" test-pin-full; then
+      pin_smoke=0
+    else
+      pin_changed="$(clean_names "$(printf '%s\n' "$affected" | sed -n 's/^pin_changed=//p')")"
+      if [[ -z "$pin_changed" ]]; then
+        pin_smoke=1
+      else
+        pin_smoke=""
+        for f in tests/test-*-pin.sh; do
+          f="${f##*/}"; f="${f%.sh}"
+          has_word "$pin_changed" "$f" || pin_smoke="${pin_smoke:+$pin_smoke }$f"
+        done
+        [[ -n "$pin_smoke" ]] || pin_smoke=0
+      fi
+    fi
     ;;
 esac
 has_word "$LABELS" test-linux && [[ "$EVENT" == pull_request && "$code" == true ]] && real=true
@@ -228,6 +253,7 @@ shim_arm="$shim"
 
 out code "$code"
 out full "$full"
+out pin_smoke "$pin_smoke"
 out tests "$tests"
 out linux_skip "$SKIP_LINUX"
 out linux_n "$n_linux"
@@ -247,11 +273,19 @@ out shim_arm "$shim_arm"
 out wsl "$wsl"
 out real "$real"
 
+# what the summary says of the pin tests (a case inside $( ) in a quoted argument breaks bash 3.2, so it is set here)
+case "$pin_smoke" in
+  0) pin_text="every scenario" ;;
+  1) pin_text="smoke scenarios" ;;
+  *) pin_text="smoke for ${pin_smoke}, every scenario for the others" ;;
+esac
+
 if [[ -n "${PLAN_SUMMARY:-}" ]]; then
   # shellcheck disable=SC2016  # the backticks are markdown
   {
     printf '### CI plan\n\n'
-    printf 'Event `%s`, mode `%s`, %s changed file(s).\n\n' "$EVENT" "$mode" "$(printf '%s\n' "$files" | tr ' ' '\n' | grep -c . || true)"
+    printf 'Event `%s`, mode `%s`, %s changed file(s). Pin tests: %s.\n\n' "$EVENT" "$mode" "$(printf '%s\n' "$files" | tr ' ' '\n' | grep -c . || true)" \
+      "$pin_text"
     printf '| Leg | Runs | Shards |\n|---|---|---|\n'
     printf '| Linux (bash 5) | %s | %s |\n' "$run_linux" "$n_linux"
     printf '| bash 3.2 container | %s | %s |\n' "$run_bash32" "$n_bash32"

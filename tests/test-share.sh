@@ -117,7 +117,7 @@ assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "No user 'nobody@example.co
 setup --users "$USERS" --acknowledge-data --backup-now --from "$OLD" --bench-dir "$BENCH"
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "--backup-now and --from"
 setup --users "$USERS" --acknowledge-data --name "x" --bogus --bench-dir "$BENCH"
-assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown argument for share setup: --bogus"
+assert_eq "64" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown option for share setup: --bogus"
 # not enough disk: the plan's size_gb, twice the set
 printf '0' >"$MOCK_STATE/df_avail_kb"
 setup --users "$USERS" --acknowledge-data --bench-dir "$BENCH"
@@ -496,9 +496,20 @@ import sys
 exec(sys.argv[1])
 class DB:
     def sql(self, query, values=None, as_dict=False):
+        # like the database: only the rows of the doctypes the query names
+        return [row for row in self.rows(query) if row["parent"] in values["doctypes"]]
+    def rows(self, query):
         if "tabCustom DocPerm" in query:
-            return [{"parent": "DocType", "role": "Only Custom", "write": 1, "create": 0, "submit": 0}]
+            return [{"parent": "DocType", "role": "Only Custom", "write": 1, "create": 0, "submit": 0},
+                    {"parent": "User Permission", "role": "Restrictor", "write": 1, "create": 0, "submit": 0}]
         return [
+            # SHARE-6 (a): a role that can change who holds which role is as good as code-capable
+            {"parent": "User", "role": "HR Manager", "write": 1, "create": 0, "submit": 0},
+            {"parent": "User", "role": "HR Reader", "write": 0, "create": 0, "submit": 0},
+            {"parent": "Role Profile", "role": "People Ops", "write": 0, "create": 1, "submit": 0},
+            {"parent": "Role", "role": "Role Keeper", "write": 1, "create": 0, "submit": 0},
+            {"parent": "User Permission", "role": "Replaced By Custom", "write": 1, "create": 0, "submit": 0},
+            {"parent": "ToDo", "role": "Everyone Else", "write": 1, "create": 1, "submit": 0},
             {"parent": "Server Script", "role": "Script Dev", "write": 1, "create": 0, "submit": 0},
             {"parent": "Report", "role": "Viewer", "write": 0, "create": 0, "submit": 0},
             {"parent": "Report", "role": "Report Writer", "write": 0, "create": 1, "submit": 0},
@@ -509,9 +520,11 @@ class DB:
 class F:
     db = DB()
 got = set(code_capable_roles(F()))
-want = set(FLOOR_ROLES) | {"Script Dev", "Report Writer", "Submitter", "Only Custom"}
+want = set(FLOOR_ROLES) | {"Script Dev", "Report Writer", "Submitter", "Only Custom", "HR Manager", "People Ops", "Role Keeper", "Restrictor"}
 assert got == want, (sorted(got ^ want))
 assert "Builder" not in got and "Viewer" not in got and "All" not in got
+assert "HR Reader" not in got and "Replaced By Custom" not in got and "Everyone Else" not in got
+assert not set(ESCALATION_DOCTYPES) & set(CODE_DOCTYPES)
 PY
 
 

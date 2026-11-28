@@ -41,11 +41,27 @@ assert_calls_not_contain '^bench get-app'
 assert_calls_not_contain '^bench --site macdev install-app'
 assert_eq "$snap" "$(snapshot "$BENCH" "$FL_STATE_DIR")" "(dry run writes nothing)"
 
+# ---- a Mac with no uv (issue 188): get-app installs the app with "uv pip install", so the plan stops
+# before anything is cloned, and says how to get uv
+use_mocks_without uv
+reset_calls; snap="$(snapshot "$BENCH")"
+run_fm app add acme_crm --site macdev --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "uv is not installed"
+assert_contains "$OUT" "brew install uv"
+assert_calls_not_contain '^bench get-app'
+assert_no_file "$BENCH/apps/acme_crm"
+run_fm app add acme_crm --site macdev --dry-run --json --bench-dir "$BENCH"
+assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')"
+assert_contains "$(printf '%s' "$OUT" | jget - '" | ".join(d["errors"])')" "uv is not installed"
+assert_eq "$snap" "$(snapshot "$BENCH")" "(no uv: app add writes nothing in the bench)"
+use_all_mocks
+
 # ---- add by name: preflight, get-app without --overwrite or --resolve-deps, install, build
 reset_calls
 run_fm app add acme_crm --site macdev --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-assert_calls_contain "^git ls-remote --exit-code --heads --tags -- file://${REMOTES}/acme_crm.git main$"
+assert_calls_contain "^git ls-remote --exit-code --heads --tags -- file://${REMOTES}/acme_crm.git refs/heads/main refs/tags/main$"
 assert_calls_contain "^bench get-app --skip-assets --branch main file://${REMOTES}/acme_crm.git$"
 assert_calls_not_contain 'get-app.*(--overwrite|--resolve-deps)'
 assert_calls_contain '^bench --site macdev install-app acme_crm$'
@@ -206,6 +222,19 @@ assert_calls_not_contain '^bench --site .* (backup|migrate)'
 run_fm app update acme_crm --dry-run --bench-dir "$BENCH"
 assert_contains "$OUT" "2 commit(s)"
 assert_contains "$OUT" "acme_crm: change 1 on main"
+# no uv: the update stops before the backups and the fast forward ("bench setup requirements" needs it)
+use_mocks_without uv
+reset_calls
+run_fm app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "uv is not installed"
+assert_contains "$OUT" "brew install uv"
+assert_eq "$old" "$(app_head "$BENCH/apps/acme_crm")" "(no uv: the code stays)"
+assert_calls_not_contain '^bench --site .* (backup|migrate)'
+run_fm app update acme_crm --dry-run --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "uv is not installed"
+use_all_mocks
 reset_calls
 run_fm app update acme_crm --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
@@ -315,7 +344,7 @@ run_fm app list --json --bench-dir "$NOSITE"
 assert_eq "0" "$CODE" "(the second run reads a cache with only @ lines) $OUT"
 
 # ---- app add as a plan with a token (0.6.0, for benchbar_app_add over MCP)
-run_json() { set +e; OUT="$("$FM" "$@" 2>"$MOCK_STATE/stderr")"; CODE="$?"; ERR="$(cat "$MOCK_STATE/stderr")"; set -e; }
+run_json() { run_fm_split "$@"; }
 PB="$HOME/plan-bench"
 make_fake_bench "$PB" plansite
 printf 'frappe\n' >"$PB/sites/apps.txt"
@@ -339,9 +368,9 @@ assert_eq "file://${REMOTES}/acme_top.git" "$(printf '%s' "$OUT" | jget - 'd["re
 assert_eq "[{'name': 'plansite', 'installed': False}]" "$(printf '%s' "$OUT" | jget - 'd["sites"]')"
 assert_eq "acme_mid:acme_top:apps_tsv:version-15 acme_leaf:acme_mid:apps_tsv:main" "$(printf '%s' "$OUT" | jget - '" ".join("%s:%s:%s:%s" % (r["name"], r["required_by"], r["source"], r["branch"]) for r in d["required_apps"])')"
 assert_eq "['acme_mid', 'acme_leaf']" "$(printf '%s' "$OUT" | jget - 'd["missing_required"]')"
-assert_eq "Clone acme_leaf,Clone acme_mid,Clone acme_top,Build,Install on plansite,Restart" "$(printf '%s' "$OUT" | jget - '",".join(s["name"] for s in d["steps"])')"
+assert_eq "Clone acme_leaf,Clone acme_mid,Clone acme_top,Build,Back up plansite,Install on plansite,Restart" "$(printf '%s' "$OUT" | jget - '",".join(s["name"] for s in d["steps"])')"
 assert_eq "bench build --apps acme_leaf,acme_mid,acme_top" "$(printf '%s' "$OUT" | jget - 'd["steps"][3]["command"]')"
-assert_contains "$(printf '%s' "$OUT" | jget - 'd["steps"][4]["note"]')" "like a migrate"
+assert_contains "$(printf '%s' "$OUT" | jget - 'd["steps"][5]["note"]')" "like a migrate"
 assert_eq "64" "$(printf '%s' "$OUT" | jget - 'len(d["token"])')"
 TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 assert_eq "$(git -C "$REMOTES/acme_top.git" rev-parse main)" "$(printf '%s' "$OUT" | jget - 'd["commit"]')"
@@ -382,7 +411,7 @@ assert_calls_contain '^bench build --apps acme_leaf,acme_mid,acme_top$'
 assert_calls_contain '^bench --site plansite install-app acme_top$'
 assert_calls_not_contain 'get-app.*(--overwrite|--resolve-deps)'
 assert_eq "frappe acme_leaf acme_mid acme_top" "$(tr '\n' ' ' <"$PB/sites/apps.txt" | sed 's/ $//')"
-assert_eq "True done,done,done,done,done,skipped" "$(printf '%s' "$OUT" | jget - 'str(d["ok"]) + " " + ",".join(s["status"] for s in d["steps"])')"
+assert_eq "True done,done,done,done,done,done,skipped" "$(printf '%s' "$OUT" | jget - 'str(d["ok"]) + " " + ",".join(s["status"] for s in d["steps"])')"
 assert_eq "$TOKEN" "$(printf '%s' "$OUT" | jget - 'd["token"]')"
 # the plan of a present app is empty
 run_json app add "file://${REMOTES}/acme_top.git" --site plansite --dry-run --json --bench-dir "$PB"

@@ -3,6 +3,11 @@ import Network
 import Testing
 @testable import BenchBar
 
+/// tests/share/helpers.js registers a node:test hook, so node prints a "TAP version 13" header on stdout
+/// (Node 20 and 22 do when stdout is a pipe), ahead of the JSON line the Swift side reads. The reporter goes to stderr.
+nonisolated extension NodeGateway { static var quietTestReporter: [String] { ["--test-reporter=tap", "--test-reporter-destination=stderr"] } }
+nonisolated extension PeerRoomServer { static var quietTestReporter: [String] { NodeGateway.quietTestReporter } }
+
 /// The real Node gateway (tests/share/gateway_harness.js through helpers.startGateway) on a
 /// random loopback port, joined from Swift over mTLS: CPace, the exporter, Ta and Tb, then
 /// the seat calls on a pinned connection.
@@ -27,6 +32,11 @@ nonisolated final class NodeGateway {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
+    /// CI sets it: the interop tests must run there, not be skipped.
+    static var required: Bool {
+        ProcessInfo.processInfo.environment["BENCHBAR_REQUIRE_INTEROP"] == "1"
+    }
+
     static var available: Bool {
         nodePath() != nil && FileManager.default.fileExists(atPath: ShareRepo.root.appendingPathComponent("tests/share/helpers.js").path)
     }
@@ -37,7 +47,7 @@ nonisolated final class NodeGateway {
         else { return nil }
         process = Process()
         process.executableURL = URL(fileURLWithPath: node)
-        process.arguments = [ShareRepo.macos.appendingPathComponent("BenchBarTests/Fixtures/room-gateway.js").path, ShareRepo.root.path]
+        process.arguments = Self.quietTestReporter + [ShareRepo.macos.appendingPathComponent("BenchBarTests/Fixtures/room-gateway.js").path, ShareRepo.root.path]
         stdin = Pipe()
         stdout = Pipe()
         process.standardInput = stdin
@@ -97,7 +107,7 @@ nonisolated final class PeerRoomServer {
         guard NodeGateway.available, let node = NodeGateway.nodePath() else { return nil }
         process = Process()
         process.executableURL = URL(fileURLWithPath: node)
-        process.arguments = [ShareRepo.macos.appendingPathComponent("BenchBarTests/Fixtures/peer-room.js").path, ShareRepo.root.path]
+        process.arguments = Self.quietTestReporter + [ShareRepo.macos.appendingPathComponent("BenchBarTests/Fixtures/peer-room.js").path, ShareRepo.root.path]
         stdin = Pipe()
         stdout = Pipe()
         process.standardInput = stdin
@@ -131,8 +141,11 @@ nonisolated final class PeerRoomServer {
     }
 }
 
-/// Skipped (not failed) where node or the repository's share tests are absent, as on CI.
-@Suite(.serialized, .enabled(if: NodeGateway.available, "needs node and tests/share/helpers.js"))
+/// The Swift to Node join checks (the Swift CPace against the gateway's). Where node or the repository's
+/// share tests are absent they are skipped, with the reason in the suite's trait, for a developer's machine.
+/// Where `BENCHBAR_REQUIRE_INTEROP` is set (CI passes it as `TEST_RUNNER_BENCHBAR_REQUIRE_INTEROP`) the suite
+/// is not skipped: a missing node fails each test through its `Issue.record`, so a skip cannot pass unseen.
+@Suite(.serialized, .enabled(if: NodeGateway.available || NodeGateway.required, "needs node and tests/share/helpers.js (set BENCHBAR_REQUIRE_INTEROP=1 to fail instead of skip)"))
 struct ShareInteropTests {
     private func join(_ gateway: NodeGateway, identity: KeychainIdentity, code: String, pin: ServerPin = .firstJoin) async throws -> (Result<JoinedRoom, JoinRefusal>, RoomConnection) {
         let connection = RoomConnection(endpoint: gateway.endpoint, identity: try identity.identity(), pin: pin)
@@ -336,7 +349,9 @@ struct ShareInteropTests {
             clientFingerprint: { (try? identity.spkiDER()).map(Fingerprint.raw(spki:)) },
             makeForwarder: { _ in FakeForwarder() },
             openURL: { _ in },
-            readPasteboard: { message }), guestName: "Asha")
+            readPasteboard: { message },
+            // the Node gateway of this test listens on loopback, which no invite may name outside it
+            inviteAddressAllowed: { $0 == "127.0.0.1" }), guestName: "Asha")
 
         store.pasteInvite()
         guard case .enteringCode(let room) = store.join, let invite = store.invite else {

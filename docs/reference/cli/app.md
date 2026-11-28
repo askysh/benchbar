@@ -18,7 +18,7 @@ Every app: branch, commit, local changes, and the sites that have it.
 
 | Flag | What it does |
 |---|---|
-| `--json` | The list as JSON ([schema](../../json-schema.md#benchbar-app-list---json)) |
+| `--json` | The list as JSON ([schema](../json/apps.md#benchbar-app-list---json)) |
 | `--no-sites` | Read the last site lists instead of asking bench (faster) |
 
 Exit codes: 0; 1 when no bench is found.
@@ -49,6 +49,7 @@ The app's own code runs on your Mac, so add only repos you trust.
 | `--install-on S[,S]` | Install the app on these sites (comma separated), instead of `--site` or `--all-sites` |
 | `--site S` | Install every app (without `--install-on`) on this site afterwards |
 | `--all-sites` | Install it on every site |
+| `--skip-backup` | Do not back the sites up before `install-app`. The plan has a `Back up SITE` step for each site by default; the token changes with the flag |
 
 ### Several apps at once
 
@@ -83,7 +84,8 @@ benchbar app add NAME|URL [same flags] --dry-run --json
 benchbar app add NAME|URL [same flags] --apply TOKEN --yes [--json]
 ```
 
-`--dry-run --json` prints the plan and changes nothing: the resolved app,
+`--dry-run --json` prints the plan and changes nothing in the bench (the
+first plan creates the plan key for tokens, once): the resolved app,
 repo and branch, whether git can read the repo (without a prompt, with a
 timeout), the sites, the required apps from `hooks.py` (read from a
 shallow clone in a temp folder, then removed; at the pinned commit with
@@ -91,7 +93,7 @@ shallow clone in a temp folder, then removed; at the pinned commit with
 through `config/apps.tsv` or the team profile, the steps, and a `token`.
 `commit_source` says whether `commit` is the `pin` or the `branch` tip,
 and with several apps `apps[]` has one entry each.
-See the [JSON schema](../../json-schema.md#benchbar-app-add-url---dry-run---json).
+See the [JSON schema](../json/apps.md#benchbar-app-add-url---dry-run---json).
 
 `--apply TOKEN --yes`, with the same arguments, recomputes the plan
 under the CLI lock and runs exactly that plan, including the planned
@@ -118,14 +120,17 @@ benchbar app add https://github.com/acme/acme_crm --site macdev --apply 3f9c...e
 ## app install
 
 ```
-benchbar app install NAME --site S
+benchbar app install NAME --site S [--skip-backup]
 ```
 
-Installs an app of the bench on one site.
+Installs an app of the bench on one site. `install-app` changes the site's
+database, so it backs the site up first (the site's older backups are kept),
+and stops when the backup fails.
 
 | Flag | What it does |
 |---|---|
 | `--site S` | The site to install on |
+| `--skip-backup` | Install without a backup first |
 
 Exit codes: 0; 1 on failure.
 
@@ -156,7 +161,7 @@ leaves one too (`app_add_pending`).
 | `--skip-backup` | Do not back up the sites first |
 | `--discard-pending` | Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs |
 | `--dry-run` | Show the changelog and the plan, change nothing |
-| `--json` | With `--dry-run`: the plan as JSON ([schema](../../json-schema.md#benchbar-app-update-name---dry-run---json)). Without it: JSON lines, the plan, a line per step and a `done` with `updated` and the [done fields](../../json-schema.md#the-done-fields-08) |
+| `--json` | With `--dry-run`: the plan as JSON ([schema](../json/apps.md#benchbar-app-update-name---dry-run---json)). Without it: JSON lines, the plan, a line per step and a `done` with `updated` and the [done fields](../../json-schema.md#the-done-fields-08) |
 
 Exit codes: 0 updated or already current; 1 refused or a step failed.
 
@@ -184,7 +189,7 @@ the pin so it is inferred again. The pin is kept in the bench's state.
 | Flag | What it does |
 |---|---|
 | `--list` | List the apps (the same as no NAME) |
-| `--json` | As JSON ([schema](../../json-schema.md#benchbar-app-focus---json)) |
+| `--json` | As JSON ([schema](../json/apps.md#benchbar-app-focus---json)) |
 | `--fetch` | Fetch the focus apps' dependencies first (20 seconds each, no prompt; not with `OFFLINE=1` or `--dry-run`) |
 | `--auto` | With NAME: remove the pin, infer again |
 
@@ -208,25 +213,36 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar app list\|add\|install\|update\|focus\|unfocus ...` | no | no | no | no | none |
 | `benchbar app list [--json] [--no-sites]` | no | no | no | no | document |
 | `benchbar app add NAME\|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME\|URL ...] [--site S\|--all-sites] --dry-run --json, then --apply TOKEN --yes` | no | no | yes | yes | document |
-| `benchbar app install NAME --site S` | no | no | no | yes | none |
-| `benchbar app update NAME [--skip-backup] [--dry-run] [--json]` | yes | no | yes | yes | stream |
+| `benchbar app install NAME --site S [--skip-backup] [--dry-run --json \| --apply TOKEN --yes]` | no | no | no | yes | stream |
+| `benchbar app update NAME [--skip-backup] [--dry-run --json \| --apply TOKEN --yes]` | yes | no | yes | yes | stream |
 | `benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]` | no | no | no | no | document |
-| `benchbar app unfocus NAME` | no | no | no | yes | none |
+| `benchbar app unfocus NAME` | no | no | no | yes | document |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
+| `app list` | `--no-sites` |  | Leave out the sites that have each app (faster): the last site lists are read instead of asking bench. |
+| `app add` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `app add` | `--branch` | `B` | Branch or tag. |
 | `app add` | `--name` | `N` | The app's package name. |
 | `app add` | `--commit` | `SHA` | Pin the app to this commit (7 to 40 hex characters). |
 | `app add` | `--install-on` | `S,S` | Install this app on these sites only. |
 | `app add` | `--site` | `S` | Install it on this site. |
 | `app add` | `--all-sites` |  | Install it on every site. |
+| `app add` | `--skip-backup` |  | Install on the sites without a backup first (the plan takes one by default). |
 | `app add` | `--dry-run` |  | Print the plan and its token. |
 | `app add` | `--apply` | `TOKEN` | Run exactly that plan (with --yes). |
+| `app install` | `--skip-backup` |  | Install without a backup of the site first. |
+| `app install` | `--dry-run` |  | Print the plan as one JSON document with --json; it carries a token. |
+| `app install` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); refused when the plan changed since the token was made. |
+| `app update` | `--background` |  | Start it detached and print its op_id at once (benchbar op status, op wait follow it). Nothing can be asked: needs --yes and the inputs in the environment, as for an agent. Not with --dry-run. |
 | `app update` | `--skip-backup` |  | Migrate without a backup first. |
-| `app update` | `--dry-run` |  | Print the plan as one JSON document with --json. |
+| `app update` | `--dry-run` |  | Print the plan as one JSON document with --json; it carries a token (null when there is nothing to do). |
+| `app update` | `--apply` | `TOKEN` | Run exactly that plan (with --yes); the plan is made again after a fetch, under the lock, and refused when it changed. |
 | `app update` | `--discard-pending` |  | Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs. |
+| `app focus` | `--list` |  | List the focus apps (the default without a name). |
+| `app focus` | `--auto` |  | With NAME: let benchbar decide again (undo a pin). |
+| `app focus` | `--fetch` |  | git fetch the branches of the focus apps first. |
 <!-- /generated:cli-commands -->

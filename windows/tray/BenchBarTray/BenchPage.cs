@@ -28,6 +28,7 @@ internal sealed class BenchPage : UserControl
     private readonly Dictionary<BenchTab, UIElement> _views = [];
     private readonly Dictionary<BenchTab, TabItem> _items = [];
     private readonly PendingBanner _banner;
+    private readonly NoticesBanner _notices;
     private BenchContext? _context;
     private bool _syncing;
 
@@ -41,15 +42,17 @@ internal sealed class BenchPage : UserControl
         {
             var item = new TabItem { Header = BenchTabs.Label(tab), Tag = tab, Padding = new Thickness(14, 6, 14, 6) };
             if (tab == BenchTab.Overview) item.Content = overview;
-            Ui.Name(item, BenchTabs.Label(tab) + " tab");
+            Ui.Name(item, UiText.Format("BenchTabName", BenchTabs.Label(tab)));
             _items[tab] = item;
             _tabs.Items.Add(item);
         }
         _tabs.SelectionChanged += OnTabChanged;
-        Ui.Name(_tabs, "Bench tabs");
+        Ui.Name(_tabs, UiText.Get("BenchTabs"));
         _banner = new PendingBanner(services);
         DockPanel.SetDock(_banner, Dock.Top);
-        Content = new DockPanel { LastChildFill = true, Children = { _banner, _tabs } };
+        _notices = new NoticesBanner(services);
+        DockPanel.SetDock(_notices, Dock.Top);
+        Content = new DockPanel { LastChildFill = true, Children = { _notices, _banner, _tabs } };
         _syncing = true;
         _tabs.SelectedIndex = 0;
         _syncing = false;
@@ -60,6 +63,9 @@ internal sealed class BenchPage : UserControl
 
     /// <summary>The banner for app updates and adds that stopped part way, above the tabs (for tests).</summary>
     internal PendingBanner Pending => _banner;
+
+    /// <summary>The banner for the notices an update left (<c>status --json</c> <c>notices[]</c>), above the unfinished operations (for tests).</summary>
+    internal NoticesBanner Notices => _notices;
 
     public BenchTab Tab { get; private set; } = BenchTab.Overview;
 
@@ -87,7 +93,7 @@ internal sealed class BenchPage : UserControl
         if (visible)
         {
             var item = new TabItem { Header = BenchTabs.Label(BenchTab.Sharing), Tag = BenchTab.Sharing, Padding = new Thickness(14, 6, 14, 6) };
-            Ui.Name(item, "Sharing tab");
+            Ui.Name(item, UiText.Format("BenchTabName", BenchTabs.Label(BenchTab.Sharing)));
             _items[BenchTab.Sharing] = item;
             _tabs.Items.Add(item);
             return;
@@ -109,6 +115,7 @@ internal sealed class BenchPage : UserControl
     {
         _context = new BenchContext(bench, site);
         _banner.Bind(bench);
+        _notices.Bind(bench);
         if (navigate) Select(site is null ? BenchTab.Overview : BenchTab.Sites);
         BindShown();
     }
@@ -146,9 +153,27 @@ internal sealed class BenchPage : UserControl
         _items[tab].Content = new ScrollViewer { Content = view, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 4, 8, 0) };
     }
 
+    private bool _asking;
+
+    /// <summary>Asks the CLI once what it can do, so the tabs know what to offer (Pull in Sites); binds again when the answer arrives.</summary>
+    private async Task AskCatalogueAsync()
+    {
+        if (_asking || _services.Commands.Current is not null) return;
+        _asking = true;
+        try
+        {
+            if (await _services.Commands.GetAsync().ConfigureAwait(true) is not null) BindShown();
+        }
+        finally
+        {
+            _asking = false;
+        }
+    }
+
     private void BindShown()
     {
         if (_context is null) return;
+        if (Tab == BenchTab.Sites) AskCatalogueAsync().Forget();
         if (_views.TryGetValue(Tab, out var view) && view is IBenchPageView page) page.Bind(_context);
         if (Tab == BenchTab.Overview)
         {

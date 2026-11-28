@@ -3,16 +3,59 @@ title: "Quick start"
 description: "Register a bench you already have with benchbar adopt, or install a new bench and site with benchbar install, then start it."
 ---
 
-First [install](install.md) BenchBar; with Homebrew that is
-`brew install askysh/tap/benchbar askysh/tap/benchbar-app`. Then there
-are two starting points. Pick the one that matches your Mac.
+Pick your system. Each block gives what you need, the install command
+and the address of your site.
 
-A few words first. A **bench** is the folder that holds a Frappe
+## Your system
+
+**macOS.**
+
+- You need macOS 14 or later on Apple Silicon, Homebrew, the Xcode
+  Command Line Tools and about 5 GB of free disk. The wizard checks all
+  of them.
+- Install with `brew install askysh/tap/benchbar askysh/tap/benchbar-app`.
+  Other ways are on the [Install](install.md) page.
+- The default site is `macdev`. Open `http://macdev:8000`.
+
+**Linux (Ubuntu 24.04).**
+
+- You need an x86_64 or arm64 PC with systemd, a user that can run `sudo`
+  (not root) and about 5 GB of free disk. Run
+  `benchbar doctor --prerequisites` first: it checks what it can and
+  changes nothing.
+- Install with the one line installer, then open a new terminal. It
+  installs the command line tool only. See
+  [Install: Linux](install.md#linux).
+
+  ```bash
+  curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+  ```
+
+- The default site is `linuxdev.localhost`. Open
+  `http://linuxdev.localhost:8000`. The helpers (`benchup`) are in
+  `~/.bashrc`: run `source ~/.bashrc` once.
+
+**Windows (beta, with WSL).**
+
+- You need Windows 10 22H2 or Windows 11. The tray app sets up WSL and
+  Ubuntu for you.
+- Install with the one line in PowerShell. See
+  [Install: Windows](install.md#windows) and
+  [Windows](windows.md#first-run).
+- The site is `linuxdev.localhost`, as on Linux. Open
+  `http://linuxdev.localhost:8000` in a Windows browser.
+
+The steps below use the macOS commands. On Linux and in WSL, use
+`~/.bashrc` where they say `~/.zshrc`, and the site above in place of
+`macdev`. If an install stops, see [First run problems](first-run-problems.md).
+
+A few words first (the [Glossary](glossary.md) has the rest). A **bench** is the folder that holds a Frappe
 installation: the apps in `apps/`, a Python environment in `env/` and
 the sites in `sites/`. A **site** is one Frappe instance in that bench,
 with its own database and its own address, such as `http://macdev:8000`.
-benchbar runs each bench as a **launchd agent**, the macOS way of
-keeping a program running in the background.
+benchbar runs each bench as a **launchd agent** on macOS, or a
+`systemd --user` unit on Linux. Both keep a program running in the
+background.
 
 ## Without Terminal
 
@@ -97,27 +140,13 @@ what is already done.
 ### If the install stops
 
 Run `benchbar install` again: it picks up where it stopped. The cases
-below are the ones that need a word.
+below need a word. The rest are on [First run problems](first-run-problems.md).
 
-**It stopped at `bench init` with `No such file or directory: 'uv'`
-(issue 112), and every run since says `Bench directory exists but is
-incomplete`.** Older releases did not install `uv`, which `bench init`
-needs even when bench itself came from pipx. Update BenchBar, then run
-`benchbar install` again: step 1 installs `uv` with Homebrew, and the
-empty folder the failed init left is moved to
-`~/frappe-bench.incomplete.<time>` (nothing is deleted; remove it when you
-like). On an older release the same fix by hand is:
-
-```bash
-brew install uv
-mv ~/frappe-bench ~/frappe-bench.incomplete.$(date +%Y%m%d%H%M%S)
-benchbar install
-```
-
-A folder that holds something other than empty folders (an app, your
-files) is not moved on its own. `benchbar install --repair-bench` moves
-it aside and starts over, and with `--dry-run` it shows the move first. A
-bench that has a site is never moved.
+**It stopped at `bench init` with `No such file or directory: 'uv'`, or
+every run says `Bench directory exists but is incomplete`.** See
+[First run problems](first-run-problems.md#macos-bench-init-fails-with-no-such-file-or-directory-uv).
+The same page covers the Linux stops: a false MariaDB warning, no systemd
+user bus, and a failed step that exits with 0.
 
 **`benchbar: command not found`.** Step 1 links `benchbar` into
 `~/.local/bin`. A new terminal (or `source ~/.zshrc`) puts that folder on
@@ -154,22 +183,13 @@ Terminal (a new tab has them already). `benchup` starts the bench in the
 background, waits for the site and ends with
 `bench is up: http://macdev:8000`.
 
-`macdev` is the default site name on macOS. On Linux (and in WSL) it is
+`macdev` is the default site name on macOS. On Linux and in WSL it is
 `linuxdev.localhost`, so open `http://linuxdev.localhost:8000`. When you picked
-another one, or adopted a bench, `benchbar status` shows the site's URL; use that.
+another one, or adopted a bench, `benchbar status` shows the site's URL: use that.
 
 In the browser, log in as `Administrator` with the password you gave
 `install` (or your existing one), and walk through the setup wizard. You
 can close Terminal; the bench keeps running until `benchdown`.
-
-## Linux and Windows
-
-On Ubuntu 24.04 (or another apt based system), clone the repository and run `./benchbar install`, then
-`source ~/.bashrc` and `benchup`. See [Install: Linux](install.md#linux).
-
-On Windows, install BenchBar for Windows (a beta) with the one line in
-[Install: Windows](install.md#windows). Its tray opens a first run wizard
-that sets up WSL, the distro and the bench. See [Windows](windows.md#first-run).
 
 ## What next
 

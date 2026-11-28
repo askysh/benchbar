@@ -15,12 +15,31 @@
 # entries of an array of tables from 1 (0 otherwise). Arrays are space
 # separated. KEYS lists "section.key=type" (type s, b, i or a), REQUIRED
 # lists "section.key". Exit 1 with the message on stderr.
+#
+# A repo that is a git transport helper (ext::sh -c ..., fd::3) is refused in
+# every file: the value goes to git and bench get-app. The rest depends on
+# who wrote the file (FL_TOML_REPOS, set by the caller):
+#   strict (the default): a file from someone else (an import, a subscription,
+#     a lock inside an app repo) names https://, ssh:// or user@host:path; a
+#     local path or file:// passes only with BENCHBAR_ALLOW_LOCAL_REPOS=1.
+#   own: a file the person made themselves also takes a local path, file://,
+#     http:// and git://; benchbar warns where it writes one that teammates
+#     cannot clone.
+# repo and branch are never empty and never hold "|" (the app lists are joined
+# with it). A UTF-8 byte order mark at the start of the file is skipped.
 
 fl_toml_parse() {
   local file="$1" keys="$2" tables="$3" arrays="$4" required="$5"
   [[ -f "$file" ]] || { printf '%s: no such file\n' "$file" >&2; return 1; }
-  awk -v fname="$(basename "$file")" -v keys="$keys" -v tables="$tables" -v arrays="$arrays" -v required="$required" '
+  LC_ALL=C awk -v fname="$(basename "$file")" -v local_ok="${BENCHBAR_ALLOW_LOCAL_REPOS:-0}" -v own="$([[ "${FL_TOML_REPOS:-strict}" == "own" ]] && printf 1 || printf 0)" -v keys="$keys" -v tables="$tables" -v arrays="$arrays" -v required="$required" '
     function fail(msg, ln) { printf "%s:%d: not supported: %s\n", fname, (ln ? ln : NR), msg > "/dev/stderr"; bad = 1; exit 1 }
+    function repo_ok(v) {
+      if (v ~ /^https:\/\/[^ \t]+$/ || v ~ /^ssh:\/\/[^ \t]+$/) return 1
+      if (v ~ /^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:[^: \t][^ \t]*$/) return 1
+      if ((local_ok == "1" || own == "1") && (v ~ /^file:\/\/[^ \t]+$/ || v ~ /^\//)) return 1
+      if (own == "1" && (v ~ /^http:\/\/[^ \t]+$/ || v ~ /^git:\/\/[^ \t]+$/ || v ~ /^\.\.?\/[^ \t]+$/ || v ~ /^~\/[^ \t]+$/)) return 1
+      return 0
+    }
     function header_close(   k, n, r) {
       # the required keys of the table or entry that just ended
       if (sec == "top" || sec == "") return
@@ -38,6 +57,7 @@ fl_toml_parse() {
     }
     {
       line = $0; sub(/\r$/, "", line)
+      if (NR == 1 && substr(line, 1, 3) == "\357\273\277") line = substr(line, 4)
       if (line ~ /^[ \t]*(#.*)?$/) next
       if (match(line, /^[ \t]*\[\[[a-z_]+\]\][ \t]*(#.*)?$/)) {
         name = line; sub(/^[ \t]*\[\[/, "", name); sub(/\]\].*$/, "", name)
@@ -73,10 +93,16 @@ fl_toml_parse() {
       else fail("value of " key)
       if (tail !~ /^[ \t]*(#.*)?$/) fail("text after the value of " key)
       if (t != ktype[sec "." key]) fail(key " must be " (ktype[sec "." key] == "s" ? "a string" : ktype[sec "." key] == "b" ? "true or false" : ktype[sec "." key] == "i" ? "an integer" : "an array of strings"))
-      if (key == "repo" && val ~ /^[a-zA-Z+]+:\/\/[^\/]*@/ && val !~ /^ssh:\/\//) fail("a user name or token in a repo URL (the file gets committed)")
+      if ((key == "repo" || key == "branch") && val == "") fail(key " must not be empty")
+      if ((key == "repo" || key == "branch") && index(val, "|")) fail(key " must not contain \"|\"")
       # a value git would read as an option (--upload-pack=...) runs commands: never accepted
       if ((key == "repo" || key == "branch" || key == "commit" || key == "frappe_commit" || key == "erpnext_commit" || key == "name") && val ~ /^-/) fail("\"" key "\" must not start with \"-\"")
+      if (key == "repo" && index(val, "::")) fail("repo \"" val "\": a git transport helper (transport::address) is never accepted")
+      if (key == "repo" && !repo_ok(val)) fail("repo \"" val "\": use https://, ssh:// or user@host:path")
+      if (key == "repo" && val ~ /^[a-zA-Z+]+:\/\/[^\/]*@/ && val !~ /^ssh:\/\//) fail("a user name or token in a repo URL (the file gets committed)")
       if ((key == "commit" || key == "frappe_commit" || key == "erpnext_commit") && (val !~ /^[0-9a-f]+$/ || length(val) < 7 || length(val) > 40)) fail(key " must be 7 to 40 lower case hex characters")
+      # a lock pins a full commit: a 7 character prefix is matched by prefix and is easy to collide
+      if (sec == "app" && key == "commit" && length(val) < 12) fail("commit must be 12 to 40 lower case hex characters (a lock pins a full commit)")
       if (key == "name" && val !~ /^[A-Za-z0-9][A-Za-z0-9._-]*$/) fail("name " val)
       printf "%s\t%d\t%s\t%s\n", sec, idx, key, val
     }

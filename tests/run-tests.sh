@@ -4,7 +4,7 @@
 #
 #   tests/run-tests.sh                  all tests, PARALLEL at a time
 #   PARALLEL=1 tests/run-tests.sh       one after another
-#   SHARD=2/3 tests/run-tests.sh        only the second third, balanced by TEST_SECS (CI matrix)
+#   SHARD=2/3 tests/run-tests.sh        only the second third, balanced by tests/timings.tsv (CI matrix)
 #   tests/run-tests.sh test-doctor ...  only the named tests
 #   tests/run-tests.sh shellcheck       only the lint
 #   SHELLCHECK=0 tests/run-tests.sh     the tests without the lint
@@ -12,7 +12,10 @@
 #   ONLY_TESTS="test-a test-b" ...      only those, sharded like the full list (CI: affected tests)
 #   LIST_ONLY=1 SHARD=2/4 ...           print the chosen tests, run nothing
 #   SECS_ONLY=1 ...                     print the weight (table seconds) of the chosen tests, run nothing
-#   SHELLCHECK_FILES="a.sh b.sh" ...    the lint checks only those files; SC_JOBS=4 runs 4 shellcheck at once
+#   NO_SKIP="test-a test-b" ...         those tests fail when they skip themselves ("NAME: ok (SKIPPED ...)")
+#   RERUN_FAILED=1 ...                  a failed test runs once more, and FLAKY says it passed then (on by default when CI is set)
+#   STRICT_FLAKY=1 ...                  a test that was FLAKY (failed, then passed on the rerun) fails the run at its end
+#   SHELLCHECK_FILES="a.sh b.sh" ...    the lint checks only those files; SC_JOBS=2 runs 2 shellcheck at once (default: CPUs, at most 3, at most what the memory holds at 4.5 GB each)
 #
 # PARALLEL defaults to the number of CPUs. Every test builds its own HOME
 # and mock state under mktemp, so they run side by side; each test's output
@@ -30,67 +33,40 @@ SCRIPTS=("$ROOT"/benchbar "$ROOT"/00-mac-system-deps.sh "$ROOT"/00-linux-system-
 # (the plan only wants a weight: SECS_ONLY skips the syntax check)
 [[ -n "${SECS_ONLY:-}" ]] || bash -n "${SCRIPTS[@]}"
 
-# Every test file. Shards are filled from TEST_SECS below, not from this
-# order. A new test file must be added here; the check below enforces it.
-ALL_TESTS="test-doctor test-phases test-install-json test-install-json-2 test-lock test-apps test-app-recovery test-app-recovery-2 test-app-recovery-3 test-app-batch test-pull test-repair test-install-linux test-port-management
-test-profiles test-profiles-2 test-profiles-3 test-service test-homebrew test-multi-bench test-ports test-sites test-input-hygiene test-doctor-hardening
-test-cli test-open-as test-freshness test-hygiene test-mcp test-mcp-2 test-site-backups test-app-cli test-process test-process-match test-doctor-linux test-install-sh test-install-sh-linux
-test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
-test-runner test-redact test-docs-command test-status-cost test-command-cost test-bench-flow test-run test-platform-linux test-self-update
-test-site-restore test-site-restore-2 test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
-test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin test-lan-guard test-labs test-labs-share test-wsl-preflight test-ci-plan test-fresh-install test-tray-fixtures test-backup-safety test-changelog test-lean-load test-linux-parity test-facts test-guards test-release-workflows test-neutralise test-listen test-macos-appcast test-apps-speed test-version-sources test-person-guard test-json-schema"
-
-ALL_TESTS_WORDS=" $(printf '%s' "$ALL_TESTS" | tr '\n' ' ') "
+# Every test file: each tests/test-*.sh is a test. A new test needs no entry here or
+# anywhere else. Shards are filled from the seconds in tests/timings.tsv, not from
+# this order.
+ALL_TESTS=""
 for f in "$ROOT"/tests/test-*.sh; do
-  n="${f##*/}"; n="${n%.sh}"
-  case "$ALL_TESTS_WORDS" in
-    *" $n "*) ;;
-    *) printf 'FAIL: %s is not in the test list of tests/run-tests.sh\n' "$n" >&2; exit 1 ;;
-  esac
+  [[ -f "$f" ]] || continue
+  n="${f##*/}"; ALL_TESTS="$ALL_TESTS ${n%.sh}"
 done
+ALL_TESTS="${ALL_TESTS# }"
+ALL_TESTS_WORDS=" $ALL_TESTS "
 
-# Seconds each test takes in a CI shard, as the CI log reports them
-# ("--- ok: test-x (Ns)"): TEST_SECS_MAC on the macOS shards (3 CPUs), TEST_SECS_LINUX
-# on the Linux and bash 3.2 container shards (4 CPUs; the average of both). A test
-# not named counts as 10 (one new test is a rounding error; a table that is a month
-# old is not). Only the proportions matter. Shards are filled from these tables (see
-# "the jobs"), and CI-ready plans size the matrix from them (scripts/ci-plan.sh).
-# Refresh both from the log of a green full run (a push to next-release or the
-# nightly): scripts/ci-timings.sh RUN_ID prints the two blocks below, from run
-# 44055044922 (2026-11-17).
-TEST_SECS_MAC="test-services-served=297 test-doctor=270 test-port-management=232 test-share-run=232 test-repair=223 test-share=222
-test-install-json=220 test-site-restore=219 test-pull=216 test-lock=200 test-windows-commands=197 test-site-restore-2=194
-test-sudo-env=193 test-app-recovery-2=181 test-doctor-hardening=179 test-wsl-preflight=176 test-share-preflight=174 test-apps=165
-test-mcp=161 test-agent-contracts-3=159 test-app-batch=156 test-app-recovery-3=149 test-phases=137 test-agent-contracts-2=134
-test-app-recovery=128 test-install-json-2=128 test-agent-contracts=123 test-profiles-2=121 test-homebrew=116 test-freshness=115
-test-service=109 test-ports=108 test-share-admin=108 test-app-cli=104 test-input-hygiene=104 test-multi-bench=101
-test-sites=81 test-hygiene=80 test-cli=76 test-open-as=65 test-site-backups=61 test-install-sh=57
-test-pipelines=57 test-profiles-3=57 test-lan-guard=50 test-report=49 test-migrate=48 test-json=47
-test-profiles=45 test-process=43 test-adopt=42 test-profile-v16=38 test-run-lock=36 test-state-migrate=36
-test-command-cost=35 test-redact=35 test-repair-json=34 test-share-gateway=33 test-bench-flow=20 test-docs-command=20
-test-labs=20 test-prerequisites-linux=20 test-labs-share=19 test-runner=19 test-status-cost=14 test-run=13
-test-install-sh-linux=10 test-discovery=5 test-self-update=5 test-affected=4 test-shellrc=4 test-templates=4
-test-packaging=2 test-macos-appcast=2 test-docs=1 test-platform=0 test-release-notes=0 test-changelog=0 test-ui=0 test-version-policy=0 test-ci-plan=25 test-apps-speed=20 test-version-sources=1 test-json-schema=25"
-
-TEST_SECS_LINUX="test-doctor=184 test-apps=176 test-pull=175 test-sudo-env=172 test-windows-commands=165 test-install-json-2=164
-test-site-restore=159 test-repair=157 test-site-restore-2=153 test-app-batch=148 test-lock=148 test-mcp=145
-test-phases=139 test-port-management=138 test-wsl-preflight=137 test-install-linux=136 test-install-json=135 test-app-recovery-2=130
-test-app-recovery-3=122 test-agent-contracts-3=119 test-doctor-hardening=118 test-services-served=115 test-app-recovery=114 test-homebrew=106
-test-agent-contracts-2=103 test-agent-contracts=99 test-service=99 test-profiles-2=97 test-sites=96 test-input-hygiene=94
-test-freshness=92 test-multi-bench=89 test-ports=89 test-app-cli=84 test-pipelines=84 test-doctor-linux=74
-test-open-as=72 test-hygiene=69 test-site-backups=69 test-profiles-3=57 test-cli=56 test-systemd=48
-test-adopt=45 test-process=41 test-install-sh=40 test-migrate=39 test-profile-v16=37 test-json=35
-test-profiles=33 test-report=32 test-repair-json=29 test-run-lock=27 test-state-migrate=25 test-labs=24
-test-redact=22 test-command-cost=20 test-docs-command=18 test-bench-flow=17 test-runner=17 test-share-gateway=17
-test-labs-share=14 test-prerequisites-linux=12 test-run=12 test-status-cost=10 test-install-sh-linux=7 test-self-update=7
-test-discovery=4 test-templates=4 test-affected=3 test-platform-linux=3 test-docs=2 test-shellrc=2
-test-packaging=1 test-macos-appcast=1 test-release-notes=1 test-changelog=0 test-platform=0 test-ui=0 test-version-policy=0 test-ci-plan=25 test-apps-speed=20 test-version-sources=1 test-json-schema=25"
-# TEST_PLATFORM=mac or linux picks the table (default: this machine)
+# Seconds each test takes in a CI shard: tests/timings.tsv, one row per test, NAME,
+# the macOS seconds and the Linux seconds (the file's header says how they are
+# measured and how to refresh them: scripts/ci-timings.sh --write RUN_ID). A test with
+# no row, or with a dash, counts as 10 (one new test is a rounding error; a table that
+# is a month old is not). Only the proportions matter. Shards are filled from this
+# table (see "the jobs"), and CI plans size the matrix from it (scripts/ci-plan.sh).
+# The table is a data file so that a new test or a new time is not a change to this
+# harness: tests/affected.sh runs the whole suite for a change here, and two branches
+# that both add a row merge without a conflict.
+# TEST_PLATFORM=mac or linux picks the column (default: this machine)
 case "${TEST_PLATFORM:-$(uname -s)}" in
-  mac|Darwin) TEST_SECS="$TEST_SECS_MAC" ;;
-  *) TEST_SECS="$TEST_SECS_LINUX" ;;
+  mac|Darwin) SECS_COL=mac ;;
+  *) SECS_COL=linux ;;
 esac
-TEST_SECS_WORDS=" $(printf '%s' "$TEST_SECS" | tr '\n' ' ') "
+TEST_SECS_WORDS=" "
+if [[ -f "$ROOT/tests/timings.tsv" ]]; then
+  while IFS=$'\t' read -r n mac linux _; do
+    case "$n" in ''|'#'*) continue ;; esac
+    if [[ "$SECS_COL" == mac ]]; then v="$mac"; else v="$linux"; fi
+    [[ "$v" =~ ^[0-9]+$ ]] || continue
+    TEST_SECS_WORDS="$TEST_SECS_WORDS$n=$v "
+  done <"$ROOT/tests/timings.tsv"
+fi
 # test_secs NAME: sets SECS (no subshell: this runs once per test, and a fork
 # costs milliseconds on a busy machine)
 test_secs() {
@@ -114,6 +90,15 @@ weighted_tests() {
 }
 
 ncpu() { sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2; }
+# mem_mb: the memory the machine can give out now, in MB (empty when unknown). On macOS
+# there is no such figure, so it is the total memory there: only an upper bound
+mem_mb() {
+  local kb bytes
+  kb="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null)" || kb=""
+  if [[ "$kb" =~ ^[0-9]+$ ]]; then printf '%s' $((kb / 1024)); return 0; fi
+  bytes="$(sysctl -n hw.memsize 2>/dev/null)" || bytes=""
+  if [[ "$bytes" =~ ^[0-9]+$ ]]; then printf '%s' $((bytes / 1048576)); fi
+}
 PARALLEL="${PARALLEL:-$(ncpu)}"
 [[ "$PARALLEL" =~ ^[1-9][0-9]*$ ]] || { printf 'PARALLEL must be a positive number, got %s\n' "$PARALLEL" >&2; exit 1; }
 
@@ -162,10 +147,14 @@ run_test_with_deadline() {
 }
 
 # run_shellcheck: shellcheck -x over every shell file, or over SHELLCHECK_FILES
-# when set (the files a pull request changed). The files go to SC_JOBS shellcheck
-# processes at a time, 12 files each (one process over all 200 takes minutes: it
-# parses harness.sh and the libraries again for every test file). SC_JOBS is 1
-# unless set; a run of "shellcheck" alone uses every CPU.
+# when set (the files a pull request changed). One shellcheck process per file
+# (tests/lib/shellcheck-file.sh: a deadline that names the file),
+# SC_JOBS at a time: -x parses harness.sh and the libraries again for every
+# file. benchbar, with dataflow analysis, took 15 GB on a 16 GB runner, so the
+# wrapper checks it without that analysis (0.7 GB); the biggest of the rest
+# take 2 to 2.5 GB there (#137, #396).
+# SC_JOBS is 1 unless set; a run of "shellcheck" alone uses every CPU, at most
+# SC_JOBS_MAX (default 3).
 run_shellcheck() {
   local files=() jobs="${SC_JOBS:-1}"
   if [[ -n "${SHELLCHECK_FILES:-}" ]]; then
@@ -177,7 +166,8 @@ run_shellcheck() {
     files+=("$ROOT"/tests/*.sh "$ROOT"/tests/lib/*.sh "$ROOT"/tests/mocks/bin/* "$ROOT"/scripts/*.sh)
   fi
   [[ "${#files[@]}" -gt 0 ]] || { printf 'shellcheck: no files\n'; return 0; }
-  printf '%s\0' "${files[@]}" | xargs -0 -n 12 -P "$jobs" shellcheck -x || return 1
+  printf 'shellcheck: %s files, %s at a time\n' "${#files[@]}" "$jobs"
+  printf '%s\0' "${files[@]}" | xargs -0 -n 1 -P "$jobs" bash "$ROOT/tests/lib/shellcheck-file.sh" || return 1
   printf 'shellcheck: ok (%s files)\n' "${#files[@]}"
 }
 
@@ -231,8 +221,18 @@ if [[ -n "${SECS_ONLY:-}" ]]; then
   for t in ${JOBS[@]+"${JOBS[@]}"}; do [[ "$t" == shellcheck ]] || { test_secs "$t"; total=$((total + SECS)); }; done
   printf '%s\n' "$total"; exit 0
 fi
-# a run of the lint alone has the machine to itself
-if [[ "${#JOBS[@]}" -eq 1 && "${JOBS[0]}" == shellcheck && -z "${SC_JOBS:-}" ]]; then SC_JOBS="$PARALLEL"; fi
+# a run of the lint alone has the machine to itself, but not more than SC_JOBS_MAX processes
+# (default 3) and not more than the memory holds: the biggest takes SC_MB_PER_JOB (default 4500)
+if [[ "${#JOBS[@]}" -eq 1 && "${JOBS[0]}" == shellcheck && -z "${SC_JOBS:-}" ]]; then
+  SC_JOBS="$PARALLEL"
+  [[ "$SC_JOBS" -le "${SC_JOBS_MAX:-3}" ]] || SC_JOBS="${SC_JOBS_MAX:-3}"
+  mb="${SC_MEM_MB:-$(mem_mb)}"
+  if [[ "$mb" =~ ^[1-9][0-9]*$ ]]; then
+    fit=$((mb / ${SC_MB_PER_JOB:-4500}))
+    [[ "$fit" -ge 1 ]] || fit=1
+    [[ "$SC_JOBS" -le "$fit" ]] || SC_JOBS="$fit"
+  fi
+fi
 
 OUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-run-tests.XXXXXX")"
 PIDS=()
@@ -248,6 +248,26 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+# run_one_test NAME LOG: one run of a test file, its output in LOG; 0 only when it passed in full.
+# Two checks beyond the exit code, because bash 3.2 (the macOS /bin/bash and the container legs) exits 0
+# after a "set -u" abort inside a function when an EXIT trap is set, so a test that stopped halfway
+# counts as a pass: the log may not hold an "unbound variable" error (stderr is in it), and a share or
+# lan-guard test must print its own "NAME: ok" line (a skip says why after the ok, in parentheses:
+# "NAME: ok (SKIPPED ...)").
+run_one_test() {
+  local name="$1" log="$2" c=0
+  if run_test_with_deadline "$ROOT/tests/$name.sh" >"$log" 2>&1; then c=0; else c=$?; fi
+  if [[ "$c" == 0 && ( "$name" == test-share* || "$name" == test-lan-guard ) ]] && ! grep -qE "^${name}: ok( \(.*\))?\$" "$log"; then
+    printf 'FAIL: %s exited 0 without its "%s: ok" line\n' "$name" "$name" >>"$log"
+    c=1
+  fi
+  if [[ "$c" == 0 ]] && grep -qE ': [A-Za-z_][A-Za-z_0-9]*: unbound variable' "$log"; then
+    printf 'FAIL: %s printed an "unbound variable" error: a set -u abort the shell did not turn into an exit code\n' "$name" >>"$log"
+    c=1
+  fi
+  return "$c"
+}
+
 # start_job INDEX: runs job INDEX in the background, output to $OUT_DIR/INDEX.log,
 # exit code to $OUT_DIR/INDEX.rc, seconds to $OUT_DIR/INDEX.secs
 start_job() {
@@ -257,13 +277,24 @@ start_job() {
     if [[ "$name" == "shellcheck" ]]; then
       if run_shellcheck >"$OUT_DIR/$idx.log" 2>&1; then c=0; else c=$?; fi
     else
-      if run_test_with_deadline "$ROOT/tests/$name.sh" >"$OUT_DIR/$idx.log" 2>&1; then c=0; else c=$?; fi
-      # a share or lan-guard test passes only with its own "NAME: ok" line as well: under bash 3.2 a set -u
-      # abort inside a function exits 0 when an EXIT trap is set, so the code alone can count a test that
-      # stopped halfway (a skip says why after the ok, in parentheses: "NAME: ok (SKIPPED ...)")
-      if [[ "$c" == 0 && ( "$name" == test-share* || "$name" == test-lan-guard ) ]] && ! grep -qE "^${name}: ok( \(.*\))?\$" "$OUT_DIR/$idx.log"; then
-        printf 'FAIL: %s exited 0 without its "%s: ok" line\n' "$name" "$name" >>"$OUT_DIR/$idx.log"
-        c=1
+      if run_one_test "$name" "$OUT_DIR/$idx.log"; then c=0; else c=$?; fi
+      # a failed test runs once more on CI (RERUN_FAILED=1 anywhere else): one that then passes is a
+      # flake, and the log says so with the first failure, so it is fixed and not hidden
+      if [[ "$c" != 0 && "$c" != 124 && "${RERUN_FAILED:-${CI:+1}}" == 1 ]]; then
+        mv "$OUT_DIR/$idx.log" "$OUT_DIR/$idx.first"
+        # how the first run ended: a test that a signal killed prints nothing, and then the exit
+        # code is all there is to go on (above 128 it is 128 plus the signal: 143 is TERM, 137 KILL)
+        first="exit ${c}"; [[ "$c" -le 128 ]] || first="${first}, signal $((c - 128))"
+        first="${first}, after $((SECONDS - started))s"
+        if run_one_test "$name" "$OUT_DIR/$idx.log"; then c=0; else c=$?; fi
+        if [[ "$c" == 0 ]]; then
+          { printf 'FLAKY: %s failed once and passed on the rerun (the first run: %s). The first failure:\n' "$name" "$first"; sed 's/^/  | /' "$OUT_DIR/$idx.first"; } >>"$OUT_DIR/$idx.log"
+          # the line the run's summary and the GitHub annotation show (the main loop reads it)
+          { sed -n '/^FAIL/{p;q;}' "$OUT_DIR/$idx.first"; sed -n 1p "$OUT_DIR/$idx.first"; } 2>/dev/null | sed -n 1p >"$OUT_DIR/$idx.flaky"
+          [[ -s "$OUT_DIR/$idx.flaky" ]] || printf 'no output (%s)\n' "$first" >"$OUT_DIR/$idx.flaky"
+        else
+          { printf 'FAILED TWICE: %s (the first run: %s). The first failure:\n' "$name" "$first"; sed 's/^/  | /' "$OUT_DIR/$idx.first"; } >>"$OUT_DIR/$idx.log"
+        fi
       fi
     fi
     printf '%s\n' "$((SECONDS - started))" >"$OUT_DIR/$idx.secs"
@@ -276,7 +307,7 @@ start_job() {
 TOTAL="${#JOBS[@]}"
 printf 'running %s jobs, %s at a time (shard %s)\n' "$TOTAL" "$PARALLEL" "$SHARD"
 started_all="$SECONDS"
-next_start=0; next_print=0; running=0; FAILED=()
+next_start=0; next_print=0; running=0; FAILED=(); SKIPPED_TESTS=(); FLAKY_TESTS=()
 while [[ "$next_print" -lt "$TOTAL" ]]; do
   while [[ "$running" -lt "$PARALLEL" && "$next_start" -lt "$TOTAL" ]]; do
     start_job "$next_start"
@@ -295,6 +326,28 @@ while [[ "$next_print" -lt "$TOTAL" ]]; do
   while [[ "$next_print" -lt "$TOTAL" && -f "$OUT_DIR/$next_print.rc" && -z "${PIDS[next_print]:-}" ]]; do
     name="${JOBS[$next_print]}"; rc="$(cat "$OUT_DIR/$next_print.rc")"; secs="$(cat "$OUT_DIR/$next_print.secs")"
     cat "$OUT_DIR/$next_print.log"
+    # a test that skipped itself says so after its ok ("NAME: ok (SKIPPED: why)"): counted and listed at the
+    # end, and a failure for a test in NO_SKIP (the legs that are meant to have what it needs, node for the gateway)
+    if [[ "$rc" == "0" && "$name" != shellcheck ]] && grep -qE "^${name}: ok \(SKIPPED" "$OUT_DIR/$next_print.log"; then
+      SKIPPED_TESTS+=("$name")
+      case " ${NO_SKIP:-} " in
+        *" $name "*) printf 'FAIL: %s skipped itself, and this run lists it in NO_SKIP (it must run here)\n' "$name"; rc=1 ;;
+      esac
+    fi
+    if [[ -f "$OUT_DIR/$next_print.flaky" ]]; then
+      flaky_line="$(cat "$OUT_DIR/$next_print.flaky")"
+      FLAKY_TESTS+=("$name")
+      # a flake must not hide in a log block nobody opens: an annotation on the run, a row in the job summary
+      if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+        flaky_msg="${flaky_line//'%'/%25}"; flaky_msg="${flaky_msg//$'\r'/%0D}"
+        printf '::warning title=FLAKY::%s first failure: %s\n' "$name" "$flaky_msg"
+        if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+          [[ -s "$GITHUB_STEP_SUMMARY" ]] && grep -q '^### Flaky tests' "$GITHUB_STEP_SUMMARY" 2>/dev/null || printf '### Flaky tests\n\n| test | first failure |\n| --- | --- |\n' >>"$GITHUB_STEP_SUMMARY"
+          # shellcheck disable=SC2016  # the backticks are Markdown, not a command substitution
+          printf '| %s | `%s` |\n' "$name" "${flaky_line//|/\\|}" >>"$GITHUB_STEP_SUMMARY"
+        fi
+      fi
+    fi
     if [[ "$rc" == "0" ]]; then
       printf -- '--- ok: %s (%ss)\n' "$name" "$secs"
     else
@@ -307,7 +360,15 @@ while [[ "$next_print" -lt "$TOTAL" ]]; do
 done
 
 printf '\n%s jobs in %ss, %s failed\n' "$TOTAL" "$((SECONDS - started_all))" "${#FAILED[@]}"
+[[ "${#SKIPPED_TESTS[@]}" -eq 0 ]] || printf 'skipped: %s (%s)\n' "${#SKIPPED_TESTS[@]}" "${SKIPPED_TESTS[*]}"
+[[ "${#FLAKY_TESTS[@]}" -eq 0 ]] || printf 'flaky: %s (%s)\n' "${#FLAKY_TESTS[@]}" "${FLAKY_TESTS[*]}"
 if [[ "${#FAILED[@]}" -gt 0 ]]; then
   printf 'FAILED: %s\n' "${FAILED[*]}" >&2
+  exit 1
+fi
+# STRICT_FLAKY=1 (CI, on a push to next-release and the nightly): the rerun still runs, so every other test
+# still reports, but a flake is a failure of the run: "green N times in a row" cannot include one
+if [[ "${STRICT_FLAKY:-}" == 1 && "${#FLAKY_TESTS[@]}" -gt 0 ]]; then
+  printf 'FAILED: flaky tests (STRICT_FLAKY=1): %s\n' "${FLAKY_TESTS[*]}" >&2
   exit 1
 fi

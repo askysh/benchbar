@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -382,7 +384,7 @@ func selfUpdateRun(sys *System, o suOpts) int {
 
 	noTray := !sys.FileExists(trayExe)
 	distro, skip := cliTarget(sys)
-	script := installerScript(o, target, noTray)
+	var script string
 	ps, perr := "powershell.exe", error(nil)
 	if sys.PowerShellPath != nil {
 		ps, perr = sys.PowerShellPath()
@@ -390,6 +392,13 @@ func selfUpdateRun(sys *System, o suOpts) int {
 
 	trayBefore, trayKnown := trayProcesses(sys, trayExe)
 	w := sys.Stdout
+	// what is shown is the line that will run: with no --installer FILE, the
+	// file is install.ps1 of the release, downloaded and checked below
+	shown := o
+	if shown.installer == "" {
+		shown.installer = "<install.ps1 of v" + target + ">"
+	}
+	script = installerScript(shown, target, noTray)
 	fmt.Fprintf(w, "BenchBar for Windows %s is installed in %s.\n", version, dir)
 	fmt.Fprintf(w, "This installs %s%s:\n", target, relation(target))
 	switch {
@@ -408,6 +417,9 @@ func selfUpdateRun(sys *System, o suOpts) int {
 		fmt.Fprintf(w, "  2. The BenchBar CLI in WSL is skipped: %s.\n", skip)
 	}
 	fmt.Fprintln(w, "  Your settings, benches and sites stay as they are.")
+	if o.installer == "" {
+		fmt.Fprintf(w, "  The installer is install.ps1 of the v%s tag. It is downloaded and its SHA256 is compared with the release's checksums before it runs.\n", target)
+	}
 	fmt.Fprintf(w, "  runs: %s\n", printableCommand(ps, script))
 	if o.dryRun {
 		fmt.Fprintln(w, "dry-run: nothing was run")
@@ -431,6 +443,19 @@ func selfUpdateRun(sys *System, o suOpts) int {
 		}
 	}
 
+	if o.installer == "" {
+		path, cleanup, prob := fetchInstaller(sys, target)
+		if prob != nil {
+			prob.print(sys)
+			return 1
+		}
+		defer cleanup()
+		// the retry command keeps o as it was: the file goes when this run ends
+		ran := o
+		ran.installer = path
+		script = installerScript(ran, target, noTray)
+		fmt.Fprintf(w, "\nChecked: install.ps1 of v%s matches the release's checksums.\n", target)
+	}
 	fmt.Fprintf(w, "\nRunning the installer for %s.\n", target)
 	var summary []string
 	resultPath := installResultPath(sys)
@@ -539,17 +564,110 @@ func baseName(p string) string {
 // psQuote is a PowerShell single quoted string.
 func psQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
 
-// installerScript is the -Command text. The installer runs as a script
-// block, like the one line form, so an execution policy of Restricted does
-// not stop it (it is not a script file). It always gets -Yes, and the
+// fetchInstaller downloads install.ps1 of the v<target> tag and the
+// release's checksums file, and returns a file holding the installer only
+// when its SHA256 is the one the checksums list for install.ps1. The file
+// is in a folder of its own under the user's temp folder; cleanup removes
+// it. A release made before install.ps1 was listed (every release before
+// 0.9.0) has no such line: its installer is then not run, and the problem
+// says so and how to install that release by hand.
+func fetchInstaller(sys *System, target string) (path string, cleanup func(), prob *problem) {
+	retry := "try again later, or install by hand: " + installByHand(target)
+	if sys.Web == nil {
+		return "", nil, &problem{Msg: "no network client to download the installer with", Fix: retry}
+	}
+	ctx, cancel := context.WithTimeout(sys.Ctx, 3*webTimeout)
+	defer cancel()
+	get := func(u string) ([]byte, error) {
+		resp, err := sys.Web.Get(ctx, u, true)
+		if err != nil {
+			return nil, webError(ctx, err)
+		}
+		if resp.Status != 200 {
+			return nil, fmt.Errorf("%s answered HTTP %d", u, resp.Status)
+		}
+		return resp.Body, nil
+	}
+	sums, err := get(sumsURLFor(target))
+	if err != nil {
+		return "", nil, &problem{Msg: fmt.Sprintf("could not get the checksums of v%s: %v", target, err), Fix: retry}
+	}
+	want := installerSum(sums)
+	if want == "" {
+		why := fmt.Sprintf("the checksums of v%s do not list install.ps1", target)
+		if olderThan090(target) {
+			why = fmt.Sprintf("v%s is older than 0.9.0, and releases before 0.9.0 do not list install.ps1 in their checksums", target)
+		}
+		return "", nil, &problem{
+			Msg: why + ", so its installer cannot be checked, and benchbar.exe does not run an installer it cannot check. Nothing was changed",
+			Fix: "to install v" + target + " anyway, run (this installer is not checked): " + installByHand(target),
+		}
+	}
+	body, err := get(installerURLFor(target))
+	if err != nil {
+		return "", nil, &problem{Msg: fmt.Sprintf("could not download install.ps1 of v%s: %v", target, err), Fix: retry}
+	}
+	sum := sha256.Sum256(body)
+	if got := hex.EncodeToString(sum[:]); got != want {
+		return "", nil, &problem{
+			Msg: fmt.Sprintf("install.ps1 of v%s does not match the release's checksums (file %s, checksums %s); it was not run", target, got, want),
+			Fix: "try again later. If it repeats, report it at " + repoWeb + "/issues",
+		}
+	}
+	dir, err := os.MkdirTemp("", "benchbar-self-update-")
+	if err != nil {
+		return "", nil, &problem{Msg: "could not make a temporary folder for the installer: " + err.Error(), Fix: retry}
+	}
+	path = filepath.Join(dir, "install.ps1")
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		os.RemoveAll(dir)
+		return "", nil, &problem{Msg: "could not write the installer: " + err.Error(), Fix: retry}
+	}
+	return path, func() { os.RemoveAll(dir) }, nil
+}
+
+// installByHand is the one line installer of the v<target> tag, for a person
+// to run themselves.
+func installByHand(target string) string {
+	return "& ([scriptblock]::Create((irm " + psQuote(installerURLFor(target)) + "))) -Version " + psQuote(target)
+}
+
+// olderThan090 is true for a release before 0.9.0, the first whose checksums
+// list install.sh and install.ps1.
+func olderThan090(v string) bool {
+	m := namedVersionRE.FindString(strings.TrimPrefix(v, "v"))
+	if m == "" {
+		return false
+	}
+	core, _, _ := strings.Cut(strings.TrimPrefix(m, "v"), "-")
+	parts := strings.Split(core, ".")
+	return len(parts) == 3 && parts[0] == "0" && len(parts[1]) == 1 && parts[1] < "9"
+}
+
+// installerSum is the SHA256 the checksums text lists for install.ps1
+// ("<64 hex>  install.ps1", with an optional * or ./), lower case, or "".
+func installerSum(sums []byte) string {
+	for _, line := range strings.Split(string(sums), "\n") {
+		f := strings.Fields(line)
+		if len(f) != 2 || len(f[0]) != 64 {
+			continue
+		}
+		if name := strings.TrimPrefix(strings.TrimPrefix(f[1], "*"), "./"); name == "install.ps1" {
+			return strings.ToLower(f[0])
+		}
+	}
+	return ""
+}
+
+// installerScript is the -Command text. The installer is a file (the checked
+// download, or the --installer FILE), read and run as a script block, so an
+// execution policy of Restricted does not stop it and nothing is run from a
+// pipe. It always gets -Yes, and the
 // version the user agreed to (or the zip), so a release published after
 // the question cannot change what is installed. Only single quotes appear,
 // so the line survives the Windows command line unchanged.
 func installerScript(o suOpts, target string, noTray bool) string {
-	src := "(irm " + psQuote(installerPS1URL) + ")"
-	if o.installer != "" {
-		src = "(Get-Content -Raw -LiteralPath " + psQuote(o.installer) + ")"
-	}
+	src := "(Get-Content -Raw -LiteralPath " + psQuote(o.installer) + ")"
 	params := " -Yes"
 	if o.zip != "" {
 		params += " -Zip " + psQuote(o.zip)

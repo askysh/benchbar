@@ -5,15 +5,16 @@ namespace BenchBar.Tray.Core;
 /// <summary>One entry of <c>changed[]</c> in the done fields: what a run really changed.</summary>
 public sealed record CliChange(string Kind, string Name, string? Detail);
 
-/// <summary>One entry of <c>next_actions[]</c>: a command to run and why.</summary>
-public sealed record CliNextAction(string Command, string? Why);
+/// <summary>One entry of <c>next_actions[]</c>: a command to run and why. <see cref="Quoted"/>: every word is quoted for the shell, so a program may split it.</summary>
+public sealed record CliNextAction(string Command, string? Why, bool Quoted = false);
 
 /// <summary>
 /// The done fields of docs/json-schema.md, from the <c>done</c> line of a stream or from the one document a command prints.
 /// <see cref="Raw"/> keeps the whole object, so a page reads the fields only its command has (<c>site</c>, <c>url</c>, ...).
 /// </summary>
 public sealed record CliDone(int Exit, IReadOnlyList<CliChange> Changed, IReadOnlyList<string> Warnings, IReadOnlyList<CliNextAction> NextActions,
-    JsonObject? StateAfter, string? ErrorId, IReadOnlyList<string> Missing, string? Error, string? Fix, string? Log, JsonObject Raw)
+    JsonObject? StateAfter, string? ErrorId, IReadOnlyList<string> Missing, string? Error, string? Fix, string? Log, JsonObject Raw,
+    int? SchemaVersion = null, string? CliVersion = null, string? OpId = null)
 {
     public bool Ok => Exit == 0;
 
@@ -22,10 +23,17 @@ public sealed record CliDone(int Exit, IReadOnlyList<CliChange> Changed, IReadOn
 
     /// <summary>The first thing to tell the person about a failure: the error, else the fix.</summary>
     public string? Problem => Error ?? Fix;
+
+    /// <summary>The error and the CLI's hint (its <c>fix</c>) after it: what a refusal shows.</summary>
+    public string? Explained => ResultEnvelope.Explain(Error, Fix);
 }
 
 /// <summary>A <c>step</c> line of a stream. <see cref="Id"/> is the line's <c>id</c>, else its <c>action</c> or <c>kind</c>.</summary>
-public sealed record CliStep(string Id, string Name, InstallStepStatus Status, string? Message, string? Command, int? Secs);
+public sealed record CliStep(string Id, string Name, InstallStepStatus Status, string? Message, string? Command, int? Secs, string? Parent = null)
+{
+    /// <summary>A sub step (<c>site move</c>'s restore) shares the id of its parent and names it in <c>parent</c>: it is progress, not a row of its own.</summary>
+    public bool IsSubStep => !string.IsNullOrEmpty(Parent);
+}
 
 /// <summary>A line of a <c>--json</c> or <c>--jsonl</c> stream.</summary>
 public abstract record CliEvent
@@ -66,28 +74,10 @@ public sealed record CliStreamResult(int Exit, CliDone? Done, string? Error, boo
 
 public static class CliJson
 {
-    public static CliDone? ParseDone(JsonObject o)
-    {
-        var exit = JsonRead.Int(o, "exit") ?? JsonRead.Int(o, "exit_code");
-        if (exit is null) return null;
-        var changed = new List<CliChange>();
-        if (o["changed"] is JsonArray c)
-        {
-            foreach (var item in c.OfType<JsonObject>())
-                changed.Add(new CliChange(JsonRead.Str(item, "kind") ?? "", JsonRead.Str(item, "name") ?? "", JsonRead.Str(item, "detail")));
-        }
-        var next = new List<CliNextAction>();
-        if (o["next_actions"] is JsonArray n)
-        {
-            foreach (var item in n)
-            {
-                if (item is JsonObject obj && JsonRead.Str(obj, "command") is { Length: > 0 } cmd) next.Add(new CliNextAction(cmd, JsonRead.Str(obj, "why")));
-                else if (item is JsonValue v && v.TryGetValue<string>(out var text) && text.Length > 0) next.Add(new CliNextAction(text, null));
-            }
-        }
-        return new CliDone(exit.Value, changed, JsonRead.Strings(o, "warnings"), next, o["state_after"] as JsonObject, JsonRead.Str(o, "error_id"),
-            JsonRead.Strings(o, "missing"), JsonRead.Str(o, "error"), JsonRead.Str(o, "fix"), JsonRead.Str(o, "log"), o);
-    }
+    /// <summary>The done fields of one object, through the one <see cref="ResultEnvelope"/> decoder; null when it has no <c>exit</c>.</summary>
+    public static CliDone? ParseDone(JsonObject o) => ResultEnvelope.From(o) is { } e
+        ? new CliDone(e.Exit, e.Changed, e.Warnings, e.NextActions, e.StateAfter, e.ErrorId, e.Missing, e.Error, e.Fix, e.Log, o, e.SchemaVersion, e.CliVersion, e.OpId)
+        : null;
 
     /// <summary>One line of a stream. A schema above 1 throws <see cref="UnsupportedSchemaException"/>.</summary>
     public static CliEvent ParseLine(string line)
@@ -102,14 +92,22 @@ public static class CliJson
                 var id = JsonRead.Str(o, "id") ?? JsonRead.Str(o, "action") ?? JsonRead.Str(o, "kind");
                 if (string.IsNullOrEmpty(id)) return new CliEvent.Other(o);
                 return new CliEvent.Step(new CliStep(id, JsonRead.Str(o, "name") ?? id, InstallJson.ParseStatus(JsonRead.Str(o, "status")),
-                    JsonRead.Str(o, "message"), JsonRead.Str(o, "command"), JsonRead.Int(o, "secs")));
+                    JsonRead.Str(o, "message"), JsonRead.Str(o, "command"), JsonRead.Int(o, "secs"), JsonRead.Str(o, "parent")));
             case "progress":
-                return new CliEvent.Progress(JsonRead.Str(o, "step") ?? "", JsonRead.Str(o, "label") ?? "", JsonRead.Int(o, "elapsed") ?? 0);
+                return new CliEvent.Progress(JsonRead.Str(o, "step") ?? "", JsonRead.Str(o, "label") ?? DownloadLabel(o), JsonRead.Int(o, "elapsed") ?? 0);
             case "done":
                 return ParseDone(o) is { } d ? new CliEvent.Done(d) : new CliEvent.Other(o);
             default:
                 return new CliEvent.Other(o);
         }
+    }
+
+    /// <summary>The <c>progress</c> line of <c>pull</c> has <c>file</c>, <c>bytes</c> and <c>total</c> and no label: "Downloaded 7.0 MB of 12.0 MB".</summary>
+    private static string DownloadLabel(JsonObject o)
+    {
+        if (o["bytes"] is not JsonValue b || !b.TryGetValue<long>(out var bytes)) return "";
+        var total = o["total"] is JsonValue t && t.TryGetValue<long>(out var all) && all > 0 ? UiText.Format("CommonDownloadedOf", ByteSize.Format(all)) : "";
+        return UiText.Format("CommonDownloaded", ByteSize.Format(bytes), total);
     }
 
     /// <summary>

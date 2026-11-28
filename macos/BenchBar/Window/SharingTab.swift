@@ -7,6 +7,8 @@ struct SharingTab: View {
     let bench: BenchModel
     let share: ShareStore
     @State private var hours = 4
+    /// Who gives out the seats of the next room; kept, so the choice is made once.
+    @AppStorage("shareAssignSeats") private var assignSeats = SharePresentation.assignSeatsDefault
     @State private var setupOpen = false
     @State private var showActivity = false
     /// The code is drawn as dots until the host asks (a shared screen, a screenshot); Start and New code show it once.
@@ -30,7 +32,7 @@ struct SharingTab: View {
                     if status.isOn { roomSection(status) }
                     noticesSection(status)
                     // a bench never set up fails every check by definition; the list is for after setup
-                    if SharePrimary.from(status) != .setUp && SharePrimary.from(status) != .finishSetup { checksSection(status) }
+                    if !SharePrimary.from(status).isSetUp { checksSection(status) }
                     if let copy = status.copy { copySection(copy, status: status) }
                     if status.isOn { peopleSection(status) ; activitySection }
                 }
@@ -56,38 +58,78 @@ struct SharingTab: View {
     @ViewBuilder
     private func primarySection(_ status: ShareStatus) -> some View {
         Section {
-            Text(SharePrimary.from(status) == .setUp || SharePrimary.from(status) == .finishSetup ? SharePresentation.setUpIntro : SharePresentation.liveUpdates)
+            let primary = SharePrimary.from(status)
+            Text(primary.isSetUp ? SharePresentation.setUpIntro : SharePresentation.liveUpdates)
                 .foregroundStyle(.secondary)
             HStack {
                 if status.isOn {
                     Text(SharePresentation.indicator(status))
                     Spacer()
+                    let extendOptions = SharePresentation.extendOptions(canExtendS: status.canExtendS)
                     Menu("Extend") {
-                        ForEach(SharePresentation.extendOptions(canExtendS: status.canExtendS), id: \.minutes) { option in
+                        ForEach(extendOptions, id: \.minutes) { option in
                             Button(option.label) { Task { await share.extend(minutes: option.minutes) } }
                         }
                     }
                     .fixedSize()
-                    .disabled(SharePresentation.extendOptions(canExtendS: status.canExtendS).isEmpty)
-                } else if case .start = SharePrimary.from(status) {
+                    .disabled(extendOptions.isEmpty)
+                } else if case .start = primary {
                     Picker("For", selection: $hours) {
-                        ForEach(SharePresentation.durations, id: \.self) { Text("\($0) h").tag($0) }
+                        ForEach(SharePresentation.durations, id: \.self) { Text(Wording.hoursShort($0)).tag($0) }
                     }
                     .fixedSize()
                     Spacer()
                 } else {
                     Spacer()
                 }
-                primaryButton(status)
+                primaryButton(status, primary)
             }
-            if status.isOn { Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary) }
+            if status.isOn {
+                Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
+                Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
+            } else if case .start = SharePrimary.from(status) {
+                Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                    .help(SharePresentation.assignSeatsHelp)
+                Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+            }
+            if status.isOn {
+                Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
+                Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
+            } else if case .start = SharePrimary.from(status) {
+                Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                    .help(SharePresentation.assignSeatsHelp)
+                Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+            }
+            if status.isOn {
+                Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
+                Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
+            } else if case .start = SharePrimary.from(status) {
+                if status.knowsSeatMode {
+                    Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                        .help(SharePresentation.assignSeatsHelp)
+                    Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(SharePresentation.seatsNeedNewerCLI).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if status.isOn {
+                Text(SharePresentation.seatModeLine(hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
+                Text(SharePresentation.awake).font(.caption).foregroundStyle(.secondary)
+            } else if case .start = SharePrimary.from(status) {
+                if status.knowsSeatMode {
+                    Toggle(SharePresentation.assignSeatsToggle, isOn: $assignSeats)
+                        .help(SharePresentation.assignSeatsHelp)
+                    Text(SharePresentation.seatModeLine(hostGivesSeats: assignSeats)).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(SharePresentation.seatsNeedNewerCLI).font(.caption).foregroundStyle(.secondary)
+                }
+            }
             if let busy = share.busy { Label(busy, systemImage: "hourglass").foregroundStyle(.secondary) }
         }
     }
 
     @ViewBuilder
-    private func primaryButton(_ status: ShareStatus) -> some View {
-        let primary = SharePrimary.from(status)
+    private func primaryButton(_ status: ShareStatus, _ primary: SharePrimary) -> some View {
         Button(primary.title) { Task { await act(primary, status: status) } }
             .buttonStyle(.borderedProminent)
             .disabled(share.busy != nil || primary == .start(enabled: false))
@@ -98,37 +140,41 @@ struct SharingTab: View {
         case .setUp, .finishSetup: setupOpen = true
         case .turnOnProtection: await turnOnProtection()
         case .start:
-            guard ShareConfirm.ask("Start sharing \(site) on this network?",
-                                   detail: "People on this Wi-Fi who have the room code can join a copy of \(site) until you stop.",
-                                   button: "Start sharing") else { return }
-            await share.start(hours: hours, label: nil)
+            guard ShareConfirm.ask(String(localized: "Start sharing \(site) on this network?"),
+                                   detail: SharePresentation.startDetail(site: site, assignSeats: assignSeats && status.knowsSeatMode),
+                                   button: String(localized: "Start sharing")) else { return }
+            await share.start(hours: hours, label: nil, assignSeats: assignSeats)
             await share.loadCode()
             codeRevealed = true
         case .stop:
-            guard ShareConfirm.ask(SharePresentation.stopConfirm(online: status.devicesOnline), button: "Stop") else { return }
+            guard ShareConfirm.ask(SharePresentation.stopConfirm(online: status.devicesOnline), button: String(localized: "Stop")) else { return }
             await share.stop()
         case .updateCLI: NSWorkspace.shared.open(BenchBarLinks.docs)
         }
     }
 
     private func turnOnProtection() async {
-        guard ShareConfirm.ask("Turn on network protection?",
-                               detail: "macOS asks for your password in its own dialog. The rules keep the bench's ports closed to other Macs while sharing.",
-                               button: "Continue") else { return }
+        guard ShareConfirm.ask(String(localized: "Turn on network protection?"),
+                               detail: String(localized: "macOS asks for your password in its own dialog. The rules keep the bench's ports closed to other Macs while sharing."),
+                               button: String(localized: "Continue")) else { return }
         await share.installNetworkProtection()
     }
 
     @ViewBuilder
     private func roomSection(_ status: ShareStatus) -> some View {
         Section("Room code") {
+            if let key = SharePresentation.hostKeyLine(status) {
+                Text(key).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+                    .help(SharePresentation.hostKeyHelp)
+            }
             HStack(alignment: .firstTextBaseline) {
                 Text(SharePresentation.codeText(share.code, revealed: codeRevealed))
                     .font(.system(size: 40, weight: .semibold, design: .monospaced))
                     .textSelection(.disabled)
-                    .accessibilityLabel(codeRevealed ? "Room code" : "Room code, hidden")
+                    .accessibilityLabel(codeRevealed ? String(localized: "Room code") : String(localized: "Room code, hidden"))
                 Spacer()
-                Button(codeRevealed ? "Hide" : "Show") { codeRevealed.toggle() }
-                    .accessibilityLabel(codeRevealed ? "Hide room code" : "Show room code")
+                Button(codeRevealed ? String(localized: "Hide") : String(localized: "Show")) { codeRevealed.toggle() }
+                    .accessibilityLabel(codeRevealed ? String(localized: "Hide room code") : String(localized: "Show room code"))
                     .disabled(share.code == nil)
                     .help("The code lets anyone on this Wi-Fi join. Hide it while you share your screen.")
                 Button("Copy") { if let code = share.code { ShareClipboard.copy(code.code) } }
@@ -142,7 +188,7 @@ struct SharingTab: View {
                         codeRevealed = true
                     }
                 }
-                Button(status.locked == true ? "Unlock" : "Lock room") {
+                Button(status.locked == true ? String(localized: "Unlock") : String(localized: "Lock room")) {
                     Task { await share.setLocked(!(status.locked ?? false)) }
                 }
             }
@@ -217,8 +263,8 @@ struct SharingTab: View {
         case .none: break
         case .installNetworkProtection: await turnOnProtection()
         case .allowNodeFirewall:
-            guard ShareConfirm.ask("Allow sharing through the firewall?",
-                                   detail: "macOS asks for your password in its own dialog.", button: "Allow") else { return }
+            guard ShareConfirm.ask(String(localized: "Allow sharing through the firewall?"),
+                                   detail: String(localized: "macOS asks for your password in its own dialog."), button: String(localized: "Allow")) else { return }
             await share.allowNodeThroughFirewall()
         case .openLocalNetworkSettings:
             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork") { NSWorkspace.shared.open(url) }
@@ -226,9 +272,12 @@ struct SharingTab: View {
         case .rerunSetup, .refreshCopy: setupOpen = true
         case .restartSharing:
             let confirm = SharePresentation.restartConfirm(online: status.devicesOnline)
-            guard ShareConfirm.ask(confirm.message, detail: confirm.detail, button: "Restart") else { return }
+            guard ShareConfirm.ask(confirm.message, detail: confirm.detail, button: String(localized: "Restart")) else { return }
+            // the room that starts again gives out its seats the way the one that ran did; a room that
+            // did not say falls back to the switch, never to open seats
+            let assign = SharePresentation.restartAssignsSeats(mode: share.seatMode ?? status.seatMode, stored: assignSeats)
             await share.stop()
-            await share.start(hours: hours, label: nil)
+            await share.start(hours: hours, label: nil, assignSeats: assign)
         }
     }
 
@@ -239,14 +288,14 @@ struct SharingTab: View {
             if copy.drifted { Label(SharePresentation.driftWarning, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
             HStack {
                 Button("Refresh copy…") {
-                    if ShareConfirm.ask("Refresh the copy?", detail: SharePresentation.refreshConfirm, button: "Refresh") { setupOpen = true }
+                    if ShareConfirm.ask(String(localized: "Refresh the copy?"), detail: SharePresentation.refreshConfirm, button: String(localized: "Refresh")) { setupOpen = true }
                 }
                 .disabled(status.isOn)
                 if status.isOn {
                     Menu("Open copy as…") {
                         ForEach(status.allowedUsers, id: \.self) { user in
                             Button(user) {
-                                guard ShareConfirm.ask("Open the copy as \(user)?", detail: "BenchBar signs in to the copy in your browser.", button: "Open") else { return }
+                                guard ShareConfirm.ask(String(localized: "Open the copy as \(user)?"), detail: String(localized: "BenchBar signs in to the copy in your browser."), button: String(localized: "Open")) else { return }
                                 Task { await share.openAs(user) }
                             }
                         }
@@ -261,24 +310,28 @@ struct SharingTab: View {
     private func peopleSection(_ status: ShareStatus) -> some View {
         Section(SharePresentation.peopleTitle) {
             if share.people.isEmpty { Text("Nobody has joined yet.").foregroundStyle(.secondary) }
+            if let waiting = SharePresentation.waitingNotice(people: share.people, hostGivesSeats: share.hostGivesSeats) {
+                Label(waiting, systemImage: "person.crop.circle.badge.clock").foregroundStyle(.orange)
+            }
             ForEach(SharePresentation.sorted(share.people)) { person in
                 HStack {
                     Circle().fill(person.online ? Color.green : Color.secondary).frame(width: 8, height: 8)
                         .accessibilityLabel(SharePresentation.presenceText(online: person.online))
                     VStack(alignment: .leading) {
                         Text(SharePresentation.personLine(person))
-                        Text(person.seatFullName ?? "No seat yet").font(.caption).foregroundStyle(.secondary)
+                        Text(SharePresentation.seatCaption(person, hostGivesSeats: share.hostGivesSeats)).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    let targets = SharePresentation.moveTargets(for: person, people: share.people, known: share.knownSeats)
-                    Menu("Move to") {
+                    let targets = SharePresentation.moveTargets(for: person, people: share.people, known: share.knownSeats, seats: share.seats)
+                    Menu(SharePresentation.seatMenuTitle(person)) {
                         ForEach(targets, id: \.id) { seat in
                             Button(seat.name) { Task { await share.assign(person, seat: seat.id) } }
                         }
                     }
                     .fixedSize()
                     .disabled(targets.isEmpty || share.busy != nil)
-                    .help(targets.isEmpty ? "No free seat this room has shown yet." : "Signs them out of their seat and into the one you pick.")
+                    .help(targets.isEmpty ? String(localized: "No seat of this room is free.") : person.seatID == nil ? String(localized: "Gives them the seat you pick.")
+                        : String(localized: "Signs them out of their seat and into the one you pick."))
                     Button("Remove") { Task { await remove(person) } }
                 }
             }
@@ -286,7 +339,7 @@ struct SharingTab: View {
     }
 
     private func remove(_ person: SharePerson) async {
-        guard ShareConfirm.ask(SharePresentation.removeConfirm(person, site: site), detail: SharePresentation.removeDetail, button: "Remove") else { return }
+        guard ShareConfirm.ask(SharePresentation.removeConfirm(person, site: site), detail: SharePresentation.removeDetail, button: String(localized: "Remove")) else { return }
         await share.remove(person, newCode: false)
     }
 
@@ -314,7 +367,7 @@ enum ShareConfirm {
         alert.messageText = message
         alert.informativeText = detail
         let action = alert.addButton(withTitle: button)
-        let cancel = alert.addButton(withTitle: "Cancel")
+        let cancel = alert.addButton(withTitle: String(localized: "Cancel"))
         if cancelIsDefault {
             action.keyEquivalent = ""
             cancel.keyEquivalent = "\r"
@@ -358,7 +411,7 @@ struct ShareSetupSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(refresh ? "Refresh the shared copy" : "Set up sharing").font(.title2.bold())
+            Text(refresh ? String(localized: "Refresh the shared copy") : String(localized: "Set up sharing")).font(.title2.bold())
             Text("Site: \(site)").foregroundStyle(.secondary)
             Picker("Source", selection: $form.backupNow) {
                 Text(ShareSetupForm.sourceLabel(backupNow: true, estMinutes: plan?.estMinutes, backupAgeS: nil)).tag(true)
@@ -391,7 +444,7 @@ struct ShareSetupSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel", action: close).disabled(running)
-                Button(refresh ? "Refresh copy" : "Set up sharing") { Task { await run() } }
+                Button(refresh ? String(localized: "Refresh copy") : String(localized: "Set up sharing")) { Task { await run() } }
                     .buttonStyle(.borderedProminent)
                     .disabled(!form.canRun || running)
             }
@@ -412,7 +465,7 @@ struct ShareSetupSheet: View {
         case "backup": "Backing up…"
         case "share_site": "Making the copy…"
         case "harden", "baseline": "Locking it down…"
-        default: "Working…"
+        default: String(localized: "Working…")
         }
     }
 
@@ -429,7 +482,8 @@ struct ShareSetupSheet: View {
         }
         running = false
         if ok {
-            ShareNotices.post(title: "Shared copy ready", body: "\(site) can now be shared on your network.", bench: share.bench)
+            ShareNotices.post(title: String(localized: "Shared copy ready"),
+                              body: String(localized: "\(site) can now be shared on your network."), bench: share.bench)
             close()
         }
     }

@@ -11,13 +11,14 @@ public class SharingViewTests
     /// <summary>The off room with every check passing, so Start is offered.</summary>
     private static string Clean(string from = "share-status-off.json") => Fixture(from)[0].Replace("\"fail\"", "\"ok\"");
 
-    private static (SharingView View, PageKit Kit, List<string> Asked) Make(string status, bool answer = true, Func<string, string>? tweak = null, int statusExit = 0, bool guard = true)
+    private static (SharingView View, PageKit Kit, List<string> Asked) Make(string status, bool answer = true, Func<string, string>? tweak = null, int statusExit = 0, bool guard = true,
+        string people = "share-people.json")
     {
         var kit = new PageKit();
         kit.Runner.On(a => a.Contains("--acknowledge-data")).Print(Fixture("share-done.jsonl"));
         kit.Runner.On("share", "setup").Print(Fixture("share-setup-plan.json"));
         kit.Runner.On("share", "status").Print(tweak is null ? Fixture(status)[0] : tweak(Fixture(status)[0])).Fail(statusExit);
-        kit.Runner.On("share", "people").Print(Fixture("share-people.json"));
+        kit.Runner.On("share", "people").Print(Fixture(people));
         kit.Runner.On("share", "users").Print(Fixture("share-users.json"));
         kit.Runner.On("share", "code").Print(Fixture("share-code.json"));
         kit.Runner.On("share", "invite").Print(Fixture("share-invite.json"));
@@ -97,6 +98,7 @@ public class SharingViewTests
     {
         var (view, _, _) = Make("share-status-on.json");
         Assert.Contains("Sharing on your network · 1 online · 59 min left", view.Lines);
+        Assert.Contains("Host key: 0123 4567 89ab cdef", view.Lines); // #159 SHARE-8
         Assert.Contains(ShareText.Full, view.Lines);
         Assert.Contains(ShareText.JoinTrouble, view.Lines);
         Assert.Contains(ShareText.WipeOwed, view.Lines);
@@ -114,6 +116,57 @@ public class SharingViewTests
         Assert.Equal([ShareText.NewerCli, "[Update]"], view.Lines);
     });
 
+    // --- #159 SHARE-5: the host gives out the seats ---
+
+    [Fact]
+    public void AGuestWhoWaitsIsShownAndGivenASeatFromTheListOfFreeSeats() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make("share-status-on.json", people: "share-people-waiting.json");
+        Assert.Contains(ShareText.SeatModeLine(true), view.Lines);
+        Assert.Contains("1 person waits for a seat. Pick a seat under their name, then Give.", view.Lines);
+        Assert.Contains("Offline: Sam · MacBook Air · 192.168.1.31 · Waits for a seat from you", view.Lines);
+        Assert.Contains("Online: Priya · ThinkPad · 192.168.1.32 · Priya N", view.Lines);
+        Assert.Contains("Move Priya to this seat", view.Buttons.Keys);
+        Click(view.Buttons["Give Sam this seat"]);
+        Wait(view.Pending);
+        // the first free seat by name is the one in the box: Mgr Seat
+        Assert.Equal(["share", "assign", "d_0a1b2c3d", "s_33333333", "--json", "--bench-dir", P], kit.Runner.Runs.Single(r => r.Args[1] == "assign").Args);
+    });
+
+    [Fact]
+    public void TheStartSwitchIsOnAndUntickedItStartsARoomWithOpenSeats() => Sta.Run(() =>
+    {
+        // on by default: the form says that guests wait, before anything is started
+        var (on, _, askedOn) = Make("share-status-off.json", answer: false, Clean0);
+        Assert.True(on.AssignSeats);
+        Assert.Contains(ShareText.SeatModeLine(true), on.Lines);
+        Click(on.Buttons["Start sharing"]);
+        Wait(on.Pending);
+        Assert.Single(askedOn, a => a.EndsWith("They wait until you give each of them a seat."));
+
+        var (view, kit, asked) = Make("share-status-off.json", answer: true, Clean0);
+        view.AssignSeats = false;
+        kit.Runner.On(a => a.Length > 1 && a[1] == "start").Print(Fixture("share-done.jsonl"));
+        Click(view.Buttons["Start sharing"]);
+        Wait(view.Pending);
+        Assert.Single(asked, a => a.EndsWith("Each of them can take any free seat."));
+        Assert.Equal(["share", "start", "--for", "4h", "--open-seats", "--json", "--bench-dir", P], kit.Runner.Runs.Single(r => r.Args[1] == "start").Args);
+    });
+
+    [Fact]
+    public void AnOlderCliGetsNoSeatFlagAndTheFormSaysWhy() => Sta.Run(() =>
+    {
+        // the status of a CLI from before 0.9.0 has no seat_mode: no box, no flag, and the confirmation says open seats
+        var (view, kit, asked) = Make("share-status-off.json", answer: true, text => Clean0(text).Replace(",\"seat_mode\":null", ""));
+        Assert.Contains(ShareText.SeatsNeedNewerCli, view.Lines);
+        Assert.DoesNotContain(ShareText.SeatModeLine(true), view.Lines);
+        kit.Runner.On(a => a.Length > 1 && a[1] == "start").Print(Fixture("share-done.jsonl"));
+        Click(view.Buttons["Start sharing"]);
+        Wait(view.Pending);
+        Assert.Single(asked, a => a.EndsWith("Each of them can take any free seat."));
+        Assert.Equal(["share", "start", "--for", "4h", "--json", "--bench-dir", P], kit.Runner.Runs.Single(r => r.Args[1] == "start").Args);
+    });
+
     // --- the code ---
 
     [Fact]
@@ -129,7 +182,7 @@ public class SharingViewTests
         kit.Runner.On(a => a.Length > 1 && a[1] == "start").Print(Fixture("share-done.jsonl")); // the first reply that matches wins, so this one is not reached before the others
         Click(view.Buttons["Start sharing"]);
         Wait(view.Pending);
-        Assert.Equal(["share", "start", "--for", "4h", "--json", "--bench-dir", P], kit.Runner.Runs.Single(r => r.Args[1] == "start").Args);
+        Assert.Equal(["share", "start", "--for", "4h", "--assign-seats", "--json", "--bench-dir", P], kit.Runner.Runs.Single(r => r.Args[1] == "start").Args);
         Assert.Equal(1, Calls(kit, "share", "code"));
     });
 

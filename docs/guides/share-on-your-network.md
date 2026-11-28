@@ -1,0 +1,231 @@
+---
+title: "Share a site on your network"
+description: "Open a room so colleagues on your Wi-Fi can use a copy of a dev site in their own browser, or join a room a colleague opened. Steps for the Mac app and the command line."
+---
+
+A room lets colleagues on the same Wi-Fi use a copy of one of your dev
+sites in their own browser. The copy is hardened. Your site, its database
+and its files stay on your computer.
+
+Read [How sharing keeps your bench safe](../concepts/sharing-safety.md)
+before you open a room for someone else. It explains what guests can see
+and what the LAN guard does.
+
+Sharing is a Lab, so it is off until you turn it on. Use **Settings >
+Labs** in the Mac app or the **Labs** page of the BenchBar window on
+Windows, or run `benchbar labs on lan-rooms`. See [Labs](labs.md).
+
+- **macOS.** Open a room in the Mac app or on the command line, and join
+  one in the Mac app.
+- **Linux.** Open a room on the command line, since 0.9.0. The LAN guard
+  is an nftables table.
+- **Windows.** Open a room on the **Sharing** tab of the BenchBar window,
+  since 0.9.0. The bench runs in WSL, which needs mirrored networking for
+  a room. The same tab joins a room as a guest (NAT or mirrored). See
+  [Rooms on Windows](../windows.md#rooms-on-windows).
+
+## Open a room in the Mac app
+
+1. Open the bench in the BenchBar window and choose the **Sharing** tab.
+2. Click **Set up sharing**. Pick the site and the seats. A seat is a
+   Frappe user that a guest signs in as. BenchBar makes the copy. Nothing
+   is shared yet.
+3. If the tab asks, click **Turn on network protection**. macOS asks for
+   your password once, in its own dialog. The protection is a firewall
+   rule that keeps the bench's ports closed to other Macs.
+4. Click **Start sharing** and pick how long the room stays open: 1, 2,
+   4, 8 or 12 hours. **Extend** adds time, up to 12 hours in total.
+5. Give your colleague the room code, or click **Copy invite**. The
+   invite is a link that holds the code.
+6. Click **Stop** when you are done. Every guest session ends with it.
+
+While the room is open, you can:
+
+- **Show** or **Hide** the room code. The code is hidden when you leave
+  the tab.
+- **New code** makes the old code stop working.
+- **Lock room** stops new joins. Guests already in the room stay.
+- **Remove** ends one guest's session. The seat menu moves a guest to
+  another seat.
+- **Refresh copy…** makes a new copy of the site for guests.
+
+Guests see changes after a page refresh. The Mac stays awake while the
+room is open. Closing the lid still ends the room.
+
+## Open a room on the command line
+
+```bash
+benchbar labs on lan-rooms                        # once: turn on the Lab
+benchbar share setup --site mysite.localhost --users alice,bob
+benchbar share start --for 2h                     # the room is open for 2 hours
+benchbar share code                               # show the room code
+benchbar share invite                             # a link with the code
+benchbar share people                             # who is in the room
+benchbar share extend --by 1h                     # more time
+benchbar share stop                               # end the room
+```
+
+`share setup` takes the site (`--site`) and the Frappe users for the seats
+(`--users`). `share code --new` makes a new code. `share lock` and
+`share unlock` stop and allow new joins. Every command is in the
+[share reference](../reference/cli/share.md).
+
+**You give out the seats.** The room code lets a person into the room and
+no further: a guest who joins waits until you give them a seat, and sees
+nothing of the copy before that.
+
+- In the Mac app a guest shows as "Waits for a seat from you" on the
+  **Sharing** tab. Choose **Give a Seat** next to their name and pick the
+  seat. The menu lists every free seat with its roles.
+- In the Windows tray, pick a seat in the list under the person's name and
+  click **Give NAME this seat**.
+- In a terminal, `benchbar share people` lists who waits and the free
+  seats, and `benchbar share assign ID SEAT_ID` gives one.
+
+A guest keeps their place for 10 minutes while they wait. If the room is
+full and somebody has waited more than 2 minutes, the next person who
+joins takes that place. `benchbar share remove ID` puts somebody out whom
+you do not know.
+
+**Read out the host key when a guest asks.** A guest who joins from your
+invite link sees the address the link leads to and 16 digits of your key
+before they join. The same digits are on your **Sharing** tab (Mac app
+and Windows tray) and in `benchbar share status`, as "Host key". If the
+guest's digits differ, the link was not yours.
+
+To let guests take a free seat themselves, as before 0.9.0, turn off **I
+give out the seats** next to **Start** (the Mac app and the tray), or run
+`benchbar share start --open-seats`. Do this only when everybody who has
+the code may use every seat of the room.
+
+Network protection is a separate step: `benchbar lan-guard install`
+asks for your password. Run it yourself. An agent or a script cannot
+install it.
+
+## Join a room in the Mac app
+
+1. Open **On your network** in the sidebar of the BenchBar window.
+2. Under **Nearby**, choose the room and click **Join**. Type the room
+   code. The host gives you a seat: when you pick one yourself, the pane
+   says so. Ask the host for your seat, then open the room. In a room
+   with open seats you pick a seat here.
+3. If a colleague sent you an invite link, click **Paste invite** instead.
+   The sheet shows the address the link leads to and the host's key.
+4. Click **Open** on the room in **Your rooms**. The room's site opens in
+   your browser.
+
+The first time, macOS asks for Local Network access. Allow it. If you
+said no, the pane shows a button that opens System Settings. **Find rooms**
+looks for rooms again.
+
+In **Your rooms**, **Change Seat** picks another seat. **Forget** signs
+this Mac out of the room and deletes the host's key and the key this Mac
+showed to that host. Every host sees another key of yours, so two hosts
+cannot tell that the same Mac joined both. A new code or invite from
+the host is needed to join again.
+
+## Join a room from a terminal
+
+On macOS, Linux and Windows (WSL), `benchbar share join` joins a room
+without the Mac app. Turn on the `lan-rooms` Lab first:
+`benchbar labs on lan-rooms`.
+
+With the host's address and the room code:
+
+```bash
+benchbar share join 192.168.1.20
+```
+
+With an invite link:
+
+```bash
+benchbar share join
+```
+
+1. BenchBar shows the room, its address and the host key (16 digits). If
+   you are not sure that this is the right computer, ask the host to read
+   out the key. `benchbar share status` shows it there.
+2. Type the room code, or paste the invite link, when BenchBar asks. The
+   code and the link are never arguments of the command: an argument
+   stays in the history of your shell.
+3. The host gives you a seat. BenchBar waits for it, for 10 minutes at
+   most. In a room with open seats, you pick a seat from a list.
+4. The room's site opens in your browser on an address of your own
+   computer (`http://<room>-<digits>.localhost:<port>`). No other
+   computer on the network can use that address.
+
+The local address closes after 15 minutes without a page request. Run
+`benchbar share join 192.168.1.20` again to open it. No code is needed
+while you are still in the room.
+
+| Command | What it does |
+|---|---|
+| `benchbar share joined` | Lists the rooms this computer joined, with their ids. |
+| `benchbar share leave [ROOM]` | Leaves a room. The host is told, your seat is free and the local address closes. |
+| `benchbar share forget [ROOM]` | Leaves a room and deletes this computer's key for that host. |
+
+`ROOM` is the id that `share joined` prints. You can omit it when the
+computer joined one room.
+
+The address is an IPv4 address of a local network. From a terminal,
+BenchBar does not search the network for rooms: use the address in the
+host's invite or in its `benchbar share status`.
+
+A room that you joined from a terminal and a room that you joined in the
+Mac app are two guests to the host. Each has its own key and its own list
+of rooms. The host counts you twice, and each takes a seat. On a Mac with
+BenchBar.app, `share join` says so before it asks for the code.
+
+To look at a room first and join it later, run `benchbar share join
+ADDRESS --dry-run --json` and read `host_pin`, the full key of the host.
+Then join with `--host-key HEX`: BenchBar joins only if the host still
+shows that key, and otherwise ends with exit code 3, before it sends
+anything. The tray works this way.
+
+Only a person runs `share join`, `share leave` and `share forget`. An
+agent or a script is refused.
+
+### On Windows (WSL)
+
+`share join` works with NAT networking and with mirrored networking. A
+guest only connects out, and the browser in Windows opens the room on
+`localhost`.
+
+- NAT: WSL reaches the Wi-Fi through Windows. If the room does not
+  answer, check that Windows itself reaches the host. A VPN or the
+  firewall of Windows can be in the way. The browser reaches the local
+  address through the localhost forwarding of WSL, which is on unless
+  `.wslconfig` says `localhostForwarding=false`.
+- Mirrored: there is nothing to set up.
+- A Windows program that already listens on the same `localhost` port
+  (41000 to 41999) can take the browser's request before WSL sees it. BenchBar
+  checks the port inside WSL only. If the address shows another page, run
+  `benchbar share leave` and `benchbar share join` again to get another
+  port, or close the program that holds it.
+
+The local address is there while the WSL distribution runs. Keep a
+terminal of the distribution open while you use the room.
+
+### In the Windows tray
+
+The **Sharing** tab has **Join a room...** when the command line tool in WSL
+has `share join`. Type the address of the room, choose **Look at the room**,
+and compare the 16 digits of the host key with the ones the host reads out.
+Only then type the room code. Where the host gives out the seats, the tab
+waits for yours (up to 10 minutes) and **Cancel join** ends the wait. A room
+this computer joined is listed with **Open**, **Leave** and **Forget**;
+**Forget** asks first. The tab joins by address and code. To use an invite
+link, run `benchbar share join` in a terminal.
+
+## When a room ends
+
+A room ends when its time runs out, when the host clicks **Stop**, or when
+the host turns off the `lan-rooms` Lab. Turning off the Lab signs out every
+guest. Sharing also ends by itself when the protection checks fail twice
+in a row.
+
+## Related
+
+- [How sharing keeps your bench safe](../concepts/sharing-safety.md)
+- [share and lan-guard](../reference/cli/share.md), the command reference
+- [Labs](labs.md)

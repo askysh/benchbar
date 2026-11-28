@@ -127,7 +127,7 @@ private struct JoinedRoomRow: View {
         let health = store.health[room.id] ?? .unknown
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("\(room.room) · \(room.host) · \(room.site)").font(.headline)
+                Text(NetworkPanePresentation.savedTitle(room)).font(.headline)
                 Spacer()
                 Button("Open") { Task { await store.open(room) } }
                     .disabled(!NetworkPanePresentation.canOpen(health))
@@ -137,7 +137,7 @@ private struct JoinedRoomRow: View {
                 if NetworkPanePresentation.canRejoin(health) {
                     Button("Join") { store.beginRejoin(room) }
                 }
-                Button(health == .identityChanged ? "Remove and Join Again" : "Forget") { forget(health) }
+                Button(health == .identityChanged ? String(localized: "Remove and Join Again") : String(localized: "Forget")) { forget(health) }
             }
             if let failure = store.openFailed[room.id] {
                 Label(failure, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
@@ -177,6 +177,16 @@ private struct JoinSheet: View {
             EmptyView()
         case .enteringCode(let room):
             Text(store.invite == nil ? NetworkPanePresentation.codePrompt(room) : NetworkPanePresentation.invitePrompt(room)).font(.headline)
+            if let invite = store.invite {
+                let check = NetworkPanePresentation.inviteCheck(invite, addressAllowed: store.inviteAddressUsed(invite))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(check.note)
+                    Text(check.address)
+                    Text(check.key).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
             TextField("Your name", text: $store.guestName)
             HStack {
                 Group {
@@ -208,7 +218,7 @@ private struct JoinSheet: View {
         case .refused(let room, let refusal):
             Text(NetworkPanePresentation.refusal(refusal, host: room.display.label)).fixedSize(horizontal: false, vertical: true)
             if NetworkPanePresentation.canRetry(refusal) {
-                buttons(primary: "Try Again", enabled: true) { store.join = .enteringCode(room) }
+                buttons(primary: String(localized: "Try Again"), enabled: true) { store.join = .enteringCode(room) }
             } else {
                 HStack {
                     Spacer()

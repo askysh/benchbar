@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Where the BenchBar window is: an app pane, the first run wizard, or one
@@ -5,6 +6,8 @@ import SwiftUI
 /// window): the sidebar footer and ⌘, lead to them.
 nonisolated enum WindowPane: Hashable, Sendable {
     case profiles, discovery, wizard
+    /// What ran on this Mac that changed something, from `benchbar history`.
+    case history
     /// On your network: rooms joined and rooms nearby (guest side of sharing).
     case network
     case general, menuBar, about
@@ -118,6 +121,7 @@ struct MainWindowView: View {
             if router.benchTab == .sites, let site = router.sidebarSite { return .site(bench: path, name: site) }
             return .bench(path)
         case .profiles: return .profiles
+        case .history: return .history
         case .discovery: return .discovery
         case .network: return .network
         case .general, .menuBar, .about, .wizard, .none: return nil
@@ -131,6 +135,7 @@ struct MainWindowView: View {
             router.show(bench: path, tab: .sites)
             router.sidebarSite = name
         case .profiles: router.pane = .profiles
+        case .history: router.pane = .history
         case .discovery: router.pane = .discovery
         case .network: router.pane = .network
         case .none: break
@@ -170,6 +175,10 @@ struct MainWindowView: View {
                         if let offer = about.offer, offer.showsBanner {
                             UpdateBanner(offer: offer).padding([.horizontal, .top], WindowMetrics.paneInset)
                         }
+                        if let first = store.notices.first {
+                            DefaultsNoticeBanner(notice: first, more: store.notices.count - 1) { store.dismissNotice(first.id) }
+                                .padding([.horizontal, .top], WindowMetrics.paneInset)
+                        }
                         if let notice = router.notice {
                             NoticeBanner(text: notice) { router.notice = nil }
                                 .padding([.horizontal, .top], WindowMetrics.paneInset)
@@ -193,6 +202,8 @@ struct MainWindowView: View {
             AboutPane(store: store, model: about, router: router).navigationTitle("About BenchBar")
         case .profiles:
             ProfilesPane(store: store, workbench: workbench, router: router).navigationTitle("Team Profiles")
+        case .history:
+            HistoryPane(workbench: workbench).navigationTitle("History")
         case .discovery:
             DiscoveryPane(discovery: discovery, router: router).navigationTitle("Find Benches")
         case .network:
@@ -261,7 +272,7 @@ struct MainSidebar: View {
                                 .foregroundStyle(site.isDefault ? Color.yellow : Color.secondary)
                                 .environment(\.backgroundProminence, .standard)
                                 .offscreenSafe()
-                                .accessibilityLabel(site.isDefault ? "Default site" : "Site")
+                                .accessibilityLabel(site.isDefault ? String(localized: "Default site") : String(localized: "Site"))
                             Text(site.name)
                         }
                         .font(.callout)
@@ -275,6 +286,7 @@ struct MainSidebar: View {
             Section {
                 Label("Team Profiles", systemImage: "person.2").tag(SidebarItem.profiles)
                 Label("Find Benches", systemImage: "folder.badge.plus").tag(SidebarItem.discovery)
+                Label("History", systemImage: "clock.arrow.circlepath").tag(SidebarItem.history)
                 if model.showsNetwork { Label("On your network", systemImage: "wifi").tag(SidebarItem.network) }
             }
         }
@@ -320,8 +332,8 @@ struct SidebarFooter: View {
             .fixedSize()
             .accessibilityLabel("Settings")
             .help("Settings (⌘,): General and Menu Bar")
-            footerButton("info.circle", label: "About BenchBar",
-                         help: "About BenchBar: versions, Check for Updates, Report a Bug") { router.pane = .about }
+            footerButton("info.circle", label: String(localized: "About BenchBar"),
+                         help: String(localized: "About BenchBar: versions, Check for Updates, Report a Bug")) { router.pane = .about }
         }
         .font(.callout)
         .foregroundStyle(.secondary)
@@ -345,7 +357,33 @@ struct NoticeBanner: View {
     let dismiss: () -> Void
 
     var body: some View {
-        PaneBanner(symbol: "link", tint: .orange, title: "A BenchBar link did nothing", detail: text, dismiss: dismiss)
+        PaneBanner(symbol: "link", tint: .orange, title: String(localized: "A BenchBar link did nothing"), detail: text, dismiss: dismiss)
+    }
+}
+
+/// A default an update changed: what it is, the switch back and a link to the
+/// page that explains it. One at a time; Dismiss runs `benchbar notices --dismiss ID`
+/// and shows the next.
+struct DefaultsNoticeBanner: View {
+    let notice: BenchNotice
+    /// How many more notices wait behind this one.
+    let more: Int
+    let dismiss: () -> Void
+
+    var title: String { more > 0 ? String(localized: "\(notice.title) (\(more) more after this)") : notice.title }
+
+    var body: some View {
+        PaneBanner(symbol: "info.circle.fill", tint: .orange, title: title, detail: notice.banner,
+                   dismissHelp: String(localized: "Dismiss this notice"), dismiss: dismiss) {
+            HStack {
+                if let doc = notice.doc, let url = URL(string: doc) {
+                    Button("Learn More") { NSWorkspace.shared.open(url) }
+                }
+                Button("Dismiss", action: dismiss)
+            }
+            .controlSize(.small)
+            .padding(.top, 2)
+        }
     }
 }
 
@@ -359,8 +397,39 @@ struct ChangeResultBanner: View {
         if let result = workbench.result, result.scope == scope {
             PaneBanner(symbol: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
                    tint: result.succeeded ? .green : .red,
-                   title: result.succeeded ? "\(result.title): done" : "\(result.title): failed",
-                   detail: result.error ?? result.note, dismiss: { workbench.result = nil })
+                   title: result.succeeded ? String(localized: "\(result.title): done") : String(localized: "\(result.title): failed"),
+                   detail: result.error ?? result.note, dismiss: { workbench.result = nil }) {
+                if let lease = result.lease {
+                    LeaseBreakRow(lease: lease, title: result.title, canBreak: workbench.leaseRetry != nil) { Task { await workbench.breakLease() } }
+                }
+            }
+        }
+    }
+}
+
+/// Who holds the lease that refused a change, and a person's explicit "Break Lease". Nothing else in the app breaks a lease:
+/// the button asks first, then runs the same change with `--break-lease`, which the CLI allows only to a person.
+struct LeaseBreakRow: View {
+    let lease: LeaseRefusal
+    let title: String
+    var canBreak = true
+    let breakLease: () -> Void
+    @State private var asking = false
+
+    var body: some View {
+        HStack(spacing: WindowMetrics.rowSpacing) {
+            Text(lease.sentence).font(.caption)
+            if canBreak {
+                Button("Break Lease…") { asking = true }
+                    .controlSize(.small)
+                    .help("Run it anyway. The holder is not told, and what they are doing may break.")
+            }
+        }
+        .alert("Break the lease of \(lease.holder)?", isPresented: $asking) {
+            Button("Break Lease and Run", role: .destructive, action: breakLease)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(lease.sentence) Breaking it runs \"\(title)\" anyway, as you: whoever holds the lease may be in the middle of work on it. The run is recorded in the history.")
         }
     }
 }

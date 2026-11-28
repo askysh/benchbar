@@ -28,6 +28,9 @@ public sealed record PlanDocument(IReadOnlyList<PlanStepInfo> Steps, IReadOnlyLi
         var steps = new List<PlanStepInfo>();
         if (o["steps"] is JsonArray array)
         {
+            // pull lists its steps as plain sentences: the sentence is the name, and the run's step lines match it by name
+            foreach (var line in array.OfType<JsonValue>().Select(v => v.TryGetValue<string>(out var t) ? t : null).OfType<string>().Where(t => t.Length > 0))
+                steps.Add(new PlanStepInfo(line, line, null, null, false, true));
             foreach (var s in array.OfType<JsonObject>())
             {
                 var id = JsonRead.Str(s, "id") ?? JsonRead.Str(s, "kind") ?? "";
@@ -47,10 +50,10 @@ public sealed record PlanDocument(IReadOnlyList<PlanStepInfo> Steps, IReadOnlyLi
             var entries = PortsJson.ParsePlan(o).Entries;
             foreach (var e in entries)
             {
-                var what = e.ChangesPorts ? $"web port {e.Current.Web} to {e.Proposed.Web}" : e.ServiceInstalled ? "no change" : "set up the service files";
-                steps.Add(new PlanStepInfo(e.Path, $"{e.Name}: {what}", null, e.Conflicts.Count > 0 ? string.Join("; ", e.Conflicts) : null,
+                var what = e.ChangesPorts ? UiText.Format("PlanPortsChange", e.Current.Web, e.Proposed.Web) : e.ServiceInstalled ? UiText.Get("PlanPortsNoChange") : UiText.Get("PlanPortsSetUp");
+                steps.Add(new PlanStepInfo(e.Path, UiText.Format("PlanEntryLine", e.Name, what), null, e.Conflicts.Count > 0 ? string.Join("; ", e.Conflicts) : null,
                     false, e.NeedsSetup)); // ports apply runs nothing as root on Linux
-                if (e.Blocked is { } blocked) errors.Add($"{e.Name}: {blocked}");
+                if (e.Blocked is { } blocked) errors.Add(UiText.Format("PlanEntryLine", e.Name, blocked));
             }
             changes = entries.Any(e => e.NeedsSetup);
         }
@@ -66,7 +69,7 @@ public sealed record PlanDocument(IReadOnlyList<PlanStepInfo> Steps, IReadOnlyLi
 /// </summary>
 public static partial class PlanStale
 {
-    [System.Text.RegularExpressions.GeneratedRegex(@"\b(plan|update|export)\b[^.\n]*\bchanged since it was (shown|reviewed)\b|\bThe port plan changed\.|\bchanged since it was reviewed\. Nothing was",
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(plan|update|export)\b[^.\n]*\bchanged since it was (shown|reviewed)\b|\bThe port plan changed\.|\bThe plan token expired\b|\bchanged since it was reviewed\. Nothing was",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex Refusal();
 
@@ -79,7 +82,7 @@ public static partial class PlanStale
 /// </summary>
 public sealed record PlanReviewRequest(string Title, IReadOnlyList<string> PlanArgs, Func<PlanDocument, IReadOnlyList<string>> ApplyArgs)
 {
-    public string ConfirmLabel { get; init; } = "Apply";
+    public string ConfirmLabel { get; init; } = UiText.Get("PlanApply");
 
     /// <summary>Whether Stop is offered while the apply runs. Only for a run that is safe to kill part way (a clone, not a restore).</summary>
     public bool CanStop { get; init; }
@@ -112,10 +115,25 @@ public sealed record PlanReviewRequest(string Title, IReadOnlyList<string> PlanA
     /// <summary>Lines about the plan the CLI made (one per app of an add), shown under the summary of the review.</summary>
     public Func<PlanDocument, IReadOnlyList<string>>? Describe { get; init; }
 
+    /// <summary>The name the person types before the apply is offered (a site that is dropped where it was); null asks for nothing. Confirm is then never the default button.</summary>
+    public string? ConfirmName { get; init; }
+
+    /// <summary>A rule the plan must also pass before it can be confirmed (what the CLI cannot say with <c>can_apply</c>: it still needs an input).</summary>
+    public Func<PlanDocument, bool>? Allows { get; init; }
+
+    /// <summary>The button that clears what blocks this plan, or null.</summary>
+    public Func<PlanDocument, PlanResolver?>? BlockedBy { get; init; }
+
+    /// <summary>The label of the button that reads the plan again after a stale token or a failure.</summary>
+    public string RefreshLabel { get; init; } = UiText.Get("PlanRefresh");
+
     /// <summary><c>baseArgs --dry-run --json</c> to plan, <c>baseArgs --apply TOKEN --yes --jsonl</c> to apply.</summary>
     public static PlanReviewRequest Tokened(string title, IReadOnlyList<string> baseArgs) => new(
         title, [.. baseArgs, "--dry-run", "--json"], plan => [.. baseArgs, "--apply", plan.Token ?? "", "--yes", "--jsonl"]);
 }
+
+/// <summary>What stands between a plan and its apply that a button of the sheet can clear (a running bench: Stop Bench), and what that button does. True when it worked.</summary>
+public sealed record PlanResolver(string Label, Func<Task<bool>> Resolve, string FailedText);
 
 /// <summary>The sheet's answer to its caller.</summary>
 public sealed record PlanOutcome(bool Applied, bool Cancelled, CliDone? Done)

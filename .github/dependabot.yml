@@ -1,21 +1,85 @@
-# Weekly updates for the Actions in .github/workflows, the Swift
-# packages of the app and the docs site's packages (site/, bun). The CLI
-# is plain bash with no packages to update. Updates go to next-release,
-# where every change lands; main moves only when a release is cut.
+# Weekly updates for everything this repository depends on, one entry per
+# package manager:
+#
+#   github-actions  the Actions in .github/workflows and .github/actions
+#                   (every one is pinned to a commit sha with its version in
+#                   a comment; Dependabot moves both)
+#   gomod           the Windows shim (windows/shim): x/sys
+#   nuget           the Windows tray (windows/tray): Directory.Packages.props
+#   dotnet-sdk      the .NET SDK of the tray (windows/tray/global.json)
+#   swift           the app's packages: macos/Package.swift mirrors
+#                   project.yml and sparkle.yml, and macos/Package.resolved
+#                   is what every build uses (macos/DECISIONS.md, "Swift
+#                   package pins")
+#   bun             the docs site (site/)
+#
+# The CLI is plain bash with no packages to update. Updates go to
+# next-release, where every change lands; main moves only when a release is
+# cut. A new release must be a week old before Dependabot proposes it (the
+# cooldown): a release that is pulled or found malicious usually is within
+# days. Security updates are not held back by it.
+#
+# Not here, so a person bumps them (maintainers/DECISIONS.md, "Supply chain"): the
+# tools of scripts/ci-install-tool.sh (shellcheck, XcodeGen, actionlint,
+# zizmor), the Xcode version of the macOS jobs, the bash:3.2.57 image's
+# digest in ci.yml, govulncheck's version in ci.yml, and the third party
+# installers the CLI downloads (uv, fnm) in 00-linux-system-deps.sh.
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /.github/actions/release-draft
+      - /.github/actions/release-prepare
     target-branch: next-release
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: gomod
+    directory: /windows/shim
+    target-branch: next-release
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: nuget
+    directory: /windows/tray
+    target-branch: next-release
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      # the test packages move together; a shipped package gets its own pull
+      # request, because it reaches users
+      tray-tests:
+        patterns:
+          - "xunit*"
+          - "Microsoft.Extensions.TimeProvider.Testing"
+
+  - package-ecosystem: dotnet-sdk
+    directory: /windows/tray
+    target-branch: next-release
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
   - package-ecosystem: swift
     directory: /macos
     target-branch: next-release
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+
   - package-ecosystem: bun
     directory: /site
     target-branch: next-release
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7

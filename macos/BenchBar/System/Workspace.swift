@@ -5,9 +5,9 @@ import AppKit
 enum Workspace {
     static func chooseScanFolder(previous: String) -> String? {
         let panel = NSOpenPanel()
-        panel.title = "Scan for Frappe benches"
-        panel.message = "Choose a folder to search, including its subfolders."
-        panel.prompt = "Scan Folder"
+        panel.title = String(localized: "Scan for Frappe benches")
+        panel.message = String(localized: "Choose a folder to search, including its subfolders.")
+        panel.prompt = String(localized: "Scan Folder")
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
@@ -20,9 +20,9 @@ enum Workspace {
     /// Adopt Existing Bench: the folder of one bench (with apps and sites).
     static func chooseExistingBench(previous: String) -> String? {
         let panel = NSOpenPanel()
-        panel.title = "Adopt an existing bench"
-        panel.message = "Choose the bench folder, the one with apps and sites in it. BenchBar shows the setup plan before it changes anything."
-        panel.prompt = "Choose Bench"
+        panel.title = String(localized: "Adopt an existing bench")
+        panel.message = String(localized: "Choose the bench folder, the one with apps and sites in it. BenchBar shows the setup plan before it changes anything.")
+        panel.prompt = String(localized: "Choose Bench")
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
@@ -36,8 +36,8 @@ enum Workspace {
     /// The folder for a new bench: an existing one, or one made in the panel.
     static func chooseBenchFolder(previous: String) -> String? {
         let panel = NSOpenPanel()
-        panel.title = "Choose the bench folder"
-        panel.message = "Choose or create the folder for the new bench."
+        panel.title = String(localized: "Choose the bench folder")
+        panel.message = String(localized: "Choose or create the folder for the new bench.")
         panel.prompt = "Choose"
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -92,13 +92,26 @@ enum Workspace {
     /// Open Console / Open Database from a view: the error lands on the bench.
     static func openShell(_ kind: TerminalScript.Kind, site: String, bench: BenchModel, store: BenchStore) {
         guard case .ready(let cli) = store.cli else {
-            bench.lastError = "The benchbar command line tool is not available."
+            bench.lastError = String(localized: "The benchbar command line tool is not available.")
             return
         }
         do {
             try openShell(kind, site: site, bench: bench, cli: cli)
         } catch {
-            bench.lastError = "Could not open Terminal: \(error.localizedDescription)"
+            bench.lastError = String(localized: "Could not open Terminal: \(error.localizedDescription)")
+        }
+    }
+
+    /// Watch Assets in Terminal: `benchbar watch` for this bench. The error lands on the bench.
+    static func openWatch(bench: BenchModel, store: BenchStore) {
+        guard case .ready(let cli) = store.cli else {
+            bench.lastError = String(localized: "The benchbar command line tool is not available.")
+            return
+        }
+        do {
+            try runInTerminal(name: "watch-\(bench.name)", contents: TerminalScript.watchContents(cli: cli.path, bench: bench.path))
+        } catch {
+            bench.lastError = String(localized: "Could not open Terminal: \(error.localizedDescription)")
         }
     }
 
@@ -125,9 +138,9 @@ enum Workspace {
     /// Asks for the benchbar file. Returns nil when cancelled.
     static func chooseCLI() -> String? {
         let panel = NSOpenPanel()
-        panel.title = "Choose the benchbar command"
-        panel.message = "Pick Homebrew's /opt/homebrew/bin/benchbar, ~/.local/bin/benchbar or the benchbar file in your checkout. No benchbar yet? Install it with \(Homebrew.installCLI), or the one line installer."
-        panel.prompt = "Use This"
+        panel.title = String(localized: "Choose the benchbar command")
+        panel.message = String(localized: "Pick Homebrew's /opt/homebrew/bin/benchbar, ~/.local/bin/benchbar or the benchbar file in your checkout. No benchbar yet? Install it with \(Homebrew.installCLI), or the one line installer.")
+        panel.prompt = String(localized: "Use This")
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false

@@ -6,6 +6,8 @@
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 # shellcheck source=tests/lib/apps-fixtures.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/apps-fixtures.sh"
+# these tests import, subscribe and read a profile folder whose repos are file:// folders: files from others take a local repo only with this
+export BENCHBAR_ALLOW_LOCAL_REPOS=1
 
 USER_DIR="$HOME/.config/benchbar/profiles"
 TEAM_REPO="$TMP_DIR/team-config"
@@ -111,7 +113,7 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "acme (team, on v15-lts)"
 assert_contains "$OUT" "Team profile: acme"
 assert_calls_contain "^bench init ${BENCH} --frappe-branch version-15 --python "
-assert_calls_contain "^git ls-remote --exit-code --heads --tags -- file://${REMOTES}/acme_crm.git main$"
+assert_calls_contain "^git ls-remote --exit-code --heads --tags -- file://${REMOTES}/acme_crm.git refs/heads/main refs/tags/main$"
 assert_calls_contain "^bench get-app --branch main file://${REMOTES}/acme_crm.git$"
 assert_calls_contain "^bench get-app --branch version-15 --skip-assets file://${REMOTES}/acme_tools.git$" "(a pinned app is built once, after its checkout)"
 assert_calls_not_contain "checkout --quiet" "(the clone is at the pin already: nothing to check out)"

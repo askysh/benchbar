@@ -13,7 +13,7 @@ Bash only for read only commands (`grep`, `git log`, `git show`, `ls`).
 - `lib/frappe-local/platform.sh` (macOS) and `platform-linux.sh` (Linux): platform functions.
 - `templates/`: generated files (runner, Procfile.lean, launchd plist, systemd unit, helpers).
 - `tests/test-*.sh`, `tests/lib/harness.sh`, `tests/mocks/bin/`: the mocked suite.
-- `docs/DECISIONS.md`: why things are the way they are. `macos/`: the Mac app (Swift).
+- `maintainers/DECISIONS.md`: why things are the way they are. `macos/`: the Mac app (Swift).
 
 ## Report
 Answer the question first, then the evidence as `file:line` with a short excerpt each. Keep it

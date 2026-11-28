@@ -83,6 +83,7 @@ public sealed class SystemProcessRunner : IProcessRunner
             StandardErrorEncoding = outputEncoding ?? Encoding.UTF8,
         };
         foreach (var a in args) info.ArgumentList.Add(a);
+        TrayCaller.Apply(info);
 
         using var process = new Process { StartInfo = info };
         process.Start();
@@ -138,6 +139,7 @@ public sealed class SystemProcessRunner : IProcessRunner
     {
         var info = new ProcessStartInfo(fileName) { UseShellExecute = false, CreateNoWindow = true };
         foreach (var a in args) info.ArgumentList.Add(a);
+        TrayCaller.Apply(info);
         Process.Start(info)?.Dispose(); // disposing the handle does not end the process
     }
 }
@@ -202,9 +204,9 @@ public static class ShimLocator
 /// </summary>
 public sealed class ShimBenchSource : IBenchSource
 {
-    public const string NotFoundMessage = ShimStart.NotFoundMessage;
+    public static string NotFoundMessage => ShimStart.NotFoundMessage;
 
-    public const string BlockedMessage = ShimStart.BlockedMessage;
+    public static string BlockedMessage => ShimStart.BlockedMessage;
 
     /// <summary>up, down and restart wait for the bench: 3 minutes.</summary>
     public static readonly TimeSpan ActionTimeout = TimeSpan.FromSeconds(180);
@@ -224,7 +226,7 @@ public sealed class ShimBenchSource : IBenchSource
     } : ReadTimeout;
 
     private static string Words(TimeSpan t) =>
-        t.TotalSeconds >= 120 ? $"{(int)t.TotalMinutes} minutes" : t.TotalSeconds >= 60 ? "1 minute" : $"{(int)t.TotalSeconds} seconds";
+        t.TotalSeconds >= 120 ? UiText.Format("SetupMinutesMany", (int)t.TotalMinutes) : t.TotalSeconds >= 60 ? UiText.Get("SetupMinuteOne") : UiText.Format("SetupSecondsMany", (int)t.TotalSeconds);
 
     private readonly IProcessRunner _runner;
     private readonly Func<string?> _locate;
@@ -262,15 +264,14 @@ public sealed class ShimBenchSource : IBenchSource
         {
             var result = await _runner.RunAsync(shim, args, ct, TimeoutFor(args)).ConfigureAwait(false);
             if (result.ExitCode == 0) return ActionResult.Success;
-            var line = FirstLine(result.Error) ?? FirstLine(result.Output) ?? $"benchbar.exe exited with code {result.ExitCode}.";
+            var line = FirstLine(result.Error) ?? FirstLine(result.Output) ?? UiText.Format("SetupExitCode", result.ExitCode);
             return new ActionResult(result.ExitCode, line);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             // the runner's own timeout, not a caller cancel: never "A task was canceled."
             var verb = args.Length > 0 ? args[0] : "command";
-            var state = verb == "down" ? "stopping" : "starting";
-            return ActionResult.Failure($"benchbar.exe {verb} did not finish in {Words(TimeoutFor(args))}; the bench may still be {state}. Run benchbar.exe status.");
+            return ActionResult.Failure(verb == "down" ? UiText.Format("CommonActionTimeoutDown", verb, Words(TimeoutFor(args))) : UiText.Format("CommonActionTimeoutUp", verb, Words(TimeoutFor(args))));
         }
         catch (Win32Exception ex)
         {
@@ -321,11 +322,11 @@ public sealed class ShimBenchSource : IBenchSource
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new CliProblemException($"benchbar.exe {(args.Count > 0 ? args[0] : "command")} did not answer in {Words(TimeoutFor(args))}.");
+            throw new CliProblemException(UiText.Format("CommonCommandNoAnswer", args.Count > 0 ? args[0] : "command", Words(TimeoutFor(args))));
         }
 
         if (result.ExitCode != 0 && string.IsNullOrWhiteSpace(result.Output))
-            throw new CliProblemException(FirstLine(result.Error) ?? $"benchbar.exe exited with code {result.ExitCode}.");
+            throw new CliProblemException(FirstLine(result.Error) ?? UiText.Format("SetupExitCode", result.ExitCode));
         return result;
     }
 

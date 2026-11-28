@@ -1,0 +1,59 @@
+# Issue platform: a new or edited issue from the bug form gets the label of the
+# Platform it names: macOS is `platform:macos`, Linux is `platform:linux`,
+# Windows beta is `windows`. The label that no longer fits is taken off, so an
+# edit of the dropdown moves it. Labels that do not exist yet are created here.
+# It never touches `test-linux`: that label starts a CI run (maintainers/DECISIONS.md).
+# The issue body comes through the environment, never into the shell text.
+name: Issue platform
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions: {}
+
+concurrency:
+  group: issue-platform-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    name: Label the issue from its Platform
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          set -euo pipefail
+          # the form writes "### Platform", a blank line, then the chosen option
+          platform="$(printf '%s\n' "$ISSUE_BODY" | tr -d '\r' | awk '/^### Platform[[:space:]]*$/ { f = 1; next } f && NF { print; exit }')"
+          case "$platform" in
+            macOS) want="platform:macos"; color="1d76db"; text="Reported on macOS" ;;
+            Linux) want="platform:linux"; color="1d76db"; text="Reported on Linux" ;;
+            "Windows beta") want="windows"; color="0078D4"; text="Reported on Windows" ;;
+            *) echo "No Platform in this issue: nothing to label."; exit 0 ;;
+          esac
+          # create the label when the repository does not have it yet; a label
+          # that another run made in between ("already exists") is fine
+          labels="$(gh label list --limit 200 --json name --jq '.[].name')"
+          if ! grep -qxF "$want" <<<"$labels"; then
+            if ! made="$(gh label create "$want" --color "$color" --description "$text" 2>&1)"; then
+              case "$made" in
+                *"already exists"*) ;;
+                *) printf '%s\n' "$made" >&2; exit 1 ;;
+              esac
+            fi
+          fi
+          gh issue edit "$NUMBER" --add-label "$want"
+          for other in platform:macos platform:linux windows; do
+            if [ "$other" != "$want" ]; then
+              gh issue edit "$NUMBER" --remove-label "$other" || true
+            fi
+          done

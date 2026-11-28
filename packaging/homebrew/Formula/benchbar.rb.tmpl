@@ -2,13 +2,13 @@
 # in the url and the sha256 of benchbar-cli-<version>.tar.gz (made by
 # scripts/cli-tarball.sh); .github/workflows/homebrew-tap.yml puts the
 # result in Formula/benchbar.rb of github.com/askysh/homebrew-tap once the
-# release is published (docs/releasing.md).
+# release is published (maintainers/releasing.md).
 #
 # The wrapper in bin/ runs opt_libexec/benchbar, not the Cellar folder:
 # the CLI records the path it runs from (shell helpers, links, fix lines),
 # and only the opt path survives brew upgrade and brew cleanup.
 class Benchbar < Formula
-  desc "Set up, run and repair local Frappe and ERPNext benches on macOS"
+  desc "Set up, run and repair local Frappe and ERPNext benches on macOS and Linux"
   homepage "https://benchbar.akashmishra.com/"
   url "{{URL}}"
   sha256 "{{SHA256}}"
@@ -19,7 +19,13 @@ class Benchbar < Formula
     strategy :github_latest
   end
 
-  depends_on :macos
+  # Linuxbrew: the tools the CLI itself calls (clone, download, release checks).
+  # MariaDB, Redis, Python and Node are not here: `benchbar install` gets them
+  # from apt, uv and fnm, as it does without Homebrew.
+  on_linux do
+    depends_on "curl"
+    depends_on "git"
+  end
 
   def install
     libexec.install Dir["*"]
@@ -28,7 +34,7 @@ class Benchbar < Formula
 
   def caveats
     <<~EOS
-      To set up Frappe on this Mac (asks for sudo once):
+      To set up Frappe on this machine (asks for sudo once):
         benchbar install
 
       Coming from the one line installer? Move its state and links over:

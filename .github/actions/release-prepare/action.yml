@@ -1,7 +1,8 @@
 # The steps both Mac build jobs of release.yml share before they build:
-# Xcode, tools, the CLI tests and the version check. It reads no secret.
+# Xcode, tools, the CI check and the version check. It reads no secret; the
+# only credential is the job's GitHub token, to read the commit's check runs.
 name: Release prepare
-description: Select Xcode, install the tools, run the CLI tests and check the version.
+description: Select Xcode, install the tools, check that CI passed for this commit (or run the CLI tests) and check the version.
 inputs:
   version:
     description: The version being built (X.Y.Z or X.Y.Z-rc.N)
@@ -10,26 +11,44 @@ inputs:
     description: "true for a release candidate (a suffix on the version): no changelog section is needed and fragments may remain"
     required: false
     default: "false"
+  ci_gate:
+    description: "true for a signed release: CI already ran the whole suite on this tree, so only its verdict is checked. false (an ad hoc test build) runs the CLI tests here"
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
+    # The push run of CI on next-release (and main) ran every test, the Swift
+    # tests and the app build on this tree. The release does not run them
+    # again; it fails here, in seconds, when that run is not green.
+    - name: CI passed for this commit
+      if: inputs.ci_gate == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: scripts/release-ci-gate.sh "$GITHUB_SHA"
+
     - name: Select Xcode
-      uses: maxim-lobanov/setup-xcode@v1
+      uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
       with:
-        xcode-version: latest-stable
+        # the version the macos-26 image has as its default today. A signed
+        # release must build the same way a week later, so this is bumped on
+        # purpose (with the snapshot references, ci.yml and snapshots.yml say
+        # the same), never by "latest"
+        xcode-version: '26.6'
 
-    - name: Cache Homebrew downloads
-      uses: actions/cache@v6
-      with:
-        path: ~/Library/Caches/Homebrew
-        key: brew-${{ runner.os }}-${{ runner.arch }}-xcodegen
-        restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
-
+    # XcodeGen and shellcheck at the versions and sha256 of
+    # scripts/ci-install-tool.sh: no Homebrew formula that moves, and no
+    # cache that a CI run on another branch could have written
     - name: Install tools
       shell: bash
-      run: brew install xcodegen shellcheck
+      run: |
+        scripts/ci-install-tool.sh xcodegen
+        scripts/ci-install-tool.sh shellcheck
 
-    - name: CLI tests
+    # An ad hoc test build from a branch has no CI verdict to lean on.
+    - name: CLI tests (ad hoc build only)
+      if: inputs.ci_gate != 'true'
       shell: bash
       run: /bin/bash tests/run-tests.sh
 

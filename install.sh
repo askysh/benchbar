@@ -1,55 +1,80 @@
 #!/bin/bash
 #
-# install.sh: the one line installer for BenchBar.
-#
-#   curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
-#
-# What it does, in this order, and says so before each step:
-#   1. checks macOS, Apple Silicon (warns on Intel), the Xcode Command Line
-#      Tools (offers xcode-select --install and waits) and Homebrew (offers
-#      the official installer)
-#   2. clones the CLI into ~/.local/share/benchbar (or pulls), links
-#      benchbar and frappe-mac into ~/.local/bin, and adds that folder to
-#      PATH in ~/.zshrc inside a marker block
-#   3. installs or updates the BenchBar app from the latest GitHub release
-#      (zip checked against the release's SHA256SUMS, unpacked with ditto
-#      into ~/Applications); skipped when no release exists yet
-#   4. offers "benchbar adopt" for a bench it finds, or "benchbar install"
-#
-# On Linux (Ubuntu 24.04, WSL included) it does the CLI half only, in the
-# same place: it checks git, clones the CLI into ~/.local/share/benchbar (or
-# pulls), links benchbar into ~/.local/bin and adds that folder to PATH in
-# ~/.bashrc (~/.zshrc for zsh). There is no app on Linux, and it never runs
-# sudo: a missing git is reported with the apt command. It needs no terminal
-# and no questions; BENCHBAR_NONINTERACTIVE=1 asks for the same. Next:
-# benchbar install (on WSL the Windows tray continues the setup on its own).
-#
-# Homebrew owns a half it installed: with the benchbar formula
-# (<prefix>/opt/benchbar) the CLI half is skipped, with the benchbar-app
-# cask (<prefix>/Caskroom/benchbar-app) the app half. Each prints the brew
-# command that updates it instead, so a Mac never gets a second copy.
-#
-# Flags:
-#   --yes             accept every default, no questions (no TTY needed). On a
-#                     Mac that already has the CLI in ~/.local/share/benchbar
-#                     this is an update: CLI and app only, no adopt or install
-#                     of a bench, no Homebrew installer
-#   --dry-run         print the plan and every command, change nothing
-#   --no-app          CLI only
-#   --app-only        app only
-#   --version vX.Y.Z  install that release of the app instead of the latest;
-#                     on Linux, check out that release of the CLI (a detached
-#                     checkout, a rerun without it goes back to main)
-#   --uninstall       remove the app, the links and the PATH block; offer to
-#                     stop and remove the launchd agents and the checkout
-#                     (with --yes: yes to both). Benches, sites and databases
-#                     are never touched.
-#
-# It never runs sudo itself. The only step that may ask for your password
-# is Homebrew's own installer, and it says so first. Works on macOS
-# /bin/bash 3.2. Prompts read from /dev/tty, so it works when piped.
+# install.sh: the one line installer for BenchBar. `install.sh --help` says
+# what it does and which flags it takes: the text is in usage() below, not
+# in these comments, so it is there when the script comes through a pipe.
+# Everything runs from main, called on the last line: a download that is
+# cut short runs nothing.
 
 set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+install.sh: the one line installer for BenchBar.
+
+  curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+
+What it does, in this order, and says so before each step:
+  1. checks macOS, Apple Silicon (warns on Intel), the Xcode Command Line
+     Tools (offers xcode-select --install and waits) and Homebrew (offers
+     the official installer)
+  2. clones the CLI into ~/.local/share/benchbar (or pulls), links
+     benchbar and frappe-mac into ~/.local/bin, and adds that folder to
+     PATH in ~/.zshrc inside a marker block
+  3. installs or updates the BenchBar app from the latest GitHub release:
+     the zip is checked against the release's SHA256SUMS, and when gh (the
+     GitHub CLI) is installed and signed in, against its build provenance
+     (gh attestation verify, pinned to this repository's release workflow; a
+     failure stops the install, except that a release older than 0.9.0 has
+     none and is installed on its checksum);
+     the unpacked app must pass codesign --verify --deep --strict and
+     spctl --assess (a Developer ID signature, notarized); then it is
+     copied next to the old app and swapped in with one rename; skipped
+     when no release exists yet
+  4. offers "benchbar adopt" for a bench it finds, or "benchbar install"
+
+On Linux (Ubuntu 24.04, WSL included) it does the CLI half only, in the
+same place: it checks git, clones the CLI into ~/.local/share/benchbar (or
+pulls), links benchbar into ~/.local/bin and adds that folder to PATH in
+~/.bashrc (~/.zshrc for zsh). There is no app on Linux, and it never runs
+sudo: a missing git is reported with the apt command. It needs no terminal
+and no questions; BENCHBAR_NONINTERACTIVE=1 asks for the same. Next:
+benchbar install (on WSL the Windows tray continues the setup on its own).
+
+Homebrew owns a half it installed: with the benchbar formula
+(<prefix>/opt/benchbar) the CLI half is skipped, with the benchbar-app
+cask (<prefix>/Caskroom/benchbar-app) the app half. Each prints the brew
+command that updates it instead, so a Mac never gets a second copy.
+
+Flags:
+  --yes             accept every default, no questions (no TTY needed). On a
+                    Mac that already has the CLI in ~/.local/share/benchbar
+                    this is an update: CLI and app only, no adopt or install
+                    of a bench, no Homebrew installer
+  --dry-run         print the plan and every command, change nothing
+  --no-app          CLI only
+  --app-only        app only
+  --version vX.Y.Z  install that release of the app instead of the latest;
+                    on Linux, with --no-app and for a release candidate
+                    (vX.Y.Z-rc.N, installed only when named), also check
+                    out that release of the CLI (a detached checkout, a
+                    rerun without it goes back to main)
+  --uninstall       remove the app, the links and the PATH block; offer to
+                    stop and remove the launchd agents and the checkout
+                    (with --yes: yes to both). Benches, sites and databases
+                    are never touched.
+
+It never runs sudo itself. The only step that may ask for your password
+is Homebrew's own installer, and it says so first. Works on macOS
+/bin/bash 3.2. Prompts read from /dev/tty, so it works when piped.
+USAGE
+}
+
+# the release workflow that attests the Mac files, and the deadline of each gh
+# call (the tests shorten it; only under FL_TESTING=1)
+ATTEST_WORKFLOW="askysh/benchbar/.github/workflows/release.yml"
+ATTEST_TIMEOUT=30
+[[ "${FL_TESTING:-}" != "1" ]] || ATTEST_TIMEOUT="${BENCHBAR_ATTEST_TIMEOUT:-30}"
 
 BENCHBAR_REPO="${BENCHBAR_REPO:-https://github.com/askysh/benchbar.git}"
 BENCHBAR_API="${BENCHBAR_API:-https://api.github.com/repos/askysh/benchbar}"
@@ -75,21 +100,24 @@ CHANGED=0
 UPDATING=0
 [[ -d "${BENCHBAR_HOME}/.git" ]] && UPDATING=1
 
-while [[ "$#" -gt 0 ]]; do
-  case "$1" in
-    -y|--yes) YES=1 ;;
-    --dry-run) DRY=1 ;;
-    --no-app) DO_APP=0 ;;
-    --app-only) DO_CLI=0 ;;
-    --version) PIN="${2:-}"; shift ;;
-    --version=*) PIN="${1#*=}" ;;
-    --uninstall) UNINSTALL=1 ;;
-    -h|--help) sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) printf 'Unknown option: %s (try --help)\n' "$1" >&2; exit 1 ;;
-  esac
-  shift
-done
-[[ -z "$PIN" || "$PIN" == v* ]] || PIN="v${PIN}"
+# parse_args "$@": sets YES, DRY, DO_CLI, DO_APP, UNINSTALL and PIN
+parse_args() {
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      -y|--yes) YES=1 ;;
+      --dry-run) DRY=1 ;;
+      --no-app) DO_APP=0 ;;
+      --app-only) DO_CLI=0 ;;
+      --version) PIN="${2:-}"; shift ;;
+      --version=*) PIN="${1#*=}" ;;
+      --uninstall) UNINSTALL=1 ;;
+      -h|--help) usage; exit 0 ;;
+      *) printf 'Unknown option: %s (try --help)\n' "$1" >&2; exit 1 ;;
+    esac
+    shift
+  done
+  [[ -z "$PIN" || "$PIN" == v* ]] || PIN="v${PIN}"
+}
 
 # ---------------------------------------------------------------- output
 
@@ -328,7 +356,7 @@ check_system() {
     return 0
   fi
   if confirm "Run the official Homebrew installer now? (from brew.sh, it asks for your password)" y; then
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/tty
+    /bin/bash -c "$(curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/tty
     for p in /opt/homebrew/bin/brew /usr/local/bin/brew; do
       [[ -x "$p" ]] && eval "$("$p" shellenv)"
     done
@@ -392,24 +420,30 @@ brew_guard() {
 
 install_cli() {
   step "Command line tool"
+  # The CLI is checked out at the pinned release on Linux, with --no-app (the CLI
+  # only, which Homebrew and self-update cannot pin) and for a release candidate.
+  # An app update to a final release leaves the CLI on main: a tag would leave
+  # the managed checkout detached (Update Now passes --version).
+  CLI_PIN=""
+  if [[ -n "$PIN" ]] && { [[ "$IS_LINUX" == "1" ]] || [[ "$DO_APP" == "0" ]] || [[ "$PIN" == *-rc.* ]]; }; then CLI_PIN="$PIN"; fi
   if [[ "$IS_LINUX" == "1" ]]; then
     command -v git >/dev/null 2>&1 || die "git not found" "sudo apt update && sudo apt install -y git"
   else
     command -v git >/dev/null 2>&1 || die "git not found" "install the Xcode Command Line Tools: xcode-select --install"
   fi
-  if [[ -d "${BENCHBAR_HOME}/.git" && "$IS_LINUX" == "1" && -n "$PIN" ]]; then
+  if [[ -d "${BENCHBAR_HOME}/.git" && -n "$CLI_PIN" ]]; then
     # pinned: this release exactly, a detached checkout (a run without
     # --version goes back to main)
     local before after out
     before="$(git -C "$BENCHBAR_HOME" rev-parse --short HEAD 2>/dev/null || true)"
     if [[ "$DRY" == "1" ]]; then
       info "dry-run: git -C ${BENCHBAR_HOME} fetch --quiet --tags"
-      info "dry-run: git -C ${BENCHBAR_HOME} checkout --quiet ${PIN}"
+      info "dry-run: git -C ${BENCHBAR_HOME} checkout --quiet ${CLI_PIN}"
     else
       out="$(git -C "$BENCHBAR_HOME" fetch --quiet --tags 2>&1)" || { printf '%s\n' "$out"; die "git fetch failed in ${BENCHBAR_HOME}" "check the network, then run this again"; }
-      out="$(git -C "$BENCHBAR_HOME" checkout --quiet "$PIN" 2>&1)" || { printf '%s\n' "$out"; die "no release ${PIN} in ${BENCHBAR_HOME}, or the checkout has changes" "fix the checkout or move it aside"; }
+      out="$(git -C "$BENCHBAR_HOME" checkout --quiet "$CLI_PIN" 2>&1)" || { printf '%s\n' "$out"; die "no release ${CLI_PIN} in ${BENCHBAR_HOME}, or the checkout has changes" "fix the checkout or move it aside"; }
       after="$(git -C "$BENCHBAR_HOME" rev-parse --short HEAD 2>/dev/null || true)"
-      if [[ "$before" == "$after" ]]; then same "CLI ${PIN} at ${BENCHBAR_HOME} (${after})"; else ok "CLI ${PIN} checked out in ${BENCHBAR_HOME} (${before} to ${after})"; CHANGED=1; fi
+      if [[ "$before" == "$after" ]]; then same "CLI ${CLI_PIN} at ${BENCHBAR_HOME} (${after})"; else ok "CLI ${CLI_PIN} checked out in ${BENCHBAR_HOME} (${before} to ${after})"; CHANGED=1; fi
     fi
   elif [[ -d "${BENCHBAR_HOME}/.git" ]]; then
     local before after out ref=0 changes
@@ -439,9 +473,9 @@ install_cli() {
     die "${BENCHBAR_HOME} exists but is not a git checkout" "move it aside and run this again"
   else
     run mkdir -p "$(dirname "$BENCHBAR_HOME")"
-    if [[ "$IS_LINUX" == "1" && -n "$PIN" ]]; then
-      run git clone --quiet --branch "$PIN" "$BENCHBAR_REPO" "$BENCHBAR_HOME" || die "could not clone ${PIN} from ${BENCHBAR_REPO}" "check the network and that the release exists"
-      [[ "$DRY" == "1" ]] || ok "CLI ${PIN} cloned into ${BENCHBAR_HOME}"
+    if [[ -n "$CLI_PIN" ]]; then
+      run git clone --quiet --branch "$CLI_PIN" "$BENCHBAR_REPO" "$BENCHBAR_HOME" || die "could not clone ${CLI_PIN} from ${BENCHBAR_REPO}" "check the network and that the release exists"
+      [[ "$DRY" == "1" ]] || ok "CLI ${CLI_PIN} cloned into ${BENCHBAR_HOME}"
     else
       run git clone --quiet "$BENCHBAR_REPO" "$BENCHBAR_HOME" || die "could not clone ${BENCHBAR_REPO}" "check the network, then run this again"
       [[ "$DRY" == "1" ]] || ok "CLI cloned into ${BENCHBAR_HOME}"
@@ -475,7 +509,7 @@ release_lookup() {
   local url json
   REL_TAG=""; REL_ZIP_URL=""; REL_SUMS_URL=""
   if [[ -n "$PIN" ]]; then url="${BENCHBAR_API}/releases/tags/${PIN}"; else url="${BENCHBAR_API}/releases/latest"; fi
-  json="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$url" 2>/dev/null)" || return 1
+  json="$(curl --proto '=https' --tlsv1.2 -fsSL -H 'Accept: application/vnd.github+json' "$url" 2>/dev/null)" || return 1
   REL_TAG="$(printf '%s' "$json" | json_field tag_name)"
   REL_ZIP_URL="$(printf '%s' "$json" | tr ',' '\n' | json_field browser_download_url | grep -E 'BenchBar-.*\.zip$' || true)"
   [[ -n "$REL_ZIP_URL" ]] || REL_ZIP_URL="$(printf '%s' "$json" | tr ',' '\n' | sed -n 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"\([^"]*BenchBar-[^"]*\.zip\)".*/\1/p' | head -n 1)"
@@ -505,15 +539,16 @@ install_app() {
   if [[ "$DRY" == "1" ]]; then
     info "dry-run: would download ${REL_ZIP_URL}"
     info "dry-run: would check it against ${REL_SUMS_URL:-<no SHA256SUMS in the release>}"
-    info "dry-run: would quit a running BenchBar and unpack the zip into ${APP_DIR} with ditto"
+    info "dry-run: would check its build provenance (gh attestation verify, when gh is signed in), unpack it, check the signature (codesign, spctl)"
+    info "dry-run: would quit a running BenchBar and put the app into ${APP_DIR} with ditto and one rename"
     return 0
   fi
   [[ -n "$REL_SUMS_URL" ]] || die "release ${REL_TAG} has no SHA256SUMS; refusing to install an unchecked app" "download the dmg by hand from github.com/askysh/benchbar/releases"
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-app.XXXXXX")"
   zipname="$(basename "$REL_ZIP_URL")"
   info "downloading ${zipname}"
-  curl -fsSL --retry 3 -o "${tmp}/${zipname}" "$REL_ZIP_URL" || { rm -rf "$tmp"; die "download failed: ${REL_ZIP_URL}"; }
-  curl -fsSL --retry 3 -o "${tmp}/SHA256SUMS" "$REL_SUMS_URL" || { rm -rf "$tmp"; die "download failed: ${REL_SUMS_URL}"; }
+  curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "${tmp}/${zipname}" "$REL_ZIP_URL" || { rm -rf "$tmp"; die "download failed: ${REL_ZIP_URL}"; }
+  curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "${tmp}/SHA256SUMS" "$REL_SUMS_URL" || { rm -rf "$tmp"; die "download failed: ${REL_SUMS_URL}"; }
   expected="$(awk -v f="$zipname" '$2 == f || $2 == "*" f || $2 == "./" f {print $1; exit}' "${tmp}/SHA256SUMS")"
   actual="$(sha256_of "${tmp}/${zipname}")"
   if [[ -z "$expected" || "$expected" != "$actual" ]]; then
@@ -521,18 +556,133 @@ install_app() {
     die "checksum mismatch for ${zipname} (SHA256SUMS: ${expected:-not listed}, file: ${actual}); nothing installed" "try again later, or download the dmg by hand and check it yourself"
   fi
   ok "sha256 verified against SHA256SUMS"
-  quit_app
-  mkdir -p "$APP_DIR"
+  verify_provenance "${tmp}/${zipname}" "$REL_TAG" || { rm -rf "$tmp"; die "the build provenance of ${zipname} did not verify; nothing installed" "download the dmg by hand from github.com/askysh/benchbar/releases and check it: gh attestation verify BenchBar-${want}.dmg -R askysh/benchbar --signer-workflow ${ATTEST_WORKFLOW}"; }
   rm -rf "${tmp}/unpacked"; mkdir -p "${tmp}/unpacked"
   ditto -x -k "${tmp}/${zipname}" "${tmp}/unpacked" || { rm -rf "$tmp"; die "could not unpack ${zipname}"; }
   [[ -d "${tmp}/unpacked/BenchBar.app" ]] || { rm -rf "$tmp"; die "${zipname} does not contain BenchBar.app"; }
-  rm -rf "$APP"
-  ditto "${tmp}/unpacked/BenchBar.app" "$APP"
+  # curl does not set the quarantine flag, so Gatekeeper never looked at this
+  # app: look for it here, on the unpacked copy, before it replaces anything
+  verify_app "${tmp}/unpacked/BenchBar.app" || { rm -rf "$tmp"; die "the unpacked app did not pass the signature check; nothing installed" "download the dmg by hand from github.com/askysh/benchbar/releases"; }
+  # only now: the running app is quit and replaced after every check passed
+  quit_app
+  mkdir -p "$APP_DIR"
+  swap_app "${tmp}/unpacked/BenchBar.app" || { rm -rf "$tmp"; die "could not put the app into ${APP_DIR}; the old app is as it was" "check the folder's permissions and the free space"; }
   touch "$APP"  # ditto keeps the build's mtime; a fresh one makes Finder reread the icon
   rm -rf "$tmp"
   CHANGED=1
-  ok "BenchBar ${want} installed in ${APP_DIR} (downloaded with curl: no Gatekeeper prompt on first open)"
+  ok "BenchBar ${want} installed in ${APP_DIR}"
   info "start it with: open ${APP}"
+}
+
+# before_attestations TAG: true for a release older than 0.9.0, the first
+# whose Mac files carry build provenance
+before_attestations() {
+  local v="${1#v}" major minor
+  v="${v%%-*}"
+  IFS=. read -r major minor _ <<<"$v"
+  [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]] || return 1
+  [[ "$major" -eq 0 && "$minor" -lt 9 ]]
+}
+
+# with_deadline SECONDS CMD...: CMD's exit code, or 124 when it did not end in
+# time and was stopped (macOS has no timeout command)
+with_deadline() {
+  local secs="$1" pid watcher rc=0
+  shift
+  "$@" &
+  pid=$!
+  ( sleep "$secs"; kill "$pid" ) >/dev/null 2>&1 &
+  watcher=$!
+  wait "$pid" || rc=$?
+  kill "$watcher" >/dev/null 2>&1 || true
+  wait "$watcher" >/dev/null 2>&1 || true
+  [[ "$rc" != 143 && "$rc" != 137 ]] || rc=124
+  return "$rc"
+}
+
+# verify_provenance FILE TAG: the build provenance of a download, with `gh
+# attestation verify`, pinned to this repository's release workflow. The
+# checksum comes from the same release as the file, so it finds a damaged
+# download, not a swapped one; the attestation says the file was built by
+# that workflow. Without gh, with gh signed out, with gh that does not answer
+# within the deadline, and for a release older than 0.9.0 that has no
+# attestation, it says only the checksum was checked and returns 0. Any other
+# failure of gh returns 1 after printing what gh said.
+verify_provenance() {
+  local f="$1" tag="${2:-}" out rc=0 name
+  name="$(basename "$f")"
+  local byhand="to check by hand: gh attestation verify ${name} -R askysh/benchbar --signer-workflow ${ATTEST_WORKFLOW}"
+  if ! command -v gh >/dev/null 2>&1; then
+    info "gh (the GitHub CLI) is not installed: only the checksum was checked, not where the file was built"
+    info "$byhand"
+    return 0
+  fi
+  with_deadline "$ATTEST_TIMEOUT" gh auth status >/dev/null 2>&1 || rc=$?
+  if [[ "$rc" == 124 ]]; then
+    info "gh did not answer within ${ATTEST_TIMEOUT} s: only the checksum was checked, not where the file was built"
+    info "$byhand"
+    return 0
+  elif [[ "$rc" != 0 ]]; then
+    info "gh is not signed in (gh auth login): only the checksum was checked, not where the file was built"
+    info "$byhand"
+    return 0
+  fi
+  rc=0
+  out="$(with_deadline "$ATTEST_TIMEOUT" gh attestation verify "$f" -R askysh/benchbar --signer-workflow "$ATTEST_WORKFLOW" 2>&1)" || rc=$?
+  if [[ "$rc" == 0 ]]; then
+    ok "build provenance verified (gh attestation verify)"
+    return 0
+  fi
+  if [[ "$rc" == 124 ]]; then
+    info "gh attestation verify did not answer within ${ATTEST_TIMEOUT} s: only the checksum was checked, not where the file was built"
+    info "$byhand"
+    return 0
+  fi
+  if before_attestations "$tag" && printf '%s' "$out" | grep -qiE 'no attestations? found|HTTP 404|not found'; then
+    info "${tag} is older than 0.9.0, the first release with build provenance: only the checksum was checked, not where the file was built"
+    return 0
+  fi
+  fail "gh attestation verify did not accept ${name}:"
+  printf '%s\n' "$out" | sed 's/^/      /' >&2
+  return 1
+}
+
+# verify_app APP: the signature, then Gatekeeper's verdict (a Developer ID
+# signature and a notarization ticket). Returns 1, after saying why, when
+# either refuses.
+verify_app() {
+  local app="$1" out
+  if ! out="$(codesign --verify --deep --strict "$app" 2>&1)"; then
+    fail "codesign --verify --deep --strict refused the app:"
+    printf '%s\n' "$out" | sed 's/^/      /' >&2
+    return 1
+  fi
+  ok "code signature valid (codesign --verify --deep --strict)"
+  if ! out="$(spctl --assess --type execute "$app" 2>&1)"; then
+    fail "spctl --assess --type execute refused the app (not notarized, or not signed by a Developer ID):"
+    printf '%s\n' "$out" | sed 's/^/      /' >&2
+    return 1
+  fi
+  ok "Gatekeeper accepts the app: notarized (spctl --assess --type execute)"
+}
+
+# swap_app SRC: SRC is copied to BenchBar.app.new beside the installed app,
+# the old app is renamed aside, the new one renamed into place and the old
+# one removed. A failure on the way leaves the old app as it was; there is
+# no moment with no app, except between the two renames.
+swap_app() {
+  local src="$1" new="${APP}.new" old="${APP}.old"
+  rm -rf "$new" "$old"
+  ditto "$src" "$new" || { rm -rf "$new"; return 1; }
+  if [[ -e "$APP" ]]; then
+    mv "$APP" "$old" || { rm -rf "$new"; return 1; }
+  fi
+  if ! mv "$new" "$APP"; then
+    rm -rf "$new"
+    [[ ! -e "$old" ]] || mv "$old" "$APP"
+    return 1
+  fi
+  rm -rf "$old"
 }
 
 # ---------------------------------------------------------------- bench
@@ -695,6 +845,10 @@ uninstall() {
     fi
     if [[ "$keep" == "1" ]]; then
       :
+    elif [[ ! -e "${BENCHBAR_HOME}/benchbar" || ! -e "${BENCHBAR_HOME}/.git" ]]; then
+      # BENCHBAR_HOME comes from the environment: a folder that is not this
+      # installer's checkout is never removed, with --yes or without
+      warn "${BENCHBAR_HOME} does not hold benchbar and .git, so it is not a BenchBar checkout; kept it"
     elif [[ "$YES" == "1" ]] || confirm "Remove ${BENCHBAR_HOME}?" n; then
       run rm -rf "$BENCHBAR_HOME"
       [[ "$DRY" == "1" ]] || ok "removed ${BENCHBAR_HOME}"
@@ -741,45 +895,50 @@ shell_path_note() {
 
 # ---------------------------------------------------------------- main
 
-printf '\n%sBenchBar installer%s%s\n' "$B" "$R" "$([[ "$DRY" == "1" ]] && printf ' (dry-run: nothing is changed)')"
-BREW_CLI=""; BREW_APP=""
-if [[ "$IS_LINUX" == "1" ]]; then
-  # no Homebrew half and no app on Linux
-  [[ "$DO_CLI" == "1" ]] || die "there is no BenchBar app on Linux; --app-only has nothing to do" "run this without --app-only to install the command line tool"
-  DO_APP=0
-else
-  brew_detect
-fi
-if [[ "$UNINSTALL" == "1" ]]; then
-  uninstall
+main() {
+  parse_args "$@"
+  printf '\n%sBenchBar installer%s%s\n' "$B" "$R" "$([[ "$DRY" == "1" ]] && printf ' (dry-run: nothing is changed)')"
+  BREW_CLI=""; BREW_APP=""
+  if [[ "$IS_LINUX" == "1" ]]; then
+    # no Homebrew half and no app on Linux
+    [[ "$DO_CLI" == "1" ]] || die "there is no BenchBar app on Linux; --app-only has nothing to do" "run this without --app-only to install the command line tool"
+    DO_APP=0
+  else
+    brew_detect
+  fi
+  if [[ "$UNINSTALL" == "1" ]]; then
+    uninstall
+    exit 0
+  fi
+  brew_guard
+  printf '  Plan:\n'
+  [[ "$DO_CLI" == "1" && "$IS_LINUX" == "1" ]] && printf '   1. check Linux and git\n   2. clone or update the CLI in %s, link it into %s, add that folder to PATH in %s\n   3. offer benchbar adopt for an existing bench, or benchbar install\n' "$BENCHBAR_HOME" "$BIN_DIR" "$RC_FILE"
+  [[ "$DO_CLI" == "1" && "$IS_LINUX" != "1" ]] && printf '   1. check macOS, the Command Line Tools and Homebrew\n   2. clone or update the CLI in %s, link it into %s, add that folder to PATH in %s\n' "$BENCHBAR_HOME" "$BIN_DIR" "$RC_FILE"
+  [[ "$DO_APP" == "1" ]] && printf '   3. install or update the BenchBar app in %s from the %s GitHub release (sha256 checked; build provenance and signature too, when they can be)\n' "$APP_DIR" "${PIN:-latest}"
+  [[ "$DO_CLI" == "1" && "$IS_LINUX" != "1" ]] && printf '   4. offer benchbar adopt for an existing bench, or benchbar install\n'
+  if [[ "$DO_CLI" == "1" && "$IS_LINUX" != "1" ]]; then
+    printf '  This script never runs sudo. Homebrew'"'"'s installer, if you accept it, asks for your password itself.\n'
+  else
+    printf '  This script never runs sudo.\n'
+  fi
+
+  check_system
+  [[ "$DO_CLI" == "1" ]] && install_cli
+  [[ "$DO_APP" == "1" ]] && install_app
+  [[ "$DO_CLI" == "1" ]] && offer_bench
+
+  step "Done"
+  if [[ "$DRY" == "1" ]]; then
+    ok "dry-run finished; nothing was changed"
+  elif [[ "$CHANGED" == "1" ]]; then
+    ok "BenchBar is installed. Open a new terminal (or run: source ${RC_FILE}), then: benchbar --help"
+  else
+    ok "everything was already in place (unchanged)"
+  fi
+  shell_path_note
+  [[ -d "$APP" ]] && info "app: open ${APP}"
+  [[ "$DO_CLI" == "1" ]] && info "testing guide: ${BENCHBAR_HOME}/docs/testing.md"
   exit 0
-fi
-brew_guard
-printf '  Plan:\n'
-[[ "$DO_CLI" == "1" && "$IS_LINUX" == "1" ]] && printf '   1. check Linux and git\n   2. clone or update the CLI in %s, link it into %s, add that folder to PATH in %s\n   3. offer benchbar adopt for an existing bench, or benchbar install\n' "$BENCHBAR_HOME" "$BIN_DIR" "$RC_FILE"
-[[ "$DO_CLI" == "1" && "$IS_LINUX" != "1" ]] && printf '   1. check macOS, the Command Line Tools and Homebrew\n   2. clone or update the CLI in %s, link it into %s, add that folder to PATH in %s\n' "$BENCHBAR_HOME" "$BIN_DIR" "$RC_FILE"
-[[ "$DO_APP" == "1" ]] && printf '   3. install or update the BenchBar app in %s from the %s GitHub release (sha256 checked)\n' "$APP_DIR" "${PIN:-latest}"
-[[ "$DO_CLI" == "1" && "$IS_LINUX" != "1" ]] && printf '   4. offer benchbar adopt for an existing bench, or benchbar install\n'
-if [[ "$DO_CLI" == "1" && "$IS_LINUX" != "1" ]]; then
-  printf '  This script never runs sudo. Homebrew'"'"'s installer, if you accept it, asks for your password itself.\n'
-else
-  printf '  This script never runs sudo.\n'
-fi
+}
 
-check_system
-[[ "$DO_CLI" == "1" ]] && install_cli
-[[ "$DO_APP" == "1" ]] && install_app
-[[ "$DO_CLI" == "1" ]] && offer_bench
-
-step "Done"
-if [[ "$DRY" == "1" ]]; then
-  ok "dry-run finished; nothing was changed"
-elif [[ "$CHANGED" == "1" ]]; then
-  ok "BenchBar is installed. Open a new terminal (or run: source ${RC_FILE}), then: benchbar --help"
-else
-  ok "everything was already in place (unchanged)"
-fi
-shell_path_note
-[[ -d "$APP" ]] && info "app: open ${APP}"
-[[ "$DO_CLI" == "1" ]] && info "testing guide: ${BENCHBAR_HOME}/docs/testing.md"
-exit 0
+main "$@"
