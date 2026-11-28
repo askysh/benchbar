@@ -17,6 +17,9 @@ fl_adopt_plan_json() {
   # refused here, before any action runs, when it no longer matches
   off="${FL_PORT_TARGET:-$((FL_WEB_PORT - FL_PORT_BASE_WEB))}"
   token_data="$(printf '%s\n' "$FL_BENCH_DIR" "$1" "$off" "${FL_SCHEDULER:-}" "$FL_SITE")"
+  # a ports plan previews this adopt run and takes the same fields into its own token (port-management.sh),
+  # with the profile, which the preview's header showed and the service token does not need
+  if [[ -n "${FL_PM_PLAN_FILE:-}" ]]; then printf '%s|%s\n' "${token_data//$'\n'/|}" "${FL_PROFILE:-}" >>"$FL_PM_PLAN_FILE" 2>/dev/null || true; fi
   fl_plan_token_v token "$token_data"
   if [[ -n "${FL_SERVICE_APPLY_TOKEN:-}" ]]; then
     code=0; fl_plan_token_check "$token_data" "$FL_SERVICE_APPLY_TOKEN" || code=$?
