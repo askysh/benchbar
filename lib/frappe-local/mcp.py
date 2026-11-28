@@ -53,6 +53,7 @@ CLI_READS = (
     ("list", "benches[].adopted", False),
     ("status", "state", True),
     ("where", "state_dir", True),
+    ("siteList", "default_site", False),
     ("labsList", "labs[].name", True),
     ("labsList", "labs[].enabled", True),
     ("planLine", "token", False),

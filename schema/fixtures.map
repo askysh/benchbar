@@ -18,6 +18,7 @@ windows/tray/fixtures/cli/ports-apply.txt                -
 windows/tray/fixtures/cli/refusal.jsonl                  streamLine
 
 # readers must refuse these
+windows/tray/fixtures/cli/envelope-newer-extras.jsonl  !streamLine   # wrong types a reader skips (the tray's tolerance test)
 macos/BenchBarTests/Fixtures/status-future.json   !status   # a state this build does not know
 macos/BenchBarTests/Fixtures/status-schema2.json  !status   # schema_version 2
 
@@ -26,12 +27,16 @@ macos/BenchBarTests/Fixtures/status-*.json        status
 macos/BenchBarTests/Fixtures/state-runner.json    stateFile
 macos/BenchBarTests/Fixtures/list*.json           list
 macos/BenchBarTests/Fixtures/doctor-prerequisites*.json  doctorPrerequisites
+macos/BenchBarTests/Fixtures/doctor-ack.json      document   # doctor ack: the envelope, no checks
+macos/BenchBarTests/Fixtures/doctor-unack.json    document
 macos/BenchBarTests/Fixtures/doctor*.json         doctor
 macos/BenchBarTests/Fixtures/app-list*.json       appList
 macos/BenchBarTests/Fixtures/profile-list*.json   profileList
 macos/BenchBarTests/Fixtures/site-backups.json    siteBackups
 macos/BenchBarTests/Fixtures/site-backup.json     siteBackup
 macos/BenchBarTests/Fixtures/report.json          report
+macos/BenchBarTests/Fixtures/bench-gc-apply.jsonl       document   # one document, not a stream
+macos/BenchBarTests/Fixtures/bench-retire-result.jsonl  document
 macos/BenchBarTests/Fixtures/*.jsonl              streamLine
 macos/BenchBarTests/Fixtures/*.json               document
 
@@ -50,6 +55,8 @@ windows/tray/fixtures/cli/ports-check-*.json      portsCheck
 windows/tray/fixtures/cli/profile-list*.json      profileList
 windows/tray/fixtures/cli/sites-backups*.json     siteBackups
 windows/tray/fixtures/cli/sites-backup.json       siteBackup
+windows/tray/fixtures/cli/bench-gc-apply.jsonl       document   # one document, not a stream
+windows/tray/fixtures/cli/bench-retire-result.jsonl  document
 windows/tray/fixtures/cli/*.jsonl                 streamLine
 windows/tray/fixtures/cli/*.json                  document
 windows/tray/fixtures/recorded*/*.json            document

@@ -163,7 +163,7 @@ def documents(path):
 
 
 def rel(path):
-    return os.path.relpath(path, ROOT)
+    return os.path.relpath(path, ROOT).replace(os.sep, "/")
 
 
 # ---- schema reading helpers
@@ -248,7 +248,7 @@ def check_fixtures():
     checked = 0
     for n, cols in read_map("fixtures.map"):
         pattern, target = cols[0], cols[1]
-        files = sorted(glob.glob(os.path.join(ROOT, pattern), recursive=True))
+        files = sorted(os.path.normpath(p) for p in glob.glob(os.path.join(ROOT, pattern), recursive=True))
         if not files:
             problems.append("schema/fixtures.map:%d: %s matches no file" % (n, pattern))
         for path in files:
@@ -279,7 +279,7 @@ def check_fixtures():
         elif not want_invalid:
             problems += errs
     for d in FIXTURE_DIRS:
-        for path in sorted(glob.glob(os.path.join(ROOT, d, "**", "*.json*"), recursive=True)):
+        for path in sorted(os.path.normpath(p) for p in glob.glob(os.path.join(ROOT, d, "**", "*.json*"), recursive=True)):
             if path not in claimed:
                 problems.append("%s is in no row of schema/fixtures.map" % rel(path))
     return problems, checked
@@ -633,9 +633,75 @@ def check_mcp(root, file):
             problems.append("%s: %s needs %s of %s, which the schema does not require" % (file, file.split("/")[-1], field, doc))
         if last not in used:
             problems.append("%s: CLI_READS lists %s but the code never reads the key %s" % (file, field, last))
-    if "outputSchema" in text:
-        problems.append("%s: has an outputSchema; check it against the schema here too (schema/models.map)" % file)
+    problems += check_mcp_output(root, file, tree, text)
     return problems
+
+
+# The definition each MCP tool with an outputSchema returns. A tool that gets an outputSchema gets a row here.
+MCP_OUTPUT_DEFS = {"benchbar_list": "list", "benchbar_status": "status", "benchbar_doctor": "doctor"}
+
+
+def check_mcp_output(root, file, tree, text):
+    """Every field an outputSchema of OUTPUT_SCHEMAS names is a field of the definition its tool returns, with the same type."""
+    table = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "OUTPUT_SCHEMAS" for t in node.targets):
+            table = node.value
+    if table is None:
+        return ["%s: has an outputSchema but no OUTPUT_SCHEMAS table" % file] if "outputSchema" in text else []
+    if not isinstance(table, ast.Dict):
+        return ["%s: OUTPUT_SCHEMAS is not a literal dict" % file]
+    problems = []
+    for tool_node, fields in zip(table.keys, table.values):
+        tool = tool_node.value if isinstance(tool_node, ast.Constant) else None
+        name = MCP_OUTPUT_DEFS.get(tool)
+        if name is None or name not in root["$defs"]:
+            problems.append("%s: the outputSchema of %s has no definition in MCP_OUTPUT_DEFS (scripts/json-schema-check.py)" % (file, tool))
+            continue
+        if not isinstance(fields, ast.Dict):
+            problems.append("%s: the outputSchema of %s is not a literal dict" % (file, tool))
+            continue
+        props = all_properties(root, root["$defs"][name])
+        for key_node, value in zip(fields.keys, fields.values):
+            key = key_node.value
+            if key not in props:
+                problems.append("%s: the outputSchema of %s has %s, which the definition %s does not" % (file, tool, key, name))
+                continue
+            kind = None
+            if isinstance(value, ast.Dict):
+                for k, v in zip(value.keys, value.values):
+                    if isinstance(k, ast.Constant) and k.value == "type" and isinstance(v, ast.Constant):
+                        kind = v.value
+            if kind is not None and kind not in json_types(root, props[key]):
+                problems.append("%s: the outputSchema of %s says %s is %s; the definition %s says %s" % (file, tool, key, kind, name, "/".join(sorted(json_types(root, props[key]))) or "no type"))
+    return problems
+
+
+def all_properties(root, schema):
+    """The properties of a definition, through $ref and allOf."""
+    if "$ref" in schema:
+        return all_properties(root, root["$defs"][schema["$ref"].split("/")[-1]])
+    out = dict(schema.get("properties", {}))
+    for sub in schema.get("allOf", []):
+        out.update(all_properties(root, sub))
+    return out
+
+
+def json_types(root, schema):
+    """The JSON types a property can have ("integer" for a const 1)."""
+    if "$ref" in schema:
+        return json_types(root, root["$defs"][schema["$ref"].split("/")[-1]])
+    t = schema.get("type")
+    if t is not None:
+        return set(t) if isinstance(t, list) else {t}
+    if "const" in schema:
+        c = schema["const"]
+        return {"boolean" if isinstance(c, bool) else "integer" if isinstance(c, int) else "string" if isinstance(c, str) else "null"}
+    out = set()
+    for key in ("anyOf", "oneOf"):
+        for sub in schema.get(key, []):
+            out |= json_types(root, sub)
+    return out
 
 
 def mcp_functions(text):

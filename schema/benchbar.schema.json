@@ -50,10 +50,7 @@
         {"$ref": "#/$defs/site"},
         {
           "type": "object",
-          "properties": {
-            "db_name": {"type": ["string", "null"], "x-since": "0.7.3"},
-            "db_port": {"type": "integer", "x-since": "0.7.3"}
-          }
+          "properties": {"db_name": {"type": ["string", "null"], "x-since": "0.7.3"}, "db_port": {"type": "integer", "x-since": "0.7.3"}}
         }
       ],
       "x-doc": ["Sites"]
@@ -106,16 +103,8 @@
         "redis": {
           "type": "object",
           "properties": {
-            "queue": {
-              "type": "object",
-              "properties": {"port": {"type": "integer"}, "running": {"type": "boolean"}},
-              "required": ["port", "running"]
-            },
-            "cache": {
-              "type": "object",
-              "properties": {"port": {"type": "integer"}, "running": {"type": "boolean"}},
-              "required": ["port", "running"]
-            }
+            "queue": {"type": "object", "properties": {"port": {"type": "integer"}, "running": {"type": "boolean"}}, "required": ["port", "running"]},
+            "cache": {"type": "object", "properties": {"port": {"type": "integer"}, "running": {"type": "boolean"}}, "required": ["port", "running"]}
           },
           "required": ["queue", "cache"],
           "x-since": "0.8"
@@ -129,14 +118,14 @@
         "url": {"type": ["string", "null"]},
         "agent": {"type": "string"},
         "loaded": {"type": "string", "enum": ["yes", "no"]},
-        "stop_flag": {
-          "type": "string",
-          "enum": ["manual", "crash", "broken", "port_conflict", "none", ""],
-          "description": "empty in the 0.7.3 fixtures"
-        },
+        "stop_flag": {"type": "string", "enum": ["manual", "crash", "broken", "port_conflict", "none", ""], "description": "empty in the 0.7.3 fixtures"},
         "ping": {"type": "string"},
         "pending_operations": {"type": "array", "items": {"$ref": "#/$defs/pendingOperation"}, "x-since": "0.8.3"},
-        "labs": {"type": "array", "items": {"type": "string"}, "x-since": "0.9"}
+        "labs": {"type": "array", "items": {"type": "string"}, "x-since": "0.9"},
+        "autostart": {"type": "boolean", "x-since": "0.9"},
+        "notices": {"type": "array", "items": {"$ref": "#/$defs/notice"}, "x-since": "0.9"},
+        "leases": {"type": "array", "items": {"$ref": "#/$defs/lease"}, "x-since": "0.9"},
+        "ready": {"$ref": "#/$defs/ready", "x-since": "0.9"}
       },
       "required": ["schema_version", "bench", "state"],
       "x-doc": ["`benchbar status --json`"]
@@ -206,12 +195,7 @@
         "fix_command": {"type": ["string", "null"]},
         "fix_quoted": {"type": "boolean", "x-since": "0.8"},
         "action": {"type": ["string", "null"]},
-        "status": {
-          "type": "string",
-          "enum": ["ok", "warn", "fail"],
-          "description": "0.2.0 name of level",
-          "x-conditional": true
-        },
+        "status": {"type": "string", "enum": ["ok", "warn", "fail"], "description": "0.2.0 name of level", "x-conditional": true},
         "fix": {"type": "string", "description": "0.2.0 name of fix_command, \"\" instead of null", "x-conditional": true},
         "acked": {"type": "boolean", "x-since": "0.8"}
       },
@@ -507,11 +491,7 @@
     "labsList": {
       "type": "object",
       "description": "benchbar labs list --json.",
-      "properties": {
-        "schema_version": {"const": 1},
-        "cli_version": {"type": "string"},
-        "labs": {"type": "array", "items": {"$ref": "#/$defs/lab"}}
-      },
+      "properties": {"schema_version": {"const": 1}, "cli_version": {"type": "string"}, "labs": {"type": "array", "items": {"$ref": "#/$defs/lab"}}},
       "required": ["schema_version", "labs"],
       "x-doc": ["`benchbar labs --json`"]
     },
@@ -549,12 +529,7 @@
     "report": {
       "type": "object",
       "description": "benchbar report --json.",
-      "properties": {
-        "schema_version": {"const": 1},
-        "cli_version": {"type": "string"},
-        "zip": {"type": "string"},
-        "redactions": {"type": "integer"}
-      },
+      "properties": {"schema_version": {"const": 1}, "cli_version": {"type": "string"}, "zip": {"type": "string"}, "redactions": {"type": "integer"}},
       "required": ["schema_version", "zip"],
       "x-doc": ["`benchbar report --json`"]
     },
@@ -569,10 +544,7 @@
     "changedEntry": {
       "type": "object",
       "properties": {
-        "kind": {
-          "type": "string",
-          "enum": ["bench", "site", "app", "service", "ports", "hosts", "backup", "process", "state"]
-        },
+        "kind": {"type": "string", "enum": ["bench", "site", "app", "service", "ports", "hosts", "backup", "process", "state"]},
         "name": {"type": "string"},
         "detail": {"type": ["string", "null"]}
       },
@@ -584,11 +556,7 @@
       "properties": {
         "command": {"type": "string"},
         "why": {"type": ["string", "null"]},
-        "quoted": {
-          "type": "boolean",
-          "description": "true when every word of command was quoted for the shell; absent for a command written as text",
-          "x-conditional": true
-        }
+        "quoted": {"type": "boolean", "description": "true when every word of command was quoted for the shell; absent for a command written as text", "x-conditional": true}
       },
       "required": ["command"],
       "x-doc": ["The `done` fields (0.8)"]
@@ -604,7 +572,8 @@
         "state_after": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/status"}]},
         "missing": {"type": "array", "items": {"type": "string"}, "x-conditional": true},
         "error": {"type": "string", "x-conditional": true},
-        "error_id": {"type": "string", "x-conditional": true}
+        "error_id": {"type": "string", "x-conditional": true},
+        "op_id": {"type": "string", "x-since": "0.9", "x-conditional": true}
       },
       "x-doc": ["The `done` fields (0.8)"]
     },
@@ -619,24 +588,14 @@
         "will_run": {"type": "boolean"}
       },
       "required": ["id"],
-      "x-doc": [
-        "`benchbar install --json`",
-        "`benchbar repair --json`",
-        "The `done` fields (0.8)",
-        "`benchbar service --dry-run --json`"
-      ]
+      "x-doc": ["`benchbar install --json`", "`benchbar repair --json`", "The `done` fields (0.8)", "`benchbar service --dry-run --json`"]
     },
     "skippedStep": {
       "type": "object",
       "description": "A privileged step that was skipped, and the command to run by hand.",
       "properties": {"id": {"type": "string"}, "command": {"type": "string"}},
       "required": ["id"],
-      "x-doc": [
-        "`benchbar install --json`",
-        "`benchbar repair --json`",
-        "The `done` fields (0.8)",
-        "`benchbar service --dry-run --json`"
-      ]
+      "x-doc": ["`benchbar install --json`", "`benchbar repair --json`", "The `done` fields (0.8)", "`benchbar service --dry-run --json`"]
     },
     "planLine": {
       "type": "object",
@@ -655,7 +614,7 @@
         "web_url": {"type": "string", "x-conditional": true},
         "dry_run": {"type": "boolean", "x-conditional": true},
         "sudo_mode": {"type": "string", "enum": ["terminal", "gui", "env"], "x-conditional": true},
-        "steps": {"type": "array", "items": {"$ref": "#/$defs/planStep"}, "x-conditional": true},
+        "steps": {"type": "array", "items": {"anyOf": [{"$ref": "#/$defs/planStep"}, {"type": "string"}]}, "x-conditional": true},
         "actions": {
           "type": "array",
           "items": {
@@ -692,16 +651,12 @@
         "can_apply": {"type": "boolean", "x-conditional": true},
         "backups": {"type": "string", "x-conditional": true},
         "command": {"type": "string", "x-conditional": true},
-        "log": {"type": ["string", "null"], "x-conditional": true}
+        "log": {"type": ["string", "null"], "x-conditional": true},
+        "op_id": {"type": "string", "x-since": "0.9", "x-conditional": true}
       },
       "required": ["event"],
       "x-open": true,
-      "x-doc": [
-        "`benchbar install --json`",
-        "`benchbar repair --json`",
-        "The `done` fields (0.8)",
-        "`benchbar service --dry-run --json`"
-      ]
+      "x-doc": ["`benchbar install --json`", "`benchbar repair --json`", "The `done` fields (0.8)", "`benchbar service --dry-run --json`"]
     },
     "stepLine": {
       "type": "object",
@@ -717,15 +672,11 @@
         "status": {"type": "string", "enum": ["running", "done", "unchanged", "skipped", "warning", "failed"]},
         "secs": {"type": "integer", "x-conditional": true},
         "message": {"type": "string", "x-conditional": true},
-        "command": {"type": "string", "x-conditional": true}
+        "command": {"type": "string", "x-conditional": true},
+        "op_id": {"type": "string", "x-since": "0.9", "x-conditional": true}
       },
       "required": ["event", "id", "status"],
-      "x-doc": [
-        "`benchbar install --json`",
-        "`benchbar repair --json`",
-        "The `done` fields (0.8)",
-        "`benchbar service --dry-run --json`"
-      ]
+      "x-doc": ["`benchbar install --json`", "`benchbar repair --json`", "The `done` fields (0.8)", "`benchbar service --dry-run --json`"]
     },
     "repairStepLine": {
       "type": "object",
@@ -734,31 +685,29 @@
         "event": {"const": "step"},
         "action": {"type": "string"},
         "status": {"type": "string", "enum": ["running", "done", "skipped", "failed"]},
-        "message": {"type": "string", "x-conditional": true}
+        "message": {"type": "string", "x-conditional": true},
+        "op_id": {"type": "string", "x-since": "0.9", "x-conditional": true}
       },
       "required": ["event", "action", "status"],
-      "x-doc": ["`benchbar repair --json`"]
+      "x-doc": ["`benchbar repair --json`", "The `done` fields (0.8)"]
     },
     "progressLine": {
       "type": "object",
-      "description": "A progress line, every 10 seconds while a long command runs.",
+      "description": "A progress line, every 10 seconds while a long command runs (step, label and elapsed), or while pull downloads a file (file, bytes and total).",
       "properties": {
         "schema_version": {"const": 1},
         "cli_version": {"type": "string"},
         "event": {"const": "progress"},
-        "step": {"type": "string"},
+        "step": {"type": "string", "x-conditional": true},
         "label": {"type": "string"},
-        "elapsed": {"type": "integer"},
+        "elapsed": {"type": "integer", "x-conditional": true},
         "bytes": {"type": ["integer", "null"]},
-        "total": {"type": ["integer", "null"]}
+        "total": {"type": ["integer", "null"]},
+        "file": {"type": "string", "x-conditional": true},
+        "op_id": {"type": "string", "x-since": "0.9", "x-conditional": true}
       },
-      "required": ["event", "step", "elapsed"],
-      "x-doc": [
-        "`benchbar install --json`",
-        "`benchbar repair --json`",
-        "The `done` fields (0.8)",
-        "`benchbar service --dry-run --json`"
-      ]
+      "required": ["event"],
+      "x-doc": ["`benchbar install --json`", "`benchbar repair --json`", "The `done` fields (0.8)", "`benchbar service --dry-run --json`", "`benchbar pull --json`"]
     },
     "doneLine": {
       "description": "The last line of a stream: the result envelope, and any fields of the document the command would have printed (bench, site, url, skipped, fix, log, created, ...). repair keeps exit_code next to exit.",
@@ -770,7 +719,7 @@
             "cli_version": {"type": "string"},
             "event": {"const": "done"},
             "exit_code": {"type": "integer", "x-conditional": true},
-            "bench": {"type": "string", "x-conditional": true},
+            "bench": {"type": ["string", "null"], "x-conditional": true},
             "site": {"type": "string", "x-conditional": true},
             "url": {"type": ["string", "null"], "x-conditional": true},
             "skipped": {"type": "array", "items": {"$ref": "#/$defs/skippedStep"}, "x-conditional": true},
@@ -784,22 +733,79 @@
         {"anyOf": [{"required": ["exit"]}, {"required": ["exit_code"]}]}
       ],
       "x-open": true,
-      "x-doc": [
-        "`benchbar install --json`",
-        "`benchbar repair --json`",
-        "The `done` fields (0.8)",
-        "`benchbar service --dry-run --json`"
-      ]
+      "x-doc": ["`benchbar install --json`", "`benchbar repair --json`", "The `done` fields (0.8)", "`benchbar service --dry-run --json`"]
     },
     "streamLine": {
-      "description": "One line of a --json or --jsonl stream: plan, step (repair has its own), progress or done.",
+      "description": "One line of a --json or --jsonl stream: plan, step (repair has its own), progress, gate (pull) or done.",
       "oneOf": [
         {"$ref": "#/$defs/planLine"},
         {"$ref": "#/$defs/stepLine"},
         {"$ref": "#/$defs/repairStepLine"},
         {"$ref": "#/$defs/progressLine"},
+        {"$ref": "#/$defs/gateLine"},
         {"$ref": "#/$defs/doneLine"}
       ]
+    },
+    "gateLine": {
+      "type": "object",
+      "description": "A gate line of pull: a question the run asked and its answer.",
+      "properties": {
+        "schema_version": {"const": 1},
+        "cli_version": {"type": "string"},
+        "event": {"const": "gate"},
+        "name": {"type": "string", "enum": ["new_backup", "apply", "replace"]},
+        "answer": {"type": "string", "enum": ["yes", "no"]}
+      },
+      "required": ["event", "name", "answer"],
+      "x-doc": ["`benchbar pull --json`"]
+    },
+    "notice": {
+      "type": "object",
+      "description": "A default an update changed, shown until it is dismissed (benchbar notices).",
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "text": {"type": "string"},
+        "switch_back": {"type": "string"},
+        "doc": {"type": "string"},
+        "since": {"type": "string"}
+      },
+      "required": ["id", "title", "text"],
+      "x-doc": ["Notices (0.9.0)"]
+    },
+    "lease": {
+      "type": "object",
+      "description": "An active lease on the bench or one of its sites. Never the lease's id.",
+      "properties": {
+        "scope": {"type": "string", "enum": ["bench", "site"]},
+        "site": {"type": ["string", "null"]},
+        "holder": {"type": "string"},
+        "note": {"type": ["string", "null"]},
+        "since": {"type": "string"},
+        "expires_at": {"type": "string"}
+      },
+      "required": ["scope", "holder"],
+      "x-doc": ["`benchbar status --json`"]
+    },
+    "ready": {
+      "type": "object",
+      "description": "Whether the bench can serve, and the parts that say so. workers and stale are null unless the deep parts were asked.",
+      "properties": {
+        "ready": {"type": "boolean"},
+        "deep": {"type": "boolean"},
+        "agent": {"type": "boolean"},
+        "processes": {"type": "boolean"},
+        "web": {"type": "boolean"},
+        "socketio": {"type": "boolean"},
+        "redis": {"type": "boolean"},
+        "workers": {"type": ["boolean", "null"]},
+        "stale": {"type": ["boolean", "null"]},
+        "stale_file": {"type": ["string", "null"]},
+        "waiting_on": {"type": "array", "items": {"type": "string"}},
+        "fix": {"type": ["string", "null"]}
+      },
+      "required": ["ready", "waiting_on"],
+      "x-doc": ["Readiness"]
     }
   }
 }

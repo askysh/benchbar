@@ -28,11 +28,10 @@ swift macos/BenchBar/CLI/Models.swift ProfileList profileList
 swift macos/BenchBar/CLI/PendingOperation.swift PendingOperation pendingOperation
 swift macos/BenchBar/CLI/PendingOperation.swift PendingOperation.Step pendingStep
 swift macos/BenchBar/CLI/PortModels.swift PortCheck portsCheck
+swift macos/BenchBar/CLI/Models.swift ReadyInfo ready
+swift macos/BenchBar/CLI/CLIClient+Notices.swift BenchNotice notice
 swift macos/BenchBar/CLI/CLIClient+Labs.swift LabEntry lab
 swift macos/BenchBar/CLI/CLIClient+Labs.swift LabsDocument labsList
-swift macos/BenchBar/CLI/CLIClient+Labs.swift DoneLine doneFields
-swift macos/BenchBar/CLI/CLIClient+Labs.swift DoneChange changedEntry
-swift macos/BenchBar/CLI/CLIClient+Labs.swift DoneAction nextAction
 swift macos/BenchBar/CLI/InstallEvents.swift InstallPlan planLine
 swift macos/BenchBar/CLI/InstallEvents.swift InstallStep stepLine
 swift macos/BenchBar/CLI/InstallEvents.swift InstallProgressLine progressLine
@@ -63,14 +62,17 @@ csread windows/tray/Tray.Core/Cli/CliModels.cs planLine stepLine repairStepLine 
 csread windows/tray/Tray.Core/Health/HealthModels.cs doctor
 csread windows/tray/Tray.Core/Labs/LabsModel.cs labsList
 csread windows/tray/Tray.Core/Logs/LogModels.cs logs
+csread windows/tray/Tray.Core/Status/StatusExtras.cs status ready notice lease
+csread windows/tray/Tray.Core/Health/Prerequisites.cs doctorPrerequisites prerequisite
+csread windows/tray/Tray.Core/Cli/ResultEnvelope.cs doneFields doneLine
 
 swiftread macos/BenchBar/CLI/Models.swift planLine repairStepLine doneLine
 swiftread macos/BenchBar/CLI/InstallEvents.swift planLine stepLine progressLine doneLine
 swiftread macos/BenchBar/CLI/CLIClient+Share.swift stepLine repairStepLine progressLine doneLine
 
 # the functions of mcp.py that read CLI output, then after | the ones that parse JSON of their own or mix it with the CLI's (state_dir: the environment and its own
-# cache around where.state_dir; shrink: the wrapper's output key around logs; tool_call: the tool arguments)
-mcpreaders lib/frappe-local/mcp.py stream_plan stream_done keep_generated_password known_bench_paths labs_enabled service_missing progress_relay relay add_argv remember_plan | state_dir shrink recall_plan tool_call dispatch
+# cache around where.state_dir; shrink: the wrapper's output key around logs; tool_call: the tool arguments; run_tool: the result it passes through as structuredContent; the two default refusals: the tool arguments and default_site of site list)
+mcpreaders lib/frappe-local/mcp.py stream_plan stream_done keep_generated_password known_bench_paths labs_enabled service_missing progress_relay relay add_argv remember_plan | state_dir shrink recall_plan tool_call dispatch run_tool site_drop_default_refusal pull_default_refusal
 
 # Models that read the CLI's JSON and are not checked yet, and why. A new model is mapped above or lands here with a reason.
 #   skip FILE STRUCT reason       one Codable struct of a mapped Swift file
@@ -117,3 +119,21 @@ skipfile windows/tray/Tray.Core/Sites/OpenAsModels.cs no definition yet: open-as
 skipfile windows/tray/Tray.Core/Sites/SiteModels.cs no definition yet: site restore and drop documents (site list and backups are read here too)
 skipfile windows/tray/Tray.Core/TrayConfig.cs the tray's own settings, not CLI output
 skipfile windows/tray/Tray.Core/Update/SelfUpdate.cs the shim's self-update document
+skipfile macos/BenchBar/CLI/ActivityModels.swift no definition yet: history, lease list and logs chunks
+skipfile macos/BenchBar/CLI/CommandCatalog.swift no definition yet: commands
+skip macos/BenchBar/CLI/Models.swift RedisServices status.redis is inline in the status definition, with no definition of its own
+skip macos/BenchBar/CLI/Models.swift RedisServices.Server status.redis is inline in the status definition, with no definition of its own
+skipfile macos/BenchBar/CLI/PullPlan.swift no definition yet: pull plan and pull done
+skipfile macos/BenchBar/CLI/RunModels.swift no definition yet: run plan, run result and op records
+skipfile macos/BenchBar/CLI/ServiceInstallPlan.swift no definition yet: service install plan
+skipfile macos/BenchBar/CLI/SiteMovePlan.swift no definition yet: site move plan
+skipfile macos/BenchBar/CLI/SnapshotModels.swift no definition yet: snapshots and rollback
+skipfile macos/BenchBar/CLI/TidyModels.swift no definition yet: bench gc, orphan databases and tidy plan
+skipfile windows/tray/Tray.Core/Activity/ActivityModels.cs no definition yet: history, lease list and logs chunks
+skipfile windows/tray/Tray.Core/Activity/SnapshotModels.cs no definition yet: snapshots and rollback
+skipfile windows/tray/Tray.Core/Cli/CommandCatalogue.cs no definition yet: commands
+skipfile windows/tray/Tray.Core/Share/ShareGuestModel.cs no definition yet: share join and joined
+skipfile windows/tray/Tray.Core/Share/ShareGuestModels.cs no definition yet: share join and joined
+skipfile windows/tray/Tray.Core/Sites/PullModels.cs no definition yet: pull plan and pull done
+skipfile windows/tray/Tray.Core/Sites/SiteMoveModels.cs no definition yet: site move plan
+skipfile windows/tray/Tray.Core/Tidy/TidyModels.cs no definition yet: bench gc, orphan databases and tidy plan

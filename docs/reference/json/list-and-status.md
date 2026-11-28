@@ -109,6 +109,7 @@ listener: it is polled at rest (0.6.1).
 | `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null), `url` (an add's repo URL, so `app add NAME` can finish an app that was never cloned or that no profile lists; null for an update and for a record an older version wrote) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
 | `leases` | array | added in 0.9: the active [leases](../cli/lease.md) on this bench, its own and those of its sites, `[]` when none. Each: `scope` (`bench` or `site`), `site` (null for a bench lease), `holder`, `note` (null without one), `since` and `expires_at` (ISO 8601 UTC). Never the lease's id. One small file read in the state folder, none without leases, so status starts no new program for it |
 | `ready` | object | added in 0.9: whether the bench can serve, and the parts that say so; see [Readiness](#readiness) |
+| `notices` | array | added in 0.9: the defaults an update changed, until they are dismissed, `[]` when none; see [notices](operations.md#notices-090) |
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
 `loaded` (`"yes"` or `"no"`), `stop_flag` (`"manual"`, `"crash"`,
