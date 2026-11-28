@@ -2,6 +2,7 @@
 # The guards of state.sh hold under a mkdir that answers as uutils coreutils does (issue 340): a run
 # that loses the race to make a folder is told it made it. The state move guard and the reclaim guard
 # of the key=value store take the folder with fl_mkdir_excl, so a held guard stays held.
+# shellcheck disable=SC2016  # the snippets in single quotes run in a child bash, which expands them
 set -euo pipefail
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
