@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -102,7 +103,7 @@ public static class ShareGuestJson
     private static IReadOnlyList<GuestSeat> Seats(JsonObject o) =>
         o["seats"] is JsonArray a
             ? [.. a.OfType<JsonObject>().Where(s => JsonRead.Str(s, "seat_id") is { Length: > 0 }).Select(s => new GuestSeat(JsonRead.Str(s, "seat_id")!,
-                ShareGuestText.Clean(JsonRead.Str(s, "full_name") ?? JsonRead.Str(s, "seat_id")), [.. JsonRead.Strings(s, "roles").Select(r => ShareGuestText.Clean(r))], CleanOrNull(JsonRead.Str(s, "taken_by"))))]
+                ShareGuestText.Clean(JsonRead.Str(s, "full_name") ?? JsonRead.Str(s, "seat_id"), ShareGuestText.NameMax), [.. JsonRead.Strings(s, "roles").Select(r => ShareGuestText.Clean(r))], CleanOrNull(JsonRead.Str(s, "taken_by"))))]
             : [];
 }
 
@@ -111,6 +112,12 @@ public static class ShareGuestText
 {
     /// <summary>The port of a room when the address has none.</summary>
     public const int DefaultPort = 8443;
+
+    /// <summary>
+    /// How long a person's full name may be shown: the field of a user in Frappe takes 140 characters, so a name that was typed in full is
+    /// shown in full. A room's name, a host's name and a role keep the 80 of <see cref="Clean"/>.
+    /// </summary>
+    public const int NameMax = 140;
 
     public static bool IsKey(string? key) => key is { Length: 16 } && key.All(Uri.IsHexDigit);
 
@@ -148,6 +155,19 @@ public static class ShareGuestText
     public static string? Sentence(string? stderr) => OpenAsRules.CliSentence(stderr) is { } sentence ? Clean(sentence, 300) : null;
 
     /// <summary>
+    /// A line of stderr that is not the CLI's sentence, as one line of plain text, or "" when there is none or it is a line of the room's own
+    /// block (<c>Room</c>, <c>Address</c>, <c>Host key</c> and the advice to ask the host for it): those hold what the host chose. A refused join
+    /// prints that block before anything else, so a line that comes first and is not one of them was written by something else (the shim, WSL).
+    /// </summary>
+    public static string Detail(string? stderr) =>
+        OpenAsRules.CliSentence(stderr) is { } text && !text.Split('\n').Any(IsRoomBlockLine) ? Clean(text, 300) : "";
+
+    private static bool IsRoomBlockLine(string line) =>
+        line.TrimStart().StartsWith("If you are not sure this is the right computer", StringComparison.Ordinal) || RoomBlockLabel.IsMatch(line.TrimStart());
+
+    private static readonly System.Text.RegularExpressions.Regex RoomBlockLabel = new(@"^(Room|Address|Host key)\s{2,}", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
     /// Text that a host chose (the name of its room and of itself, seat names and roles) as one line of plain text: control characters, line and
     /// paragraph separators and the characters that turn text around (bidi marks and overrides) become spaces, runs of spaces become one, and
     /// the text is cut at <paramref name="max"/> characters. What is left cannot make a second line, or a line that reads as something else.
@@ -165,7 +185,24 @@ public static class ShareGuestText
             builder.Append(space ? ' ' : c);
         }
         var clean = builder.ToString().TrimEnd();
-        return clean.Length <= max ? clean : clean[..(max - 3)].TrimEnd() + "...";
+        return clean.Length <= max ? clean : CutAtElement(clean, Math.Max(0, max - 3)).TrimEnd() + "...";
+    }
+
+    /// <summary>
+    /// The longest start of <paramref name="text"/> that is at most <paramref name="length"/> UTF-16 units and ends on a text element: a
+    /// surrogate pair, a letter with its combining marks and a run joined with zero width joiners (one emoji) are never cut in the middle.
+    /// </summary>
+    private static string CutAtElement(string text, int length)
+    {
+        var end = 0;
+        var elements = StringInfo.GetTextElementEnumerator(text);
+        while (elements.MoveNext())
+        {
+            var next = elements.ElementIndex + ((string)elements.Current).Length;
+            if (next > length) break;
+            end = next;
+        }
+        return text[..end];
     }
 
     /// <summary>The IPv4 address of a room as the CLI prints it, or null: it becomes an argument of the next call, so it is nothing else.</summary>
