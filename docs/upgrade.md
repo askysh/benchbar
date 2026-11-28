@@ -81,7 +81,7 @@ tells you to update the CLI with `git pull` in that checkout.
 The install of 0.8.3 and earlier started Homebrew's own Redis service
 (`brew services start redis`). BenchBar does not need it: each bench runs
 its own Redis on its own ports, and since 0.9.0 the install no longer
-starts it. After the update `benchbar doctor` warns about it until it stops
+starts it. After the update `benchbar doctor` warns about it while it runs
 (**Homebrew redis**: redis on 6379 is not used by the bench). When nothing
 else on your Mac uses that Redis, stop it:
 
