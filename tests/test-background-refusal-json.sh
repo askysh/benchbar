@@ -83,7 +83,10 @@ unchanged() { assert_eq "$BEFORE" "$(state_tree)" "($1: nothing was written, not
 nrm() {
   sed -E -e "s#$TMP_DIR#TMP#g" -e "s#$ROOT#ROOT#g" -e 's#op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?#OPID#g' -e 's#[0-9]{8}-[0-9]{6}-[0-9]+#STAMP#g' \
     -e 's#"pid":[0-9]+#"pid":N#g' -e 's#[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+Z#TS#g' -e 's#"elapsed":[0-9]+#"elapsed":N#g' \
-    -e 's#"duration[a-z_]*":[0-9.]+#"duration":N#g' -e 's#[0-9a-f]{8,}#H#g'
+    -e 's#"duration[a-z_]*":[0-9.]+#"duration":N#g' -e 's#[0-9a-f]{8,}#H#g' |
+    # the header box of a run is as wide as the longest path in it, and a long folder is cut with "..." (the temp
+    # folder of macOS is long): the same rules as tests/lib/pin.sed, so the text is the same on every machine
+    sed -E -e 's#([^ ]) {2,}#\1 #g' -e 's# +$##' -e 's#-{4,}#---#g' -e 's#^\| bench .* \|$#| bench <PATH> |#'
 }
 
 # --- the accepted run of repair and pull (the commands with a stream of their own, so with a writer that could send a
@@ -134,12 +137,16 @@ print(d["state"])')" || fail "(accepted $name $mode $outer) not the op_id line: 
   done
   { nrm <"$OPS/$id.jsonl"; printf -- '--- stderr\n'; nrm <"$OPS/$id.err"; } | golden_add "$name $mode $outer"
 }
+# The pull of this test ends at its first connection (the mock has no remote). The launcher reports a detached run that
+# has failed by its first look (0.2 s) as a failure of its own, with exit 1 and no op_id line: on a fast machine that
+# happened in some runs. MOCK_SSH_SLEEP keeps the connection open for a second, so the launcher always finds the run
+# running; what the detached run writes is the same.
 for mode in --for-agent --jsonl --json; do
   accepted_run repair "$mode" none repair --yes --bench-dir "$BENCH"
-  accepted_run pull "$mode" none pull build.example.com:mysite --yes --bench-dir "$BENCH"
+  MOCK_SSH_SLEEP=1 accepted_run pull "$mode" none pull build.example.com:mysite --yes --bench-dir "$BENCH"
 done
 accepted_run repair --for-agent env repair --yes --bench-dir "$BENCH"
-accepted_run pull --for-agent env pull build.example.com:mysite --yes --bench-dir "$BENCH"
+MOCK_SSH_SLEEP=1 accepted_run pull --for-agent env pull build.example.com:mysite --yes --bench-dir "$BENCH"
 golden_check
 # <<< accepted runs
 
