@@ -5,20 +5,20 @@ app-icon-dark.png	README.md	scripts/app-icon.py	2026-09-26	current
 app-icon-light.png	README.md	scripts/app-icon.py	2026-09-26	current
 app-icon.png	docs/index.md	scripts/app-icon.py	2026-09-26	current
 og-image.png	the site (site/scripts/prepare.mjs copies it to og.png)	scripts/social-preview.swift	2026-11-19	current (0.9.0 wording)
-open-as-find-user.png	docs/app.md	DocsSnapshotTests.docsFindUser	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
-popover-dark.png	docs/app.md, README.md	by hand (no snapshot test yet)	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
-popover-light.png	docs/index.md, README.md	by hand (no snapshot test yet)	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
-profile-export.png	docs/guides/teams.md	by hand (no snapshot test yet)	2026-09-29	stale: captured before 0.7.2
-profile-import.png	docs/guides/teams.md	by hand (no snapshot test yet)	2026-09-29	stale: captured before 0.7.2
-runners-more.png	docs/runners.md, docs/app.md	by hand (no snapshot test yet)	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
-runners.png	docs/app.md	by hand (no snapshot test yet)	2026-09-24	stale: captured before 0.7.2
+open-as-find-user.png	docs/app.md	DocsSnapshotTests.docsFindUser (docs-find-user-light)	2026-11-28	current (0.9.0)
+popover-dark.png	docs/app.md, README.md	DocsSnapshotTests.docsPopover (docs-popover-dark)	2026-11-28	current (0.9.0)
+popover-light.png	docs/index.md, README.md	DocsSnapshotTests.docsPopover (docs-popover-light)	2026-11-28	current (0.9.0)
+profile-export.png	docs/guides/teams.md	DocsSnapshotTests.docsProfileSheets (docs-profile-export-light)	2026-11-28	current (0.9.0)
+profile-import.png	docs/guides/teams.md	DocsSnapshotTests.docsProfileSheets (docs-profile-import-light)	2026-11-28	current (0.9.0)
+runners-more.png	docs/runners.md, docs/app.md	by hand (no snapshot test yet)	2026-11-01	current (0.9.0): the drawings of these runners did not change since the image was made (checked 2026-11-28)
+runners.png	docs/app.md	by hand (no snapshot test yet)	2026-09-24	current (0.9.0): the drawings of these runners did not change since the image was made (checked 2026-11-28)
 social-preview.png	the GitHub social preview (uploaded by hand in the repository settings)	scripts/social-preview.swift	2026-11-19	current (0.9.0 wording)
-window-about.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-about)	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
-window-apps.png	docs/app.md	by hand (no snapshot test yet)	2026-09-29	stale: captured before 0.7.2
-window-general.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-general)	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
-window-health.png	docs/app.md	by hand (no snapshot test yet)	2026-09-29	stale: captured before 0.7.2
-window-overview.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-overview)	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
-window-profiles.png	docs/app.md, docs/guides/teams.md	by hand (no snapshot test yet)	2026-09-29	stale: captured before 0.7.2
+window-about.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-about)	2026-11-01	review: the pane shows the version of the build, so it waits for the 0.9.0 build (release candidate pass)
+window-apps.png	docs/app.md	DocsSnapshotTests.docsWindowTabs (docs-window-apps-light)	2026-11-28	current (0.9.0)
+window-general.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-general-light)	2026-11-28	current (0.9.0)
+window-health.png	docs/app.md	DocsSnapshotTests.docsWindowTabs (docs-window-health-light)	2026-11-28	current (0.9.0)
+window-overview.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-overview-light)	2026-11-28	current (0.9.0)
+window-profiles.png	docs/app.md, docs/guides/teams.md	DocsSnapshotTests.docsWindowTabs (docs-window-profiles-light)	2026-11-28	current (0.9.0)
 windows-bench.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
 windows-flyout-dark.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
 windows-flyout-light.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
@@ -27,6 +27,6 @@ windows-wizard-bench.png	docs/windows.md	by hand on a Windows PC	2026-11-01	revi
 windows-wizard-check.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
 windows-wizard-review.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
 windows-wizard-welcome.png	docs/windows.md	by hand on a Windows PC	2026-11-01	review: the tray changed in 0.8.3 and 0.9.0
-wizard-check.png	docs/app.md	DocsSnapshotTests.docsWizard	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
-wizard-review.png	docs/app.md, docs/quick-start.md	DocsSnapshotTests.docsWizard	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
-wizard-welcome.png	docs/app.md, docs/quick-start.md, docs/install.md	DocsSnapshotTests.docsWizard	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
+wizard-check.png	docs/app.md	DocsSnapshotTests.docsWizard (docs-wizard-check-light)	2026-11-28	current (0.9.0)
+wizard-review.png	docs/app.md, docs/quick-start.md	DocsSnapshotTests.docsWizard (docs-wizard-review-light)	2026-11-01	current (0.9.0): rendered again on 2026-11-28, the same image byte for byte
+wizard-welcome.png	docs/app.md, docs/quick-start.md, docs/install.md	DocsSnapshotTests.docsWizard (docs-wizard-welcome-light)	2026-11-01	current (0.9.0): rendered again on 2026-11-28, the same image byte for byte
