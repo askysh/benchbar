@@ -83,10 +83,13 @@ else
   mkdir -p "$TMP_DIR/a"; printf 'stand in\n' >"$TARBALL"
 fi
 
+# The formula and the cask are rendered for a release only (the tap skips a candidate, and
+# homebrew-render.sh refuses X.Y.Z-rc.N): on a candidate tree they use the release it leads to.
+RVER="${VER%%-rc.*}"
 # ---- the formula alone, with the release url
-bash "$RENDER_SH" --version "$VER" --cli "$TARBALL" "$TMP_DIR/tap1" >/dev/null
+bash "$RENDER_SH" --version "$RVER" --cli "$TARBALL" "$TMP_DIR/tap1" >/dev/null
 FORMULA="$(cat "$TMP_DIR/tap1/Formula/benchbar.rb")"
-assert_contains "$FORMULA" "url \"https://github.com/askysh/benchbar/releases/download/v${VER}/benchbar-cli-${VER}.tar.gz\""
+assert_contains "$FORMULA" "url \"https://github.com/askysh/benchbar/releases/download/v${RVER}/benchbar-cli-${RVER}.tar.gz\""
 assert_contains "$FORMULA" "sha256 \"$(sha_of "$TARBALL")\""
 assert_contains "$FORMULA" 'bin.write_exec_script opt_libexec/"benchbar"'
 assert_not_contains "$FORMULA" "{{"
@@ -105,12 +108,12 @@ assert_no_file "$TMP_DIR/tap1/Casks" "(no DMG, no cask)"
 
 # ---- with a DMG and a local url
 printf 'a disk image\n' >"$TMP_DIR/BenchBar.dmg"
-bash "$RENDER_SH" --version "$VER" --cli "$TARBALL" --dmg "$TMP_DIR/BenchBar.dmg" \
+bash "$RENDER_SH" --version "$RVER" --cli "$TARBALL" --dmg "$TMP_DIR/BenchBar.dmg" \
   --url "file://$TARBALL" "$TMP_DIR/tap2" >/dev/null
 assert_contains "$(cat "$TMP_DIR/tap2/Formula/benchbar.rb")" "url \"file://$TARBALL\""
 CASK="$(cat "$TMP_DIR/tap2/Casks/benchbar-app.rb")"
 assert_contains "$CASK" 'cask "benchbar-app" do'
-assert_contains "$CASK" "version \"${VER}\""
+assert_contains "$CASK" "version \"${RVER}\""
 assert_contains "$CASK" "sha256 \"$(sha_of "$TMP_DIR/BenchBar.dmg")\""
 assert_contains "$CASK" 'depends_on formula: "askysh/tap/benchbar"'
 assert_contains "$CASK" 'depends_on macos: :sonoma' "(the app stays macOS only)"
@@ -119,12 +122,12 @@ assert_not_contains "$CASK" "git clone"
 assert_not_contains "$CASK" "{{"
 
 # ---- what it refuses
-set +e; OUT="$(bash "$RENDER_SH" --version "$VER" --cli "$TARBALL" --url 'https://x/"a' "$TMP_DIR/tap3" 2>&1)"; CODE=$?; set -e
+set +e; OUT="$(bash "$RENDER_SH" --version "$RVER" --cli "$TARBALL" --url 'https://x/"a' "$TMP_DIR/tap3" 2>&1)"; CODE=$?; set -e
 assert_eq 1 "$CODE" "(a quote in the url)"
 assert_no_file "$TMP_DIR/tap3"
-set +e; OUT="$(bash "$RENDER_SH" --version "$VER" --cli "$TMP_DIR/missing.tar.gz" "$TMP_DIR/tap4" 2>&1)"; CODE=$?; set -e
+set +e; OUT="$(bash "$RENDER_SH" --version "$RVER" --cli "$TMP_DIR/missing.tar.gz" "$TMP_DIR/tap4" 2>&1)"; CODE=$?; set -e
 assert_eq 1 "$CODE" "(no tarball)"
-assert_contains "$OUT" "scripts/cli-tarball.sh ${VER}"
+assert_contains "$OUT" "scripts/cli-tarball.sh ${RVER}"
 set +e; OUT="$(bash "$RENDER_SH" --version 1.0 --cli "$TARBALL" "$TMP_DIR/tap5" 2>&1)"; CODE=$?; set -e
 assert_eq 1 "$CODE" "(not X.Y.Z)"
 # a release candidate is a form the tarball takes (it is then checked against FL_VERSION)
