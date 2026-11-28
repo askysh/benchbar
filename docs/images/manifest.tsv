@@ -19,10 +19,10 @@ window-general.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-ge
 window-health.png	docs/app.md	by hand (no snapshot test yet)	2026-09-29	stale: captured before 0.7.2
 window-overview.png	docs/app.md	DocsSnapshotTests.docsWindowPanes (docs-window-overview)	2026-11-01	review: the app changed in 0.8.2 and 0.9.0
 window-profiles.png	docs/app.md, docs/guides/teams.md	by hand (no snapshot test yet)	2026-09-29	stale: captured before 0.7.2
-windows-bench.png	docs/windows.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
-windows-flyout-dark.png	docs/windows.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
-windows-flyout-light.png	docs/windows.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
-windows-window.png	docs/windows.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
+windows-bench.png	docs/windows-tray.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
+windows-flyout-dark.png	docs/windows-tray.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
+windows-flyout-light.png	docs/windows-tray.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
+windows-window.png	docs/windows-tray.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
 windows-wizard-bench.png	docs/windows.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
 windows-wizard-check.png	docs/windows.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
 windows-wizard-review.png	docs/windows.md	the tray on fixtures, captured by window on a Windows PC (scripts in the PR text)	2026-11-28	current (0.9.0)
