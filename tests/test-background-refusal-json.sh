@@ -83,7 +83,7 @@ unchanged() { assert_eq "$BEFORE" "$(state_tree)" "($1: nothing was written, not
 nrm() {
   sed -E -e "s#$TMP_DIR#TMP#g" -e "s#$ROOT#ROOT#g" -e 's#op-[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?#OPID#g' -e 's#[0-9]{8}-[0-9]{6}-[0-9]+#STAMP#g' \
     -e 's#"pid":[0-9]+#"pid":N#g' -e 's#[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+Z#TS#g' -e 's#"elapsed":[0-9]+#"elapsed":N#g' \
-    -e 's#"duration[a-z_]*":[0-9.]+#"duration":N#g' -e 's#[0-9a-f]{8,}#H#g' |
+    -e 's#"duration[a-z_]*":[0-9.]+#"duration":N#g' -e 's#"cli_version":"[^"]*"#"cli_version":"<V>"#g' -e 's#[0-9a-f]{8,}#H#g' |
     # the header box of a run is as wide as the longest path in it, and a long folder is cut with "..." (the temp
     # folder of macOS is long): the same rules as tests/lib/pin.sed, so the text is the same on every machine
     sed -E -e 's#([^ ]) {2,}#\1 #g' -e 's# +$##' -e 's#-{4,}#---#g' -e 's#^\| bench .* \|$#| bench <PATH> |#'

@@ -127,7 +127,9 @@ struct ParityTests {
 
     @Test func theCatalogSaysWhichCommandsAndFlagsTheCLIHas() throws {
         let catalog = try catalog()
-        #expect(catalog.cliVersion == "0.8.3")
+        // the fixture is the CLI's own answer, recorded again when the command table changes: a version, not a fixed one
+        let version = try #require(catalog.cliVersion)
+        #expect(version.range(of: #"^\d+\.\d+\.\d+(-rc\.\d+)?$"#, options: .regularExpression) != nil, "cli_version \(version)")
         #expect(catalog.has("service") && catalog.has("autostart") && catalog.has("doctor") && !catalog.has("nosuch"))
         #expect(catalog.hasFlag("up", "--services-only") && catalog.hasFlag("doctor", "--ack") && catalog.hasFlag("doctor", "--unack"))
         #expect(!catalog.hasFlag("up", "--nosuch") && !catalog.hasFlag("nosuch", "--ack"))

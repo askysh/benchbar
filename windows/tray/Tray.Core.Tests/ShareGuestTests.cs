@@ -14,6 +14,10 @@ namespace Tray.Core.Tests;
 /// </summary>
 public class ShareGuestTests
 {
+    /// <summary>A fixture line as a CLI of <paramref name="version"/> prints it: whatever version the fixture was recorded with.</summary>
+    private static string AtVersion(string line, string version) =>
+        System.Text.RegularExpressions.Regex.Replace(line, "\"cli_version\":\"[^\"]*\"", "\"cli_version\":\"" + version + "\"");
+
     internal const string Code = "482913";
     private const string RoomKey = "7fdc34a6ba8c6ac7";
     private const string Pin = "7fdc34a6ba8c6ac7c1afd281d813b5d80957fdaa89d10c000cc72b44c816453d"; // host_pin of share-join-look.json
@@ -583,7 +587,7 @@ public class ShareGuestTests
     {
         var (client, runner) = Scripted();
         runner.On("commands").Print(Catalogue("0.9.0"));
-        runner.On("share", "joined").Print(Lines("share-joined-none.json").Select(l => l.Replace("0.8.3", "0.9.0")).ToArray());
+        runner.On("share", "joined").Print(Lines("share-joined-none.json").Select(l => AtVersion(l, "0.9.0")).ToArray());
         var support = new CommandSupport(client);
         for (var look = 0; look < 3; look++)
         {
@@ -635,7 +639,7 @@ public class ShareGuestTests
         var first = 0;
         runner.On(a => a[0] == "commands" && first++ == 0).Print(Catalogue("0.9.0"));
         runner.On("commands").Print(Catalogue("0.9.1", pin: false)); // the CLI inside WSL was updated, and the new one has no --host-key
-        runner.On("share", "joined").Print(Lines("share-joined-ready.json").Select(l => l.Replace("0.8.3", "0.9.1")).ToArray());
+        runner.On("share", "joined").Print(Lines("share-joined-ready.json").Select(l => AtVersion(l, "0.9.1")).ToArray());
         var support = new CommandSupport(client);
         var model = new ShareGuestModel(client, support);
         await model.CheckSupportAsync(TestContext.Current.CancellationToken);
