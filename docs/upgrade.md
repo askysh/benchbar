@@ -76,6 +76,22 @@ If your `benchbar` is a git checkout of your own, for example
 `~/dev/benchbar`, `self-update` updates only the app (`--app-only`) and
 tells you to update the CLI with `git pull` in that checkout.
 
+### From 0.8 to 0.9 on a Mac
+
+The install of 0.8.3 and earlier started Homebrew's own Redis service
+(`brew services start redis`). BenchBar does not need it: each bench runs
+its own Redis on its own ports, and since 0.9.0 the install no longer
+starts it. After the update `benchbar doctor` warns about it until it stops
+(**Homebrew redis**: redis on 6379 is not used by the bench). When nothing
+else on your Mac uses that Redis, stop it:
+
+```bash
+brew services stop redis
+```
+
+BenchBar does not stop it for you, because it cannot tell whether you or
+another program started it.
+
 ## From the one line installer to Homebrew
 
 Your benches keep running through the move: their agents and runners
