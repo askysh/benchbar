@@ -8,7 +8,8 @@
 #      every field and every flag of the table;
 #   3. a lookup with the index reads no table (it answers with the table emptied);
 #   4. a word a person typed never becomes part of a variable name unless it is a plain key;
-#   5. without the index file the lookups still answer, by the scan.
+#   5. without the index file the lookups still answer, by the scan;
+#   6. the table that is cut out by the length in the index is the table.
 # shellcheck disable=SC2016  # the snippets in single quotes run in a child bash, which expands them
 set -euo pipefail
 # shellcheck source=tests/lib/harness.sh
@@ -35,35 +36,44 @@ assert_contains "$OUT" "bash scripts/commands-index.sh --write"
 # ---- 2. the index and the scan agree, for every key, field and flag of the table
 DIFF="$(lib '
   n=0
-  ask() { # WHAT...: the answer of one lookup, by the index and by the scan
-    local a b
-    FL_CMD_INDEXED=1; a="$("$@" 2>&1; printf "|%s|%s" "$?" "${FL_BAD_FLAGS:-}")" || true
-    FL_CMD_INDEXED=0; b="$("$@" 2>&1; printf "|%s|%s" "$?" "${FL_BAD_FLAGS:-}")" || true
-    FL_CMD_INDEXED=1
+  # each lookup is made twice in this shell, by the index and by the scan (no subshell: about 4000 of them)
+  both() { # WHAT INDEX_ANSWER SCAN_ANSWER
     n=$((n + 1))
-    [[ "$a" == "$b" ]] || printf "%s: index [%s] scan [%s]\n" "$*" "$a" "$b"
+    [[ "$2" == "$3" ]] || printf "%s: index [%s] scan [%s]\n" "$1" "$2" "$3"
   }
-  attr() { local v; fl_cmd_attr_v v "$1" "$2"; printf "%s" "$v"; }
-  key3() { ARGS=("${2:-}" "${3:-}"); fl_cmd_key_for "$1" "${2:-}"; }
-  fl_cmd_attr_v _ status json   # the index is read here, in this shell
+  attr() { local a b; FL_CMD_INDEXED=1; fl_cmd_attr_v a "$1" "$2"; FL_CMD_INDEXED=0; fl_cmd_attr_v b "$1" "$2"; FL_CMD_INDEXED=1; both "attr $1 $2" "$a" "$b"; }
+  key3() { # COMMAND [ARG [THIRD]]
+    local a b ra=0 rb=0
+    ARGS=("${2:-}" "${3:-}")
+    FL_CMD_INDEXED=1; fl_cmd_key_for_v a "$1" "${2:-}" || ra=1
+    FL_CMD_INDEXED=0; fl_cmd_key_for_v b "$1" "${2:-}" || rb=1
+    FL_CMD_INDEXED=1; both "key $*" "${ra}|${a}" "${rb}|${b}"
+  }
+  flags() { # KEY ARG...
+    local a b
+    FL_CMD_INDEXED=1; if fl_cmd_flag_check "$@"; then a="0|${FL_BAD_FLAGS}"; else a="1|${FL_BAD_FLAGS}"; fi
+    FL_CMD_INDEXED=0; if fl_cmd_flag_check "$@"; then b="0|${FL_BAD_FLAGS}"; else b="1|${FL_BAD_FLAGS}"; fi
+    FL_CMD_INDEXED=1; both "flags $*" "$a" "$b"
+  }
+  fl_cmd_attr_v _ status json   # the index is read here
+  [[ "$FL_CMD_INDEXED" == 1 ]] || { printf "the index was not read\n"; exit 0; }
   while IFS="~" read -r kind key name val _; do
     case "$kind" in
       cmd)
-        for f in tty sudo network mutating json nosuchfield; do ask attr "$key" "$f"; done
+        for f in tty sudo network mutating json nosuchfield; do attr "$key" "$f"; done
         set -f; set -- $key; set +f
-        ask key3 "$1"; ask key3 "$1" "${2:-}"; ask key3 "$1" "${2:-}" "${3:-}"
-        ask key3 "$1" nosuchword; ask key3 "$1" "${2:-nosuchword}" nosuchword; ask key3 "$1" --json x
-        ask fl_cmd_flag_check "$key" --no-such-flag; ask fl_cmd_flag_check "$key" -Z; ask fl_cmd_flag_check "$key" plain words ;;
+        key3 "$1"; key3 "$1" "${2:-}"; key3 "$1" "${2:-}" "${3:-}"
+        key3 "$1" nosuchword; key3 "$1" "${2:-nosuchword}" nosuchword; key3 "$1" --json x
+        flags "$key" --no-such-flag; flags "$key" -Z; flags "$key" plain words ;;
       flag)
-        ask fl_cmd_flag_check "$key" "$name"
-        ask fl_cmd_flag_check "$key" "$name" --no-such-flag
-        ask fl_cmd_flag_check "$key" "${name}=x" --no-such-flag
-        ask fl_cmd_flag_check "$key" "${name}20" -Z
-        ask fl_cmd_flag_check "$key" -- "$name" --no-such-flag ;;
+        flags "$key" "$name"
+        flags "$key" "$name" --no-such-flag
+        flags "$key" "${name}=x" --no-such-flag
+        flags "$key" "${name}20" -Z ;;
     esac
   done <<<"$FL_CMD_TABLE"
-  ask key3 nosuchcommand; ask key3 "" ""; ask attr nosuchcommand json; ask attr "" json
-  ask fl_cmd_flag_check nosuchcommand --json
+  key3 nosuchcommand; key3 "" ""; attr nosuchcommand json; attr "" json
+  flags nosuchcommand --json
   printf "asked %s\n" "$n"
 ')"
 case "$DIFF" in
@@ -87,7 +97,7 @@ assert_eq "no" "$(lib 'if fl_cmd_key_for nosuchcommand >/dev/null; then echo yes
 
 # ---- 4. a typed word is never part of a variable name unless it is a plain key
 PWNED="$TMP_DIR/pwned"
-HOSTILE=('x[$(touch '"$PWNED"')]' 'status;touch '"$PWNED" 'a b' 'A' 'st*tus' 'site list x y' '-' 'x y z w' $'status\nx' 'é' '${HOME}' 'x__y' 'site_list')
+HOSTILE=('x[$(touch '"$PWNED"')]' 'status;touch '"$PWNED" 'a b' 'A' 'st*tus' 'site list x y' '-' 'x y z w' $'status\nx' 'é' '${HOME}' 'x__y' 'site_list' 'site--list')
 for word in "${HOSTILE[@]}"; do
   OUT="$(lib '
     ARGS=("$1" "$1"); r=0
@@ -102,9 +112,20 @@ assert_no_file "$PWNED"
 
 # ---- 5. without the index file the lookups answer by the scan
 mkdir -p "$TMP_DIR/noindex/lib/frappe-local"
-cp "$ROOT/lib/frappe-local/ui.sh" "$ROOT/lib/frappe-local/commands.sh" "$ROOT/lib/frappe-local/help.sh" "$ROOT/lib/frappe-local/help-layout.txt" "$TMP_DIR/noindex/lib/frappe-local/"
+for f in "$ROOT"/lib/frappe-local/*; do
+  [[ -d "$f" || "${f##*/}" == commands-index.sh ]] || cp "$f" "$TMP_DIR/noindex/lib/frappe-local/"
+done
+assert_no_file "$TMP_DIR/noindex/lib/frappe-local/commands-index.sh"
 assert_eq "0|document|site list|0" "$(LIB_ROOT="$TMP_DIR/noindex" lib '
   fl_cmd_attr_v j status json; ARGS=(list); fl_cmd_key_for_v k site list
   fl_cmd_flag_check logs --no-follow; printf "%s|%s|%s|%s" "$FL_CMD_INDEXED" "$j" "$k" "$?"')" "(no index file)"
+
+# ---- 6. the table is cut out by the length the index gives, and it is the table the search for its end gives
+assert_eq "by length|same|same" "$(lib '
+  LC_ALL=C; a="$FL_CMD_TABLE"; r="by search"
+  [[ "${#a}" != "$FL_CMD_TABLE_BYTES" ]] || r="by length"
+  FL_CMD_TABLE_BYTES=""; fl_cmd_load; [[ "$a" != "$FL_CMD_TABLE" ]] || r="${r}|same"
+  FL_CMD_TABLE_BYTES=10; fl_cmd_load; [[ "$a" != "$FL_CMD_TABLE" ]] || r="${r}|same"
+  printf "%s" "$r"')" "(the table with the length, without it, and with a wrong one)"
 
 printf 'test-commands-index: ok\n'
