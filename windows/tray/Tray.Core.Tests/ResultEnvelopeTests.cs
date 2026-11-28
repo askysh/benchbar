@@ -77,7 +77,8 @@ public class ResultEnvelopeTests
         var result = await client.RunJsonAsync(["status", "--for-agent"], null, Short, TestContext.Current.CancellationToken);
         Assert.False(result.Ok);
         Assert.Equal("No bench at /home/akash/no-such-bench.", result.Done!.Error);
-        Assert.Equal("0.8.3", result.Done.CliVersion);
+        // the fixture is recorded again at every version bump (tests/record-tray-fixtures.sh): its version, not a fixed one
+        Assert.Matches(@"^\d+\.\d+\.\d+(-rc\.\d+)?$", result.Done.CliVersion);
         Assert.Empty(result.Done.NextActions);
     }
 
