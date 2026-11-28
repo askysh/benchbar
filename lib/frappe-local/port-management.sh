@@ -113,6 +113,7 @@ fl_pm_print_human() {
 
 fl_pm_build() {
   local d i mode current proposed conflicts blocked installed n found priority preview preview_code rows="" sep="" evidence="" agent_files=()
+  local plan_file plan_data plan_rows=""
   PM_PATHS=(); PM_TARGETS=(); PM_CURRENTS=(); PM_MODES=(); PM_PREVIEWS=(); PM_BLOCKED=(); PM_CONFLICT_ROWS=(); PM_TAKEN=""; PM_SOFT=""; PM_CAN_APPLY=1
   [[ "$#" -gt 0 ]] || { fl_fail 'Select at least one bench.' >&2; return 1; }
   for d in "$@"; do
@@ -160,10 +161,17 @@ fl_pm_build() {
       done
       [[ "$found" == 1 ]] || { blocked="No free port block between 0 and ${FL_PORT_MAX_OFFSET}."; proposed="$current"; }
     fi
-    preview=""
+    preview=""; plan_data=""
     if [[ -z "$blocked" ]]; then
       preview_code=0
-      preview="$(fl_pm_setup_preview "$d" "$current" "$proposed" 2>&1)" || preview_code=$?
+      # the preview's adopt run records its plan (fl_adopt_plan_json: the bench, the actions, the port
+      # block, the scheduler and the site) in this file; that, not the preview's text, goes into the token
+      plan_file="$(mktemp "${TMPDIR:-/tmp}/benchbar-pm-plan.XXXXXX" 2>/dev/null)" || plan_file=""
+      preview="$(FL_PM_PLAN_FILE="$plan_file" fl_pm_setup_preview "$d" "$current" "$proposed" 2>&1)" || preview_code=$?
+      if [[ -n "$plan_file" ]]; then
+        plan_data="$(cat "$plan_file" 2>/dev/null || true)"
+        rm -f "$plan_file" 2>/dev/null || true
+      fi
       # Step timings are presentation only, not an input to the approved plan.
       preview="$(printf '%s' "$preview" | fl_pm_untimed)"
       [[ "$preview_code" == 0 ]] || blocked='Management setup preview failed. Follow the errors below before applying.'
@@ -172,6 +180,8 @@ fl_pm_build() {
     PM_CURRENTS+=("$current"); PM_MODES+=("$mode"); PM_PREVIEWS+=("$preview"); PM_BLOCKED+=("$blocked"); PM_CONFLICT_ROWS+=("$conflicts")
     PM_TARGETS+=("$proposed")
     fl_pm_reserve "$d" "$proposed"
+    # what the token covers for this bench: the plan's fields, one line (no preview text, no times)
+    plan_rows="${plan_rows}${d}|${FL_BENCH_NAME}|${FL_SITE}|${mode}|${current}|${proposed}|${conflicts//$'\n'/,}|${blocked}|${installed}|${plan_data//$'\n'/;}"$'\n'
     rows="${rows}${sep}{\"path\":$(fl_json_str "$d"),\"name\":$(fl_json_str "$FL_BENCH_NAME"),\"site\":$(fl_json_str "$FL_SITE"),\"mode\":$(fl_json_str "$mode"),\"current\":$(fl_pm_ports_json "$current"),\"proposed\":$(fl_pm_ports_json "$proposed"),\"conflicts\":$(fl_pm_strings_json "$conflicts"),\"blocked\":$(fl_json_str "$blocked"),\"service_installed\":$(fl_json_bool "$installed"),\"setup_plan\":$(fl_pm_text_json "$preview")}"; sep=,
   done
   # Config and ownership changes invalidate approval even if the proposed ports
@@ -179,7 +189,7 @@ fl_pm_build() {
   evidence="$(while IFS= read -r d; do printf '%s\n' "$d"; cksum "$d/sites/common_site_config.json" "$(fl_bench_state_file_for "$d")" 2>/dev/null || true; done < <({ fl_known_benches; printf '%s\n' "${PM_PATHS[@]}"; } | LC_ALL=C sort -u))"
   agent_files=()
   while IFS= read -r d; do agent_files+=("$d"); done < <(fl_agent_files)
-  PM_TOKEN_DATA="$( { printf '%s\n%s' "$rows" "$evidence"; cksum "$FL_STATE_FILE" ${agent_files[@]+"${agent_files[@]}"} 2>/dev/null || true; } )"
+  PM_TOKEN_DATA="$( { printf '%s\n%s' "$plan_rows" "$evidence"; cksum "$FL_STATE_FILE" ${agent_files[@]+"${agent_files[@]}"} 2>/dev/null || true; } )"
   fl_plan_token_v PM_TOKEN "$PM_TOKEN_DATA"
   # shellcheck disable=SC2153  # PM_TOKEN is set by fl_plan_token_v above
   PM_JSON="{\"schema_version\":1,\"cli_version\":\"${FL_VERSION}\",\"token\":\"$PM_TOKEN\",\"entries\":[$rows],\"can_apply\":$(fl_json_bool "$PM_CAN_APPLY") }"
