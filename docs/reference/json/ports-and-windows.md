@@ -33,7 +33,7 @@ lines of all benches in one macOS password dialog, as `adopt` does for one
 Apply does not start services. Socket availability cannot be
 reserved against unrelated programs; start checks again before launching.
 
-`ports check --json --bench-dir PATH` returns `schema_version: 1`, `conflicts`
+`ports check --json --bench-dir PATH` returns `schema_version: 1`, `cli_version` (0.9; the labs and ports documents had none before), `conflicts`
 (strings), `mode`, and `already_running` (boolean, positively owned running
 processes). Clients may treat `up` as idempotent when `already_running` is true;
 restart still needs a conflict check. It checks configured reservations and all listening PIDs,
