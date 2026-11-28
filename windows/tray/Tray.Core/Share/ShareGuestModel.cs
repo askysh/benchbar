@@ -13,8 +13,13 @@ namespace BenchBar.Tray.Core;
 /// of this model holds it, and nothing here is serialised. The address of a room is typed too, so it is checked before it can be an argument.
 /// </para>
 /// </summary>
-public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? commands = null)
+public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? commands = null, TimeProvider? clock = null)
 {
+    /// <summary>How long what was asked about the CLI (its version, its lab) is kept before a look at the tab asks again.</summary>
+    public static readonly TimeSpan Recheck = TimeSpan.FromMinutes(1);
+
+    private readonly TimeProvider _time = clock ?? TimeProvider.System;
+
     /// <summary>The CLI waits up to 10 minutes for a seat the host gives; the call is not cut short before that.</summary>
     public static readonly TimeSpan JoinTimeout = TimeSpan.FromMinutes(12);
 
@@ -80,19 +85,30 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
     /// Whether this CLI can join a room. The catalogue of the tray is read once per run of the tray, not at every look at the tab, and it is read
     /// again only when it cannot be right: it was printed while the lan-rooms lab was off (the commands of a lab that is off are left out, and
     /// this tab exists only while the lab is on), or the CLI's version moved on since (a <c>share joined</c> document says it, see
-    /// <see cref="RefreshAsync"/>).
+    /// <see cref="RefreshAsync"/>). Both questions are asked once for a catalogue: the answer, also "cannot" and "no labs field", is kept for
+    /// <see cref="Recheck"/>, and it is asked again after that (the CLI may have been updated, the lab turned on) or for another catalogue.
     /// </summary>
     public async Task CheckSupportAsync(CancellationToken ct = default)
     {
         var known = commands is null ? await ReadCatalogueAsync(ct).ConfigureAwait(true) : await commands.GetAsync().ConfigureAwait(true);
-        if (commands is not null && known is not null && !known.Labs.Contains(LabName)) known = await commands.RefreshAsync().ConfigureAwait(true);
-        // A CLI that cannot pin gets no look at <c>share joined</c>, whose documents would tell that it was updated: ask its version (any document has it)
-        // once per look at the tab, and read the catalogue again when it is not the one the catalogue came from.
-        if (known is not null && !CanPin(known) && await ProbeVersionAsync(ct).ConfigureAwait(true) is { } version && version != known.CliVersion)
-            known = commands is null ? await ReadCatalogueAsync(ct).ConfigureAwait(true) : await commands.RefreshAsync().ConfigureAwait(true);
+        if (known is not null && (!ReferenceEquals(known, _settled) || _time.GetElapsedTime(_settledAt) >= Recheck))
+        {
+            // A CLI that prints no labs field does not leave the commands of a lab out, so a second read would say the same.
+            if (commands is not null && known.HasLabsField && !known.Labs.Contains(LabName)) known = await commands.RefreshAsync().ConfigureAwait(true);
+            // A CLI that cannot pin gets no look at <c>share joined</c>, whose documents would tell that it was updated: ask its version (any document
+            // has it) once, and read the catalogue again when it is not the one the catalogue came from. A version that cannot be read is an answer too.
+            if (known is not null && !CanPin(known) && await ProbeVersionAsync(ct).ConfigureAwait(true) is { } version && version != known.CliVersion)
+                known = commands is null ? await ReadCatalogueAsync(ct).ConfigureAwait(true) : await commands.RefreshAsync().ConfigureAwait(true);
+            _settled = known;
+            _settledAt = _time.GetTimestamp();
+        }
         Use(known);
         Raise();
     }
+
+    /// <summary>The catalogue whose lab and version were asked about, so a look at the tab with the same catalogue asks nothing.</summary>
+    private CommandCatalogue? _settled;
+    private long _settledAt;
 
     private const string LabName = "lan-rooms";
 
@@ -473,14 +489,19 @@ public sealed partial class ShareGuestModel(ICliClient cli, CommandSupport? comm
     public static bool IsLocalAddress(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttp && uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The CLI's sentence for a call that did not work (its <c>error</c> or the <c>[FAIL]</c> line of stderr), else the generic text.</summary>
+    /// <summary>
+    /// The CLI's sentence for a call that did not work (its <c>error</c> or the <c>[FAIL]</c> line of stderr). Any other line of stderr is shown
+    /// after the generic sentence, with the exit code, as one line of plain text (<see cref="ShareGuestText.Detail"/>): it is what the shim or WSL
+    /// said ("WSL is not installed", "not found"), unless it is a line of the room's own block, which is the host's text and is never the reason.
+    /// </summary>
     private static string Refusal(CliResult<JsonObject> result, string generic)
     {
         if (result.Ok) return generic;
         // A sentence is the CLI's when it comes in its document, or from a stderr line that starts with the tag. Any other first line of a refused
-        // join is the room's own text (its name, chosen by the host) and is never shown as the reason.
+        // join is the room's own text (its name, chosen by the host) or something that is not the CLI's.
         var tagged = result.Value is not null || result.Done is not null || result.Error?.TrimStart().StartsWith("[FAIL]", StringComparison.Ordinal) == true;
-        return tagged && ShareGuestText.Sentence(result.Error) is { Length: > 0 } sentence ? sentence : generic;
+        if (tagged && ShareGuestText.Sentence(result.Error) is { Length: > 0 } sentence) return sentence;
+        return ShareGuestText.Detail(result.Error) is { Length: > 0 } line ? UiText.Format("GuestFailedWith", generic, line, result.Exit) : generic;
     }
 
     private bool Begin(string busy)

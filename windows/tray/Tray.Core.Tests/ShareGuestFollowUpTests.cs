@@ -187,6 +187,24 @@ public class ShareGuestFollowUpTests
     }
 
     [Fact]
+    public async Task TheAnswerIsAskedAgainOnceTheRecheckTimeHasPassed()
+    {
+        var (client, runner) = Scripted();
+        runner.On("commands").Print(ShareGuestTests.Catalogue("0.9.0", pin: false));
+        runner.On("where").Print(Where("0.9.0"));
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
+        var model = new ShareGuestModel(client, new CommandSupport(client), clock);
+        await model.CheckSupportAsync(TestContext.Current.CancellationToken);
+        clock.Advance(ShareGuestModel.Recheck - TimeSpan.FromSeconds(1));
+        await model.CheckSupportAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(1, Asked(runner, "where"));
+        clock.Advance(TimeSpan.FromSeconds(2));
+        await model.CheckSupportAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, Asked(runner, "where"));
+        Assert.Equal(1, Asked(runner, "commands")); // the version did not change, so the catalogue stays
+    }
+
+    [Fact]
     public async Task AProbeThatCannotAnswerIsRememberedToo()
     {
         var (client, runner) = Scripted();

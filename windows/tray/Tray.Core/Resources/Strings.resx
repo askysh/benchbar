@@ -5205,6 +5205,9 @@ BenchBar opens again after you sign in and carries on with the setup.</value>
   <data name="GuestJoinFailed" xml:space="preserve">
     <value>The room could not be joined.</value>
   </data>
+  <data name="GuestFailedWith" xml:space="preserve">
+    <value>{0} It said: {1} (exit code {2})</value>
+  </data>
   <data name="GuestJoinUnreadable" xml:space="preserve">
     <value>The answer of the room could not be read. Update the BenchBar command line tool in WSL and try again.</value>
   </data>

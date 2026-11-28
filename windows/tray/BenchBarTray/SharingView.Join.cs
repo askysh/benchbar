@@ -35,13 +35,31 @@ internal sealed partial class SharingView
         {
             _guest = _newGuest();
             // the shared catalogue is read on a pool thread, so the change may arrive there: drawing is the UI thread's
-            _guest.Changed += () =>
-            {
-                if (Dispatcher.CheckAccess()) Render();
-                else Dispatcher.Invoke(Render);
-            };
+            _guest.Changed += DrawGuestChange;
         }
         return LoadGuestAsync(_guest);
+    }
+
+    /// <summary>
+    /// The guest model changed, maybe on the thread its call ended on. A call that ends after the window is gone has no dispatcher to draw on:
+    /// <c>Invoke</c> of a dispatcher that shuts down throws (<see cref="TaskCanceledException"/>) into the model's caller, so the change is dropped.
+    /// </summary>
+    private void DrawGuestChange()
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            Render();
+            return;
+        }
+        if (Dispatcher.HasShutdownStarted) return;
+        try
+        {
+            Dispatcher.Invoke(Render);
+        }
+        catch (Exception ex) when (ex is TaskCanceledException or OperationCanceledException or InvalidOperationException)
+        {
+            // the dispatcher shut down between the check and the call: nothing is left to draw
+        }
     }
 
     private static async Task LoadGuestAsync(ShareGuestModel guest)

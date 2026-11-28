@@ -102,27 +102,31 @@ public class ShareHostTextTests
     // --- an old CLI that is updated ---
 
     [Fact]
-    public async Task AnOldCliThatIsUpdatedGetsTheJoinInTheSameModelAtTheNextBind()
+    public async Task AnOldCliThatIsUpdatedGetsTheJoinInTheSameModelAtTheNextBindAfterTheRecheck()
     {
         var (client, runner) = Scripted();
         var asked = 0;
         runner.On(a => a[0] == "commands" && asked++ == 0).Print(ShareGuestTests.Catalogue("0.9.0", pin: false)); // an old CLI: share join without --host-key
         runner.On("commands").Print(ShareGuestTests.Catalogue("0.9.1")); // after benchbar self-update in WSL
         var probes = 0;
-        runner.On(a => a[0] == "where" && probes++ < 2).Print("{\"schema_version\":1,\"cli_version\":\"0.9.0\"}");
+        runner.On(a => a[0] == "where" && probes++ < 1).Print("{\"schema_version\":1,\"cli_version\":\"0.9.0\"}");
         runner.On("where").Print("{\"schema_version\":1,\"cli_version\":\"0.9.1\"}");
-        var model = new ShareGuestModel(client, new CommandSupport(client));
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
+        var model = new ShareGuestModel(client, new CommandSupport(client), clock);
 
         await model.CheckSupportAsync(TestContext.Current.CancellationToken); // the first look at the tab: the catalogue, then the version
         Assert.False(model.Supported);
-        await model.CheckSupportAsync(TestContext.Current.CancellationToken); // the same CLI: the same version, so the catalogue is not read again
+        await model.CheckSupportAsync(TestContext.Current.CancellationToken); // the next bind: the answer of a moment ago is kept, nothing is asked
         Assert.False(model.Supported);
         Assert.Equal(1, ShareGuestTests.Asked(runner));
+        Assert.Equal(1, runner.Runs.Count(r => r.Args[0] == "where"));
 
+        clock.Advance(ShareGuestModel.Recheck + TimeSpan.FromSeconds(1));
         await model.CheckSupportAsync(TestContext.Current.CancellationToken); // the CLI says 0.9.1 now
         Assert.True(model.Supported);
         Assert.Equal(2, ShareGuestTests.Asked(runner));
         await model.CheckSupportAsync(TestContext.Current.CancellationToken);
         Assert.Equal(2, ShareGuestTests.Asked(runner)); // and it is remembered
+        Assert.Equal(2, runner.Runs.Count(r => r.Args[0] == "where"));
     }
 }
