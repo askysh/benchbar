@@ -215,8 +215,10 @@ without a row counts as 10 seconds, so a new test needs no row to run.
   generated from the code: after you change `lib/frappe-local/commands.sh`
   or `lib/frappe-local/mcp.py`, run `python3 -I scripts/docs-reference.py
   --write` and commit the result; `tests/test-docs.sh` fails when they
-  differ. A bug with a workaround gets a troubleshooting entry in the
-  same pull request.
+  differ. A change of a `cmd` or `flag` record of `commands.sh` also needs
+  `bash scripts/commands-index.sh --write` (the index the CLI looks a
+  command up in); `tests/test-commands-index.sh` fails without it. A bug
+  with a workaround gets a troubleshooting entry in the same pull request.
 - **A changelog fragment.** Add `changelog.d/<issue number>-<short-slug>.md`
   with a `### <Section>` heading and a bullet for each user facing change
   ([format](changelog.d/README.md)). Do not edit [CHANGELOG.md](CHANGELOG.md):

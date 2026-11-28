@@ -385,7 +385,7 @@ has no such field is asked in words (`benchbar autostart`).
 
 ![The BenchBar window: a bench's overview with Start, Stop, Restart, Open as and Open Site, its resources, site and ports](images/window-overview.png)
 
-![A bench's apps: branch, repository, the sites that have each app, the focus menu, Check Remotes, Install and Update](images/window-apps.png)
+![A bench's apps: version, branch, repository and the sites that have each app, with Update, Add App and a menu for the rest](images/window-apps.png)
 
 ![A bench's health: doctor's warnings with their fixes, Run Doctor and Repair](images/window-health.png)
 
@@ -433,7 +433,7 @@ In the sidebar, below the benches:
   before they write, and nothing is installed from this page. See
   [Teams](guides/teams.md#team-profiles).
 
-![Team Profiles: the built in profiles and a team profile with where each comes from, and the Import and Subscribe buttons](images/window-profiles.png)
+![Team Profiles: the built in profiles and a team profile with where each comes from, and the Add Profile menu](images/window-profiles.png)
 
 ## Share on your network
 

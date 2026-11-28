@@ -511,7 +511,8 @@ if [[ -z "$OPT_BENCH_DIR" ]] && ! { [[ "$COMMAND" == share ]] && fl_share_guest_
   case "$COMMAND" in
     install|adopt|register|scan|self-update|labs|profile|ports|lan-guard|docs|report|help|commands|mcp|where|mariadb-password) ;;
     *)
-      fl_cmd_attr_v FL_GUESS_MUT "$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}" || true)" mutating
+      fl_cmd_key_for_v FL_GUESS_KEY "$COMMAND" "${ARGS[0]:-}" || FL_GUESS_KEY=""
+      fl_cmd_attr_v FL_GUESS_MUT "$FL_GUESS_KEY" mutating
       if [[ "$FL_GUESS_MUT" == "yes" && " ${ARGS[*]:-} " != *" --all "* ]]; then fl_bench_guess_gate; else fl_bench_write_gate; fi ;;
   esac
 fi

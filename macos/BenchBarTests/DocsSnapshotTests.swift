@@ -16,13 +16,13 @@ extension SnapshotTests {
     private func docsStore() async throws -> BenchStore {
         base.cli.answer("list", json: try Fixture.string("list-two-benches"))
         let sites = #"[{"name":"macdev","default":true,"hosts_entry":true,"ping_code":200,"developer_mode":true,"open_as_enabled":true,"open_as":true},{"name":"qa","default":false,"hosts_entry":true,"ping_code":200,"developer_mode":true,"open_as_enabled":false,"open_as":false}]"#
-        base.cli.answer("status", bench: Self.frappeBench, json: #"{"schema_version":1,"cli_version":"0.8.1","bench":"\#(Self.frappeBench)","name":"frappe-bench","site":"macdev","label":"com.benchbar.frappe-bench","state":"running","stop_reason":null,"pid":4242,"started_at":"2026-09-26T01:00:00Z","last_exit_code":null,"web_url":"http://macdev:8000","web_ping_code":200,"ports":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_socketio":13000,"redis_cache":13000},"sites":\#(sites),"scheduler":true,"agent":"com.benchbar.frappe-bench","agent_state":"running","processes_running":true}"#)
+        base.cli.answer("status", bench: Self.frappeBench, json: #"{"schema_version":1,"cli_version":"0.9.0","bench":"\#(Self.frappeBench)","name":"frappe-bench","site":"macdev","label":"com.benchbar.frappe-bench","state":"running","stop_reason":null,"pid":4242,"started_at":"2026-09-26T01:00:00Z","last_exit_code":null,"web_url":"http://macdev:8000","web_ping_code":200,"ports":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_socketio":13000,"redis_cache":13000},"sites":\#(sites),"scheduler":true,"agent":"com.benchbar.frappe-bench","agent_state":"running","processes_running":true}"#)
         base.cli.answer("status", bench: "/Users/you/dev/v16-bench", json: try Fixture.string("status-v16-two-sites"))
         base.cli.answer("app", json: try Fixture.string("app-list"))
         base.cli.answer("profile", json: try Fixture.string("profile-list"))
         base.cli.answer("doctor", json: try Fixture.string("doctor"))
         base.cli.answer("users", json: try Fixture.string("open-as-users"))
-        base.cli.answer("--version", json: "benchbar 0.8.1\nBenchBar app 0.8.1 (/Applications/BenchBar.app)\n")
+        base.cli.answer("--version", json: "benchbar 0.9.0\nBenchBar app 0.9.0 (/Applications/BenchBar.app)\n")
         base.settings.cliPath = Self.docsCLI
         let runner = base.cli.runner()
         let store = BenchStore(
@@ -67,8 +67,8 @@ extension SnapshotTests {
         router.pane = .general
         try renderKey(docsWindow(store, workbench, router), "docs-window-general", size: CGSize(width: 1000, height: 700), wholeWindow: true)
 
-        let release = Data(try Fixture.string("github-release-latest").replacingOccurrences(of: "v0.6.0", with: "v0.8.1").utf8)
-        let about = AboutModel(store: store, updates: UpdateChecker(currentVersion: "0.8.1") { _ throws(UpdateCheckError) in release })
+        let release = Data(try Fixture.string("github-release-latest").replacingOccurrences(of: "v0.6.0", with: "v0.9.0").utf8)
+        let about = AboutModel(store: store, updates: UpdateChecker(currentVersion: "0.9.0") { _ throws(UpdateCheckError) in release })
         await about.loadCLIVersion()
         await about.updates.check()
         router.pane = .about
@@ -80,6 +80,53 @@ extension SnapshotTests {
         let bench = try #require(store.benches.first { $0.path == Self.frappeBench })
         let row = try #require(bench.siteRows.first { $0.name == "macdev" })
         try renderKey(FindUserSheet(store: store, bench: bench, row: row) {}.frame(width: 520), "docs-find-user", size: nil)
+    }
+
+    /// The popover of one running bench with doctor's findings, as the home page and the README show it.
+    @Test(.enabled(if: docsOnScreenEnabled)) func docsPopover() async throws {
+        base.cli.answer("list", json: base.listJSON())
+        base.cli.answer("status", json: base.statusJSON("running").replacingOccurrences(of: "\"pid\":null", with: "\"pid\":4242"))
+        base.cli.answer("doctor", json: try Fixture.string("doctor"))
+        let store = base.makeStore()
+        await store.start(polling: false)
+        await store.runDoctor(on: try #require(store.selected))
+        try renderKey(PopoverView(store: store, commands: AppCommands()), "docs-popover", size: nil)
+    }
+
+    /// A bench's Apps and Health tabs and the Team Profiles pane, in the whole window.
+    @Test(.enabled(if: docsOnScreenEnabled)) func docsWindowTabs() async throws {
+        let store = try await docsStore()
+        let workbench = Workbench(store: store)
+        let bench = try #require(store.benches.first { $0.path == Self.frappeBench })
+        // the apps of the fixture are the v16 bench's: its sites are the ones the rows name
+        let v16 = try #require(store.benches.last)
+        await workbench.loadApps(v16)
+        await store.runDoctor(on: bench)
+        await workbench.loadProfiles()
+        let router = WindowRouter()
+        router.show(bench: v16.path, tab: .apps)
+        try renderKey(docsWindow(store, workbench, router), "docs-window-apps", size: CGSize(width: 1000, height: 700), wholeWindow: true)
+        router.show(bench: bench.path, tab: .health)
+        try renderKey(docsWindow(store, workbench, router), "docs-window-health", size: CGSize(width: 1000, height: 700), wholeWindow: true)
+        router.pane = .profiles
+        try renderKey(docsWindow(store, workbench, router), "docs-window-profiles", size: CGSize(width: 1000, height: 700), wholeWindow: true)
+    }
+
+    /// The Export and Import sheets of a team profile (docs/guides/teams.md).
+    @Test(.enabled(if: docsOnScreenEnabled)) func docsProfileSheets() async throws {
+        let store = try await docsStore()
+        base.cli.answer("profile list", json: try Fixture.string("profile-list-sharing"))
+        base.cli.answer("profile export", json: try Fixture.string("profile-export-plan"))
+        base.cli.answer("profile import", json: try Fixture.string("profile-import-plan"))
+        let workbench = Workbench(store: store)
+        await workbench.loadProfiles()
+        let export = ProfileExportRun(name: "acme", workbench: workbench)
+        await export.load()
+        export.setKeep("my_tools", false)
+        try renderKey(ExportProfileSheet(run: export) {}, "docs-profile-export", size: nil)
+        let importing = ProfileImportRun(source: "https://raw.githubusercontent.com/acme/profiles/main/acme.toml", workbench: workbench)
+        await importing.review()
+        try renderKey(ImportProfileSheet(run: importing) {}, "docs-profile-import", size: nil)
     }
 
     @Test(.enabled(if: docsOnScreenEnabled)) func docsWizard() async throws {
