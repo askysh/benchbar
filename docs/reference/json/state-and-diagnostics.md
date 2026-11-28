@@ -48,7 +48,7 @@ Exit 0. An argument other than `--json` exits 1.
 
 ## `benchbar labs --json`
 
-`labs list --json` is one document, with no done fields:
+`labs list --json` is one document, with no done fields (`cli_version` is there since 0.9, as in `labs status` and `ports plan`):
 
 ```json
 {"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.8.2","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false}]}

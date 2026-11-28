@@ -39,6 +39,7 @@ The documents that tell you which benches exist and what state each one is in. T
 | `benches[].ports` | object | web, socketio, redis_queue, redis_socketio, redis_cache. `redis_socketio` was added in 0.4: bench keeps it equal to `redis_cache` and frappe v15 and v16 never connect to it; older CLIs leave it out |
 | `benches[].sites` | array | added in 0.4, see [Sites](sites-and-backups.md#sites) |
 | `benches[].default` | bool | same as `path == default_bench` |
+| `benches[].lock_file` | string or null | the `benchbar.toml` that `lock check` compares with (0.5); `null` without one |
 | `benches[].service_installed` | bool | the agent plist exists |
 | `benches[].adopted` | bool | benchbar knows this bench: it has a service, is registered or is the remembered bench. A folder that only looks like a bench under `~` or `~/dev` is listed with `false` (added in 0.9). The MCP tools that change a bench act only on `true` ones |
 | `benches[].state_file` | string | where the runner writes `state.json` |
@@ -102,11 +103,13 @@ listener: it is polled at rest (0.6.1).
 | `sites` | array | added in 0.4, see [Sites](sites-and-backups.md#sites) |
 | `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
 | `autostart` | bool | added in 0.9: the bench may come back after a login (`benchbar autostart on`, the default; `off` keeps it down until `benchbar up`) |
+| `labs` | array | added in 0.9: the names of the enabled [labs](state-and-diagnostics.md#benchbar-labs---json) |
 | `listen` | string | added in 0.9: `"local"` (the web server and socketio listen on 127.0.0.1) or `"all"` (every interface, `benchbar listen all`) |
 | `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
 | `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null), `url` (an add's repo URL, so `app add NAME` can finish an app that was never cloned or that no profile lists; null for an update and for a record an older version wrote) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
 | `leases` | array | added in 0.9: the active [leases](../cli/lease.md) on this bench, its own and those of its sites, `[]` when none. Each: `scope` (`bench` or `site`), `site` (null for a bench lease), `holder`, `note` (null without one), `since` and `expires_at` (ISO 8601 UTC). Never the lease's id. One small file read in the state folder, none without leases, so status starts no new program for it |
 | `ready` | object | added in 0.9: whether the bench can serve, and the parts that say so; see [Readiness](#readiness) |
+| `notices` | array | added in 0.9: the defaults an update changed, until they are dismissed, `[]` when none; see [notices](operations.md#notices-090) |
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
 `loaded` (`"yes"` or `"no"`), `stop_flag` (`"manual"`, `"crash"`,
