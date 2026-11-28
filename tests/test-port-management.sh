@@ -265,16 +265,19 @@ assert_calls_not_contain '^bench (migrate|build|update|start)'
     printf '+- benchbar adopt -+\n  %s\n  [ok] 1. Write Procfile.lean: done (%ss)\n' "$WORDING" "$RANDOM"
     [[ -z "${FL_PM_PLAN_FILE:-}" ]] || printf '%s|%s\n' "$1" "$ACTIONS" >>"$FL_PM_PLAN_FILE"
   }
-  # a fault in the build ends this subshell under set -e: its stderr is in a file the failure prints
+  # a fault in the build (set -u, set -e) ends the command substitution: its stderr is kept in a file,
+  # and each caller prints it, so the failure has a text
   token_of() {
-    CURRENT="$1" ACTIONS="$2" WORDING="$3" fl_pm_build "$TMP_DIR/bench-one" >/dev/null 2>"$TMP_DIR/pm-token.err"       || fail "(fl_pm_build failed) $(cat "$TMP_DIR/pm-token.err")"
+    CURRENT="$1" ACTIONS="$2" WORDING="$3" fl_pm_build "$TMP_DIR/bench-one" >/dev/null 2>"$TMP_DIR/pm-token.err"
     printf '%s' "$PM_TOKEN"
   }
-  base="$(token_of '8000 9000 11000 13000' 'agent_write runner_write' 'adopt only adds the background service files.')"
-  assert_eq "$base" "$(token_of '8000 9000 11000 13000' 'agent_write runner_write' 'Adopt adds the service files only.')" "(the same plan in other words keeps its token)"
-  other="$(token_of '8001 9001 11001 13001' 'agent_write runner_write' 'adopt only adds the background service files.')"
-  [[ -n "$base" && "$other" != "$base" ]] || fail "(another port block is another plan) $base $other"
-  other="$(token_of '8000 9000 11000 13000' 'agent_write' 'adopt only adds the background service files.')"
+  built() { fail "(fl_pm_build failed) $(cat "$TMP_DIR/pm-token.err" 2>/dev/null)"; }
+  base="$(token_of '8000 9000 11000 13000' 'agent_write runner_write' 'adopt only adds the background service files.')" || built
+  other="$(token_of '8000 9000 11000 13000' 'agent_write runner_write' 'Adopt adds the service files only.')" || built
+  [[ -n "$base" && "$other" == "$base" ]] || fail "(the same plan in other words keeps its token) $base $other"
+  other="$(token_of '8001 9001 11001 13001' 'agent_write runner_write' 'adopt only adds the background service files.')" || built
+  [[ "$other" != "$base" ]] || fail "(another port block is another plan) $base $other"
+  other="$(token_of '8000 9000 11000 13000' 'agent_write' 'adopt only adds the background service files.')" || built
   [[ "$other" != "$base" ]] || fail "(another action list is another plan) $base $other"
 )
 printf 'test-port-management: ok\n'
