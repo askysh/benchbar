@@ -48,6 +48,52 @@ Raycast extensions and the like can rely on it too.
 | `benchbar history [--bench PATH] [--since TIME] [--limit N] --json` | the runs that changed things on this machine, newest first (0.9), see [action history](reference/json/operations.md#action-history-09) |
 | `<state folder>/history.jsonl` | one line per finished run, 1 MB and three older files (0.9) |
 
+## The schema file
+
+[`schema/benchbar.schema.json`](https://github.com/askysh/benchbar/blob/main/schema/benchbar.schema.json)
+(JSON Schema 2020-12) is the source of truth. This page and the pages below
+explain it; when they and the file disagree, the file is right and the pages
+are a bug. It has one definition under `$defs` per document or stream line
+that an app or the MCP server reads:
+
+| Definition | What it describes |
+|---|---|
+| `status`, `stateFile` | `status --json` and `logs/.benchbar/state.json` |
+| `list`, `listBench` | `list --json` |
+| `doctor`, `doctorCheck`, `doctorPrerequisites` | `doctor --json` and `doctor --prerequisites --json` |
+| `logs` | `logs --json` |
+| `appList`, `appFocus` | `app list --json` and `app focus --json` |
+| `siteList`, `siteBackups`, `siteBackup` | `site list`, `site backups` and `site backup` |
+| `profileList` | `profile list --json` |
+| `labsList` | `labs list --json` |
+| `portsCheck` | `ports check --json` |
+| `where`, `report` | `where --json` and `report --json` |
+| `planLine`, `stepLine`, `repairStepLine`, `progressLine`, `doneLine`, `streamLine` | the lines of a `--json` or `--jsonl` stream |
+| `doneFields` | the result envelope, see [the done fields](#the-done-fields-08) |
+| `document` | any other document: the envelope only, until it has a definition of its own |
+
+How to read it:
+
+- `required` lists the fields that every CLI version since the field arrived
+  prints, so a document recorded from an old CLI still fits. Everything else
+  is optional for a reader.
+- `x-since` says in which version a field arrived. `x-conditional` marks a
+  field printed only in some cases (a plan field of one command, the done
+  fields of a dry run). Every other field is printed by the CLI of the same
+  checkout, always, and `null` where it does not apply.
+- An `enum` lists the values this CLI prints. A reader still treats a value it
+  does not know as unknown, see below.
+
+`tests/test-json-schema.sh` keeps the file, the CLI and its readers together.
+It checks that every recorded fixture of the Mac app and the Windows tray fits
+its definition (`schema/fixtures.map`), that what the CLI prints under the
+mocks fits and prints every non conditional field, that the Swift models, the
+tray's C# models and the MCP server read only fields the schema has and need
+only fields it requires (`schema/models.map`, `CLI_READS` in
+`lib/frappe-local/mcp.py`), and that these pages name every field of the
+schema. A pull request that adds a field to the CLI's JSON adds it to the
+schema in the same pull request, or the test fails.
+
 ## The pages
 
 This page holds what every document shares: the rules for readers, the
