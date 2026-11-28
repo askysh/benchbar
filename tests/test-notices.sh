@@ -168,7 +168,7 @@ assert_eq "[]" "$(printf '%s' "$OUT" | jget - 'd["notices"]')"
 state_is "LAST_VERSION=0.8.2"
 fm_out notices --json
 assert_eq "$ALL" "$(ids)"
-assert_contains "$(cat "$FL_STATE_FILE")" "LAST_VERSION=0.8.3"
+assert_contains "$(cat "$FL_STATE_FILE")" "LAST_VERSION=${VER}" "(the version of this tree is recorded)"
 # the same version again changes nothing: no write, no new notice after a dismissal
 fm_out notices --all --json
 cp "$FL_STATE_FILE" "$TMP_DIR/state.before"
@@ -183,17 +183,18 @@ assert_eq "" "$(ids)" "(coming from 0.9.0 nothing is new)"
 
 # ---- two CLIs of different versions share the state folder (the app's and a Homebrew one):
 # a recorded version that is newer than the running one is left alone: no write, no notice
-state_is "LAST_VERSION=0.9.1" "NOTICES=unknown-flags"
+# (99.0.0: above whatever version this tree has, now and after every bump)
+state_is "LAST_VERSION=99.0.0" "NOTICES=unknown-flags"
 cp "$FL_STATE_FILE" "$TMP_DIR/state.before"
 fm_out notices --json
 assert_eq "unknown-flags" "$(ids)" "(a newer recorded version keeps the notices as they are)"
 fm_out status --json --bench-dir "$BENCH"
 fm_out list
 assert_eq "$(cat "$TMP_DIR/state.before")" "$(cat "$FL_STATE_FILE")" "(an older CLI next to a newer one writes nothing)"
-state_is "LAST_VERSION=0.9.0"
+state_is "LAST_VERSION=99.0.0"
 cp "$FL_STATE_FILE" "$TMP_DIR/state.before"
 fm_out notices --json
-assert_eq "$(cat "$TMP_DIR/state.before")" "$(cat "$FL_STATE_FILE")" "(the dev tree 0.8.3 next to a recorded 0.9.0 writes nothing)"
+assert_eq "$(cat "$TMP_DIR/state.before")" "$(cat "$FL_STATE_FILE")" "(this tree next to a newer recorded version writes nothing)"
 
 # ---- a prerelease: SINCE is compared without it (0.9.0-rc.1 counts as 0.9.0)
 tree() {

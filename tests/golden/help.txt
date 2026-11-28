@@ -3906,7 +3906,7 @@ Options:
   --limit N              The newest N entries, 1 to 5000. Default: 200.
   --json                 One document: entries (ts, device, user, method, path, status) and
                          truncated. user is the seat's name (the seat's id when the room no longer
-                         has the seat), never an e-mail address but in a line written by @VERSION@.
+                         has the seat), never an e-mail address but in a line written by 0.8.3.
 
 Global options: --bench-dir DIR, --site NAME, --json, --jsonl, --for-agent, --plain, -h.
 Needs: a terminal to ask questions: no; sudo: no; the network: no.

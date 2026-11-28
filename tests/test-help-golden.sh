@@ -16,10 +16,13 @@ GOLDEN="$ROOT/tests/golden/help.txt"
 ACTUAL="$TMP_DIR/help-actual.txt"
 : >"$ACTUAL"
 
-# note FORM: the output of the last run_fm under a heading, the version and the docs URL as words
+# note FORM: the output of the last run_fm under a heading, the version and the docs URL as words. The version
+# is replaced in the banner line only ("benchbar X.Y.Z:"): a help text that names a version as a fact ("a line
+# written by 0.8.3") stays as it is, or the golden would hold @VERSION@ there while that version is the current
+# one and differ at the next bump.
 note() {
   local text="$OUT"
-  text="${text//"$VER"/@VERSION@}"
+  text="${text//"benchbar ${VER}:"/benchbar @VERSION@:}"
   text="${text//"$DOCS"/@DOCS@}"
   printf '=== %s (exit %s)\n%s\n' "$1" "$CODE" "$text" >>"$ACTUAL"
 }
