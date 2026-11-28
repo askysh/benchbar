@@ -122,6 +122,9 @@ for sub in leave forget; do
   BENCHBAR_LABS="" guest "" "$sub"
   assert_eq 1 "$CODE" "(${sub}, Lab off) $ALL"; assert_contains "$ALL" "joined no room"; assert_not_contains "$ALL" "labs on lan-rooms"
 done
+# and so does the list: with two rooms, leave and forget name it ("benchbar share joined lists them")
+BENCHBAR_LABS="" run_fm share joined
+assert_eq 0 "$CODE" "(joined, Lab off) $OUT"; assert_contains "$OUT" "joined no room"; assert_not_contains "$OUT" "labs on lan-rooms"
 
 # macOS: BENCHBAR_SUDO=gui counts only when BenchBar.app is above the command (fl_person_env_ok). Here an
 # app that runs (pid 4300) is not above this command.
@@ -225,6 +228,43 @@ for bad in abc "${ROOM_KEY:0:63}" "${ROOM_KEY:0:63}g" "" "${ROOM_KEY}00"; do
 done
 guest "" join "127.0.0.1:${ROOM_PORT}" --host-key
 assert_eq 1 "$CODE" "$ALL"; assert_contains "$ALL" "--host-key needs"
+
+# at a terminal the code is typed where nobody reads along: the terminal (a pty here) echoes none of it,
+# and the line that was typed is the code that is checked
+cat >"$TMP_DIR/typed.py" <<'PY'
+import os, pty, select, subprocess, sys, time
+master, slave = pty.openpty()
+p = subprocess.Popen(sys.argv[2:], stdin=slave, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+os.close(slave)
+out, err = p.stdout.fileno(), p.stderr.fileno()
+said, live = {out: b"", err: b"", master: b""}, {out, err}
+typed, until = False, time.time() + 60
+while live and time.time() < until:
+    ready, _, _ = select.select(list(live) + [master], [], [], 0.2)
+    for fd in ready:
+        try:
+            chunk = os.read(fd, 4096)
+        except OSError:
+            chunk = b""
+        said[fd] += chunk
+        if not chunk:
+            live.discard(fd)
+    if not typed and b"(not shown)" in said[err]:
+        time.sleep(0.3)
+        os.write(master, sys.argv[1].encode() + b"\n")
+        typed = True
+p.wait()
+print("typed=%s" % typed)
+print("echo=%r" % said[master].decode("utf-8", "replace").strip())
+print("code=%d" % p.returncode)
+sys.stdout.write((said[out] + said[err]).decode("utf-8", "replace"))
+PY
+TYPED="$(python3 "$TMP_DIR/typed.py" 54321 "$FM" share join "127.0.0.1:${ROOM_PORT}" 2>&1)"
+printf '%s\n' "$TYPED" >>"$SEEN"
+assert_contains "$TYPED" "typed=True"; assert_contains "$TYPED" "echo=''"
+assert_contains "$TYPED" "code=1"; assert_contains "$TYPED" "The room code is 6 digits."
+assert_not_contains "$TYPED" "54321"
+assert_no_file "$ITEM"; assert_no_file "$GUEST/rooms.json"
 
 # a wrong code: one sentence on stderr, no document, and the key made for the try is gone again
 guest "$WRONG" join "127.0.0.1:${ROOM_PORT}" --name "Lab PC" --json
