@@ -476,6 +476,8 @@ fl_notices_run
 # --background: refused here when it cannot run unattended, else started detached; the caller gets the
 # op_id at once and the stream goes to the operation's own output (ops.sh)
 if [[ "$OPT_BACKGROUND" == "1" ]]; then
+  # the stream the run would have in front opens first, so that a refusal below is its done line and not silence (stream.sh)
+  fl_background_stream_open
   fl_lab_gate "${FL_JSON_KEY:-$COMMAND}"
   # a lease stops it here, with the holder, and not in the detached run the caller would then have to poll
   fl_lease_gate

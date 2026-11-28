@@ -27,6 +27,8 @@ while [[ "$#" -gt 0 ]]; do
   esac
 done
 [[ -n "$op" ]] && exit 0
+# MOCK_SSH_SLEEP=N: a connection that takes N seconds (a detached run that is seen running before it ends)
+if [[ -n "${MOCK_SSH_SLEEP:-}" ]]; then sleep "$MOCK_SSH_SLEEP"; fi
 if [[ -f "${MOCK_STATE:?}/ssh_refused" ]]; then
   echo "ssh: connect to host ${host} port 22: Connection refused" >&2
   exit 255

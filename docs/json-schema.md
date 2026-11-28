@@ -296,11 +296,27 @@ Which line carries it:
   ends with their own `done` line in every mode, plain `--json` included
   (`repair` keeps `exit_code` beside `exit`; `pull` has `exit` and `site`,
   which is `null`). Until then they printed nothing on stdout for these
-  refusals.
+  refusals. The `done` line of `pull` carries `error_id` and `missing` where
+  the one of `repair` does (#410).
 
   ```json
   {"schema_version":1,"cli_version":"0.9.0","event":"done","bench":"/home/u/frappe-bench","exit":1,"changed":[],"warnings":[],"next_actions":[{"command":"benchbar app unfocus frappe --for-agent --bench-dir /home/u/frappe-bench","why":"Run it on this bench","quoted":true},{"command":"benchbar app unfocus frappe --for-agent --bench-dir /home/u/dev/frappe-bench","why":"Run it on this bench","quoted":true},{"command":"benchbar list --json","why":"See the known benches","quoted":true}],"state_after":null,"log":null,"error":"More than one bench is possible and none was chosen: /home/u/frappe-bench, /home/u/dev/frappe-bench."}
   ```
+- A `--background` run that is refused before it starts ends the way the same
+  run in front ends (#410). The dispatch opens its stream before the lease
+  gate and the checks of `--background` itself (a dry run, a command that may
+  not run detached, `BENCHBAR_SUDO_PASSWORD`), so under `--for-agent` and
+  `--jsonl`, and under `--json` for a command that streams (`install`,
+  `repair`, `pull`, `site add`, `app update`), stdout holds one `done` line
+  with `exit` 1 and the refusal as `error`, and no `op_id`: no operation
+  exists. `app add` and the `site` commands that print a document (`backup`,
+  `restore`, `snapshot`, `rollback`) get the `done` line under `--for-agent`
+  and `--jsonl` only; under plain `--json` they print nothing, as a read does.
+  The lab gate and the non interactive preflight answer with their own refusal
+  document (`exit`, `error`, `missing`, no `event`), as they always did here.
+  A run that is accepted prints the one `op_id` line and no `done` line. A
+  detached run that is refused after it started (the run lock is held) is a
+  `done` line of the launcher too, and its attempt is recorded as before.
 - A refusal of the non interactive mode, a usage error and a failure
   before the command could start (`No bench at ...`) all end with this
   envelope. A distinct exit code for usage errors is not used yet: a usage
