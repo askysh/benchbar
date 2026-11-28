@@ -142,7 +142,7 @@ struct AboutPane: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text("BenchBar").font(.title.weight(.semibold))
-                Text("Version \(BenchBarLinks.appVersion) (\(BenchBarLinks.appBuild))")
+                Text("Version \(model.appVersion) (\(BenchBarLinks.appBuild))")
                     .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                 Text("Frappe benches on your Mac, from the menu bar.").font(.callout).foregroundStyle(.secondary)
             }
@@ -154,7 +154,7 @@ struct AboutPane: View {
         Form {
             Section {
                 LabeledContent("BenchBar") {
-                    Text("\(BenchBarLinks.appVersion) (build \(BenchBarLinks.appBuild))").textSelection(.enabled)
+                    Text("\(model.appVersion) (build \(BenchBarLinks.appBuild))").textSelection(.enabled)
                 }
                 // the path under the row, not inside it: a long path pushed the
                 // value far below its label

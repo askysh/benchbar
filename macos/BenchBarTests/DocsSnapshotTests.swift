@@ -69,6 +69,7 @@ extension SnapshotTests {
 
         let release = Data(try Fixture.string("github-release-latest").replacingOccurrences(of: "v0.6.0", with: "v0.9.0").utf8)
         let about = AboutModel(store: store, updates: UpdateChecker(currentVersion: "0.9.0") { _ throws(UpdateCheckError) in release })
+        about.appVersion = "0.9.0"
         await about.loadCLIVersion()
         await about.updates.check()
         router.pane = .about

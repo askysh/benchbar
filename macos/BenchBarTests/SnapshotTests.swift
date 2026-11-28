@@ -294,6 +294,8 @@ struct SnapshotTests {
         base.cli.answer("--version", json: "benchbar 0.5.5\nBenchBar app 0.5.5 (/Applications/BenchBar.app)\n")
         let release = try Fixture.data("github-release-latest")
         let about = AboutModel(store: store, updates: UpdateChecker(currentVersion: "0.5.5") { _ throws(UpdateCheckError) in release })
+        // a fixed version, not the build's: the reference images must not change at a version bump
+        about.appVersion = "0.8.3"
         await about.loadCLIVersion()
         await about.updates.check()
         try render(AboutPane(store: store, model: about, router: WindowRouter())
