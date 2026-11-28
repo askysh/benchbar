@@ -94,7 +94,7 @@ lib_family() {
     service|launchd|systemd|templates|shellrc|mariadb|wkhtmltopdf|platform|platform-linux) echo "test-platform test-platform-linux test-systemd test-service test-templates test-shellrc test-wsl-preflight test-install-linux test-install-failures test-install-json test-phases test-sudo-env test-windows-commands test-hygiene test-homebrew test-secrets-stdin" ;;
     secrets) echo "test-secrets-stdin test-secrets-stdin-linux test-hygiene test-install-json test-phases test-sudo-env test-ops test-docs" ;;
     sudo|sudo-env) echo "test-sudo-env test-platform-linux test-install-json test-hygiene test-port-management" ;;
-    ui|state|run|lock|process|install-kind|toml) echo "$LIB_CORE test-ui test-redact test-input-hygiene test-state-migrate test-process test-runner" ;;
+    ui|state|run|lock|excl|process|install-kind|toml) echo "$LIB_CORE test-state-guards test-lease test-ui test-redact test-input-hygiene test-state-migrate test-process test-runner" ;;
     profiles|teamlock|version-policy) echo "test-profiles test-profile-v16 test-version-policy test-doctor-linux test-self-update test-apps-git test-lock test-lock-apply-pin test-profile-update-pin test-json-schema" ;;
     labs) echo "test-labs test-labs-share test-docs test-help-golden test-json-schema" ;;
     stream) echo "test-json test-envelope test-install-json test-repair-json test-adopt test-lean-load test-json-strings test-tray-fixtures test-gate-next-actions test-background-refusal-json" ;;

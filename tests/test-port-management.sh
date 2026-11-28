@@ -237,4 +237,47 @@ assert_calls_not_contain '^bench (migrate|build|update|start)'
   assert_contains "$(cat "$TMP_DIR/partial-output")" 'Earlier completed benches remain configured'
   assert_not_contains "$(cat "$TMP_DIR/partial-output")" 'command not found'
 )
+# The token of a port plan is made from the plan's fields (the benches, their modes, the port blocks, the
+# service actions and what they are made from), not from the preview's text (#361): a preview whose text
+# differs only in wording or timing keeps the token, a changed port block or a changed action list does not.
+# shellcheck disable=SC2031  # ROOT is the harness's, only read here
+(
+  . "$ROOT/lib/frappe-local/ui.sh"
+  . "$ROOT/lib/frappe-local/ports.sh"
+  . "$ROOT/lib/frappe-local/plan-token.sh"
+  . "$ROOT/lib/frappe-local/port-management.sh"
+  FL_STATE_DIR="$TMP_DIR/pm-token-state"; mkdir -p "$FL_STATE_DIR"; FL_STATE_FILE="$FL_STATE_DIR/state.env"; : >"$FL_STATE_FILE"; FL_LOG_FILE=/dev/null; FL_VERSION="$VER"
+  fl_abs_path() { printf '%s' "$1"; }
+  fl_is_bench_dir() { :; }
+  fl_pm_known_reservations() { :; }
+  fl_pm_mode() { printf automatic; }
+  fl_bench_load() { FL_BENCH_DIR="$1"; FL_BENCH_NAME=bench; FL_SITE=site.local; }
+  fl_pm_current() { printf '%s' "$CURRENT"; }
+  fl_bench_established() { :; }
+  fl_pm_conflicts() { :; }
+  fl_pm_running() { return 1; }
+  fl_agent_plist_path() { printf '%s' "$TMP_DIR/no-such-agent"; }
+  fl_known_benches() { :; }
+  fl_bench_state_file_for() { printf '%s' "$TMP_DIR/no-such-state"; }
+  fl_agent_files() { :; }
+  # the preview: its text (WORDING), and the plan it would apply (ACTIONS), as fl_adopt_plan_json records it
+  fl_pm_setup_preview() {
+    printf '+- benchbar adopt -+\n  %s\n  [ok] 1. Write Procfile.lean: done (%ss)\n' "$WORDING" "$RANDOM"
+    [[ -z "${FL_PM_PLAN_FILE:-}" ]] || printf '%s|%s\n' "$1" "$ACTIONS" >>"$FL_PM_PLAN_FILE"
+  }
+  # a fault in the build (set -u, set -e) ends the command substitution: its stderr is kept in a file,
+  # and each caller prints it, so the failure has a text
+  token_of() {
+    CURRENT="$1" ACTIONS="$2" WORDING="$3" fl_pm_build "$TMP_DIR/bench-one" >/dev/null 2>"$TMP_DIR/pm-token.err"
+    printf '%s' "$PM_TOKEN"
+  }
+  built() { fail "(fl_pm_build failed) $(cat "$TMP_DIR/pm-token.err" 2>/dev/null)"; }
+  base="$(token_of '8000 9000 11000 13000' 'agent_write runner_write' 'adopt only adds the background service files.')" || built
+  other="$(token_of '8000 9000 11000 13000' 'agent_write runner_write' 'Adopt adds the service files only.')" || built
+  [[ -n "$base" && "$other" == "$base" ]] || fail "(the same plan in other words keeps its token) $base $other"
+  other="$(token_of '8001 9001 11001 13001' 'agent_write runner_write' 'adopt only adds the background service files.')" || built
+  [[ "$other" != "$base" ]] || fail "(another port block is another plan) $base $other"
+  other="$(token_of '8000 9000 11000 13000' 'agent_write' 'adopt only adds the background service files.')" || built
+  [[ "$other" != "$base" ]] || fail "(another action list is another plan) $base $other"
+)
 printf 'test-port-management: ok\n'
